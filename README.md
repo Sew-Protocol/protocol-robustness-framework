@@ -77,9 +77,9 @@ This was reproduced and fixed using deterministic traces:
 
 ## Grant-ready impact metrics (for applications)
 
-- **47 deterministic trace fixtures** in `data/fixtures/traces/*.trace.json` covering
+- **44 deterministic trace fixtures** in `data/fixtures/traces/*.trace.json` covering
   happy-path, adversarial, regression, and equilibrium-proxy scenarios.
-- **10+ adversarial failure-mode scenarios (S24–S33)** implemented in the Python
+- **12 adversarial failure-mode scenarios (S24–S35)** implemented in the Python
   invariant suite (`python/invariant_suite.py`, with scenario modules in
   `python/eth_failure_modes.py` and `python/eth_failure_modes_2.py`).
 
@@ -103,6 +103,35 @@ These metrics are intentionally concrete and repository-verifiable.
 - **Multi-agent adversarial dynamics** *(active: live-agent runner and failure-mode scenarios implemented; coverage expanding)*
 - **Parameter sensitivity + stronger multi-trace equilibrium evidence** *(active: trace-end proxy checks implemented; deeper deviation/multi-trace evidence expanding)*
 - **Expanded EVM trace equivalence** *(active: model↔EVM projection/diff workflow implemented; scenario coverage expanding)*
+
+## Program Status Update (2026-06-05)
+
+### 1) Refining multi-agent adversarial dynamics to expand coverage
+**Status:** Active, progressing.
+
+- Multi-agent adversarial dynamics are implemented and explicitly tracked as in-progress.
+- Baseline coverage includes **12 adversarial failure-mode scenarios (S24–S35)** in the Python invariant suite (`python/invariant_suite.py`, with scenario modules in `python/eth_failure_modes.py` and `python/eth_failure_modes_2.py`).
+- Latest evidence summary reports **33/33 scenarios passed** with **0 invariant violations**, while still capturing adversarial attack-success events that expose sequence-level design risk (`docs/evidence/summary.md`).
+
+**Current interpretation:** coverage is already producing meaningful adversarial signal and is being expanded further.
+
+### 2) Strengthening multi-trace equilibrium evidence through deeper deviation analysis
+**Status:** Active, partially implemented, boundary acknowledged.
+
+- Trace-end mechanism/equilibrium checks are active as **single-trace proxy validations**.
+- `:pass` means the realised trace is consistent with the claimed property; it is not a full equilibrium proof.
+- Concepts requiring counterfactual/deviation comparisons across traces (e.g., SPE-style claims) are expected to remain `:inconclusive` without additional multi-trace evidence (`docs/trace-end-equilibrium-validation.md`).
+
+**Current interpretation:** the proxy layer is operational; deeper deviation-based and multi-trace evidence is the main expansion frontier.
+
+### 3) Increasing Model ↔ EVM trace-equivalence coverage
+**Status:** Active, workflow in place, coverage expanding.
+
+- Model↔EVM equivalence is ongoing and supported by projection/diff workflow and deterministic fixture traces.
+- Solidity-side equivalence validation entrypoint is documented (`forge test --match-test test_trace_equivalence`, run from the protocol repo).
+- Scope is intentionally described as expanding scenario coverage rather than complete parity.
+
+**Current interpretation:** equivalence infrastructure is operational and usable; confidence increases as scenario breadth/depth grows.
 
 ## Quick Start
 

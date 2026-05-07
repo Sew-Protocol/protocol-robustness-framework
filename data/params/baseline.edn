@@ -25,6 +25,25 @@
  :appeal-probability-if-wrong 0.40
  :slashing-detection-probability 0.10
 
+ ;; Fraud model
+ ;; Legacy mode (:single-stage-ev):
+ ;;   fraud-success-rate = scalar EV multiplier for escrow diversion.
+ ;; Sequential mode (:sequential-escalation):
+ ;;   fraud-upside is weighted by staged survival through appeal/escalation tiers.
+ ;;   This is the preferred baseline for escalation-aware economics.
+ :fraud-model :sequential-escalation
+ :escalation-assumption-band :base  ; :base / :optimistic / :pessimistic / :two-layer
+
+ ;; Escalation tier params (override individual values from the :base band):
+ :p-appeal-wrong  0.40  ; mirrors :appeal-probability-if-wrong above
+ :p-l1-reversal   0.85  ; senior resolver overturns corrupt L0 verdict 85% of the time
+ :has-kleros?     true  ; L2/Kleros backstop active
+ :p-l2-escalation 0.70  ; aggrieved party escalates to Kleros 70% of the time if L1 fails
+ :p-l2-reversal   0.95  ; Kleros overturns corrupt verdict 95% of the time
+
+ ;; Kept for backward compatibility with legacy :single-stage-ev mode only.
+ :fraud-success-rate 0.90
+
  ;; Simulation config
  :n-trials 1000
  :n-seeds 10                    ; 10 independent runs with different seeds

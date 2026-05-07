@@ -41,6 +41,46 @@ results/test-artifacts/test-summary.json
 
 It includes per-target status, exit codes, durations, and log file paths.
 
+### Baseline vs scenario comparison (research-shareable)
+
+Use this to generate a compact, researcher-facing diff between two replay outputs.
+
+```bash
+bb trace:compare \
+  --baseline results/baseline.trace.json \
+  --candidate results/candidate.trace.json \
+  --out-dir results/trace-compare/example
+```
+
+Outputs:
+- `results/trace-compare/example/comparison.json`
+- `results/trace-compare/example/comparison.md`
+
+The report includes:
+- outcome + events processed
+- key metric deltas
+- terminal-state count differences
+- a single headline line you can paste into research notes
+
+### Attack-to-outcome visual map (shareable diagrams)
+
+Generate three canonical visual artifacts from fixtures/sweep outputs:
+
+```bash
+bb report:attack-map --out-dir results/attack-outcome-map
+```
+
+Outputs (timestamped directory):
+- `state-transition-heatmap.md` — action→action transition heatmap table
+- `profitability-surface-snapshot.md` — top risk points from latest `adv:sweep` surface
+- `escalation-timeline.md` — Mermaid escalation/settlement timeline
+
+If no profitability surface exists yet, run:
+
+```bash
+bb adv:sweep
+```
+
 ### Transition/guard coverage release gate
 
 ```bash

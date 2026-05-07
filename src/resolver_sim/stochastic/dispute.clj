@@ -1,7 +1,8 @@
 (ns resolver-sim.stochastic.dispute
   "Dispute lifecycle and resolution mechanics."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.stochastic.economics :as econ]))
+            [resolver-sim.stochastic.economics :as econ]
+            [resolver-sim.economics.payoffs :as payoffs]))
 
 ;; Dispute resolution for a single trial
 ;; Phase D: Track slashing reasons (timeout/reversal/fraud) without RNG changes
@@ -12,6 +13,8 @@
    Reasons are deterministically derived from existing state.
    Phase G adds slashing delays and control baseline support.
    Phase H adds realistic bond mechanics: immediate freeze, unstaking delays, appeal windows.
+   MC-1 adds fraud-success-rate: escrow-diversion upside for malicious resolvers.
+   MC-4 adds model-appeal-costs?: appeal-bond recovery for honest resolvers when appeal fails.
 
    Detection mechanisms (mutually exclusive priority order):
      1. fraud-detected?    — intentional wrong verdict caught (fraud-slash-bps penalty)
@@ -31,8 +34,10 @@
     :escaped? bool                ; Phase H: did resolver unstake before penalties?
     :slashing-delay-weeks int     ; Phase G: weeks until slashing takes effect (0 = immediate)
     :slashing-reason keyword      ; Reason for slashing (:timeout/:reversal/:fraud or nil)
-    :profit-honest integer        ; Profit if honest
-    :profit-malice integer        ; Profit if malicious (accounts for freeze/appeal/unstake delays)
+    :profit-honest integer        ; Profit if honest (MC-4: includes appeal-bond recovery when enabled)
+    :profit-malice integer        ; Profit if malicious (MC-1: includes escrow-diversion upside when fraud-success-rate > 0)
+    :fraud-upside integer         ; MC-1: escrow-diversion gain (0 when fraud-success-rate=0 or slashed)
+    :slash-distributed map        ; {:insurance :protocol :burned} — nil when not slashed
     :strategy keyword}            ; Strategy used"
   [rng escrow-wei fee-bps bond-bps slash-mult strategy
    appeal-prob-correct appeal-prob-wrong detection-prob
@@ -40,7 +45,10 @@
              slashing-detection-delay-weeks allow-slashing?
              unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
              detection-type timeout-detection-probability reversal-detection-probability
-             fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps]
+             fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
+              fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
+              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+              model-appeal-costs? appeal-bond-recovery-rate]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -56,7 +64,23 @@
            fraud-detection-probability 0.0
            fraud-slash-bps 0
            reversal-slash-bps 0
-           timeout-slash-bps 200}}]
+           timeout-slash-bps 200
+           ;; MC-1: escrow-diversion upside for malicious resolvers.
+           ;; 0.0 = original model (no upside); 0.22 = calibrated to adversarial suite.
+           fraud-success-rate 0.0
+            ;; Fraud payoff model:
+            ;; :single-stage-ev       -> legacy scalar fraud-success-rate shortcut
+            ;; :sequential-escalation -> appeal/escalation-aware survival probability
+            ;; :strict-all-tiers      -> escrow loss only if L1 and L2 both fail
+            ;;                          (assumes appeal/escalation always pursued)
+            fraud-model :single-stage-ev
+            escalation-assumptions econ/default-escalation-assumptions
+            escalation-assumption-band :base
+           ;; MC-4: model appeal-bond recovery for honest resolvers.
+           ;; false = original model; true = resolver earns fraction of failed challenge bond.
+           model-appeal-costs? false
+           ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
+           appeal-bond-recovery-rate 0.5}}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond   (econ/calculate-bond escrow-wei bond-bps)
@@ -189,8 +213,52 @@
           bond-loss
           (if slashing-pending? 0 bond-loss))
 
-        profit-honest (long fee)
-        profit-malice (long (- fee effective-bond-loss))]
+        ;; MC-1/MC-SEQ: Escrow-diversion upside.
+        ;; A malicious resolver who is NOT caught may redirect the escrow to a colluding
+        ;; party. The gain is the escrow minus the fee already counted in profit-honest.
+        ;; Legacy mode (fraud-model :single-stage-ev) uses scalar fraud-success-rate.
+        ;; Sequential mode models survival through multi-tier appeal/escalation.
+        ;; :strict-all-tiers assumes appeals are always pursued — models worst case for protocol.
+        selected-assumptions (get escalation-assumptions escalation-assumption-band
+                                  (get econ/default-escalation-assumptions :base))
+        effective-has-kleros? (if (some? has-kleros?) has-kleros?
+                                  (:has-kleros? selected-assumptions true))
+        sequential-survival-prob
+        (econ/fraud-survival-probability
+         {:p-appeal-wrong  (or p-appeal-wrong appeal-prob-wrong (:p-appeal-wrong selected-assumptions))
+          :p-l1-reversal   (or p-l1-reversal (:p-l1-reversal selected-assumptions))
+          :has-kleros?     effective-has-kleros?
+          :p-l2-escalation (or p-l2-escalation (:p-l2-escalation selected-assumptions))
+          :p-l2-reversal   (or p-l2-reversal (:p-l2-reversal selected-assumptions))})
+        fraud-success-prob
+        (case fraud-model
+          :sequential-escalation sequential-survival-prob
+          :strict-all-tiers (* (- 1.0 (double (or p-l1-reversal (:p-l1-reversal selected-assumptions))))
+                               (- 1.0 (double (or p-l2-reversal (:p-l2-reversal selected-assumptions)))))
+          fraud-success-rate)
+        fraud-upside
+        (if (and (= strategy :malicious)
+                 (not slashed-detected?)
+                 (pos? fraud-success-prob))
+          (long (* (- escrow-wei fee) fraud-success-prob))
+          0)
+
+        ;; MC-4: Appeal-bond recovery for honest resolvers.
+        ;; When an appeal fails (verdict was correct), the challenger loses their bond.
+        ;; The protocol may return a fraction to the resolver. Disabled by default.
+        appeal-recovery
+        (if (and model-appeal-costs? appealed? verdict-correct?)
+          (long (* appeal-bond appeal-bond-recovery-rate))
+          0)
+
+        profit-honest (long (+ fee appeal-recovery))
+        profit-malice (long (+ (- fee effective-bond-loss) fraud-upside))
+
+        ;; MC-3: Slash distribution (insurance/protocol/burned split).
+        ;; Only populated when the resolver is slashed.
+        slash-distributed
+        (when slashed-detected?
+          (payoffs/calculate-slashing-distribution bond-loss 0))]
 
     {:dispute-correct?      verdict-correct?
      :appeal-triggered?     appealed?
@@ -205,6 +273,9 @@
      :slashing-reason       slash-reason
      :profit-honest         profit-honest
      :profit-malice         profit-malice
+     :fraud-upside          fraud-upside
+     :fraud-survival-prob   fraud-success-prob  ; probability that fraud outcome survives escalation
+     :slash-distributed     slash-distributed
      :strategy              strategy}))
 
 (defn multiple-disputes

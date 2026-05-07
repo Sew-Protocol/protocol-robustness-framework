@@ -264,7 +264,13 @@
              "   - Dominance ratio drops significantly at rho > 0.3-0.5\n"
              "   - Heavy load exacerbates attack surface\n"
              "   - System remains solvent but margins erode\n"
-             "   → Recommended: Choose Option A/B/C before mainnet\n")
+             "   → Option A (param): Raise minimum bond-to-escrow ratio\n"
+             "     Increases honest-path return relative to attack cost; lifts dominance ratio at all load levels\n"
+             "   → Option B (design): Add per-resolver rate limit per epoch\n"
+             "     Correlated flooding attacks depend on volume; rate limiting breaks the attack model\n"
+             "   → Option C (operational): Accept BRITTLE as operating envelope\n"
+             "     System is safe at rho < 0.3 and light-medium load; document these as mainnet constraints\n"
+             "     and route high-correlation dispute bursts to Kleros escalation automatically\n")
         
         :C (str
              "❌ BROKEN: System fails under realistic conditions\n"
@@ -279,7 +285,7 @@
 (defn run-phase-p-lite
   "Run Phase P Lite falsification test."
   [params]
-  (let [trials-per-combo (get params :num-trials 1)
+  (let [trials-per-combo (get params :num-trials 30)
         sweep-results (run-phase-p-lite-sweep params trials-per-combo)
         report (generate-full-report sweep-results params)]
     

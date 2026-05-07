@@ -13,4 +13,11 @@ Use this file only as a quick index into docs:
 - `security-model.md` — threat model assumptions
 - `usage.md` — CLI/API usage notes
 
+## Research Outputs
+
+- `RESEARCH_NOTE_V0.md` — 6-page research note: headline claim, model, results, limitations, open questions
+- `evidence/RESEARCHER_EVIDENCE_PACK.md` — ≤15-minute reproducibility pack with three failure-class scenario pairs
+- `evidence/` — per-failure-class evidence with raw JSON traces
+- `challenge/BENCHMARK_CHALLENGE.md` — "Break This Mechanism" benchmark: 3 adversarial tasks with scoring
+
 Historical planning docs are kept for context (for example `roadmap-generalisation.md`).

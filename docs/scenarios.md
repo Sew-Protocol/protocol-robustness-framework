@@ -1,6 +1,6 @@
 # Adversarial Scenarios
 
-All 33 scenarios run deterministically against the live Clojure contract state machine. 13 protocol invariants are checked at every state transition.
+All 33 adversarial scenarios (S24–S35) run against the live Clojure contract state machine via gRPC. 31 protocol invariants are checked at every state transition. The Clojure deterministic suite (S01–S41) runs in-process without a server.
 
 Run all: `cd python && python invariant_suite.py`
 Run one: `python invariant_suite.py --scenario F3`

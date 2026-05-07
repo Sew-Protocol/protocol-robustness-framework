@@ -10,6 +10,7 @@
   - Test 4 scenarios: baseline, governance failure, fraud spike, recovery"
   (:require [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.economics :as econ]
             [resolver-sim.sim.engine      :as engine]))
 
 ;;;; ============================================================================
@@ -175,7 +176,26 @@
                            :else "✅"))))
     
     (println (format "\n   Key Finding: %s\n" finding))
-    
+
+    ;; MC-B: Print breakeven detection rate so the economic security gap is visible
+    (let [escrow     (:escrow-size params 10000)
+          fee        (econ/calculate-fee escrow (:resolver-fee-bps params 150))
+          bond       (+ (econ/calculate-bond escrow (:appeal-bond-bps params 700))
+                        (econ/calculate-bond escrow (:resolver-bond-bps params 1000)))
+          bond-loss  (* bond (:slash-multiplier params 2.5))
+          breakeven  (econ/breakeven-detection escrow fee bond-loss)
+          current-d  (:slashing-detection-probability params 0.10)
+          fsr        (:fraud-success-rate params 0.0)]
+      (println "   ── Economic Deterrence Analysis ──────────────────────────────────────")
+      (println (format "   fraud-success-rate:    %.2f (set in params; 0.0 = protocol-income model only)" fsr))
+      (println (format "   current detection:     %.0f%%" (* 100 current-d)))
+      (println (format "   breakeven detection:   %.0f%% (needed to deter if every undetected fraud diverts escrow)" (* 100 breakeven)))
+      (if (>= current-d breakeven)
+        (println "   ✅ Detection is sufficient to deter fraud-as-escrow-diversion at current parameters")
+        (println (format "   ⚠️  Detection is %.0fx below breakeven — economic security relies on invariant suite"
+                         (/ breakeven current-d))))
+      (println "   ─────────────────────────────────────────────────────────────────────\n"))
+
     (engine/make-result
      {:benchmark-id "O"
       :label        "Market Exit Cascade"

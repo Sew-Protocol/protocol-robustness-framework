@@ -25,6 +25,17 @@
  :reversal-detection-probability 0.25
  :reversal-slash-bps 2500
  :timeout-slash-bps 200
+
+ ;; Sequential escalation fraud model (matches baseline.edn :base band).
+ ;; Without this, malicious resolvers have fsr=0.0 — honest retention is trivially stable.
+ :fraud-model :sequential-escalation
+ :escalation-assumption-band :base
+ :p-appeal-wrong  0.40
+ :p-l1-reversal   0.85
+ :has-kleros?     true
+ :p-l2-escalation 0.70
+ :p-l2-reversal   0.95
+ :fraud-success-rate 0.90  ; fallback for single-stage-ev compat
  
  :unstaking-delay-days 14
  :freeze-on-detection? true

@@ -27,7 +27,7 @@ This simulator provides a reusable library of failure modes, a deterministic sta
 Running `python invariant_suite.py` produces:
 - Per-scenario pass/fail with step counts and attack metrics
 - A reproducibility header (git SHA, Python version, UTC timestamp)
-- Summary statistics across all 33 scenarios (transactions, escrow volume, attack successes, invariant violations)
+- Summary statistics across the adversarial scenario suite (transactions, escrow volume, attack successes, invariant violations)
 - Optional JSON report for CI integration
 
 ## Who Should Use This
@@ -39,4 +39,4 @@ Running `python invariant_suite.py` produces:
 
 ## Relationship to the SEW Protocol
 
-This simulator was developed for the SEW (Simple Escrow with Waterfall) protocol, which implements a multi-level dispute resolution system with DR1 (fee-only), DR2 (reputation + bonds), and DR3 (full decentralised resolution with Kleros-style escalation). The failure modes tested are structural and apply to any protocol sharing these properties.
+This simulator was developed for the SEW (Simple Escrow with Waterfall) protocol, which implements a multi-level dispute resolution system with Kleros-style escalation. The failure modes tested are structural and apply to any protocol sharing these properties.

@@ -1,9 +1,14 @@
-# sew-simulation: Dispute Resolver Incentive Monte Carlo
+# Overview
 
-Clojure-based Monte Carlo simulation for validating dispute resolver network incentive economics.
+> **This file is a historical archive of the Monte Carlo incentive-economics phase.**
+> For the current overview, see:
+> - [docs/README.md](../README.md) — documentation index
+> - [docs/overview/SIMULATION_OVERVIEW.md](SIMULATION_OVERVIEW.md) — current simulation architecture
+> - [docs/RESEARCH_NOTE_V0.md](../RESEARCH_NOTE_V0.md) — research findings
 
-**Goal**: Prove that honest resolver participation is significantly more profitable than malice (3-7×) across various escrow sizes, fee structures, and network configurations.
+The content below is preserved for historical context only. It documents the DR1/DR2/DR3 Monte Carlo phases which preceded the current protocol-adapter replay and adversarial simulation approach.
 
+---
 ## Quick Start
 
 ```bash

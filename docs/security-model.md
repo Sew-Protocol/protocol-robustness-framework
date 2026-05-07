@@ -83,7 +83,7 @@ This simulator does **not** test:
 
 ## Invariant Coverage
 
-13 invariants are checked after every state transition. A violation halts the scenario immediately:
+31 invariants are checked after every state transition. A violation halts the scenario immediately:
 
 | Category | Invariants |
 |----------|-----------|

@@ -33,6 +33,12 @@
   adv:sweep:promote {:doc "Run sweep and emit top risky promotion backlog"
                      :task (shell "python3 python/adversarial_profitability_sweep.py --top-n 20")}
 
+  trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
+                 :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
+
+  report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
+                     :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
+
   lint {:doc "Lint code with clj-kondo"
         :task (clojure {:dir "." :extra-deps {clj-kondo/clj-kondo {:mvn/version "2024.01.11"}}}
                        "-m" "clj-kondo.main" "--lint" "src:test")}

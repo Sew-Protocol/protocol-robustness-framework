@@ -9,7 +9,7 @@
 
 ## What This Evidence Shows
 
-This repository contains a set of reproducible adversarial simulations demonstrating failure modes in Ethereum dispute resolution systems. Each scenario is deterministic, runs against a live contract state machine, and is verified against 13 protocol invariants at every state transition.
+This repository contains a set of reproducible adversarial simulations demonstrating failure modes in Ethereum dispute resolution systems. Each scenario is deterministic, runs against a live contract state machine, and is verified against 31 protocol invariants at every state transition.
 
 These are not theoretical vulnerabilities — they are emergent failures that occur under realistic multi-agent conditions that existing security tools cannot detect.
 

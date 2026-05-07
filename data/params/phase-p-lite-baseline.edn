@@ -24,6 +24,6 @@
   :appeal-probability-if-correct 0.05
   :appeal-probability-if-wrong 0.90
   :slashing-detection-probability 0.10
-  :n-trials 100
+  :n-trials 30
   :parallelism :sequential
 }

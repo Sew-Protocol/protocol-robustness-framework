@@ -10,6 +10,7 @@
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
 #   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
+#   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
 #
 # Exit code: 0 = all passed, 1 = any failure.
 
@@ -490,6 +491,51 @@ PY
   return $?
 }
 
+run_monte_carlo() {
+  # ──────────────────────────────────────────────────────────────────────────
+  # HOW THE TWO SIMULATION ENGINES RELATE
+  #
+  # Engine 1 — Monte Carlo (stochastic + sim/economic|adversarial|governance/)
+  # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
+  #
+  # This sweep runs representative phases for expected-value/regime checks.
+  # ──────────────────────────────────────────────────────────────────────────
+
+  echo "Running Monte Carlo representative sweep (4 domains)..."
+  echo ""
+  echo "  Phase O  — Economic:    market exit cascade (honest vs malice profitability)"
+  echo "  Phase P  — Adversarial: appeals falsification (difficulty/evidence/herding)"
+  echo "  Phase AA — Governance:  governance-as-adversary (selective enforcement gaming)"
+  echo "  Phase AD — Governance:  bandwidth floor safeguard (AA remediation)"
+  echo ""
+
+  local mc_fail=0
+
+  echo "── Phase O: Market Exit Cascade ──────────────────────────────────────────"
+  clojure -M:run -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase P Lite: Appeals Falsification ───────────────────────────────────"
+  clojure -M:run -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase AA: Governance as Adversary ─────────────────────────────────────"
+  clojure -M:run -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase AD: Governance Bandwidth Floor (AA safeguard) ───────────────────"
+  clojure -M:run -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  if [ "$mc_fail" -eq 0 ]; then
+    echo "Monte Carlo sweep: all 4 phases PASSED"
+  else
+    echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
+  fi
+
+  return $mc_fail
+}
+
 case "$MODE" in
   unit)
     run_unit || FAILURES=$((FAILURES + 1))
@@ -524,6 +570,9 @@ case "$MODE" in
   adversarial-gates)
     run_target adversarial-gates run_adversarial_gates || FAILURES=$((FAILURES + 1))
     ;;
+  monte-carlo)
+    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+    ;;
   all)
     : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
     run_target unit run_unit || FAILURES=$((FAILURES + 1))
@@ -537,10 +586,12 @@ case "$MODE" in
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|suites|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|all]"
     exit 1
     ;;
 esac

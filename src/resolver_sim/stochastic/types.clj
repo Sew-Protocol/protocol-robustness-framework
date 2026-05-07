@@ -23,6 +23,12 @@
    :reversal-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :reversal-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
    :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
+   :fraud-model (fn [x] (contains? #{:single-stage-ev :sequential-escalation :strict-all-tiers} x))
+   :escalation-assumption-band (fn [x] (contains? #{:conservative :base :optimistic} x))
+   :p-appeal-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+   :p-l1-reversal (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+   :p-l2-escalation (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+   :p-l2-reversal (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :n-trials (fn [x] (and (integer? x) (> x 0)))
    :n-seeds (fn [x] (and (integer? x) (> x 0)))
    :parallelism (fn [x] (or (keyword? x) (integer? x)))})
@@ -74,6 +80,12 @@
    :reversal-detection-probability 0.0          ; Phase I: reversal detection disabled by default
    :reversal-slash-bps 0                        ; Phase I: reversal slashing disabled (0 bps)
    :timeout-slash-bps 200                       ; Phase I: timeout penalty (2% = 200 bps, from contracts)
+   :fraud-model :single-stage-ev                ; legacy default for backward compatibility
+   :escalation-assumption-band :base            ; for :sequential-escalation mode
+   :p-appeal-wrong 0.40
+   :p-l1-reversal 0.75
+   :p-l2-escalation 0.55
+   :p-l2-reversal 0.88
    :n-trials 1000
    :n-seeds 1
    :parallelism :auto
@@ -107,6 +119,13 @@
     :fraud-slash-bps
     :reversal-slash-bps
     :timeout-slash-bps
+    :fraud-model
+    :escalation-assumption-band
+    :escalation-assumptions
+    :p-appeal-wrong
+    :p-l1-reversal
+    :p-l2-escalation
+    :p-l2-reversal
     :ring-spec
     :l2-detection-prob
     :senior-resolver-skill})
