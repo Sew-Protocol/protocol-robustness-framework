@@ -5,6 +5,7 @@ import os
 
 GRAPHQL_URL = "http://127.0.0.1:8080/graphql"
 OUTPUT_DIR = "outputs"
+REQUEST_TIMEOUT_SECONDS = 10
 
 def hex_to_str(hex_str):
     if hex_str.startswith("0x"):
@@ -32,7 +33,7 @@ def fetch_results():
     """
     print(f"[*] Fetching notices from {GRAPHQL_URL}...")
     try:
-        response = requests.post(GRAPHQL_URL, json={'query': query})
+        response = requests.post(GRAPHQL_URL, json={'query': query}, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         notices = data.get("data", {}).get("notices", {}).get("edges", [])
@@ -46,7 +47,6 @@ def fetch_results():
         for edge in notices:
             node = edge["node"]
             idx = node["index"]
-            input_idx = node["input"]["index"]
             payload = node["payload"]
             
             decoded = hex_to_str(payload)

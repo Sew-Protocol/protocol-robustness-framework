@@ -19,9 +19,10 @@ jobs:
           java-version: '21'
 
       - name: Install Clojure CLI
-        uses: DeLaGuardo/setup-clojure@13.2
-        with:
-          cli: latest
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -52,9 +53,10 @@ jobs:
           java-version: '21'
 
       - name: Install Clojure CLI
-        uses: DeLaGuardo/setup-clojure@13.2
-        with:
-          cli: latest
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
 
       - name: Run transition/guard coverage gate
         env:
@@ -107,9 +109,10 @@ jobs:
           java-version: '21'
 
       - name: Install Clojure CLI
-        uses: DeLaGuardo/setup-clojure@13.2
-        with:
-          cli: latest
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
 
       - name: Run equivalence comparison gates
         run: ./scripts/test.sh equivalence-new

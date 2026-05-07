@@ -3,8 +3,7 @@ import json
 import binascii
 import requests
 import argparse
-import time
-import sys
+from pathlib import Path
 
 # Configuration
 DAPP_ADDRESS = "0xab7528bb862fB57E8A2BCd567a2e929a0Be56a5e"
@@ -13,6 +12,8 @@ RPC_URL = "http://127.0.0.1:8545"
 INSPECT_URL = "http://127.0.0.1:8080/inspect"
 GRAPHQL_URL = "http://127.0.0.1:8080/graphql"
 PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+REQUEST_TIMEOUT_SECONDS = 10
+SUBPROCESS_TIMEOUT_SECONDS = 30
 
 def hex_to_str(hex_str):
     if hex_str.startswith("0x"):
@@ -24,11 +25,16 @@ def str_to_hex(s):
 
 def send_scenario(file_path):
     print(f"[*] Reading scenario from {file_path}...")
+    scenario_path = Path(file_path).resolve()
+    if scenario_path.suffix.lower() != ".json":
+        print("[!] Error: only .json scenario files are allowed.")
+        return
+
     try:
-        with open(file_path, "r") as f:
+        with scenario_path.open("r", encoding="utf-8") as f:
             scenario = f.read()
     except FileNotFoundError:
-        print(f"[!] Error: File {file_path} not found.")
+        print(f"[!] Error: File {scenario_path} not found.")
         return
 
     hex_payload = str_to_hex(scenario)
@@ -40,8 +46,15 @@ def send_scenario(file_path):
         "--private-key", PRIVATE_KEY
     ]
     
-    print(f"[*] Sending transaction to InputBox...")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    print("[*] Sending transaction to InputBox...")
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        shell=False,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
+    )
     
     if result.returncode != 0:
         print("[!] Error sending transaction:")
@@ -60,7 +73,7 @@ def inspect_state(query="all"):
     url = f"{INSPECT_URL}/{payload}"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         
@@ -98,7 +111,7 @@ def get_notices():
     }
     """
     try:
-        response = requests.post(GRAPHQL_URL, json={'query': query})
+        response = requests.post(GRAPHQL_URL, json={'query': query}, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         notices = data.get("data", {}).get("notices", {}).get("edges", [])

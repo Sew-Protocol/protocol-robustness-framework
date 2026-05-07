@@ -19,7 +19,8 @@ ARG MACHINE_EMULATOR_TOOLS_VERSION=0.14.1
 ADD https://github.com/cartesi/machine-emulator-tools/releases/download/v${MACHINE_EMULATOR_TOOLS_VERSION}/machine-emulator-tools-v${MACHINE_EMULATOR_TOOLS_VERSION}.deb /
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
     dpkg -i /machine-emulator-tools-v${MACHINE_EMULATOR_TOOLS_VERSION}.deb && \
-    rm /machine-emulator-tools-v${MACHINE_EMULATOR_TOOLS_VERSION}.deb
+    rm /machine-emulator-tools-v${MACHINE_EMULATOR_TOOLS_VERSION}.deb && \
+    rm -rf /var/lib/apt/lists/*
 
 LABEL io.cartesi.rollups.sdk_version=0.9.0
 LABEL io.cartesi.rollups.ram_size=256Mi

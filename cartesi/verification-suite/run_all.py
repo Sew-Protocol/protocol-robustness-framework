@@ -1,10 +1,10 @@
 import subprocess
 import os
-import json
 import binascii
 import time
 import argparse
 from pathlib import Path
+import shutil
 
 def env(name, default=None, required=False):
     value = os.getenv(name, default)
@@ -19,11 +19,15 @@ INPUT_BOX_ADDRESS = env("INPUT_BOX_ADDRESS", "0x59b22D57D4f067708AB0c00552767405
 RPC_URL = env("RPC_URL", "http://127.0.0.1:8545")
 PRIVATE_KEY = env("PRIVATE_KEY", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
 ENVIRONMENT = env("APP_ENV", "dev")
+SUBPROCESS_TIMEOUT_SECONDS = 30
 
 def str_to_hex(s):
     return "0x" + binascii.hexlify(s.encode("utf-8")).decode("utf-8")
 
 def run_suite(dry_run=False):
+    if shutil.which("cast") is None:
+        raise RuntimeError("Required executable 'cast' not found on PATH")
+
     if ENVIRONMENT != "dev":
         # In non-dev environments, explicit config is required.
         env("DAPP_ADDRESS", required=True)
@@ -61,7 +65,14 @@ def run_suite(dry_run=False):
             print("DRY-RUN")
             continue
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            shell=False,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        )
         
         if result.returncode == 0:
             print("OK")
