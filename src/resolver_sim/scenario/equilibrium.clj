@@ -399,6 +399,9 @@
         proof-sketch (str
                       "Claim: Bounded public-state SPE proxy under declared strategy profile "
                       (or (:id strategy-profile) "unknown") ".\n\n"
+                      "Note: Alternatives are heuristic utility estimates under a trace-following "
+                      "continuation policy, not independent protocol replays. Regret values are "
+                      "proxy measurements; this is not a formal SPE proof.\n\n"
                       "Checked:\n"
                       "  - " (long (or proper-subgames-checked 0)) " proper subgame node(s)\n"
                       "  - " (long (or information-set-nodes-checked 0)) " information-set node(s) (inconclusive)\n"
@@ -611,7 +614,12 @@
     :equilibrium-results {concept-kw → result-map}
     :equilibrium-status :pass | :fail | :inconclusive | :not-applicable | :not-checked}"
   [theory result]
-  (let [projection   (proj/trace-end-projection result)
+  (let [raw-proj     (proj/trace-end-projection result)
+        ;; Thread spe-config from the theory block into the projection so that
+        ;; evaluate-subgame-counterfactual uses the declared thresholds/epsilon
+        ;; values rather than its own defaults (regret-threshold=0, epsilon-abs=0.0).
+        projection   (cond-> raw-proj
+                       (:spe-config theory) (assoc :spe-config (:spe-config theory)))
         mech-props   (seq (:mechanism-properties theory))
         eq-concepts  (seq (:equilibrium-concept theory))
 

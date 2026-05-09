@@ -108,11 +108,15 @@
             (into #{} (keep :agent trace))
 
             ;; Distill decisions for SPE validation.
+            ;; Only strategic actions that classify as proper-subgame or information-set nodes
+            ;; are included. "release", "sender_cancel", "recipient_cancel" are routine protocol
+            ;; mechanics, not strategic equilibrium decisions — excluding them prevents silent
+            ;; :not-spe-checkable inflation in the SPE coverage counts.
             ;; :address resolves agent-id -> protocol address so SPE can look up
             ;; resolver-stakes (keyed by address, not agent ID).
             decisions (vec (keep (fn [entry]
-                                   (when (contains? #{"raise_dispute" "escalate_dispute" "release"
-                                                      "sender_cancel" "recipient_cancel" "execute_resolution"}
+                                   (when (contains? #{"raise_dispute" "escalate_dispute"
+                                                      "execute_resolution"}
                                                     (:action entry))
                                      (let [agent-id (:agent entry)
                                            addr     (get agents-by-id agent-id agent-id)]

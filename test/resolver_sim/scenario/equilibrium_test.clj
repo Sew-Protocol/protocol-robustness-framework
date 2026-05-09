@@ -519,3 +519,53 @@
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj)
                      :bounded-public-state-epsilon-spe)]
       (is (= :inconclusive (:status result))))))
+
+;; ---------------------------------------------------------------------------
+;; Fix 1 regression: spe-config from theory block must be threaded to evaluator
+;; ---------------------------------------------------------------------------
+
+(defn- minimal-replay-result
+  "Minimal replay result that trace-end-projection can process.
+   Produces a resolver execute_resolution decision with regret=50.
+
+   Wealth is keyed by address '0xresolver' (not agent-id 'resolver') because
+   trace-end-projection resolves agent-id → address via :agents, and the SPE
+   evaluator looks up wealth using actor = (or address agent).
+
+   pre-wealth=100 (seq=0 register_stake), terminal-wealth=50 (seq=1 execute_resolution)."
+  []
+  {:trace [{:world {:claimable {"e1" {"0xresolver" 100}}
+                    :live-states {"e1" "disputed"}
+                    :total-held {}
+                    :total-fees {}}
+             :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+            {:world {:claimable {"e1" {"0xresolver" 50}}
+                     :live-states {"e1" "released"}
+                     :total-held {}
+                     :total-fees {}}
+             :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+   :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
+   :metrics {}})
+
+(deftest test-spe-config-threading-from-theory
+  (testing "spe-config from theory block is used by the evaluator (not defaults)"
+    (let [result (minimal-replay-result)
+          ;; regret=50 > threshold=0 and > epsilon-abs=0 → FAIL
+          theory-strict {:equilibrium-concept ["subgame-perfect-equilibrium"]
+                         :spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}}
+          ;; regret=50 <= threshold=9999, and 50 < epsilon-abs=200, 50/50=1.0 not > 1.0 → PASS
+          theory-lenient {:equilibrium-concept ["subgame-perfect-equilibrium"]
+                          :spe-config {:regret-threshold 9999 :epsilon-abs 200.0 :epsilon-rel 1.0}}
+          r-strict  (-> (eq/evaluate-equilibrium theory-strict result)
+                        :equilibrium-results :subgame-perfect-equilibrium)
+          r-lenient (-> (eq/evaluate-equilibrium theory-lenient result)
+                        :equilibrium-results :subgame-perfect-equilibrium)]
+      ;; Strict threshold: regret(50) > 0 → fail
+      (is (= :fail (:status r-strict))
+          "regret-threshold=0 should fail when resolver wealth drops by 50")
+      ;; Lenient threshold: regret(50) <= 9999 and within epsilon → pass
+      (is (= :pass (:status r-lenient))
+          "regret-threshold=9999 + epsilon-abs=200 should pass when resolver wealth drops by 50")
+      ;; Confirm the declared threshold is visible in the observed payload
+      (is (= 9999 (get-in r-lenient [:observed :spe-threshold]))
+          "spe-threshold in observed should reflect the theory-declared value, not default 0"))))

@@ -108,11 +108,15 @@
        :spe/checkability :proper-subgame
        :checkability-reason "all protocol state public; resolver verdict from known public dispute state"}
 
-      ;; Seller escalation from a known dispute state is a proper subgame.
+      ;; Seller escalation from a known dispute state is treated as a proper subgame.
+      ;; Assumption: seller delivery state is publicly observable by the time of escalation
+      ;; (the dispute was already raised and protocol state is on-chain). This is a modeling
+      ;; assumption — if seller private evidence quality were material, this would be an
+      ;; information-set node. Mark as :proper-subgame under the public-state assumption.
       :else
       {:checkability :proper-subgame
        :spe/checkability :proper-subgame
-       :checkability-reason "protocol dispute state is public; escalation from known dispute state"})))
+       :checkability-reason "protocol dispute state is public; escalation from known dispute state (assumes seller delivery status observable)"})))
 
 ;; ---------------------------------------------------------------------------
 ;; Phase G — Strategy profile definition
