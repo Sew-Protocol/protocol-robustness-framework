@@ -11,7 +11,8 @@
     {"id": "seller", "address": "0xseller", "type": "honest"},
     {"id": "l0resolver", "address": "0xl0", "type": "resolver"},
     {"id": "l1resolver", "address": "0xl1", "type": "resolver"},
-    {"id": "badresolver", "address": "0xbadresolver", "type": "attacker"}
+    {"id": "badresolver", "address": "0xbadresolver", "type": "attacker"},
+    {"id": "keeper", "address": "0xkeeper", "type": "resolver"}
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -26,6 +27,7 @@
     {"seq": 2, "time": 1120, "agent": "l0resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl0hash"}},
     {"seq": 3, "time": 1130, "agent": "buyer", "action": "escalate_dispute", "params": {"workflow-id": "wf0"}},
     {"seq": 4, "time": 1140, "agent": "badresolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xwrongtier"}},
-    {"seq": 5, "time": 1200, "agent": "l1resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl1hash"}}
+    {"seq": 5, "time": 1200, "agent": "l1resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl1hash"}},
+    {"seq": 6, "time": 1260, "agent": "keeper", "action": "execute_pending_settlement", "params": {"workflow-id": "wf0"}}
   ]
 }

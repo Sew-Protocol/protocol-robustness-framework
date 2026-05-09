@@ -13,4 +13,8 @@
   :suites/equivalence-race-pairs {:file "equivalence-race-pairs.edn" :title "Equivalence Settlement Race Counterfactual Pairs" :class :ordering :criticality :high}
   :suites/equivalence-escalation-boundaries {:file "equivalence-escalation-boundaries.edn" :title "Equivalence Escalation Boundary Chains" :class :ordering :criticality :high}
   :suites/equivalence-accounting-min {:file "equivalence-accounting-min.edn" :title "Equivalence Accounting-Min Semantics" :class :economic :criticality :high}
+  :suites/equivalence-alias-boundaries {:file "equivalence-alias-boundaries.edn" :title "Equivalence Alias & Boundary Guards" :class :ordering :criticality :high}
+  :suites/equivalence-ordering-terminal-determinism {:file "equivalence-ordering-terminal-determinism.edn" :title "Equivalence Ordering/Terminal/Determinism" :class :ordering :criticality :high}
+  :suites/equivalence-economic-stress {:file "equivalence-economic-stress.edn" :title "Equivalence Economic Stress" :class :economic :criticality :high}
+  :suites/equivalence-governance-snapshot {:file "equivalence-governance-snapshot.edn" :title "Equivalence Governance Snapshot Isolation" :class :governance :criticality :high}
 }
