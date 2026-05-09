@@ -153,20 +153,30 @@
    :inconclusive when payoff-ledger is not tracked (negative-payoff-count = nil).
    Falls back to partial proxy (funds-lost = 0) when full ledger absent.
    :pass when negative-payoff-count = 0 or (partial) funds-lost = 0."
-  [{:keys [metrics]}]
+  [{:keys [metrics payoff-ledger-summary]}]
   (let [npc  (:negative-payoff-count metrics)
+        ledger (get payoff-ledger-summary :per-actor {})
         lost (:funds-lost metrics 0)]
     (cond
       ;; Full payoff ledger available
       (some? npc)
       (if (zero? npc)
         (pass :individual-rationality :single-trace-metric-proxy
-              {:negative-payoff-count npc}
+              {:negative-payoff-count npc
+               :actors-evaluated (count ledger)}
               "no participant ended with negative net payoff")
         (fail :individual-rationality :single-trace-metric-proxy
-              {:negative-payoff-count npc}
+              {:negative-payoff-count npc
+               :actors-evaluated (count ledger)}
               {:negative-payoff-count 0}
-              [{:metric :negative-payoff-count :observed npc}]))
+              (if (seq ledger)
+                (->> ledger
+                     (keep (fn [[actor row]]
+                             (let [net (long (:net-payoff row 0))]
+                               (when (neg? net)
+                                 {:actor actor :net-payoff net :metric :negative-payoff-count}))))
+                     vec)
+                [{:metric :negative-payoff-count :observed npc}])))
 
       ;; Partial proxy: funds-lost only
       (pos? lost)
@@ -185,17 +195,19 @@
 
    :inconclusive for single-trace (coalition-net-profit requires multi-epoch
    runner or population data). Checks metric if present."
-  [{:keys [metrics]}]
+  [{:keys [metrics payoff-ledger-summary]}]
   (let [cnp (:coalition-net-profit metrics)]
     (if (nil? cnp)
       (inconclusive :collusion-resistance :multi-trace-required
                     "coalition-net-profit metric absent; requires multi-epoch batch runner")
       (if (<= cnp 0)
         (pass :collusion-resistance :single-trace-metric-proxy
-              {:coalition-net-profit cnp}
+              {:coalition-net-profit cnp
+               :ledger-coalition-net-profit (get payoff-ledger-summary :coalition-net-profit)}
               "coalition net profit ≤ 0")
         (fail :collusion-resistance :single-trace-metric-proxy
-              {:coalition-net-profit cnp}
+              {:coalition-net-profit cnp
+               :ledger-coalition-net-profit (get payoff-ledger-summary :coalition-net-profit)}
               {:coalition-net-profit "≤ 0"}
               [{:metric :coalition-net-profit :observed cnp}])))))
 

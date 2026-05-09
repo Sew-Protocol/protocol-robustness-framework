@@ -132,3 +132,63 @@
       (is (= {:created 1 :cleared 1 :superseded 1}
              (get-in p [:money-movement-summary :pending-lifecycle :unknown])))
       (is (= 30 (get-in p [:stake-flow-summary "0xR" :withdrawn]))))))
+
+(deftest test-trace-end-projection-payoff-ledger-v1
+  (testing "payoff-ledger summary exposes per-actor deltas and aggregate metrics"
+    (let [trace [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+                  :world {:live-states {0 :disputed}
+                          :pending-count 0
+                          :total-held {"USDC" 1000}
+                          :total-fees {"USDC" 0}
+                          :resolver-stakes {"0xR" 100}
+                          :claimable {0 {"0xbuyer" 0}}
+                          :bond-balances {0 {"0xbuyer" 0}}
+                          :block-time 1000}}
+                 {:seq 1 :time 1010 :agent "resolver" :action "execute_resolution"
+                  :world {:live-states {0 :released}
+                          :pending-count 0
+                          :total-held {"USDC" 0}
+                          :total-fees {"USDC" 10}
+                          :resolver-stakes {"0xR" 90}
+                          :claimable {0 {"0xbuyer" 990}}
+                          :bond-balances {0 {"0xbuyer" 0}}
+                          :block-time 1010}}]
+          p (proj/trace-end-projection
+             (replay-result {:trace trace
+                             :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
+                                      {:id "resolver" :address "0xR" :type "resolver"}]
+                             :metrics {}}))]
+      ;; Ledger is event-actor-attributed in v1, so resolver row is guaranteed
+      ;; to exist for this synthetic trace.
+      (is (number? (get-in p [:payoff-ledger-summary :per-actor "0xR" :net-payoff])))
+      (is (number? (get-in p [:payoff-ledger-summary :negative-payoff-count])))
+      (is (= (get-in p [:payoff-ledger-summary :negative-payoff-count])
+             (get-in p [:metrics :negative-payoff-count]))))))
+
+(deftest test-trace-end-projection-coalition-net-profit
+  (testing "coalition-net-profit is derived when coalition tags exist"
+    (let [trace [{:seq 0 :time 1000 :agent "colluder" :action "create_escrow"
+                  :world {:live-states {0 :disputed}
+                          :total-held {"USDC" 100}
+                          :total-fees {"USDC" 0}
+                          :resolver-stakes {}
+                          :claimable {0 {"0xC" 0}}
+                          :bond-balances {}
+                          :pending-count 0
+                          :block-time 1000}}
+                 {:seq 1 :time 1010 :agent "colluder" :action "release"
+                  :world {:live-states {0 :released}
+                          :total-held {"USDC" 0}
+                          :total-fees {"USDC" 0}
+                          :resolver-stakes {}
+                          :claimable {0 {"0xC" 100}}
+                          :bond-balances {}
+                          :pending-count 0
+                          :block-time 1010}}]
+          p (proj/trace-end-projection
+             (replay-result {:trace trace
+                             :agents [{:id "colluder" :address "0xC" :strategy "collusive"}]
+                             :metrics {}}))]
+      (is (number? (get-in p [:metrics :coalition-net-profit])))
+      (is (= (get-in p [:metrics :coalition-net-profit])
+             (get-in p [:payoff-ledger-summary :coalition-net-profit]))))))

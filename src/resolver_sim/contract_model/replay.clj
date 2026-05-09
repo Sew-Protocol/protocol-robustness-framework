@@ -115,7 +115,9 @@
     :invariant-violations
     :double-settlements
     :invalid-state-transitions
-    :funds-lost})
+    :funds-lost
+    :negative-payoff-count
+    :coalition-net-profit})
 
 (defn- metric-key
   "Coerce a metric name (string or keyword) to a keyword, stripping any
@@ -243,6 +245,8 @@
    :double-settlements           0
    :invalid-state-transitions    0
    :funds-lost                   0
+   :negative-payoff-count        nil
+   :coalition-net-profit         nil
    ;; Per-invariant failure map: {inv-kw :fail} for any invariant that
    ;; violated at least once during the run. Invariants NOT in this map
    ;; either passed throughout or were never exercised.  Used exclusively
