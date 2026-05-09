@@ -88,3 +88,22 @@
     (is (number? (:mean-regret out)))
     (is (= 1 (:exceed-epsilon-count out)))
     (is (= 1 (get-in out [:regret-distribution :positive])))))
+
+(deftest evaluate-subgame-counterfactual-phase-e-memoization-and-timing-variants
+  (let [projection {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
+                                {:world {:claimable {"e1" {"buyer" 0}}}}]
+                    ;; duplicate nodes to force in-evaluation cache hits
+                    :decisions [{:seq 1 :agent "buyer" :action "raise_dispute"}
+                                {:seq 1 :agent "buyer" :action "raise_dispute"}]
+                    :terminal-world {:terminal? true}
+                    :spe-config {:regret-threshold 100
+                                 :max-alternatives-per-node 7
+                                 :enable-timing-variants? true
+                                 :enable-exogenous-variants? true}}
+        out (cf/evaluate-subgame-counterfactual projection)
+        row (first (:regret-table out))]
+    (is (= true (get-in out [:memoization :enabled])))
+    (is (pos? (get-in out [:memoization :entries])))
+    (is (pos? (get-in out [:memoization :hits])))
+    (is (some #({"wait_same_block" "wait_next_block"} %) (:alternatives row)))
+    (is (some #({"hold_exogenous_fixed" "allow_exogenous_shift"} %) (:alternatives row)))))

@@ -91,8 +91,13 @@
                  (seq (:available-actions info-set))
                  (seq (get action-alternatives action []))
                  [])
+        timing-variants (when (get spe-config :enable-timing-variants? true)
+                          ["wait_same_block" "wait_next_block"])
+        exogenous-variants (when (get spe-config :enable-exogenous-variants? true)
+                             ["hold_exogenous_fixed" "allow_exogenous_shift"])
+        enriched (concat base timing-variants exogenous-variants)
         cap  (long (get spe-config :max-alternatives-per-node 3))]
-    (->> base
+    (->> enriched
          (remove #(= % action))
          distinct
          (take (max 0 cap))
@@ -254,14 +259,32 @@
        :requires ["trace ends before terminal settlement; counterfactual SPE proxy unavailable"]}
 
       :else
-      (let [rows0      (mapv #(node->table-row {:raw-trace raw-trace
-                                                :terminal-state terminal-state
-                                                :continuation-policy continuation-policy
-                                                :replay-boundary replay-boundary
-                                                :utility-spec utility-spec}
-                                               %
-                                               spe-config)
-                             decision-nodes)
+      (let [memo*      (atom {})
+            cache-key  (fn [node]
+                         [(:seq node)
+                          (:agent node)
+                          (:action node)
+                          (:mode continuation-policy)
+                          (:version continuation-policy)
+                          (:type utility-spec)
+                          (:version utility-spec)
+                          (long (get spe-config :max-alternatives-per-node 3))
+                          (boolean (get spe-config :enable-timing-variants? true))
+                          (boolean (get spe-config :enable-exogenous-variants? true))])
+            cached-row (fn [node]
+                         (let [k (cache-key node)]
+                           (if-let [hit (get @memo* k)]
+                             (assoc hit :memoization-hit? true)
+                             (let [computed (node->table-row {:raw-trace raw-trace
+                                                              :terminal-state terminal-state
+                                                              :continuation-policy continuation-policy
+                                                              :replay-boundary replay-boundary
+                                                              :utility-spec utility-spec}
+                                                             node
+                                                             spe-config)]
+                               (swap! memo* assoc k computed)
+                               (assoc computed :memoization-hit? false)))))
+            rows0      (mapv cached-row decision-nodes)
             rows       (mapv (fn [r]
                                (assoc r :bundle-regret
                                       (compute-bundle-regret (:local-regret r) max-depth)))
@@ -306,6 +329,9 @@
          :utility-spec utility-spec
          :class-counts class-counts
          :exceed-epsilon-count exceed-count
+         :memoization {:enabled true
+                       :entries (count @memo*)
+                       :hits (count (filter :memoization-hit? rows0))}
          :regret-distribution {:zero (count (filter zero? regrets))
                                :positive (count (filter pos? regrets))}
          :checked-nodes (count rows)

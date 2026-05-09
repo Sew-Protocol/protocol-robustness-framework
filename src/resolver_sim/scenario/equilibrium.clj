@@ -382,7 +382,8 @@
   [projection]
   (let [{:keys [status basis regret-table max-regret mean-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec class-counts
-                exceed-epsilon-count regret-distribution epsilon-abs epsilon-rel]}
+                exceed-epsilon-count regret-distribution epsilon-abs epsilon-rel
+                max-deviation-depth memoization]}
         (subgame-cf/evaluate-subgame-counterfactual projection)
         observed {:spe-status      status
                   :spe-summary     (case status
@@ -396,11 +397,13 @@
                   :spe-threshold    threshold
                   :spe-epsilon-abs epsilon-abs
                   :spe-epsilon-rel epsilon-rel
+                  :spe-max-deviation-depth max-deviation-depth
                   :spe-continuation-policy continuation-policy
                   :spe-replay-boundary replay-boundary
                   :spe-utility-spec utility-spec
                   :spe-class-counts class-counts
                   :spe-exceed-epsilon-count exceed-epsilon-count
+                  :spe-memoization memoization
                   :spe-regret-distribution regret-distribution
                   :decisions-checked checked-nodes
                   :spe-violations   (vec (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) regret-table))}]
