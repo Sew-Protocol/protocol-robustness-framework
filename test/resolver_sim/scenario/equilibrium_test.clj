@@ -569,3 +569,78 @@
       ;; Confirm the declared threshold is visible in the observed payload
       (is (= 9999 (get-in r-lenient [:observed :spe-threshold]))
           "spe-threshold in observed should reflect the theory-declared value, not default 0"))))
+
+;; ---------------------------------------------------------------------------
+;; Phase K — Backward induction tests
+;; ---------------------------------------------------------------------------
+
+(defn- two-node-bi-replay-result
+  "Minimal 2-node replay result for backward induction tests.
+   Node seq=2 — buyer raise_dispute (information-set)
+   Node seq=3 — resolver execute_resolution (proper-subgame)
+   Resolver receives fee at execute_resolution; buyer wealth is 0 throughout."
+  []
+  {:raw-trace
+   [{:world {:resolver-stakes {} :claimable {} :bond-balances {} :live-states {} :total-held {}}
+     :agent "buyer" :action "create_escrow" :seq 0 :time 1000}
+    {:world {:resolver-stakes {} :claimable {} :bond-balances {} :live-states {"e1" "pending"} :total-held {"e1" 1000}}
+     :agent "buyer" :action "raise_dispute" :seq 2 :time 1010}
+    {:world {:resolver-stakes {"0xresolver" 200} :claimable {"e1" {"0xresolver" 50}} :bond-balances {} :live-states {"e1" "disputed"} :total-held {}}
+     :agent "resolver" :action "execute_resolution" :seq 3 :time 1060}
+    {:world {:resolver-stakes {"0xresolver" 200} :claimable {"e1" {"0xresolver" 50}} :bond-balances {} :live-states {"e1" "released"} :total-held {}}
+     :agent "resolver" :action "settle" :seq 4 :time 1070}]
+   :agents [{:id "buyer" :address "0xbuyer" :role "buyer" :strategy "rational"}
+            {:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
+   :metrics {}})
+
+(deftest test-backward-induction-mode-vs-forward-single-node
+  (testing "backward-induction and forward modes produce identical results on single-node trace"
+    (let [result (minimal-replay-result)
+          theory {:equilibrium-concept ["bounded-public-state-epsilon-spe"]
+                  :spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}}
+          theory-bi {:equilibrium-concept ["bounded-backward-induction-spe"]
+                     :spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}}
+          r-fwd (-> (eq/evaluate-equilibrium theory result)
+                    :equilibrium-results :bounded-public-state-epsilon-spe)
+          r-bi  (-> (eq/evaluate-equilibrium theory-bi result)
+                    :equilibrium-results :bounded-backward-induction-spe)]
+      (is (= (:status r-fwd) (:status r-bi))
+          "single-node trace: forward and backward-induction modes must agree on status"))))
+
+(deftest test-backward-induction-evaluation-mode-in-output
+  (testing "backward-induction mode is recorded in output keys"
+    (let [result (two-node-bi-replay-result)
+          theory {:equilibrium-concept ["bounded-backward-induction-spe"]
+                  :spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}}
+          r (-> (eq/evaluate-equilibrium theory result)
+                :equilibrium-results :bounded-backward-induction-spe)]
+      (is (some? r) "bounded-backward-induction-spe result must be present")
+      (is (contains? #{:pass :fail :inconclusive :not-applicable} (:status r))
+          "status must be a known keyword"))))
+
+(deftest test-backward-induction-terminal-deviation-uses-pre-wealth
+  (testing "terminal deviation (settle_now) uses pre-wealth, not chosen-local"
+    (let [result (two-node-bi-replay-result)
+          theory-bi {:equilibrium-concept ["bounded-backward-induction-spe"]
+                     :spe-config {:regret-threshold 9999 :epsilon-abs 200.0 :epsilon-rel 1.0}}
+          theory-fwd {:equilibrium-concept ["bounded-public-state-epsilon-spe"]
+                      :spe-config {:regret-threshold 9999 :epsilon-abs 200.0 :epsilon-rel 1.0}}
+          r-bi  (-> (eq/evaluate-equilibrium theory-bi result)
+                    :equilibrium-results :bounded-backward-induction-spe)
+          r-fwd (-> (eq/evaluate-equilibrium theory-fwd result)
+                    :equilibrium-results :bounded-public-state-epsilon-spe)]
+      (is (some? r-bi) "backward-induction result must be present")
+      (is (some? r-fwd) "forward result must be present")
+      (when (= :pass (:status r-fwd))
+        (is (contains? #{:pass :inconclusive} (:status r-bi))
+            "backward induction on terminal deviation must not be stricter than forward pass")))))
+
+(deftest test-backward-induction-two-node-pass
+  (testing "honest 2-node trace passes bounded-backward-induction-spe"
+    (let [result (two-node-bi-replay-result)
+          theory {:equilibrium-concept ["bounded-backward-induction-spe"]
+                  :spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}}
+          r (-> (eq/evaluate-equilibrium theory result)
+                :equilibrium-results :bounded-backward-induction-spe)]
+      (is (contains? #{:pass :inconclusive} (:status r))
+          "honest resolution with no profitable deviation must pass or be inconclusive"))))

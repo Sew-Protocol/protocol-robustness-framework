@@ -147,6 +147,63 @@
         b (reduce + 0 (for [[_ wf] bonds] (get wf agent-id 0)))]
     (+ s c b)))
 
+;; ---------------------------------------------------------------------------
+;; Phase K — Backward induction helpers
+;; ---------------------------------------------------------------------------
+
+;; Alternative actions that end the current game path for the deviating agent.
+;; Taking a terminal action means no downstream subgames apply to that agent.
+(def ^:private terminal-deviation-actions
+  #{"settle_now" "wait" "no_challenge" "no_escalation"})
+
+(defn- classify-deviation-action
+  "Phase K: classify an alternative action as :terminal-deviation or
+   :continuation-deviation.
+   :terminal-deviation    — agent exits the game path; downstream subgames do not apply.
+   :continuation-deviation — agent stays in game with a different action; downstream
+                             subgame outcomes still propagate to their utility."
+  [alt-action]
+  (if (contains? terminal-deviation-actions alt-action)
+    :terminal-deviation
+    :continuation-deviation))
+
+(defn- build-agent-wealth-table
+  "Phase K: walk raw-trace and return {trace-idx → {actor-addr → wealth}}.
+   Only actors in the supplied set are tracked. Entries without a :world are skipped."
+  [raw-trace actors]
+  (into {}
+        (keep-indexed (fn [idx entry]
+                        (when-let [world (:world entry)]
+                          [idx (into {} (map (fn [a] [a (get-agent-wealth world a)]) actors))]))
+                      raw-trace)))
+
+(defn- compute-backward-alt-utility
+  "Phase K: estimate deviation utility for one alternative action under backward induction.
+
+   :terminal-deviation    → deviation-value = pre-wealth
+     (agent exits game path; downstream subgames do not contribute to their utility)
+   :continuation-deviation → deviation-value = pre-wealth + downstream-delta, where
+     downstream-delta = terminal-wealth − wealth-at-start-of-first-downstream-node.
+     Estimates what the actor receives from downstream subgames even if they take a
+     different action at this node. Falls back to pre-wealth when no downstream nodes exist.
+
+   All wealth values are longs. Returns 0 when pre-wealth is nil."
+  [actor alt-action pre-wealth terminal-wealth wealth-table downstream-seqs]
+  (let [pre-w (long (or pre-wealth 0))]
+    (case (classify-deviation-action alt-action)
+      :terminal-deviation pre-w
+      :continuation-deviation
+      (if (seq downstream-seqs)
+        ;; Use the pre-state of the earliest downstream node (trace-idx = downstream-seq − 1)
+        (let [first-ds-seq (apply min downstream-seqs)
+              pre-idx      (max 0 (dec (long first-ds-seq)))
+              ds-start     (get-in wealth-table [pre-idx actor])]
+          (if (some? ds-start)
+            (+ pre-w (- (long (or terminal-wealth 0)) (long ds-start)))
+            pre-w))
+        ;; No downstream nodes: continuation deviation treated like terminal
+        pre-w))))
+
 (defn- compute-utility
   "Canonical utility interface for Phase A.
    Returns {:defined? bool :value number|nil :utility-type kw :utility-version str}."
@@ -237,7 +294,7 @@
 
 (defn- node->table-row
   [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec
-           strategy-profile]}
+           strategy-profile backward-induction-ctx]}
    {:keys [agent address action] :as node}
    spe-config]
   (let [node-seq        (:seq node)
@@ -256,8 +313,22 @@
         chosen-utility-r (when terminal-state (compute-utility terminal-state actor utility-spec))
         pre-utility    (:value pre-utility-r)
         chosen-utility (:value chosen-utility-r)
+        ;; Phase K: backward-induction-ctx overrides the forward-pass heuristic when present.
+        ;; bi-result = {:best-alt-utility n :deviation-classes {alt → class}}, or nil.
+        bi-result
+        (when (and backward-induction-ctx (seq alternatives))
+          (let [{:keys [wealth-table downstream-seqs]} backward-induction-ctx
+                per-alt-vals (mapv (fn [alt]
+                                     (compute-backward-alt-utility
+                                       actor alt pre-utility (or chosen-utility 0)
+                                       wealth-table downstream-seqs))
+                                   alternatives)]
+            {:best-alt-utility  (apply max per-alt-vals)
+             :deviation-classes (zipmap alternatives
+                                        (map classify-deviation-action alternatives))}))
+        ;; Forward-pass heuristic (used when bi-result is nil).
         local-alt-utility
-        (when chosen-world
+        (when (and (nil? bi-result) chosen-world)
           (let [chosen-local (get-agent-wealth chosen-world actor)]
             (if (and (some? pre-utility) (some? chosen-local))
               ;; bounded local replay proxy: if chosen action immediately reduces
@@ -265,11 +336,13 @@
               ;; that immediate drop in this local subgame snapshot.
               (max pre-utility chosen-local)
               chosen-local)))
-        response-delta  (response-adjustment continuation-policy chosen-utility)
-        best-alt-utility (if (seq alternatives)
-                           (max (or local-alt-utility Long/MIN_VALUE)
-                                (+ (long (or chosen-utility Long/MIN_VALUE)) response-delta))
-                           chosen-utility)
+        response-delta  (when (nil? bi-result) (response-adjustment continuation-policy chosen-utility))
+        best-alt-utility (or (:best-alt-utility bi-result)
+                             (if (seq alternatives)
+                               (max (or local-alt-utility Long/MIN_VALUE)
+                                    (+ (long (or chosen-utility Long/MIN_VALUE)) (or response-delta 0)))
+                               chosen-utility))
+        deviation-classes (:deviation-classes bi-result)
         classification (classify-row {:node-type node-type
                                       :alternatives alternatives
                                       :chosen-utility chosen-utility
@@ -300,6 +373,8 @@
      :best-alt-utility best-alt-utility
      :local-regret regret
      :bundle-regret nil
+     ;; Phase K
+     :deviation-classes deviation-classes
      :deterministic-key (str idx "|" agent "|" action)}))
 
 ;; ---------------------------------------------------------------------------
@@ -411,6 +486,9 @@
         strategy-profile (merge default-strategy-profile
                                 (or (:strategy-profile spe-config) {}))
         terminal-state (:world (last raw-trace))
+        ;; Phase K: evaluation mode (default :forward for backward compatibility)
+        eval-mode  (keyword (get spe-config :evaluation-mode :forward))
+        backward?  (= eval-mode :backward-induction)
         ;; Early-exit helper for inconclusive stubs
         stub (fn [basis requires]
                {:status :inconclusive
@@ -439,6 +517,10 @@
                                     :proper-subgames-checked 0
                                     :information-set-nodes-checked 0
                                     :max-depth max-depth}
+                :evaluation-mode eval-mode
+                :backward-induction-depth nil
+                :deviation-terminal-count nil
+                :deviation-continuation-count nil
                 :requires requires})]
     (cond
       (empty? decision-nodes)
@@ -450,7 +532,17 @@
              :checked-nodes (count decision-nodes))
 
       :else
-      (let [memo*      (atom {})
+      (let [;; Phase K: build wealth table and determine evaluation order
+            bi-actors    (when backward?
+                           (into #{} (map (fn [n] (or (:address n) (:agent n))) decision-nodes)))
+            wealth-table (when backward? (build-agent-wealth-table raw-trace bi-actors))
+            ;; In backward-induction mode: evaluate highest-seq first so downstream
+            ;; continuation values are available when processing earlier nodes.
+            eval-nodes   (if backward?
+                           (sort-by :seq #(compare %2 %1) decision-nodes)
+                           decision-nodes)
+            ;; Memoisation cache (forward mode only; backward mode uses per-node state)
+            memo*      (atom {})
             cache-key  (fn [node]
                          [(:seq node)
                           (:agent node)
@@ -463,21 +555,37 @@
                           (long (get spe-config :max-alternatives-per-node 3))
                           (boolean (get spe-config :enable-timing-variants? true))
                           (boolean (get spe-config :enable-exogenous-variants? true))])
+            row-ctx    {:raw-trace raw-trace
+                        :terminal-state terminal-state
+                        :continuation-policy continuation-policy
+                        :replay-boundary replay-boundary
+                        :utility-spec utility-spec
+                        :strategy-profile strategy-profile}
             cached-row (fn [node]
                          (let [k (cache-key node)]
                            (if-let [hit (get @memo* k)]
                              (assoc hit :memoization-hit? true)
-                             (let [computed (node->table-row {:raw-trace raw-trace
-                                                              :terminal-state terminal-state
-                                                              :continuation-policy continuation-policy
-                                                              :replay-boundary replay-boundary
-                                                              :utility-spec utility-spec
-                                                              :strategy-profile strategy-profile}
-                                                             node
-                                                             spe-config)]
+                             (let [computed (node->table-row row-ctx node spe-config)]
                                (swap! memo* assoc k computed)
                                (assoc computed :memoization-hit? false)))))
-            rows0      (mapv cached-row decision-nodes)
+            ;; Phase K: backward-induction evaluation via reduce (tracks processed-seqs).
+            ;; Forward mode uses memoised mapv (no change to existing behaviour).
+            rows0      (if backward?
+                         ;; Evaluate descending; accumulate processed-seqs (= downstream nodes
+                         ;; already evaluated). Re-sort ascending by node-index for output.
+                         (let [bi-rows (:rows
+                                        (reduce (fn [{:keys [rows processed-seqs]} node]
+                                                  (let [bi-ctx {:wealth-table    wealth-table
+                                                                 :downstream-seqs processed-seqs}
+                                                        row    (node->table-row
+                                                                 (assoc row-ctx :backward-induction-ctx bi-ctx)
+                                                                 node spe-config)]
+                                                    {:rows         (conj rows (assoc row :memoization-hit? false))
+                                                     :processed-seqs (conj processed-seqs (long (:seq node)))}))
+                                                {:rows [] :processed-seqs #{}}
+                                                eval-nodes))]
+                           (vec (sort-by :node-index bi-rows)))
+                         (mapv cached-row decision-nodes))
             rows       (mapv (fn [r]
                                (assoc r :bundle-regret
                                       (compute-bundle-regret (:local-regret r) max-depth)))
@@ -529,7 +637,14 @@
                                :nodes-not-checkable     not-check-count
                                :proper-subgames-checked proper-count
                                :information-set-nodes-checked info-set-count
-                               :max-depth               max-depth}]
+                               :max-depth               max-depth}
+            ;; Phase K: deviation classification counts (backward-induction mode only)
+            all-dev-classes  (when backward?
+                               (mapcat (fn [r] (vals (or (:deviation-classes r) {}))) rows))
+            deviation-terminal-count    (when backward?
+                                          (count (filter #(= :terminal-deviation %) all-dev-classes)))
+            deviation-continuation-count (when backward?
+                                           (count (filter #(= :continuation-deviation %) all-dev-classes)))]
         {:status status
          :spe-result spe-result
          :basis :single-trace-node-counterfactual-proxy
@@ -549,12 +664,17 @@
          :not-checkable-nodes not-check-count
          :class-counts class-counts
          :exceed-epsilon-count exceed-count
-         :memoization {:enabled true
-                       :entries (count @memo*)
-                       :hits (count (filter :memoization-hit? rows0))}
+         :memoization {:enabled  (not backward?)
+                       :entries  (count @memo*)
+                       :hits     (count (filter :memoization-hit? rows0))}
          :regret-distribution {:zero (count (filter zero? regrets))
                                :positive (count (filter pos? regrets))}
          :counterexamples counterexamples
          :off-path-coverage off-path-coverage
          :checked-nodes (count rows)
-         :requires requires}))))
+         :requires requires
+         ;; Phase K
+         :evaluation-mode eval-mode
+         :backward-induction-depth (when backward? (count eval-nodes))
+         :deviation-terminal-count deviation-terminal-count
+         :deviation-continuation-count deviation-continuation-count}))))

@@ -526,6 +526,81 @@
       (inconclusive eq-concept basis
                     (or (first requires) "counterfactual evidence unavailable")))))
 
+(defn- check-bounded-backward-induction-spe
+  "Phase K: Bounded backward-induction epsilon-SPE proxy.
+
+   Same as check-bounded-public-state-epsilon-spe but evaluates decision nodes in
+   descending seq order (highest seq first), classifies each alternative as
+   :terminal-deviation or :continuation-deviation, and propagates downstream
+   continuation values for continuation deviations.
+
+   Inject :evaluation-mode :backward-induction into spe-config so the evaluator
+   selects the backward-induction path.
+
+   :inconclusive when no proper subgames were found."
+  [projection]
+  (let [projection' (update projection :spe-config assoc :evaluation-mode :backward-induction)
+        {:keys [status basis regret-table max-regret threshold checked-nodes requires
+                continuation-policy replay-boundary utility-spec
+                spe-result strategy-profile
+                proper-subgames-checked information-set-nodes-checked not-checkable-nodes
+                counterexamples off-path-coverage epsilon-abs epsilon-rel
+                class-counts exceed-epsilon-count memoization regret-distribution
+                max-deviation-depth mean-regret
+                evaluation-mode backward-induction-depth
+                deviation-terminal-count deviation-continuation-count]}
+        (subgame-cf/evaluate-subgame-counterfactual projection')
+        eq-concept :bounded-backward-induction-spe]
+    (cond
+      (zero? (long (or proper-subgames-checked 0)))
+      (inconclusive eq-concept :absent-evidence
+                    (str "no proper subgames found (proper-subgames-checked=0); "
+                         "all nodes were information-set or not-checkable"))
+
+      (= status :pass)
+      (pass eq-concept basis
+            {:spe-result spe-result
+             :spe-max-regret max-regret
+             :spe-threshold threshold
+             :spe-epsilon-abs epsilon-abs
+             :spe-epsilon-rel epsilon-rel
+             :strategy-profile strategy-profile
+             :proper-subgames-checked proper-subgames-checked
+             :information-set-nodes-checked information-set-nodes-checked
+             :counterexamples counterexamples
+             :off-path-coverage off-path-coverage
+             :decisions-checked checked-nodes
+             :evaluation-mode evaluation-mode
+             :backward-induction-depth backward-induction-depth
+             :deviation-terminal-count deviation-terminal-count
+             :deviation-continuation-count deviation-continuation-count}
+            {:spe-result #{:spe/pass :spe/epsilon-pass}
+             :profitable-deviation-count 0})
+
+      (= status :fail)
+      (fail eq-concept basis
+            {:spe-result spe-result
+             :spe-max-regret max-regret
+             :spe-threshold threshold
+             :counterexamples counterexamples
+             :profitable-deviation-count (count counterexamples)
+             :proper-subgames-checked proper-subgames-checked
+             :strategy-profile strategy-profile
+             :evaluation-mode evaluation-mode
+             :deviation-terminal-count deviation-terminal-count
+             :deviation-continuation-count deviation-continuation-count}
+            {:spe-result #{:spe/pass :spe/epsilon-pass}
+             :profitable-deviation-count 0}
+            (mapv (fn [ce] {:metric :profitable-deviation
+                            :node/id (:node/id ce)
+                            :regret (:regret ce)
+                            :agent (:agent ce)})
+                  counterexamples))
+
+      :else
+      (inconclusive eq-concept basis
+                    (or (first requires) "counterfactual evidence unavailable")))))
+
 (defn- check-bayesian-nash-equilibrium
   "Requires population/belief distributions across resolvers. Always
    :inconclusive for single-trace replay."
@@ -552,6 +627,7 @@
    :nash-equilibrium                        check-nash-equilibrium
    :subgame-perfect-equilibrium             check-subgame-perfect-equilibrium
    :bounded-public-state-epsilon-spe        check-bounded-public-state-epsilon-spe
+   :bounded-backward-induction-spe          check-bounded-backward-induction-spe
    :bayesian-nash-equilibrium               check-bayesian-nash-equilibrium})
 
 ;; ---------------------------------------------------------------------------
