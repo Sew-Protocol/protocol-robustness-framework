@@ -261,7 +261,13 @@
       (is (= 1 (get-in result [:observed :decisions-checked])))
       (is (= :pass (get-in result [:observed :spe-status])))
       (is (= 0 (get-in result [:observed :spe-max-regret])))
-      (is (= 1 (count (get-in result [:observed :spe-regret-table]))))))
+      (is (= 1 (count (get-in result [:observed :spe-regret-table]))))
+      (is (= :trace-following (get-in result [:observed :spe-continuation-policy :mode])))
+      (is (= :preserve (get-in result [:observed :spe-replay-boundary :ordering-mode])))
+      (is (= :terminal-realized-v1 (get-in result [:observed :spe-utility-spec :type])))
+      (is (number? (get-in result [:observed :spe-mean-regret])))
+      (is (= 0 (get-in result [:observed :spe-exceed-epsilon-count])))
+      (is (map? (get-in result [:observed :spe-regret-distribution])))))
 
   (testing "SPE FAIL: bounded counterfactual regret exceeds threshold"
     (let [proj {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}    ; t=0

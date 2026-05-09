@@ -380,7 +380,9 @@
 
    :inconclusive when no strategic decisions were made."
   [projection]
-  (let [{:keys [status basis regret-table max-regret threshold checked-nodes requires]}
+  (let [{:keys [status basis regret-table max-regret mean-regret threshold checked-nodes requires
+                continuation-policy replay-boundary utility-spec class-counts
+                exceed-epsilon-count regret-distribution epsilon-abs epsilon-rel]}
         (subgame-cf/evaluate-subgame-counterfactual projection)
         observed {:spe-status      status
                   :spe-summary     (case status
@@ -390,7 +392,16 @@
                                      "counterfactual evidence unavailable")
                   :spe-regret-table regret-table
                   :spe-max-regret   max-regret
+                  :spe-mean-regret  mean-regret
                   :spe-threshold    threshold
+                  :spe-epsilon-abs epsilon-abs
+                  :spe-epsilon-rel epsilon-rel
+                  :spe-continuation-policy continuation-policy
+                  :spe-replay-boundary replay-boundary
+                  :spe-utility-spec utility-spec
+                  :spe-class-counts class-counts
+                  :spe-exceed-epsilon-count exceed-epsilon-count
+                  :spe-regret-distribution regret-distribution
                   :decisions-checked checked-nodes
                   :spe-violations   (vec (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) regret-table))}]
     (case status
