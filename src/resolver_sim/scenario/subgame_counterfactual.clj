@@ -7,7 +7,21 @@
    - alternatives are generated from a small fixed action set,
    - utilities are computed from world snapshots in the same replay trace.
 
-   Output is deterministic and suitable as SPE-proxy evidence."
+   Output is deterministic and suitable as SPE-proxy evidence.
+
+   ## Phase summary
+
+   Phase A — continuation-policy / replay-boundary / utility-spec defaults
+   Phase B — minimal information-set model (observable vs hidden state per node)
+   Phase C — epsilon semantics + bounded alternatives with timing/exogenous variants
+   Phase D — deterministic response-adjustment + compute-bundle-regret multi-step proxy
+   Phase E — in-evaluation memoization keyed by stable tuple; per-row memoization-hit?
+   Phase F — per-node :spe/checkability classification (proper-subgame vs information-set-node
+              vs not-spe-checkable) + top-level coverage counts
+   Phase G — declared strategy profile; :governing-policy per row
+   Phase H — rich SPE result vocabulary (:spe/pass, :spe/epsilon-pass, etc.)
+   Phase I — structured counterexample maps for every profitable deviation
+   Phase J — off-path coverage reporting"
   (:require [clojure.string :as str]))
 
 (def ^:private default-continuation-policy
@@ -43,6 +57,82 @@
   {"raise_dispute" :challenge-timing
    "escalate_dispute" :escalation-timing
    "execute_resolution" :resolver-verdict})
+
+;; ---------------------------------------------------------------------------
+;; Phase F — Subgame boundary classification
+;; ---------------------------------------------------------------------------
+
+;; Agent roles that operate on private evidence quality or private beliefs —
+;; these nodes are information-set nodes, not proper subgames.
+(def ^:private private-evidence-roles
+  #{"buyer" "claimant"})
+
+(defn- classify-subgame-node
+  "Phase F: classify a decision node as :proper-subgame, :information-set-node,
+   or :not-spe-checkable.
+
+   :proper-subgame       — all relevant protocol state is public (live-states,
+                           dispute-levels, block-time visible); verdict or
+                           escalation action from a known public dispute state.
+   :information-set-node — the acting agent has private state that materially
+                           affects their decision (e.g. buyer's private evidence
+                           quality; buyer escalation decisions).
+   :not-spe-checkable    — pre-state unavailable or node is not a strategic
+                           decision point."
+  [node pre-world]
+  (let [action (str (:action node))
+        agent  (str (:agent node))]
+    (cond
+      (nil? pre-world)
+      {:checkability :not-spe-checkable
+       :spe/checkability :not-spe-checkable
+       :checkability-reason "pre-state unavailable; cannot evaluate decision context"}
+
+      (not (contains? node-type-by-action action))
+      {:checkability :not-spe-checkable
+       :spe/checkability :not-spe-checkable
+       :checkability-reason "action is not a recognized strategic decision type"}
+
+      ;; Buyer/claimant raise_dispute or escalate_dispute depend on private
+      ;; evidence quality — these are information-set nodes.
+      (and (contains? private-evidence-roles agent)
+           (contains? #{"raise_dispute" "escalate_dispute"} action))
+      {:checkability :information-set-node
+       :spe/checkability :information-set-node
+       :checkability-reason "buyer private evidence quality not modeled; decision is information-set node"}
+
+      ;; Resolver execute_resolution from a public dispute state is a proper subgame:
+      ;; all protocol state (dispute-levels, live-states, available actions) is public.
+      (= action "execute_resolution")
+      {:checkability :proper-subgame
+       :spe/checkability :proper-subgame
+       :checkability-reason "all protocol state public; resolver verdict from known public dispute state"}
+
+      ;; Seller escalation from a known dispute state is a proper subgame.
+      :else
+      {:checkability :proper-subgame
+       :spe/checkability :proper-subgame
+       :checkability-reason "protocol dispute state is public; escalation from known dispute state"})))
+
+;; ---------------------------------------------------------------------------
+;; Phase G — Strategy profile definition
+;; ---------------------------------------------------------------------------
+
+(def ^:private default-strategy-profile
+  {:id         "honest-resolution-v1"
+   :buyer      :policy/buyer-rational-v1
+   :seller     :policy/seller-rational-v1
+   :resolver   :policy/resolver-honest-v1
+   :governance :policy/governance-no-intervention-v1})
+
+(defn- governing-policy
+  "Phase G: return the declared policy for the acting agent in this node,
+   derived from the (possibly overridden) strategy profile."
+  [agent strategy-profile]
+  (let [role (keyword (str agent))]
+    (or (get strategy-profile role)
+        (get strategy-profile (keyword (str/replace (str agent) #"^:" "")))
+        :policy/unknown)))
 
 (defn- get-agent-wealth [world agent-id]
   (let [stakes    (get world :resolver-stakes {})
@@ -142,7 +232,8 @@
     :else :evaluated))
 
 (defn- node->table-row
-  [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec]}
+  [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec
+           strategy-profile]}
    {:keys [agent address action] :as node}
    spe-config]
   (let [node-seq        (:seq node)
@@ -153,6 +244,8 @@
         node-type      (get node-type-by-action action)
         pre-world      (:world pre-entry)
         chosen-world   (:world chosen-entry)
+        ;; Phase F: subgame boundary classification
+        subgame-class  (classify-subgame-node node pre-world)
         info-set       (build-information-set pre-world node)
         alternatives   (bounded-alternatives node-type action info-set spe-config)
         pre-utility-r  (when pre-world (compute-utility pre-world actor utility-spec))
@@ -186,6 +279,10 @@
      :agent agent
      :address actor
      :node-type node-type
+     ;; Phase F
+     :checkability (:checkability subgame-class)
+     :spe/checkability (:spe/checkability subgame-class)
+     :checkability-reason (:checkability-reason subgame-class)
      :information-set info-set
      :classification classification
      :chosen-action action
@@ -193,22 +290,104 @@
      :continuation-policy continuation-policy
      :replay-boundary replay-boundary
      :utility-spec utility-spec
+     ;; Phase G
+     :governing-policy (governing-policy actor strategy-profile)
      :chosen-utility chosen-utility
      :best-alt-utility best-alt-utility
      :local-regret regret
      :bundle-regret nil
      :deterministic-key (str idx "|" agent "|" action)}))
 
+;; ---------------------------------------------------------------------------
+;; Phase H — Rich SPE result vocabulary
+;; ---------------------------------------------------------------------------
+
+(defn- derive-spe-result
+  "Phase H: derive a rich SPE vocabulary keyword from the raw evaluator state.
+   Returned alongside the backward-compat :status key.
+
+   :spe/pass                          — all evaluated nodes have regret = 0
+   :spe/epsilon-pass                  — all evaluated nodes pass threshold, but some have regret > 0
+   :spe/fail-profitable-deviation     — max-regret exceeds threshold or epsilon exceeded
+   :spe/not-a-proper-subgame          — all nodes inapplicable (no node-type match)
+   :spe/inconclusive-missing-actions  — some nodes lack alternatives
+   :spe/inconclusive-missing-utility  — some nodes lack defined utility
+   :spe/inconclusive-continuation-undefined — other inconclusive cases"
+  [status evaluated-count max-regret threshold exceed-count rows]
+  (cond
+    (zero? evaluated-count)
+    (let [class-issues (mapv :classification rows)]
+      (cond
+        (every? #(= :inapplicable-node-type %) class-issues)
+        :spe/not-a-proper-subgame
+
+        (some #(= :inconclusive-insufficient-alternatives %) class-issues)
+        :spe/inconclusive-missing-actions
+
+        (some #(= :inconclusive-undefined-utility %) class-issues)
+        :spe/inconclusive-missing-utility
+
+        :else
+        :spe/inconclusive-continuation-undefined))
+
+    (= status :pass)
+    ;; :spe/epsilon-pass when passes threshold but max-regret > 0 (not perfect)
+    (if (and (some? max-regret) (pos? (long max-regret)))
+      :spe/epsilon-pass
+      :spe/pass)
+
+    (= status :fail)
+    :spe/fail-profitable-deviation
+
+    :else
+    :spe/inconclusive-continuation-undefined))
+
+;; ---------------------------------------------------------------------------
+;; Phase I — Structured counterexample maps
+;; ---------------------------------------------------------------------------
+
+(defn- build-counterexample
+  "Phase I: build a structured counterexample map for a profitable deviation row."
+  [row epsilon-abs epsilon-rel]
+  (let [regret   (long (or (:bundle-regret row) 0))
+        chosen-u (:chosen-utility row)
+        alt-u    (:best-alt-utility row)
+        pre-obs  (get-in row [:information-set :observable-state])]
+    {:failure/type        :profitable-deviation
+     :node/id             (:deterministic-key row)
+     :agent               (:agent row)
+     :chosen-action       (:chosen-action row)
+     :best-alternative    (first (:alternatives row))
+     :chosen-utility      chosen-u
+     :alternative-utility alt-u
+     :regret              regret
+     :epsilon-exceeded?   (regret-exceeds-epsilon? regret chosen-u epsilon-abs epsilon-rel)
+     :checkability        (:checkability row)
+     :pre-state-summary   {:block-time    (:block-time pre-obs)
+                           :dispute-level (get (:dispute-levels pre-obs) "unknown")}
+     :counterfactual-ref  nil}))
+
+;; ---------------------------------------------------------------------------
+;; Public API
+;; ---------------------------------------------------------------------------
+
 (defn evaluate-subgame-counterfactual
   "Compute bounded local regret evidence for strategic decision nodes.
 
    Returns:
-   {:status :pass|:fail|:inconclusive
-    :basis  kw
+   {:status       :pass|:fail|:inconclusive          (backward-compat)
+    :spe-result   :spe/pass|:spe/epsilon-pass|...    (Phase H rich vocab)
+    :basis        kw
     :regret-table [...]
-    :max-regret n
-    :threshold n
+    :max-regret   n
+    :threshold    n
     :checked-nodes n
+    :strategy-profile  map                           (Phase G)
+    :proper-subgames-checked n                       (Phase F)
+    :information-set-nodes-checked n                 (Phase F)
+    :not-checkable-nodes n                           (Phase F)
+    :off-path-coverage map                           (Phase J)
+    :counterexamples [...]                           (Phase I)
     :requires [...]}"
   [{:keys [raw-trace decisions terminal-world spe-config]}]
   (let [decision-nodes (->> decisions
@@ -224,39 +403,47 @@
                                (or (:replay-boundary spe-config) {}))
         utility-spec (merge default-utility-spec
                             (or (:utility-spec spe-config) {}))
-        terminal-state (:world (last raw-trace))]
+        ;; Phase G: strategy profile
+        strategy-profile (merge default-strategy-profile
+                                (or (:strategy-profile spe-config) {}))
+        terminal-state (:world (last raw-trace))
+        ;; Early-exit helper for inconclusive stubs
+        stub (fn [basis requires]
+               {:status :inconclusive
+                :spe-result :spe/inconclusive-continuation-undefined
+                :basis basis
+                :regret-table []
+                :max-regret nil
+                :threshold threshold
+                :continuation-policy continuation-policy
+                :replay-boundary replay-boundary
+                :utility-spec utility-spec
+                :strategy-profile strategy-profile
+                :checked-nodes 0
+                :proper-subgames-checked 0
+                :information-set-nodes-checked 0
+                :not-checkable-nodes 0
+                :class-counts {:inconclusive-insufficient-alternatives 0
+                               :inconclusive-undefined-utility 0
+                               :inapplicable-node-type 0
+                               :evaluated 0}
+                :counterexamples []
+                :off-path-coverage {:nodes-generated 0
+                                    :nodes-evaluated 0
+                                    :nodes-inconclusive 0
+                                    :nodes-not-checkable 0
+                                    :proper-subgames-checked 0
+                                    :information-set-nodes-checked 0
+                                    :max-depth max-depth}
+                :requires requires})]
     (cond
       (empty? decision-nodes)
-      {:status :inconclusive
-       :basis :absent-evidence
-       :regret-table []
-       :max-regret nil
-       :threshold threshold
-       :continuation-policy continuation-policy
-       :replay-boundary replay-boundary
-       :utility-spec utility-spec
-       :checked-nodes 0
-       :class-counts {:inconclusive-insufficient-alternatives 0
-                      :inconclusive-undefined-utility 0
-                      :inapplicable-node-type 0
-                      :evaluated 0}
-       :requires ["no decision nodes available in trace"]}
+      (stub :absent-evidence ["no decision nodes available in trace"])
 
       (not (:terminal? terminal-world))
-      {:status :inconclusive
-       :basis :multi-trace-required
-       :regret-table []
-       :max-regret nil
-       :threshold threshold
-       :continuation-policy continuation-policy
-       :replay-boundary replay-boundary
-       :utility-spec utility-spec
-       :checked-nodes (count decision-nodes)
-       :class-counts {:inconclusive-insufficient-alternatives 0
-                      :inconclusive-undefined-utility 0
-                      :inapplicable-node-type 0
-                      :evaluated 0}
-       :requires ["trace ends before terminal settlement; counterfactual SPE proxy unavailable"]}
+      (assoc (stub :multi-trace-required
+                   ["trace ends before terminal settlement; counterfactual SPE proxy unavailable"])
+             :checked-nodes (count decision-nodes))
 
       :else
       (let [memo*      (atom {})
@@ -268,6 +455,7 @@
                           (:version continuation-policy)
                           (:type utility-spec)
                           (:version utility-spec)
+                          (:id strategy-profile)
                           (long (get spe-config :max-alternatives-per-node 3))
                           (boolean (get spe-config :enable-timing-variants? true))
                           (boolean (get spe-config :enable-exogenous-variants? true))])
@@ -279,7 +467,8 @@
                                                               :terminal-state terminal-state
                                                               :continuation-policy continuation-policy
                                                               :replay-boundary replay-boundary
-                                                              :utility-spec utility-spec}
+                                                              :utility-spec utility-spec
+                                                              :strategy-profile strategy-profile}
                                                              node
                                                              spe-config)]
                                (swap! memo* assoc k computed)
@@ -314,8 +503,31 @@
                          :else :fail)
             requires   (if (zero? evaluated-count)
                          ["all decision nodes were inapplicable or lacked defined alternatives/utility"]
-                         [])]
+                         [])
+            ;; Phase H: rich SPE result vocabulary
+            spe-result (derive-spe-result status evaluated-count max-regret threshold exceed-count rows)
+            ;; Phase F: subgame boundary coverage counts
+            proper-count     (count (filter #(= :proper-subgame (:checkability %)) rows))
+            info-set-count   (count (filter #(= :information-set-node (:checkability %)) rows))
+            not-check-count  (count (filter #(= :not-spe-checkable (:checkability %)) rows))
+            inconclusive-count (+ (long (:inconclusive-insufficient-alternatives class-counts 0))
+                                  (long (:inconclusive-undefined-utility class-counts 0)))
+            ;; Phase I: structured counterexamples for profitable deviations
+            counterexamples (vec
+                             (for [r rows
+                                   :let [regret (long (or (:bundle-regret r) 0))]
+                                   :when (pos? regret)]
+                               (build-counterexample r epsilon-abs epsilon-rel)))
+            ;; Phase J: off-path coverage report
+            off-path-coverage {:nodes-generated         (count decision-nodes)
+                               :nodes-evaluated         evaluated-count
+                               :nodes-inconclusive      inconclusive-count
+                               :nodes-not-checkable     not-check-count
+                               :proper-subgames-checked proper-count
+                               :information-set-nodes-checked info-set-count
+                               :max-depth               max-depth}]
         {:status status
+         :spe-result spe-result
          :basis :single-trace-node-counterfactual-proxy
          :regret-table rows
          :max-regret max-regret
@@ -327,6 +539,10 @@
          :continuation-policy continuation-policy
          :replay-boundary replay-boundary
          :utility-spec utility-spec
+         :strategy-profile strategy-profile
+         :proper-subgames-checked proper-count
+         :information-set-nodes-checked info-set-count
+         :not-checkable-nodes not-check-count
          :class-counts class-counts
          :exceed-epsilon-count exceed-count
          :memoization {:enabled true
@@ -334,5 +550,7 @@
                        :hits (count (filter :memoization-hit? rows0))}
          :regret-distribution {:zero (count (filter zero? regrets))
                                :positive (count (filter pos? regrets))}
+         :counterexamples counterexamples
+         :off-path-coverage off-path-coverage
          :checked-nodes (count rows)
          :requires requires}))))

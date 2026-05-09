@@ -1,5 +1,5 @@
 (ns resolver-sim.scenario.subgame-counterfactual-test
-  (:require [clojure.test :refer [deftest is run-tests]]
+  (:require [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.scenario.subgame-counterfactual :as cf]))
 
 (defn -main
@@ -107,3 +107,212 @@
     (is (pos? (get-in out [:memoization :hits])))
     (is (some #({"wait_same_block" "wait_next_block"} %) (:alternatives row)))
     (is (some #({"hold_exogenous_fixed" "allow_exogenous_shift"} %) (:alternatives row)))))
+
+;; ---------------------------------------------------------------------------
+;; Phase F — Subgame boundary classification
+;; ---------------------------------------------------------------------------
+
+(deftest phase-f-proper-subgame-resolver-verdict
+  (testing "resolver execute_resolution from public dispute state → :proper-subgame"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:dispute-levels {"e1" 1}
+                                     :live-states {"e1" :disputed}
+                                     :claimable {"e1" {"resolver" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 100}})
+          row (first (:regret-table out))]
+      (is (= :proper-subgame (:checkability row)))
+      (is (= :proper-subgame (:spe/checkability row)))
+      (is (string? (:checkability-reason row)))
+      (is (pos? (:proper-subgames-checked out))))))
+
+(deftest phase-f-information-set-node-buyer-escalation
+  (testing "buyer escalate_dispute → :information-set-node (private evidence)"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"buyer" 100}}}}
+                             {:world {:claimable {"e1" {"buyer" 80}}}}]
+                :decisions [{:seq 1 :agent "buyer" :action "escalate_dispute"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})
+          row (first (:regret-table out))]
+      (is (= :information-set-node (:checkability row)))
+      (is (= :information-set-node (:spe/checkability row)))
+      (is (pos? (:information-set-nodes-checked out))))))
+
+(deftest phase-f-not-checkable-missing-pre-world
+  (testing "seq=0 node with no pre-entry → :not-spe-checkable"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"seller" 100}}}}]
+                :decisions [{:seq 0 :agent "seller" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})
+          row (first (:regret-table out))]
+      ;; seq=0 means idx=0, pre-entry = (nth raw-trace -1) = nil
+      (is (= :not-spe-checkable (:checkability row)))
+      (is (pos? (:not-checkable-nodes out))))))
+
+(deftest phase-f-coverage-counts-sum-to-total
+  (testing "proper + information-set + not-checkable = checked-nodes"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}
+                             {:world {:claimable {"e1" {"seller" 50}}}}]
+                :decisions [{:seq 1 :agent "buyer" :action "escalate_dispute"}
+                             {:seq 2 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 1000}})
+          ps (:proper-subgames-checked out)
+          is-count (:information-set-nodes-checked out)
+          nc (:not-checkable-nodes out)]
+      (is (= (:checked-nodes out) (+ (long ps) (long is-count) (long nc)))))))
+
+;; ---------------------------------------------------------------------------
+;; Phase G — Strategy profile
+;; ---------------------------------------------------------------------------
+
+(deftest phase-g-default-strategy-profile-in-output
+  (testing "default strategy profile emitted at top level"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
+                             {:world {:claimable {"e1" {"buyer" 100}}}}]
+                :decisions [{:seq 1 :agent "buyer" :action "raise_dispute"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})]
+      (is (map? (:strategy-profile out)))
+      (is (= "honest-resolution-v1" (get-in out [:strategy-profile :id]))))))
+
+(deftest phase-g-governing-policy-per-row
+  (testing "each row has :governing-policy from the strategy profile"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
+                             {:world {:claimable {"e1" {"buyer" 100}}}}]
+                :decisions [{:seq 1 :agent "buyer" :action "raise_dispute"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})
+          row (first (:regret-table out))]
+      (is (some? (:governing-policy row))))))
+
+(deftest phase-g-strategy-profile-override
+  (testing "custom strategy profile overrides default"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0
+                              :strategy-profile {:id "custom-v1"
+                                                 :resolver :policy/resolver-malicious-v1}}})]
+      (is (= "custom-v1" (get-in out [:strategy-profile :id]))))))
+
+;; ---------------------------------------------------------------------------
+;; Phase H — Rich SPE result vocabulary
+;; ---------------------------------------------------------------------------
+
+(deftest phase-h-spe-result-pass
+  (testing ":spe/pass emitted when no deviations and no epsilon exceedances"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 100 :epsilon-abs 0.0}})]
+      (is (= :pass (:status out)))
+      (is (= :spe/pass (:spe-result out))))))
+
+(deftest phase-h-spe-result-epsilon-pass
+  (testing ":spe/epsilon-pass when regret > 0 but within threshold and epsilon"
+    ;; resolver had 100 before, ends with 80 → regret = 20
+    ;; threshold = 1000, epsilon-abs = 50.0 → regret=20 <= epsilon → exceed-count=0
+    ;; pass? = true (within threshold + epsilon), max-regret=20 > 0 → :spe/epsilon-pass
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 100}}}}
+                             {:world {:claimable {"e1" {"resolver" 80}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 1000
+                              :epsilon-abs 50.0
+                              :epsilon-rel 1.0}})]
+      (is (= :pass (:status out)))
+      (is (= :spe/epsilon-pass (:spe-result out))))))
+
+(deftest phase-h-spe-result-fail-profitable-deviation
+  (testing ":spe/fail-profitable-deviation when regret exceeds threshold"
+    ;; resolver had 100 before, ends with 50 → regret = 50 > threshold = 0
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 100}}}}
+                             {:world {:claimable {"e1" {"resolver" 50}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})]
+      (is (= :fail (:status out)))
+      (is (= :spe/fail-profitable-deviation (:spe-result out))))))
+
+(deftest phase-h-spe-result-inconclusive-missing-actions
+  (testing ":spe/inconclusive-missing-actions when all nodes are inapplicable"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
+                             {:world {:claimable {"e1" {"buyer" 0}}}}]
+                :decisions [{:seq 1 :agent "buyer" :action "unknown_action"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})]
+      (is (= :inconclusive (:status out)))
+      ;; inapplicable-node-type → missing-actions classification
+      (is (= :spe/not-a-proper-subgame (:spe-result out))))))
+
+;; ---------------------------------------------------------------------------
+;; Phase I — Structured counterexamples
+;; ---------------------------------------------------------------------------
+
+(deftest phase-i-counterexamples-on-fail
+  (testing "counterexamples emitted on profitable deviation"
+    ;; resolver had 100 before, ends with 50 → regret = 50 > threshold = 0
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 100}}}}
+                             {:world {:claimable {"e1" {"resolver" 50}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})
+          ces (:counterexamples out)]
+      (is (= :fail (:status out)))
+      (is (seq ces))
+      (let [ce (first ces)]
+        (is (= :profitable-deviation (:failure/type ce)))
+        (is (string? (:node/id ce)))
+        (is (= "resolver" (:agent ce)))
+        (is (= "execute_resolution" (:chosen-action ce)))
+        (is (some? (:best-alternative ce)))
+        (is (number? (:regret ce)))
+        (is (pos? (:regret ce)))
+        (is (map? (:pre-state-summary ce)))))))
+
+(deftest phase-i-no-counterexamples-on-pass
+  (testing "counterexamples is empty on pass"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 1000}})]
+      (is (= :pass (:status out)))
+      (is (empty? (:counterexamples out))))))
+
+;; ---------------------------------------------------------------------------
+;; Phase J — Off-path coverage reporting
+;; ---------------------------------------------------------------------------
+
+(deftest phase-j-off-path-coverage-present
+  (testing ":off-path-coverage map emitted"
+    (let [out (cf/evaluate-subgame-counterfactual
+               {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
+                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
+                :terminal-world {:terminal? true}
+                :spe-config {:regret-threshold 0}})
+          cov (:off-path-coverage out)]
+      (is (map? cov))
+      (is (number? (:nodes-generated cov)))
+      (is (number? (:nodes-evaluated cov)))
+      (is (number? (:proper-subgames-checked cov)))
+      (is (number? (:max-depth cov))))))

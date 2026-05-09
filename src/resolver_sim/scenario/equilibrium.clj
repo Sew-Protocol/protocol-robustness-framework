@@ -378,14 +378,44 @@
      :insufficient-information — trace ends before subgame resolution
      :inconclusive-payoff     — wealth cannot be calculated
 
-   :inconclusive when no strategic decisions were made."
+   :inconclusive when no strategic decisions were made.
+
+   Phase F: proper subgame boundary coverage counts included in observed.
+   Phase G: strategy-profile included in observed.
+   Phase H: :spe-result rich vocabulary key included in observed.
+   Phase I: :spe-counterexamples structured counterexample maps.
+   Phase J: :spe-off-path-coverage map included in observed.
+   Phase L: :spe-proof-sketch human-readable summary."
   [projection]
   (let [{:keys [status basis regret-table max-regret mean-regret threshold checked-nodes requires
                 continuation-policy replay-boundary utility-spec class-counts
                 exceed-epsilon-count regret-distribution epsilon-abs epsilon-rel
-                max-deviation-depth memoization]}
+                max-deviation-depth memoization
+                spe-result strategy-profile
+                proper-subgames-checked information-set-nodes-checked not-checkable-nodes
+                counterexamples off-path-coverage]}
         (subgame-cf/evaluate-subgame-counterfactual projection)
+        ;; Phase L: human-readable proof sketch
+        proof-sketch (str
+                      "Claim: Bounded public-state SPE proxy under declared strategy profile "
+                      (or (:id strategy-profile) "unknown") ".\n\n"
+                      "Checked:\n"
+                      "  - " (long (or proper-subgames-checked 0)) " proper subgame node(s)\n"
+                      "  - " (long (or information-set-nodes-checked 0)) " information-set node(s) (inconclusive)\n"
+                      "  - " (long (or not-checkable-nodes 0)) " not-checkable node(s)\n\n"
+                      "Result:\n"
+                      (case status
+                        :pass   (str "  - No profitable deviation exceeded epsilon = " epsilon-abs "\n"
+                                     "  - Max regret: " max-regret "\n"
+                                     "  - SPE result: " spe-result)
+                        :fail   (str "  - Profitable deviation detected\n"
+                                     "  - Max regret: " max-regret " (threshold: " threshold ")\n"
+                                     "  - SPE result: " spe-result "\n"
+                                     "  - Counterexamples: " (count counterexamples))
+                        (str "  - Inconclusive: " (or (first requires) "evidence unavailable") "\n"
+                             "  - SPE result: " spe-result)))
         observed {:spe-status      status
+                  :spe-result      spe-result
                   :spe-summary     (case status
                                      :pass (str "bounded counterfactual regret <= threshold across " checked-nodes " node(s)")
                                      :fail (str "bounded counterfactual regret exceeds threshold at one or more nodes")
@@ -401,10 +431,17 @@
                   :spe-continuation-policy continuation-policy
                   :spe-replay-boundary replay-boundary
                   :spe-utility-spec utility-spec
+                  :spe-strategy-profile strategy-profile
+                  :spe-proper-subgames-checked proper-subgames-checked
+                  :spe-information-set-nodes-checked information-set-nodes-checked
+                  :spe-not-checkable-nodes not-checkable-nodes
                   :spe-class-counts class-counts
                   :spe-exceed-epsilon-count exceed-epsilon-count
                   :spe-memoization memoization
                   :spe-regret-distribution regret-distribution
+                  :spe-counterexamples (vec counterexamples)
+                  :spe-off-path-coverage off-path-coverage
+                  :spe-proof-sketch proof-sketch
                   :decisions-checked checked-nodes
                   :spe-violations   (vec (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) regret-table))}]
     (case status
@@ -420,6 +457,70 @@
             (:spe-violations observed))
 
       (inconclusive :subgame-perfect-equilibrium basis
+                    (or (first requires) "counterfactual evidence unavailable")))))
+
+(defn- check-bounded-public-state-epsilon-spe
+  "Phase K: Bounded public-state epsilon-SPE proxy.
+
+   Distinct from :subgame-perfect-equilibrium in that it:
+   - requires an explicit :spe-config in the theory block,
+   - explicitly declares the equilibrium concept as bounded and public-state only,
+   - uses the full Phase F–J evaluator (subgame classification, strategy profile,
+     counterexamples, off-path coverage, proof sketch),
+   - falsifies if max-regret > epsilon-abs or profitable-deviation-count > 0.
+
+   :inconclusive when no proper subgames were found (only information-set nodes)."
+  [projection]
+  (let [{:keys [status basis regret-table max-regret threshold checked-nodes requires
+                continuation-policy replay-boundary utility-spec
+                spe-result strategy-profile
+                proper-subgames-checked information-set-nodes-checked not-checkable-nodes
+                counterexamples off-path-coverage epsilon-abs epsilon-rel
+                class-counts exceed-epsilon-count memoization regret-distribution
+                max-deviation-depth mean-regret]}
+        (subgame-cf/evaluate-subgame-counterfactual projection)
+        eq-concept :bounded-public-state-epsilon-spe]
+    (cond
+      (zero? (long (or proper-subgames-checked 0)))
+      (inconclusive eq-concept :absent-evidence
+                    (str "no proper subgames found (proper-subgames-checked=0); "
+                         "all nodes were information-set or not-checkable"))
+
+      (= status :pass)
+      (pass eq-concept basis
+            {:spe-result spe-result
+             :spe-max-regret max-regret
+             :spe-threshold threshold
+             :spe-epsilon-abs epsilon-abs
+             :spe-epsilon-rel epsilon-rel
+             :strategy-profile strategy-profile
+             :proper-subgames-checked proper-subgames-checked
+             :information-set-nodes-checked information-set-nodes-checked
+             :counterexamples counterexamples
+             :off-path-coverage off-path-coverage
+             :decisions-checked checked-nodes}
+            {:spe-result #{:spe/pass :spe/epsilon-pass}
+             :profitable-deviation-count 0})
+
+      (= status :fail)
+      (fail eq-concept basis
+            {:spe-result spe-result
+             :spe-max-regret max-regret
+             :spe-threshold threshold
+             :counterexamples counterexamples
+             :profitable-deviation-count (count counterexamples)
+             :proper-subgames-checked proper-subgames-checked
+             :strategy-profile strategy-profile}
+            {:spe-result #{:spe/pass :spe/epsilon-pass}
+             :profitable-deviation-count 0}
+            (mapv (fn [ce] {:metric :profitable-deviation
+                            :node/id (:node/id ce)
+                            :regret (:regret ce)
+                            :agent (:agent ce)})
+                  counterexamples))
+
+      :else
+      (inconclusive eq-concept basis
                     (or (first requires) "counterfactual evidence unavailable")))))
 
 (defn- check-bayesian-nash-equilibrium
@@ -444,10 +545,11 @@
    :stake-flow-conservation check-stake-flow-conservation})
 
 (def ^:private equilibrium-validators
-  {:dominant-strategy-equilibrium  check-dominant-strategy-equilibrium
-   :nash-equilibrium                check-nash-equilibrium
-   :subgame-perfect-equilibrium     check-subgame-perfect-equilibrium
-   :bayesian-nash-equilibrium       check-bayesian-nash-equilibrium})
+  {:dominant-strategy-equilibrium          check-dominant-strategy-equilibrium
+   :nash-equilibrium                        check-nash-equilibrium
+   :subgame-perfect-equilibrium             check-subgame-perfect-equilibrium
+   :bounded-public-state-epsilon-spe        check-bounded-public-state-epsilon-spe
+   :bayesian-nash-equilibrium               check-bayesian-nash-equilibrium})
 
 ;; ---------------------------------------------------------------------------
 ;; Status roll-up
