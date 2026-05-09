@@ -1,0 +1,142 @@
+name: SEW Validation Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  core-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Clojure CLI
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run canonical suite
+        run: ./scripts/test.sh all
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: results/test-artifacts/
+
+  coverage-gates:
+    runs-on: ubuntu-latest
+    needs: core-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Clojure CLI
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
+
+      - name: Run transition/guard coverage gate
+        env:
+          MAX_UNHIT_TRANSITIONS: "4"
+        run: ./scripts/test.sh coverage
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-artifact
+          path: results/test-artifacts/coverage.json
+
+  adversarial-surfaces:
+    runs-on: ubuntu-latest
+    needs: core-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run profitability sweep
+        run: ./scripts/test.sh adversarial-sweep
+
+      - name: Run adversarial artifact gates
+        run: ./scripts/test.sh adversarial-gates
+
+      - name: Upload profitability surfaces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profitability-surfaces
+          path: results/profitability-surfaces/
+
+  equivalence-comparison-gates:
+    runs-on: ubuntu-latest
+    needs: [core-validation, comparison-schema-gates]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Clojure CLI
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
+
+      - name: Run equivalence comparison gates
+        run: ./scripts/test.sh equivalence-new
+
+      - name: Upload equivalence test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: equivalence-test-artifacts
+          path: results/test-artifacts/
+
+  comparison-schema-gates:
+    runs-on: ubuntu-latest
+    needs: core-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run comparison metadata lint
+        run: ./scripts/test.sh comparison-lint
+
+      - name: Upload comparison lint artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-lint-artifacts
+          path: results/test-artifacts/

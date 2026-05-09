@@ -3,7 +3,7 @@
   "scenario-id": "eq-v10-incentive-compat-fail-attack-success",
   "title": "Incentive Compatibility \u2014 FAIL (adversarial event succeeds)",
   "description": "An adversarial buyer marks a valid raise_dispute call as adversarial. Since the dispute succeeds, attack-successes = 1, causing incentive-compatibility to return :fail. This demonstrates that adversarial actions reaching a profitable outcome falsify the compatibility claim. Not in normal suite \u2014 verified via unit tests.",
-  "purpose": "regression",
+  "purpose": "theory-falsification",
   "_validator-test-note": "This trace produces mechanism-status :fail. Verified via equilibrium unit tests, not fixture suite.",
   "schema-version": "1.1",
   "initial-block-time": 1000,

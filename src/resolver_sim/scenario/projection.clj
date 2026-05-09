@@ -49,6 +49,15 @@
 
             metrics      (:metrics result {})
 
+            ;; Build agent-id -> address map from the scenario agents list.
+            ;; Propagated by replay-scenario for SPE wealth lookup.
+            agents-by-id (reduce (fn [m a]
+                                   (let [id   (or (:id a) "")
+                                         addr (or (:address a) id)]
+                                     (assoc m id addr)))
+                                 {}
+                                 (:agents result []))
+
             ;; Derive escalation levels actually observed in trace
             escalation-levels
             (into #{} (keep (fn [entry]
@@ -61,12 +70,17 @@
             actors
             (into #{} (keep :agent trace))
 
-            ;; Distill decisions for SPE validation
+            ;; Distill decisions for SPE validation.
+            ;; :address resolves agent-id -> protocol address so SPE can look up
+            ;; resolver-stakes (keyed by address, not agent ID).
             decisions (vec (keep (fn [entry]
                                    (when (contains? #{"raise_dispute" "escalate_dispute" "release"
                                                       "sender_cancel" "recipient_cancel" "execute_resolution"}
                                                     (:action entry))
-                                     (select-keys entry [:seq :time :agent :action :extra])))
+                                     (let [agent-id (:agent entry)
+                                           addr     (get agents-by-id agent-id agent-id)]
+                                       (assoc (select-keys entry [:seq :time :agent :action :extra])
+                                              :address addr))))
                                  trace))]
 
         {:terminal-world

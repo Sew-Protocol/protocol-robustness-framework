@@ -57,3 +57,6 @@ resources
 .calva
 .clerk
 .hypothesis
+
+# Local sync safety backups
+.sync-backup/

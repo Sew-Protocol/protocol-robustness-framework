@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew
   "SEWProtocol — implementation of DisputeProtocol for the SEW state machine."
-  (:require [resolver-sim.protocols.protocol             :as proto]
+  (:require [clojure.string                         :as str]
+            [resolver-sim.protocols.protocol             :as proto]
             [resolver-sim.protocols.sew.types       :as t]
             [resolver-sim.protocols.sew.diff        :as diff]
             [resolver-sim.protocols.sew.state-machine  :as sm]
@@ -93,14 +94,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defmulti apply-action
-  "Dispatch on action name (string), not keyword."
+  "Dispatch on action name (string), converting underscores to hyphens for compatibility."
   (fn [_ctx _world event]
-    ;; Normalize incoming action names so both legacy snake_case and
-    ;; current kebab-case spellings dispatch to the same handlers.
-    ;; Examples: create_escrow -> create-escrow, :raise_dispute -> raise-dispute
     (-> (:action event)
         name
-        (clojure.string/replace "_" "-"))))
+        (str/replace "_" "-"))))
 
 (defmethod apply-action "create-escrow"
   [{:keys [agent-index snapshot]} world event]

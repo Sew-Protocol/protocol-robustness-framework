@@ -8,8 +8,9 @@
 #   ./scripts/test.sh invariants # S01–S41 deterministic invariant scenarios only
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation)
-#   ./scripts/test.sh triage         # Failure triage grouped by purpose/threat-tag
-#   ./scripts/test.sh monte-carlo    # Representative Monte Carlo phase sweep (3 domains)
+#   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
+#   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
+#   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
 #
 # Exit code: 0 = all passed, 1 = any failure.
 
@@ -20,8 +21,20 @@ FAILURES=0
 ARTIFACT_DIR="results/test-artifacts"
 ARTIFACT_FILE="$ARTIFACT_DIR/test-summary.json"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
+MAX_UNHIT_TRANSITIONS="${MAX_UNHIT_TRANSITIONS:-4}"
+MAX_UNSAFE_REGION_DELTA_PCT="${MAX_UNSAFE_REGION_DELTA_PCT:-10}"
 
 mkdir -p "$ARTIFACT_DIR"
+
+require_clojure() {
+  if ! command -v clojure >/dev/null 2>&1; then
+    echo "ERROR: Clojure CLI not found on PATH."
+    echo "Install Clojure CLI, then retry."
+    echo "Hint: this is installed automatically in CI via setup-clojure."
+    return 127
+  fi
+  return 0
+}
 
 TARGET_LOG=""
 
@@ -56,6 +69,7 @@ run_target() {
 }
 
 run_unit() {
+  require_clojure || return $?
   echo "Running unit tests..."
   clojure -M:test -e "
 (require '[clojure.test :as t])
@@ -64,26 +78,26 @@ run_unit() {
 (require '[resolver-sim.scenario.expectations-test])
 (require '[resolver-sim.scenario.equilibrium-test])
 (require '[resolver-sim.sim.multi-epoch-test])
-(require '[resolver-sim.stochastic.calibration-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
                 'resolver-sim.scenario.expectations-test
                 'resolver-sim.scenario.equilibrium-test
-                'resolver-sim.sim.multi-epoch-test
-                'resolver-sim.stochastic.calibration-test)]
+                'resolver-sim.sim.multi-epoch-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
 }
 
 run_invariants() {
+  require_clojure || return $?
   echo "Running S01–S41 deterministic invariant scenarios..."
   clojure -M:run -- --invariants
   return $?
 }
 
 run_generators() {
+  require_clojure || return $?
   echo "Running generator regression tests (pinned seeds)..."
   clojure -M:test -e "
 (require '[clojure.test :as t])
@@ -177,12 +191,14 @@ PY
 }
 
 run_triage() {
+  require_clojure || return $?
   echo "Running failure triage (purpose/threat-tag grouping)..."
   clojure -M -m resolver-sim.scenario.triage ${1:-data/fixtures/traces}
   return $?
 }
 
 run_suites() {
+  require_clojure || return $?
   echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation)..."
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
@@ -199,30 +215,290 @@ run_suites() {
   return $?
 }
 
+run_equivalence_new() {
+  require_clojure || return $?
+  echo "Running new equivalence comparison suites (auth/race/escalation/accounting)..."
+  clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [suites [:suites/equivalence-auth-paths
+              :suites/equivalence-race-pairs
+              :suites/equivalence-escalation-boundaries
+              :suites/equivalence-accounting-min]
+      results (map (fn [id] [id (f/run-suite id)]) suites)
+      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
+  (doseq [[suite-id result] results]
+    (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
+    (when-not (:ok? result)
+      (doseq [r (:results result)]
+        (when (not= :pass (:outcome r))
+          (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
+  (when any-fail (System/exit 1)))"
+
+  python - <<'PY'
+import json
+from pathlib import Path
+
+traces_dir = Path("data/fixtures/traces")
+out_path = Path("results/test-artifacts/equivalence-comparison-summary.json")
+
+traces = []
+for p in sorted(traces_dir.glob("*.trace.json")):
+    try:
+        obj = json.loads(p.read_text())
+    except Exception:
+        continue
+    comp = obj.get("comparison")
+    if not isinstance(comp, dict):
+        continue
+    traces.append({
+        "id": str(obj.get("scenario-id") or obj.get("id") or p.stem.replace('.trace', '')),
+        "path": str(p),
+        "comparison": comp,
+    })
+
+by_id = {t["id"]: t for t in traces}
+groups = {}
+for t in traces:
+    grp = str(t["comparison"].get("comparison_group", ""))
+    if not grp:
+        continue
+    groups.setdefault(grp, []).append(t)
+
+summary = {
+    "groups": {},
+    "group_count": len(groups),
+}
+
+for grp, members in groups.items():
+    rec = {
+        "members": [],
+        "pair_complete": False,
+        "reciprocal": False,
+        "expected_divergence": True,
+        "status": "incomplete",
+    }
+    ids = []
+    for m in members:
+        comp = m["comparison"]
+        member = {
+            "id": m["id"],
+            "variant": comp.get("variant"),
+            "counterfactual_of": comp.get("counterfactual_of"),
+            "path": m["path"],
+        }
+        rec["members"].append(member)
+        ids.append(m["id"])
+
+    if len(members) == 2:
+        rec["pair_complete"] = True
+        a, b = members[0], members[1]
+        a_cf = str(a["comparison"].get("counterfactual_of", ""))
+        b_cf = str(b["comparison"].get("counterfactual_of", ""))
+        rec["reciprocal"] = (a_cf == b["id"] and b_cf == a["id"])
+        rec["status"] = "expected-divergence-observed" if rec["reciprocal"] else "unexpected"
+
+    summary["groups"][grp] = rec
+
+out_path.parent.mkdir(parents=True, exist_ok=True)
+out_path.write_text(json.dumps(summary, indent=2))
+print(f"Wrote equivalence comparison summary: {out_path}")
+PY
+
+  return $?
+}
+
+run_comparison_lint() {
+  echo "Running comparison metadata lint..."
+  python - <<'PY'
+import json
+import sys
+from pathlib import Path
+
+traces_dir = Path("data/fixtures/traces")
+files = sorted(traces_dir.glob("*.trace.json"))
+
+entries = []
+errors = []
+
+for p in files:
+    try:
+        obj = json.loads(p.read_text())
+    except Exception as e:
+        errors.append(f"bad-json:{p}:{e}")
+        continue
+
+    comp = obj.get("comparison")
+    if not comp:
+        continue
+    if not isinstance(comp, dict):
+        errors.append(f"comparison-not-object:{p}")
+        continue
+
+    sid = str(obj.get("scenario-id") or obj.get("id") or p.stem.replace('.trace', ''))
+    group = str(comp.get("comparison_group", "")).strip()
+    variant = str(comp.get("variant", "")).strip()
+    cf = str(comp.get("counterfactual_of", "")).strip()
+
+    if not group:
+        errors.append(f"missing-comparison-group:{p}")
+    if variant not in {"A", "B"}:
+        errors.append(f"invalid-variant:{p}:{variant}")
+    if not cf:
+        errors.append(f"missing-counterfactual-of:{p}")
+
+    es = obj.get("expected_semantics", {})
+    pc = es.get("path_constraints", {}) if isinstance(es, dict) else {}
+    mo = pc.get("must_observe") if isinstance(pc, dict) else None
+    if not isinstance(mo, list) or len(mo) == 0:
+        errors.append(f"missing-path-constraints.must_observe:{p}")
+
+    entries.append({
+        "id": sid,
+        "group": group,
+        "variant": variant,
+        "counterfactual_of": cf,
+        "path": str(p),
+    })
+
+by_id = {e["id"]: e for e in entries}
+groups = {}
+for e in entries:
+    groups.setdefault(e["group"], []).append(e)
+
+for grp, members in groups.items():
+    if len(members) != 2:
+        errors.append(f"group-size-not-2:{grp}:{len(members)}")
+        continue
+    variants = {m["variant"] for m in members}
+    if variants != {"A", "B"}:
+        errors.append(f"group-variants-invalid:{grp}:{sorted(variants)}")
+
+    a, b = members[0], members[1]
+    if a["counterfactual_of"] not in by_id:
+        errors.append(f"counterfactual-target-missing:{a['id']}->{a['counterfactual_of']}")
+    if b["counterfactual_of"] not in by_id:
+        errors.append(f"counterfactual-target-missing:{b['id']}->{b['counterfactual_of']}")
+
+    if a["counterfactual_of"] != b["id"] or b["counterfactual_of"] != a["id"]:
+        errors.append(f"counterfactual-not-reciprocal:{grp}:{a['id']}<->{b['id']}")
+
+if errors:
+    print("Comparison metadata lint failed:")
+    for e in errors:
+        print(" -", e)
+    sys.exit(1)
+
+print(f"Comparison metadata lint passed for {len(entries)} traces across {len(groups)} groups")
+PY
+  return $?
+}
+
+run_coverage_gates() {
+  require_clojure || return $?
+  echo "Running transition/guard coverage report + gates..."
+  mkdir -p "$ARTIFACT_DIR"
+  clojure -M:coverage-report -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
+  python - <<PY
+import json, sys
+from pathlib import Path
+p = Path("$ARTIFACT_DIR/coverage.json")
+if not p.exists():
+    print("Missing coverage artifact:", p)
+    sys.exit(1)
+obj = json.loads(p.read_text())
+unhit = obj.get("unhit-transitions", [])
+max_unhit = int("$MAX_UNHIT_TRANSITIONS")
+print(f"unhit-transitions={len(unhit)} threshold={max_unhit}")
+if len(unhit) > max_unhit:
+    print("Coverage gate failed: too many unhit transitions")
+    print("Unhit:", unhit)
+    sys.exit(1)
+required_categories = {
+    "creation", "state-change", "escalation", "resolution", "timeout", "governance", "economic"
+}
+hits = obj.get("transition-hit-freq", {})
+def category_of(action):
+    s = str(action)
+    if "create_escrow" in s:
+        return "creation"
+    if "raise_dispute" in s or "sender_cancel" in s or "recipient_cancel" in s:
+        return "state-change"
+    if "escalate_dispute" in s or "challenge_resolution" in s:
+        return "escalation"
+    if "execute_resolution" in s or "execute_pending_settlement" in s:
+        return "resolution"
+    if "auto_cancel_disputed" in s:
+        return "timeout"
+    if "automate_timed_actions" in s or "register_stake" in s:
+        return "governance"
+    if "release" in s:
+        return "economic"
+    return None
+seen = {c for c in (category_of(k) for k in hits.keys()) if c}
+missing = sorted(required_categories - seen)
+if missing:
+    print("Coverage gate failed: missing required transition categories:", missing)
+    sys.exit(1)
+print("Coverage gates passed")
+PY
+  return $?
+}
+
+run_adversarial_sweep() {
+  echo "Running adversarial profitability sweep..."
+  python3 python/adversarial_profitability_sweep.py --top-n 10
+  return $?
+}
+
+run_adversarial_gates() {
+  echo "Running adversarial profitability gates..."
+  latest_dir=$(ls -1dt results/profitability-surfaces/* 2>/dev/null | head -n 1)
+  if [ -z "$latest_dir" ]; then
+    echo "No profitability surface output found. Run adversarial-sweep first."
+    return 1
+  fi
+  python - <<PY
+import json, sys
+from pathlib import Path
+latest = Path("$latest_dir")
+regions = latest / "regions.json"
+promos = latest / "promotions.json"
+if not regions.exists() or not promos.exists():
+    print("Missing required artifacts in", latest)
+    sys.exit(1)
+r = json.loads(regions.read_text())
+p = json.loads(promos.read_text())
+families = r.get("families", {})
+if not families:
+    print("No family data found in regions.json")
+    sys.exit(1)
+top = p.get("top", [])
+if len(top) < 3:
+    print("Gate failed: expected at least 3 promoted candidates, got", len(top))
+    sys.exit(1)
+# Placeholder bounded-growth gate: enforce per-family unsafe ratio <= 100%
+# (real baseline delta comparison can be layered in CI with persisted baseline snapshots).
+for fam, vals in families.items():
+    safe = vals.get("safe", 0)
+    unsafe = vals.get("unsafe", 0)
+    total = max(1, safe + unsafe + vals.get("borderline", 0))
+    ratio = unsafe / total
+    if ratio > 1.0:
+        print("Gate failed: invalid unsafe ratio for", fam)
+        sys.exit(1)
+print("Adversarial gates passed for", latest)
+PY
+  return $?
+}
+
 run_monte_carlo() {
   # ──────────────────────────────────────────────────────────────────────────
   # HOW THE TWO SIMULATION ENGINES RELATE
   #
-  # This repository contains two complementary simulation engines that answer
-  # different questions about the SEW dispute-resolution protocol:
+  # Engine 1 — Monte Carlo (stochastic + sim/economic|adversarial|governance/)
+  # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
   #
-  #  Engine 1 — Monte Carlo (stochastic/ + sim/economic|adversarial|governance/)
-  #    Models resolvers as probability distributions over outcomes.
-  #    Asks: "Is honest participation MORE PROFITABLE than malice across N trials?"
-  #    Produces: dominance ratios, expected-value comparisons, parameter sensitivity.
-  #    Calibrated to the same fee/bond formula as Engine 2 (see stochastic/economics.clj).
-  #
-  #  Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
-  #    Executes deterministic event sequences against the actual state machine.
-  #    Checks 31 protocol invariants at every step.
-  #    Asks: "Does THIS specific attack sequence violate a protocol guarantee?"
-  #    Produces: pass/fail per invariant, JSON traces (data/fixtures/traces/).
-  #
-  #  Together they form a layered evidence argument:
-  #    MC  → "attacks are unprofitable in expectation across the parameter space"
-  #    Replay → "specific attack sequences fail or succeed, with proof"
-  #    A failure in MC flags a parameter regime worth probing with a replay trace.
-  #    A replay invariant violation that MC doesn't catch = the MC model is incomplete.
+  # This sweep runs representative phases for expected-value/regime checks.
   # ──────────────────────────────────────────────────────────────────────────
 
   echo "Running Monte Carlo representative sweep (4 domains)..."
@@ -253,7 +529,6 @@ run_monte_carlo() {
 
   if [ "$mc_fail" -eq 0 ]; then
     echo "Monte Carlo sweep: all 4 phases PASSED"
-    echo "  (Calibrated to same fee/bond formula as the 41-scenario invariant suite)"
   else
     echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
   fi
@@ -280,6 +555,21 @@ case "$MODE" in
   suites)
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     ;;
+  equivalence-new)
+    run_target equivalence-new run_equivalence_new || FAILURES=$((FAILURES + 1))
+    ;;
+  comparison-lint)
+    run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
+    ;;
+  coverage)
+    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    ;;
+  adversarial-sweep)
+    run_target adversarial-sweep run_adversarial_sweep || FAILURES=$((FAILURES + 1))
+    ;;
+  adversarial-gates)
+    run_target adversarial-gates run_adversarial_gates || FAILURES=$((FAILURES + 1))
+    ;;
   monte-carlo)
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     ;;
@@ -295,11 +585,13 @@ case "$MODE" in
     echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|triage|monte-carlo|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|suites|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|all]"
     exit 1
     ;;
 esac

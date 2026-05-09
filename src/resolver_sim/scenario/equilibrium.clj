@@ -323,7 +323,11 @@
 
    :inconclusive when no strategic decisions were made."
   [{:keys [raw-trace decisions terminal-world]}]
-  (let [strategic-actions #{"raise_dispute" "escalate_dispute"}
+  (let [;; Strategic actions are points where an agent makes a material choice:
+        ;; - raise_dispute:      party contests an escrow outcome (posts implicit claim)
+        ;; - escalate_dispute:   party appeals to a higher authority (posts appeal bond)
+        ;; - execute_resolution: resolver decides outcome (may lose stake if fraudulent)
+        strategic-actions #{"raise_dispute" "escalate_dispute" "execute_resolution"}
         decision-nodes    (filter #(strategic-actions (:action %)) decisions)]
     (cond
       (empty? decision-nodes)
@@ -337,24 +341,30 @@
       :else
       (let [terminal-state (:world (last raw-trace))
             violations (keep (fn [decision]
-                               (let [t-idx   (:index decision)
+                               ;; :seq equals the array index in raw-trace (events are
+                               ;; validated to have contiguous seq values starting at 0)
+                               (let [t-idx   (:seq decision)
                                      agent   (:agent decision)
+                                     ;; Use resolved address for world-state lookup;
+                                     ;; world keys (resolver-stakes, claimable, etc.)
+                                     ;; are keyed by address, not agent ID.
+                                     addr    (or (:address decision) agent)
                                      action  (:action decision)]
                                  (when (and (strategic-actions action)
                                              (some? t-idx)
                                              (< t-idx (count raw-trace)))
-                                   (let [world-at     (:world (nth raw-trace t-idx))
-                                         w-at         (get-agent-wealth world-at agent)
-                                         w-T          (get-agent-wealth terminal-state agent)]
+                                   (let [world-at (:world (nth raw-trace t-idx))
+                                         w-at     (get-agent-wealth world-at addr)
+                                         w-T      (get-agent-wealth terminal-state addr)]
                                      (when (< w-T w-at)
-                                        {:index    t-idx
-                                         :seq      (:seq decision)
-                                        :agent    agent
-                                        :action   action
-                                        :loss     (- w-at w-T)
-                                        :class    :ex-post-regret
-                                         :summary  (str "Agent " agent " " action " at node " t-idx
-                                                       " led to net loss of " (- w-at w-T))})))))
+                                       {:index   t-idx
+                                        :seq     t-idx
+                                        :agent   agent
+                                        :action  action
+                                        :loss    (- w-at w-T)
+                                        :class   :ex-post-regret
+                                        :summary (str "Agent " agent " " action " at step " t-idx
+                                                      " led to net loss of " (- w-at w-T))})))))
                              decisions)]
         (if (seq violations)
           (fail :subgame-perfect-equilibrium :single-trace-node-proxy

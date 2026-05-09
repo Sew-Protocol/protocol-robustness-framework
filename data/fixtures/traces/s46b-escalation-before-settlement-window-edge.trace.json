@@ -1,0 +1,41 @@
+{
+  "schema-version": "1.1",
+  "id": "scenarios/s46b-escalation-before-settlement-window-edge",
+  "title": "Counterfactual B: Escalation Before Settlement at Window Edge",
+  "purpose": "regression",
+  "threat-tags": ["settlement-race", "timing-boundary"],
+  "comparison": {
+    "comparison_group": "settlement-vs-escalation-window-edge",
+    "variant": "B",
+    "counterfactual_of": "s46a-settlement-before-escalation-window-edge"
+  },
+  "expected_semantics": {
+    "path_constraints": {
+      "must_observe": [
+        "escalate_dispute before execute_pending_settlement",
+        "pending settlement execution after escalation should revert"
+      ]
+    }
+  },
+  "scenario-id": "s46b-escalation-before-settlement-window-edge",
+  "initial-block-time": 1000,
+  "agents": [
+    {"id": "buyer", "address": "0xbuyer", "type": "honest"},
+    {"id": "seller", "address": "0xseller", "type": "honest"},
+    {"id": "l0resolver", "address": "0xl0", "type": "resolver"},
+    {"id": "keeper", "address": "0xkeeper", "type": "resolver"}
+  ],
+  "protocol-params": {
+    "resolver-fee-bps": 150,
+    "resolution-module": "0xkleros-proxy",
+    "appeal-window-duration": 60,
+    "max-dispute-duration": 2592000
+  },
+  "events": [
+    {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow", "params": {"token": "USDC", "to": "0xseller", "amount": 5000}, "save-id-as": "wf0"},
+    {"seq": 1, "time": 1060, "agent": "buyer", "action": "raise_dispute", "params": {"workflow-id": "wf0"}},
+    {"seq": 2, "time": 1120, "agent": "l0resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl0hash"}},
+    {"seq": 3, "time": 1179, "agent": "buyer", "action": "escalate_dispute", "params": {"workflow-id": "wf0"}},
+    {"seq": 4, "time": 1180, "agent": "keeper", "action": "execute_pending_settlement", "params": {"workflow-id": "wf0"}}
+  ]
+}

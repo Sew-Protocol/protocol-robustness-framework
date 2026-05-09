@@ -263,22 +263,26 @@
                       ;; :inconclusive is treated as a soft warning, not a hard failure
                       ;;
                       ;; Mechanism-property and equilibrium-concept results (CDRS v1.1):
-                      ;; - :fail → hard failure (same severity as expectations failure)
+                      ;; - :fail → hard failure UNLESS purpose = :theory-falsification
                       ;; - :inconclusive / :not-applicable → soft warning (suite still passes)
                       ;; - :not-checked → no properties declared; passes
+                      ;;
+                      ;; Negative test cases (purpose = :theory-falsification) are expected to
+                      ;; produce :fail — including mechanism and equilibrium :fail results.
                       (let [status       (get-in r [:theory :status])
                             purpose      (keyword (or (:purpose r) ""))
+                            neg-test?    (= purpose :theory-falsification)
                             mech-status  (get-in r [:theory :mechanism-status] :not-checked)
                             eq-status    (get-in r [:theory :equilibrium-status] :not-checked)
                             falsify-ok?  (case status
                                            nil            true
                                            :not-evaluated true
                                            :not-falsified true
-                                           :falsified     (= purpose :theory-falsification)
+                                           :falsified     neg-test?
                                            :inconclusive  true
                                            true)
-                            mech-ok?     (not= mech-status :fail)
-                            eq-ok?       (not= eq-status :fail)]
+                            mech-ok?     (or (not= mech-status :fail) neg-test?)
+                            eq-ok?       (or (not= eq-status :fail) neg-test?)]
                         (and falsify-ok? mech-ok? eq-ok?)))
          all-ok? (every? (fn [r] (and (= :pass (:outcome r))
                                       (:ok? (:threshold-validation r))

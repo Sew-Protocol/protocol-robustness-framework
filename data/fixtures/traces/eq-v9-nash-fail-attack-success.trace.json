@@ -3,7 +3,7 @@
   "scenario-id": "eq-v9-nash-fail-attack-success",
   "title": "Nash Equilibrium \u2014 FAIL (adversarial event succeeds)",
   "description": "Adversarial buyer marks a legitimate raise_dispute call as adversarial?:true. Since the dispute succeeds, attack-successes = 1. Nash-equilibrium and dominant-strategy-equilibrium validators return :fail. This scenario is NOT included in the normal suite \u2014 it is verified via unit tests that check the validator returns :fail.",
-  "purpose": "regression",
+  "purpose": "theory-falsification",
   "_validator-test-note": "This trace produces mechanism-status :fail. It verifies the validators detect violations. Run via equilibrium unit tests, not the fixture suite.",
   "schema-version": "1.1",
   "initial-block-time": 1000,
