@@ -108,6 +108,26 @@
     (or (> (double regret) abs-th)
         (> rel-v rel-th))))
 
+(defn- response-adjustment
+  "Deterministic response-policy adjustment for counterfactual alternatives.
+   Phase D foundation: enables explicit mode differences without introducing
+   nondeterminism."
+  [continuation-policy chosen-utility]
+  (case (:mode continuation-policy)
+    :policy-response (if (some? chosen-utility) 1 0)
+    :trace-following 0
+    0))
+
+(defn- compute-bundle-regret
+  "Bounded multi-step deviation bundle proxy.
+   Uses depth-2 style additive penalty on positive one-step regret as a
+   deterministic approximation for compounded strategic deviation effects."
+  [local-regret max-depth]
+  (let [depth (long (max 1 max-depth))]
+    (if (or (nil? local-regret) (<= local-regret 0) (= depth 1))
+      local-regret
+      (+ local-regret (long (Math/floor (/ local-regret 2.0)))))))
+
 (defn- classify-row
   [{:keys [node-type alternatives chosen-utility best-alt-utility]}]
   (cond
@@ -143,9 +163,10 @@
               ;; that immediate drop in this local subgame snapshot.
               (max pre-utility chosen-local)
               chosen-local)))
+        response-delta  (response-adjustment continuation-policy chosen-utility)
         best-alt-utility (if (seq alternatives)
                            (max (or local-alt-utility Long/MIN_VALUE)
-                                (or chosen-utility Long/MIN_VALUE))
+                                (+ (long (or chosen-utility Long/MIN_VALUE)) response-delta))
                            chosen-utility)
         classification (classify-row {:node-type node-type
                                       :alternatives alternatives
@@ -170,6 +191,7 @@
      :chosen-utility chosen-utility
      :best-alt-utility best-alt-utility
      :local-regret regret
+     :bundle-regret nil
      :deterministic-key (str idx "|" agent "|" action)}))
 
 (defn evaluate-subgame-counterfactual
@@ -188,6 +210,7 @@
                             (sort-by (juxt :seq :agent :action))
                             vec)
         threshold      (long (get spe-config :regret-threshold 0))
+        max-depth      (long (get spe-config :max-deviation-depth 1))
         epsilon-abs    (double (get spe-config :epsilon-abs 0.0))
         epsilon-rel    (double (get spe-config :epsilon-rel 0.0))
         continuation-policy (merge default-continuation-policy
@@ -231,7 +254,7 @@
        :requires ["trace ends before terminal settlement; counterfactual SPE proxy unavailable"]}
 
       :else
-      (let [rows       (mapv #(node->table-row {:raw-trace raw-trace
+      (let [rows0      (mapv #(node->table-row {:raw-trace raw-trace
                                                 :terminal-state terminal-state
                                                 :continuation-policy continuation-policy
                                                 :replay-boundary replay-boundary
@@ -239,7 +262,11 @@
                                                %
                                                spe-config)
                              decision-nodes)
-            regrets    (keep :local-regret rows)
+            rows       (mapv (fn [r]
+                               (assoc r :bundle-regret
+                                      (compute-bundle-regret (:local-regret r) max-depth)))
+                             rows0)
+            regrets    (keep :bundle-regret rows)
             max-regret (when (seq regrets) (apply max regrets))
             mean-regret (when (seq regrets) (/ (reduce + 0 regrets) (count regrets)))
             class-counts (reduce (fn [m r]
@@ -251,9 +278,9 @@
                                  rows)
             evaluated-count (:evaluated class-counts 0)
             exceed-count (count (filter identity
-                                        (for [{:keys [local-regret chosen-utility]} rows
-                                              :when (some? local-regret)]
-                                          (regret-exceeds-epsilon? local-regret chosen-utility epsilon-abs epsilon-rel))))
+                                        (for [{:keys [bundle-regret chosen-utility]} rows
+                                              :when (some? bundle-regret)]
+                                          (regret-exceeds-epsilon? bundle-regret chosen-utility epsilon-abs epsilon-rel))))
             pass?      (and (pos? evaluated-count)
                             (some? max-regret)
                             (<= max-regret threshold)
@@ -273,6 +300,7 @@
          :threshold threshold
          :epsilon-abs epsilon-abs
          :epsilon-rel epsilon-rel
+         :max-deviation-depth max-depth
          :continuation-policy continuation-policy
          :replay-boundary replay-boundary
          :utility-spec utility-spec
