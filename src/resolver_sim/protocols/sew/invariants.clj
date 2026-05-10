@@ -725,17 +725,21 @@
 ;; Invariant 24: Slash distribution consistent
 ;;
 ;; Every unit of stake slashed via bond-slashed must be accounted for in
-;; bond-distribution (insurance + protocol + burned).  The three buckets
-;; must sum to the total of all bond-slashed amounts.
-;; ---------------------------------------------------------------------------
-
+;; bond-distribution (insurance + protocol) plus retained-slash-reserves.
+;; The three buckets
 (defn slash-distribution-consistent?
-  "True when the global bond-distribution totals equal the sum of all bond-slashed amounts.
-   Enforces that every slashed bond was distributed somewhere (insurance, protocol, or burned)
+  ;; must sum to the total of all bond-slashed amounts.
+  ;; ---------------------------------------------------------------------------
+  "True when (insurance + protocol + retained-slash-reserves) equals
+   the sum of all bond-slashed amounts.
+
+   Enforces that every slashed bond was distributed/accounted somewhere
+   (insurance, protocol, or retained reserves)
    rather than disappearing."
   [world]
-  (let [bd          (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})
-        dist-total  (+ (:insurance bd 0) (:protocol bd 0) (:burned bd 0))
+  (let [bd          (:bond-distribution world {:insurance 0 :protocol 0})
+        retained    (:retained-slash-reserves world 0)
+        dist-total  (+ (:insurance bd 0) (:protocol bd 0) retained)
         slash-total (reduce + 0 (vals (:bond-slashed world {})))]
     (if (zero? slash-total)
       {:holds? true :violations []}

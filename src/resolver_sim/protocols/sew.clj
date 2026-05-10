@@ -82,6 +82,11 @@
                 (= resolver-addr (:dispute-resolver et))))
          (:escrow-transfers world))))
 
+(defn- governance-actor?
+  [agent]
+  (let [r (or (:role agent) (:type agent) "")]
+    (contains? #{"governance" :governance} r)))
+
 (defn- wf-id
   "Compatibility accessor for workflow identifiers.
    Accepts either {:workflow-id n} (current) or {:id n} (legacy)."
@@ -327,11 +332,14 @@
   (let [ar (resolve-address agent-index (:agent event))]
     (if-not (:ok ar)
       ar
-      (let [p             (:params event)
-            workflow-id   (or (:workflow-id p) (wf-id event))
-            resolver-addr (:resolver-addr p)
-            amount        (:amount p)]
-        (res/propose-fraud-slash world workflow-id (:address ar) resolver-addr amount)))))
+      (let [agent (get agent-index (:agent event))]
+        (if-not (governance-actor? agent)
+          (t/fail :not-governance)
+          (let [p             (:params event)
+                workflow-id   (or (:workflow-id p) (wf-id event))
+                resolver-addr (:resolver-addr p)
+                amount        (:amount p)]
+            (res/propose-fraud-slash world workflow-id (:address ar) resolver-addr amount)))))))
 
 (defmethod apply-action "challenge-resolution"
   [{:keys [agent-index escalation-fn]} world event]
@@ -354,8 +362,19 @@
   (let [ar (resolve-address agent-index (:agent event))]
     (if-not (:ok ar)
       ar
-      (let [p (:params event)]
-        (res/resolve-appeal world (or (:workflow-id p) (wf-id event)) (:address ar) (:upheld? p))))))
+      (let [agent (get agent-index (:agent event))]
+        (if-not (governance-actor? agent)
+          (t/fail :not-governance)
+          (let [p (:params event)]
+            (res/resolve-appeal world
+            ;; NOTE: event param key remains :upheld? for wire compatibility.
+            ;; Semantics: this flag is about the APPEAL outcome.
+            ;;   true  => appeal upheld (accepted)  => slash reversed
+            ;;   false => appeal rejected           => slash remains pending
+                                (or (:workflow-id p) (wf-id event))
+                                (:address ar)
+                                (:upheld? p)
+                                (or (:slash-id p) (:workflow-id p) (wf-id event)))))))))
 
 (defmethod apply-action "execute-fraud-slash"
   [_ctx world event]
