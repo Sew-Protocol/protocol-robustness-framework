@@ -725,6 +725,80 @@
     (is (= :pass (:outcome r)))
     (is (= :ok (get-in r [:trace 4 :result])))))
 
+(deftest test-withdraw-stake-invalid-amount-nil-rejected
+  (let [r (replay/replay-scenario
+           (sc :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1001 :agent "resolver" :action "withdraw_stake"
+                 :params {}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :invalid-amount (get-in r [:trace 1 :error])))))
+
+(deftest test-withdraw-stake-invalid-amount-zero-rejected
+  (let [r (replay/replay-scenario
+           (sc :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1001 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :invalid-amount (get-in r [:trace 1 :error])))))
+
+(deftest test-withdraw-stake-invalid-amount-negative-rejected
+  (let [r (replay/replay-scenario
+           (sc :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1001 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount -1}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :invalid-amount (get-in r [:trace 1 :error])))))
+
+(deftest test-withdraw-stake-pending-slash-boundary-allows-withdraw
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (replay/replay-scenario
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params
+                              :appeal-window-duration 100
+                              :appeal-bond-amount 50)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                ;; current=5000, pending-slash=1000, amount=4000 => current-amount=1000 (allowed)
+                {:seq 3 :time 1002 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 4000}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
+(deftest test-withdraw-stake-pending-slash-boundary-blocks-withdraw
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (replay/replay-scenario
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params
+                              :appeal-window-duration 100
+                              :appeal-bond-amount 50)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                ;; current=5000, pending-slash=1000, amount=4001 => current-amount=999 (blocked)
+                {:seq 3 :time 1002 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 4001}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 3 :result])))
+    (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 3 :error])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 20: Invariant-violation metric tracking
 ;;

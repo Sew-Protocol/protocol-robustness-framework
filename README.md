@@ -135,6 +135,27 @@ These metrics are intentionally concrete and repository-verifiable.
 
 ## Quick Start
 
+### Start here (first-time visitors)
+
+Choose one path:
+
+1. **See the evidence dashboard (read-only, fastest)**
+   ```bash
+   bb notebook
+   ```
+   Then open: `http://localhost:7777/notebooks/report`
+
+2. **Run the canonical deterministic validation suite**
+   ```bash
+   make reference-validation-v1
+   make verify-reference-validation-v1
+   ```
+
+3. **See the most useful commands quickly**
+   ```bash
+   bb help:first
+   ```
+
 ### Canonical validation command (recommended)
 ```bash
 ./scripts/test.sh all
@@ -224,3 +245,18 @@ This repository provides:
 - A validation layer for the SEW Protocol
 - A deterministic replay harness with protocol-adapter seams
 - A fixture-driven testing toolkit useful to other protocol teams
+
+
+## Reference Validation Evidence Dashboard
+
+For a read-only artifact-driven evidence view, open the Clerk notebook:
+
+- `notebooks/report.clj` (Reference Validation Evidence Dashboard)
+
+Run locally:
+
+```bash
+clojure -M:clerk
+```
+
+The notebook is a visualization layer over committed suite artifacts and is **not** the validation system itself.

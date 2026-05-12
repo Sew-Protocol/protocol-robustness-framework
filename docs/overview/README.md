@@ -108,7 +108,7 @@ Tests validate invariants:
 
 - `src/resolver_sim/io/params.clj` — Load/validate parameters
 - `src/resolver_sim/io/results.clj` — Serialize results
-- `notebooks/report.clj` — Clerk notebook for analysis
+- `notebooks/report.clj` — Reference Validation Evidence Dashboard (read-only, artifact-driven)
 
 ## Parameter Scenarios
 

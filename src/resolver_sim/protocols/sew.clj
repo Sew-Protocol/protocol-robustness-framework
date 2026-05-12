@@ -250,6 +250,9 @@
                                                    (#{:pending :appealed} (:status slash)))]
                                     (:amount slash)))]
         (cond
+          (or (nil? amount) (not (number? amount)) (<= amount 0))
+          (t/fail :invalid-amount)
+
           (has-active-dispute-for-resolver? world resolver-addr)
           (t/fail :active-disputes-block-withdrawal)
 

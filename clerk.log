@@ -1,0 +1,5 @@
+Execution error (FileNotFoundException) at clojure.main/main (main.java:40).
+Could not locate nextjournal/clerk/cli__init.class, nextjournal/clerk/cli.clj or nextjournal/clerk/cli.cljc on classpath.
+
+Full report at:
+/tmp/clojure-1113013973698221220.edn
