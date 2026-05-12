@@ -1,0 +1,23 @@
+name: Reference Validation Suite v1
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  reference-validation-v1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up runtime
+        run: |
+          echo "Install Java/Clojure/Python dependencies here"
+
+      - name: Run reference suite
+        run: make reference-validation-v1
+
+      - name: Verify reference outputs
+        run: make verify-reference-validation-v1

@@ -5,7 +5,7 @@
    Covers:
      - total-held-per-token tracking (add on create, sub on release/refund)
      - total-fees-per-token (monotonically increasing; withdraw-fees resets)
-     - claimable-balances (push-transfer fallback; cleared on withdrawEscrow)
+     - claimable-balances (pull-settlement entitlements; cleared on withdrawEscrow)
      - withdraw-fees
      - BondCollector appeal bond accounting
 
@@ -55,11 +55,10 @@
         (assoc (t/ok world') :amount amount)))))
 
 ;; ---------------------------------------------------------------------------
-;; Claimable balances (push-transfer fallback)
+;; Claimable balances (pull-settlement model)
 ;;
-;; When a direct token transfer fails (e.g. recipient is a non-receiving contract),
-;; the amount is recorded in claimableBalances[workflowId][addr].
-;; The recipient calls withdrawEscrow() to claim it later.
+;; Settlement creates claimableBalances[workflowId][addr] entitlements.
+;; Funds are delivered explicitly via withdrawEscrow().
 ;; ---------------------------------------------------------------------------
 
 (defn record-released
@@ -73,11 +72,10 @@
   (update-in world [:total-refunded token] (fnil + 0) amount))
 
 ;; ---------------------------------------------------------------------------
-;; Claimable balances (push-transfer fallback)
+;; Claimable balances (pull-settlement model)
 ;;
-;; When a direct token transfer fails (e.g. recipient is a non-receiving contract),
-;; the amount is recorded in claimableBalances[workflowId][addr].
-;; The recipient calls withdrawEscrow() to claim it later.
+;; Settlement creates claimableBalances[workflowId][addr] entitlements.
+;; Funds are delivered explicitly via withdrawEscrow().
 ;; ---------------------------------------------------------------------------
 
 (defn record-claimable
