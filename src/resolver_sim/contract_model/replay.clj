@@ -115,7 +115,9 @@
     :invariant-violations
     :double-settlements
     :invalid-state-transitions
-    :funds-lost})
+    :funds-lost
+    :negative-payoff-count
+    :coalition-net-profit})
 
 (defn- metric-key
   "Coerce a metric name (string or keyword) to a keyword, stripping any
@@ -243,6 +245,8 @@
    :double-settlements           0
    :invalid-state-transitions    0
    :funds-lost                   0
+   :negative-payoff-count        nil
+   :coalition-net-profit         nil
    ;; Per-invariant failure map: {inv-kw :fail} for any invariant that
    ;; violated at least once during the run. Invariants NOT in this map
    ;; either passed throughout or were never exercised.  Used exclusively
@@ -434,10 +438,10 @@
             (let [open (when-not (:allow-open-disputes? scenario)
                          (seq (engine/open-disputes protocol world)))]
               (if open
-                {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-disputes-at-end :detail {:open-disputes (vec open)} :trace trace :metrics metrics}
+                {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-disputes-at-end :detail {:open-disputes (vec open)} :trace trace :metrics metrics :agents agents}
                 (do
                   (log/info :scenario/end {:id scenario-id :outcome :pass})
-                  {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics})))
+                  {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics :agents agents})))
             (let [raw-event  (first events)
                   alias-res  (engine/resolve-id-alias protocol raw-event id-alias-map)]
               (if-not (:ok alias-res)

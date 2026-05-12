@@ -54,17 +54,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn calculate-slashing-distribution
-  "Calculate the 80/10/10 distribution for slashed funds.
+  "Calculate the 50/30/20 distribution for slashed funds.
    If bounty is provided, it is deducted from insurance and protocol portions.
-   Returns {:insurance amount :protocol amount :burned amount}"
+   Returns {:insurance amount :protocol amount :retained amount}"
   [amount bounty]
-  (let [insurance (quot (* amount 80) 100)
-        protocol  (quot (* amount 10) 100)
-        burned    (- amount insurance protocol)
+  (let [insurance (quot (* amount 50) 100)
+        protocol  (quot (* amount 30) 100)
+        retained  (- amount insurance protocol)
         half-bounty (quot bounty 2)]
     {:insurance (- insurance half-bounty)
      :protocol  (- protocol half-bounty)
-     :burned    burned}))
+     :retained  retained}))
 
 (defn calculate-bounty
   "Calculate the bounty amount for a successful challenge (Phase L)."

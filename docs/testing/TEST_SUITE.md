@@ -24,9 +24,15 @@ Execution time depends on scenario complexity and environment.
 - Clojure unit tests for core protocol/model behavior:
   - `resolver-sim.core-tests`
   - `resolver-sim.protocols.sew.replay-test`
+    - Includes replay-level slashing custody assertions (appeal bond held during appeal; refunded to resolver when upheld; forfeited to insurance when rejected)
   - `resolver-sim.scenario.expectations-test`
   - `resolver-sim.scenario.equilibrium-test`
   - `resolver-sim.sim.multi-epoch-test`
+
+### Slashing accounting notes (simulation parity)
+- Appeal bond custody lifecycle is now enforced by invariant checks:
+  - `:appeal-bond-custody-consistent`
+- Slash accounting includes retained residue and insurance distribution tracking in invariants/tests.
 
 ### `generators`
 - Deterministic generator/property regression tests:

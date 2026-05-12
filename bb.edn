@@ -82,4 +82,36 @@
 
   adv:all:deep {:doc "Start server (if needed) then run deep adversarial preset"
                 :task (do (run 'adv:server)
-                          (run 'adv:deep))}}}
+                          (run 'adv:deep))}
+
+  help:first {:doc "First-time visitor quick commands"
+              :task (do
+                      (println "SEW first-time quickstart")
+                      (println "")
+                      (println "1) Evidence dashboard (read-only):")
+                      (println "   bb notebook")
+                      (println "   http://localhost:7777/notebooks/report")
+                      (println "")
+                      (println "2) Canonical validation (deterministic):")
+                      (println "   make reference-validation-v1")
+                      (println "   make verify-reference-validation-v1")
+                      (println "")
+                      (println "3) Useful helpers:")
+                      (println "   bb slash:calc 500 50")
+                      (println "   ./scripts/test.sh all"))}
+
+  notebook {:doc "Start Clerk notebook server (or reuse existing) at http://localhost:7777/notebooks/report"
+            :task (shell "bash" "-lc" "if ss -ltn '( sport = :7777 )' | grep -q 7777; then echo 'Notebook server already running at http://localhost:7777/notebooks/report'; else clojure -M -m notebooks.serve; fi")}
+
+  slash:calc {:doc "Calculate waterfall slash amount. Usage: bb slash:calc <bond-amount> <slash-rate-bps>"
+              :task (let [bond (or (first *command-line-args*) "0")
+                          bps  (or (second *command-line-args*) "0")]
+                      (clojure {:dir "."}
+                               "-M"
+                               "-e"
+                               (str "(require '[resolver-sim.sim.waterfall :as w])"
+                                    "(println (w/calculate-slash-amount "
+                                    bond
+                                    " "
+                                    bps
+                                    "))")))}}}

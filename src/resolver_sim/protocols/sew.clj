@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew
   "SEWProtocol — implementation of DisputeProtocol for the SEW state machine."
-  (:require [resolver-sim.protocols.protocol             :as proto]
+  (:require [clojure.string                         :as str]
+            [resolver-sim.protocols.protocol             :as proto]
             [resolver-sim.protocols.sew.types       :as t]
             [resolver-sim.protocols.sew.diff        :as diff]
             [resolver-sim.protocols.sew.state-machine  :as sm]
@@ -81,6 +82,11 @@
                 (= resolver-addr (:dispute-resolver et))))
          (:escrow-transfers world))))
 
+(defn- governance-actor?
+  [agent]
+  (let [r (or (:role agent) (:type agent) "")]
+    (contains? #{"governance" :governance} r)))
+
 (defn- wf-id
   "Compatibility accessor for workflow identifiers.
    Accepts either {:workflow-id n} (current) or {:id n} (legacy)."
@@ -93,14 +99,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defmulti apply-action
-  "Dispatch on action name (string), not keyword."
+  "Dispatch on action name (string), converting underscores to hyphens for compatibility."
   (fn [_ctx _world event]
-    ;; Normalize incoming action names so both legacy snake_case and
-    ;; current kebab-case spellings dispatch to the same handlers.
-    ;; Examples: create_escrow -> create-escrow, :raise_dispute -> raise-dispute
     (-> (:action event)
         name
-        (clojure.string/replace "_" "-"))))
+        (str/replace "_" "-"))))
 
 (defmethod apply-action "create-escrow"
   [{:keys [agent-index snapshot]} world event]
@@ -247,6 +250,9 @@
                                                    (#{:pending :appealed} (:status slash)))]
                                     (:amount slash)))]
         (cond
+          (or (nil? amount) (not (number? amount)) (<= amount 0))
+          (t/fail :invalid-amount)
+
           (has-active-dispute-for-resolver? world resolver-addr)
           (t/fail :active-disputes-block-withdrawal)
 
@@ -329,11 +335,14 @@
   (let [ar (resolve-address agent-index (:agent event))]
     (if-not (:ok ar)
       ar
-      (let [p             (:params event)
-            workflow-id   (or (:workflow-id p) (wf-id event))
-            resolver-addr (:resolver-addr p)
-            amount        (:amount p)]
-        (res/propose-fraud-slash world workflow-id (:address ar) resolver-addr amount)))))
+      (let [agent (get agent-index (:agent event))]
+        (if-not (governance-actor? agent)
+          (t/fail :not-governance)
+          (let [p             (:params event)
+                workflow-id   (or (:workflow-id p) (wf-id event))
+                resolver-addr (:resolver-addr p)
+                amount        (:amount p)]
+            (res/propose-fraud-slash world workflow-id (:address ar) resolver-addr amount)))))))
 
 (defmethod apply-action "challenge-resolution"
   [{:keys [agent-index escalation-fn]} world event]
@@ -356,8 +365,19 @@
   (let [ar (resolve-address agent-index (:agent event))]
     (if-not (:ok ar)
       ar
-      (let [p (:params event)]
-        (res/resolve-appeal world (or (:workflow-id p) (wf-id event)) (:address ar) (:upheld? p))))))
+      (let [agent (get agent-index (:agent event))]
+        (if-not (governance-actor? agent)
+          (t/fail :not-governance)
+          (let [p (:params event)]
+            (res/resolve-appeal world
+            ;; NOTE: event param key remains :upheld? for wire compatibility.
+            ;; Semantics: this flag is about the APPEAL outcome.
+            ;;   true  => appeal upheld (accepted)  => slash reversed
+            ;;   false => appeal rejected           => slash remains pending
+                                (or (:workflow-id p) (wf-id event))
+                                (:address ar)
+                                (:upheld? p)
+                                (or (:slash-id p) (:workflow-id p) (wf-id event)))))))))
 
 (defmethod apply-action "execute-fraud-slash"
   [_ctx world event]
@@ -413,6 +433,7 @@
    :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
                                      (:escrow-transfers world)))
    :resolver-stakes     (:resolver-stakes world)
+   :resolver-slash-total (:resolver-slash-total world)
    :bond-distribution   (:bond-distribution world)
    :claimable           (:claimable world {})
    :bond-balances       (:bond-balances world {})})

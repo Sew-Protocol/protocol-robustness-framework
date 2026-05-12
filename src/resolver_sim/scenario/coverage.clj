@@ -15,6 +15,27 @@
             [clojure.data.json :as json]
             [clojure.string    :as str]))
 
+(declare coverage-report)
+
+(defn -main
+  "CLI entrypoint.
+
+   Usage:
+     clojure -M:coverage-report
+     clojure -M:coverage-report -- data/fixtures/traces
+     clojure -M:coverage-report -- data/fixtures/traces results/test-artifacts/coverage.json"
+  [& args]
+  (let [[dir out] (->> args (remove #(= % "--")) vec)
+        dir       (or dir "data/fixtures/traces")
+        report    (coverage-report dir)
+        payload   (json/write-str report)
+        out       (or out "results/test-artifacts/coverage.json")]
+    (.mkdirs (io/file "results/test-artifacts"))
+    (spit out payload)
+    (println (str "Wrote coverage report: " out))
+    (println (str "Scanned dir: " dir))
+    (println (str "Unhit transitions: " (count (:unhit-transitions report))))))
+
 (def ^:private canonical-transitions
   "Release-candidate transition catalog used to compute explicit unhit backlog.
    Keep this aligned with supported protocol actions."

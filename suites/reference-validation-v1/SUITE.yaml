@@ -1,0 +1,106 @@
+suite_id: reference-validation-v1
+title: Reference Validation Suite v1
+status: public-candidate
+version: 1.0.0
+created: 2026-05
+protocol_phase: DR3 built; simulation-backed hardening and gated rollout
+
+description: >
+  Canonical deterministic validation harness for Sew Protocol.
+  v1 defines scenario set, claim mappings, expected outputs,
+  verification flow, and CI checks.
+
+public_disclosure:
+  classification: deterministic-evidence-pack-harness
+  simulator_backed: false
+  confidence: provisional
+  note: >
+    The v1 harness does not yet execute deep simulator replay for each
+    scenario. Scenario outputs are pinned deterministic artifacts.
+    v1.1 work upgrades scenarios to simulator-backed traces.
+
+goals:
+  - Provide externally reproducible validation evidence packaging.
+  - Map protocol claims to executable scenarios and expected outputs.
+  - Preserve high-value adversarial cases as regression artifacts.
+  - Support the Sew Trust Packet Validation & Evidence artifact.
+
+non_goals:
+  - Exhaust all possible adversarial strategies.
+  - Replace contract audits.
+  - Prove complete game-theoretic equilibrium.
+  - Claim full simulator-backed validation coverage in v1.
+
+repository:
+  name: sew-simulation
+  expected_root: suites/reference-validation-v1
+
+pinned_inputs:
+  suite_version: 1.0.0
+  config_version: reference-config-v1
+  economic_assumptions_version: economic-assumptions-v1
+  resolver_capacity_version: resolver-capacity-v1
+  chain_assumptions_version: chain-assumptions-v1
+
+commands:
+  run: make reference-validation-v1
+  verify: make verify-reference-validation-v1
+  clean: make clean-reference-validation-v1
+  report: make report-reference-validation-v1
+
+outputs:
+  summary: actual/summary.json
+  scenario_results: actual/scenario-results.json
+  invariants: actual/invariants.json
+  economic_results: actual/economic-results.json
+  evidence_matrix: actual/evidence-matrix.json
+
+scenarios:
+  - id: governance-sandwich-v1
+    file: scenarios/001-governance-sandwich.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: malicious-resolver-verdict-v1
+    file: scenarios/002-malicious-resolver-verdict.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: dispute-flooding-v1
+    file: scenarios/003-dispute-flooding.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: bond-withdrawal-race-v1
+    file: scenarios/004-bond-withdrawal-race.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: same-block-ordering-v1
+    file: scenarios/005-same-block-ordering.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: autopush-settlement-v1
+    file: scenarios/006-autopush-settlement.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash
+
+  - id: appeal-failure-cascade-v1
+    file: scenarios/007-appeal-failure-cascade.edn
+    evidence_type: pinned-derivation
+    simulator_backed: false
+    confidence: provisional
+    upgrade_path: wire to deterministic simulator replay and commit trace hash

@@ -414,6 +414,34 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
+(defn appeal-bond-custody-consistent?
+  "Invariant: appeal bond custody lifecycle is coherent.
+
+   Rules per slash-id:
+   - :appeal-bond-held must be >= 0
+   - held > 0  => slash status must be :appealed and custody entry must exist
+   - held == 0 => custody entry must not exist"
+  [world]
+  (let [slashes  (:pending-fraud-slashes world {})
+        custody  (:appeal-bond-custody world {})
+        violations
+        (for [[slash-id ev] slashes
+              :let [held         (or (:appeal-bond-held ev) 0)
+                    status       (:status ev)
+                    has-custody? (contains? custody slash-id)
+                    valid?
+                    (and (>= held 0)
+                         (if (pos? held)
+                           (and (= :appealed status) has-custody?)
+                           (not has-custody?)))]
+              :when (not valid?)]
+          {:slash-id slash-id
+           :status status
+           :appeal-bond-held held
+           :has-custody has-custody?})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
 ;; ---------------------------------------------------------------------------
 ;; Invariant 16: Fraud slashes must not be auto-executed
 ;;
@@ -725,17 +753,21 @@
 ;; Invariant 24: Slash distribution consistent
 ;;
 ;; Every unit of stake slashed via bond-slashed must be accounted for in
-;; bond-distribution (insurance + protocol + burned).  The three buckets
-;; must sum to the total of all bond-slashed amounts.
-;; ---------------------------------------------------------------------------
-
+;; bond-distribution (insurance + protocol) plus retained-slash-reserves.
+;; The three buckets
 (defn slash-distribution-consistent?
-  "True when the global bond-distribution totals equal the sum of all bond-slashed amounts.
-   Enforces that every slashed bond was distributed somewhere (insurance, protocol, or burned)
+  ;; must sum to the total of all bond-slashed amounts.
+  ;; ---------------------------------------------------------------------------
+  "True when (insurance + protocol + retained-slash-reserves) equals
+   the sum of all bond-slashed amounts.
+
+   Enforces that every slashed bond was distributed/accounted somewhere
+   (insurance, protocol, or retained reserves)
    rather than disappearing."
   [world]
-  (let [bd          (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})
-        dist-total  (+ (:insurance bd 0) (:protocol bd 0) (:burned bd 0))
+  (let [bd          (:bond-distribution world {:insurance 0 :protocol 0})
+        retained    (:retained-slash-reserves world 0)
+        dist-total  (+ (:insurance bd 0) (:protocol bd 0) retained)
         slash-total (reduce + 0 (vals (:bond-slashed world {})))]
     (if (zero? slash-total)
       {:holds? true :violations []}
@@ -868,6 +900,7 @@
                   :dispute-level-bounded         (dispute-level-bounded? world)
                   :slash-status-consistent       (slash-status-consistent? world)
                   :appeal-bond-conserved         (appeal-bond-conserved? world)
+                  :appeal-bond-custody-consistent (appeal-bond-custody-consistent? world)
                   :no-auto-fraud-execute         (no-auto-fraud-execute? world)
                   :bond-liquidity                (bond-liquidity-holds? world)
                   :bond-slash-bounded            (bond-slash-bounded? world)

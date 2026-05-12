@@ -1772,6 +1772,109 @@
      :params {:workflow-id "wf0"}}]})
 
 ;; ---------------------------------------------------------------------------
+;; S42 — Resolver-Buyer Bribery Loop (Economic Collusion Stress)
+;;
+;; Adversarial interaction: A buyer colludes with a resolver. The buyer pays a
+;; bribe (simulated as side-payment, outcome: refund) to the resolver to rule 
+;; against the seller. The seller then challenges the biased ruling at L1.
+;;
+;; Sequence:
+;;   1. Buyer creates escrow (10000 USDC, kleros-appeal window=60s).
+;;   2. Buyer raises dispute (to trigger the bribe loop).
+;;   3. L0 resolver (colluder) rules :refund (buyer wins, seller loses).
+;;      → pending (deadline = 1120+60 = 1180).
+;;   4. Seller (victim) challenges the biased ruling at t=1150.
+;;      → challenge bond posted, level 0→1, new-resolver=0xl1.
+;;   5. L1 resolver (honest) rules :release (reverses the bribe).
+;;      → new pending (deadline = 1200+60 = 1260).
+;;   6. Keeper executes after L1 deadline → escrow :released.
+;;
+;; Expected: PASS — the protocol's L1 challenge mechanism successfully 
+;; neutralizes the bribery attempt. The buyer (colluder) loses the escrow 
+;; amount they tried to steal via bribe, plus any side-costs.
+;;
+;; Invariants exercised:
+;;   escalation-level-monotonic?    — level advances 0→1
+;;   finalization-accounting-correct? — release recorded despite L0 bribe
+;;   conservation-of-funds?         — funds are correctly attributed after reversal
+;; ---------------------------------------------------------------------------
+
+(def s42
+  {:scenario-id     "s42-resolver-buyer-bribery-loop"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "malicious"}
+                     {:id "seller"     :address "0xseller" :strategy "honest"}
+                     {:id "l0resolver" :address "0xl0"     :role "resolver" :strategy "malicious"}
+                     {:id "l1resolver" :address "0xl1"     :role "resolver"}
+                     {:id "keeper"     :address "0xkeeper" :role "keeper"}]
+   :protocol-params kleros-appeal
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 10000}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; L0 rules refund (biased, part of bribe loop). Deadline = 1120+60 = 1180.
+    {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xbribe-hash" :adversarial? true}}
+    ;; Seller challenges the bias. Level 0→1, new-resolver=0xl1.
+    {:seq 3 :time 1150 :agent "seller" :action "challenge_resolution"
+     :params {:workflow-id "wf0"}}
+    ;; L1 rules release (honest reversal). Deadline = 1200+60 = 1260.
+    {:seq 4 :time 1200 :agent "l1resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhonest-hash"}}
+    ;; Keeper executes after L1 deadline → :released
+    {:seq 5 :time 1265 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S45 — Flash-Loan Stake Inflation
+;;
+;; Adversarial interaction: A resolver temporarily inflates their stake to gain
+;; assignment for a high-volume escrow, then immediately withdraws the stake.
+;; This bypasses the 'Skin in the Game' requirement for the remainder of the
+;; dispute lifecycle.
+;;
+;; Sequence:
+;;   1. Resolver registers a massive stake (100,000 USDC - simulated flash loan).
+;;   2. Buyer creates a large escrow (50,000 USDC) assigned to this resolver.
+;;      → Assigned because stake (100k) > amount (50k).
+;;   3. Resolver immediately withdraws the stake (100,000 USDC).
+;;      → Withdrawal successful (vulnerability: no active-assignment lock).
+;;   4. Resolver is now assigned to a 50k escrow with 0 stake.
+;;   5. Buyer raises dispute. Resolver has no capital at risk if they timeout.
+;;
+;; Expected: PASS (demonstrates the vulnerability).
+;; Invariants exercised:
+;;   solvency-holds?           — total-held tracks the withdrawal correctly.
+;;   conservation-of-funds?    — funds accounted for after the simulation.
+;; ---------------------------------------------------------------------------
+
+(def s45
+  {:scenario-id     "s45-flash-loan-stake-inflation"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "resolver" :address "0xadv"    :role "resolver" :strategy "malicious"}
+                     {:id "buyer"    :address "0xbuyer"  :strategy "honest"}
+                     {:id "seller"   :address "0xseller" :strategy "honest"}]
+   :protocol-params (assoc dr3 :resolver-bond-bps 1000) ; 10% bond required
+   :allow-open-disputes? true
+   :events
+   [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+     :params {:amount 100000}}
+    {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 50000
+              :custom-resolver "0xadv"}
+     :save-id-as "wf0"}
+    ;; Adversary withdraws stake immediately after assignment
+    {:seq 2 :time 1001 :agent "resolver" :action "withdraw_stake"
+     :params {:amount 100000}}
+    ;; Escrow is now live but resolver has 0 stake
+    {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
 ;; Scenario registry
 ;; ---------------------------------------------------------------------------
 
@@ -1819,7 +1922,9 @@
    ["S38  dr3-bond-mix-valid"                           s38]
    ["S39  dr3-senior-coverage-delegation"               s39]
    ["S40  dr3-freeze-post-slash"                        s40]
-   ["S41  dr3-reversal-slash-disabled"                  s41]])
+   ["S41  dr3-reversal-slash-disabled"                  s41]
+   ["S42  resolver-buyer-bribery-loop"                  s42]
+   ["S45  flash-loan-stake-inflation"                   s45]])
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario type registry
@@ -1833,7 +1938,7 @@
 ;; ---------------------------------------------------------------------------
 
 (def scenario-type-registry
-  "Type metadata for all S01–S41 invariant scenarios, keyed by scenario-id."
+  "Type metadata for all S01–S45 invariant scenarios, keyed by scenario-id."
   {;; ── Baseline: standard happy-path protocol flows ───────────────────────
    "s01-baseline-happy-path"                {:scenario/type :baseline}
    "s02-dr3-dispute-release"                {:scenario/type :baseline}
@@ -1934,4 +2039,16 @@
    "s33-forking-strategist-two-escrow-fork-isolation"
    {:scenario/type    :adversarial
     :adversary/type   :forking-strategist
-    :adversary/traits #{:multi-step :capital-efficient}}})
+    :adversary/traits #{:multi-step :capital-efficient}}
+   
+   ;; ── Adversarial: Collusion Stress ───────────────────────────────────
+   "s42-resolver-buyer-bribery-loop"
+   {:scenario/type    :adversarial
+    :adversary/type   :colluder
+    :adversary/traits #{:multi-agent :bribery}}
+   
+   ;; ── Adversarial: Stake Stress ───────────────────────────────────
+   "s45-flash-loan-stake-inflation"
+   {:scenario/type    :adversarial
+    :adversary/type   :profit-maximizer
+    :adversary/traits #{:flash-loan :stake-inflation}}})

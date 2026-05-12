@@ -130,11 +130,40 @@
     (assoc-in world [:pending-fraud-slashes slash-id]
               {:resolver         resolver
                :amount           slash-amt
+               :reason           :fraud
                :status           :pending
                :proposed-at      now
                :appeal-deadline  (+ now appeal-window)
                :appeal-bond-held 0
                :contest-deadline 0})))
+
+(defn- update-unavailability
+  "Idempotent resolver unavailability accounting + circuit breaker trigger.
+   Mirrors Solidity behavior at a model level."
+  [world resolver unavailable?]
+  (let [prev-unavailable? (contains? (:resolver-unavailable world #{}) resolver)
+        world' (cond
+                 (and unavailable? (not prev-unavailable?))
+                 (-> world
+                     (update :resolver-unavailable (fnil conj #{}) resolver)
+                     (update-in [:unavailability-stats :unavailable-count] (fnil inc 0)))
+
+                 (and (not unavailable?) prev-unavailable?)
+                 (-> world
+                     (update :resolver-unavailable disj resolver)
+                     (update-in [:unavailability-stats :unavailable-count] (fnil #(max 0 (dec %)) 0)))
+
+                 :else world)
+        world'' (assoc-in world' [:unavailability-stats :last-update] (:block-time world))
+        total (get-in world'' [:unavailability-stats :total-resolvers] 0)
+        unavailable (get-in world'' [:unavailability-stats :unavailable-count] 0)
+        threshold (get-in world'' [:circuit-breaker :threshold-bps] 3000)
+        pct-bps (if (pos? total) (quot (* unavailable 10000) total) 0)]
+    (if (and (pos? total) (>= pct-bps threshold))
+      (-> world''
+          (assoc-in [:circuit-breaker :active?] true)
+          (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
+      world'')))
 
 ;; ---------------------------------------------------------------------------
 ;; execute-resolution
@@ -477,11 +506,24 @@
        (not= :pending (:status pending))
        (t/fail :slash-not-pending)
 
+       (> (:block-time world) (:appeal-deadline pending))
+       (t/fail :appeal-window-expired)
+
        (not= caller (:resolver pending))
        (t/fail :not-resolver)
 
        :else
-       (t/ok (assoc-in world [:pending-fraud-slashes slash-id :status] :appealed))))))
+       (let [snap        (t/get-snapshot world workflow-id)
+             et          (t/get-transfer world workflow-id)
+             token       (:token et)
+             bond-amount (max 0 (or (:appeal-bond-amount snap) 0))
+             world'      (if (pos? bond-amount)
+                           (-> world
+                               (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
+                               (assoc-in [:appeal-bond-custody slash-id]
+                                         {:resolver caller :workflow-id workflow-id :amount bond-amount :token token}))
+                           world)]
+         (t/ok (assoc-in world' [:pending-fraud-slashes slash-id :status] :appealed)))))))
 
 (defn propose-fraud-slash
   "Governance (TIMELOCK) proposes a manual fraud slash for a resolver (Phase M).
@@ -495,6 +537,7 @@
       (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
                       {:resolver         resolver-addr
                        :amount           amount
+                        :reason           :fraud
                        :status           :pending
                        :proposed-at      (:block-time world)
                        :appeal-deadline  (+ (:block-time world) gov-delay)
@@ -503,22 +546,45 @@
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
-   If upheld, the slash is REVERSED and cannot be executed.
+   Naming note: `appeal-upheld?` means the APPEAL is upheld (accepted),
+   not that the slash is upheld.
+   - appeal-upheld? = true  -> slash is reversed and cannot be executed.
+   - appeal-upheld? = false -> appeal is rejected; slash returns to pending.
    Mirrors: ResolverSlashingModuleV1.resolveAppeal"
-  [world workflow-id caller upheld?]
-  (let [pending (get-in world [:pending-fraud-slashes workflow-id])]
-    (cond
-      (nil? pending)
-      (t/fail :no-pending-slash)
+  ([world workflow-id caller appeal-upheld?]
+   (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
+  ([world _workflow-id _caller appeal-upheld? slash-id]
+   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
+     (cond
+       (nil? pending)
+       (t/fail :no-pending-slash)
 
-      (not= :appealed (:status pending))
-      (t/fail :no-active-appeal)
+       (not= :appealed (:status pending))
+       (t/fail (case (:status pending)
+                 :executed :cannot-reverse-executed-slash
+                 :no-active-appeal))
 
-      :else
-      (if upheld?
-        (t/ok (assoc-in world [:pending-fraud-slashes workflow-id :status] :reversed))
-        ;; Appeal rejected: return to pending state for execution after deadline
-        (t/ok (assoc-in world [:pending-fraud-slashes workflow-id :status] :pending))))))
+       :else
+       (let [bond-held   (get-in world [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
+             custody     (get-in world [:appeal-bond-custody slash-id])
+             resolver    (or (:resolver custody) (:resolver pending))
+             workflow-id (:workflow-id custody slash-id)
+             world'      (-> world
+                             (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
+                             (update :appeal-bond-custody dissoc slash-id))
+             world''     (if appeal-upheld?
+                           (if (pos? bond-held)
+                             (-> world'
+                                 (assoc-in [:pending-fraud-slashes slash-id :status] :reversed)
+                                 (acct/record-claimable workflow-id resolver bond-held))
+                             (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed))
+                           (if (pos? bond-held)
+                             (-> world'
+                                 (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
+                                 (update-in [:bond-distribution :insurance] (fnil + 0) bond-held)
+                                 (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held))
+                             (assoc-in world' [:pending-fraud-slashes slash-id :status] :pending)))]
+         (t/ok world''))))))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
@@ -551,8 +617,17 @@
                                  (reg/slash-resolver-stake resolver amount)
                                  :world
                                  (assoc-in [:resolver-frozen-until resolver]
-                                           (+ (:block-time world) freeze-duration)))]
+                                            (+ (:block-time world) freeze-duration))
+                                  (update-unavailability resolver true))]
          (t/ok world'))))))
+
+(defn unfreeze-resolver
+  "Governance unfreezes resolver and idempotently clears unavailability mark."
+  [world resolver]
+  (-> world
+      (assoc-in [:resolver-frozen-until resolver] 0)
+      (update-unavailability resolver false)
+      t/ok))
 
 ;; ---------------------------------------------------------------------------
 ;; rotate-dispute-resolver

@@ -22,6 +22,11 @@
 (def CORRELATION-VALUES [0.0 0.2 0.5 0.8])
 (def ATTACKER-BUDGETS [0.0 0.10 0.25])
 
+;; Solidity-parity defaults (simple integer counters + hard cap + overflow route)
+(def DEFAULT-RESOLVER-COUNT 10)
+(def DEFAULT-MAX-CASES-PER-RESOLVER-PER-EPOCH 6)
+(def DEFAULT-OVERFLOW-ATTACKER-WIN-PROBABILITY 0.10)
+
 ;; Utility
 (defn pad-right [s width]
   (let [pad (- width (count (str s)))]
@@ -36,51 +41,80 @@
   (let [rng (rng/make-rng seed)
         num-disputes (get LOAD-LEVELS load-level 50)
         attacker-budget (int (* num-disputes attacker-fraction))
+        resolver-count (int (get params :resolver-count DEFAULT-RESOLVER-COUNT))
+        max-cases-per-resolver-per-epoch
+        (int (get params :max-cases-per-resolver-per-epoch
+                  DEFAULT-MAX-CASES-PER-RESOLVER-PER-EPOCH))
+        enable-overflow-routing? (get params :enable-overflow-routing? true)
+        overflow-attacker-win-probability
+        (double (get params :overflow-attacker-win-probability
+                     DEFAULT-OVERFLOW-ATTACKER-WIN-PROBABILITY))
+
+        ;; Epoch load counters (matches how Solidity would track: resolver => epoch => count)
+        resolver-load (atom (zipmap (range resolver-count) (repeat 0)))
         
         honest-profits (atom [])
         malice-profits (atom [])
-        attacks-executed (atom 0)]
+        attacks-executed (atom 0)
+        overflows (atom 0)]
     
     ;; Generate disputes
     (doseq [d (range num-disputes)]
       (let [d-rng (rng/make-rng (+ seed d))
+            resolver-id (mod d resolver-count)
+            current-load (get @resolver-load resolver-id 0)
+            at-cap? (>= current-load max-cases-per-resolver-per-epoch)]
+
+        (if (and enable-overflow-routing? at-cap?)
+          (do
+            ;; Solidity-parity modeling: overflow routes to escalation-safe path.
+            ;; For simulation we model that path as materially harder for attackers.
+            (swap! overflows inc)
+            (let [attacker-wins? (< (rng/next-double d-rng) overflow-attacker-win-probability)
+                  fee 100.0
+                  honest-profit (if attacker-wins? 0.0 fee)
+                  malice-profit (if attacker-wins? fee 0.0)]
+              (swap! honest-profits conj honest-profit)
+              (swap! malice-profits conj malice-profit)))
+          (do
+            (swap! resolver-load update resolver-id (fnil inc 0))
             
             ;; Attacker decides whether to attack this dispute
-            should-attack (and (> attacker-budget 0)
-                              (< @attacks-executed attacker-budget)
-                              (< (rng/next-double d-rng) 0.5))
+            (let [should-attack (and (> attacker-budget 0)
+                                     (< @attacks-executed attacker-budget)
+                                     (< (rng/next-double d-rng) 0.5))
             
             ;; Sample difficulty
-            difficulty (diff/sample-difficulty d-rng)
+                  difficulty (diff/sample-difficulty d-rng)
             
             ;; Get accuracies
-            honest-acc (if should-attack 0.3 (diff/accuracy-by-difficulty :honest difficulty))
-            malice-acc (if should-attack 0.7 (diff/accuracy-by-difficulty :malicious difficulty))
+                  honest-acc (if should-attack 0.3 (diff/accuracy-by-difficulty :honest difficulty))
+                  malice-acc (if should-attack 0.7 (diff/accuracy-by-difficulty :malicious difficulty))
             
             ;; Apply correlation: herding effect
-            honest-correct (if (< (rng/next-double d-rng) rho)
-                             false  ; Herd toward wrong answer
-                             (< (rng/next-double d-rng) honest-acc))
-            malice-correct (if (< (rng/next-double d-rng) rho)
-                             true  ; Herd toward attack success
-                             (< (rng/next-double d-rng) malice-acc))
+                  honest-correct (if (< (rng/next-double d-rng) rho)
+                                   false  ; Herd toward wrong answer
+                                   (< (rng/next-double d-rng) honest-acc))
+                  malice-correct (if (< (rng/next-double d-rng) rho)
+                                   true  ; Herd toward attack success
+                                   (< (rng/next-double d-rng) malice-acc))
             
             ;; Detection
-            detection (diff/detection-probability-by-difficulty 0.10 difficulty)
-            detected (< (rng/next-double d-rng) detection)
+                  detection (diff/detection-probability-by-difficulty 0.10 difficulty)
+                  detected (< (rng/next-double d-rng) detection)
             
             ;; Slashing
-            fee 100.0
-            honest-slash (if (and (not honest-correct) detected) 500.0 0.0)
-            malice-slash (if (and (not malice-correct) detected) 500.0 0.0)
+                  fee 100.0
+                  honest-slash (if (and (not honest-correct) detected) 500.0 0.0)
+                  malice-slash (if (and (not malice-correct) detected) 500.0 0.0)
             
-            honest-profit (- fee honest-slash)
-            malice-profit (- fee malice-slash)]
+                  honest-profit (- fee honest-slash)
+                  malice-profit (- fee malice-slash)]
         
-        (when should-attack
-          (swap! attacks-executed inc))
-        (swap! honest-profits conj honest-profit)
-        (swap! malice-profits conj malice-profit)))
+              (when should-attack
+                (swap! attacks-executed inc))
+              (swap! honest-profits conj honest-profit)
+              (swap! malice-profits conj malice-profit))))))
     
     ;; Calculate dominance
     (let [h-avg (if (empty? @honest-profits) 0.0

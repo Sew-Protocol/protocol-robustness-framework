@@ -8,5 +8,15 @@
   :suites/token-pathologies {:file "token-pathologies.edn" :title "Token-based pathologies (FoT/Rebasing)" :class :adversarial :criticality :high}
   :suites/equilibrium-validation {:file "equilibrium-validation.edn" :title "Trace-end mechanism-property and equilibrium-concept validation" :class :safety :criticality :high}
   :suites/spe-validation {:file "spe-validation.edn" :title "Subgame Perfect Equilibrium (SPE) Proxy Validation" :class :safety :criticality :high}
+  :suites/spe-regression {:file "spe-regression.edn" :title "SPE Regression — bounded-public-state-epsilon-SPE vocabulary and coverage" :class :safety :criticality :high}
+  :suites/withdrawal-adversarial {:file "withdrawal-adversarial.edn" :title "Adversarial withdrawal and settlement suite" :class :adversarial :criticality :critical}
+  :suites/equivalence-auth-paths {:file "equivalence-auth-paths.edn" :title "Equivalence Authorization Paths" :class :adversarial :criticality :high}
+  :suites/equivalence-race-pairs {:file "equivalence-race-pairs.edn" :title "Equivalence Settlement Race Counterfactual Pairs" :class :ordering :criticality :high}
+  :suites/equivalence-escalation-boundaries {:file "equivalence-escalation-boundaries.edn" :title "Equivalence Escalation Boundary Chains" :class :ordering :criticality :high}
+  :suites/equivalence-accounting-min {:file "equivalence-accounting-min.edn" :title "Equivalence Accounting-Min Semantics" :class :economic :criticality :high}
+  :suites/equivalence-alias-boundaries {:file "equivalence-alias-boundaries.edn" :title "Equivalence Alias & Boundary Guards" :class :ordering :criticality :high}
+  :suites/equivalence-ordering-terminal-determinism {:file "equivalence-ordering-terminal-determinism.edn" :title "Equivalence Ordering/Terminal/Determinism" :class :ordering :criticality :high}
+  :suites/equivalence-economic-stress {:file "equivalence-economic-stress.edn" :title "Equivalence Economic Stress" :class :economic :criticality :high}
+  :suites/equivalence-governance-snapshot {:file "equivalence-governance-snapshot.edn" :title "Equivalence Governance Snapshot Isolation" :class :governance :criticality :high}
+  :suites/equivalence-money-path-integrity {:file "equivalence-money-path-integrity.edn" :title "Equivalence Money Path Integrity" :class :economic :criticality :high}
 }
-:suites/withdrawal-adversarial {:file "withdrawal-adversarial.edn" :title "Adversarial withdrawal and settlement suite" :class :adversarial :criticality :critical}

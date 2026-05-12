@@ -1,5 +1,5 @@
 (ns resolver-sim.generators.scenario
-  "SEW Protocol scenario composition for deterministic generator output.")
+  "SEW Protocol scenario composition for deterministic generator output."
   (:require [resolver-sim.generators.stateful :as stateful]
             [resolver-sim.protocols.protocol :as engine]
             [resolver-sim.protocols.sew :as sew]))

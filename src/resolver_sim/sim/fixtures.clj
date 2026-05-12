@@ -247,6 +247,7 @@
                            (when (= mode :save) (save-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
                            {:trace-id (:scenario-id trace)
                             :purpose  (:purpose trace)
+                             :theory-source (:theory trace)
                             :outcome (:outcome res)
                             :metrics (:metrics res)
                             :threshold-validation (validate-thresholds res thresholds)
@@ -262,23 +263,41 @@
                       ;; - claim was falsified AND the scenario is explicitly a theory-falsification exercise
                       ;; :inconclusive is treated as a soft warning, not a hard failure
                       ;;
-                      ;; Mechanism-property and equilibrium-concept results (CDRS v1.1):
-                      ;; - :fail → hard failure (same severity as expectations failure)
+                       ;; Mechanism-property and equilibrium-concept results (CDRS v1.1):
+                       ;; - hard :fail → hard failure UNLESS purpose = :theory-falsification
+                       ;; - soft :fail  → warning only (treated as inconclusive)
                       ;; - :inconclusive / :not-applicable → soft warning (suite still passes)
                       ;; - :not-checked → no properties declared; passes
-                      (let [status       (get-in r [:theory :status])
+                      ;;
+                      ;; Negative test cases (purpose = :theory-falsification) are expected to
+                      ;; produce :fail — including mechanism and equilibrium :fail results.
+                       (let [status       (get-in r [:theory :status])
                             purpose      (keyword (or (:purpose r) ""))
+                            neg-test?    (= purpose :theory-falsification)
                             mech-status  (get-in r [:theory :mechanism-status] :not-checked)
                             eq-status    (get-in r [:theory :equilibrium-status] :not-checked)
+                             mech-results (vals (get-in r [:theory :mechanism-results] {}))
+                             eq-results   (vals (get-in r [:theory :equilibrium-results] {}))
+                             strict?      (true? (get-in r [:theory-source :require-conclusive?]))
+                             hard-fail?   (fn [results]
+                                            (some #(and (= :fail (:status %))
+                                                        (= :hard (:severity %)))
+                                                  results))
+                             inconclusive? (fn [status-kw]
+                                             (contains? #{:inconclusive :not-applicable} status-kw))
                             falsify-ok?  (case status
                                            nil            true
                                            :not-evaluated true
                                            :not-falsified true
-                                           :falsified     (= purpose :theory-falsification)
+                                           :falsified     neg-test?
                                            :inconclusive  true
                                            true)
-                            mech-ok?     (not= mech-status :fail)
-                            eq-ok?       (not= eq-status :fail)]
+                             mech-ok?     (and
+                                           (or (not (hard-fail? mech-results)) neg-test?)
+                                           (or (not strict?) (not (inconclusive? mech-status))))
+                             eq-ok?       (and
+                                           (or (not (hard-fail? eq-results)) neg-test?)
+                                           (or (not strict?) (not (inconclusive? eq-status))))]
                         (and falsify-ok? mech-ok? eq-ok?)))
          all-ok? (every? (fn [r] (and (= :pass (:outcome r))
                                       (:ok? (:threshold-validation r))
