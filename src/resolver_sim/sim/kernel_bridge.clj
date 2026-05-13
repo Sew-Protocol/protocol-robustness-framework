@@ -271,18 +271,38 @@
        :params {:workflow-id     "wf0"
                 :is-appeal-valid false}}]}))
 
+(defn- check-domain-metrics
+  "Verify that a replay result exercised the expected protocol path.
+   Returns {:ok? bool :missing [key ...]} where :missing lists expected
+   domain-metric keys that were zero (meaning the path was not traversed).
+
+   expected-nonzero is a seq of metric keys that must be > 0 in the result."
+  [r expected-nonzero]
+  (let [metrics (:metrics r {})
+        missing (vec (filter #(zero? (get metrics % 0)) expected-nonzero))]
+    {:ok?     (empty? missing)
+     :missing missing}))
+
 (defn run-full-kernel-validation
   "Run all four scenario types through the SEW replay kernel.
 
    Extends run-kernel-validation with Phase 5 pending-settlement and
    appeal-slash scenario types. All four paths must pass for :all-paths-pass? true.
 
+   Phase 6 addition: each scenario type is verified to have exercised its
+   expected protocol path. Pending-settlement scenarios must have non-zero
+   :pending-settlements-executed; appeal-slash scenarios must have non-zero
+   :disputes-triggered AND :resolutions-executed. This guards against scenarios
+   that 'pass' by halting before the relevant protocol path is reached.
+
    Returns run-kernel-validation result enriched with:
-     :pending-pass-count  int
-     :pending-fail-count  int
-     :appeal-pass-count   int
-     :appeal-fail-count   int
-     :all-paths-pass?     bool"
+     :pending-pass-count           int
+     :pending-fail-count           int
+     :appeal-pass-count            int
+     :appeal-fail-count            int
+     :all-paths-pass?              bool
+     :path-coverage-ok?            bool  (domain metrics all non-zero)
+     :path-coverage-violations     [{:scenario-id :missing [...]}]"
   ([params n-samples rng]
    (let [base-result (run-kernel-validation params n-samples rng)
 
@@ -290,38 +310,54 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-pending-settlement-scenario params (str "p" i))
-                      r  (replay/replay-scenario sc)]
+                      r  (replay/replay-scenario sc)
+                      coverage (check-domain-metrics r [:disputes-triggered
+                                                         :resolutions-executed
+                                                         :pending-settlements-executed])]
                   {:scenario-id (:scenario-id sc)
                    :type        :pending-settlement
                    :outcome     (:outcome r)
                    :violations  (:invariant-violations (:metrics r) 0)
-                   :halt-reason (:halt-reason r)})))
+                   :halt-reason (:halt-reason r)
+                   :coverage    coverage})))
 
          appeal-results
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-appeal-slash-scenario params (str "a" i))
-                      r  (replay/replay-scenario sc)]
+                      r  (replay/replay-scenario sc)
+                      coverage (check-domain-metrics r [:disputes-triggered
+                                                         :resolutions-executed])]
                   {:scenario-id (:scenario-id sc)
                    :type        :appeal-slash
                    :outcome     (:outcome r)
                    :violations  (:invariant-violations (:metrics r) 0)
-                   :halt-reason (:halt-reason r)})))
+                   :halt-reason (:halt-reason r)
+                   :coverage    coverage})))
 
-         pending-passed (count (filter #(= :pass (:outcome %)) pending-results))
-         appeal-passed  (count (filter #(= :pass (:outcome %)) appeal-results))]
+         pending-passed  (count (filter #(= :pass (:outcome %)) pending-results))
+         appeal-passed   (count (filter #(= :pass (:outcome %)) appeal-results))
+         coverage-violations
+         (vec (keep (fn [r]
+                      (when-not (get-in r [:coverage :ok?])
+                        {:scenario-id (:scenario-id r)
+                         :type        (:type r)
+                         :missing     (get-in r [:coverage :missing])}))
+                    (concat pending-results appeal-results)))]
 
      (merge base-result
-            {:pending-pass-count pending-passed
-             :pending-fail-count (- n-samples pending-passed)
-             :appeal-pass-count  appeal-passed
-             :appeal-fail-count  (- n-samples appeal-passed)
-             :all-paths-pass?    (and (= (:pass-rate base-result) 1.0)
-                                      (= pending-passed n-samples)
-                                      (= appeal-passed n-samples))
-             :pending-violations (mapv #(select-keys % [:scenario-id :halt-reason :violations])
-                                       (remove #(= :pass (:outcome %)) pending-results))
-             :appeal-violations  (mapv #(select-keys % [:scenario-id :halt-reason :violations])
-                                       (remove #(= :pass (:outcome %)) appeal-results))})))
+            {:pending-pass-count       pending-passed
+             :pending-fail-count       (- n-samples pending-passed)
+             :appeal-pass-count        appeal-passed
+             :appeal-fail-count        (- n-samples appeal-passed)
+             :all-paths-pass?          (and (= (:pass-rate base-result) 1.0)
+                                            (= pending-passed n-samples)
+                                            (= appeal-passed n-samples))
+             :path-coverage-ok?        (empty? coverage-violations)
+             :path-coverage-violations coverage-violations
+             :pending-violations       (mapv #(select-keys % [:scenario-id :halt-reason :violations])
+                                             (remove #(= :pass (:outcome %)) pending-results))
+             :appeal-violations        (mapv #(select-keys % [:scenario-id :halt-reason :violations])
+                                             (remove #(= :pass (:outcome %)) appeal-results))})))
   ([params rng]
    (run-full-kernel-validation params 5 rng)))

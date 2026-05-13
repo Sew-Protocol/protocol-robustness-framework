@@ -116,13 +116,26 @@
 ;; ============ Full Phase Y Run ============
 
 (defn run-phase-y-sweep
-  "Run all Phase Y evidence fog tests."
+  "Run all Phase Y evidence fog tests.
+
+   Phase 5 safety sweep established that the ≥75% correctness claim only holds
+   when budget-per-resolver ≥ 50 (at 200 disputes / 30 resolvers). When params
+   supply a lower budget, the sweep result is annotated with :budget-floor-warning
+   so callers can distinguish 'passed at an under-resourced config' from 'passed
+   within the validated safe zone'."
   [params]
-  (let [n-resolvers (:n-resolvers params 30)
-        seed (:rng-seed params 42)]
+  (let [n-resolvers        (:n-resolvers params 30)
+        seed               (:rng-seed params 42)
+        budget-per-resolver (:budget-per-resolver params 20)
+        budget-floor       50
+        below-floor?       (< budget-per-resolver budget-floor)]
 
     (println "\n📊 PHASE Y: EVIDENCE FOG & ATTENTION BUDGET TESTING")
     (println "   Hypothesis: >75% correctness survives budget caps + attacker complexity escalation")
+    (when below-floor?
+      (println (format "   ⚠️  budget-per-resolver=%d < floor=%d (Phase 5 safety sweep)"
+                       budget-per-resolver budget-floor))
+      (println "   ⚠️  The ≥75%% accuracy claim only holds at budget-per-resolver ≥ 50."))
     (println "")
 
     (let [r1 (test-scenario-y "TEST 1: Baseline (light load, ample budget)" 
@@ -168,12 +181,16 @@
       (println "")
 
       (engine/make-result
-       {:benchmark-id "Y"
-        :label        "Evidence Fog & Attention Budget"
-        :hypothesis   ">75% correctness survives budget caps + attacker complexity escalation"
-        :passed?      hypothesis-holds?
-        :results      all-results
-        :summary      {:class-a class-a :class-c class-c :min-accuracy min-accuracy}}))))
+       {:benchmark-id          "Y"
+        :label                 "Evidence Fog & Attention Budget"
+        :hypothesis            ">75% correctness survives budget caps + attacker complexity escalation"
+        :passed?               hypothesis-holds?
+        :results               all-results
+        :summary               {:class-a class-a :class-c class-c :min-accuracy min-accuracy}
+        :budget-floor-warning  (when below-floor?
+                                 {:budget-per-resolver budget-per-resolver
+                                  :budget-floor        budget-floor
+                                  :note                "75%-accuracy claim only validated at budget >= floor"})}))))
 
 ;; ============ Phase Y Safety Margin Sweep ============
 

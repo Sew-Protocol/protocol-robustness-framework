@@ -727,3 +727,75 @@ kernel level.
   inside the replay kernel do cover these paths; the bridge just checks `pass/fail`.
 - `scenario-adversary-protocol` is a single-epoch test. Multi-epoch belief convergence
   (EMA stability over 100+ epochs) is not yet tested in Phase U.
+
+---
+
+## Phase 6 Audit (post-Phase 6)
+
+### What Phase 6 addressed
+
+**Item 1 — Phase Y budget floor CI annotation**
+`run-phase-y-sweep` now detects `budget-per-resolver < 50` and annotates the result with
+`:budget-floor-warning`. The warning identifies runs below the Phase 5 safety floor so callers
+can distinguish "passed at an under-resourced config" from "passed within the validated safe
+zone". The pass/fail outcome is unchanged; this is annotation-only for backward compatibility.
+
+**Item 2 — Phase Z accuracy floor CI annotation**
+`run-phase-z-sweep` now detects `base-accuracy < 0.65` or `false-positive-rate ≥ 0.20`
+(the stable zone from Phase 5 sensitivity sweep) and annotates with `:accuracy-floor-warning`.
+Same annotation-only design.
+
+**Item 3 — Kernel bridge domain-metric path coverage**
+`run-full-kernel-validation` now calls `check-domain-metrics` on the replay output of
+pending-settlement and appeal-slash scenarios. It verifies that these paths exercised the
+expected non-zero domain metrics (`:disputes-triggered`, `:resolutions-executed`,
+`:pending-settlements-executed`). Results carry `:path-coverage-ok?` and
+`:path-coverage-violations`. If a scenario produces a passing structure but zero activity
+in the expected domain, the violation is surfaced without failing the test (it logs a
+warning and continues), preventing silent dead-path tests.
+
+**Item 4 — Multi-epoch AdaptiveAttacker convergence**
+`scenario-adversary-multi-epoch` (Scenario 6) in `phase_u.clj` runs 100 epochs with the
+same `AdaptiveAttacker` instance (beliefs persist across epochs via atom). It tests two
+hypotheses: H1 — belief variance drops below 0.05 by epoch 30 (EMA converges), H2 — the
+last-20-epoch success rate exceeds the first-20-epoch rate + 5% (attacker learns). The
+vulnerable threshold for Phase U was proportionally scaled from ≤5/40 to ≤8/60 to account
+for the two added scenarios (5 and 6) while preserving the same ~12.5% vulnerable rate.
+
+**Item 5 — Stochastic equilibrium bridge**
+New namespace `sim/stochastic_equilibrium.clj` evaluates 5 formal claims against
+`run-multi-epoch` output:
+1. `evaluate-malice-net-profit-negative` — malicious cumulative profit ≤ honest cumulative
+2. `evaluate-honest-dominates` — honest win rate ≥ malicious win rate
+3. `evaluate-slashing-deters` — malicious exit rate > honest exit rate
+4. `evaluate-participation-stable` — final resolver count ≥ 40% of initial
+5. `evaluate-honest-survival-rate` — ≥ 50% of initial honest resolvers survive
+
+The public API `evaluate-stochastic-equilibrium` is now wired into `run-multi-epoch` and
+returns a `:equilibrium-report` key in every Phase J result. `print-equilibrium-report`
+emits a per-claim summary after the Phase J completion line.
+
+### Updated claim status
+
+| Phase | Previous Status | After Phase 6 |
+|---|---|---|
+| **Phase Y** | Safety floor derived but not surfaced at runtime | Floor guard annotates results below budget=50; warnings visible in output. |
+| **Phase Z** | Stability zone derived but not surfaced at runtime | Accuracy/FPR floor guards annotate out-of-range configs. |
+| **Kernel bridge** | Domain-metric activity was unchecked | `check-domain-metrics` verifies non-zero activity for each exercised path. |
+| **Phase U (AdaptiveAttacker)** | Belief convergence untested across epochs | 100-epoch convergence scenario; EMA variance and learning-rate hypotheses tested. |
+| **Phase J (multi-epoch)** | No formal equilibrium check on output | 5-claim stochastic equilibrium report wired into every Phase J run. |
+
+### Remaining limitations
+
+- Floor guards in Phase Y and Z are annotation-only. A future hardening pass should make
+  the CI suite *fail* (not warn) when params fall below the floor, to prevent regressions.
+- The stochastic equilibrium bridge evaluates population-level aggregates. It does not
+  evaluate per-resolver strategy stability (e.g., individual resolvers switching strategies
+  in response to payoff signals). The `defection.clj` module models this, but its output
+  is not yet cross-checked against the equilibrium claims.
+- `evaluate-slashing-deters` requires exit tracking. In the current multi-epoch model,
+  exits are counted by comparing initial vs. final resolver sets; resolvers that joined mid-
+  run dilute the exit count. A per-strategy exit ledger would give a cleaner signal.
+- The five equilibrium claims are evaluated at end-of-run only. Time-series analysis
+  (e.g., "malice dominance never exceeds honest dominance in any epoch") requires
+  `epoch-results` traversal, which is not yet implemented.

@@ -23,13 +23,14 @@
    - :kernel-validation-sample-size N — validate N scenarios per epoch through
      the SEW replay kernel to check protocol-param self-consistency."
   (:require [resolver-sim.sim.batch         :as batch]
-            [resolver-sim.sim.shared-batch  :as shared-batch]
-            [resolver-sim.sim.kernel-bridge :as kernel-bridge]
-            [resolver-sim.sim.reputation    :as rep]
-            [resolver-sim.sim.trial-router  :as router]
-            [resolver-sim.sim.trajectory    :as trajectory]
-            [resolver-sim.sim.defection     :as defection]
-            [resolver-sim.stochastic.rng    :as rng]
+            [resolver-sim.sim.shared-batch         :as shared-batch]
+            [resolver-sim.sim.kernel-bridge        :as kernel-bridge]
+            [resolver-sim.sim.reputation           :as rep]
+            [resolver-sim.sim.trial-router         :as router]
+            [resolver-sim.sim.trajectory           :as trajectory]
+            [resolver-sim.sim.defection            :as defection]
+            [resolver-sim.sim.stochastic-equilibrium :as stoch-eq]
+            [resolver-sim.stochastic.rng           :as rng]
             [clojure.set]))
 
 
@@ -390,7 +391,13 @@
            :strategy-spread-trajectories strategy-spread-trajectories
            :trajectory/meta              {:type        :trajectory/equity
                                           :epoch-count n-epochs
-                                          :unit        :profit}}]
+                                          :unit        :profit}}
+
+          ;; Phase 6: stochastic equilibrium evaluation wired into every Phase J run.
+          ;; The result is a map of {:claim-results [...] :overall-status :pass/:fail/:inconclusive}
+          ;; keyed under :equilibrium-report. Does not affect existing callers — opt-out by
+          ;; ignoring the key.
+          eq-report (stoch-eq/evaluate-stochastic-equilibrium result)]
 
       (println (format "\n✓ Phase J complete. Final state:"))
       (println (format "   Resolvers exited: %d" (:total-resolver-exits final-stats)))
@@ -399,5 +406,6 @@
       (println (format "   Win rate - honest: %.1f%%" (* 100 (:honest-avg-win-rate final-stats))))
       (println (format "   Win rate - malice: %.1f%%" (* 100 (:malice-avg-win-rate final-stats))))
       (println "")
+      (stoch-eq/print-equilibrium-report eq-report)
 
-      result))))
+      (assoc result :equilibrium-report eq-report)))))

@@ -137,13 +137,36 @@
 ;; ============ Full Phase Z Run ============
 
 (defn run-phase-z-sweep
-  "Run all Phase Z legitimacy + reflexive participation tests."
+  "Run all Phase Z legitimacy + reflexive participation tests.
+
+   Phase 5 sensitivity sweep established the stable operating zone:
+     base-accuracy ≥ 0.65 AND false-positive-rate < 0.20
+
+   When params fall outside this zone, the result is annotated with
+   :accuracy-floor-warning so callers can distinguish 'passed in safe zone'
+   from 'passed in a configuration that may not generalise'."
   [params]
-  (let [seed (:rng-seed params 42)
+  (let [seed              (:rng-seed params 42)
+        base-accuracy     (:base-accuracy params 0.88)
+        fpr               (:false-positive-rate params 0.02)
+        accuracy-floor    0.65
+        fpr-ceiling       0.20
+        below-accuracy?   (< base-accuracy accuracy-floor)
+        above-fpr?        (>= fpr fpr-ceiling)
+        outside-safe-zone? (or below-accuracy? above-fpr?)
         _ (engine/print-phase-header
              {:benchmark-id "Z"
               :label        "Legitimacy & Reflexive Participation Loop"
               :hypothesis   "System maintains stable participation (>40%) over 100 epochs"})
+        _ (when outside-safe-zone?
+            (when below-accuracy?
+              (println (format "   ⚠️  base-accuracy=%.2f < floor=%.2f (Phase 5 sensitivity sweep)"
+                               base-accuracy accuracy-floor))
+              (println "   ⚠️  Stability claim only validated at base-accuracy ≥ 0.65."))
+            (when above-fpr?
+              (println (format "   ⚠️  false-positive-rate=%.2f ≥ ceiling=%.2f (Phase 5 sensitivity sweep)"
+                               fpr fpr-ceiling))
+              (println "   ⚠️  Stability claim only validated at false-positive-rate < 0.20.")))
         
         scenarios (make-scenarios seed)
         results (engine/run-sweep "PHASE Z SWEEP" scenarios params)
@@ -158,12 +181,18 @@
       :summary-lines [(format "Robust (A): %d  Fragile (C): %d" class-a class-c)]})
 
     (engine/make-result
-     {:benchmark-id "Z"
-      :label        "Legitimacy & Reflexive Participation Loop"
-      :hypothesis   "System maintains stable participation (>40%) over 100 epochs"
-      :passed?      hypothesis-holds?
-      :results      results
-      :summary      {:class-a class-a :class-c class-c}})))
+     {:benchmark-id          "Z"
+      :label                 "Legitimacy & Reflexive Participation Loop"
+      :hypothesis            "System maintains stable participation (>40%) over 100 epochs"
+      :passed?               hypothesis-holds?
+      :results               results
+      :summary               {:class-a class-a :class-c class-c}
+      :accuracy-floor-warning (when outside-safe-zone?
+                                {:base-accuracy  base-accuracy
+                                 :accuracy-floor accuracy-floor
+                                 :fpr            fpr
+                                 :fpr-ceiling    fpr-ceiling
+                                 :note           "Stability claim only validated within safe zone"})})))
 
 ;; ============ Phase Z Sensitivity Sweep ============
 
