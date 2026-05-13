@@ -177,3 +177,151 @@
       :fraud-fail-count  (- (count (or fraud-results [])) (count fraud-passed))}))
   ([params rng]
    (run-kernel-validation params 5 rng)))
+
+;; ---------------------------------------------------------------------------
+;; Additional scenario generators (Phase 5)
+;; ---------------------------------------------------------------------------
+
+(defn generate-pending-settlement-scenario
+  "Generate a dispute scenario that exercises the pending-settlement path.
+
+   Sequence:
+     create_escrow → raise_dispute → execute_resolution (refund, is-release=false)
+     → execute_pending_settlement
+
+   The resolution with is-release=false creates a pending refund-to-buyer
+   settlement. The keeper then finalises it after the settlement deadline.
+   This validates the full settlement finalization path, not covered by
+   generate-honest-scenario (which uses is-release=true, an immediate release).
+
+   Returns a scenario map accepted by replay/replay-with-protocol."
+  [params trial-id]
+  {:scenario-id        (str "kernel-pending-" trial-id)
+   :schema-version     "1.0"
+   :initial-block-time 1000
+   :agents
+   [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+    {:id "seller"   :address "0xseller"   :strategy "honest"}
+    {:id "resolver" :address "0xresolver" :role "resolver"}
+    {:id "keeper"   :address "0xkeeper"   :role "keeper"}]
+   :protocol-params
+   {:resolver-fee-bps       (:resolver-fee-bps params 150)
+    :appeal-window-duration 120
+    :max-dispute-duration   (:max-dispute-duration params 2592000)}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller"
+              :amount          (:escrow-size params 10000)
+              :custom-resolver "0xresolver"}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id     "wf0"
+              :is-release      false
+              :resolution-hash "0xhash-refund"}}
+    {:seq 3 :time 2000 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}]})
+
+(defn generate-appeal-slash-scenario
+  "Generate a dispute scenario covering the appeal-slash path.
+
+   Sequence:
+     create_escrow → raise_dispute → execute_resolution (bad verdict)
+     → propose_fraud_slash → appeal_slash (resolver appeals)
+     → resolve_appeal (governance rejects appeal, slash stands)
+
+   Returns a scenario map accepted by replay/replay-with-protocol."
+  [params trial-id]
+  (let [escrow-size  (:escrow-size params 10000)
+        slash-bps    (:fraud-slash-bps params 500)
+        slash-amount (long (* escrow-size (/ slash-bps 10000.0)))]
+    {:scenario-id        (str "kernel-appeal-" trial-id)
+     :schema-version     "1.0"
+     :initial-block-time 1000
+     :agents
+     [{:id "buyer"      :address "0xbuyer"      :strategy "honest"}
+      {:id "seller"     :address "0xseller"     :strategy "honest"}
+      {:id "resolver"   :address "0xresolver"   :role "resolver"}
+      {:id "governance" :address "0xgov"        :role "governance"}]
+     :protocol-params
+     {:resolver-fee-bps       (:resolver-fee-bps params 150)
+      :appeal-window-duration 120
+      :max-dispute-duration   (:max-dispute-duration params 2592000)}
+     :events
+     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+       :params {:token "USDC" :to "0xseller"
+                :amount          escrow-size
+                :custom-resolver "0xresolver"}
+       :save-id-as "wf0"}
+      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+       :params {:workflow-id "wf0"}}
+      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+       :params {:workflow-id     "wf0"
+                :is-release      false
+                :resolution-hash "0xbad-hash"}
+       :event-tags #{:adversarial}}
+      {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
+       :params {:workflow-id   "wf0"
+                :resolver-addr "0xresolver"
+                :amount        slash-amount}}
+      {:seq 4 :time 1140 :agent "resolver" :action "appeal_slash"
+       :params {:workflow-id "wf0"}}
+      {:seq 5 :time 1160 :agent "governance" :action "resolve_appeal"
+       :params {:workflow-id     "wf0"
+                :is-appeal-valid false}}]}))
+
+(defn run-full-kernel-validation
+  "Run all four scenario types through the SEW replay kernel.
+
+   Extends run-kernel-validation with Phase 5 pending-settlement and
+   appeal-slash scenario types. All four paths must pass for :all-paths-pass? true.
+
+   Returns run-kernel-validation result enriched with:
+     :pending-pass-count  int
+     :pending-fail-count  int
+     :appeal-pass-count   int
+     :appeal-fail-count   int
+     :all-paths-pass?     bool"
+  ([params n-samples rng]
+   (let [base-result (run-kernel-validation params n-samples rng)
+
+         pending-results
+         (vec (for [i (range n-samples)]
+                (let [_ (rng/next-long rng)
+                      sc (generate-pending-settlement-scenario params (str "p" i))
+                      r  (replay/replay-scenario sc)]
+                  {:scenario-id (:scenario-id sc)
+                   :type        :pending-settlement
+                   :outcome     (:outcome r)
+                   :violations  (:invariant-violations (:metrics r) 0)
+                   :halt-reason (:halt-reason r)})))
+
+         appeal-results
+         (vec (for [i (range n-samples)]
+                (let [_ (rng/next-long rng)
+                      sc (generate-appeal-slash-scenario params (str "a" i))
+                      r  (replay/replay-scenario sc)]
+                  {:scenario-id (:scenario-id sc)
+                   :type        :appeal-slash
+                   :outcome     (:outcome r)
+                   :violations  (:invariant-violations (:metrics r) 0)
+                   :halt-reason (:halt-reason r)})))
+
+         pending-passed (count (filter #(= :pass (:outcome %)) pending-results))
+         appeal-passed  (count (filter #(= :pass (:outcome %)) appeal-results))]
+
+     (merge base-result
+            {:pending-pass-count pending-passed
+             :pending-fail-count (- n-samples pending-passed)
+             :appeal-pass-count  appeal-passed
+             :appeal-fail-count  (- n-samples appeal-passed)
+             :all-paths-pass?    (and (= (:pass-rate base-result) 1.0)
+                                      (= pending-passed n-samples)
+                                      (= appeal-passed n-samples))
+             :pending-violations (mapv #(select-keys % [:scenario-id :halt-reason :violations])
+                                       (remove #(= :pass (:outcome %)) pending-results))
+             :appeal-violations  (mapv #(select-keys % [:scenario-id :halt-reason :violations])
+                                       (remove #(= :pass (:outcome %)) appeal-results))})))
+  ([params rng]
+   (run-full-kernel-validation params 5 rng)))

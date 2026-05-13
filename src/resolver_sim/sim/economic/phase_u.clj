@@ -1,23 +1,25 @@
 (ns resolver-sim.sim.economic.phase-u
   "Phase U: Adaptive Attacker Learning
-   
+
    Tests whether attackers can optimize strategies across epochs.
-   
+
    Key question: Can an attacker learn which strategies work best
    and concentrate attacks on high-ROI methods?
-   
+
    Scenarios:
    1. Static strategy: Same attack method every epoch
    2. Learning attacker: Switches to best-performing strategy
    3. Adaptive defense: System parameters change mid-simulation
-   
+   4. Protocol-backed adaptive attacker: Uses AdaptiveAttacker protocol dispatch
+
    Measures:
    - Success rate over time (do attackers improve?)
    - Strategy convergence (do they pick one winning strategy?)
    - Governance lag (can updates outpace learning?)
    - Budget efficiency (cost per successful attack)"
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as engine]
+            [resolver-sim.adversaries.strategy :as strategy]))
 
 ;; ============ Simple Adaptive Attacker ============
 
@@ -53,60 +55,92 @@
      :detected? detected?}))
 
 (defn run-epoch
-  "Run one epoch of attack attempts with optional learning.
-   
+  "Run one epoch of attack attempts with optional learning or Adversary dispatch.
+
+   When an `adversary` satisfying the Adversary protocol is provided:
+     - should-attack? is called before each attack to decide whether to attack
+     - observe-outcome! is called after each attack to update adversary state
+     - attack-type is used to select the attack strategy
+   This makes AdaptiveAttacker's EMA belief updates actually run.
+
+   Without `adversary` (nil): falls back to inline learning? logic (original behaviour).
+
    Returns: {:strategy-stats {strategy-name {:attempts :successes :cost}} :budget-remaining int}"
-  [initial-budget num-attacks difficulty learning? strategy-history rng]
+  ([initial-budget num-attacks difficulty learning? strategy-history rng]
+   (run-epoch initial-budget num-attacks difficulty learning? strategy-history rng nil))
+  ([initial-budget num-attacks difficulty learning? strategy-history rng adversary]
   (let [strategies [:bribery :evidence-spoof :resolver-targeting]
         stats (zipmap strategies (repeat {:attempts 0 :successes 0 :cost 0}))]
-    
-    (loop [epoch 0
-           budget initial-budget
-           stats stats
+
+    (loop [epoch   0
+           budget  initial-budget
+           stats   stats
            history []]
-      
+
       (if (>= epoch num-attacks)
-        
-        {:strategy-stats stats
+        {:strategy-stats   stats
          :budget-remaining budget
-         :total-attempts (apply + (map :attempts (vals stats)))
-         :total-successes (apply + (map :successes (vals stats)))
-         :history history}
-        
-        ; Select strategy
-        (let [chosen-strategy (if learning?
-                               ; Pick best-performing strategy
-                               (let [win-rates (into {}
-                                               (for [s strategies]
-                                                 (let [st (stats s)]
-                                                   [s (if (zero? (:attempts st))
-                                                      0.0
-                                                      (/ (double (:successes st))
-                                                        (double (:attempts st))))])))
-                                 best (key (apply max-key val win-rates))]
-                               best)
-                              ; Random strategy — use the passed rng for reproducibility
-                              (nth strategies (mod (long (* (rng/next-double rng) (count strategies)))
-                                                   (count strategies))))
-              
-              ; Execute attack
-              result (simulate-attack chosen-strategy difficulty rng)
+         :total-attempts   (apply + (map :attempts (vals stats)))
+         :total-successes  (apply + (map :successes (vals stats)))
+         :history          history}
+
+        (let [dispatch-params {:rng rng :difficulty difficulty :attacker-budget budget}
+
+              ;; Decide whether to attack this round
+              attack? (if adversary
+                        (strategy/should-attack? adversary dispatch-params)
+                        true)  ; legacy path: always attack
+
+              chosen-strategy
+              (cond
+                ;; Adversary protocol dispatch
+                adversary
+                (let [at (strategy/attack-type adversary dispatch-params)]
+                  (if (= at :none) :bribery at))
+                ;; Inline learning mode
+                learning?
+                (let [win-rates (into {}
+                                      (for [s strategies]
+                                        (let [st (get stats s)]
+                                          [s (if (zero? (:attempts st))
+                                               0.0
+                                               (/ (double (:successes st))
+                                                  (double (:attempts st))))])))
+                      best (key (apply max-key val win-rates))]
+                  best)
+                ;; Random strategy (seeded)
+                :else
+                (nth strategies (mod (long (* (rng/next-double rng) (count strategies)))
+                                     (count strategies))))
+
+              result     (if attack?
+                           (simulate-attack chosen-strategy difficulty rng)
+                           {:success? false :cost 0 :detected? false})
               new-budget (- budget (:cost result))
-              old-stat (stats chosen-strategy)
-              new-stat (assoc old-stat
-                             :attempts (inc (:attempts old-stat))
-                             :successes (+ (:successes old-stat) (if (:success? result) 1 0))
-                             :cost (+ (:cost old-stat) (:cost result)))]
-          
+              old-stat   (get stats chosen-strategy)
+              new-stat   (assoc old-stat
+                                :attempts  (inc (:attempts old-stat))
+                                :successes (+ (:successes old-stat) (if (:success? result) 1 0))
+                                :cost      (+ (:cost old-stat) (:cost result)))]
+
+          ;; Notify adversary of outcome (no-op for non-adaptive types)
+          (when adversary
+            (strategy/observe-outcome! adversary
+                                       {:attack-type chosen-strategy
+                                        :success?    (:success? result)
+                                        :profit      (if (:success? result) (:cost result) 0)
+                                        :detected?   (:detected? result)}))
+
           (recur (inc epoch)
                  (max 0 new-budget)
                  (assoc stats chosen-strategy new-stat)
                  (conj history
-                       {:epoch epoch
+                       {:epoch    epoch
                         :strategy chosen-strategy
                         :success? (:success? result)
-                        :cost (:cost result)
-                        :budget new-budget})))))))
+                        :cost     (:cost result)
+                        :budget   new-budget
+                        :attacked? attack?}))))))))
 
 ;; ============ Phase U Scenarios ============
 
@@ -263,6 +297,54 @@
                     profitable
                     (* 100.0 (apply max (map :roi results))))}))
 
+;; ============ Adversary Protocol Scenario ============
+
+(defn scenario-adversary-protocol
+  "Scenario 5: Does AdaptiveAttacker via protocol dispatch improve over static?
+
+   This is the *protocol-wired* version of scenario-learning-vs-static.
+   AdaptiveAttacker.should-attack? and observe-outcome! are called through
+   protocol dispatch, making the EMA belief update actually run.
+
+   Previously: AdaptiveAttacker was never called by any phase (dead code).
+   This scenario closes that gap.
+
+   Expected: Protocol-wired adaptive attacker should converge to a better
+   strategy than a static (non-learning) baseline."
+  [{:keys [seed]}]
+  (let [rng        (rng/make-rng seed)
+        budget     100000
+        num-attacks 50
+        difficulty :medium
+
+        ;; Baseline: static (no adversary, no learning)
+        static     (run-epoch budget num-attacks difficulty false [] rng nil)
+        static-rate (if (zero? (:total-attempts static)) 0.0
+                      (/ (double (:total-successes static))
+                         (double (:total-attempts static))))
+
+        ;; Protocol-wired: AdaptiveAttacker via protocol dispatch
+        [rng2 _]   (rng/split-rng rng)
+        adversary  (strategy/make-adaptive-attacker 0.3 0.2)
+        adaptive   (run-epoch budget num-attacks difficulty false [] rng2 adversary)
+        adapt-rate (if (zero? (:total-attempts adaptive)) 0.0
+                     (/ (double (:total-successes adaptive))
+                        (double (:total-attempts adaptive))))
+
+        improvement (- adapt-rate static-rate)
+        vulnerable? (> improvement 0.1)]
+
+    {:scenario   "adversary-protocol-adaptive"
+     :status     (if vulnerable? :vulnerable :safe)
+     :confidence improvement
+     :metrics    {:static-success-rate  static-rate
+                  :adaptive-success-rate adapt-rate
+                  :improvement           improvement}
+     :reason     (format "Static: %.1f%%, AdaptiveAttacker: %.1f%%, Δ=%.1f%%"
+                         (* 100.0 static-rate)
+                         (* 100.0 adapt-rate)
+                         (* 100.0 improvement))}))
+
 ;; ============ Scenario Runner ============
 
 (defn run-phase-u-sweep
@@ -276,7 +358,8 @@
         scenario-fns [scenario-learning-vs-static
                       scenario-convergence-speed
                       scenario-defense-timing
-                      scenario-budget-grinding]
+                      scenario-budget-grinding
+                      scenario-adversary-protocol]
         
         results (flatten
                 (for [scenario-fn scenario-fns

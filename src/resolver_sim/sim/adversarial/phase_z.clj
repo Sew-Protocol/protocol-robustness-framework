@@ -164,3 +164,84 @@
       :passed?      hypothesis-holds?
       :results      results
       :summary      {:class-a class-a :class-c class-c}})))
+
+;; ============ Phase Z Sensitivity Sweep ============
+
+(defn- run-z-scenario-pure
+  "Run a single Phase Z scenario without output, returning final state."
+  [initial-state params n-epochs]
+  (loop [epoch 1
+         state initial-state]
+    (if (> epoch n-epochs)
+      state
+      (recur (inc epoch)
+             (simulate-epoch-z epoch state params nil)))))
+
+(defn run-phase-z-sensitivity-sweep
+  "Sweep base-accuracy and false-positive-rate to find the safety margins
+   for stable participation. Returns a 2D grid of outcomes.
+
+   For each (accuracy, fpr) pair: run 100 epochs and record whether
+   participation stays above 30% (no death spiral).
+
+   Returns: {:results [{:accuracy :fpr :final-participation :stable?}]
+             :min-safe-accuracy double
+             :max-safe-fpr      double}"
+  [params]
+  (println "\n🔍 Phase Z Sensitivity Sweep: base-accuracy × false-positive-rate")
+  (println "   Threshold: participation > 30% at epoch 100")
+  (println "   Initial state: trust=0.75 participation=0.85")
+  (println "")
+
+  (let [accuracies [0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95]
+        fprs       [0.01 0.02 0.04 0.06 0.08 0.10]
+        n-epochs   100
+        init-state {:trust 0.75 :participation 0.85}
+
+        results
+        (vec (for [acc accuracies
+                   fpr fprs]
+               (let [final-state (run-z-scenario-pure
+                                  init-state
+                                  {:base-accuracy acc :false-positive-rate fpr
+                                   :resolution-time 3}
+                                  n-epochs)
+                     stable?     (> (:participation final-state) 0.30)]
+                 {:accuracy         acc
+                  :fpr              fpr
+                  :final-part       (:participation final-state)
+                  :final-trust      (:trust final-state)
+                  :stable?          stable?})))
+
+        ;; Per-accuracy: find the max FPR that still gives stability
+        stable-results (filter :stable? results)
+
+        min-safe-acc
+        (when (seq stable-results)
+          (apply min (map :accuracy stable-results)))
+
+        max-safe-fpr-at-min-acc
+        (when min-safe-acc
+          (apply max (map :fpr (filter #(and (= (:accuracy %) min-safe-acc) (:stable? %))
+                                       results))))]
+
+    ;; Print a compact table
+    (println (format "   %-8s  %s" "Accuracy" (apply str (map #(format "  fpr=%.2f" %) fprs))))
+    (doseq [acc accuracies]
+      (let [row (filter #(= (:accuracy %) acc) results)]
+        (println (format "   acc=%.2f  %s"
+                         acc
+                         (apply str (map #(format "  %s" (if (:stable? %) "✅ " "❌ ")) row))))))
+    (println "")
+    (if min-safe-acc
+      (do (println (format "   ✅ Minimum safe accuracy: %.2f (max FPR at this accuracy: %.2f)"
+                           min-safe-acc max-safe-fpr-at-min-acc))
+          (println "   Protocol is stable for accuracy ≥ this threshold."))
+      (println "   ❌ No tested combination achieves stable participation."))
+    (println "")
+
+    {:results              results
+     :min-safe-accuracy    min-safe-acc
+     :max-safe-fpr         max-safe-fpr-at-min-acc
+     :stable-count         (count stable-results)
+     :total-combinations   (count results)}))

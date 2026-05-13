@@ -42,3 +42,29 @@
    Both are deterministic and different."
   [^long base-seed ^long idx]
   (+ base-seed (* idx 1000000007))) ; Large prime ensures good spacing
+
+(defn sample-index
+  "Sample a random index in [0, n) from the RNG.
+   Equivalent to next-int but named for intent clarity."
+  [^SplittableRandom rng ^long n]
+  (.nextInt rng (int n)))
+
+(defn shuffle-with-rng
+  "Return a seeded Fisher-Yates shuffle of the given collection using `rng`.
+
+   Unlike Clojure's `shuffle` (which calls java.util.Collections/shuffle
+   with a non-seeded PRNG), this function produces fully reproducible
+   orderings for the same rng state.
+
+   Returns a vector."
+  [coll ^SplittableRandom rng]
+  (let [arr (object-array coll)
+        n   (alength arr)]
+    (loop [i (dec n)]
+      (when (pos? i)
+        (let [j (int (.nextInt rng (inc i)))
+              tmp (aget arr i)]
+          (aset arr i (aget arr j))
+          (aset arr j tmp))
+        (recur (dec i))))
+    (vec arr)))

@@ -53,11 +53,16 @@
 ;; ============ Simulation Logic ============
 
 (defn assign-disputes
-  "Assign each dispute to 3 random resolvers."
+  "Assign each dispute to 3 random resolvers using seeded RNG.
+
+   Previously used Clojure's (shuffle ...) which calls
+   java.util.Collections/shuffle with the JVM default PRNG — non-reproducible.
+   Now uses rng/shuffle-with-rng for deterministic, seeded assignment."
   [n-resolvers n-disputes d-rng]
   (let [resolver-ids (vec (range n-resolvers))]
     (for [i (range n-disputes)]
-      (let [assigned (take 3 (shuffle resolver-ids))] ; Simplified shuffle, for high-fidelity use d-rng splits
+      (let [[sub _] (rng/split-rng d-rng)
+            assigned (take 3 (rng/shuffle-with-rng resolver-ids sub))]
         {:id i :resolvers assigned}))))
 
 (defn simulate-epoch-y
@@ -169,3 +174,51 @@
         :passed?      hypothesis-holds?
         :results      all-results
         :summary      {:class-a class-a :class-c class-c :min-accuracy min-accuracy}}))))
+
+;; ============ Phase Y Safety Margin Sweep ============
+
+(defn run-phase-y-safety-sweep
+  "Sweep budget-per-resolver to find the minimum budget where ≥75% correctness
+   is maintained for high-load scenarios (200 disputes, 30 resolvers).
+
+   Returns: {:safe-budget-threshold int :results [{:budget :accuracy :safe?}]
+             :min-safe-budget int}"
+  [params]
+  (println "\n🔍 Phase Y Safety Margin Sweep: budget-per-resolver vs correctness")
+  (println "   Scenario: 200 disputes, 30 resolvers, 50 trials per budget level")
+  (println "")
+
+  (let [n-resolvers (:n-resolvers params 30)
+        n-disputes  200
+        seed        (:rng-seed params 42)
+        trials      50
+        budgets     [5 10 15 20 25 30 40 50 75 100]
+
+        results
+        (vec (for [budget budgets]
+               (let [rng (rng/make-rng (+ seed budget))
+                     accuracy-readings
+                     (vec (repeatedly trials
+                                      #(let [r (simulate-epoch-y n-resolvers n-disputes budget 0 rng)]
+                                         (/ (double (:correct r)) (:total r)))))
+                     avg-accuracy (/ (apply + accuracy-readings) (double trials))
+                     safe?        (>= avg-accuracy 0.75)]
+                 (println (format "   budget=%3d  accuracy=%.1f%%  %s"
+                                  budget (* 100.0 avg-accuracy)
+                                  (if safe? "✅" "❌")))
+                 {:budget budget :accuracy avg-accuracy :safe? safe?})))
+
+        ;; Find the minimum budget at which correctness becomes safe
+        safe-budgets (filter :safe? results)
+        threshold    (when (seq safe-budgets)
+                       (:budget (first safe-budgets)))]
+
+    (println "")
+    (if threshold
+      (println (format "   ✅ Minimum safe budget: %d units/resolver" threshold))
+      (println "   ❌ No tested budget achieves ≥75%% correctness at 200 disputes"))
+    (println "")
+
+    {:safe-budget-threshold threshold
+     :min-safe-budget       threshold
+     :results               results}))

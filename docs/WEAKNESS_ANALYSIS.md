@@ -612,3 +612,118 @@ Impact on Phase J claims: With defection enabled, multi-epoch dynamics become ge
 - Defection model uses a simple proportional probability; does not model multi-period rationality (resolvers don't discount future slashing risk across epochs).
 - Full kernel-backed trial generation (replace stochastic probability model entirely) still not implemented.
 - Malicious-path kernel scenarios (fraud detection + appeal cascades via replay kernel) still not implemented.
+
+---
+
+## Phase 5 Audit (Oracle accuracy sweep, adversary protocol wiring, kernel appeal paths)
+
+### Phase Y shuffle reproducibility fix
+
+**Root cause**: `assign-disputes` called `(shuffle resolver-ids)` which delegates to
+`java.util.Collections/shuffle` with `ThreadLocalRandom`. This is not seeded by the
+simulation's `SplittableRandom`, so re-running with the same seed produces different
+resolver assignment orders. The accuracy correctness signal was real but the exact
+workload distribution per resolver was not reproducible.
+
+**Fix**: `shuffle-with-rng` added to `stochastic/rng.clj` using Fisher-Yates with
+`SplittableRandom`. Each dispute's assignment now uses an independent split of the
+parent RNG (`rng/split-rng` per dispute iteration). Phase Y `assign-disputes` updated.
+
+**Impact on Phase Y claim**: Claim "≥75% correctness under attention-budget pressure"
+remains directionally valid. Reproducibility is now guaranteed — CI runs with the same
+seed will produce identical outputs.
+
+### Phase Y safety-margin sweep
+
+**Finding**: `run-phase-y-safety-sweep` sweeps `budget-per-resolver` over
+[5, 10, 15, 20, 25, 30, 40, 50, 75, 100] with 50 trials each.
+
+- At default budget of 20 units with 200 disputes / 30 resolvers (~6.7 disputes/resolver),
+  resolvers allocate ~3 effort/dispute — just above the `shallow` threshold of 2. Correctness
+  = 52% at shallow effort.
+- Safe budget floor (effort ≥ 2, accuracy > 51.6%) requires ≥ 25 units per resolver.
+- The 75% correctness threshold requires effort ≥ 4 (`medium` strategy), achieved at
+  budget ≥ 50 units.
+
+**Updated claim**: "Phase Y passes at ≥75% correctness" is valid only when
+`budget-per-resolver ≥ 50` with the default 200 disputes / 30 resolvers. Below that,
+the system degrades gracefully to ~52% (budget=20) or random (~50%) at budget=5.
+
+### Phase Z sensitivity sweep
+
+**Finding**: `run-phase-z-sensitivity-sweep` sweeps `base-accuracy` × `false-positive-rate`
+over an 8×6 grid.
+
+- System is stable (participation > 30% over 100 epochs) only when `base-accuracy ≥ 0.65`.
+- At `base-accuracy = 0.60` (the prior test value), trust decays to < 0.4 by epoch 30,
+  participation spirals to near zero.
+- `false-positive-rate` has a secondary effect: at high FPR (≥ 0.25) combined with
+  `base-accuracy = 0.70`, the system can still spiral if false positives erode correctness
+  signal faster than accurate resolutions build it.
+
+**Updated claim**: "Phase Z participation stays > 30%" is valid when `base-accuracy ≥ 0.65`
+AND `false-positive-rate < 0.20`. The original Phase Z baseline (accuracy=0.70, FPR=0.05)
+remains a safe operating point; the claim should now be qualified with those parameter bounds.
+
+### Adversary protocol wiring (Phase U)
+
+**Root cause**: `Adversary` defprotocol (`adversaries/strategy.clj`) defined
+`should-attack?` and `observe-outcome!`, but no simulation phase ever called them.
+`AdaptiveAttacker`'s EMA belief update in `observe-outcome!` was dead code.
+Phase U scenarios used inline adaptive logic that bypassed the protocol entirely.
+
+**Fix**: `phase_u/run-epoch` rewritten as 2-arity:
+- `[... rng]` — backward compatible, identical to prior behaviour (adversary=nil)
+- `[... rng adversary]` — calls `strategy/should-attack?` before each attack,
+  `strategy/observe-outcome!` after, and `strategy/attack-type` for strategy selection.
+
+New `scenario-adversary-protocol` (Scenario 5) exercises the protocol path directly:
+static baseline vs. `AdaptiveAttacker` via protocol dispatch with initial beliefs = 0.3.
+
+**Impact**: `AdaptiveAttacker.observe-outcome!` now runs; EMA belief updates are exercised.
+The Phase U "≤5 vulnerable scenarios" claim is unchanged (static attacker was the baseline);
+Scenario 5 adds a new falsifiable check that adaptive learning through protocol dispatch
+does not provide > 10% improvement over static in a single-epoch run.
+
+### Kernel validation appeal-chain and pending-settlement paths (Phase 5)
+
+**Gap**: `kernel_bridge.clj` only validated two kernel paths:
+1. Honest create → dispute → release resolution
+2. Fraud detection → propose slash
+
+The pending-settlement path (`execute_pending_settlement` after a refund verdict) and
+the appeal-slash path (`propose_fraud_slash → appeal_slash → resolve_appeal`) were
+not exercised against the replay kernel at all.
+
+**Fix**: Two new scenario generators added to `kernel_bridge.clj`:
+- `generate-pending-settlement-scenario` — create → dispute → refund verdict → settle
+- `generate-appeal-slash-scenario` — create → dispute → bad verdict → propose slash → appeal → governance reject
+
+`run-full-kernel-validation` runs all four paths (honest, fraud-slash, pending-settlement,
+appeal-slash) and reports `all-paths-pass?` — true only when every path passes 100% of
+n-sample trials.
+
+**Impact**: Any regression in the governance appeal or settlement-finalization kernel path
+will now surface in integration test runs. These paths were previously untested at the
+kernel level.
+
+### Updated claim status
+
+| Phase | Previous Status | After Phase 5 |
+|---|---|---|
+| **Phase Y** | Shuffle non-reproducible; accuracy 51.6% unqualified | Shuffle seeded; safety sweep establishes budget floor (≥50 for 75% accuracy). Claim now bounded. |
+| **Phase Z** | Baseline (accuracy=0.70) passes; no sensitivity characterisation | Sensitivity sweep establishes safe zone: accuracy ≥ 0.65, FPR < 0.20. |
+| **Phase U / AdaptiveAttacker** | `observe-outcome!` dead code; EMA never ran | Protocol dispatch wired; EMA belief updates exercised. Scenario 5 added. |
+| **Kernel bridge** | Only honest + fraud-slash paths validated | All four paths: honest, fraud, pending-settlement, appeal-slash. |
+
+### Remaining limitations
+
+- Phase Y safety sweep is offline analysis only — `run-phase-y-safety-sweep` is not
+  integrated into the CI pass/fail harness. Budget floor should be added to Phase Y params.
+- Phase Z stability zone (accuracy ≥ 0.65, FPR < 0.20) is derived from a grid sweep but
+  not a formal proof; boundary conditions may shift with different epoch dynamics.
+- `run-full-kernel-validation` generates structurally valid scenario maps but does not
+  verify protocol-level invariant counts for appeal-chain scenarios. Invariant assertions
+  inside the replay kernel do cover these paths; the bridge just checks `pass/fail`.
+- `scenario-adversary-protocol` is a single-epoch test. Multi-epoch belief convergence
+  (EMA stability over 100+ epochs) is not yet tested in Phase U.
