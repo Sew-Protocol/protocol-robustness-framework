@@ -2,12 +2,12 @@
 # Canonical test runner for sew-simulation.
 #
 # Usage:
-#   ./scripts/test.sh            # run all suites (unit + invariants + fixtures)
+#   ./scripts/test.sh            # run all suites (unit + invariants + fixtures + triage)
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S41 deterministic invariant scenarios only
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
-#   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation)
+#   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
 #   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
 #   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
@@ -248,10 +248,10 @@ run_triage() {
 
 run_suites() {
   require_clojure || return $?
-  echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation)..."
+  echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation + spe-regression)..."
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
-(let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation]
+(let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]
       results (map (fn [id] [id (f/run-suite id)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
@@ -702,6 +702,8 @@ case "$MODE" in
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target triage run_triage || FAILURES=$((FAILURES + 1))
     echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     ;;

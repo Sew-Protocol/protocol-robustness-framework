@@ -799,3 +799,76 @@ emits a per-claim summary after the Phase J completion line.
 - The five equilibrium claims are evaluated at end-of-run only. Time-series analysis
   (e.g., "malice dominance never exceeds honest dominance in any epoch") requires
   `epoch-results` traversal, which is not yet implemented.
+
+---
+
+## Phase 7 Audit: scenario/ namespace integration
+
+**Date**: February 12, 2026
+**Scope**: Wire orphaned scenario/ suites into the default test run; add mechanism-property
+proxy bridge between Monte Carlo aggregate output and formal game-theoretic validators.
+
+### Background
+
+The scenario/ namespace was reported as "orphaned — never called by any sim phase" in the
+multi-agent gap analysis. Investigation revealed this was incorrect: `scenario/theory`,
+`scenario/equilibrium`, `scenario/coverage`, and `scenario/triage` are all wired through
+`sim/fixtures.clj` and `scripts/test.sh`. However three genuine gaps existed:
+
+1. `:suites/spe-regression` suite (8 scenarios) was not included in the default `run_suites()` call
+2. The `triage` target was not included in the `all)` build target
+3. No bridge existed between Monte Carlo aggregate statistics and the formal mechanism-property
+   vocabulary in `scenario/equilibrium.clj`
+
+### What was done
+
+**Item 1 — spe-regression in default suite run**
+`run_suites()` in `scripts/test.sh` updated to include `:suites/spe-regression`. The echo
+header and inline usage comment were updated to match. All 4 suites pass: `all-invariants`,
+`equilibrium-validation`, `spe-validation`, `spe-regression`.
+
+**Item 2 — triage in all target**
+The `all)` target in `scripts/test.sh` now calls `run_target triage run_triage` after
+`coverage`. Triage is a diagnostic tool — it emits a grouped trace report but does not
+produce hard failures, so it cannot break the build.
+
+**Item 3 — Mechanism-property proxy bridge**
+New evaluators added to `sim/stochastic_equilibrium.clj`:
+
+| Evaluator | Mechanism property | Proxy metric |
+|---|---|---|
+| `evaluate-mech-budget-balance` | `:budget-balance` | honest+malice net profit within 5% of honest profit |
+| `evaluate-mech-incentive-compatibility` | `:incentive-compatibility` | honest profit ≥ malice profit AND honest win-rate ≥ malice win-rate |
+| `evaluate-mech-individual-rationality` | `:individual-rationality` | honest-cumulative-profit > 0 |
+| `evaluate-mech-collusion-resistance` | `:collusion-resistance` | malice pool not grown >10% from initial approx |
+
+Public API:
+- `evaluate-mechanism-proxies` — returns `{:mechanism-proxy-results {prop → result} :mechanism-proxy-status}` — basis is `:multi-epoch-population-proxy`
+- `evaluate-stochastic-equilibrium` — now returns both claim-results AND mechanism-proxy-results
+- `print-equilibrium-report` — now prints a second "Mechanism-Property Proxies" section
+
+The `:basis` field in mechanism proxies is `:multi-epoch-population-proxy`, deliberately
+weaker than `:single-trace-terminal-proxy` (used by `scenario/equilibrium` on individual
+replay traces). The docstring in `stochastic_equilibrium.clj` now documents the full
+claim-strength correspondence table.
+
+### Claim-strength taxonomy after Phase 7
+
+| Basis label | Source | Strength |
+|---|---|---|
+| `:single-trace-terminal-proxy` | `scenario/equilibrium.clj` single trace | Weakest — one replay |
+| `:single-trace-metric-proxy` | `scenario/equilibrium.clj` intermediate metrics | Weak |
+| `:multi-epoch-population-proxy` | `sim/stochastic_equilibrium.clj` | Medium — many epochs |
+| `:single-simulation-evidence` | `sim/stochastic_equilibrium.clj` claims | Medium |
+| `:multi-trace-required` | `scenario/equilibrium.clj` marker for unresolvable claims | N/A |
+
+### Remaining limitations
+
+- Mechanism proxies use a hardcoded 35% initial malice share assumption for the collusion-
+  resistance proxy. If the actual strategy mix differs significantly, the initial-malice-approx
+  will be wrong. A future pass should extract the actual mix from the multi-epoch params.
+- Budget-balance proxy is directional only (checks for positive leakage). Full budget-balance
+  verification requires per-token reconciliation across all escrows, which requires
+  per-trace `projection` data from `scenario/projection.clj`.
+- The mechanism proxies are evaluated at end-of-run only. A stronger claim would require
+  every epoch to satisfy these properties (time-series monotonic check).

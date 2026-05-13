@@ -19,6 +19,24 @@
    trace but weaker than an analytic proof or ensemble of independent runs.
    The :basis field in every result declares this explicitly.
 
+   Mechanism-proxy checks (see evaluate-mechanism-proxies) use the basis
+   :multi-epoch-population-proxy, which is weaker than :single-trace-terminal-proxy
+   (the basis used by scenario/equilibrium for single-trace replay) but provides
+   convergent evidence across many epochs that mechanism properties hold at the
+   population level.
+
+   ## Claim-strength correspondence with scenario/equilibrium
+
+   | scenario/equilibrium basis         | stochastic-equilibrium basis          |
+   |------------------------------------|---------------------------------------|
+   | :single-trace-terminal-proxy       | :single-simulation-evidence           |
+   | :single-trace-metric-proxy         | :multi-epoch-population-proxy         |
+   | :multi-trace-required              | (fulfilled by multi-epoch evidence)   |
+   | :multi-epoch-required              | :single-simulation-evidence           |
+
+   The mechanism-proxy evaluators mirror the mechanism-property vocabulary from
+   scenario/equilibrium.clj so the two evaluators can be cross-referenced.
+
    ## Layering
 
    sim/* may import sim/* per project rules. This namespace imports nothing
@@ -232,38 +250,240 @@
    evaluate-honest-survival-rate])
 
 ;; ---------------------------------------------------------------------------
+;; Mechanism-property proxy evaluators
+;;
+;; These mirror the mechanism-property vocabulary from scenario/equilibrium.clj
+;; but operate on multi-epoch aggregate statistics rather than single-trace
+;; terminal projections. The :basis is :multi-epoch-population-proxy throughout.
+;;
+;; Properties evaluated:
+;;   :budget-balance          — net value flow sums near zero (no leakage)
+;;   :incentive-compatibility — honest strategy yields better outcomes than malicious
+;;   :individual-rationality  — honest resolvers earn positive cumulative profit
+;;   :collusion-resistance    — malicious share does not grow relative to initial
+;; ---------------------------------------------------------------------------
+
+(defn- mech-pass [property evidence detail]
+  {:property property
+   :status   :pass
+   :basis    :multi-epoch-population-proxy
+   :evidence evidence
+   :detail   detail})
+
+(defn- mech-fail [property evidence detail]
+  {:property property
+   :status   :fail
+   :basis    :multi-epoch-population-proxy
+   :evidence evidence
+   :detail   detail})
+
+(defn- mech-inconclusive [property reason]
+  {:property property
+   :status   :inconclusive
+   :basis    :multi-epoch-population-proxy
+   :reason   reason})
+
+(defn- evaluate-mech-budget-balance
+  "Proxy for :budget-balance.
+
+   In a closed system all value that leaves honest resolvers as losses should
+   appear as protocol fees or slash revenue. We check the directional signal:
+   honest-cumulative-profit > 0 AND (honest + malice net sum is not strongly
+   positive, implying no runaway money creation).
+
+   This is a directional check, not a full token-level reconciliation (that
+   requires per-trace projections from scenario/projection)."
+  [result]
+  (let [stats  (:aggregated-stats result)
+        h-prof (:honest-cumulative-profit stats)
+        m-prof (:malice-cumulative-profit stats)]
+    (if (or (nil? h-prof) (nil? m-prof))
+      (mech-inconclusive :budget-balance "cumulative profit data missing from aggregated-stats")
+      (let [net-sum    (+ h-prof m-prof)
+            ;; A strongly positive net sum (> 5% of honest profit) suggests value leakage
+            leaking?   (and (pos? h-prof) (> net-sum (* 0.05 (Math/abs h-prof))))
+            no-data?   (and (zero? h-prof) (zero? m-prof))]
+        (cond
+          no-data?
+          (mech-inconclusive :budget-balance "all profits are zero; no value flowed")
+
+          leaking?
+          (mech-fail :budget-balance
+                     {:net-sum net-sum :honest h-prof :malice m-prof}
+                     (format "net value sum=%.0f suggests outflow imbalance (honest=%.0f malice=%.0f)"
+                             net-sum h-prof m-prof))
+
+          :else
+          (mech-pass :budget-balance
+                     {:net-sum net-sum :honest h-prof :malice m-prof}
+                     (format "net value sum=%.0f within expected range (honest=%.0f malice=%.0f)"
+                             net-sum h-prof m-prof)))))))
+
+(defn- evaluate-mech-incentive-compatibility
+  "Proxy for :incentive-compatibility.
+
+   Incentive compatibility requires that honest play is at least as good as
+   deviation. Population proxy: honest resolvers earn higher cumulative profit
+   AND higher win rate than malicious resolvers over the full simulation."
+  [result]
+  (let [stats  (:aggregated-stats result)
+        h-prof (:honest-cumulative-profit stats)
+        m-prof (:malice-cumulative-profit stats)
+        h-wr   (:honest-avg-win-rate stats)
+        m-wr   (:malice-avg-win-rate stats)]
+    (if (some nil? [h-prof m-prof h-wr m-wr])
+      (mech-inconclusive :incentive-compatibility "profit or win-rate data missing")
+      (let [profit-ok? (>= h-prof m-prof)
+            winrate-ok? (>= h-wr m-wr)]
+        (cond
+          (and profit-ok? winrate-ok?)
+          (mech-pass :incentive-compatibility
+                     {:honest-profit h-prof :malice-profit m-prof :honest-wr h-wr :malice-wr m-wr}
+                     (format "honest profit=%.0f≥malice=%.0f and win-rate=%.1f%%≥%.1f%%"
+                             h-prof m-prof (* 100 h-wr) (* 100 m-wr)))
+
+          profit-ok?
+          (mech-fail :incentive-compatibility
+                     {:honest-profit h-prof :malice-profit m-prof :honest-wr h-wr :malice-wr m-wr}
+                     (format "honest win-rate=%.1f%% < malice=%.1f%% — deviation rewarded in win rate"
+                             (* 100 h-wr) (* 100 m-wr)))
+
+          :else
+          (mech-fail :incentive-compatibility
+                     {:honest-profit h-prof :malice-profit m-prof :honest-wr h-wr :malice-wr m-wr}
+                     (format "honest profit=%.0f < malice=%.0f — deviation is profitable"
+                             h-prof m-prof)))))))
+
+(defn- evaluate-mech-individual-rationality
+  "Proxy for :individual-rationality.
+
+   Individual rationality requires that no required honest participant ends up
+   with a negative payoff. Population proxy: honest-cumulative-profit > 0."
+  [result]
+  (let [stats  (:aggregated-stats result)
+        h-prof (:honest-cumulative-profit stats)]
+    (if (nil? h-prof)
+      (mech-inconclusive :individual-rationality "honest-cumulative-profit missing")
+      (if (pos? h-prof)
+        (mech-pass :individual-rationality
+                   {:honest-cumulative-profit h-prof}
+                   (format "honest cumulative profit=%.0f > 0: participation individually rational" h-prof))
+        (mech-fail :individual-rationality
+                   {:honest-cumulative-profit h-prof}
+                   (format "honest cumulative profit=%.0f ≤ 0: honest participation not individually rational" h-prof))))))
+
+(defn- evaluate-mech-collusion-resistance
+  "Proxy for :collusion-resistance.
+
+   Collusion resistance requires that a coalition of malicious resolvers cannot
+   profitably deviate. Population proxy: malicious resolver share does not grow
+   — i.e., malice-final-count / initial-malice-approx ≤ 1.0 (no net growth).
+
+   Uses aggregated stats and assumes ~35% initial malice share (the default
+   strategy mix: 25% malicious + 10% collusive)."
+  [result]
+  (let [stats        (:aggregated-stats result)
+        m-final      (:malice-final-count stats)
+        initial      (:initial-resolver-count result)
+        ;; Default strategy mix has 35% non-honest (0.25 malicious + 0.10 collusive)
+        initial-malice-approx (when initial (* 0.35 initial))]
+    (if (some nil? [m-final initial-malice-approx])
+      (mech-inconclusive :collusion-resistance "malice final count or initial resolver count missing")
+      (let [growth-ratio (/ (double m-final) (max 1 initial-malice-approx))
+            grew?        (> growth-ratio 1.10)]  ; >10% growth = coalition expanded
+        (if grew?
+          (mech-fail :collusion-resistance
+                     {:malice-final m-final :initial-malice-approx initial-malice-approx :growth-ratio growth-ratio}
+                     (format "malice pool grew ×%.2f from initial approx: collusion may be attracting new actors"
+                             growth-ratio))
+          (mech-pass :collusion-resistance
+                     {:malice-final m-final :initial-malice-approx initial-malice-approx :growth-ratio growth-ratio}
+                     (format "malice pool ×%.2f of initial (≤1.1): no coalition growth detected"
+                             growth-ratio)))))))
+
+(def ^:private mechanism-proxy-evaluators
+  [evaluate-mech-budget-balance
+   evaluate-mech-incentive-compatibility
+   evaluate-mech-individual-rationality
+   evaluate-mech-collusion-resistance])
+
+(defn evaluate-mechanism-proxies
+  "Evaluate mechanism-property proxies against a multi-epoch result map.
+
+   These are population-level analogues of the mechanism properties checked by
+   scenario/equilibrium.clj on single traces. The :basis is
+   :multi-epoch-population-proxy throughout — weaker than :single-trace-terminal-proxy
+   but provides convergent multi-epoch evidence for the same claims.
+
+   Properties checked: :budget-balance, :incentive-compatibility,
+                       :individual-rationality, :collusion-resistance.
+
+   Returns:
+     {:mechanism-proxy-results  {property-kw → result-map}
+      :mechanism-proxy-status   :pass | :fail | :inconclusive}"
+  [multi-epoch-result]
+  (let [results  (into {} (map (fn [f]
+                                 (let [r (f multi-epoch-result)]
+                                   [(:property r) r]))
+                               mechanism-proxy-evaluators))
+        statuses (map :status (vals results))
+        overall  (cond
+                   (some #(= :fail %) statuses)         :fail
+                   (every? #(= :pass %) statuses)       :pass
+                   :else                                 :inconclusive)]
+    {:mechanism-proxy-results results
+     :mechanism-proxy-status  overall}))
+
+;; ---------------------------------------------------------------------------
+;; Registry
+;; ---------------------------------------------------------------------------
+
+(def ^:private evaluators
+  [evaluate-malice-net-profit-negative
+   evaluate-honest-dominates
+   evaluate-slashing-deters
+   evaluate-participation-stable
+   evaluate-honest-survival-rate])
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
 (defn evaluate-stochastic-equilibrium
-  "Evaluate all stochastic equilibrium claims against a multi-epoch result map.
+  "Evaluate all stochastic equilibrium claims and mechanism-property proxies
+   against a multi-epoch result map.
 
    The result map is the return value of resolver-sim.sim.multi-epoch/run-multi-epoch.
 
    Returns:
-     {:claim-results  [{:claim-id :status :basis :evidence :detail} ...]
-      :overall-status :pass | :fail | :inconclusive
-      :pass-count     int
-      :fail-count     int
-      :inconclusive-count int
-      :summary        string}"
+     {:claim-results           [{:claim-id :status :basis :evidence :detail} ...]
+      :mechanism-proxy-results {property-kw → result-map}
+      :mechanism-proxy-status  :pass | :fail | :inconclusive
+      :overall-status          :pass | :fail | :inconclusive
+      :pass-count              int
+      :fail-count              int
+      :inconclusive-count      int
+      :summary                 string}"
   [multi-epoch-result]
-  (let [claim-results (mapv #(% multi-epoch-result) evaluators)
-        pass-count    (count (filter #(= :pass (:status %)) claim-results))
-        fail-count    (count (filter #(= :fail (:status %)) claim-results))
-        inc-count     (count (filter #(= :inconclusive (:status %)) claim-results))
-        overall       (cond
-                        (pos? fail-count)    :fail
-                        (pos? inc-count)     :inconclusive
-                        :else                :pass)
-        summary       (format "%d/%d claims pass (%d fail, %d inconclusive)"
-                               pass-count (count claim-results) fail-count inc-count)]
-    {:claim-results       claim-results
-     :overall-status      overall
-     :pass-count          pass-count
-     :fail-count          fail-count
-     :inconclusive-count  inc-count
-     :summary             summary}))
+  (let [claim-results    (mapv #(% multi-epoch-result) evaluators)
+        mech-proxies     (evaluate-mechanism-proxies multi-epoch-result)
+        pass-count       (count (filter #(= :pass (:status %)) claim-results))
+        fail-count       (count (filter #(= :fail (:status %)) claim-results))
+        inc-count        (count (filter #(= :inconclusive (:status %)) claim-results))
+        overall          (cond
+                           (pos? fail-count)    :fail
+                           (pos? inc-count)     :inconclusive
+                           :else                :pass)
+        summary          (format "%d/%d claims pass (%d fail, %d inconclusive)"
+                                 pass-count (count claim-results) fail-count inc-count)]
+    (merge
+     {:claim-results       claim-results
+      :overall-status      overall
+      :pass-count          pass-count
+      :fail-count          fail-count
+      :inconclusive-count  inc-count
+      :summary             summary}
+     mech-proxies)))
 
 (defn print-equilibrium-report
   "Print a human-readable summary of a stochastic equilibrium report.
@@ -274,4 +494,10 @@
     (let [icon (case (:status r) :pass "✅" :fail "❌" "⚠️")]
       (println (format "  %s %-40s %s" icon (name (:claim-id r)) (:detail r "")))))
   (println (format "\n  Overall: %s  (%s)" (name (:overall-status report)) (:summary report)))
+  (when-let [proxies (:mechanism-proxy-results report)]
+    (println "\n── Mechanism-Property Proxies (multi-epoch population) ────────────────────")
+    (doseq [[_prop r] (sort-by key proxies)]
+      (let [icon (case (:status r) :pass "✅" :fail "❌" "⚠️")]
+        (println (format "  %s %-40s %s" icon (name (:property r)) (:detail r (:reason r ""))))))
+    (println (format "\n  Mechanism proxies: %s" (name (:mechanism-proxy-status report)))))
   (println "───────────────────────────────────────────────────────────────────────────"))
