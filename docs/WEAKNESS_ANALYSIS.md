@@ -505,6 +505,62 @@ The following bugs were discovered and fixed, and affected claims were re-evalua
 
 ---
 
+## Phase 3 Architecture Audit (2026-05-14)
+
+### Structural gaps addressed
+
+Two foundational gaps in the multi-agent adversarial simulation have been closed:
+
+**Gap 1 — Shared-world multi-agent dispute pool** (`sim/shared_batch.clj`)
+
+Previously, `run-single-epoch` ran two completely independent batches of n-trials:
+one for honest resolvers and one for strategic resolvers. There was no competition:
+both groups got n trials each (2n total). The shared-world model fixes this.
+
+`run-shared-batch` generates n PAIRED dispute outcomes. Each dispute is run with both
+strategies on independent RNG streams. The caller splits the pool by resolver mix so
+total disputes = n-trials (not 2n). Enable with `:use-shared-world? true` in params.
+
+Semantic change: in shared-world mode, disputes assigned to malicious resolvers are
+NOT also assigned to honest resolvers. The dominance-ratio now reflects genuine
+competition, not parallel independent evaluation.
+
+**Gap 2 — Replay-kernel validation of batch params** (`sim/kernel_bridge.clj`)
+
+The stochastic batch model uses probability distributions. There was no check that
+the underlying SEW protocol state machine was self-consistent with those parameters.
+
+`kernel-bridge/run-kernel-validation` generates minimal SEW scenarios from batch
+params and runs them through `replay-with-protocol` (the full invariant-checked
+protocol kernel). Any invariant violation indicates a parameter inconsistency.
+
+Enable per-epoch validation with `:kernel-validation-sample-size N` in params.
+Two scenario types are validated: honest resolution (always) and fraud-slash lifecycle
+(when `:fraud-slash-bps > 0` and `:fraud-detection-probability > 0`).
+
+### New params flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `:use-shared-world?` | `false` | Shared dispute pool (true competition) |
+| `:kernel-validation-sample-size` | `0` | N scenarios/epoch validated by replay kernel |
+
+### Claims update
+
+| Phase | Claim | Status after Phase 3 |
+|---|---|---|
+| **Phase J (multi-epoch)** | "Malice cannot dominate over time" | Now testable with genuine competition. Run with `:use-shared-world? true` for valid competitive dynamics. Previous runs with independent batches were not falsifiable competitive tests. |
+| **All batch phases** | Protocol params are self-consistent | Verifiable with `:kernel-validation-sample-size 5`. Kernel violations would indicate a model-kernel divergence bug. |
+
+### Remaining structural gaps (Phase 4 scope)
+
+- Ring coordination model (N ring members with entry/exit/signal dynamics)
+- Agent strategy defection (agents switch strategy based on observed payoff differential)
+- Full kernel-backed trial generation (replace stochastic probability model entirely)
+- Malicious-path kernel scenarios (fraud detection + appeal cascades via replay kernel)
+
+---
+
 ## Session Artifacts
 
 - **Full technical analysis**: See explore agent output above
