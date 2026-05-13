@@ -468,6 +468,43 @@ The following assumptions have been validated through Phase I and are considered
 
 ---
 
+## Phase 1–2 Correctness Audit (2026-05-13)
+
+The following bugs were discovered and fixed, and affected claims were re-evaluated.
+
+### Bugs Fixed (Phase 1)
+
+| File | Bug | Fix |
+|---|---|---|
+| `protocols/sew/accounting.clj` | `sub-held` used `assert` (throws `AssertionError`, not catchable by `catch Exception`) | Replaced with `(throw (ex-info ...))` |
+| `adversaries/strategy.clj` | `StaticAttacker`, `BriberyAttacker`, `EvidenceAttacker` all called bare `(rand)` — unseeded | Added `next-double` helper; reads `:rng` from params with `(rand)` fallback |
+| `adversaries/strategy.clj` | `AdaptiveAttacker.beliefs` never updated; `learning-rate` unused | Rewrote with `beliefs-atom`; `observe-outcome!` applies exponential moving average |
+| `sim/adversarial/phase_ai.clj` | Ring exit hardcoded to never happen (`new-ring-active ring-active`) | Ring shrinks each epoch: `floor(ring-active × base-detection / ring-size)` members exit |
+| `sim/adversarial/phase_p_lite.clj` | 5 mutable atoms in `doseq` — not thread-safe | Replaced with pure `loop/recur` accumulator |
+
+### New capabilities (Phase 2)
+
+| File | Change |
+|---|---|
+| `sim/trial_router.clj` | Added `ReputationWeightedRouter`, `CapacityWeightedRouter`, `AdversarialRoutingRouter` with `make-*` constructors. All satisfy the conservation invariant. |
+
+### Corrected Claims
+
+| Phase | Claim (before) | Corrected Result | Status |
+|---|---|---|---|
+| **Phase AI** | "Sybil ring displaces >50% honest resolvers within 200 epochs" | **100% displacement (collapse)** at default params (`fraud-detection=0.05`, `ring-size=5`). Ring exit mechanic is now correct; detection is too low to prevent collapse at these params. Claim **strengthened**: risk is higher than stated. | ❌ CRITICAL remains |
+| **Phase U** | "Adaptive learning provides limited advantage (≤5 vulnerable scenarios)" — was testing a *static* attacker mislabelled as adaptive | **1/40 vulnerable** after fix (defense-effectiveness, seed=44). Claim **confirmed** with corrected model. | ✅ CONFIRMED |
+| **Phase AF** | Insurance pool solvency — unchanged (does not use `Adversary` protocol) | **13/45 design-envelope configs pass (29%)** — hypothesis FAILS. Pool undersized at default params. | ❌ FAIL (pre-existing) |
+| **Phase P Lite** | "System achieves ROBUST under all tested conditions" | **48/48 scenarios pass** after pure functional rewrite. Claim confirmed. | ✅ CONFIRMED |
+
+### Notes
+
+- The `Adversary` protocol methods (`should-attack?`, `attack-type`, `observe-outcome!`) are not called by any simulation phase — `AdaptiveAttacker` is dead code. Phase U has its own inline adaptive logic in `run-epoch`. The protocol fix is correct for future use.
+- Ring exit at default params (`fraud-detection-probability=0.05`, `ring-size=5`) yields `expected-exits = 5 × 0.01 = 0.05/epoch` — effectively zero. Meaningful ring attrition requires detection ≥ 0.20 or ring-size ≤ 2.
+- `ReputationWeightedRouter` and `CapacityWeightedRouter` are now implemented and tested. Required before running shared-world multi-agent epoch sweeps (Phase 3).
+
+---
+
 ## Session Artifacts
 
 - **Full technical analysis**: See explore agent output above

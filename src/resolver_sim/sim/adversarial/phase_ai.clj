@@ -80,9 +80,16 @@
                    {}
                    honest-capitals)
 
-        ; Ring loses a member if total ring escalation costs exceed ring capital
-        ; (simplified: ring never exits in base model — ring has whale backing).
-        new-ring-active ring-active]
+        ; Ring loses members each epoch based on effective detection probability.
+        ; Each ring member faces base-detection / ring-size per epoch.
+        ; Expected exits = ring-active * effective-detection-rate.
+        base-detection  (:fraud-detection-probability params 0.05)
+        eff-det         (if (pos? ring-size) (/ base-detection ring-size) base-detection)
+        expected-exits  (* ring-active eff-det)
+        ; Use a Bernoulli approximation: exit if stochastic draw < expected-exits.
+        ; Deterministic floor ensures at least one member exits once eff-det is
+        ; high enough to drive expected-exits ≥ 1.
+        new-ring-active (max 0 (long (- ring-active (Math/floor expected-exits))))]
 
     {:honest-capitals updated-caps
      :honest-active   (count updated-caps)

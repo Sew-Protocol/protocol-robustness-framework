@@ -85,8 +85,9 @@
                                                         (double (:attempts st))))])))
                                  best (key (apply max-key val win-rates))]
                                best)
-                              ; Random strategy
-                              (rand-nth strategies))
+                              ; Random strategy — use the passed rng for reproducibility
+                              (nth strategies (mod (long (* (rng/next-double rng) (count strategies)))
+                                                   (count strategies))))
               
               ; Execute attack
               result (simulate-attack chosen-strategy difficulty rng)

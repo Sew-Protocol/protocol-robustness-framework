@@ -24,11 +24,17 @@
 
 (defn sub-held
   "Decrease total-held for token by amount. Called on release/refund.
-   Callers must have validated state. Asserts no underflow as a trip-wire."
+   Callers must have validated state. Throws a catchable ex-info on underflow
+   so process-step's (catch Exception) handler converts it to :dispatch-exception
+   rather than propagating an AssertionError past the catch boundary."
   [world token amount]
   (let [current (get-in world [:total-held token] 0)]
-    (assert (>= current amount)
-            (format "sub-held underflow: token=%s held=%d amount=%d" token current amount))
+    (when (< current amount)
+      (throw (ex-info "sub-held underflow"
+                      {:type   :sub-held-underflow
+                       :token  token
+                       :held   current
+                       :amount amount})))
     (update-in world [:total-held token] - amount)))
 
 ;; ---------------------------------------------------------------------------
