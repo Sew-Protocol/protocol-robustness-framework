@@ -17,6 +17,8 @@
       :senior-bonds        {addr {:coverage-max nat-int :reserved-coverage nat-int}}
       :resolver-frozen-until {addr nat-int}          ; freeze expiry (0 = not frozen)
       :resolver-epoch-slashed {addr {:epoch-start nat-int :amount nat-int}}
+      :resolver-capacities {addr {:max-concurrent nat-int   ; 0 = unlimited (matches DRM setResolverCapacity unlimited=true)
+                                  :current-active nat-int}} ; mirrors DRM.resolverCapacity.currentDisputes
       :paused?             boolean                   ; protocol pause state
       :block-time          nat-int}                  ; injected clock
 
@@ -202,6 +204,7 @@
     :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
     :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
     :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
+     :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
      :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
      :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
      :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
@@ -325,3 +328,46 @@
   "True when the escrow is at the maximum escalation round (no further appeals)."
   [world workflow-id]
   (>= (dispute-level world workflow-id) max-dispute-level))
+
+;; ---------------------------------------------------------------------------
+;; Resolver capacity accessors
+;; ---------------------------------------------------------------------------
+
+(defn resolver-capacity
+  "Return the capacity entry for resolver-addr, or nil if not configured.
+   Structure: {:max-concurrent nat-int :current-active nat-int}
+   A missing entry means unlimited (matches DRM setResolverCapacity with unlimited=true)."
+  [world resolver-addr]
+  (get-in world [:resolver-capacities resolver-addr]))
+
+(defn resolver-at-capacity?
+  "True when resolver-addr has a finite capacity limit AND current-active >= max-concurrent.
+   Returns false when capacity is not configured (unlimited)."
+  [world resolver-addr]
+  (when-let [{:keys [max-concurrent current-active]} (resolver-capacity world resolver-addr)]
+    (and (pos? max-concurrent)
+         (>= current-active max-concurrent))))
+
+(defn set-resolver-capacity
+  "Configure or overwrite the capacity for resolver-addr.
+   max-concurrent=0 means unlimited (mirrors DRM setResolverCapacity unlimited=true)."
+  [world resolver-addr max-concurrent]
+  (assoc-in world [:resolver-capacities resolver-addr]
+            {:max-concurrent (long max-concurrent) :current-active 0}))
+
+(defn increment-resolver-capacity
+  "Increment current-active for resolver-addr.
+   No-op if resolver has no configured capacity (unlimited)."
+  [world resolver-addr]
+  (if (contains? (:resolver-capacities world) resolver-addr)
+    (update-in world [:resolver-capacities resolver-addr :current-active] inc)
+    world))
+
+(defn decrement-resolver-capacity
+  "Decrement current-active for resolver-addr, clamped to 0.
+   No-op if resolver has no configured capacity (unlimited)."
+  [world resolver-addr]
+  (if (contains? (:resolver-capacities world) resolver-addr)
+    (update-in world [:resolver-capacities resolver-addr :current-active]
+               (fn [n] (max 0 (dec n))))
+    world))

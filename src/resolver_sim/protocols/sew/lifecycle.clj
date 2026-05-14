@@ -184,9 +184,20 @@
 
 (defn raise-dispute
   "Raise a dispute on a :pending escrow.
-   Caller must be :from or :to."
+   Caller must be :from or :to.
+
+   Also checks DRM resolver capacity: if the escrow has a dispute-resolver assigned
+   and that resolver is at maxConcurrentDisputes, the call fails with
+   :resolver-capacity-exceeded — mirroring DRM.initializeDispute behaviour.
+   On success, increments the resolver's current-active counter."
   [world workflow-id caller]
-  (sm/transition-to-disputed world workflow-id caller))
+  (let [result (sm/transition-to-disputed world workflow-id caller)]
+    (if-not (:ok result)
+      result
+      (let [resolver (get-in (:world result) [:escrow-transfers workflow-id :dispute-resolver])]
+        (if (and resolver (t/resolver-at-capacity? world resolver))
+          (t/fail :resolver-capacity-exceeded)
+          (t/ok (t/increment-resolver-capacity (:world result) resolver)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; release
@@ -356,5 +367,6 @@
           world'          (-> world-slashed
                               (acct/distribute-slashed-funds slash-amt)
                               (finalize-refund workflow-id)
+                              (t/decrement-resolver-capacity resolver)
                               (update :dispute-timestamps dissoc workflow-id))]
       (t/ok world'))))

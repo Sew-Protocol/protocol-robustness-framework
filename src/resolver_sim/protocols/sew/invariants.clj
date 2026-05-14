@@ -881,6 +881,53 @@
      :violations (vec violations)}))
 
 ;; ---------------------------------------------------------------------------
+;; Invariant 30: Resolver capacity never exceeded
+;;
+;; For every resolver with a finite capacity limit (max-concurrent > 0),
+;; current-active must never exceed max-concurrent.
+;;
+;; Also: for every :disputed escrow assigned to a resolver, current-active
+;; must account for it (current-active >= open disputes assigned to that resolver).
+;; ---------------------------------------------------------------------------
+
+(defn resolver-capacity-invariant?
+  "True when:
+   1. No resolver's current-active exceeds its max-concurrent.
+   2. current-active >= count of open :disputed escrows assigned to that resolver.
+
+   Violation of (1) means the counter went over limit.
+   Violation of (2) means the counter was decremented without a finalization."
+  [world]
+  (let [capacities (:resolver-capacities world {})
+        ;; count open disputes per resolver
+        open-by-resolver
+        (reduce (fn [acc [_ et]]
+                  (if (and (= :disputed (:escrow-state et))
+                           (:dispute-resolver et))
+                    (update acc (:dispute-resolver et) (fnil inc 0))
+                    acc))
+                {}
+                (:escrow-transfers world {}))
+
+        over-limit
+        (for [[addr {:keys [max-concurrent current-active]}] capacities
+              :when (and (pos? max-concurrent) (> current-active max-concurrent))]
+          {:resolver addr :current-active current-active :max-concurrent max-concurrent
+           :violation :over-limit})
+
+        under-count
+        (for [[addr {:keys [current-active]}] capacities
+              :let [open (get open-by-resolver addr 0)]
+              :when (< current-active open)]
+          {:resolver addr :current-active current-active :open-disputes open
+           :violation :counter-below-open-disputes})
+
+        violations (concat over-limit under-count)]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+
+;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
 ;; ---------------------------------------------------------------------------
 
@@ -913,7 +960,8 @@
                   :senior-coverage-not-exceeded   (senior-coverage-not-exceeded? world)
                   :resolver-not-frozen-on-assign  (resolver-not-frozen-on-assign? world)
                   :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
-                  :reversal-slash-disabled        (reversal-slash-disabled? world)}
+                  :reversal-slash-disabled        (reversal-slash-disabled? world)
+                   :resolver-capacity              (resolver-capacity-invariant? world)}
          all?    (every? #(:holds? %) (vals results))]
      {:all-hold? all?
       :results   results})))
