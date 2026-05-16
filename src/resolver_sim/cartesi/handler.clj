@@ -1,7 +1,7 @@
 (ns resolver-sim.cartesi.handler
   (:require [clojure.data.json :as json]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew])
+            [resolver-sim.protocols.sew :as sew])
   (:import [java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers]
            [java.net URI]
            [java.nio.charset StandardCharsets])
@@ -80,7 +80,7 @@
       (println "Scenario string: " scenario-str)
       (let [scenario (json/read-str scenario-str :key-fn keyword)
             _ (println "Executing scenario: " (:scenario-id scenario))
-            result (replay/replay-with-sew-protocol scenario)]
+            result (sew/replay-with-sew-protocol scenario)]
         (println "Simulation result outcome: " (:outcome result))
         (update-state! result)
         (emit-notice result)

@@ -47,7 +47,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-validation-wrong-schema-version
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :schema-version "2.0"
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -55,14 +55,14 @@
     (is (= :unsupported-schema-version (:halt-reason r)))))
 
 (deftest test-validation-missing-schema-version
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (assoc (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                                 :params {:token "0xUSDC" :to "0xBob" :amount 5000}}])
                   :schema-version nil))]
     (is (= :invalid (:outcome r)))))
 
 (deftest test-validation-non-contiguous-seq
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 2 :time 1001 :agent "alice" :action "release"  ; gap at 1
@@ -71,7 +71,7 @@
     (is (= :non-contiguous-event-seq (:halt-reason r)))))
 
 (deftest test-validation-duplicate-seq
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 0 :time 1001 :agent "alice" :action "release"  ; dup
@@ -79,7 +79,7 @@
     (is (= :invalid (:outcome r)))))
 
 (deftest test-validation-non-monotonic-time
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1005 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 1 :time 1000 :agent "alice" :action "release"  ; backward
@@ -88,7 +88,7 @@
     (is (= :non-monotonic-event-time (:halt-reason r)))))
 
 (deftest test-validation-event-time-before-initial
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :init-time 2000
                :events [{:seq 0 :time 999 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -96,7 +96,7 @@
     (is (= :event-time-before-initial (:halt-reason r)))))
 
 (deftest test-validation-unknown-agent-in-event
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "nobody" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
     (is (= :invalid (:outcome r)))
@@ -104,7 +104,7 @@
 
 (deftest test-validation-duplicate-agent-ids
   (let [alice2 {:id "alice" :type "attacker" :address "0xEvil"}  ; same id, different address
-        r (replay/replay-with-sew-protocol
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice alice2 bob resolver]
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -113,7 +113,7 @@
 
 (deftest test-validation-duplicate-agent-addresses
   (let [alice2 {:id "alice2" :type "attacker" :address "0xAlice"}  ; same address, different id
-        r (replay/replay-with-sew-protocol
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice alice2 bob resolver]
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -144,7 +144,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-happy-path-release
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 10000
@@ -165,7 +165,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-dispute-and-resolution
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 10000
@@ -185,7 +185,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-attacker-unauthorized-resolution-is-revert
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :agents [alice bob mallory resolver]
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -207,7 +207,7 @@
     (is (= 0 (get-in r [:metrics :attack-successes])))))
 
 (deftest test-dispute-after-release-rejected
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :agents [alice bob mallory]
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -238,7 +238,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-amount-overflow-guard
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                ;; amount > max-safe-amount = 922337203685477
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -252,7 +252,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-mutual-cancel
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -269,7 +269,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-auto-cancel-after-timeout
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :max-dispute-duration 500)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -287,7 +287,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-appeal-window-deferred-settlement
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :appeal-window-duration 100)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -313,7 +313,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-multiple-escrows-isolated
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000
@@ -394,7 +394,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-json-serialization
-  (let [r    (replay/replay-with-sew-protocol
+  (let [r    (sew/replay-with-sew-protocol
               (sc :events
                   [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                      :params {:token "0xUSDC" :to "0xBob" :amount 500}}]))
@@ -407,7 +407,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-advance-time-event
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 1000}}
@@ -631,7 +631,7 @@
 
 (deftest test-wf-alias-save-and-resolve
   ":save-id-as captures the assigned workflow-id; subsequent events resolve the alias."
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000
@@ -646,7 +646,7 @@
 
 (deftest test-wf-alias-multi-escrow
   "Multiple aliases can be saved and resolved independently."
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 3000}
@@ -666,7 +666,7 @@
 
 (deftest test-wf-alias-unresolved-returns-invalid
   "A string alias with no prior :save-id-as returns :invalid outcome."
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -677,7 +677,7 @@
 
 (deftest test-wf-alias-integer-passes-through
   "Integer workflow-ids bypass the alias layer unchanged."
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -691,7 +691,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-withdraw-stake-blocked-during-active-dispute
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (assoc (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -708,7 +708,7 @@
     (is (= :active-disputes-block-withdrawal (get-in r [:trace 3 :error])))))
 
 (deftest test-withdraw-stake-succeeds-after-dispute-resolution
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :appeal-window-duration 0)
                :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
@@ -726,7 +726,7 @@
     (is (= :ok (get-in r [:trace 4 :result])))))
 
 (deftest test-withdraw-stake-invalid-amount-nil-rejected
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -737,7 +737,7 @@
     (is (= :invalid-amount (get-in r [:trace 1 :error])))))
 
 (deftest test-withdraw-stake-invalid-amount-zero-rejected
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -748,7 +748,7 @@
     (is (= :invalid-amount (get-in r [:trace 1 :error])))))
 
 (deftest test-withdraw-stake-invalid-amount-negative-rejected
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -760,7 +760,7 @@
 
 (deftest test-withdraw-stake-pending-slash-boundary-allows-withdraw
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        r (replay/replay-with-sew-protocol
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice bob resolver gov]
                :params (assoc default-params
                               :appeal-window-duration 100
@@ -780,7 +780,7 @@
 
 (deftest test-withdraw-stake-pending-slash-boundary-blocks-withdraw
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        r (replay/replay-with-sew-protocol
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice bob resolver gov]
                :params (assoc default-params
                               :appeal-window-duration 100
@@ -871,7 +871,7 @@
 
 (deftest test-auto-cancel-after-timeout
   "auto_cancel_disputed succeeds when block-time > dispute-timestamp + max-dispute-duration."
-  (let [r (replay/replay-with-sew-protocol
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :max-dispute-duration 500)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -892,7 +892,7 @@
    - rejected appeal forfeits bond to insurance accounting"
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
         r-upheld
-        (replay/replay-with-sew-protocol
+        (sew/replay-with-sew-protocol
          (sc :agents [alice bob resolver gov]
              :params (assoc default-params
                             :appeal-window-duration 100
@@ -909,7 +909,7 @@
               {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? true}}]))
         r-rejected
-        (replay/replay-with-sew-protocol
+        (sew/replay-with-sew-protocol
          (sc :agents [alice bob resolver gov]
              :params (assoc default-params
                             :appeal-window-duration 100

@@ -13,7 +13,8 @@
             [resolver-sim.protocols.sew.trace-metadata   :as meta]
             [resolver-sim.protocols.sew.invariants       :as inv]
             [resolver-sim.protocols.sew.projection       :as sew-proj]
-            [resolver-sim.protocols.sew.equilibrium      :as sew-eq]))
+            [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
+            [resolver-sim.contract-model.replay          :as replay]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -553,7 +554,7 @@
     (when (= action "create_escrow")
       (:workflow-id extra)))
 
-  (open-disputes [_ world]
+  (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
                :when (= :disputed (:escrow-state et))]
            wf)))
@@ -580,13 +581,29 @@
       :negative-payoff-count
       :coalition-net-profit})
 
-  (accum-protocol-metrics [_ metrics event-tags event accepted?]
+  (adversarial-event? [_ event agent]
+    ;; Per-event :adversarial? flag takes precedence over agent role/strategy/type
+    ;; to allow mixed-role actors to mark individual calls adversarial.
+    (boolean (or (:adversarial? event)
+                 (= "malicious" (:strategy agent))
+                 (= "attacker"  (:role agent))
+                 (= "attacker"  (:type agent)))))
+
+  (accum-protocol-metrics [_ metrics event-tags event accepted? attack? world-before world-after]
     ;; double-settle? checks :resolutions-executed BEFORE this event's increment
     ;; (the metrics arg is the pre-event state), so order matters here.
     (let [double-settle? (and accepted?
                               (or (contains? event-tags :dispute-resolved)
                                   (contains? event-tags :settlement-executed))
-                              (pos? (:resolutions-executed metrics)))]
+                              (pos? (:resolutions-executed metrics)))
+          ;; funds-lost: decrease in total-held caused by an accepted adversarial
+          ;; action.  Computed as max(0, held-before - held-after) so refunds into
+          ;; held don't produce negative deltas.
+          held-fn        (fn [w]
+                           (let [held (:total-held w {})]
+                             (if (map? held) (apply + (vals held)) 0)))
+          funds-lost-delta (when (and attack? accepted?)
+                             (max 0 (- (held-fn world-before) (held-fn world-after))))]
       (cond-> metrics
         (contains? event-tags :entity-created)
         (-> (update :total-escrows inc)
@@ -605,7 +622,10 @@
         (update :double-settlements inc)
 
         (contains? event-tags :invalid-state-transition)
-        (update :invalid-state-transitions inc))))
+        (update :invalid-state-transitions inc)
+
+        (and funds-lost-delta (pos? funds-lost-delta))
+        (update :funds-lost + funds-lost-delta))))
 
   (trace-projection [_ result]
     (sew-proj/trace-end-projection result))
@@ -617,3 +637,11 @@
     sew-eq/equilibrium-concept-validators))
 
 (def protocol (SEWProtocol.))
+
+(defn replay-with-sew-protocol
+  "SEW convenience entry point: replays a scenario using SEWProtocol.
+   This is the canonical SEW-specific replay function; it lives here
+   (in the SEW protocol namespace) rather than in the generic replay engine.
+   For protocol-agnostic replay use replay/replay-with-protocol directly."
+  [scenario]
+  (replay/replay-with-protocol protocol scenario))

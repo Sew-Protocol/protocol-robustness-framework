@@ -10,6 +10,7 @@
   (:require [clojure.data.json                 :as json]
             [clojure.java.io                   :as io]
             [clojure.string                    :as str]
+            [resolver-sim.protocols.sew          :as sew]
             [resolver-sim.protocols.sew.diff  :as diff]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.io.scenarios          :as scenarios]
@@ -402,7 +403,7 @@
     (System/exit 1))
   (let [[scenario-path output-path] args
         scenario (scenarios/load-scenario-file scenario-path)
-        result   (replay/replay-with-sew-protocol scenario)]
+        result   (sew/replay-with-sew-protocol scenario)]
     (if (= :invalid (:outcome result))
       (do (println "ERROR: scenario invalid:" (:halt-reason result))
           (System/exit 2))

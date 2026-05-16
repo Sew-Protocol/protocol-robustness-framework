@@ -236,58 +236,37 @@
 ;; Metrics — accumulation
 ;; ---------------------------------------------------------------------------
 
-(defn- zero-metrics []
-  {:total-escrows                0
-   :total-volume                 0
-   :disputes-triggered           0
-   :resolutions-executed         0
-   :pending-settlements-executed 0
-   :attack-attempts              0
-   :attack-successes             0
-   :rejected-attacks             0
-   :reverts                      0
-   :invariant-violations         0
-   :double-settlements           0
-   :invalid-state-transitions    0
-   :funds-lost                   0
-   :negative-payoff-count        nil
-   :coalition-net-profit         nil
-   ;; Per-invariant failure map: {inv-kw :fail} for any invariant that
-   ;; violated at least once during the run. Invariants NOT in this map
-   ;; either passed throughout or were never exercised.  Used exclusively
-   ;; by evaluate-invariants — not evaluated by evaluate-metric-op.
-   :invariant-results            {}})
+(defn- zero-metrics
+  "Initialise the metrics accumulator for one replay run.
 
-(defn- held-total
-  "Sum all total-held values across tokens in a world or world-snapshot map.
-   Accepts either a full world map (keyed :total-held) or a world-snapshot map."
-  [world]
-  (let [held (:total-held world {})]
-    (if (map? held) (apply + (vals held)) 0)))
+   Produces a map containing:
+   - All base-metrics keys, zeroed to 0 (numeric) or {} (:invariant-results).
+   - All protocol-specific keys declared via metric-vocabulary, zeroed to 0.
+
+   The two sets are disjoint by contract: protocol implementations must not
+   declare base-metric keys in their vocabulary."
+  [protocol]
+  (let [base {:attack-attempts      0
+              :attack-successes     0
+              :rejected-attacks     0
+              :reverts              0
+              :invariant-violations 0
+              :funds-lost           0
+              ;; Per-invariant failure map: {inv-kw :fail} for any invariant that
+              ;; violated at least once during the run.  Invariants NOT in this map
+              ;; either passed throughout or were never exercised.  Used exclusively
+              ;; by evaluate-invariants — not evaluated by evaluate-metric-op.
+              :invariant-results    {}}
+        vocab (engine/metric-vocabulary protocol)]
+    (into base (map #(vector % 0) vocab))))
 
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (let [result-kw (:result trace-entry)
         accepted? (= result-kw :ok)
         agent     (get agent-index (:agent event))
-        ;; Per-event :adversarial? flag takes precedence over agent.type so
-        ;; that mixed-role actors (e.g. an honest buyer performing adversarial
-        ;; calls) can be classified at the event level without marking the whole
-        ;; agent type as "attacker" (which would inflate attack-successes for
-        ;; legitimate accepted actions by the same agent).
-        attack?   (or (:adversarial? event)
-                      (= "malicious" (:strategy agent))
-                      (= "attacker" (:role agent))
-                      (= "attacker" (:type agent)))
+        attack?   (engine/adversarial-event? protocol event agent)
         tags      (:event-tags trace-entry)
-        ;; funds-lost: total-held decrease caused by an adversarial accepted
-        ;; action. Computed as max(0, held-before - held-after) so that
-        ;; refunds-into-held don't produce negative values.
-        ;; Does NOT fire for honest actions (attack? = false).
-        held-before      (held-total world-before)
-        held-after       (held-total (:world trace-entry))
-        funds-lost-delta (if (and attack? accepted?)
-                           (max 0 (- held-before held-after))
-                           0)
+        world-after (:world trace-entry)
         base (cond-> metrics
                (and attack? accepted?)
                (update :attack-successes inc)
@@ -312,12 +291,12 @@
                              (reduce (fn [m [kw r]]
                                        (if (:holds? r) m (assoc m kw :fail)))
                                      acc
-                                     (:violations trace-entry)))))
-
-               (pos? funds-lost-delta)
-               (update :funds-lost + funds-lost-delta))]
+                                     (:violations trace-entry))))))]
     ;; Delegate protocol-specific metric accumulation to the protocol.
-    (engine/accum-protocol-metrics protocol base tags event accepted?)))
+    ;; Passes world-before and world-after so protocols can compute
+    ;; value-based metrics such as :funds-lost without knowledge of the
+    ;; specific world structure being hard-coded in the generic engine.
+    (engine/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)))
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
@@ -403,7 +382,7 @@
   (let [effective-metrics (into base-metrics (engine/metric-vocabulary protocol))
         validation (validate-scenario scenario effective-metrics)]
     (if-not (:ok validation)
-      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics) :halt-reason (:error validation) :protocol protocol}
+      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
       (let [agents   (:agents scenario)
             p-params (get scenario :protocol-params {})
             context  (engine/build-execution-context protocol agents p-params)
@@ -412,10 +391,10 @@
             events  (sort-by :seq (:events scenario))
             scenario-id (:scenario-id scenario)]
         (log/info :scenario/start {:id scenario-id})
-        (loop [world world0 events events trace [] metrics (zero-metrics) id-alias-map {}]
+        (loop [world world0 events events trace [] metrics (zero-metrics protocol) id-alias-map {}]
           (if (empty? events)
             (let [open (when-not (:allow-open-disputes? scenario)
-                         (seq (engine/open-disputes protocol world)))]
+                         (seq (engine/open-entities protocol world)))]
               (if open
                 {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-disputes-at-end :detail {:open-disputes (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
                 (do
@@ -445,13 +424,6 @@
                       (log/error :scenario/halt {:id scenario-id :seq (:seq event) :reason :invariant-violation})
                       {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
                     (recur (:world step) (rest events) new-trace new-metrics new-alias-map)))))))))))
-
-(defn replay-with-sew-protocol
-  "SEW convenience entry point: replays using SEWProtocol.
-   This is a SEW-specific helper, not the framework entry point.
-   For protocol-agnostic replay use replay-with-protocol directly."
-  [scenario]
-  (replay-with-protocol @(requiring-resolve 'resolver-sim.protocols.sew/protocol) scenario))
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

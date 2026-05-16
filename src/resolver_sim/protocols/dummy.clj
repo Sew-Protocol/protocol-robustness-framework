@@ -11,7 +11,7 @@
    - resolve-id-alias: always passes — no alias resolution needed since
      dispatch-action ignores all params.
    - created-id: always nil — no alias tracking.
-   - open-disputes: always [] — no open-dispute end-check enforcement.
+   - open-entities: always [] — no open-entity end-check enforcement.
    - classify-event: always #{} — no lifecycle metrics incremented.
    - Invariant checks: always pass (no invariants enforced).
 
@@ -58,7 +58,7 @@
   (created-id [_ _action _extra]
     nil)
 
-  (open-disputes [_ _world]
+  (open-entities [_ _world]
     [])
 
   (classify-event [_ _event _result-kw _error-kw]
@@ -67,7 +67,10 @@
   (metric-vocabulary [_]
     #{})
 
-  (accum-protocol-metrics [_ metrics _ _ _]
+  (adversarial-event? [_ _event _agent]
+    false)
+
+  (accum-protocol-metrics [_ metrics _ _ _ _ _ _]
     metrics)
 
   (trace-projection [_ _result]

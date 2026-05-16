@@ -1,6 +1,7 @@
 (ns resolver-sim.generators.equilibrium
   "Phase 3: generator-driven equilibrium evaluation helpers."
   (:require [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.generators.scenario :as gsc]
             [resolver-sim.scenario.equilibrium :as eq]))
 
@@ -39,7 +40,7 @@
   [{:keys [seed max-steps profile theory]
     :or {seed 42 max-steps 6 profile :phase1-lifecycle theory default-theory}}]
   (let [scenario (gsc/build-scenario {:seed seed :max-steps max-steps :profile profile})
-        result   (replay/replay-with-sew-protocol scenario)
+        result   (sew/replay-with-sew-protocol scenario)
         eqr      (eq/evaluate-equilibrium theory result)]
     {:seed seed
      :profile profile

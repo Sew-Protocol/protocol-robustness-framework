@@ -23,6 +23,7 @@
      (persist-top-n! n) runs all Phase Z scenarios, scores them, persists top-n.
      (persist-top-percent! p) keeps the top p fraction (0.01 = 1%)."
   (:require [resolver-sim.contract-model.replay      :as replay]
+            [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.io.trace-score             :as ts]
             [resolver-sim.io.trace-store             :as store]))
 
@@ -181,7 +182,7 @@
   "Run a Phase Z scenario through replay-with-sew-protocol and score the result.
    Returns a map with :scenario, :result, :scored-result."
   [scenario]
-  (let [result        (replay/replay-with-sew-protocol scenario)
+  (let [result        (sew/replay-with-sew-protocol scenario)
         scored-result (ts/score-result result)]
     {:scenario      scenario
      :result        result

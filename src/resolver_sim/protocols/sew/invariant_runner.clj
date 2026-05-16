@@ -2,7 +2,7 @@
   "In-process runner for the S01–S41 deterministic invariant scenarios.
 
    Runs every scenario in invariant-scenarios/all-scenarios against
-   replay/replay-with-sew-protocol, reports pass/fail per entry, and returns a
+   sew/replay-with-sew-protocol, reports pass/fail per entry, and returns a
    summary map suitable for CLI consumption.
 
    S12 is a paired scenario (vector of two maps); it passes only when
@@ -12,6 +12,7 @@
    invariant-scenarios/scenario-type-registry (:scenario/type,
    :adversary/type, :adversary/traits) for queryable output."
   (:require [resolver-sim.contract-model.replay            :as replay]
+            [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
 
 ;; ---------------------------------------------------------------------------
@@ -24,7 +25,7 @@
    When :expected-fail? is true on the scenario, the test passes only when the
    replay outcome is :fail (the invariant is expected to fire)."
   [scenario]
-  (let [result        (replay/replay-with-sew-protocol scenario)
+  (let [result        (sew/replay-with-sew-protocol scenario)
         expected-fail (boolean (:expected-fail? scenario false))
         outcome       (:outcome result)
         pass?         (if expected-fail

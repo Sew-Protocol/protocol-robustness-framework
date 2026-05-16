@@ -73,13 +73,13 @@
      Return nil for protocols that do not produce transition metadata.")
 
   (resolve-id-alias [protocol event id-alias-map]
-    "Resolve any ID alias in the event params to its integer ID.
-     id-alias-map — {alias-string → integer-id}
+    "Resolve any ID alias in the event params to its entity ID.
+     id-alias-map — {alias-string → entity-id} (entity IDs may be any opaque type)
 
      Called by the replay engine before dispatching each event.  The protocol
      inspects the event params and, if an alias pattern is present, resolves it:
        - If the alias is in id-alias-map → return {:ok true :event event'}
-         where event' has the alias replaced with the integer ID.
+         where event' has the alias replaced with the entity ID.
        - If an alias pattern is present but not in id-alias-map → return
          {:ok false :error :unresolved-alias :alias str :seq n}.
        - If no alias is present → return {:ok true :event event} unchanged.
@@ -88,13 +88,14 @@
 
   (created-id [protocol action extra]
     "If action just created a new tracked entity and succeeded, return its
-     integer ID from the extra map (as returned by dispatch-action), else nil.
+     entity ID from the extra map (as returned by dispatch-action), else nil.
      Used by the replay engine to populate the id-alias-map after a successful
      create event annotated with :save-id-as.
 
-     Protocols that do not assign integer IDs to created entities return nil.")
+     Entity IDs may be any opaque type (integer, UUID, string, etc.).
+     Protocols that do not assign IDs to created entities return nil.")
 
-  (open-disputes [protocol world]
+  (open-entities [protocol world]
     "Return a seq of entity IDs that are still open/unresolved at end of scenario.
      The replay engine calls this after the event loop when :allow-open-disputes?
      is not set, to detect incomplete runs.
@@ -125,7 +126,28 @@
 
      Return #{} for protocols that produce no named metrics beyond the base set.")
 
-  (accum-protocol-metrics [protocol metrics event-tags event accepted?]
+  (adversarial-event? [protocol event agent]
+    "Return true when the event should be classified as adversarial for metric
+     purposes.
+
+     Called by the replay engine for each event to determine :attack-attempts,
+     :attack-successes, :rejected-attacks, and to enable the :funds-lost
+     calculation in accum-protocol-metrics.
+
+     event — the full event map {:action :params :adversarial? ...}
+     agent — the agent map from the scenario's :agents list, keyed by :id,
+             or nil when the agent is not found in the scenario.
+
+     The per-event :adversarial? flag (if true) must always return true,
+     enabling mixed-role actors to mark individual calls as adversarial.
+
+     Protocols should return false for any event they consider honest, even
+     if the calling agent's type/role/strategy would otherwise indicate an
+     attack.
+
+     Return false for protocols that do not model adversarial behaviour.")
+
+  (accum-protocol-metrics [protocol metrics event-tags event accepted? attack? world-before world-after]
     "Accumulate protocol-specific metrics for one completed event step.
 
      Called by the replay engine after base-metric accumulation for each event.
@@ -135,9 +157,15 @@
      event-tags — set of tags returned by classify-event for this event
      event      — the full event map {:action :params ...}
      accepted?  — true when the action result was :ok
+     attack?    — true when the engine classified the event as adversarial
+                  (per-event :adversarial? flag or agent role/strategy/type)
+     world-before — world state snapshot before the event was applied
+     world-after  — world state snapshot after the event was applied
 
      Return the updated metrics map.  Implementations should only update keys
-     declared in their metric-vocabulary; updating base-metric keys is an error.
+     declared in their metric-vocabulary; updating base-metric keys is an error,
+     except for :funds-lost which protocols may update to record value lost to
+     accepted adversarial actions (semantics are protocol-defined).
 
      Protocols that produce no named metrics beyond the base set should return
      metrics unchanged.")
