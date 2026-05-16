@@ -1,37 +1,26 @@
 (ns notebooks.telemetry
   (:require [nextjournal.clerk :as clerk]
-            [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [resolver-sim.db.store :as store]
+            [evaluation.store :as eval-store]
+            [clojure.java.jdbc :as jdbc]))
 
 ;; # Simulation Telemetry Explorer
-;; Browse and analyze simulation results and event traces.
+;; Browse and analyze simulation outcomes from the XTDB store.
 
-(defn load-run-results [run-dir]
-  (let [summary-file (io/file run-dir "summary.edn")]
-    (when (.exists summary-file)
-      (edn/read-string (slurp summary-file)))))
+(def ds (eval-store/->datasource))
 
-(defn- get-run-dirs []
-  (let [base (io/file "results")]
-    (when (.exists base)
-      (sort (filter #(.isDirectory %) (.listFiles base))))))
+(defn get-all-protocols []
+  (jdbc/query ds ["SELECT DISTINCT protocol_id FROM sim_trial_results"]))
+
+(defn load-batch-summary [protocol-id]
+  (jdbc/query ds [(str "SELECT * FROM sim_trial_results WHERE protocol_id = '" protocol-id "'")]))
 
 {::clerk/viewer :table}
 (clerk/table
- (for [dir (get-run-dirs)]
-   {:run (.getName dir)
-    :timestamp (str (.getName dir))
-    :summary (load-run-results dir)}))
+ (get-all-protocols))
 
-;; ## Trace Inspector
-;; Select a simulation run to inspect individual traces.
-
-(defn load-trace [run-dir trace-id]
-  ;; Assuming traces are persisted as EDN files in the run directory.
-  (let [file (io/file run-dir (str trace-id ".trace.edn"))]
-    (when (.exists file)
-      (edn/read-string (slurp file)))))
+;; ## Trial Results
+;; Select a protocol to view outcomes.
 
 (defn render-event [event]
   (clerk/html

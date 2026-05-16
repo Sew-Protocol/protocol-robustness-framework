@@ -1,5 +1,5 @@
 """
-sew_sim — Python adversarial scenario generator for the SEW simulation system.
+sim_api — Python adversarial scenario generator for the generic simulation system.
 
 Architecture
 ------------

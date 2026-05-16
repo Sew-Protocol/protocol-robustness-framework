@@ -236,7 +236,7 @@
      Protocols that produce no I/O projections should always return nil.")
 
   (advisory [protocol world request-type context]
-    "Return advisory analysis results for the given request type.
+    \"Return advisory analysis results for the given request type.
 
      Provides protocol-specific analysis without executing any state transitions.
      Used by the gRPC server for action suggestion, signal reporting, and
@@ -258,4 +258,29 @@
                                    Returns: {:score n :decomposition {...}}
 
      Return {:not-supported true} for request types the protocol does not implement.
-     Non-advisory protocols should always return {:not-supported true}.") )
+     Non-advisory protocols should always return {:not-supported true}.\")
+
+  (summarise-batch [protocol outcomes]
+    \"Compute summary statistics over a vector of :trial/* outcome maps.
+
+     outcomes — vector of trial outcome records fetched from the generic DB.
+                Fields used: :trial/outcome, :trial/invariants-ok?, :trial/divergence?,
+                :trial/strategy, and any protocol-specific fields restored from
+                the metrics blob.
+
+     Returns a map of summary statistics.  Implementations should ideally call
+     resolver-sim.db.store/summarise-outcomes for the generic base set.
+
+     Protocols that do not implement specific summary logic should return the
+     generic summary from store/summarise-outcomes.\")
+
+  (reference-model [protocol scenario]
+    \"Return the results of a reference implementation (idealised model) for
+     the given scenario.
+
+     Returns:
+       {:outcome      keyword  — e.g. :released, :refunded
+        :metrics      map      — e.g. {:profit-honest 100}
+        :id-alias-map map      — {alias → entity-id}}
+     
+     Return nil for protocols that do not provide a reference model.\") )

@@ -1,5 +1,5 @@
 """
-Thin gRPC client for the SEW SimulationEngine.
+Thin gRPC client for the generic Simulation Engine.
 
 Uses grpcio's channel.unary_unary with custom JSON serializers — no protoc
 compilation is required.  The Clojure server and this client agree on a
@@ -36,20 +36,21 @@ def _decode(data: bytes) -> Any:
 # Client
 # ---------------------------------------------------------------------------
 
-_SERVICE = "sew.simulation.SimulationEngine"
+_ENGINE_SVC = "simulation.engine.SimulationEngine"
+_ADVISORY_SVC = "simulation.engine.AdvisoryService"
 
 
 class SimulationClient:
     """
-    Thin wrapper around a gRPC channel for the SEW SimulationEngine.
+    Thin wrapper around a gRPC channel for the generic Simulation Engine.
 
     All methods are synchronous unary calls.  For streaming adversarial use,
-    call step() repeatedly from your own loop (see live_runner.py).
+    call step() repeatedly from your own loop.
 
     Example::
 
         with SimulationClient() as client:
-            r = client.start_session("s1", agents=[...])
+            r = client.start_session("s1", agents=[...], protocol_id="sew-v1")
             assert r["ok"]
             r = client.step("s1", {"seq": 0, "time": 1000, "agent": "buyer",
                                    "action": "create_escrow",
@@ -60,29 +61,53 @@ class SimulationClient:
 
     def __init__(self, host: str = "localhost", port: int = 7070):
         self._channel = grpc.insecure_channel(f"{host}:{port}")
+        
+        # Engine Service
         self._start = self._channel.unary_unary(
-            f"/{_SERVICE}/StartSession",
+            f"/{_ENGINE_SVC}/StartSession",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
         self._step = self._channel.unary_unary(
-            f"/{_SERVICE}/Step",
+            f"/{_ENGINE_SVC}/Step",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
         self._get_state = self._channel.unary_unary(
-            f"/{_SERVICE}/GetSessionState",
+            f"/{_ENGINE_SVC}/GetSessionState",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
         self._destroy = self._channel.unary_unary(
-            f"/{_SERVICE}/DestroySession",
+            f"/{_ENGINE_SVC}/DestroySession",
+            request_serializer=_encode,
+            response_deserializer=_decode,
+        )
+        
+        # Advisory Service
+        self._suggest_actions = self._channel.unary_unary(
+            f"/{_ADVISORY_SVC}/SuggestActions",
+            request_serializer=_encode,
+            response_deserializer=_decode,
+        )
+        self._session_signals = self._channel.unary_unary(
+            f"/{_ADVISORY_SVC}/SessionSignals",
+            request_serializer=_encode,
+            response_deserializer=_decode,
+        )
+        self._evaluate_payoff = self._channel.unary_unary(
+            f"/{_ADVISORY_SVC}/EvaluatePayoff",
+            request_serializer=_encode,
+            response_deserializer=_decode,
+        )
+        self._evaluate_attack_objective = self._channel.unary_unary(
+            f"/{_ADVISORY_SVC}/EvaluateAttackObjective",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
 
     # ------------------------------------------------------------------
-    # RPC methods
+    # Engine RPC methods
     # ------------------------------------------------------------------
 
     def start_session(
@@ -91,11 +116,12 @@ class SimulationClient:
         agents: list[dict],
         protocol_params: dict | None = None,
         initial_block_time: int = 1000,
+        protocol_id: str = "sew-v1",
     ) -> dict:
         """
         Allocate a new simulation session on the Clojure server.
 
-        agents — list of dicts: [{"id": "buyer1", "address": "0x...", "strategy": "honest"}]
+        agents — list of dicts: [{"id": "buyer1", "address": "0x...", "role": "buyer", "strategy": "honest"}]
         Returns {"session_id": str, "ok": bool, "error": str|None}
         """
         return self._start({
@@ -103,6 +129,7 @@ class SimulationClient:
             "agents": agents,
             "protocol_params": protocol_params or {},
             "initial_block_time": initial_block_time,
+            "protocol_id": protocol_id,
         })
 
     def step(self, session_id: str, event: dict) -> dict:
@@ -119,9 +146,6 @@ class SimulationClient:
            "trace_entry": dict|None,  # full step trace
            "halted": bool,
            "error": str|None}
-
-        The workflow_id assigned by a create_escrow action is in:
-          response["trace_entry"]["extra"]["workflow_id"]
         """
         return self._step({"session_id": session_id, "event": event})
 
@@ -135,6 +159,30 @@ class SimulationClient:
     def destroy_session(self, session_id: str) -> dict:
         """Free session resources. Returns {"session_id": str, "ok": bool}."""
         return self._destroy({"session_id": session_id})
+
+    # ------------------------------------------------------------------
+    # Advisory RPC methods
+    # ------------------------------------------------------------------
+
+    def suggest_actions(self, session_id: str, actor_id: str) -> dict:
+        """Return protocol-specific action suggestions for an actor."""
+        return self._suggest_actions({"session_id": session_id, "actor_id": actor_id})
+
+    def session_signals(self, session_id: str) -> dict:
+        """Return protocol-specific risk/economic signals."""
+        return self._session_signals({"session_id": session_id})
+
+    def evaluate_payoff(self, session_id: str, actor_id: str) -> dict:
+        """Return a realised payoff projection for an actor."""
+        return self._evaluate_payoff({"session_id": session_id, "actor_id": actor_id})
+
+    def evaluate_attack_objective(self, session_id: str, actor_id: str, objective: str | None = None) -> dict:
+        """Evaluate an objective-oriented score for adversarial search."""
+        return self._evaluate_attack_objective({
+            "session_id": session_id, 
+            "actor_id": actor_id, 
+            "objective": objective
+        })
 
     # ------------------------------------------------------------------
     # Context manager
@@ -161,6 +209,7 @@ def managed_session(
     protocol_params: dict | None = None,
     initial_block_time: int = 1000,
     session_id: str | None = None,
+    protocol_id: str = "sew-v1",
 ):
     """
     Context manager that creates a session on enter and destroys it on exit.
@@ -171,7 +220,7 @@ def managed_session(
             resp = client.step(sid, event)
     """
     sid = session_id or str(uuid.uuid4())
-    resp = client.start_session(sid, agents, protocol_params, initial_block_time)
+    resp = client.start_session(sid, agents, protocol_params, initial_block_time, protocol_id)
     if not resp.get("ok"):
         raise RuntimeError(f"StartSession failed: {resp.get('error')}")
     try:

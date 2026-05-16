@@ -11,9 +11,9 @@ returned by each step.
 
 Usage::
 
-    from sew_sim.grpc_client import SimulationClient, managed_session
-    from sew_sim.live_agents import HonestBuyerLive, HonestResolverLive
-    from sew_sim.live_runner import LiveRunner
+    from sim_api.grpc_client import SimulationClient, managed_session
+    from sim_api.live_agents import HonestBuyerLive, HonestResolverLive
+    from sim_api.live_runner import LiveRunner
 
     agents_meta = [
         {"id": "buyer",    "address": "0xbuyer",    "strategy": "honest"},
@@ -34,8 +34,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from sew_sim.grpc_client import SimulationClient, managed_session
-from sew_sim.live_agents import LiveAgent
+from sim_api.grpc_client import SimulationClient, managed_session
+from sim_api.live_agents import LiveAgent
 
 
 # ---------------------------------------------------------------------------

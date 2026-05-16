@@ -203,17 +203,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn summarise-outcomes
-  "Compute generic summary statistics over a vector of :trial/* outcome maps.
+  \"Compute generic summary statistics over a vector of :trial/* outcome maps.
 
    Uses only protocol-agnostic keys present on every trial outcome record.
 
    Returns:
      {:n              — total trials
       :by-strategy    — {strategy {:n :divergent :invariant-failures}}
-      :by-final-state — {final-state count}}"
+      :by-outcome     — {outcome count}}
+  \"
   [outcomes]
   (let [by-s (group-by :trial/strategy outcomes)
-        by-f (group-by :trial/final-state outcomes)]
+        by-o (group-by :trial/outcome outcomes)]
     {:n              (count outcomes)
      :by-strategy    (into {}
                            (map (fn [[s rows]]
@@ -221,4 +222,4 @@
                                       :divergent          (count (filter :trial/divergence? rows))
                                       :invariant-failures (count (remove :trial/invariants-ok? rows))}])
                                 by-s))
-     :by-final-state (into {} (map (fn [[f rows]] [f (count rows)]) by-f))}))
+     :by-outcome     (into {} (map (fn [[o rows]] [o (count rows)]) by-o))}))

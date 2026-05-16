@@ -60,22 +60,23 @@
     :else       m))
 
 (defn- normalise-agents
-  "Accept agents as seq of maps (string or keyword keys) and return keyword-keyed maps.
+  \"Accept agents as seq of maps (string or keyword keys) and return keyword-keyed maps.
    Converts :id :address :role :strategy to ensure downstream agent-index works correctly.
    :role = structural role (resolver/governance/keeper), 
-   :strategy = behavioral strategy (honest/rational/malicious)."
+   :strategy = behavioral strategy (honest/rational/malicious).\"
   [agents]
   (mapv (fn [a]
         (let [m (keywordize a)]
           (cond-> m
             (string? (:id m))       (update :id str)
             (string? (:address m))  (update :address str)
-            (string? (:role m))     (update :role str)
-            (string? (:strategy m)) (update :strategy str))))
+            (or (:type m) (not (:role m)))
+            (assoc :role (or (:role m) (:type m) \"buyer\"))
+            (not (:strategy m)) (assoc :strategy \"honest\"))))
         agents))
 
 (defn- normalise-params
-  "Accept protocol-params as a map (string or keyword keys) and return keyword-keyed map."
+  \"Accept protocol-params as a map (string or keyword keys) and return keyword-keyed map.\"
   [params]
   (if (map? params) (keywordize params) {}))
 
@@ -84,12 +85,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn session-exists?
-  "True when session-id is active."
+  \"True when session-id is active.\"
   [session-id]
   (contains? @sessions session-id))
 
 (defn create-session!
-  "Create a new session with the given agents and protocol-params.
+  \"Create a new session with the given agents and protocol-params.
 
    session-id         — caller-supplied string (typically a UUID)
    agents             — seq of agent maps {:id :address :role :strategy ...} (string keys OK)
@@ -101,13 +102,14 @@
 
    Atomicity: uses swap-vals! so that two concurrent create calls for the same
    session-id can never both succeed — one will see the key already present in
-   the old value and return :session-already-exists."
+   the old value and return :session-already-exists.\"
   ([session-id agents protocol-params initial-block-time]
-   (create-session! session-id agents protocol-params initial-block-time "sew-v1"))
+   (create-session! session-id agents protocol-params initial-block-time \"sew-v1\"))
   ([session-id agents protocol-params initial-block-time protocol-id]
-   (let [protocol   (get protocol-registry protocol-id)]
+   (let [pid        (or protocol-id \"sew-v1\")
+         protocol   (get protocol-registry pid)]
      (if-not protocol
-       {:ok false :error :unknown-protocol :detail {:protocol-id protocol-id
+       {:ok false :error :unknown-protocol :detail {:protocol-id pid
                                                      :known (keys protocol-registry)}}
        (let [agent-list (normalise-agents agents)
              params     (normalise-params protocol-params)

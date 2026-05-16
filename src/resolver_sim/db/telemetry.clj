@@ -54,7 +54,7 @@
      :metrics blob: protocol-specific fields from io-projection :telemetry-record.
 
    When result is a run-with-divergence-check map (contains :contract),
-   the :contract sub-map is used for trial fields and :divergence for diffs."
+   the :contract sub-map is used for trial fields and :divergence for diffs.\"
   [protocol trial-id batch-id params result]
   (let [cm    (if (contains? result :contract) (:contract result) result)
         div   (get result :divergence {})
@@ -114,18 +114,20 @@
         trials))
 
 ;; ---------------------------------------------------------------------------
-;; Query helpers (delegate to sew-store)
+;; Query helpers (protocol-agnostic)
 ;; ---------------------------------------------------------------------------
 
 (defn batch-summary
-  "Return summary statistics for a stored batch.
+  \"Return summary statistics for a stored batch.
 
    Fetches all trial outcomes for batch-id from XTDB and computes
-   aggregate statistics using resolver-sim.db.store/summarise-batch.
+   aggregate statistics using the protocol's summarise-batch method.
 
-   Returns {} when ds is nil."
-  [ds batch-id]
+   Returns {} when ds is nil.\"
+  [ds protocol batch-id]
   (if (nil? ds)
     {}
-    (-> (sew-db/sew-trial-outcomes ds {:batch-id batch-id})
-        sew-db/sew-summarise-batch)))
+    (let [outcomes (case (engine/protocol-id protocol)
+                     \"sew-v1\" (sew-db/sew-trial-outcomes ds {:batch-id batch-id})
+                     [])] ; Fallback for unknown protocols
+      (engine/summarise-batch protocol outcomes))))

@@ -41,7 +41,7 @@ import sys
 import time
 from typing import Any
 
-from sew_sim.live_runner import RunResult
+from sim_api.live_runner import RunResult
 from eth_failure_modes import (
     s24_f1_liveness_extraction,
     s25_f2_appeal_window_race,

@@ -69,7 +69,7 @@
           stored   (sew-db/sew-trial-outcomes *ds* {:batch-id *batch-id*})]
       (is (= 5 (count stored)) "5 rows written")
       (is (every? #(= :honest (:trial/strategy %)) stored) "all strategy=honest")
-      (is (every? #(= :released (:trial/final-state %)) stored)
+      (is (every? #(= :released (:trial/outcome %)) stored)
           "honest resolver releases funds → :released final state")
       (is (every? #(pos? (:trial/profit-honest %)) stored) "honest fee always positive")
       (is (every? :trial/invariants-ok? stored) "all invariants satisfied"))))
@@ -126,11 +126,11 @@
         (is (= 5 (count our-after)) "all 5 rows visible far after their valid-from")))))
 
 (deftest test-summarise-batch
-  (testing "batch-summary returns aggregate statistics matching raw data"
-    (let [summary (tel/batch-summary *ds* *batch-id*)]
-      (is (= 5 (:n summary)) "5 trials in batch")
-      (is (= {:released 5} (:by-final-state summary)) "all released by honest resolver")
-      (is (= 5 (get-in summary [:by-strategy :honest :n])) "5 honest trials")
+  (testing \"batch-summary returns aggregate statistics matching raw data\"
+    (let [summary (tel/batch-summary *ds* sew/protocol *batch-id*)]
+      (is (= 5 (:n summary)) \"5 trials in batch\")
+      (is (= {:released 5} (:by-outcome summary)) \"all released by honest resolver\")
+      (is (= 5 (get-in summary [:by-strategy :honest :n])) \"5 honest trials\")
       (is (zero? (get-in summary [:by-strategy :honest :invariant-failures]))
           "no invariant failures")
       (is (number? (get-in summary [:profit-honest :mean])) "mean profit-honest is numeric")

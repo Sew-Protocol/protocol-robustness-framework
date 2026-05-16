@@ -159,37 +159,37 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-summarise-batch
-  (let [outcomes [{:trial/strategy :honest   :trial/final-state :released
+  (let [outcomes [{:trial/strategy :honest   :trial/outcome :released
                    :trial/slashed? false :trial/divergence? false :trial/invariants-ok? true
                    :trial/profit-honest 50 :trial/profit-malice 50}
-                  {:trial/strategy :malicious :trial/final-state :refunded
+                  {:trial/strategy :malicious :trial/outcome :refunded
                    :trial/slashed? true  :trial/divergence? true  :trial/invariants-ok? true
                    :trial/profit-honest 50 :trial/profit-malice -150}
-                  {:trial/strategy :malicious :trial/final-state :resolved
+                  {:trial/strategy :malicious :trial/outcome :resolved
                    :trial/slashed? false :trial/divergence? false :trial/invariants-ok? false
                    :trial/profit-honest 50 :trial/profit-malice 50}]
         summary (sew-db/sew-summarise-batch outcomes)]
-    (testing "total count"
+    (testing \"total count\"
       (is (= 3 (:n summary))))
 
-    (testing "by-strategy counts"
+    (testing \"by-strategy counts\"
       (is (= 1 (get-in summary [:by-strategy :honest :n])))
       (is (= 2 (get-in summary [:by-strategy :malicious :n]))))
 
-    (testing "slashed count for malicious"
+    (testing \"slashed count for malicious\"
       (is (= 1 (get-in summary [:by-strategy :malicious :slashed]))))
 
-    (testing "invariant failures counted"
+    (testing \"invariant failures counted\"
       (is (= 1 (get-in summary [:by-strategy :malicious :invariant-failures]))))
 
-    (testing "by-final-state"
-      (is (= 1 (get-in summary [:by-final-state :released])))
-      (is (= 1 (get-in summary [:by-final-state :refunded]))))
+    (testing \"by-outcome\"
+      (is (= 1 (get-in summary [:by-outcome :released])))
+      (is (= 1 (get-in summary [:by-outcome :refunded]))))
 
-    (testing "profit-honest mean"
+    (testing \"profit-honest mean\"
       (is (= 50.0 (get-in summary [:profit-honest :mean]))))
 
-    (testing "profit-malice mean includes negative"
+    (testing \"profit-malice mean includes negative\"
       (let [mean (get-in summary [:profit-malice :mean])]
         (is (< mean 50.0))))))
 
@@ -198,14 +198,14 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-store-nil-ds-reads
-  (testing "sew-trial-outcomes with nil ds returns []"
+  (testing \"sew-trial-outcomes with nil ds returns []\"
     (is (= [] (sew-db/sew-trial-outcomes nil))))
 
-  (testing "sew-trial-outcomes-at with nil ds returns []"
+  (testing \"sew-trial-outcomes-at with nil ds returns []\"
     (is (= [] (sew-db/sew-trial-outcomes-at nil (java.util.Date.)))))
 
-  (testing "sew-escrow-events-for-trial with nil ds returns []"
-    (is (= [] (sew-db/sew-escrow-events-for-trial nil "any-id"))))
+  (testing \"sew-escrow-events-for-trial with nil ds returns []\"
+    (is (= [] (sew-db/sew-escrow-events-for-trial nil \"any-id\"))))
 
-  (testing "batch-summary with nil ds returns {}"
-    (is (= {} (tel/batch-summary nil :any-batch)))))
+  (testing \"batch-summary with nil ds returns {}\"
+    (is (= {} (tel/batch-summary nil sew/protocol :any-batch)))))

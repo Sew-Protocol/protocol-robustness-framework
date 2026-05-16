@@ -73,12 +73,14 @@ message StartRequest {
   // For other protocols: any keys accepted by their build-execution-context.
   google.protobuf.Struct protocol_params = 3;
   int64          initial_block_time = 4;  // block timestamp for world0
+  string         protocol_id        = 5;  // e.g. "sew-v1" (defaults to "sew-v1" if omitted)
 }
 
 message Agent {
   string id      = 1;  // logical name used in events ("buyer1")
   string address = 2;  // protocol-specific address ("0x...")
-  string type    = 3;  // "honest" | "attacker" | "resolver" etc.
+  string role    = 3;  // "buyer" | "seller" | "resolver" | "gov" etc.
+  string strategy = 4; // "honest" | "malicious" | "collusive" etc.
 }
 
 message StartResponse {

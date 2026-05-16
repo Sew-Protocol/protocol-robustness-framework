@@ -4,7 +4,7 @@ adversarial.py — Utilities for trace mutation and adversarial probing.
 
 import copy
 import uuid
-from sew_sim.grpc_client import managed_session
+from sim_api.grpc_client import managed_session
 
 class TracePerturber:
     """

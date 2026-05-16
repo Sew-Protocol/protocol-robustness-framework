@@ -1,12 +1,10 @@
 (ns resolver-sim.contract-model.replay
-  "Open-world scenario replay engine. (Protocol Simulation Kernel)
-  
-    Provides the deterministic harness for executing scenarios. This engine 
-    is designed as a protocol-agnostic template and is currently instantiated 
-    for the SEW Protocol. Implementation details (actions, invariants, 
-    snapshots) are protocol-specific.
+  \"Open-world scenario replay engine. (Protocol Simulation Kernel)
 
-    DisputeProtocol implementation.
+    Provides the deterministic harness for executing scenarios. This engine 
+    is designed as a protocol-agnostic template. Implementation details 
+    (actions, invariants, snapshots) are protocol-specific and provided by 
+    implementations of the DisputeProtocol interface.\"
 
     ## Replay Invariants
     After every successful transition:

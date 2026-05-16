@@ -21,7 +21,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sew_sim.grpc_client import SimulationClient, managed_session
+from sim_api.grpc_client import SimulationClient, managed_session
 
 
 AGENTS = [

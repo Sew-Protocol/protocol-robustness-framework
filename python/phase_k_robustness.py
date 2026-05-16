@@ -8,8 +8,8 @@ and Auto-Slashing on Reversal.
 
 from __future__ import annotations
 
-from sew_sim.grpc_client import SimulationClient
-from sew_sim.live_runner import RunResult
+from sim_api.grpc_client import SimulationClient
+from sim_api.live_runner import RunResult
 
 
 def s34_phase_k_auto_slash_robustness() -> tuple[RunResult, bool]:
