@@ -1,7 +1,7 @@
 (ns resolver-sim.io.trace-export
   "Export Clojure simulation traces to Forge-compatible JSON fixtures.
 
-   Converts the output of replay-scenario into the canonical trace format
+   Converts the output of replay-with-sew-protocol into the canonical trace format
    that TraceEquivalence.t.sol replays and verifies.
 
    Supports CDRS v0.2: standardized event schema, state buckets, atomic
@@ -330,7 +330,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn export-trace-fixture
-  "Convert a replay-scenario result into a Forge-compatible trace fixture map."
+  "Convert a replay-with-sew-protocol result into a Forge-compatible trace fixture map."
   [result scenario & {:keys [token-sym] :or {token-sym "TOKEN"}}]
   (let [trace       (:trace result)
         events      (:events scenario)
@@ -402,7 +402,7 @@
     (System/exit 1))
   (let [[scenario-path output-path] args
         scenario (scenarios/load-scenario-file scenario-path)
-        result   (replay/replay-scenario scenario)]
+        result   (replay/replay-with-sew-protocol scenario)]
     (if (= :invalid (:outcome result))
       (do (println "ERROR: scenario invalid:" (:halt-reason result))
           (System/exit 2))

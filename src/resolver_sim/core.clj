@@ -4,9 +4,14 @@
   (:require [resolver-sim.core.cli    :as cli]
             [resolver-sim.core.phases :as phases]
             [resolver-sim.io.params   :as params]
-            [resolver-sim.protocols.sew.invariant-runner :as invariant]
             [resolver-sim.server.grpc :as grpc])
   (:gen-class))
+
+;; SEW invariant runner resolved lazily so core.clj carries no compile-time
+;; dependency on the SEW protocol layer. Swap this sym to run a different
+;; protocol's invariant suite from the CLI.
+(def ^:private invariant-runner-sym
+  'resolver-sim.protocols.sew.invariant-runner/run-and-report)
 
 (defn -main [& args]
   (let [{:keys [options exit-message ok?]} (cli/validate-args args)]
@@ -15,7 +20,7 @@
           (System/exit (if ok? 0 1)))
 
       (if (:invariants options)
-        (System/exit (invariant/run-and-report))
+        (System/exit ((requiring-resolve invariant-runner-sym)))
 
         (if (:serve options)
           (try

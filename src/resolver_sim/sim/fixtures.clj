@@ -13,7 +13,7 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.diff :as diff]
-            [resolver-sim.canonical.actions :as canon]
+            [resolver-sim.protocols.sew.actions :as canon]
             [resolver-sim.sim.minimizer :as minimizer]
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.expectations :as expectations]
@@ -25,7 +25,7 @@
 
 (def impl->canonical
   "Reverse mapping for trace reporting."
-  (into {} (map (fn [[k v]] [v k]) resolver-sim.canonical.actions/action-map)))
+  (into {} (map (fn [[k v]] [v k]) resolver-sim.protocols.sew.actions/action-map)))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixture Loading
@@ -223,7 +223,7 @@
                                                  authority (assoc :authority-params authority)
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
-                               res (replay/replay-scenario effective-trace)
+                               res (replay/replay-with-sew-protocol effective-trace)
                                report (generate-golden-report suite-key res)
                                comparison (when (= mode :verify) (compare-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
                                
@@ -336,7 +336,7 @@
                               state (assoc :initial-block-time (:block-time state 1000))
                               authority (assoc :authority-params authority)
                               actors (assoc :agents (vec (concat (:agents trace []) actors))))
-            replay-result (replay/replay-scenario effective-trace)]
+            replay-result (replay/replay-with-sew-protocol effective-trace)]
         (when (and (= :fail (:outcome replay-result))
                    (= :invariant-violation (:halt-reason replay-result)))
           (let [minimized (minimizer/minimize effective-trace target-invariant)]

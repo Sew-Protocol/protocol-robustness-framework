@@ -77,47 +77,49 @@
 ;; cause validate-scenario to accept :theory/falsifies-if conditions that
 ;; the deterministic replay can never satisfy, producing silent :inconclusive
 ;; results for the wrong reason.
-(def known-metrics
-  "Canonical set of metric keys emitted by the deterministic replay engine.
 
-   Any metric referenced in :expectations/:metrics or :theory/:falsifies-if
-   must be in this set. validate-scenario rejects scenarios that reference
-   unknown metrics so that :inconclusive results are never caused by typos
-   or references to unimplemented metrics.
+(def base-metrics
+  "Universal metrics incremented by the replay engine for every protocol.
 
-   All metrics below are LIVE — incremented by accum-metrics on each event.
+   These counters are tracked regardless of which DisputeProtocol is active.
+   Protocol implementations declare their own additional metrics via
+   DisputeProtocol/metric-vocabulary; the full effective set is the union of
+   base-metrics and metric-vocabulary.
 
-     :total-escrows                  accepted create_escrow calls
-     :total-volume                   sum of :amount for accepted create_escrow
-     :disputes-triggered             accepted raise_dispute calls
-     :resolutions-executed           accepted execute_resolution calls
-     :pending-settlements-executed   accepted execute_pending_settlement calls
-     :attack-attempts                adversarial events (per-event flag or agent type=attacker)
-     :attack-successes               adversarial events that were accepted
-     :rejected-attacks               adversarial events that were rejected
-     :reverts                        all rejected events (blunt aggregate)
-     :invariant-violations           aggregate count of invariant failures
-     :double-settlements             accepted settlement after a prior resolution
-     :invalid-state-transitions      rejected events with a state-logic error code
-     :funds-lost                     decrease in total-held from accepted adversarial events
-
-   NON-NUMERIC internal key (not in this set, not checkable via evaluate-metric-op):
-     :invariant-results  — map {inv-kw :fail}; used only by evaluate-invariants."
-  #{:total-escrows
-    :total-volume
-    :disputes-triggered
-    :resolutions-executed
-    :pending-settlements-executed
-    :attack-attempts
+     :attack-attempts      adversarial events (per-event :adversarial? flag or agent type)
+     :attack-successes     adversarial events that were accepted
+     :rejected-attacks     adversarial events that were rejected
+     :reverts              all rejected events (blunt aggregate)
+     :invariant-violations aggregate count of invariant failures
+     :funds-lost           decrease in total-held from accepted adversarial events"
+  #{:attack-attempts
     :attack-successes
     :rejected-attacks
     :reverts
     :invariant-violations
-    :double-settlements
-    :invalid-state-transitions
-    :funds-lost
-    :negative-payoff-count
-    :coalition-net-profit})
+    :funds-lost})
+
+(def known-metrics
+  "Full metric set for the SEW Protocol reference implementation.
+
+   Kept for backward compatibility with existing SEW scenarios and tests.
+   New protocol implementations should declare their vocabulary via
+   DisputeProtocol/metric-vocabulary rather than extending this set.
+
+   = base-metrics ∪ SEW-specific metrics.
+
+   NON-NUMERIC internal key (not in this set, not checkable via evaluate-metric-op):
+     :invariant-results  — map {inv-kw :fail}; used only by evaluate-invariants."
+  (into base-metrics
+        #{:total-escrows
+          :total-volume
+          :disputes-triggered
+          :resolutions-executed
+          :pending-settlements-executed
+          :double-settlements
+          :invalid-state-transitions
+          :negative-payoff-count
+          :coalition-net-profit}))
 
 (defn- metric-key
   "Coerce a metric name (string or keyword) to a keyword, stripping any
@@ -132,14 +134,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn validate-scenario
-  "Validate a scenario map for structural correctness before replay."
-  [scenario]
-  (let [version     (str (:schema-version scenario))
-        agents      (:agents scenario)
-        events      (sort-by :seq (:events scenario))
-        known-ids   (set (map :id agents))
-        init-time   (get scenario :initial-block-time 1000)
-        agent-check (validate-agents agents)]
+  "Validate a scenario map for structural correctness before replay.
+   Accepts an optional effective-metrics set used to validate metric references
+   in :expectations and :theory. Defaults to known-metrics (SEW full set)."
+  ([scenario] (validate-scenario scenario known-metrics))
+  ([scenario effective-metrics]
+   (let [version     (str (:schema-version scenario))
+         agents      (:agents scenario)
+         events      (sort-by :seq (:events scenario))
+         known-ids   (set (map :id agents))
+         init-time   (get scenario :initial-block-time 1000)
+         agent-check (validate-agents agents)]
     (cond
       (not (contains? supported-versions version))
       {:ok false :error :unsupported-schema-version
@@ -212,20 +217,20 @@
        :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
 
       ;; All metric names in expectations.metrics and theory.falsifies-if must
-      ;; be in known-metrics. This prevents silent :inconclusive results caused
-      ;; by typos or references to unimplemented metrics.
-      (let [exp-metrics  (map #(metric-key (:name   %)) (get-in scenario [:expectations :metrics] []))
+      ;; be in effective-metrics. This prevents silent :inconclusive results
+      ;; caused by typos or references to unimplemented metrics.
+      (let [exp-metrics    (map #(metric-key (:name   %)) (get-in scenario [:expectations :metrics] []))
             theory-metrics (map #(metric-key (:metric %)) (get-in scenario [:theory :falsifies-if] []))
-            all-refs      (concat exp-metrics theory-metrics)
-            unknown       (vec (remove known-metrics all-refs))]
+            all-refs       (concat exp-metrics theory-metrics)
+            unknown        (vec (remove effective-metrics all-refs))]
         (seq unknown))
       {:ok false :error :unknown-metric-references
-       :detail {:unknown (vec (remove known-metrics
+       :detail {:unknown (vec (remove effective-metrics
                                 (concat (map #(metric-key (:name   %)) (get-in scenario [:expectations :metrics] []))
                                         (map #(metric-key (:metric %)) (get-in scenario [:theory :falsifies-if] [])))))
-                :known known-metrics}}
+                :known effective-metrics}}
 
-      :else {:ok true})))
+      :else {:ok true}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Metrics — accumulation
@@ -422,7 +427,8 @@
 (defn replay-with-protocol
   "Replay a scenario map using a specific DisputeProtocol implementation."
   [protocol scenario]
-  (let [validation (validate-scenario scenario)]
+  (let [effective-metrics (into base-metrics (engine/metric-vocabulary protocol))
+        validation (validate-scenario scenario effective-metrics)]
     (if-not (:ok validation)
       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics) :halt-reason (:error validation)}
       (let [agents   (:agents scenario)
@@ -467,9 +473,10 @@
                       {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics})
                     (recur (:world step) (rest events) new-trace new-metrics new-alias-map)))))))))))
 
-(defn replay-scenario
-  "Standard SEW entry point: replays using SEWProtocol.
-   Callers that need a different protocol should use replay-with-protocol directly."
+(defn replay-with-sew-protocol
+  "SEW convenience entry point: replays using SEWProtocol.
+   This is a SEW-specific helper, not the framework entry point.
+   For protocol-agnostic replay use replay-with-protocol directly."
   [scenario]
   (replay-with-protocol @(requiring-resolve 'resolver-sim.protocols.sew/protocol) scenario))
 

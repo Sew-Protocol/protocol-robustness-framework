@@ -106,12 +106,21 @@
      result-kw  — :ok, :rejected, or :invariant-violated
      error-kw   — error keyword when result-kw is :rejected, else nil
 
-     Metric tags recognised by the replay engine's accum-metrics for SEW:
-       :entity-created           accepted create action → :total-escrows, :total-volume
-       :dispute-raised           accepted raise action  → :disputes-triggered
-       :dispute-resolved         accepted resolve action → :resolutions-executed
-       :settlement-executed      accepted settle action → :pending-settlements-executed
-       :invalid-state-transition rejected with a state-logic error → :invalid-state-transitions
+     Tags drive metric accumulation in the replay engine's accum-metrics.
+     See protocol documentation for the tag vocabulary your implementation uses.
 
      Return #{} for untagged events.
-     Protocols that do not produce lifecycle metrics should always return #{}.") )
+     Protocols that do not produce lifecycle metrics should always return #{}.") 
+
+  (metric-vocabulary [protocol]
+    "Return the set of protocol-specific metric keywords this protocol may produce.
+
+     The replay engine merges this set with its own base-metrics (universal
+     counters such as :reverts, :attack-attempts, :invariant-violations) to
+     form the full set of valid metric references for scenario validation.
+
+     Declare every keyword that your classify-event implementation may cause to
+     be incremented — i.e. every key you expect to see in the :metrics map of
+     a replay result, beyond the universal base set.
+
+     Return #{} for protocols that produce no named metrics beyond the base set.") )

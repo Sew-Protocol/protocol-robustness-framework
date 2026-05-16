@@ -87,7 +87,7 @@
             metrics      (:metrics result {})
 
             ;; Build agent-id -> address map from the scenario agents list.
-            ;; Propagated by replay-scenario for SPE wealth lookup.
+            ;; Propagated by replay-with-sew-protocol for SPE wealth lookup.
             agents-by-id (reduce (fn [m a]
                                    (let [id   (or (:id a) "")
                                          addr (or (:address a) id)]

@@ -80,7 +80,7 @@
       (println "Scenario string: " scenario-str)
       (let [scenario (json/read-str scenario-str :key-fn keyword)
             _ (println "Executing scenario: " (:scenario-id scenario))
-            result (replay/replay-scenario scenario)]
+            result (replay/replay-with-sew-protocol scenario)]
         (println "Simulation result outcome: " (:outcome result))
         (update-state! result)
         (emit-notice result)

@@ -141,7 +141,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng) ; consume rng for determinism
                       sc (generate-honest-scenario params (str "h" i))
-                      r  (replay/replay-scenario sc)]
+                      r  (replay/replay-with-sew-protocol sc)]
                   {:scenario-id (:scenario-id sc)
                    :type        :honest
                    :outcome     (:outcome r)
@@ -154,7 +154,7 @@
            (vec (for [i (range n-samples)]
                   (let [_ (rng/next-long rng)
                         sc (generate-fraud-slash-scenario params (str "f" i))
-                        r  (replay/replay-scenario sc)]
+                        r  (replay/replay-with-sew-protocol sc)]
                     {:scenario-id (:scenario-id sc)
                      :type        :fraud-slash
                      :outcome     (:outcome r)
@@ -310,7 +310,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-pending-settlement-scenario params (str "p" i))
-                      r  (replay/replay-scenario sc)
+                      r  (replay/replay-with-sew-protocol sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed
                                                          :pending-settlements-executed])]
@@ -325,7 +325,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-appeal-slash-scenario params (str "a" i))
-                      r  (replay/replay-scenario sc)
+                      r  (replay/replay-with-sew-protocol sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed])]
                   {:scenario-id (:scenario-id sc)

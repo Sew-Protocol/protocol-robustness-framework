@@ -565,6 +565,17 @@
         (and accepted? (= action "execute_resolution"))      (conj :dispute-resolved)
         (and accepted? (= action "execute_pending_settlement")) (conj :settlement-executed)
         (and (= result-kw :rejected)
-             (contains? sew-state-error-codes error-kw))    (conj :invalid-state-transition)))))
+             (contains? sew-state-error-codes error-kw))    (conj :invalid-state-transition))))
+
+  (metric-vocabulary [_]
+    #{:total-escrows
+      :total-volume
+      :disputes-triggered
+      :resolutions-executed
+      :pending-settlements-executed
+      :double-settlements
+      :invalid-state-transitions
+      :negative-payoff-count
+      :coalition-net-profit}))
 
 (def protocol (SEWProtocol.))

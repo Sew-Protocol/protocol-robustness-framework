@@ -774,7 +774,7 @@
 ;;
 ;; This is a necessary but not sufficient condition for eventual resolution.
 ;; Sufficiency is enforced at the scenario level by the end-of-scenario liveness
-;; check in replay/replay-scenario (scenarios without :allow-open-disputes? true
+;; check in replay/replay-with-sew-protocol (scenarios without :allow-open-disputes? true
 ;; must have all disputes resolved before the event list is exhausted).
 ;; ---------------------------------------------------------------------------
 

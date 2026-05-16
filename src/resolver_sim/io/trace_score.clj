@@ -1,7 +1,7 @@
 (ns resolver-sim.io.trace-score
   "Scoring function for replay traces.
 
-   Assigns a numeric :trace-score to any replay-scenario result.  Higher
+   Assigns a numeric :trace-score to any replay-with-sew-protocol result.  Higher
    scores indicate traces that are more valuable for regression coverage:
 
      score = attacker-profit
@@ -56,7 +56,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn score-result
-  "Compute :trace-score for a replay-scenario result map.
+  "Compute :trace-score for a replay-with-sew-protocol result map.
 
    Returns the result map augmented with:
      :trace-score       — numeric score (higher = more interesting)
@@ -65,7 +65,7 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Works with any replay-scenario result regardless of :outcome."
+   Works with any replay-with-sew-protocol result regardless of :outcome."
   [result]
   (let [metrics             (:metrics result {})
         attack-successes    (:attack-successes metrics 0)

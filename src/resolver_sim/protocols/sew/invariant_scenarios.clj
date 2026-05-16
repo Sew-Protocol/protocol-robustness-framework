@@ -2,7 +2,7 @@
   "S01–S23 deterministic invariant scenarios as Clojure data.
 
    Each entry in `all-scenarios` is a scenario map accepted by
-   resolver-sim.contract-model.replay/replay-scenario.
+   resolver-sim.contract-model.replay/replay-with-sew-protocol.
 
    Events use :save-id-as annotations on create_escrow steps and string
    :workflow-id aliases (e.g. \"wf0\") on subsequent steps.  The replay

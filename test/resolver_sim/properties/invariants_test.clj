@@ -15,7 +15,7 @@
 (deftest generated-scenario-preserves-baseline-invariants
   (let [p (prop/for-all [seed (gen/large-integer* {:min 1 :max 100000})]
             (let [sc (scenario/build-scenario {:seed seed :max-steps 4})
-                  r  (replay/replay-scenario sc)]
+                  r  (replay/replay-with-sew-protocol sc)]
               (and (not= :invalid (:outcome r))
                    (not= :fail (:outcome r))
                    (nil? (:halt-reason r)))))
@@ -37,7 +37,7 @@
   (let [profiles [:timeout-boundary :same-block-ordering :dispute-flooding :withdrawal-under-exposure]
         results  (for [p profiles]
                    (let [sc (scenario/build-scenario {:seed 2026 :max-steps 6 :profile p})
-                         r  (replay/replay-scenario sc)]
+                         r  (replay/replay-with-sew-protocol sc)]
                      {:profile p :outcome (:outcome r) :halt-reason (:halt-reason r)}))]
     (is (every? #(not= :invalid (:outcome %)) results) (pr-str results))))
 
