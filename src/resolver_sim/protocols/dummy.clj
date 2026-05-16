@@ -67,6 +67,9 @@
   (metric-vocabulary [_]
     #{})
 
+  (accum-protocol-metrics [_ metrics _ _ _]
+    metrics)
+
   (trace-projection [_ _result]
     nil)
 

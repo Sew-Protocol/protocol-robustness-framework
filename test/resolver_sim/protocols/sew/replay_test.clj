@@ -827,7 +827,7 @@
         agent-index {}
         world-before {:total-held {} :block-time 1000}]
     (testing "violations map triggers increment"
-      (let [m (accum-fn base-metrics event trace-entry agent-index world-before)]
+      (let [m (accum-fn sew/protocol base-metrics event trace-entry agent-index world-before)]
         (is (= 1 (:invariant-violations m)))
         (is (= {:conservation-of-funds :fail} (:invariant-results m)))
         (is (not (contains? (:invariant-results m) :solvency))
@@ -847,7 +847,7 @@
                      :violations {:conservation-of-funds {:holds? false :violations ["mismatch"]}
                                   :no-negative-balances  {:holds? false :violations ["negative"]}
                                   :solvency              {:holds? true  :violations []}}}
-        m (accum-fn base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
     (is (= 1 (:invariant-violations m))
         "aggregate counter increments once per step regardless of violation count")
     (is (= {:conservation-of-funds :fail :no-negative-balances :fail}
@@ -865,7 +865,7 @@
         event       {:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                      :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
         trace-entry {:result :ok :world {:total-held {} :block-time 1000} :violations nil}
-        m (accum-fn base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
     (is (= 0 (:invariant-violations m)))
     (is (= {} (:invariant-results m)))))
 

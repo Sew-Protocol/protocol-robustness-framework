@@ -125,6 +125,23 @@
 
      Return #{} for protocols that produce no named metrics beyond the base set.")
 
+  (accum-protocol-metrics [protocol metrics event-tags event accepted?]
+    "Accumulate protocol-specific metrics for one completed event step.
+
+     Called by the replay engine after base-metric accumulation for each event.
+
+     protocol   — this protocol implementation (ignored by most implementations)
+     metrics    — current accumulated metrics map (after base-metric updates)
+     event-tags — set of tags returned by classify-event for this event
+     event      — the full event map {:action :params ...}
+     accepted?  — true when the action result was :ok
+
+     Return the updated metrics map.  Implementations should only update keys
+     declared in their metric-vocabulary; updating base-metric keys is an error.
+
+     Protocols that produce no named metrics beyond the base set should return
+     metrics unchanged.")
+
   (trace-projection [protocol result]
     "Return the terminal trace projection for this replay result.
 

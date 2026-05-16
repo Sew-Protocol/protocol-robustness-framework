@@ -136,8 +136,8 @@
 (defn validate-scenario
   "Validate a scenario map for structural correctness before replay.
    Accepts an optional effective-metrics set used to validate metric references
-   in :expectations and :theory. Defaults to known-metrics (SEW full set)."
-  ([scenario] (validate-scenario scenario known-metrics))
+   in :expectations and :theory. Defaults to base-metrics (universal counters)."
+  ([scenario] (validate-scenario scenario base-metrics))
   ([scenario effective-metrics]
    (let [version     (str (:schema-version scenario))
          agents      (:agents scenario)
@@ -265,9 +265,8 @@
   (let [held (:total-held world {})]
     (if (map? held) (apply + (vals held)) 0)))
 
-(defn- accum-metrics [metrics event trace-entry agent-index world-before]
+(defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (let [result-kw (:result trace-entry)
-        error-kw  (:error trace-entry)
         accepted? (= result-kw :ok)
         agent     (get agent-index (:agent event))
         ;; Per-event :adversarial? flag takes precedence over agent.type so
@@ -280,71 +279,45 @@
                       (= "attacker" (:role agent))
                       (= "attacker" (:type agent)))
         tags      (:event-tags trace-entry)
-        ;; double-settlements: a second accepted lifecycle-ending action on what
-        ;; is (for single-escrow scenarios) already a resolved/settled workflow.
-        ;; Uses aggregate resolutions-executed as a proxy — imprecise for
-        ;; multi-escrow traces but correct for the current corpus.
-        double-settle? (and accepted?
-                            (or (contains? tags :dispute-resolved)
-                                (contains? tags :settlement-executed))
-                            (pos? (:resolutions-executed metrics)))
         ;; funds-lost: total-held decrease caused by an adversarial accepted
         ;; action. Computed as max(0, held-before - held-after) so that
-        ;; refunds-into-held (impossible in normal operation) don't produce
-        ;; negative values. Works for multi-token traces since all tokens are
-        ;; summed. Does NOT fire for honest actions (attack? = false).
-        held-before (held-total world-before)
-        held-after  (held-total (:world trace-entry))
+        ;; refunds-into-held don't produce negative values.
+        ;; Does NOT fire for honest actions (attack? = false).
+        held-before      (held-total world-before)
+        held-after       (held-total (:world trace-entry))
         funds-lost-delta (if (and attack? accepted?)
                            (max 0 (- held-before held-after))
-                           0)]
-    (cond-> metrics
-      (contains? tags :entity-created)
-      (-> (update :total-escrows inc)
-          (update :total-volume + (get-in event [:params :amount] 0)))
+                           0)
+        base (cond-> metrics
+               (and attack? accepted?)
+               (update :attack-successes inc)
 
-      (contains? tags :dispute-raised)
-      (update :disputes-triggered inc)
+               attack?
+               (update :attack-attempts inc)
 
-      (contains? tags :dispute-resolved)
-      (update :resolutions-executed inc)
+               (and attack? (not accepted?))
+               (update :rejected-attacks inc)
 
-      (contains? tags :settlement-executed)
-      (update :pending-settlements-executed inc)
+               (not accepted?)
+               (update :reverts inc)
 
-      (and attack? accepted?)
-      (update :attack-successes inc)
+               ;; Increment aggregate violation counter and record which specific
+               ;; invariants failed.  :violations is a map {inv-kw result-map}
+               ;; from check-all / check-transition; only entries where :holds? is
+               ;; false should be marked :fail.
+               (:violations trace-entry)
+               (-> (update :invariant-violations inc)
+                   (update :invariant-results
+                           (fn [acc]
+                             (reduce (fn [m [kw r]]
+                                       (if (:holds? r) m (assoc m kw :fail)))
+                                     acc
+                                     (:violations trace-entry)))))
 
-      attack?
-      (update :attack-attempts inc)
-
-      (and attack? (not accepted?))
-      (update :rejected-attacks inc)
-
-      (not accepted?)
-      (update :reverts inc)
-
-      ;; Increment aggregate violation counter and record which specific
-      ;; invariants failed.  :violations is a map {inv-kw result-map}
-      ;; from check-all / check-transition; only entries where :holds? is
-      ;; false should be marked :fail.
-      (:violations trace-entry)
-      (-> (update :invariant-violations inc)
-          (update :invariant-results
-                  (fn [acc]
-                    (reduce (fn [m [kw r]]
-                              (if (:holds? r) m (assoc m kw :fail)))
-                            acc
-                            (:violations trace-entry)))))
-
-      double-settle?
-      (update :double-settlements inc)
-
-      (contains? tags :invalid-state-transition)
-      (update :invalid-state-transitions inc)
-
-      (pos? funds-lost-delta)
-      (update :funds-lost + funds-lost-delta))))
+               (pos? funds-lost-delta)
+               (update :funds-lost + funds-lost-delta))]
+    ;; Delegate protocol-specific metric accumulation to the protocol.
+    (engine/accum-protocol-metrics protocol base tags event accepted?)))
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
@@ -456,7 +429,7 @@
                       step     (process-step protocol context world event)
                       entry    (:trace-entry step)
                       new-trace   (conj trace entry)
-                      new-metrics (accum-metrics metrics event entry agent-index world)
+                      new-metrics (accum-metrics protocol metrics event entry agent-index world)
                       created     (when (and (= :ok (:result entry)) (:save-id-as raw-event))
                                     (engine/created-id protocol (:action event) (:extra entry)))
                       new-alias-map (if created

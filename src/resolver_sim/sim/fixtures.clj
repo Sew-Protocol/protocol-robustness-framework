@@ -10,7 +10,6 @@
             [clojure.walk :as walk]
             [clojure.data.json :as json]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew.actions :as canon]
             [resolver-sim.sim.minimizer :as minimizer]
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.expectations :as expectations]

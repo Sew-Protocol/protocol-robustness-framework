@@ -580,6 +580,33 @@
       :negative-payoff-count
       :coalition-net-profit})
 
+  (accum-protocol-metrics [_ metrics event-tags event accepted?]
+    ;; double-settle? checks :resolutions-executed BEFORE this event's increment
+    ;; (the metrics arg is the pre-event state), so order matters here.
+    (let [double-settle? (and accepted?
+                              (or (contains? event-tags :dispute-resolved)
+                                  (contains? event-tags :settlement-executed))
+                              (pos? (:resolutions-executed metrics)))]
+      (cond-> metrics
+        (contains? event-tags :entity-created)
+        (-> (update :total-escrows inc)
+            (update :total-volume + (get-in event [:params :amount] 0)))
+
+        (contains? event-tags :dispute-raised)
+        (update :disputes-triggered inc)
+
+        (contains? event-tags :dispute-resolved)
+        (update :resolutions-executed inc)
+
+        (contains? event-tags :settlement-executed)
+        (update :pending-settlements-executed inc)
+
+        double-settle?
+        (update :double-settlements inc)
+
+        (contains? event-tags :invalid-state-transition)
+        (update :invalid-state-transitions inc))))
+
   (trace-projection [_ result]
     (sew-proj/trace-end-projection result))
 

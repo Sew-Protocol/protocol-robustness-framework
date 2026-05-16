@@ -56,7 +56,7 @@
 (deftest test-budget-balance-pass
   (testing "terminal escrows, total-held = 0 → :pass"
     (let [proj (projection {:terminal? true :total-held {"USDC" 0}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :pass (:status result)))
       (is (= :hard (:severity result))))))
@@ -64,7 +64,7 @@
 (deftest test-budget-balance-fail
   (testing "terminal escrows but total-held > 0 → :fail"
     (let [proj (projection {:terminal? true :total-held {"USDC" 500}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
@@ -72,7 +72,7 @@
 (deftest test-budget-balance-not-applicable-non-terminal
   (testing "non-terminal escrows → :not-applicable"
     (let [proj (projection {:terminal? false :total-held {"USDC" 5000}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :not-applicable (:status result))))))
 
@@ -81,7 +81,7 @@
     (let [proj (projection {:terminal? false
                             :halt-reason :open-disputes-at-end
                             :total-held {"USDC" 5000}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :not-applicable (:status result))))))
 
@@ -386,7 +386,7 @@
     (let [proj (assoc (projection {})
                       :money-movement-summary
                       {:workflow-outcomes {0 {:terminal-state :refunded :path :refund}}})
-          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj)
+          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj sew-eq/mechanism-property-validators)
                      :force-refund-path-integrity)]
       (is (= :pass (:status result))))))
 
@@ -395,7 +395,7 @@
     (let [proj (assoc (projection {})
                       :money-movement-summary
                       {:workflow-outcomes {0 {:terminal-state :refunded :path :release}}})
-          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj)
+          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj sew-eq/mechanism-property-validators)
                      :force-refund-path-integrity)]
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
@@ -408,9 +408,9 @@
           fail-proj (assoc (projection {})
                            :money-movement-summary
                            {:pending-lifecycle {:unknown {:created 1 :cleared 2 :superseded 0}}})
-          pass-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] pass-proj)
+          pass-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] pass-proj sew-eq/mechanism-property-validators)
                      :pending-lifecycle-integrity)
-          fail-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] fail-proj)
+          fail-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] fail-proj sew-eq/mechanism-property-validators)
                      :pending-lifecycle-integrity)]
       (is (= :pass (:status pass-r)))
       (is (= :fail (:status fail-r))))))

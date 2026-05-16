@@ -59,6 +59,16 @@
    :offending []
    :requires  [reason]})
 
+(defn- not-applicable [property reason]
+  {:property  property
+   :status    :not-applicable
+   :severity  :soft
+   :basis     :not-applicable
+   :observed  nil
+   :expected  nil
+   :offending []
+   :requires  [reason]})
+
 ;; ---------------------------------------------------------------------------
 ;; SEW mechanism-property validators
 ;; ---------------------------------------------------------------------------
@@ -496,6 +506,81 @@
                       (filter #(= :fail (:status %)) profile-results))))))))
 
 ;; ---------------------------------------------------------------------------
+;; SEW-specific mechanism-property validators (moved from scenario/equilibrium)
+;; ---------------------------------------------------------------------------
+
+(defn- check-budget-balance
+  "No residual protocol-held funds remain after all relevant escrows reach
+   terminal states, excluding explicitly retained fees.
+
+   :not-applicable when escrows are still open (terminal? = false) or
+   when the scenario used allow-open-disputes?.
+   :pass when every token's total-held-by-token = 0.
+   :fail when any token still holds funds."
+  [{:keys [terminal-world trace-summary]}]
+  (let [halt     (:halt-reason trace-summary)
+        terminal (:terminal? terminal-world)]
+    (cond
+      (= halt :open-disputes-at-end)
+      (not-applicable :budget-balance "scenario allows open disputes at end")
+
+      (not terminal)
+      (not-applicable :budget-balance "non-terminal escrows remain; held funds are expected")
+
+      :else
+      (let [held (:total-held-by-token terminal-world {})]
+        (if (every? #(zero? (val %)) held)
+          (pass :budget-balance :single-trace-terminal-proxy
+                held "all total-held-by-token values equal zero when all escrows terminal")
+          (let [offending (filterv (fn [[_ v]] (pos? v)) held)]
+            (fail :budget-balance :single-trace-terminal-proxy
+                  held {:EXPECTED "all token balances zero" :actual held}
+                  offending)))))))
+
+(defn- check-force-refund-path-integrity
+  "Ensure no workflow marked :refunded is also marked as release path.
+   Placeholder integrity check over projection-level workflow outcomes."
+  [{:keys [money-movement-summary]}]
+  (let [outcomes (get money-movement-summary :workflow-outcomes {})
+        bad      (->> outcomes
+                      (filter (fn [[_ {:keys [terminal-state path]}]]
+                                (and (= :refunded terminal-state)
+                                     (= :release path))))
+                      (mapv first))]
+    (if (seq bad)
+      (fail :force-refund-path-integrity :single-trace-terminal-proxy
+            {:workflow-outcomes outcomes}
+            "refunded workflows must not have release path"
+            bad)
+      (pass :force-refund-path-integrity :single-trace-terminal-proxy
+            {:workflow-count (count outcomes)}
+            "all refunded workflows preserve refund-only terminal path"))))
+
+(defn- check-pending-lifecycle-integrity
+  "Pending lifecycle should not clear more entries than it created.
+   Also, superseded count cannot exceed cleared count."
+  [{:keys [money-movement-summary]}]
+  (let [pl (get-in money-movement-summary [:pending-lifecycle :unknown] {:created 0 :cleared 0 :superseded 0})
+        {:keys [created cleared superseded]} pl]
+    (cond
+      (> cleared created)
+      (fail :pending-lifecycle-integrity :single-trace-metric-proxy
+            pl
+            "pending cleared cannot exceed pending created"
+            [{:field :cleared :observed cleared :max-allowed created}])
+
+      (> superseded cleared)
+      (fail :pending-lifecycle-integrity :single-trace-metric-proxy
+            pl
+            "pending superseded cannot exceed pending cleared"
+            [{:field :superseded :observed superseded :max-allowed cleared}])
+
+      :else
+      (pass :pending-lifecycle-integrity :single-trace-metric-proxy
+            pl
+            "pending lifecycle counts are consistent"))))
+
+;; ---------------------------------------------------------------------------
 ;; Public validator registries
 ;; ---------------------------------------------------------------------------
 
@@ -503,9 +588,12 @@
   "Map of SEW-specific mechanism-property keyword → validator-fn.
    Returned by SEWProtocol/mechanism-property-validators and merged with the
    framework's built-in generic validators."
-  {:individual-rationality  check-individual-rationality
-   :collusion-resistance    check-collusion-resistance
-   :stake-flow-conservation check-stake-flow-conservation})
+  {:individual-rationality      check-individual-rationality
+   :collusion-resistance        check-collusion-resistance
+   :stake-flow-conservation     check-stake-flow-conservation
+   :budget-balance              check-budget-balance
+   :force-refund-path-integrity check-force-refund-path-integrity
+   :pending-lifecycle-integrity check-pending-lifecycle-integrity})
 
 (def equilibrium-concept-validators
   "Map of SEW-specific equilibrium-concept keyword → validator-fn.
