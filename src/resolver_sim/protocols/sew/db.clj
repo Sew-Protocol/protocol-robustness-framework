@@ -101,3 +101,40 @@
            :event/escrow-state (:event/entity-state ev)
            :event/block-time   (:event/block-time ev)})
         (store/entity-events-for-trial ds trial-id)))
+
+;; ---------------------------------------------------------------------------
+;; Aggregate helpers (SEW-specific — pure, no database required)
+;; ---------------------------------------------------------------------------
+
+(defn sew-summarise-batch
+  "Compute SEW-specific summary statistics over a vector of :trial/* outcome maps.
+
+   Extends the generic store/summarise-outcomes with SEW financial metrics
+   (:trial/slashed?, :trial/profit-honest, :trial/profit-malice).
+
+   Returns:
+     {:n              — total trials
+      :by-strategy    — {strategy {:n :slashed :divergent :invariant-failures}}
+      :by-final-state — {final-state count}
+      :profit-honest  {:min :max :mean}
+      :profit-malice  {:min :max :mean}}"
+  [outcomes]
+  (let [base  (store/summarise-outcomes outcomes)
+        by-s  (group-by :trial/strategy outcomes)
+        mean  (fn [xs k] (if (seq xs) (double (/ (reduce + (map k xs)) (count xs))) 0.0))
+        min*  (fn [xs k] (when (seq xs) (apply min (map k xs))))
+        max*  (fn [xs k] (when (seq xs) (apply max (map k xs))))]
+    (-> base
+        (update :by-strategy
+                (fn [by-s-base]
+                  (into {}
+                        (map (fn [[s rows]]
+                               [s (assoc (get by-s-base s {:n (count rows)})
+                                         :slashed (count (filter :trial/slashed? rows)))])
+                             by-s))))
+        (assoc :profit-honest {:min  (min* outcomes :trial/profit-honest)
+                               :max  (max* outcomes :trial/profit-honest)
+                               :mean (mean outcomes :trial/profit-honest)}
+               :profit-malice {:min  (min* outcomes :trial/profit-malice)
+                               :max  (max* outcomes :trial/profit-malice)
+                               :mean (mean outcomes :trial/profit-malice)}))))

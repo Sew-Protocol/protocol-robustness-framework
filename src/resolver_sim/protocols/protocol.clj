@@ -217,6 +217,7 @@
                      :world-view       → a world state map
                      :forge-trace      → a replay result map (as from replay-with-protocol)
                      :telemetry-record → a replay result map
+                     :event-records    → a map {:trial-id :params :result}
      target-type — one of:
        :world-view       — lean snapshot of world state for gRPC client responses.
                            Returns a flat map, e.g. {:block-time n :entity-count n}.
@@ -225,6 +226,36 @@
        :telemetry-record — protocol-specific metrics map for DB persistence.
                            Returns a flat map stored as a blob alongside generic
                            header fields in sim_trial_results.
+       :event-records    — vector of entity state-transition event maps for DB
+                           persistence in sim_entity_events. Each map must have:
+                           {:id :trial-id :entity-id :event-type :entity-state
+                            :block-time :valid-from}.
+                           Return [] for protocols that do not emit event records.
 
      Protocols may return nil for target types they do not support.
-     Protocols that produce no I/O projections should always return nil.") )
+     Protocols that produce no I/O projections should always return nil.")
+
+  (advisory [protocol world request-type context]
+    "Return advisory analysis results for the given request type.
+
+     Provides protocol-specific analysis without executing any state transitions.
+     Used by the gRPC server for action suggestion, signal reporting, and
+     payoff/objective evaluation.
+
+     world        — the current canonical world state map
+     request-type — one of:
+       :suggest-actions          — action templates for an actor.
+                                   context: {:actor-id string :agent-index map}
+                                   Returns: {:active-workflow-ids [...] :suggested-actions [...]}
+       :session-signals          — read-only risk/economic signals.
+                                   context: {}
+                                   Returns: a flat map of protocol-specific signals.
+       :evaluate-payoff          — realised payoff projection for an actor.
+                                   context: {:actor-id string}
+                                   Returns: a flat map of payoff fields.
+       :evaluate-attack-objective — adversarial objective score for an actor.
+                                   context: {:actor-id string :objective string-or-nil}
+                                   Returns: {:score n :decomposition {...}}
+
+     Return {:not-supported true} for request types the protocol does not implement.
+     Non-advisory protocols should always return {:not-supported true}.") )

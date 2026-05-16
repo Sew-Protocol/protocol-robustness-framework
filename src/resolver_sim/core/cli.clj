@@ -40,6 +40,8 @@
    ["-a" "--adversarial" "Run adversarial parameter search (falsification)"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
    [nil "--invariants" "Run S01-S41 deterministic invariant scenarios (in-process, no gRPC)"]
+   [nil "--protocol ID" "Protocol to use for --invariants (default: sew-v1)"
+    :default "sew-v1"]
    [nil  "--port PORT" "gRPC server port (used with --serve, default: 7070)"
     :default 7070
     :parse-fn #(Integer/parseInt %)]

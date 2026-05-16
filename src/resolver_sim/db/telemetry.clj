@@ -73,32 +73,12 @@
 (defn trial->event-records
   "Derive a sequence of sim_entity_events records from a run-trial result.
 
-   Reconstructs the state timeline from the outcome fields. Each record
-   has a unique :id derived from trial-id and the event step.
-
-   Currently emits up to 3 events per trial (SEW lifecycle):
-     :sew/escrow-created   — always
-     :sew/dispute-raised   — always (all adversarial trials raise a dispute)
-     :sew/escrow-finalized — final state (released/refunded/resolved)
-
-   NOTE: This function is SEW-specific by necessity — it reconstructs a synthetic
-   event timeline from run-trial outcome fields. A fully generic implementation
-   would require the protocol to provide an event-log via io-projection."
-  [_protocol trial-id params result]
-  (let [cm     (if (contains? result :contract) (:contract result) result)
-        btime  (long (get params :block-time 1000))
-        fstate (get cm :cm/final-state :pending)
-        mk     (fn [step etype estate t]
-                 {:id           (str trial-id "-" (name step))
-                  :trial-id     trial-id
-                  :entity-id    "0"
-                  :event-type   etype
-                  :entity-state estate
-                  :block-time   t
-                  :valid-from   (sim-date t)})]
-    [(mk :created  :sew/escrow-created  :pending    btime)
-     (mk :disputed :sew/dispute-raised  :disputed   (+ btime 10))
-     (mk :final    :sew/escrow-finalized fstate      (+ btime 200))]))
+   Delegates to (engine/io-projection protocol {:trial-id :params :result} :event-records).
+   The protocol is responsible for defining its own event timeline.
+   Returns [] when the protocol does not support event record projection."
+  [protocol trial-id params result]
+  (or (engine/io-projection protocol {:trial-id trial-id :params params :result result} :event-records)
+      []))
 
 ;; ---------------------------------------------------------------------------
 ;; Write functions (side-effecting — require XTDB datasource)
@@ -148,4 +128,4 @@
   (if (nil? ds)
     {}
     (-> (sew-db/sew-trial-outcomes ds {:batch-id batch-id})
-        ss/summarise-batch)))
+        sew-db/sew-summarise-batch)))

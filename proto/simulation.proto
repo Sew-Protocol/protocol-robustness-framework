@@ -39,6 +39,29 @@ service SimulationEngine {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AdvisoryService — optional protocol-specific analysis (no state mutation)
+//
+// These RPCs call DisputeProtocol/advisory with the matching request-type.
+// Non-advisory protocols return not_supported = true in the response.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service AdvisoryService {
+  // Return action templates for an actor given the current world state.
+  // (SEW: suggests create_escrow, raise_dispute, execute_resolution, etc.)
+  rpc SuggestActions          (SuggestActionsRequest)    returns (SuggestActionsResponse);
+
+  // Return read-only risk/economic signals (SEW: stakes, slashes, held totals).
+  rpc SessionSignals          (SessionSignalsRequest)    returns (SessionSignalsResponse);
+
+  // Return a realised payoff projection for an actor (SEW: stake + claimable - slashed).
+  rpc EvaluatePayoff          (EvaluatePayoffRequest)    returns (EvaluatePayoffResponse);
+
+  // Evaluate an objective-oriented score for adversarial strategy search
+  // (SEW default objective: resolver_fraud_profit).
+  rpc EvaluateAttackObjective (EvaluateAttackRequest)    returns (EvaluateAttackResponse);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // StartSession
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -149,4 +172,68 @@ message DestroyResponse {
   string session_id = 1;
   bool   ok         = 2;
   string error      = 3;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AdvisoryService messages
+// ─────────────────────────────────────────────────────────────────────────────
+
+message SuggestActionsRequest {
+  string session_id = 1;
+  string actor_id   = 2;
+}
+
+message SuggestActionsResponse {
+  bool   ok         = 1;
+  string session_id = 2;
+  string actor_id   = 3;
+  // Protocol-specific suggestions list; shape defined by the protocol's advisory impl.
+  google.protobuf.Struct suggestions = 4;
+  // true if the protocol does not implement :suggest-actions
+  bool not_supported = 5;
+  string error       = 6;
+}
+
+message SessionSignalsRequest {
+  string session_id = 1;
+}
+
+message SessionSignalsResponse {
+  bool   ok         = 1;
+  string session_id = 2;
+  // Protocol-specific signal map; shape defined by the protocol's advisory impl.
+  google.protobuf.Struct signals = 3;
+  bool not_supported = 4;
+  string error       = 5;
+}
+
+message EvaluatePayoffRequest {
+  string session_id = 1;
+  string actor_id   = 2;
+}
+
+message EvaluatePayoffResponse {
+  bool   ok         = 1;
+  string session_id = 2;
+  // Protocol-specific payoff breakdown; shape defined by the protocol's advisory impl.
+  google.protobuf.Struct payoff = 3;
+  bool not_supported = 4;
+  string error       = 5;
+}
+
+message EvaluateAttackRequest {
+  string session_id = 1;
+  string actor_id   = 2;
+  // Protocol-specific objective label (e.g. "resolver_fraud_profit" for SEW).
+  string objective  = 3;
+}
+
+message EvaluateAttackResponse {
+  bool   ok         = 1;
+  string session_id = 2;
+  double score      = 3;
+  // Protocol-specific decomposition of the score.
+  google.protobuf.Struct decomposition = 4;
+  bool not_supported = 5;
+  string error       = 6;
 }

@@ -85,8 +85,13 @@
   (protocol-id [_]
     "dummy")
 
-  (io-projection [_ _data _target-type]
-    nil))
+  (io-projection [_ _data target-type]
+    (case target-type
+      :event-records []
+      nil))
+
+  (advisory [_ _world _request-type _context]
+    {:not-supported true}))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared singleton

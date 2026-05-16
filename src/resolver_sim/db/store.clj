@@ -202,34 +202,23 @@
 ;; Aggregate helpers (pure — no database required)
 ;; ---------------------------------------------------------------------------
 
-(defn summarise-batch
-  "Compute summary statistics over a vector of :trial/* outcome maps.
+(defn summarise-outcomes
+  "Compute generic summary statistics over a vector of :trial/* outcome maps.
+
+   Uses only protocol-agnostic keys present on every trial outcome record.
 
    Returns:
      {:n              — total trials
-      :by-strategy    — {strategy {:n :slashed :divergent :invariant-failures}}
-      :by-final-state — {final-state count}
-      :profit-honest  {:min :max :mean}
-      :profit-malice  {:min :max :mean}}"
+      :by-strategy    — {strategy {:n :divergent :invariant-failures}}
+      :by-final-state — {final-state count}}"
   [outcomes]
-  (let [n    (count outcomes)
-        by-s (group-by :trial/strategy outcomes)
-        by-f (group-by :trial/final-state outcomes)
-        mean (fn [xs k] (if (seq xs) (double (/ (reduce + (map k xs)) (count xs))) 0.0))
-        min* (fn [xs k] (when (seq xs) (apply min (map k xs))))
-        max* (fn [xs k] (when (seq xs) (apply max (map k xs))))]
-    {:n              n
+  (let [by-s (group-by :trial/strategy outcomes)
+        by-f (group-by :trial/final-state outcomes)]
+    {:n              (count outcomes)
      :by-strategy    (into {}
                            (map (fn [[s rows]]
                                   [s {:n                  (count rows)
-                                      :slashed            (count (filter :trial/slashed? rows))
                                       :divergent          (count (filter :trial/divergence? rows))
                                       :invariant-failures (count (remove :trial/invariants-ok? rows))}])
                                 by-s))
-     :by-final-state (into {} (map (fn [[f rows]] [f (count rows)]) by-f))
-     :profit-honest  {:min  (min* outcomes :trial/profit-honest)
-                      :max  (max* outcomes :trial/profit-honest)
-                      :mean (mean outcomes :trial/profit-honest)}
-     :profit-malice  {:min  (min* outcomes :trial/profit-malice)
-                      :max  (max* outcomes :trial/profit-malice)
-                      :mean (mean outcomes :trial/profit-malice)}}))
+     :by-final-state (into {} (map (fn [[f rows]] [f (count rows)]) by-f))}))

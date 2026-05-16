@@ -14,6 +14,7 @@
             [resolver-sim.protocols.sew.invariants       :as inv]
             [resolver-sim.protocols.sew.projection       :as sew-proj]
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
+            [resolver-sim.protocols.sew.advisory         :as sew-adv]
             [resolver-sim.contract-model.replay          :as replay]))
 
 ;; ---------------------------------------------------------------------------
@@ -664,10 +665,37 @@
          :cm-afa            (long (get cm :cm/afa 0))
          :diffs             (get div :diffs)})
 
+      :event-records
+      ;; data is {:trial-id string :params map :result run-trial-result}.
+      ;; Reconstructs the 3-event SEW lifecycle timeline.
+      (let [{:keys [trial-id params result]} data
+            cm    (if (contains? result :contract) (:contract result) result)
+            btime (long (get params :block-time 1000))
+            fstate (get cm :cm/final-state :pending)
+            mk    (fn [step etype estate t]
+                    {:id           (str trial-id "-" (name step))
+                     :trial-id     trial-id
+                     :entity-id    "0"
+                     :event-type   etype
+                     :entity-state estate
+                     :block-time   t
+                     :valid-from   (java.util.Date. (* ^long t 1000))})]
+        [(mk :created  :sew/escrow-created   :pending  btime)
+         (mk :disputed :sew/dispute-raised   :disputed (+ btime 10))
+         (mk :final    :sew/escrow-finalized  fstate    (+ btime 200))])
+
       ;; :forge-trace is produced by io/trace-export which has full access to
       ;; the supporting subsystem namespaces.  Return nil; callers fall back to
       ;; the dedicated export functions.
       nil))
+
+  (advisory [_ world request-type context]
+    (case request-type
+      :suggest-actions          (sew-adv/suggest-actions          world context)
+      :session-signals          (sew-adv/session-signals          world context)
+      :evaluate-payoff          (sew-adv/evaluate-payoff          world context)
+      :evaluate-attack-objective (sew-adv/evaluate-attack-objective world context)
+      {:not-supported true}))
 
 ) ; end SEWProtocol deftype
 
