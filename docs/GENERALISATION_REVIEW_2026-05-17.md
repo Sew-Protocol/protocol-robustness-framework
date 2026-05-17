@@ -80,6 +80,47 @@ These currently exercise SEW internal lifecycle/resolution/state helpers directl
   - `resolver-sim.generators.equilibrium-test` passing after refactors.
   - No remaining references to deleted `resolver-sim.canonical.actions`.
 
+## Phase 2 update — Yield module status + liquidity behavior
+
+This phase extends the generalized yield DSL and Aave module behavior with
+explicit stress/freeze semantics that can be configured per scenario.
+
+### Added scenario DSL capability
+
+- File: `src/resolver_sim/yield/registry.clj`
+- `apply-yield-config` now accepts optional:
+  - `:modules -> <module-id> -> :module-status`
+- Stored at:
+  - `[:yield/module-status <module-id>]`
+
+### Aave behavior matrix (implemented)
+
+| Condition | Deposit | Withdraw |
+|---|---|---|
+| `module-status = :active` + liquidity available | allowed | allowed |
+| `module-status = :disabled-for-new-deposits` | blocked | allowed |
+| `module-status = :paused` | blocked | blocked |
+| `liquidity-mode in #{:shortfall :frozen :paused}` | blocked | blocked |
+
+Notes:
+- Module status is evaluated first for deposit policy (`:paused`, then
+  `:disabled-for-new-deposits`).
+- Liquidity blocked modes apply to both deposit and withdraw paths.
+- Withdraw still crystallizes unrealized yield when allowed.
+
+### Phase 2 coverage added
+
+- Runtime behavior:
+  - `src/resolver_sim/yield/modules/aave.clj`
+    - status helpers + guarded deposit/withdraw transitions.
+- Tests:
+  - `test/resolver_sim/protocols/sew/yield/failure_test.clj`
+    - shortfall blocks deposit/withdraw
+    - emergency unwind marks active matching-token positions as `:unwinding`
+    - paused status blocks deposit
+    - disabled-for-new-deposits blocks deposit
+    - scenario DSL `:module-status` initialization validated via protocol init.
+
 ---
 
 This document is intended as the handoff for the next generalisation implementation cycle.

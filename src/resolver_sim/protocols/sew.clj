@@ -16,7 +16,8 @@
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
             [resolver-sim.protocols.sew.db               :as sew-db]
-            [resolver-sim.contract-model.replay          :as replay]))
+            [resolver-sim.contract-model.replay          :as replay]
+            [resolver-sim.yield.registry                 :as yield-reg]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -127,7 +128,12 @@
             {:ok false :error :amount-out-of-safe-range
              :detail {:amount amount :max max-safe-amount}}
             (let [cres     (get p :custom-resolver)
-                  settings (t/make-escrow-settings {:custom-resolver cres})
+                  settings (t/make-escrow-settings
+                            {:custom-resolver cres
+                             :release-address (:release-address p)
+                             :yield-preset (:yield-preset p)
+                             :auto-release-time (:auto-release-time p)
+                             :auto-cancel-time (:auto-cancel-time p)})
                   result   (lc/create-escrow world caller token to amount settings snapshot)]
               (if (:ok result)
                 (assoc result :extra {:workflow-id (:workflow-id result)})
@@ -532,7 +538,9 @@
           tp           (:token-params scenario)
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
-          base         (t/empty-world init-time)]
+          base         (-> (t/empty-world init-time)
+                           yield-reg/init-yield-modules
+                           (yield-reg/apply-yield-config (:yield-config scenario)))]
       (if (and fot-bps (pos? fot-bps) (seq s-tokens))
         (reduce (fn [w tok] (assoc-in w [:token-fot-bps tok] fot-bps)) base s-tokens)
         base)))

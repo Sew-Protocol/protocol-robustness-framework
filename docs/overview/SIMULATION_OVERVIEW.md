@@ -37,6 +37,22 @@ remain reusable while protocol-specific rules stay isolated.
 - Resolver authority and registry behavior
 - SEW invariants, accounting, and projection semantics
 
+### Yield module status/risk controls (Phase 2)
+
+Yield behavior is configured through the scenario DSL and enforced at module op
+execution time:
+
+- Scenario config supports `:yield-config` with per-module `:module-status`.
+- Module status semantics (Aave v3 currently):
+  - `:active` — deposits and withdrawals allowed (subject to liquidity mode)
+  - `:disabled-for-new-deposits` — deposits blocked, withdrawals allowed
+  - `:paused` — deposits and withdrawals blocked
+- Liquidity stress modes (`:shortfall`, `:frozen`, `:paused`) block both deposit
+  and withdraw paths for affected token/module pairs.
+
+These controls are tested in focused yield failure tests and are intended to be
+replay/scenario-driven rather than ad-hoc fixture mutation.
+
 ## Reproducibility and testing posture
 
 - Determinism remains a core design property (explicit RNG where applicable,

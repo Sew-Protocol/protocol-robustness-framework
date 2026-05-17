@@ -14,11 +14,16 @@
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
-            [resolver-sim.economics.payoffs            :as payoffs]))
+            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.yield.ops                   :as yield-ops]
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
+
+(defn- escrow-yield-owner [escrow-id]
+  [:sew/escrow escrow-id])
 
 (defn- finalize-release [world workflow-id]
   (let [et      (t/get-transfer world workflow-id)
@@ -26,9 +31,16 @@
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
         net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)]
+        resolver (:dispute-resolver et)
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
-        (acct/distribute-yield workflow-id)
+        (lc/accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :released)
         (acct/sub-held token amt)
         (acct/record-released token net-amt)
         (acct/record-claimable workflow-id (:to et) net-amt)
@@ -42,9 +54,16 @@
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
         net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)]
+        resolver (:dispute-resolver et)
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
-        (acct/distribute-yield workflow-id)
+        (lc/accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :refunded)
         (acct/sub-held token amt)
         (acct/record-refunded token net-amt)
         (acct/record-claimable workflow-id (:from et) net-amt)

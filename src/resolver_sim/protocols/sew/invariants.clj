@@ -15,7 +15,9 @@
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [resolver-sim.protocols.sew.types         :as t]
-            [resolver-sim.protocols.sew.state-machine :as sm]))
+            [resolver-sim.protocols.sew.state-machine :as sm]
+            [resolver-sim.yield.invariants :as generic-yield-inv]
+            [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
@@ -54,13 +56,25 @@
                                         0
                                         (:escrow-transfers world))
                      ;; Yield sum: yield accrued to live escrows is part of held.
-                     yield-sum  (reduce (fn [acc [_ et]]
-                                          (if (and (= (:token et) token)
-                                                   (contains? live-states (:escrow-state et)))
-                                            (+ acc (:accumulated-yield et 0))
-                                            acc))
+                     yield-sum  (reduce (fn [acc [oid pos]]
+                                          (let [[owner-type escrow-id] oid
+                                                et (get-in world [:escrow-transfers escrow-id])]
+                                            (if (and (= owner-type :sew/escrow)
+                                                     (= (:token pos) token)
+                                                     (contains? live-states (:escrow-state et))
+                                                     (= (:status pos) :active))
+                                              (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
+                                              acc)))
                                         0
-                                        (:escrow-transfers world))
+                                        (:yield/positions world {}))
+                     ;; legacy accumulated-yield (if any still exists)
+                     legacy-yield-sum (reduce (fn [acc [_ et]]
+                                                (if (and (= (:token et) token)
+                                                         (contains? live-states (:escrow-state et)))
+                                                  (+ acc (:accumulated-yield et 0))
+                                                  acc))
+                                              0
+                                              (:escrow-transfers world))
                      ;; Sum of all active appeal bonds for this token.
                      ;; These are part of :total-held.
                      bond-sum (reduce + 0 (for [[wf agents] (:bond-balances world)
@@ -68,7 +82,7 @@
                                                 :let [et (get-in world [:escrow-transfers wf])]
                                                 :when (= (:token et) token)]
                                             amt))
-                     live-sum (+ escrow-sum yield-sum bond-sum)
+                     live-sum (+ escrow-sum yield-sum legacy-yield-sum bond-sum)
                      ext-bal  (when token-balances (get token-balances token 0))
                      ;; Internal: total-held must EXACTLY match live (escrow + bond) sum
                      internal-ok? (= live-sum held)
@@ -1007,8 +1021,12 @@
                   :resolver-not-frozen-on-assign  (resolver-not-frozen-on-assign? world)
                   :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
                   :reversal-slash-disabled        (reversal-slash-disabled? world)
-                   :resolver-capacity              (resolver-capacity-invariant? world)}
-         all?    (every? #(:holds? %) (vals results))]
+                  :resolver-capacity              (resolver-capacity-invariant? world)
+                  :yield-position-consistency     {:holds? (generic-yield-inv/check-position-consistency world) :violations nil}
+                  :yield-exposure                 {:holds? (sew-yield-inv/check-sew-yield-exposure world) :violations nil}}
+
+                  all?    (every? #(:holds? %) (vals results))]
+
      {:all-hold? all?
       :results   results})))
 
