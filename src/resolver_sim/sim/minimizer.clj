@@ -4,8 +4,8 @@
    triggers a target invariant violation.
 
    The core algorithm (fails?, minimize) is protocol-agnostic: pass any
-   DisputeProtocol implementation. The CLI entry point defaults to SEWProtocol
-   via lazy resolution."
+   DisputeProtocol implementation. The CLI entry point defaults to the
+   registry default protocol (resolver-sim.protocols.registry/default-protocol-id)."
   (:require [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
             [clojure.data.json :as json]
@@ -58,7 +58,7 @@
 
 (defn fails?
   "True if the scenario fails with the target-invariant violation.
-   Accepts an optional protocol (defaults to SEWProtocol via lazy require)."
+   Accepts an optional protocol (defaults to registry default protocol)."
   ([scenario] (fails? scenario nil))
   ([scenario target-invariant]
    (fails? scenario target-invariant
@@ -101,7 +101,7 @@
    Events annotated with :minimize/pin true are never removed, preserving
    causal pairs that are required to trigger a specific invariant violation.
 
-   Accepts an optional protocol (defaults to SEWProtocol via lazy require)."
+   Accepts an optional protocol (defaults to registry default protocol)."
   ([scenario target-invariant]
    (minimize scenario target-invariant
              (preg/get-protocol preg/default-protocol-id)))

@@ -1,7 +1,8 @@
 (ns resolver-sim.economics.payoffs
-  "Economic logic for the SEW protocol.
-   Centralizes payoff, fee, and bounty calculations for the SEW protocol
-   to ensure consistency across the simulation and contract model."
+  "Economic logic for dispute-protocol simulations.
+   Centralizes payoff, fee, and bounty calculations used by simulation and
+   contract-model flows. Fee semantics are currently aligned with the active
+   SEW accounting path."
   (:require [resolver-sim.protocols.sew.types :as t]))
 
 ;; Fee denominator constant

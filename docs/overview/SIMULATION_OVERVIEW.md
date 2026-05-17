@@ -3,7 +3,7 @@
 ## What this system is
 
 `sew-simulation` is a protocol simulation stack with a **generalized replay core**
-and a **SEW protocol adapter**.
+and a **protocol adapter layer** (with SEW as the current primary implementation).
 
 At a high level:
 
@@ -32,7 +32,7 @@ remain reusable while protocol-specific rules stay isolated.
 - Protocol interface and adapter boundary
 - A significant portion of simulation harness and I/O/telemetry plumbing
 
-### SEW-specific (current primary domain)
+### SEW-specific (current primary implementation)
 - Escrow lifecycle and dispute transitions
 - Resolver authority and registry behavior
 - SEW invariants, accounting, and projection semantics

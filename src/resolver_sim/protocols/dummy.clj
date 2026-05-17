@@ -1,7 +1,7 @@
 (ns resolver-sim.protocols.dummy
   "DummyProtocol — minimal always-pass DisputeProtocol implementation.
 
-   A SEW test double used to verify that the DisputeProtocol adapter layer
+   A protocol test double used to verify that the DisputeProtocol adapter layer
    compiles, type-checks, and that the generic replay engine machinery (alias
    resolution, metrics, trace shape) does not crash when every protocol method
    is a no-op.
@@ -15,7 +15,9 @@
    - classify-event: always #{} — no lifecycle metrics incremented.
    - Invariant checks: always pass (no invariants enforced).
 
-   This is a test double, not a useful protocol.  Use SEWProtocol for real runs.
+   This is a test double, not a useful protocol. Use a concrete registered
+   protocol (e.g. the current default from resolver-sim.protocols.registry)
+   for real runs.
 
    Layering: may import protocols/protocol only.
    Must NOT import contract_model/*, model/*, db/*, io/*."
