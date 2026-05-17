@@ -435,7 +435,9 @@
 (def ^:private res-level-2 "0xResolver2")
 
 (def ^:private appeal-params
-  {:resolver-fee-bps 50 :appeal-window-duration 500
+  ;; Keep appeal window longer than the 1-day escalation cooldown so
+  ;; multi-round escalation tests can validly appeal after cooldown.
+  {:resolver-fee-bps 50 :appeal-window-duration 200000
    :max-dispute-duration 2592000 :appeal-bond-protocol-fee-bps 0})
 
 (defn- make-step-context

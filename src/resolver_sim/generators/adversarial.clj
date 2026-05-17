@@ -43,8 +43,8 @@
 
 (defn valid-next-actions
   "Delegates to canonical action validity and applies adversarial profile sort bias."
-  [profile context world seq time]
-  (let [base (actions/valid-next-actions context world seq time)]
+  [profile protocol context world seq time]
+  (let [base (actions/valid-next-actions protocol context world seq time)]
     (sort-by #(profile-priority profile (:action %)) base)))
 
 (defn next-time

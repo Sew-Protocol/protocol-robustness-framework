@@ -3,7 +3,7 @@
   (:require [resolver-sim.generators.actions :as actions]
             [resolver-sim.generators.adversarial :as adv]
             [resolver-sim.protocols.protocol :as engine]
-            [resolver-sim.protocols.sew :as sew]))
+            [resolver-sim.protocols.registry :as preg]))
 
 (def ^:private phase1-action-order
   {"create_escrow" 0
@@ -33,9 +33,10 @@
 (defn generate-event-sequence
   "Generate a deterministic event sequence and evolved world.
    Returns {:events [...], :world world-final}."
-  [{:keys [seed max-steps context world0 initial-time profile]
+  [{:keys [seed max-steps context world0 initial-time profile protocol]
     :or {seed 42 max-steps 4 initial-time 1000 profile :phase1-lifecycle}}]
-  (let [rng (java.util.Random. (long seed))]
+  (let [rng (java.util.Random. (long seed))
+        protocol (or protocol (preg/get-protocol preg/default-protocol-id))]
     (loop [i 0
            world world0
            events []]
@@ -49,14 +50,14 @@
                         (adv/next-time profile world prev-t i)
                         (inc prev-t)))
               valid (if (= profile :phase1-lifecycle)
-                      (->> (actions/valid-next-actions context world seqn t)
+                       (->> (actions/valid-next-actions protocol context world seqn t)
                            (filter #(contains? phase1-allowed-actions (:action %)))
                            vec)
-                      (adv/valid-next-actions profile context world seqn t))
+                      (adv/valid-next-actions profile protocol context world seqn t))
               ev    (choose-event valid rng profile)]
           (if-not ev
             {:events events :world world}
-            (let [r (engine/dispatch-action sew/protocol context world ev)]
+             (let [r (engine/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
                 {:events events :world world}))))))))
@@ -65,9 +66,10 @@
   "Shrink-friendly interpreter: given an intent vector (nat indices),
    deterministically selects among currently valid actions and executes them.
    Shorter/changed intent vectors naturally shrink failing traces."
-  [{:keys [intents context world0 initial-time profile]
+  [{:keys [intents context world0 initial-time profile protocol]
     :or {initial-time 1000 profile :phase1-lifecycle}}]
-  (loop [i 0
+  (let [protocol (or protocol (preg/get-protocol preg/default-protocol-id))]
+    (loop [i 0
            world world0
            events []]
       (if (>= i (count intents))
@@ -80,16 +82,16 @@
                         (adv/next-time profile world prev-t i)
                         (inc prev-t)))
               valid (if (= profile :phase1-lifecycle)
-                      (->> (actions/valid-next-actions context world seqn t)
+                       (->> (actions/valid-next-actions protocol context world seqn t)
                            (filter #(contains? phase1-allowed-actions (:action %)))
                            vec)
-                      (adv/valid-next-actions profile context world seqn t))
+                      (adv/valid-next-actions profile protocol context world seqn t))
               idx   (nth intents i 0)
               ev    (when (seq valid)
                       (nth (vec valid) (mod idx (count valid))))]
           (if-not ev
             {:events events :world world}
-            (let [r (engine/dispatch-action sew/protocol context world ev)]
+             (let [r (engine/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
-                {:events events :world world})))))))
+                 {:events events :world world}))))))))

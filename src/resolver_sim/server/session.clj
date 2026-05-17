@@ -17,7 +17,7 @@
 
    Layering: server/* may import contract_model/*.  Must NOT import db/* or io/*."
   (:require [resolver-sim.protocols.protocol        :as engine]
-            [resolver-sim.protocols.sew             :as sew]
+            [resolver-sim.protocols.registry        :as preg]
             [resolver-sim.contract-model.replay     :as replay])
   (:import [java.util.concurrent.locks ReentrantLock]))
 
@@ -27,8 +27,9 @@
 
 (def ^:private protocol-registry
   "Map of protocol-id string → DisputeProtocol instance.
-   Add new protocols here to make them available to the gRPC server."
-  {"sew-v1" sew/protocol})
+   Sourced from the central protocol registry."
+  (into {} (map (fn [pid] [pid (preg/get-protocol pid)])
+                (preg/known-protocol-ids))))
 
 ;; ---------------------------------------------------------------------------
 ;; Session store
@@ -60,10 +61,10 @@
     :else       m))
 
 (defn- normalise-agents
-  \"Accept agents as seq of maps (string or keyword keys) and return keyword-keyed maps.
+  "Accept agents as seq of maps (string or keyword keys) and return keyword-keyed maps.
    Converts :id :address :role :strategy to ensure downstream agent-index works correctly.
    :role = structural role (resolver/governance/keeper), 
-   :strategy = behavioral strategy (honest/rational/malicious).\"
+   :strategy = behavioral strategy (honest/rational/malicious)."
   [agents]
   (mapv (fn [a]
         (let [m (keywordize a)]
@@ -71,12 +72,12 @@
             (string? (:id m))       (update :id str)
             (string? (:address m))  (update :address str)
             (or (:type m) (not (:role m)))
-            (assoc :role (or (:role m) (:type m) \"buyer\"))
-            (not (:strategy m)) (assoc :strategy \"honest\"))))
+            (assoc :role (or (:role m) (:type m) "buyer"))
+            (not (:strategy m)) (assoc :strategy "honest"))))
         agents))
 
 (defn- normalise-params
-  \"Accept protocol-params as a map (string or keyword keys) and return keyword-keyed map.\"
+  "Accept protocol-params as a map (string or keyword keys) and return keyword-keyed map."
   [params]
   (if (map? params) (keywordize params) {}))
 
@@ -85,12 +86,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn session-exists?
-  \"True when session-id is active.\"
+  "True when session-id is active."
   [session-id]
   (contains? @sessions session-id))
 
 (defn create-session!
-  \"Create a new session with the given agents and protocol-params.
+  "Create a new session with the given agents and protocol-params.
 
    session-id         — caller-supplied string (typically a UUID)
    agents             — seq of agent maps {:id :address :role :strategy ...} (string keys OK)
@@ -102,11 +103,11 @@
 
    Atomicity: uses swap-vals! so that two concurrent create calls for the same
    session-id can never both succeed — one will see the key already present in
-   the old value and return :session-already-exists.\"
+   the old value and return :session-already-exists."
   ([session-id agents protocol-params initial-block-time]
-   (create-session! session-id agents protocol-params initial-block-time \"sew-v1\"))
+   (create-session! session-id agents protocol-params initial-block-time preg/default-protocol-id))
   ([session-id agents protocol-params initial-block-time protocol-id]
-   (let [pid        (or protocol-id \"sew-v1\")
+   (let [pid        (or protocol-id preg/default-protocol-id)
          protocol   (get protocol-registry pid)]
      (if-not protocol
        {:ok false :error :unknown-protocol :detail {:protocol-id pid

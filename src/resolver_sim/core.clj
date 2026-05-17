@@ -5,14 +5,9 @@
             [resolver-sim.core.cli    :as cli]
             [resolver-sim.core.phases :as phases]
             [resolver-sim.io.params   :as params]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.server.grpc :as grpc])
   (:gen-class))
-
-;; Registry of protocol-specific invariant runners. Add new protocols here.
-;; Each value is a fully-qualified symbol for the run-and-report fn, resolved
-;; lazily so core.clj carries no compile-time dep on any protocol namespace.
-(def ^:private protocol-runners
-  {"sew-v1" 'resolver-sim.protocols.sew.invariant-runner/run-and-report})
 
 (defn -main [& args]
   (let [{:keys [options exit-message ok?]} (cli/validate-args args)]
@@ -21,12 +16,12 @@
           (System/exit (if ok? 0 1)))
 
       (if (:invariants options)
-        (let [protocol-id (:protocol options "sew-v1")
-              runner-sym  (get protocol-runners protocol-id)]
+        (let [protocol-id (:protocol options preg/default-protocol-id)
+              runner-sym  (preg/get-invariant-runner protocol-id)]
           (if runner-sym
             (System/exit ((requiring-resolve runner-sym)))
             (do (println (str "Unknown protocol: " protocol-id
-                              ". Available: " (str/join ", " (keys protocol-runners))))
+                              ". Available: " (str/join ", " (preg/known-protocol-ids))))
                 (System/exit 1))))
 
         (if (:serve options)

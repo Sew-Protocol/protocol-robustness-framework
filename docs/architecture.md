@@ -15,7 +15,7 @@
 ┌────────────────▼────────────────────────────────────────────┐
 │  Clojure gRPC server  (src/resolver_sim/server/)             │
 │                                                              │
-│  Session API: open-session / process-step / close-session    │
+│  Session API: StartSession / Step / DestroySession            │
 │                │                                             │
 │  contract_model/replay.clj  ← protocol-agnostic kernel       │
 │                │                                             │
@@ -49,7 +49,7 @@ oracle/             detection models (pure)
 ### Imperative shell (I/O only)
 
 ```
-db/                 XTDB persistence (trial outcomes, escrow events)
+db/                 XTDB persistence (protocol-agnostic trial/entity events)
   store.clj           table operations
   telemetry.clj       adapter: runner output → DB writes
 io/                 file I/O
@@ -77,12 +77,12 @@ server/             gRPC session server
 
 ## How a Scenario Runs
 
-1. Python opens a gRPC session with `open-session`
-2. Python sends a sequence of `process-step` calls, each encoding one actor action (e.g., `raise_dispute`, `resolve`, `escalate`)
+1. Python opens a gRPC session with `StartSession`
+2. Python sends a sequence of `Step` calls, each encoding one actor action (e.g., `raise_dispute`, `resolve`, `escalate`)
 3. The Clojure server applies the action to the current escrow state, runs all 28+ invariants via the SEWProtocol adapter, and returns a `trace_entry` with the new state, any invariant violations, and whether the step was accepted or rejected
 4. Python agents inspect the response and choose their next action (adversarial agents use this to decide whether to escalate, attack, or retreat)
 5. Python asserts the scenario's specific success condition (e.g., "attack succeeded at least once" or "0 invariant violations")
-6. Session is closed
+6. Session is closed with `DestroySession`
 
 ## The 28+ Protocol Invariants
 

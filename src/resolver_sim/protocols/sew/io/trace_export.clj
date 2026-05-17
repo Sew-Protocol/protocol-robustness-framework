@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.io.trace-export
-  \"Export Clojure simulation traces to Forge-compatible JSON fixtures.
+  "Export Clojure simulation traces to Forge-compatible JSON fixtures.
 
    Converts the output of replay-with-sew-protocol into the canonical trace format
    that TraceEquivalence.t.sol replays and verifies.

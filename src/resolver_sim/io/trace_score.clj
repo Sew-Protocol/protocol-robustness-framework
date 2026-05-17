@@ -1,7 +1,7 @@
 (ns resolver-sim.io.trace-score
   "Scoring function for replay traces.
 
-   Assigns a numeric :trace-score to any replay-with-sew-protocol result.  Higher
+   Assigns a numeric :trace-score to any replay-with-protocol result. Higher
    scores indicate traces that are more valuable for regression coverage:
 
      score = attacker-profit
@@ -33,9 +33,23 @@
      :top-profitable  — attack-successes > 0
      :liveness-fail   — liveness-failure? = true
      :cascade         — disputes-triggered > 1
-     :abnormal-slash  — invariant-violations > 0 AND slashing-related violation"
-  (:require [resolver-sim.protocols.sew.diff :as diff]
-            [resolver-sim.protocols.sew.trace-metadata   :as meta]))
+     :abnormal-slash  — invariant-violations > 0")
+
+(defn- classify-issue
+  "Protocol-agnostic issue classifier used by scoring.
+   Returns one of: :none, :liveness-failure, :invariant-failure, :attack-success, :mixed."
+  [result]
+  (let [metrics (:metrics result {})
+        comps   (:score-components result {})
+        liveness? (pos? (:liveness-failure comps 0))
+        inv?      (pos? (:invariant-violations metrics 0))
+        attack?   (pos? (:attack-successes metrics 0))]
+    (cond
+      (and liveness? inv?) :mixed
+      inv?                 :invariant-failure
+      liveness?            :liveness-failure
+      attack?              :attack-success
+      :else                :none)))
 
 ;; ---------------------------------------------------------------------------
 ;; Liveness check
@@ -56,7 +70,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn score-result
-  "Compute :trace-score for a replay-with-sew-protocol result map.
+  "Compute :trace-score for a replay-with-protocol result map.
 
    Returns the result map augmented with:
      :trace-score       — numeric score (higher = more interesting)
@@ -65,7 +79,7 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Works with any replay-with-sew-protocol result regardless of :outcome."
+   Works with any replay-with-protocol result regardless of :outcome."
   [result]
   (let [metrics             (:metrics result {})
         attack-successes    (:attack-successes metrics 0)
@@ -78,7 +92,7 @@
                                (* 5  liveness-penalty))]
     (assoc result
            :trace-score      score
-           :issue/type       (meta/classify-issue (assoc result :score-components {:liveness-failure liveness-penalty}))
+           :issue/type       (classify-issue (assoc result :score-components {:liveness-failure liveness-penalty}))
            :score-components {:attacker-profit     attack-successes
                               :invariant-violations invariant-violations
                               :liveness-failure     liveness-penalty})))

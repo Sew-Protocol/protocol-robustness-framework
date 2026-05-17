@@ -91,7 +91,17 @@
       nil))
 
   (advisory [_ _world _request-type _context]
-    {:not-supported true}))
+    {:not-supported true})
+
+  (summarise-batch [_ outcomes]
+    {:n (count outcomes)
+     :by-outcome (->> outcomes
+                      (group-by :trial/outcome)
+                      (map (fn [[k vs]] [k (count vs)]))
+                      (into {}))})
+
+  (reference-model [_ _scenario]
+    nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared singleton

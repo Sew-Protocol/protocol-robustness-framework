@@ -7,6 +7,7 @@
    DisputeProtocol implementation. The CLI entry point defaults to SEWProtocol
    via lazy resolution."
   (:require [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.registry :as preg]
             [clojure.data.json :as json]
             [clojure.walk :as walk]
             [clojure.java.io :as io]
@@ -61,7 +62,7 @@
   ([scenario] (fails? scenario nil))
   ([scenario target-invariant]
    (fails? scenario target-invariant
-           @(requiring-resolve 'resolver-sim.protocols.sew/protocol)))
+           (preg/get-protocol preg/default-protocol-id)))
   ([scenario target-invariant protocol]
    (let [res (replay/replay-with-protocol protocol scenario)
          last-entry (last (:trace res))
@@ -103,7 +104,7 @@
    Accepts an optional protocol (defaults to SEWProtocol via lazy require)."
   ([scenario target-invariant]
    (minimize scenario target-invariant
-             @(requiring-resolve 'resolver-sim.protocols.sew/protocol)))
+             (preg/get-protocol preg/default-protocol-id)))
   ([scenario target-invariant protocol]
    (println "Starting minimization of" (count (:events scenario)) "events...")
    (let [minimized

@@ -14,8 +14,11 @@
 
    Layering: sim/* may import contract_model/* and protocols/* per project rules."
   (:require [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew            :as sew]
+            [resolver-sim.protocols.registry       :as preg]
             [resolver-sim.stochastic.rng        :as rng]))
+
+(defn- default-protocol []
+  (preg/get-protocol preg/default-protocol-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario generation
@@ -142,7 +145,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng) ; consume rng for determinism
                       sc (generate-honest-scenario params (str "h" i))
-                      r  (sew/replay-with-sew-protocol sc)]
+                       r  (replay/replay-with-protocol (default-protocol) sc)]
                   {:scenario-id (:scenario-id sc)
                    :type        :honest
                    :outcome     (:outcome r)
@@ -155,7 +158,7 @@
            (vec (for [i (range n-samples)]
                   (let [_ (rng/next-long rng)
                         sc (generate-fraud-slash-scenario params (str "f" i))
-                        r  (sew/replay-with-sew-protocol sc)]
+                        r  (replay/replay-with-protocol (default-protocol) sc)]
                     {:scenario-id (:scenario-id sc)
                      :type        :fraud-slash
                      :outcome     (:outcome r)
@@ -311,7 +314,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-pending-settlement-scenario params (str "p" i))
-                      r  (sew/replay-with-sew-protocol sc)
+                       r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed
                                                          :pending-settlements-executed])]
@@ -326,7 +329,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-appeal-slash-scenario params (str "a" i))
-                      r  (sew/replay-with-sew-protocol sc)
+                       r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed])]
                   {:scenario-id (:scenario-id sc)

@@ -15,7 +15,6 @@
             [resolver-sim.protocols.sew.projection       :as sew-proj]
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
-            [resolver-sim.protocols.sew.io.trace-export  :as trace-export]
             [resolver-sim.protocols.sew.db               :as sew-db]
             [resolver-sim.contract-model.replay          :as replay]))
 
@@ -642,7 +641,7 @@
   (equilibrium-concept-validators [_]
     sew-eq/equilibrium-concept-validators)
 
-  (protocol-id [_] \"sew-v1\")
+  (protocol-id [_] "sew-v1")
 
   (summarise-batch [_ outcomes]
     (sew-db/sew-summarise-batch outcomes))
@@ -677,9 +676,9 @@
             btime (long (get params :block-time 1000))
             fstate (get cm :cm/final-state :pending)
             mk    (fn [step etype estate t]
-                    {:id           (str trial-id \"-\" (name step))
+                    {:id           (str trial-id "-" (name step))
                      :trial-id     trial-id
-                     :entity-id    \"0\"
+                     :entity-id    "0"
                      :event-type   etype
                      :entity-state estate
                      :block-time   t
@@ -691,7 +690,10 @@
       :forge-trace
       ;; data is a replay result map (contains :trace :scenario :metrics etc.)
       (let [scenario (:scenario data)]
-        (trace-export/export-trace-fixture data scenario))
+        (do
+          (require 'resolver-sim.protocols.sew.io.trace-export)
+          ((resolve 'resolver-sim.protocols.sew.io.trace-export/export-trace-fixture)
+           data scenario)))
 
       nil))
 

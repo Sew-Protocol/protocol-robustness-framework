@@ -12,8 +12,8 @@ It operates at two levels:
    execution of the SEW dispute protocol against adversarial strategies,
    recorded to XTDB.
 
-Results feed an engineering brief (`docs/results/`) that drives protocol
-implementation and remediation.
+Results feed engineering and research documentation in `docs/` (overview,
+evidence, testing, and challenge artifacts) that drive protocol remediation.
 
 ---
 
@@ -42,11 +42,9 @@ src/resolver_sim/
                           protocol logic to a DisputeProtocol implementation
 
   protocols/            ← DisputeProtocol interface + implementations (pure)
-    protocol.clj          DefProtocol: the 8-method plugin interface
-                            build-execution-context, dispatch-action,
-                            check-invariants-single, check-invariants-transition,
-                            world-snapshot, init-world,
-                            compute-projection, classify-transition
+    protocol.clj          DefProtocol: protocol adapter interface
+                            (execution context, dispatch, invariants,
+                             projection/metadata, advisory, persistence views)
     dummy.clj             DummyProtocol — always-pass proof-of-concept
     sew.clj               SEWProtocol adapter — wires sew/* into the interface
     sew/                  SEW Protocol implementation (pure)
@@ -55,13 +53,13 @@ src/resolver_sim/
       accounting.clj        fee/bond/slashing arithmetic
       resolution.clj        DR1/DR2/DR3 resolution logic
       authority.clj         resolver authority checks
-      invariants.clj        28+ post-condition checks
+      invariants.clj        protocol post-condition checks
       invariants/
         accounting.clj      accounting sub-invariants (FoT, projection hash)
       types.clj             SEW world-state shape, constructors, accessors
       runner.clj            top-level trial runner (live sim)
-      invariant_runner.clj  in-process S01–S41 runner
-      invariant_scenarios.clj S01–S41 deterministic scenarios
+      invariant_runner.clj  in-process deterministic scenario runner
+      invariant_scenarios.clj deterministic scenario definitions
       diff.clj              world-state hashing + EVM diff helpers
       trace_metadata.clj    transition/effect/resolution type vocabulary
       registry.clj          resolver stake/bond registry
@@ -94,8 +92,8 @@ src/resolver_sim/
   canonical/            ← canonical action vocabulary (pure)
 
   db/                   ← imperative shell: XTDB persistence
-    store.clj             sew_trial_outcomes + sew_escrow_events tables;
-                          summarise-batch (pure aggregate helper)
+    store.clj             sim_trial_results + sim_entity_events tables;
+                          summarise-outcomes (pure aggregate helper)
     telemetry.clj         adapter: protocols/sew/runner output → db writes
 
   io/                   ← imperative shell: file I/O
@@ -168,8 +166,8 @@ Two tables, auto-created by XTDB on first INSERT:
 
 | Table | Purpose |
 |---|---|
-| `sew_trial_outcomes` | One row per simulation trial — strategy, final state, profits, invariant results |
-| `sew_escrow_events` | One row per escrow state transition within a trial — valid-time semantics |
+| `sim_trial_results` | One row per simulation trial — protocol id, outcome, invariants/divergence, params/metrics blobs |
+| `sim_entity_events` | One row per entity state transition within a trial — protocol-agnostic event stream with valid-time semantics |
 
 Valid-time semantics: `_valid_from` = simulated block timestamp. Queries with
 `FOR VALID_TIME AS OF` reproduce the escrow state at any point in the simulated
@@ -231,17 +229,10 @@ New tables get new files here (e.g. `db/governance.clj`). Do not grow
 
 ## Validation phases
 
-Phases O through AI implemented (~30 phases). Results in `docs/results/`.
-
-| Range | Focus |
-|---|---|
-| O–X | Protocol lifecycle, adversarial strategies, divergence detection |
-| Y | Evidence fog and attention budget exhaustion |
-| Z | Legitimacy and reflexive participation loop |
-| AA | Governance as adversary (capacity attack + rule drift) |
-| AB–AI | Effort rewards, threshold sensitivity, trajectory analysis |
-
-Key findings documented in `docs/results/PHASE_YZA_FINDINGS.md`.
+The simulation stack includes multiple phase modules and adversarial programs
+that are run through `scripts/test.sh`, fixture suites, and research/evidence
+workflows. Treat exact phase ranges and counts as moving targets; use the
+testing and usage docs as the operational source of truth.
 
 ---
 
@@ -253,7 +244,7 @@ Key findings documented in `docs/results/PHASE_YZA_FINDINGS.md`.
 |---|---|---|
 | `all` (default) | unit + invariants + suites | `./scripts/test.sh` |
 | `unit` | Clojure unit tests only | `./scripts/test.sh unit` |
-| `invariants` | S01–S41 deterministic scenarios | `./scripts/test.sh invariants` |
+| `invariants` | deterministic scenario run (`--invariants`) | `./scripts/test.sh invariants` |
 | `suites` | Fixture suites (all-invariants + equilibrium-validation) | `./scripts/test.sh suites` |
 
 Unit test namespaces:

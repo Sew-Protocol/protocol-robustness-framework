@@ -125,9 +125,9 @@ run_contracts() {
   grep -q 'rpc DestroySession' proto/simulation.proto
 
   # Python client must target same service/methods
-  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sew_sim/grpc_client.py
-  grep -q 'StartSession' python/sew_sim/grpc_client.py
-  grep -q 'DestroySession' python/sew_sim/grpc_client.py
+  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
+  grep -q 'StartSession' python/sim_api/grpc_client.py
+  grep -q 'DestroySession' python/sim_api/grpc_client.py
 
   # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
   grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
@@ -447,7 +447,7 @@ run_coverage_gates() {
   require_clojure || return $?
   echo "Running transition/guard coverage report + gates..."
   mkdir -p "$ARTIFACT_DIR"
-  clojure -M:coverage-report -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
+  clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
   python - <<PY
 import json, sys
 from pathlib import Path
@@ -591,6 +591,52 @@ run_monte_carlo() {
   return $mc_fail
 }
 
+run_outcome_classification_report() {
+  echo ""
+  echo "Outcome classification report"
+  echo "============================="
+  python - <<PY
+import json
+from pathlib import Path
+
+artifact = Path("$ARTIFACT_FILE")
+if not artifact.exists():
+    print("No test summary found; skipping classification report.")
+    raise SystemExit(0)
+
+data = json.loads(artifact.read_text())
+targets = data.get("targets", [])
+
+hard_fail_targets = [t for t in targets if t.get("status") == "fail"]
+print("1) Gate/Test status")
+if hard_fail_targets:
+    print(f"   FAIL: {len(hard_fail_targets)} failing target(s)")
+    for t in hard_fail_targets:
+        print(f"   - {t.get('target')} (exit={t.get('exit_code')})")
+else:
+    print("   PASS: all executed targets passed")
+
+mc = next((t for t in targets if t.get("target") == "monte-carlo"), None)
+print("\n2) Model findings (non-gating diagnostics)")
+if not mc:
+    print("   Monte Carlo target not run in this mode.")
+    raise SystemExit(0)
+
+log_path = Path(mc.get("log_file", ""))
+if not log_path.exists():
+    print("   Monte Carlo log missing; cannot summarize findings.")
+    raise SystemExit(0)
+
+txt = log_path.read_text(errors="ignore")
+claim_fails = txt.count("❌")
+claim_pass = txt.count("✅")
+
+print(f"   Indicators in Monte Carlo output: ✅={claim_pass}, ❌={claim_fails}")
+print("   Note: these are model/theory outcome signals, not unit-test assertion failures.")
+PY
+  return $?
+}
+
 run_long_horizon() {
   require_clojure || return $?
   echo "Running long-horizon coverage suite (extended epoch scenarios)..."
@@ -711,6 +757,7 @@ case "$MODE" in
     run_target triage run_triage || FAILURES=$((FAILURES + 1))
     echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+    run_outcome_classification_report || true
     ;;
   *)
     echo "Unknown mode: $MODE"

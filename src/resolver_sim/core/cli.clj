@@ -1,7 +1,8 @@
 (ns resolver-sim.core.cli
   "CLI option definitions and argument validation.
    Knows nothing about phases or simulation logic."
-  (:require [clojure.tools.cli :refer [parse-opts]]))
+  (:require [clojure.tools.cli :refer [parse-opts]]
+            [resolver-sim.protocols.registry :as preg]))
 
 (def cli-options
   [["-p" "--params PATH" "Path to params.edn file"
@@ -40,8 +41,8 @@
    ["-a" "--adversarial" "Run adversarial parameter search (falsification)"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
    [nil "--invariants" "Run S01-S41 deterministic invariant scenarios (in-process, no gRPC)"]
-   [nil "--protocol ID" "Protocol to use for --invariants (default: sew-v1)"
-    :default "sew-v1"]
+   [nil "--protocol ID" (str "Protocol to use for --invariants (default: " preg/default-protocol-id ")")
+    :default preg/default-protocol-id]
    [nil  "--port PORT" "gRPC server port (used with --serve, default: 7070)"
     :default 7070
     :parse-fn #(Integer/parseInt %)]

@@ -19,6 +19,7 @@
   (:require [clojure.data.json          :as json]
             [clojure.string             :as str]
             [clojure.stacktrace         :as st]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.server.session :as session])
   (:import [io.grpc ServerBuilder MethodDescriptor MethodDescriptor$MethodType
                     MethodDescriptor$Marshaller
@@ -65,12 +66,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- make-method
-  \"Build a unary MethodDescriptor<map,map> for the given RPC name.\"
+  "Build a unary MethodDescriptor<map,map> for the given RPC name."
   [service-name rpc-name]
   (let [m (json-marshaller)]
     (-> (MethodDescriptor/newBuilder m m)
         (.setType MethodDescriptor$MethodType/UNARY)
-        (.setFullMethodName (str \"simulation.engine.\" service-name \"/\" rpc-name))
+        (.setFullMethodName (str "simulation.engine." service-name "/" rpc-name))
         (.build))))
 
 ;; ---------------------------------------------------------------------------
@@ -78,11 +79,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- handle-start
-  \"StartSession: allocate a new simulation session.
-   req: {:session-id :agents [{:id :address :role :strategy}] :protocol-params {:resolver-fee-bps ...} :initial-block-time :protocol-id}\"
+  "StartSession: allocate a new simulation session.
+   req: {:session-id :agents [{:id :address :role :strategy}] :protocol-params {:resolver-fee-bps ...} :initial-block-time :protocol-id}"
   [req]
   (let [sid        (:session-id req)
-        pid        (get req :protocol-id \"sew-v1\")
+        pid        (get req :protocol-id preg/default-protocol-id)
         agents     (:agents req [])
         params     (get req :protocol-params {})
         init-time  (get req :initial-block-time 1000)
@@ -191,11 +192,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-engine-service []
-  (let [start-m   (make-method \"SimulationEngine\" \"StartSession\")
-        step-m    (make-method \"SimulationEngine\" \"Step\")
-        destroy-m (make-method \"SimulationEngine\" \"DestroySession\")
-        state-m   (make-method \"SimulationEngine\" \"GetSessionState\")
-        svc-desc  (-> (ServiceDescriptor/newBuilder \"simulation.engine.SimulationEngine\")
+  (let [start-m   (make-method "SimulationEngine" "StartSession")
+        step-m    (make-method "SimulationEngine" "Step")
+        destroy-m (make-method "SimulationEngine" "DestroySession")
+        state-m   (make-method "SimulationEngine" "GetSessionState")
+        svc-desc  (-> (ServiceDescriptor/newBuilder "simulation.engine.SimulationEngine")
                       (.addMethod start-m)
                       (.addMethod step-m)
                       (.addMethod destroy-m)
@@ -209,11 +210,11 @@
         (.build))))
 
 (defn- build-advisory-service []
-  (let [suggest-m   (make-method \"AdvisoryService\" \"SuggestActions\")
-        signals-m   (make-method \"AdvisoryService\" \"SessionSignals\")
-        payoff-m    (make-method \"AdvisoryService\" \"EvaluatePayoff\")
-        objective-m (make-method \"AdvisoryService\" \"EvaluateAttackObjective\")
-        svc-desc    (-> (ServiceDescriptor/newBuilder \"simulation.engine.AdvisoryService\")
+  (let [suggest-m   (make-method "AdvisoryService" "SuggestActions")
+        signals-m   (make-method "AdvisoryService" "SessionSignals")
+        payoff-m    (make-method "AdvisoryService" "EvaluatePayoff")
+        objective-m (make-method "AdvisoryService" "EvaluateAttackObjective")
+        svc-desc    (-> (ServiceDescriptor/newBuilder "simulation.engine.AdvisoryService")
                         (.addMethod suggest-m)
                         (.addMethod signals-m)
                         (.addMethod payoff-m)
@@ -230,24 +231,24 @@
 ;; Server lifecycle
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private ^{:doc \"Running gRPC server instance.\"} server
+(defonce ^:private ^{:doc "Running gRPC server instance."} server
   (atom nil))
 
 (defn start!
-  \"Start the gRPC server on the given port (default 7070).
+  "Start the gRPC server on the given port (default 7070).
    Returns the started Server instance.
-   Throws if a server is already running.\"
-  ([]     (start! 7070))
+   Throws if a server is already running."
+  ([] (start! 7070))
   ([port]
    (when @server
-     (throw (ex-info \"gRPC server already running\" {:port port})))
+     (throw (ex-info "gRPC server already running" {:port port})))
    (let [srv (-> (ServerBuilder/forPort port)
                  (.addService (build-engine-service))
                  (.addService (build-advisory-service))
                  (.build)
                  (.start))]
      (reset! server srv)
-     (println (str \"[grpc] SimulationEngine listening on port \" port))
+     (println (str "[grpc] SimulationEngine listening on port " port))
      srv)))
 
 (defn port

@@ -20,8 +20,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- row->sew-trial-outcome
-  \"Convert a sim_trial_results row into a :trial/* namespaced map.
-   Unpacks the metrics_edn blob to restore individual SEW fields.\"
+  "Convert a sim_trial_results row into a :trial/* namespaced map.
+   Unpacks the metrics_edn blob to restore individual SEW fields."
   [row]
   (let [metrics (some-> (:metrics_edn row) xtdb/parse-edn)]
     (cond-> {:trial/id                (:_id row)
@@ -46,7 +46,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn sew-trial-outcomes
-  \"Query sim_trial_results for SEW trials (protocol_id = 'sew-v1').
+  "Query sim_trial_results for SEW trials (protocol_id = 'sew-v1').
    Returns :trial/* namespaced maps compatible with db.store/summarise-batch.
 
    Options:
@@ -54,16 +54,16 @@
      :strategy  — keyword filter (applied in Clojure after fetch)
      :limit     — max rows
 
-   Returns [] when ds is nil.\"
+   Returns [] when ds is nil."
   ([ds] (sew-trial-outcomes ds {}))
   ([ds {:keys [batch-id strategy limit]}]
    (if (nil? ds)
      []
-     (let [clauses (cond-> [\"protocol_id = 'sew-v1'\"]
-                     batch-id (conj (str \"batch_id = '\" (xtdb/kw->str batch-id) \"'\")))
-           where   (clojure.string/join \" AND \" clauses)
-           sql     (cond-> (str \"SELECT * FROM sim_trial_results WHERE \" where)
-                     limit (str \" LIMIT \" limit))
+     (let [clauses (cond-> ["protocol_id = 'sew-v1'"]
+                     batch-id (conj (str "batch_id = '" (xtdb/kw->str batch-id) "'")))
+           where   (clojure.string/join " AND " clauses)
+           sql     (cond-> (str "SELECT * FROM sim_trial_results WHERE " where)
+                     limit (str " LIMIT " limit))
            all     (mapv row->sew-trial-outcome
                          (jdbc/execute! ds [sql] xtdb/opts))]
        (if strategy
@@ -75,23 +75,23 @@
            (.toInstant d)))
 
 (defn sew-trial-outcomes-at
-  \"Bitemporal query for SEW trial outcomes AS OF a valid-time.
-   Returns :trial/* namespaced maps, or [] when ds is nil.\"
+  "Bitemporal query for SEW trial outcomes AS OF a valid-time.
+   Returns :trial/* namespaced maps, or [] when ds is nil."
   [ds valid-at]
   (if (nil? ds)
     []
     (mapv row->sew-trial-outcome
           (jdbc/execute! ds
-            [(str \"SELECT * FROM sim_trial_results \"
-                  \"FOR VALID_TIME AS OF TIMESTAMP '\"
+            [(str "SELECT * FROM sim_trial_results "
+                  "FOR VALID_TIME AS OF TIMESTAMP '"
                   (inst->iso valid-at)
-                  \"' WHERE protocol_id = 'sew-v1'\")]
+                  "' WHERE protocol_id = 'sew-v1'")]
             xtdb/opts))))
 
 (defn sew-escrow-events-for-trial
-  \"Return entity events for a trial in SEW-shaped maps (remaps generic
+  "Return entity events for a trial in SEW-shaped maps (remaps generic
    entity-id → workflow-id and entity-state → escrow-state).
-   Returns [] when ds is nil.\"
+   Returns [] when ds is nil."
   [ds trial-id]
   (mapv (fn [ev]
           {:event/id           (:event/id ev)
@@ -107,7 +107,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn sew-summarise-batch
-  \"Compute SEW-specific summary statistics over a vector of :trial/* outcome maps.
+  "Compute SEW-specific summary statistics over a vector of :trial/* outcome maps.
 
    Extends the generic store/summarise-outcomes with SEW financial metrics
    (:trial/slashed?, :trial/profit-honest, :trial/profit-malice).
@@ -116,8 +116,8 @@
      {:n              — total trials
       :by-strategy    — {strategy {:n :slashed :divergent :invariant-failures}}
       :by-outcome     — {outcome count}
-      :profit-honest  {:min :max :mean}
-      :profit-malice  {:min :max :mean}}\"
+       :profit-honest  {:min :max :mean}
+       :profit-malice  {:min :max :mean}}"
   [outcomes]
   (let [base  (store/summarise-outcomes outcomes)
         by-s  (group-by :trial/strategy outcomes)

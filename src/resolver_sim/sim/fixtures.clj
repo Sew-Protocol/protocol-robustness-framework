@@ -10,6 +10,7 @@
             [clojure.walk :as walk]
             [clojure.data.json :as json]
             [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.sim.minimizer :as minimizer]
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.expectations :as expectations]
@@ -187,12 +188,12 @@
 
 (defn run-suite
   "Execute a suite fixture: compose, replay traces, validate thresholds, and optionally save or verify golden reports.
-   An optional protocol can be supplied; defaults to the SEW protocol singleton."
+   An optional protocol can be supplied; defaults to the registry default protocol."
   ([suite-key] (run-suite suite-key nil nil))
   ([suite-key mode] (run-suite suite-key mode nil))
-  ([suite-key mode protocol]
+   ([suite-key mode protocol]
    (let [effective-protocol (or protocol
-                                @(requiring-resolve 'resolver-sim.protocols.sew/protocol))
+                                (preg/get-protocol preg/default-protocol-id))
          suite (compose-suite (load-fixture suite-key))
          traces (:traces suite [])
          thresholds (:thresholds suite {})
@@ -310,7 +311,7 @@
   ([suite-key target-invariant] (minimise-suite suite-key target-invariant nil))
   ([suite-key target-invariant protocol]
    (let [effective-protocol (or protocol
-                                @(requiring-resolve 'resolver-sim.protocols.sew/protocol))
+                                (preg/get-protocol preg/default-protocol-id))
          suite (compose-suite (load-fixture suite-key))
          traces (:traces suite [])
          proto (:protocol suite)

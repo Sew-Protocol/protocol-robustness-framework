@@ -1967,7 +1967,6 @@
     {:seq 1 :time 1060 :agent "buyer" :action "release"
      :params {:workflow-id "wf0"}}
     {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
-     {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
       :params {:workflow-id "wf0"
                :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id "wf0"}}}}]})
 

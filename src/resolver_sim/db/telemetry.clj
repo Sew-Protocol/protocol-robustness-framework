@@ -21,8 +21,7 @@
      ;; Without XTDB (default, tests):
      (telemetry/record-trial! nil protocol batch-id trial-id params result)"
   (:require [resolver-sim.db.store               :as ss]
-            [resolver-sim.protocols.protocol      :as engine]
-            [resolver-sim.protocols.sew.db        :as sew-db])
+            [resolver-sim.protocols.protocol      :as engine])
   (:import [java.util Date UUID]))
 
 ;; ---------------------------------------------------------------------------
@@ -54,7 +53,7 @@
      :metrics blob: protocol-specific fields from io-projection :telemetry-record.
 
    When result is a run-with-divergence-check map (contains :contract),
-   the :contract sub-map is used for trial fields and :divergence for diffs.\"
+   the :contract sub-map is used for trial fields and :divergence for diffs."
   [protocol trial-id batch-id params result]
   (let [cm    (if (contains? result :contract) (:contract result) result)
         div   (get result :divergence {})
@@ -118,16 +117,28 @@
 ;; ---------------------------------------------------------------------------
 
 (defn batch-summary
-  \"Return summary statistics for a stored batch.
+  "Return summary statistics for a stored batch.
 
    Fetches all trial outcomes for batch-id from XTDB and computes
    aggregate statistics using the protocol's summarise-batch method.
 
-   Returns {} when ds is nil.\"
+   Returns {} when ds is nil."
   [ds protocol batch-id]
   (if (nil? ds)
     {}
-    (let [outcomes (case (engine/protocol-id protocol)
-                     \"sew-v1\" (sew-db/sew-trial-outcomes ds {:batch-id batch-id})
-                     [])] ; Fallback for unknown protocols
+    (let [results (ss/trial-results ds {:batch-id batch-id
+                                        :protocol-id (engine/protocol-id protocol)})
+          outcomes (mapv (fn [r]
+                           (let [m (:result/metrics r)]
+                             (cond-> {:trial/id             (:result/id r)
+                                      :trial/batch-id       (:result/batch-id r)
+                                      :trial/outcome        (:result/outcome r)
+                                      :trial/invariants-ok? (:result/invariants-ok? r)
+                                      :trial/divergence?    (:result/divergence? r)
+                                      :trial/params         (:result/params r)
+                                      :trial/violations     (:result/violations r)}
+                               (map? m) (merge (into {}
+                                                     (for [[k v] m]
+                                                       [(keyword "trial" (name k)) v]))))))
+                         results)]
       (engine/summarise-batch protocol outcomes))))

@@ -1,15 +1,14 @@
 (ns resolver-sim.contract-model.replay
-  \"Open-world scenario replay engine. (Protocol Simulation Kernel)
+  "Open-world scenario replay engine. (Protocol Simulation Kernel)
 
-    Provides the deterministic harness for executing scenarios. This engine 
-    is designed as a protocol-agnostic template. Implementation details 
-    (actions, invariants, snapshots) are protocol-specific and provided by 
-    implementations of the DisputeProtocol interface.\"
+   Provides the deterministic harness for executing scenarios. This engine
+   is designed as a protocol-agnostic template. Implementation details
+   (actions, invariants, snapshots) are protocol-specific and provided by
+   implementations of the DisputeProtocol interface.
 
-    ## Replay Invariants
-    After every successful transition:
-      1. protocol/check-invariants-single
-      2. protocol/check-invariants-transition"
+   Replay invariants (after every successful transition):
+     1. protocol/check-invariants-single
+     2. protocol/check-invariants-transition"
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
@@ -406,4 +405,5 @@
 (defn result->json-str
   "Serialize a replay result to a JSON string."
   [result]
-  (json/write-str result :key-fn kw->json-key :value-fn kw-val->str))
+  (let [serializable (dissoc result :protocol)]
+    (json/write-str serializable :key-fn kw->json-key :value-fn kw-val->str)))

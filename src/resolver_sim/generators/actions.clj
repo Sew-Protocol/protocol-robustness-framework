@@ -1,7 +1,6 @@
 (ns resolver-sim.generators.actions
   "State-aware action generation using protocol dispatch as the source of truth."
-  (:require [resolver-sim.protocols.protocol :as engine]
-            [resolver-sim.protocols.sew :as sew]))
+  (:require [resolver-sim.protocols.protocol :as engine]))
 
 (def ^:private buyer-id "buyer")
 (def ^:private seller-id "seller")
@@ -49,10 +48,10 @@
 
 (defn valid-next-actions
   "Return protocol-valid next events for this world at seq/time.
-   Uses SEW dispatch to validate candidate actions and avoid shadow logic."
-  [context world seq time]
+   Uses protocol dispatch to validate candidate actions and avoid shadow logic."
+  [protocol context world seq time]
   (->> (candidate-events world seq time)
        (filter (fn [ev]
-                 (let [r (engine/dispatch-action sew/protocol context world ev)]
+                 (let [r (engine/dispatch-action protocol context world ev)]
                    (:ok r))))
        vec))
