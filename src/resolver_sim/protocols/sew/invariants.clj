@@ -16,6 +16,7 @@
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [resolver-sim.protocols.sew.types         :as t]
             [resolver-sim.protocols.sew.state-machine :as sm]
+            [resolver-sim.time.invariants :as time-inv]
             [resolver-sim.yield.invariants :as generic-yield-inv]
             [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
 
@@ -1039,6 +1040,10 @@
   [world-before world-after]
   (let [results {:terminal-states-unchanged
                  (terminal-states-unchanged? world-before world-after)
+                 :time-non-decreasing
+                 (time-inv/non-decreasing-time? world-before world-after)
+                 :time-no-action-after-finality
+                 (time-inv/no-action-after-finality? world-before world-after)
                  :finalization-accounting-correct
                  (finalization-accounting-correct? world-before world-after)
                  :escalation-level-monotonic
