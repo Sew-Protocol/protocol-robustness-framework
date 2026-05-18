@@ -2,15 +2,15 @@
 
 ## What this system is
 
-`sew-simulation` is a protocol simulation stack with a **generalized replay core**
-and a **protocol adapter layer** (with SEW as the current primary implementation).
+`sew-simulation` is an adapter-oriented robustness framework with a **framework substrate**
+and a **protocol adapter layer** (with SEW as the current **reference adapter/reference implementation**).
 
 At a high level:
 
 - The replay kernel (`contract_model/replay.clj`) is protocol-agnostic.
 - Protocol logic is provided via the `DisputeProtocol` interface
   (`protocols/protocol.clj`).
-- SEW is the primary implementation (`protocols/sew.clj` + `protocols/sew/*`).
+- SEW is the current reference adapter/reference implementation (`protocols/sew.clj` + `protocols/sew/*`).
 
 This allows the simulation engine, fixtures, and many testing workflows to
 remain reusable while protocol-specific rules stay isolated.
@@ -38,6 +38,9 @@ remain reusable while protocol-specific rules stay isolated.
 ### SEW bespoke implementation (production-grade for this repo)
 - `protocols/sew/*`
 - `yield/modules/aave.clj` and SEW-integrated yield flows
+
+SEW should be treated as the reference implementation (reference study), not as
+proof that all protocol semantics are already framework-generic.
 
 ### Generic adapters (stable API surface; SEW default providers today)
 - `generators/actions.clj` → `generators/sew/actions.clj`
@@ -101,6 +104,8 @@ For current test shape and suite details, see:
   `docs/architecture/ARCHITECTURE.md`
 - Adapter implementation boundaries and authoring:
   `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`
+- Framework substrate vs adapter vs reference implementation vs research track:
+  `docs/framework-boundaries.md`
 - Reusable adapter/harness design notes:
   `docs/overview/REUSABLE_COMPONENTS.md`
 - Use-of-funds accounting contract and drift interpretation:

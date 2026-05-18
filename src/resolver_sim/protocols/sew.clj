@@ -1,5 +1,11 @@
 (ns resolver-sim.protocols.sew
-  "SEWProtocol — implementation of tiered protocol interfaces for the SEW state machine."
+  "SEWProtocol — SEW reference adapter/reference implementation of tiered protocol interfaces.
+
+   Boundary note:
+   - This namespace is the canonical SEW adapter for the framework substrate.
+   - Reusable adapter contracts are defined in protocols/protocol.clj.
+   - Domain semantics implemented here remain SEW-specific unless explicitly
+     promoted via adapter-facing contracts."
   (:require [resolver-sim.protocols.protocol             :as proto]
             [resolver-sim.protocols.sew.types            :as t]
             [resolver-sim.protocols.sew.diff             :as diff]

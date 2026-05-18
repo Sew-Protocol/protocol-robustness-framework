@@ -89,6 +89,15 @@ SEW exposes this via `io-projection` target:
 
 The projection is read-only and intended for analysis/reporting. It does not mutate session or world state.
 
+## Contract-level vs computation-level generalisation
+
+- **Output-contract level:** high generalisation intent (adapter-facing capability).
+- **Computation/producer level:** currently SEW-specific.
+
+In other words, `:funds-ledger-view` is treated as framework-facing contract
+surface, while current production of that view is owned by the SEW reference
+adapter.
+
 ## Quick check: "funds-lost = 0"
 
 For the canonical projection, treat **funds-lost = 0** as:

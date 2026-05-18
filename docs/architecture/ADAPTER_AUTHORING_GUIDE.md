@@ -3,6 +3,14 @@
 This guide explains how to add protocol adapters while preserving a clear
 boundary between reusable framework infrastructure and protocol-owned semantics.
 
+Canonical terminology:
+- framework substrate
+- adapter
+- reference implementation
+- research track
+
+See also: `docs/framework-boundaries.md`
+
 ## Design principle
 
 Generalize infrastructure, not protocol semantics.
@@ -61,7 +69,7 @@ See:
 
 ## 5) Reference implementation pattern
 
-SEW is the reference implementation:
+SEW is the reference adapter/reference implementation:
 
 - complete protocol semantics in `protocols/sew/*`,
 - framework-compatible projections/reporting exposed through adapter interfaces,

@@ -15,6 +15,9 @@ It operates at two levels:
 Results feed engineering and research documentation in `docs/` (overview,
 evidence, testing, and challenge artifacts) that drive protocol remediation.
 
+Primary boundary reference for contributors:
+- `docs/framework-boundaries.md`
+
 ---
 
 ## Design principles
