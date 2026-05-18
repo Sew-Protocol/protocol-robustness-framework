@@ -10,7 +10,7 @@
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.difficulty :as diff]
             [clojure.string :as str]
-            [resolver-sim.sim.engine :as engine]))
+            [resolver-sim.sim.engine :as proto]))
 
 ;; Configuration
 (def LOAD-LEVELS

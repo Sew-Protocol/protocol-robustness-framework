@@ -32,7 +32,7 @@
      This sweep tests that prediction empirically by sweeping (n-resolvers ×
      resolver-capacity) and finding the actual phase-transition multiplier."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Trust and legitimacy model

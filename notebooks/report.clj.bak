@@ -1,0 +1,714 @@
+;; # SEW Protocol — Evidence Workbook
+;;
+;; **Audience:** Protocol reviewers, security researchers, contributors.
+;;
+;; **Purpose:** At-a-glance evidence surface for a validation run. Every
+;; status indicator is paired with what it means, what it does *not* mean,
+;; and the source artifact it is derived from.
+;;
+;; **Not a marketing dashboard.** This notebook does not smooth over known
+;; vulnerabilities or present results as "green = safe". Red can mean a
+;; hard validation failure *or* a successful theory-falsification finding —
+;; always inspect `status-kind` before interpreting colour.
+;;
+;; **Data contract:** All evidence is loaded from:
+;; - `results/test-artifacts/test-summary.json` — canonical validation gate
+;; - `results/test-artifacts/coverage.json` — transition/threat-tag coverage
+;; - `data/fixtures/traces/*.trace.json` — scenario metadata (title, purpose, theory)
+;; - `data/fixtures/golden/*.report.edn` — per-scenario replay outcomes
+;; - `results/test-artifacts/equivalence-comparison-summary.json` — counterfactual pairs
+;;
+;; If an artifact is absent, the relevant panel shows amber (missing data),
+;; not red (failure). Missing data is not the same as a protocol problem.
+
+(ns notebooks.report
+  (:require [nextjournal.clerk :as clerk]
+            [clojure.java.io :as io]
+            [clojure.edn :as edn]
+            [clojure.data.json :as json]
+            [clojure.string :as str]))
+
+;; ---
+;; ## R/A/G Legend
+;;
+;; | Colour | Symbol | Meaning |
+;; |--------|--------|---------|
+;; | 🟢 Green | `:green` | Validation condition holds / invariant passes / no accounting drift |
+;; | 🟠 Amber | `:amber` | Inconclusive / warning / known research finding / artifact missing |
+;; | 🔴 Red | `:red` | Hard gate failure / critical finding / invariant violation / known vulnerability evidence |
+;;
+;; **Critical note on red:** Red in the Scenario Matrix can mean *either*:
+;; 1. **A validation failure** — an invariant violated, an unexpected outcome, funds drift.
+;; 2. **A successful falsification** — an expected-negative scenario proving a known protocol
+;;    limitation. This is *evidence*, not a build breakage.
+;;
+;; Always inspect the `status-kind` column:
+;; - `:validation` — result is a hard gate check
+;; - `:research-finding` — result is a model/theory finding
+;; - `:expected-negative` — scenario is designed to demonstrate a known limitation
+;; - `:missing-data` — artifact absent; evidence incomplete
+
+;; ---
+;; ## Artifact Loading
+
+(defn- slurp-if-exists [path]
+  (when (.exists (io/file path))
+    (slurp path)))
+
+(defn- read-json [path]
+  (when-let [s (slurp-if-exists path)]
+    (json/read-str s {:key-fn keyword})))
+
+(defn- read-edn [path]
+  (when-let [s (slurp-if-exists path)]
+    (edn/read-string s)))
+
+^{::clerk/visibility {:result :hide}}
+(def test-summary
+  (read-json "results/test-artifacts/test-summary.json"))
+
+^{::clerk/visibility {:result :hide}}
+(def coverage-data
+  (read-json "results/test-artifacts/coverage.json"))
+
+^{::clerk/visibility {:result :hide}}
+(def equivalence-summary
+  (read-json "results/test-artifacts/equivalence-comparison-summary.json"))
+
+(defn- load-trace-metadata []
+  (let [dir (io/file "data/fixtures/traces")]
+    (when (.isDirectory dir)
+      (->> (.listFiles dir)
+           (filter #(str/ends-with? (.getName %) ".trace.json"))
+           (map (fn [f]
+                  (try
+                    (let [d (json/read-str (slurp f) {:key-fn keyword})]
+                      {:id          (or (:scenario-id d) (str/replace (.getName f) ".trace.json" ""))
+                       :title       (or (:title d) "")
+                       :description (or (:description d) "")
+                       :purpose     (or (:purpose d) "")
+                       :threat-tags (or (:threat-tags d) [])
+                       :has-theory  (contains? d :theory)
+                       :theory      (:theory d)
+                       :trace-file  (.getName f)})
+                    (catch Exception _ nil))))
+           (remove nil?)
+           (sort-by :id)))))
+
+(defn- load-golden-reports []
+  (let [dir (io/file "data/fixtures/golden")]
+    (when (.isDirectory dir)
+      (->> (.listFiles dir)
+           (filter #(str/ends-with? (.getName %) ".report.edn"))
+           (map (fn [f]
+                  (try
+                    (let [d (edn/read-string (slurp f))]
+                      [(str (:trace-id d)) d])
+                    (catch Exception _ nil))))
+           (remove nil?)
+           (into {})))))
+
+^{::clerk/visibility {:result :hide}}
+(def all-traces (load-trace-metadata))
+^{::clerk/visibility {:result :hide}}
+(def golden-reports (load-golden-reports))
+
+;; ---
+;; ## R/A/G Status Helpers (pure, auditable)
+
+(defn rag-status
+  "Returns :green, :amber, or :red.
+  Accepts an explicit keyword, or derives from a map with :status key."
+  [x]
+  (cond
+    (keyword? x) (case x
+                   (:green :pass :ok :hold)  :green
+                   (:amber :warn :missing :inconclusive) :amber
+                   (:red :fail :error :violation) :red
+                   :amber)
+    (map? x)     (rag-status (or (:rag x) (:status x) :amber))
+    :else         :amber))
+
+(defn status-emoji
+  "Returns emoji indicator for a RAG keyword."
+  [rag]
+  (case rag
+    :green "🟢"
+    :amber "🟠"
+    :red   "🔴"
+    "⚪"))
+
+(defn status-label
+  "Returns a display label string for a RAG keyword."
+  [rag]
+  (case rag
+    :green "Pass"
+    :amber "Inconclusive / Warning"
+    :red   "Fail / Finding"
+    "Unknown"))
+
+(defn status-kind-label
+  "Returns a human-readable label for a status-kind keyword."
+  [k]
+  (case k
+    :validation        "Validation"
+    :research-finding  "Research finding"
+    :expected-negative "Expected negative"
+    :missing-data      "Missing data"
+    (str k)))
+
+(defn target-status->rag
+  "Maps a test target status string to a RAG keyword."
+  [s]
+  (case (str s)
+    "pass"    :green
+    "fail"    :red
+    "unknown" :amber
+    :amber))
+
+(defn risk-digest->rag
+  "Derives RAG from a risk_digest map.
+  Red = any critical findings. Amber = any warnings. Green = clean."
+  [digest]
+  (cond
+    (nil? digest) :amber
+    (seq (:critical_findings digest)) :red
+    (seq (:warnings digest))          :amber
+    :else                              :green))
+
+(defn funds-status->rag
+  "Derives RAG from funds-conservation metrics.
+  Red = non-zero drift. Amber = no data. Green = zero drift, holds."
+  [{:keys [holds? drift-total missing-count total-count]}]
+  (cond
+    (nil? holds?)       :amber
+    (not holds?)        :red
+    (pos? (or drift-total 0)) :red
+    :else               :green))
+
+(defn scenario-purpose->status-kind
+  "Maps a scenario purpose string to a status-kind keyword."
+  [purpose]
+  (case (str purpose)
+    "regression"              :validation
+    "adversarial-robustness"  :validation
+    "theory-falsification"    :expected-negative
+    "research"                :research-finding
+    :validation))
+
+(defn scenario-row->rag
+  "Derives RAG for a scenario row given its trace metadata and golden report.
+  Returns {:rag kw :status-kind kw :reason str}."
+  [{:keys [purpose has-theory]} golden]
+  (let [kind       (scenario-purpose->status-kind purpose)
+        outcome    (:outcome golden)
+        violations (get-in golden [:metrics :invariant-violations] 0)
+        atk-succ   (get-in golden [:metrics :attack-successes] 0)]
+    (cond
+      ;; No golden report — missing data
+      (nil? golden)
+      {:rag :amber :status-kind :missing-data
+       :reason "No golden report artifact — replay outcome unknown"}
+
+      ;; Invariant violation — always red regardless of purpose
+      (pos? violations)
+      {:rag :red :status-kind :validation
+       :reason (str "Invariant violation(s): " violations)}
+
+      ;; Theory-falsification with attack success — expected red-as-evidence
+      (and (= purpose "theory-falsification") (pos? atk-succ))
+      {:rag :red :status-kind :expected-negative
+       :reason (str "Theory falsified — attack succeeded (" atk-succ " successes). This is expected evidence, not a CI failure.")}
+
+      ;; Pass with attack successes in adversarial scenario — amber warning
+      (and (= outcome :pass) (pos? atk-succ)
+           (not= purpose "theory-falsification"))
+      {:rag :amber :status-kind :research-finding
+       :reason (str "Attack succeeded (" atk-succ ") but invariants held — research finding")}
+
+      ;; Normal pass
+      (= outcome :pass)
+      {:rag :green :status-kind kind :reason "Invariants pass; outcome as expected"}
+
+      ;; Unexpected failure
+      (= outcome :fail)
+      {:rag :red :status-kind :validation
+       :reason "Unexpected failure — invariant or expectation not met"}
+
+      :else
+      {:rag :amber :status-kind :missing-data
+       :reason (str "Outcome: " (pr-str outcome))})))
+
+;; ---
+;; ## Control Panel Helpers
+
+(defn- card-style [rag]
+  (let [border (case rag :green "#16a34a" :red "#dc2626" "#d97706")
+        bg     (case rag :green "#f0fdf4" :red "#fef2f2" "#fffbeb")
+        color  (case rag :green "#14532d" :red "#7f1d1d" "#78350f")]
+    {:borderLeft   (str "4px solid " border)
+     :background   bg
+     :color        color
+     :padding      "12px 16px"
+     :borderRadius "4px"
+     :marginBottom "8px"}))
+
+(defn render-card
+  "Renders a single status card as a hiccup div."
+  [{:keys [label rag value note]}]
+  [:div {:style (card-style rag)}
+   [:div {:style (css->style "display:flex;align-items:baseline;gap:8px")}
+    [:span {:style (css->style "font-size:1.1em")} (status-emoji rag)]
+    [:strong label]
+    [:span {:style (css->style "font-size:0.95em;opacity:0.85")} value]]
+   (when note
+     [:div {:style (css->style "font-size:0.82em;margin-top:4px;opacity:0.8")} note])])
+
+;; ---
+;; ## 1. Evidence Control Panel
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (let [summary     test-summary
+       targets     (:targets summary)
+       rd          (:risk_digest summary)
+       sc          (:status_counts summary)
+       pf          (:phase_failures summary)
+
+       ;; Derive per-card RAG
+       gate-rag    (if summary
+                     (if (= "pass" (str (:overall_status summary))) :green :red)
+                     :amber)
+       critical-n  (count (:critical_findings rd))
+       warning-n   (count (:warnings rd))
+       risk-rag    (cond (nil? rd) :amber (pos? critical-n) :red :else :green)
+       warn-rag    (cond (nil? rd) :amber (pos? warning-n)  :amber :else :green)
+
+       ;; Scenario corpus counts
+       golden-n    (count golden-reports)
+       trace-n     (count all-traces)
+       corpus-rag  (if (zero? trace-n) :amber :green)
+
+       ;; Funds: derive from golden reports — look for attack-successes and
+       ;; invariant-violations across all loaded reports
+       total-inv-viol (reduce + (map #(get-in % [:metrics :invariant-violations] 0)
+                                     (vals golden-reports)))
+       funds-rag   (cond
+                     (zero? golden-n)      :amber
+                     (pos? total-inv-viol) :red
+                     :else                  :green)
+
+       ;; Vulnerability evidence (theory-falsification traces)
+       vuln-count  (count (filter #(= "theory-falsification" (:purpose %)) all-traces))
+       vuln-rag    (if (pos? vuln-count) :amber :green)
+
+       run-id      (or (:run_id summary) "—")
+       decision    (or (:acceptance_decision summary) "UNKNOWN")]
+
+   [:div
+    [:h2 "Evidence Control Panel"]
+    [:p {:style (css->style "color:#555;font-size:0.9em")}
+     "Aggregated status from the most recent validation run. Inspect each panel for detail before acting on colour alone."]
+
+    ;; Run identity banner
+    [:div {:style (css->style "font-size:0.82em;color:#444;margin-bottom:12px;font-family:monospace;background:#f5f5f5;padding:6px 10px;border-radius:3px")}
+     (str "Run ID: " run-id " │ Decision: " decision
+          " │ Targets: " (get-in sc [:targets :total] "—")
+          " │ Artifacts loaded: traces=" trace-n ", golden=" golden-n)]
+
+    (render-card {:label "Validation gate"
+                  :rag   gate-rag
+                  :value (str (get-in sc [:targets :pass] "—") "/" (get-in sc [:targets :total] "—") " targets pass")
+                  :note  "Hard gate: did all canonical test targets complete successfully? Source: test-summary.json"})
+
+    (render-card {:label "Critical findings"
+                  :rag   risk-rag
+                  :value (str critical-n " critical finding(s)")
+                  :note  (str "Structured critical findings in risk_digest. "
+                              (if (pos? critical-n) "Review risk_digest in test-summary.json immediately." "Clean."))})
+
+    (render-card {:label "Warnings"
+                  :rag   warn-rag
+                  :value (str warning-n " warning(s)")
+                  :note  "Structured warning count from risk_digest. Amber = warnings present; does not imply protocol failure."})
+
+    (render-card {:label "Scenario corpus"
+                  :rag   corpus-rag
+                  :value (str trace-n " traces loaded; " golden-n " with golden outcome")
+                  :note  (str "Scenario coverage: " (- trace-n golden-n) " traces have no golden report (amber in matrix). "
+                              "Source: data/fixtures/traces/ and data/fixtures/golden/")})
+
+    (render-card {:label "Invariant conservation"
+                  :rag   funds-rag
+                  :value (str "Total invariant violations across golden corpus: " total-inv-viol)
+                  :note  "Aggregated invariant-violations from all loaded golden reports. Non-zero = protocol invariant breached somewhere — investigate."})
+
+    (render-card {:label "Vulnerability evidence"
+                  :rag   vuln-rag
+                  :value (str vuln-count " theory-falsification scenario(s) in corpus")
+                  :note  (str "Known theory-falsification scenarios exist. These are research findings — expected evidence of protocol limitations under specific conditions. "
+                              "This is NOT a test failure. Inspect status-kind column in Scenario Matrix.")})]))
+
+;; ---
+;; ## 2. Scenario Matrix
+;;
+;; Each row represents one scenario trace. Columns:
+;; - **Status** — R/A/G emoji derived from outcome + purpose
+;; - **status-kind** — `:validation` / `:research-finding` / `:expected-negative` / `:missing-data`
+;; - **ID** — scenario identifier
+;; - **Purpose** — declared scenario purpose
+;; - **Threat tags** — protocol threat categories
+;; - **Invariants** — violation count from golden report (if present)
+;; - **Attack succ.** — attack-successes count from golden report
+;; - **Golden outcome** — raw outcome from golden report
+;;
+;; **Red in this matrix does not necessarily mean the build is broken.**
+;; Theory-falsification scenarios marked `:expected-negative` are *red as evidence*
+;; — they demonstrate a known protocol boundary. See status-kind.
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (let [rows
+       (for [trace all-traces
+             :let [golden  (get golden-reports (:id trace))
+                   verdict (scenario-row->rag trace golden)
+                   rag     (:rag verdict)
+                   kind    (:status-kind verdict)
+                   inv-v   (get-in golden [:metrics :invariant-violations] "—")
+                   atk-s   (get-in golden [:metrics :attack-successes] "—")
+                   outcome (if golden (name (:outcome golden)) "—")
+                   tags    (let [t (:threat-tags trace)]
+                             (if (seq t) (str/join ", " (map name t)) "—"))]]
+         {:rag rag :kind kind :id (:id trace) :title (:title trace)
+          :purpose (:purpose trace) :tags tags
+          :inv-v inv-v :atk-s atk-s :outcome outcome
+          :reason (:reason verdict)})
+
+       row->tr
+       (fn [{:keys [rag kind id title purpose tags inv-v atk-s outcome reason]}]
+         (let [bg (case rag :green "#f0fdf4" :amber "#fffbeb" :red "#fef2f2" "white")]
+           [:tr {:style {:background bg}}
+            [:td {:style (css->style "text-align:center;font-size:1.1em")} (status-emoji rag)]
+            [:td {:style (css->style "font-size:0.75em;color:#555")} (status-kind-label kind)]
+            [:td {:style (css->style "font-family:monospace;font-size:0.8em;white-space:nowrap")} id]
+            [:td {:style (css->style "font-size:0.82em;max-width:220px")} title]
+            [:td {:style (css->style "font-size:0.78em")} purpose]
+            [:td {:style (css->style "font-size:0.78em;max-width:160px")} tags]
+            [:td {:style (css->style "text-align:center")} (str inv-v)]
+            [:td {:style (css->style "text-align:center")} (str atk-s)]
+            [:td {:style (css->style "font-size:0.78em")} outcome]
+            [:td {:style (css->style "font-size:0.72em;color:#555;max-width:220px")} reason]]))]
+
+   [:div
+    [:h2 "Scenario Matrix"]
+    [:p {:style (css->style "font-size:0.85em;color:#555")}
+     "One row per scenario trace. "
+     [:strong "Red ≠ CI failure"] " — inspect status-kind column. "
+     "Rows without a golden report show amber (missing data, not failure)."]
+
+    [:div {:style (css->style "overflow-x:auto")}
+     [:table {:style (css->style "border-collapse:collapse;width:100%;font-size:0.9em")}
+      [:thead
+       [:tr {:style (css->style "background:#f3f4f6;text-align:left")}
+        [:th {:style (css->style "padding:6px 8px")} "Status"]
+        [:th {:style (css->style "padding:6px 8px")} "status-kind"]
+        [:th {:style (css->style "padding:6px 8px")} "ID"]
+        [:th {:style (css->style "padding:6px 8px")} "Title"]
+        [:th {:style (css->style "padding:6px 8px")} "Purpose"]
+        [:th {:style (css->style "padding:6px 8px")} "Threat tags"]
+        [:th {:style (css->style "padding:6px 8px")} "Inv.viol"]
+        [:th {:style (css->style "padding:6px 8px")} "Atk.succ"]
+        [:th {:style (css->style "padding:6px 8px")} "Outcome"]
+        [:th {:style (css->style "padding:6px 8px")} "Reason"]]]
+      (into [:tbody] (map row->tr rows))]]]]))
+
+;; ---
+;; ## 3. Substatus Detail
+;;
+;; Expanded columns for scenarios with a golden report.
+;; Helps distinguish: protocol invariant pass, research claim status,
+;; adversarial success, and accounting metrics.
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (let [golden-rows
+       (for [trace all-traces
+             :let [golden (get golden-reports (:id trace))]
+             :when golden
+             :let [m (:metrics golden)]]
+         {:id           (:id trace)
+          :purpose      (:purpose trace)
+          :replay-ok?   (not= :fail (:outcome golden))
+          :inv-pass?    (zero? (get m :invariant-violations 0))
+          :atk-succ     (get m :attack-successes 0)
+          :total-vol    (get m :total-volume "—")
+          :disputes     (get m :disputes-triggered 0)
+          :reverts      (get m :reverts 0)
+          :resolutions  (get m :resolutions-executed 0)
+          :outcome      (:outcome golden)})
+
+       bool-cell
+       (fn [v]
+         [:td {:style {:textAlign "center" :color (if v "#16a34a" "#dc2626")}}
+          (if v "✓" "✗")])]
+
+   [:div
+    [:h2 "Substatus Detail"]
+    [:p {:style (css->style "font-size:0.85em;color:#555")}
+     "Per-scenario substatus for all scenarios with golden reports. "
+     "Columns: replay-ok, invariants-pass, attack-successes, volume, disputes, reverts, resolutions."]
+
+    [:div {:style (css->style "overflow-x:auto")}
+     [:table {:style (css->style "border-collapse:collapse;width:100%;font-size:0.85em")}
+      [:thead
+       [:tr {:style (css->style "background:#f3f4f6;text-align:left")}
+        [:th {:style (css->style "padding:5px 8px")} "ID"]
+        [:th {:style (css->style "padding:5px 8px")} "Purpose"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "replay-ok?"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "inv-pass?"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "atk-succ"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "volume"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "disputes"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "reverts"]
+        [:th {:style (css->style "padding:5px 8px;text-align:center")} "resolutions"]]]
+      (into [:tbody]
+       (for [{:keys [id purpose replay-ok? inv-pass? atk-succ total-vol disputes reverts resolutions]} golden-rows]
+         [:tr {:style {:borderBottom "1px solid #e5e7eb"
+                       :background   (cond (not inv-pass?) "#fef2f2"
+                                           (pos? atk-succ) "#fffbeb"
+                                           :else           "white")}}
+          [:td {:style (css->style "font-family:monospace;font-size:0.78em;padding:4px 8px")} id]
+          [:td {:style (css->style "font-size:0.78em;padding:4px 8px")} purpose]
+          (bool-cell replay-ok?)
+          (bool-cell inv-pass?)
+          [:td {:style (merge {:textAlign "center" :padding "4px 8px"}
+                             (when (pos? atk-succ) {:color "#d97706" :fontWeight "bold"}))}
+           atk-succ]
+          [:td {:style (css->style "text-align:right;padding:4px 8px;font-family:monospace")} (str total-vol)]
+          [:td {:style (css->style "text-align:center;padding:4px 8px")} disputes]
+          [:td {:style (css->style "text-align:center;padding:4px 8px")} reverts]
+          [:td {:style (css->style "text-align:center;padding:4px 8px")} resolutions]])])]]]]))
+
+;; ---
+;; ## 4. Research Interpretation Layer
+;;
+;; This section explains the dual semantics of red in this workbook.
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ [:div {:style (css->style "background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:16px 20px;margin:16px 0")}
+  [:h3 {:style (css->style "margin-top:0;color:#78350f")} "⚠ Research Interpretation Note"]
+  [:p "Red in this workbook can mean one of two things:"]
+  [:ol
+   [:li [:strong "A validation failure"] " — an invariant was violated, funds drifted, or an expected outcome was not met. These require investigation."]
+   [:li [:strong "A successful falsification / vulnerability finding"] " — a scenario designed to demonstrate a known protocol limitation under adversarial conditions. "
+    "This is expected evidence, not a build breakage."]]
+  [:p "Always inspect " [:code "status-kind"] " before interpreting colour:"]
+  [:ul
+   [:li [:code ":validation"] " — hard gate check; red = requires investigation"]
+   [:li [:code ":expected-negative"] " — theory-falsification; red = expected evidence of known limitation"]
+   [:li [:code ":research-finding"] " — model/hypothesis result; amber/red = inconclusive or partial result"]
+   [:li [:code ":missing-data"] " — artifact absent; amber = incomplete evidence, not failure"]]
+  [:p {:style (css->style "font-size:0.85em;color:#555")}
+   "Examples: "
+   [:em "governance-decay-exploit"] " red → collusive-resolver vulnerability evidence (expected, not CI fail). "
+   [:em "invariants"] " target red → hard validation failure. "
+   [:em "funds-drift != 0"] " red → accounting failure requiring investigation. "
+   [:em "missing funds-ledger artifact"] " amber → incomplete evidence."]])
+
+;; ---
+;; ## 5. Funds / Accounting Panel
+;;
+;; Framework-level reconciliation view. Note: bucket interpretation is
+;; adapter-defined. "funds-conservation-holds" is a *modeled* property
+;; derived from scenario metrics — not a live on-chain accounting assertion.
+;;
+;; Does **not** claim universal accounting semantics.
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (let [with-golden   (filter #(contains? golden-reports (:id %)) all-traces)
+       total-scen    (count all-traces)
+       golden-n      (count with-golden)
+       missing-n     (- total-scen golden-n)
+
+       ;; Funds ledger fields are not present in current trace JSON schema —
+       ;; derive conservation from invariant-violations and attack-successes
+       inv-viol-rows (filter #(pos? (get-in (get golden-reports (:id %))
+                                            [:metrics :invariant-violations] 0))
+                              with-golden)
+       drift-total   (reduce + (map #(get-in (get golden-reports (:id %))
+                                             [:metrics :invariant-violations] 0)
+                                     with-golden))
+       conservation? (zero? drift-total)
+
+       funds-rag     (cond
+                       (zero? golden-n)    :amber
+                       (not conservation?) :red
+                       :else                :green)]
+
+   [:div
+    [:h2 "Funds / Accounting Panel"]
+    [:p {:style (css->style "font-size:0.85em;color:#555")}
+     "Framework-level reconciliation view. "
+     "Conservation is modeled — it tracks invariant-violation counts, not live ledger entries. "
+     "Bucket interpretation is adapter-defined."]
+
+    [:table {:style (css->style "border-collapse:collapse;width:100%;margin-bottom:12px")}
+     [:thead
+      [:tr {:style (css->style "background:#f3f4f6")}
+       [:th {:style (css->style "padding:6px 10px;text-align:left")} "Metric"]
+       [:th {:style (css->style "padding:6px 10px;text-align:right")} "Value"]
+       [:th {:style (css->style "padding:6px 10px;text-align:center")} "Status"]
+       [:th {:style (css->style "padding:6px 10px;text-align:left")} "Interpretation"]]]
+     [:tbody
+      [:tr {:style {:background (if conservation? "#f0fdf4" "#fef2f2")}}
+       [:td {:style (css->style "padding:5px 10px")} "invariant-conservation-holds?"]
+       [:td {:style (css->style "padding:5px 10px;text-align:right;font-family:monospace")} (str conservation?)]
+       [:td {:style (css->style "padding:5px 10px;text-align:center")} (status-emoji funds-rag)]
+       [:td {:style (css->style "padding:5px 10px;font-size:0.85em")} "Modeled: zero invariant violations across all golden reports"]]
+      [:tr {:style {:background (if (zero? drift-total) "#f0fdf4" "#fef2f2")}}
+       [:td {:style (css->style "padding:5px 10px")} "total-invariant-violations"]
+       [:td {:style (css->style "padding:5px 10px;text-align:right;font-family:monospace")} (str drift-total)]
+       [:td {:style (css->style "padding:5px 10px;text-align:center")} (status-emoji (if (zero? drift-total) :green :red))]
+       [:td {:style (css->style "padding:5px 10px;font-size:0.85em")} "Aggregate across all golden corpus entries"]]
+      [:tr {:style {:background (if (pos? missing-n) "#fffbeb" "white")}}
+       [:td {:style (css->style "padding:5px 10px")} "scenarios-missing-golden-report"]
+       [:td {:style (css->style "padding:5px 10px;text-align:right;font-family:monospace")} (str missing-n)]
+       [:td {:style (css->style "padding:5px 10px;text-align:center")} (status-emoji (if (zero? missing-n) :green :amber))]
+       [:td {:style (css->style "padding:5px 10px;font-size:0.85em")} "Accounting projection not available for all scenarios"]]
+      [:tr
+       [:td {:style (css->style "padding:5px 10px")} "scenarios-with-golden-report"]
+       [:td {:style (css->style "padding:5px 10px;text-align:right;font-family:monospace")} (str golden-n)]
+       [:td {:style (css->style "padding:5px 10px;text-align:center")} (status-emoji :green)]
+       [:td {:style (css->style "padding:5px 10px;font-size:0.85em")} "Covered by golden report artifact"]]]]
+
+    (when (seq inv-viol-rows)
+      [:div {:style (css->style "background:#fef2f2;border:1px solid #dc2626;border-radius:4px;padding:10px;margin-top:8px")}
+       [:strong "⚠ Invariant violations found in:"]
+       (into [:ul] (map #(vector :li {:style (css->style "font-family:monospace;font-size:0.85em")} (:id %))
+                 inv-viol-rows))]
+
+    [:p {:style (css->style "font-size:0.78em;color:#666;margin-top:8px;font-style:italic")}
+     "Framework-level reconciliation view; bucket interpretation is adapter-defined. "
+     "See docs/overview/USE_OF_FUNDS.md for accounting semantics."]]))
+
+;; ---
+;; ## 6. Coverage Summary
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (if (nil? coverage-data)
+   [:div {:style (css->style "background:#fffbeb;padding:12px;border-radius:4px")}
+    "🟠 Coverage artifact not found (results/test-artifacts/coverage.json). Evidence incomplete."]
+   (let [cov        coverage-data
+         trans-freq (or (:transition-hit-freq cov) {})
+         unhit      (or (:unhit-transitions cov) [])
+         tag-freq   (or (:threat-tag-freq cov) {})
+         guard-freq (or (:guard-hit-freq cov) {})]
+     [:div
+      [:h2 "Coverage Summary"]
+      [:p {:style (css->style "font-size:0.85em;color:#555")}
+       "Transition and threat-tag coverage derived from trace corpus. "
+       "Source: results/test-artifacts/coverage.json"]
+
+      [:div {:style (css->style "display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px")}
+       [:div {:style (css->style "background:#f0fdf4;border:1px solid #16a34a;border-radius:4px;padding:10px;min-width:140px")}
+        [:div {:style (css->style "font-size:1.4em;font-weight:bold;color:#14532d")} (count trans-freq)]
+        [:div {:style (css->style "font-size:0.82em;color:#15803d")} "transitions hit"]]
+       [:div {:style {:border       (str "1px solid " (if (seq unhit) "#d97706" "#16a34a"))
+                       :borderRadius "4px" :padding "10px" :minWidth "140px"
+                       :background   (if (seq unhit) "#fffbeb" "#f0fdf4")}}
+        [:div {:style {:fontSize "1.4em" :fontWeight "bold"
+                       :color    (if (seq unhit) "#78350f" "#14532d")}} (count unhit)]
+        [:div {:style (css->style "font-size:0.82em")} "transitions not hit"]]
+       [:div {:style (css->style "background:#f0fdf4;border:1px solid #16a34a;border-radius:4px;padding:10px;min-width:140px")}
+        [:div {:style (css->style "font-size:1.4em;font-weight:bold;color:#14532d")} (count tag-freq)]
+        [:div {:style (css->style "font-size:0.82em;color:#15803d")} "threat tags covered"]]]
+
+      (when (seq unhit)
+        [:div {:style (css->style "background:#fffbeb;border:1px solid #f59e0b;border-radius:4px;padding:10px;margin-bottom:8px")}
+         [:strong "Transitions not hit: "]
+         [:span {:style (css->style "font-family:monospace;font-size:0.85em")} (str/join ", " (map name unhit))]])
+
+      [:details
+       [:summary {:style (css->style "cursor:pointer;font-size:0.85em;color:#555")} "Show transition hit frequencies"]
+       [:table {:style (css->style "border-collapse:collapse;font-size:0.82em;margin-top:6px")}
+        [:thead [:tr [:th {:style (css->style "padding:4px 10px;text-align:left")} "Transition"] [:th {:style (css->style "padding:4px 10px;text-align:right")} "Hits"]]]
+        (into [:tbody] (for [[t n] (sort trans-freq)]
+                  [:tr [:td {:style (css->style "padding:3px 10px;font-family:monospace")} (name t)] [:td {:style (css->style "padding:3px 10px;text-align:right")} (str n)]]))]]]])))
+
+;; ---
+;; ## 7. Replay / Temporal Inspection — Reserved
+;;
+;; *Not yet implemented.* This section is reserved for the replay timeline
+;; inspector, state-transition viewer, and first-divergence finder.
+;;
+;; Intended contents:
+;; - Scenario selector
+;; - Ordered event list (from trace events array)
+;; - Before/after world state summary
+;; - First divergence point between counterfactual pairs
+;; - Invariant snapshots over time
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ [:div {:style (css->style "background:#f8fafc;border:1px dashed #94a3b8;border-radius:6px;padding:16px 20px;color:#475569")}
+  [:h3 {:style (css->style "margin-top:0")} "⏱ Replay / Temporal Inspection — Reserved"]
+  [:p "This section will provide:"]
+  [:ul
+   [:li "Scenario selector for individual trace playback"]
+   [:li "Ordered event list from the trace events array"]
+   [:li "Before / after world-state summary at each step"]
+   [:li "First divergence point between counterfactual pairs"]
+   [:li "Invariant snapshots over simulation time"]]
+  [:p {:style (css->style "font-size:0.82em;font-style:italic")}
+   "Evidence is already present in data/fixtures/traces/*.trace.json (events arrays). "
+   "Implementation deferred to a later phase of the workbook."]])
+
+;; ---
+;; ## 8. Reproducibility / Provenance Panel
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (let [summary    test-summary
+       run-id     (or (:run_id summary) "—")
+       mode       (or (:mode summary) "—")
+       decision   (or (:acceptance_decision summary) "UNKNOWN")
+       git-sha    "3846604c1f6b667139116bf2e805e6aa49c78899"
+       git-branch "further-refactoring"
+       suite-root "data/fixtures/suites"
+       params-dir "data/params"
+       artifact   "results/test-artifacts/test-summary.json"]
+   [:div
+    [:h2 "Reproducibility / Provenance"]
+    [:table {:style (css->style "border-collapse:collapse;width:100%;font-size:0.85em")}
+     [:tbody
+      [:tr [:th {:style (css->style "padding:5px 10px;text-align:left;background:#f3f4f6;width:200px")} "Run ID"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} run-id]]
+      [:tr {:style (css->style "background:#fafafa")}
+       [:th {:style (css->style "padding:5px 10px;text-align:left")} "Acceptance decision"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} decision]]
+      [:tr [:th {:style (css->style "padding:5px 10px;text-align:left;background:#f3f4f6")} "Mode"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} mode]]
+      [:tr {:style (css->style "background:#fafafa")}
+       [:th {:style (css->style "padding:5px 10px;text-align:left")} "Git SHA"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} git-sha]]
+      [:tr [:th {:style (css->style "padding:5px 10px;text-align:left;background:#f3f4f6")} "Git branch"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} git-branch]]
+      [:tr {:style (css->style "background:#fafafa")}
+       [:th {:style (css->style "padding:5px 10px;text-align:left")} "Suite root"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} suite-root]]
+      [:tr [:th {:style (css->style "padding:5px 10px;text-align:left;background:#f3f4f6")} "Params dir"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} params-dir]]
+      [:tr {:style (css->style "background:#fafafa")}
+       [:th {:style (css->style "padding:5px 10px;text-align:left")} "Primary artifact"]
+       [:td {:style (css->style "padding:5px 10px;font-family:monospace")} artifact]]
+      [:tr [:th {:style (css->style "padding:5px 10px;text-align:left;background:#f3f4f6")} "Deterministic?"]
+       [:td {:style (css->style "padding:5px 10px")} "Yes — invariant suite and fixture suites are fully deterministic"]]
+      [:tr {:style (css->style "background:#fafafa")}
+       [:th {:style (css->style "padding:5px 10px;text-align:left")} "Stochastic?"]
+       [:td {:style (css->style "padding:5px 10px")} "Yes — Monte Carlo phases (O–AI) use random seeds; see phase param EDN files"]]]]
+    [:p {:style (css->style "font-size:0.78em;color:#666;margin-top:8px")}
+     "To reproduce: " [:code "clojure -M:run -- --invariants"] " (deterministic) or "
+     [:code "scripts/monte-carlo/test-all.sh"] " (stochastic phases)."]]))

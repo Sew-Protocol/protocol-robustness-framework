@@ -21,7 +21,7 @@
      across all tiers.  Without the multiplier (reward = 1×), high-complexity
      tiers breach the 20% threshold."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effort tier definitions

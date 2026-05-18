@@ -19,7 +19,7 @@
    Pass threshold: ≥80% of resolver capital correctly preserved across
    false-positive scenarios."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Slash outcome model

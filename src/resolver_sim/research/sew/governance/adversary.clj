@@ -14,7 +14,7 @@
 
    Also covers the governance capture gap (rule drift) not tested in Phases M/J."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine :as engine]))
+            [resolver-sim.sim.engine :as proto]))
 
 ;; ============ Governance Models (Pure) ============
 

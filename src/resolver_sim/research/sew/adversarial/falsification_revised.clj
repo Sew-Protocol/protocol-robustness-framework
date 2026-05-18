@@ -11,7 +11,7 @@
             [resolver-sim.stochastic.decision-quality :as dq]
             [resolver-sim.stochastic.information-cascade :as ic]
             [resolver-sim.stochastic.escalation-economics :as ee]
-            [resolver-sim.sim.engine :as engine]))
+            [resolver-sim.sim.engine :as proto]))
 
 ;; ============ Test Parameters ============
 

@@ -15,7 +15,7 @@
    You need active participation ecosystem design."
   (:require [resolver-sim.stochastic.liveness-failures :as liveness]
             [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as proto]))
 
 ;; ============ Test 1: Opportunity Cost ============
 

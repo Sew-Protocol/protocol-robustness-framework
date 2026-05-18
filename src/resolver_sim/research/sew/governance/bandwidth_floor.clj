@@ -18,7 +18,7 @@
      With floor-reviews-per-epoch ≥ 1 per 5 disputes, attacker win rate < 20%
      across all governance bandwidth scenarios."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine      :as engine]))
+            [resolver-sim.sim.engine      :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Dispute value model (mirrors Phase AA)

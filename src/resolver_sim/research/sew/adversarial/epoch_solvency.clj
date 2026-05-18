@@ -22,7 +22,7 @@
    Pass threshold: solvency-ratio ≥ 1.0 for all configurations in the
    design envelope (n-resolvers ≤ 20, avg-bond ≥ 500)."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine :as engine]))
+            [resolver-sim.sim.engine :as proto]))
 
 ;; ---------------------------------------------------------------------------
 ;; Protocol constants (mirrors ResolverSlashingModuleV1.sol + ResolverStakingModuleV1.sol)
