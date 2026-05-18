@@ -33,37 +33,8 @@
      :top-profitable  — attack-successes > 0
      :liveness-fail   — liveness-failure? = true
      :cascade         — disputes-triggered > 1
-     :abnormal-slash  — invariant-violations > 0")
-
-(defn- classify-issue
-  "Protocol-agnostic issue classifier used by scoring.
-   Returns one of: :none, :liveness-failure, :invariant-failure, :attack-success, :mixed."
-  [result]
-  (let [metrics (:metrics result {})
-        comps   (:score-components result {})
-        liveness? (pos? (:liveness-failure comps 0))
-        inv?      (pos? (:invariant-violations metrics 0))
-        attack?   (pos? (:attack-successes metrics 0))]
-    (cond
-      (and liveness? inv?) :mixed
-      inv?                 :invariant-failure
-      liveness?            :liveness-failure
-      attack?              :attack-success
-      :else                :none)))
-
-;; ---------------------------------------------------------------------------
-;; Liveness check
-;; ---------------------------------------------------------------------------
-
-(defn- liveness-failure?
-  "Returns true if the final world state contains any escrow in a non-terminal
-   state (:pending or :disputed).  Reads the last trace entry's projection."
-  [trace]
-  (let [last-entry (last trace)
-        proj       (:projection last-entry)]
-    (when proj
-      (let [transfers (vals (:escrow-transfers proj {}))]
-        (boolean (some #(#{:pending :disputed} (:escrow-state %)) transfers))))))
+     :abnormal-slash  — invariant-violations > 0"
+  (:require [resolver-sim.io.sew.trace-score :as sew-ts]))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: score-result
@@ -79,23 +50,10 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Works with any replay-with-protocol result regardless of :outcome."
+   Compatibility adapter: currently delegates to SEW scorer.
+   Works with replay results regardless of :outcome."
   [result]
-  (let [metrics             (:metrics result {})
-        attack-successes    (:attack-successes metrics 0)
-        invariant-violations (:invariant-violations metrics 0)
-        trace               (:trace result [])
-        liveness?           (liveness-failure? trace)
-        liveness-penalty    (if liveness? 1 0)
-        score               (+ attack-successes
-                               (* 10 invariant-violations)
-                               (* 5  liveness-penalty))]
-    (assoc result
-           :trace-score      score
-           :issue/type       (classify-issue (assoc result :score-components {:liveness-failure liveness-penalty}))
-           :score-components {:attacker-profit     attack-successes
-                              :invariant-violations invariant-violations
-                              :liveness-failure     liveness-penalty})))
+  (sew-ts/score-result result))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: score-category

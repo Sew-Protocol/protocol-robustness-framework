@@ -2,25 +2,30 @@
   "Central protocol registry for framework entrypoints.
 
    NOTE: This namespace is a transition point while decoupling framework code
-   from concrete protocols."
-  (:require [resolver-sim.protocols.sew :as sew]
-            [resolver-sim.protocols.dummy :as dummy]))
+   from concrete protocols.")
 
-(def ^:private protocol-registry
-  {"sew-v1" sew/protocol
-   "dummy"  dummy/protocol})
+(def ^:private protocol-symbol-registry
+  {"sew-v1" 'resolver-sim.protocols.sew/protocol
+   "dummy"  'resolver-sim.protocols.dummy/protocol})
 
 (def ^:private invariant-runners
   {"sew-v1" 'resolver-sim.protocols.sew.invariant-runner/run-and-report})
+
+(defn- resolve-var-value
+  [sym]
+  (when sym
+    (require (symbol (namespace sym)))
+    (when-let [v (resolve sym)]
+      @v)))
 
 (def default-protocol-id
   "sew-v1")
 
 (defn known-protocol-ids []
-  (keys protocol-registry))
+  (keys protocol-symbol-registry))
 
 (defn get-protocol [protocol-id]
-  (get protocol-registry protocol-id))
+  (resolve-var-value (get protocol-symbol-registry protocol-id)))
 
 (defn get-invariant-runner [protocol-id]
   (get invariant-runners protocol-id))

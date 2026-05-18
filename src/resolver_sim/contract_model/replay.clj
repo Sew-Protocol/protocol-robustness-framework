@@ -12,7 +12,8 @@
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
-             [resolver-sim.protocols.protocol :as engine]))
+             [resolver-sim.protocols.protocol :as engine]
+             [resolver-sim.db.temporal       :as temporal]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -356,7 +357,9 @@
   "Replay a scenario map using a specific DisputeProtocol implementation."
   [protocol scenario]
   (let [effective-metrics (into base-metrics (engine/metric-vocabulary protocol))
-        validation (validate-scenario scenario effective-metrics)]
+        validation (validate-scenario scenario effective-metrics)
+        temporal-cfg (:temporal-evidence scenario)
+        temporal-enabled? (boolean (:enabled? temporal-cfg))]
     (if-not (:ok validation)
       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
       (let [agents   (:agents scenario)
@@ -375,6 +378,41 @@
               (if open
                 {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
                 (do
+                  (when temporal-enabled?
+                    (temporal/record-temporal-run!
+                     (:datasource temporal-cfg)
+                     {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
+                            :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
+                            :protocol    protocol
+                            :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
+                            :scenario-id scenario-id
+                            :seed        (:seed scenario)
+                            :git-sha     (or (:git-sha temporal-cfg) "unknown")
+                            :outcome     :pass
+                            :metrics     metrics
+                            :block-time  (:block-time world)}
+                      :steps (map-indexed (fn [i e]
+                                            {:step-index i
+                                             :action (:action e)
+                                             :result (:result e)
+                                             :time-before {}
+                                             :time-advance {}
+                                             :time-after {:time/block-ts (:time e)}
+                                             :projection-hash (:projection-hash e)
+                                             :block-time (:time e)})
+                                          trace)
+                      :invariants (mapcat (fn [i e]
+                                            (for [[k r] (:violations e)
+                                                  :when (map? r)]
+                                              {:step-index i
+                                               :invariant k
+                                               :holds? (:holds? r)
+                                               :severity :time
+                                               :violations (:violations r)
+                                               :block-time (:time e)}))
+                                          (range)
+                                          trace)
+                      :coverage (:coverage temporal-cfg)}))
                   (log/info :scenario/end {:id scenario-id :outcome :pass})
                   {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics :agents agents :protocol protocol})))
             (let [raw-event  (first events)
@@ -398,6 +436,41 @@
 
                   (if (:halted? step)
                     (do
+                      (when temporal-enabled?
+                        (temporal/record-temporal-run!
+                         (:datasource temporal-cfg)
+                         {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
+                                :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
+                                :protocol    protocol
+                                :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
+                                :scenario-id scenario-id
+                                :seed        (:seed scenario)
+                                :git-sha     (or (:git-sha temporal-cfg) "unknown")
+                                :outcome     :fail
+                                :metrics     new-metrics
+                                :block-time  (:block-time (:world step))}
+                          :steps (map-indexed (fn [i e]
+                                                {:step-index i
+                                                 :action (:action e)
+                                                 :result (:result e)
+                                                 :time-before {}
+                                                 :time-advance {}
+                                                 :time-after {:time/block-ts (:time e)}
+                                                 :projection-hash (:projection-hash e)
+                                                 :block-time (:time e)})
+                                              new-trace)
+                          :invariants (mapcat (fn [i e]
+                                                (for [[k r] (:violations e)
+                                                      :when (map? r)]
+                                                  {:step-index i
+                                                   :invariant k
+                                                   :holds? (:holds? r)
+                                                   :severity :time
+                                                   :violations (:violations r)
+                                                   :block-time (:time e)}))
+                                              (range)
+                                              new-trace)
+                          :coverage (:coverage temporal-cfg)}))
                       (log/error :scenario/halt {:id scenario-id :seq (:seq event) :reason :invariant-violation})
                       {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
                     (recur (:world step) (rest events) new-trace new-metrics new-alias-map)))))))))))

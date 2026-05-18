@@ -172,7 +172,8 @@
 
 (defn- unary-handler
   "Wrap a (req → resp) fn as a gRPC ServerCallHandler.
-   Catches exceptions and converts them to gRPC INTERNAL status."
+   Catches all Throwables and converts them to gRPC INTERNAL status with
+   a descriptive message and server-side stack trace."
   [f]
   (ServerCalls/asyncUnaryCall
    (reify io.grpc.stub.ServerCalls$UnaryMethod
@@ -181,11 +182,14 @@
          (let [resp (f req)]
            (.onNext observer resp)
            (.onCompleted observer))
-         (catch Exception e
-           (.onError observer
-                     (-> (Status/INTERNAL)
-                         (.withDescription (.getMessage e))
-                         (.asRuntimeException)))))))))
+         (catch Throwable t
+           (let [msg (str "Internal Simulation Error: " (.getMessage t))]
+             (println (str "[grpc] " msg))
+             (st/print-stack-trace t)
+             (.onError observer
+                       (-> (Status/INTERNAL)
+                           (.withDescription msg)
+                           (.asRuntimeException))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service definition

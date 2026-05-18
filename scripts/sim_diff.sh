@@ -32,10 +32,10 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Running baseline simulation..."
-(cd "$TEMP_DIR" && clojure -M:run --invariants --scenario "$SCENARIO" --protocol "$PROTOCOL" --output results/baseline.json)
+(cd "$TEMP_DIR" && clojure -M:run -- --invariants --scenario "$SCENARIO" --protocol "$PROTOCOL" --output-file results/baseline.json)
 
 echo "Running candidate simulation..."
-clojure -M:run --invariants --scenario "$SCENARIO" --protocol "$PROTOCOL" --output results/candidate.json
+clojure -M:run -- --invariants --scenario "$SCENARIO" --protocol "$PROTOCOL" --output-file results/candidate.json
 
 echo "Generating comparison report..."
 python3 python/trace_compare.py --baseline "$TEMP_DIR/results/baseline.json" --candidate results/candidate.json --out-dir results/sim-diff

@@ -34,7 +34,12 @@
    never been written to (XTDB raises an error on DELETE from a non-existent
    table)."
   [ds]
-  (doseq [tbl ["sim_trial_results" "sim_entity_events"]]
+  (doseq [tbl ["sim_trial_results"
+               "sim_entity_events"
+               "sim_temporal_runs"
+               "sim_temporal_steps"
+               "sim_temporal_invariants"
+               "sim_temporal_coverage"]]
     (try
       (jdbc/execute! ds [(str "DELETE FROM " tbl)])
       (catch Exception _))))
@@ -158,7 +163,7 @@
                xtdb/opts))))))
 
 (defn- inst->iso ^String [^java.util.Date d]
-  (.format (java.time.format.DateTimeFormatter/ISO_INSTANT)
+  (.format java.time.format.DateTimeFormatter/ISO_INSTANT
            (.toInstant d)))
 
 (defn trial-results-at
@@ -197,6 +202,95 @@
             ["SELECT * FROM sim_entity_events WHERE trial_id = ? ORDER BY block_time ASC"
              trial-id]
             xtdb/opts))))
+
+;; ---------------------------------------------------------------------------
+;; Temporal evidence tables — writes
+;; ---------------------------------------------------------------------------
+
+(defn insert-temporal-run!
+  "Insert one temporal run record.
+   No-op when ds is nil."
+  [ds {:keys [id batch-id protocol-id suite-id scenario-id seed git-sha
+              outcome metrics valid-from]}]
+  (when ds
+    (jdbc/execute! ds
+      [(str "INSERT INTO sim_temporal_runs"
+            " (_id, batch_id, protocol_id, suite_id, scenario_id, seed, git_sha,"
+            "  outcome, metrics_edn, _valid_from)"
+            " VALUES ("
+            (xtdb/sql-str id) ", "
+            (xtdb/sql-str (xtdb/kw->str batch-id)) ", "
+            (xtdb/sql-str protocol-id) ", "
+            (xtdb/sql-str (xtdb/kw->str suite-id)) ", "
+            (xtdb/sql-str (xtdb/kw->str scenario-id)) ", "
+            (xtdb/sql-long seed) ", "
+            (xtdb/sql-str git-sha) ", "
+            (xtdb/sql-str (xtdb/kw->str outcome)) ", "
+            (xtdb/sql-str (xtdb/->edn metrics)) ", "
+            (xtdb/sql-ts valid-from)
+            ")")]
+      xtdb/opts)))
+
+(defn insert-temporal-step!
+  "Insert one temporal step record.
+   No-op when ds is nil."
+  [ds {:keys [id run-id step-index action result
+              time-before time-advance time-after
+              projection-hash valid-from]}]
+  (when ds
+    (jdbc/execute! ds
+      [(str "INSERT INTO sim_temporal_steps"
+            " (_id, run_id, step_index, action, result,"
+            "  time_before_edn, time_advance_edn, time_after_edn, projection_hash, _valid_from)"
+            " VALUES ("
+            (xtdb/sql-str id) ", "
+            (xtdb/sql-str run-id) ", "
+            (xtdb/sql-long step-index) ", "
+            (xtdb/sql-str (xtdb/kw->str action)) ", "
+            (xtdb/sql-str (xtdb/kw->str result)) ", "
+            (xtdb/sql-str (xtdb/->edn time-before)) ", "
+            (xtdb/sql-str (xtdb/->edn time-advance)) ", "
+            (xtdb/sql-str (xtdb/->edn time-after)) ", "
+            (xtdb/sql-str projection-hash) ", "
+            (xtdb/sql-ts valid-from)
+            ")")]
+      xtdb/opts)))
+
+(defn insert-temporal-invariant!
+  "Insert one temporal invariant evaluation record.
+   No-op when ds is nil."
+  [ds {:keys [id run-id step-index invariant holds? severity violations valid-from]}]
+  (when ds
+    (jdbc/execute! ds
+      [(str "INSERT INTO sim_temporal_invariants"
+            " (_id, run_id, step_index, invariant, holds, severity, violations_edn, _valid_from)"
+            " VALUES ("
+            (xtdb/sql-str id) ", "
+            (xtdb/sql-str run-id) ", "
+            (xtdb/sql-long step-index) ", "
+            (xtdb/sql-str (xtdb/kw->str invariant)) ", "
+            (xtdb/sql-bool holds?) ", "
+            (xtdb/sql-str (xtdb/kw->str severity)) ", "
+            (xtdb/sql-str (xtdb/->edn violations)) ", "
+            (xtdb/sql-ts valid-from)
+            ")")]
+      xtdb/opts)))
+
+(defn insert-temporal-coverage!
+  "Insert one temporal coverage summary record.
+   No-op when ds is nil."
+  [ds {:keys [id run-id coverage valid-from]}]
+  (when ds
+    (jdbc/execute! ds
+      [(str "INSERT INTO sim_temporal_coverage"
+            " (_id, run_id, coverage_edn, _valid_from)"
+            " VALUES ("
+            (xtdb/sql-str id) ", "
+            (xtdb/sql-str run-id) ", "
+            (xtdb/sql-str (xtdb/->edn coverage)) ", "
+            (xtdb/sql-ts valid-from)
+            ")")]
+      xtdb/opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Aggregate helpers (pure — no database required)

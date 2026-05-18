@@ -20,12 +20,47 @@
             [resolver-sim.yield.invariants :as generic-yield-inv]
             [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
 
+(def canonical-ids
+  "The full set of canonical invariant IDs across SEW v1.
+   Used for standardized error mapping and validation gates."
+  #{:solvency
+    :fees-non-negative
+    :held-non-negative
+    :all-status-combinations-valid
+    :pending-settlement-consistent
+    :dispute-timestamp-consistent
+    :dispute-level-bounded
+    :slash-status-consistent
+    :appeal-bond-conserved
+    :appeal-bond-custody-consistent
+    :no-auto-fraud-execute
+    :bond-liquidity
+    :bond-slash-bounded
+    :fee-cap
+    :no-stale-automatable-escrows
+    :conservation-of-funds
+    :dispute-resolution-path
+    :slash-distribution-consistent
+    :resolver-bond-mix-valid
+    :senior-coverage-not-exceeded
+    :resolver-not-frozen-on-assign
+    :slash-epoch-cap-respected
+    :reversal-slash-disabled
+    :resolver-capacity
+    :yield-position-consistency
+    :yield-exposure
+    :terminal-states-unchanged
+    :time-non-decreasing
+    :time-no-action-after-finality
+    :finalization-accounting-correct
+    :escalation-level-monotonic
+    :no-withdrawal-during-dispute
+    :time-lock-integrity
+    :token-tax-reconciliation
+    :fees-monotone})
+
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
-;;
-;; For every token: sum(amount-after-fee for :pending/:disputed escrows) <= total-held
-;;
-;; In the real contract this is enforced by InvariantGuardInternal._checkBalance.
 ;; ---------------------------------------------------------------------------
 
 (defn solvency-holds?
@@ -1043,7 +1078,12 @@
                  :time-non-decreasing
                  (time-inv/non-decreasing-time? world-before world-after)
                  :time-no-action-after-finality
-                 (time-inv/no-action-after-finality? world-before world-after)
+                 (time-inv/no-action-after-finality?
+                   world-before world-after
+                   :entities-before-fn (fn [w] (:escrow-transfers w {}))
+                   :state-after-fn     (fn [w workflow-id]
+                                         (get-in w [:escrow-transfers workflow-id :escrow-state]))
+                   :terminal-states    #{:released :refunded :resolved})
                  :finalization-accounting-correct
                  (finalization-accounting-correct? world-before world-after)
                  :escalation-level-monotonic

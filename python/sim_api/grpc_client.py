@@ -59,52 +59,69 @@ class SimulationClient:
             assert r["result"] == "ok"
     """
 
-    def __init__(self, host: str = "localhost", port: int = 7070):
+    def __init__(self, host: str = "localhost", port: int = 7070, timeout: int = 30):
         self._channel = grpc.insecure_channel(f"{host}:{port}")
+        self._timeout = timeout
         
         # Engine Service
-        self._start = self._channel.unary_unary(
+        self.__start = self._channel.unary_unary(
             f"/{_ENGINE_SVC}/StartSession",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._step = self._channel.unary_unary(
+        self.__step = self._channel.unary_unary(
             f"/{_ENGINE_SVC}/Step",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._get_state = self._channel.unary_unary(
+        self.__get_state = self._channel.unary_unary(
             f"/{_ENGINE_SVC}/GetSessionState",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._destroy = self._channel.unary_unary(
+        self.__destroy = self._channel.unary_unary(
             f"/{_ENGINE_SVC}/DestroySession",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
         
         # Advisory Service
-        self._suggest_actions = self._channel.unary_unary(
+        self.__suggest_actions = self._channel.unary_unary(
             f"/{_ADVISORY_SVC}/SuggestActions",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._session_signals = self._channel.unary_unary(
+        self.__session_signals = self._channel.unary_unary(
             f"/{_ADVISORY_SVC}/SessionSignals",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._evaluate_payoff = self._channel.unary_unary(
+        self.__evaluate_payoff = self._channel.unary_unary(
             f"/{_ADVISORY_SVC}/EvaluatePayoff",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
-        self._evaluate_attack_objective = self._channel.unary_unary(
+        self.__evaluate_attack_objective = self._channel.unary_unary(
             f"/{_ADVISORY_SVC}/EvaluateAttackObjective",
             request_serializer=_encode,
             response_deserializer=_decode,
         )
+
+    def _call(self, method: Any, request: Any, retries: int = 3) -> Any:
+        """Internal helper with retries and standardized error reporting."""
+        last_err = None
+        for i in range(retries):
+            try:
+                return method(request, timeout=self._timeout)
+            except grpc.RpcError as e:
+                last_err = e
+                # Only retry on transient errors
+                if e.code() in (grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED):
+                    time.sleep(0.5 * (i + 1))
+                    continue
+                else:
+                    raise RuntimeError(f"gRPC Error [{e.code()}]: {e.details()}")
+        raise RuntimeError(f"gRPC Call failed after {retries} retries. Last error: {last_err}")
 
     # ------------------------------------------------------------------
     # Engine RPC methods
@@ -124,7 +141,7 @@ class SimulationClient:
         agents — list of dicts: [{"id": "buyer1", "address": "0x...", "role": "buyer", "strategy": "honest"}]
         Returns {"session_id": str, "ok": bool, "error": str|None}
         """
-        return self._start({
+        return self._call(self.__start, {
             "session_id": session_id,
             "agents": agents,
             "protocol_params": protocol_params or {},
@@ -147,18 +164,18 @@ class SimulationClient:
            "halted": bool,
            "error": str|None}
         """
-        return self._step({"session_id": session_id, "event": event})
+        return self._call(self.__step, {"session_id": session_id, "event": event})
 
     def get_session_state(self, session_id: str) -> dict:
         """
         Query the full internal world state of a session.
         Returns {"session_id": str, "ok": bool, "world": dict, "error": str|None}.
         """
-        return self._get_state({"session_id": session_id})
+        return self._call(self.__get_state, {"session_id": session_id})
 
     def destroy_session(self, session_id: str) -> dict:
         """Free session resources. Returns {"session_id": str, "ok": bool}."""
-        return self._destroy({"session_id": session_id})
+        return self._call(self.__destroy, {"session_id": session_id})
 
     # ------------------------------------------------------------------
     # Advisory RPC methods
@@ -166,19 +183,19 @@ class SimulationClient:
 
     def suggest_actions(self, session_id: str, actor_id: str) -> dict:
         """Return protocol-specific action suggestions for an actor."""
-        return self._suggest_actions({"session_id": session_id, "actor_id": actor_id})
+        return self._call(self.__suggest_actions, {"session_id": session_id, "actor_id": actor_id})
 
     def session_signals(self, session_id: str) -> dict:
         """Return protocol-specific risk/economic signals."""
-        return self._session_signals({"session_id": session_id})
+        return self._call(self.__session_signals, {"session_id": session_id})
 
     def evaluate_payoff(self, session_id: str, actor_id: str) -> dict:
         """Return a realised payoff projection for an actor."""
-        return self._evaluate_payoff({"session_id": session_id, "actor_id": actor_id})
+        return self._call(self.__evaluate_payoff, {"session_id": session_id, "actor_id": actor_id})
 
     def evaluate_attack_objective(self, session_id: str, actor_id: str, objective: str | None = None) -> dict:
         """Evaluate an objective-oriented score for adversarial search."""
-        return self._evaluate_attack_objective({
+        return self._call(self.__evaluate_attack_objective, {
             "session_id": session_id, 
             "actor_id": actor_id, 
             "objective": objective

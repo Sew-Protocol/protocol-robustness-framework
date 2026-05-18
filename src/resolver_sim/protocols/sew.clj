@@ -1,7 +1,6 @@
 (ns resolver-sim.protocols.sew
   "SEWProtocol — implementation of DisputeProtocol for the SEW state machine."
-  (:require [clojure.string                              :as str]
-            [resolver-sim.protocols.protocol             :as proto]
+  (:require             [resolver-sim.protocols.protocol             :as proto]
             [resolver-sim.protocols.sew.types            :as t]
             [resolver-sim.protocols.sew.diff             :as diff]
             [resolver-sim.protocols.sew.state-machine    :as sm]
@@ -17,7 +16,9 @@
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
             [resolver-sim.protocols.sew.db               :as sew-db]
             [resolver-sim.contract-model.replay          :as replay]
-            [resolver-sim.yield.registry                 :as yield-reg]))
+            [resolver-sim.yield.registry                 :as yield-reg]
+            [resolver-sim.protocols.sew.compat           :as compat]
+            [resolver-sim.protocols.sew.action-context   :as actx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -30,19 +31,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Helpers (Moved from replay.clj)
 ;; ---------------------------------------------------------------------------
-
-(defn- resolve-address
-  "Return {:ok true :address addr} or {:ok false :error :unknown-agent}.
-   Never throws."
-  [agent-index agent-id]
-  (if-let [agent (get agent-index agent-id)]
-    {:ok true :address (:address agent)}
-    {:ok false :error :unknown-agent :detail {:agent-id agent-id}}))
-
-(defn- check-paused [world]
-  (if (:paused? world)
-    (t/fail :protocol-paused)
-    {:ok true}))
 
 ;; Defaults below are the on-chain contract defaults from BaseEscrow/EscrowFactory.
 ;; Non-zero on-chain defaults:
@@ -93,12 +81,17 @@
   (let [r (or (:role agent) (:type agent) "")]
     (contains? #{"governance" :governance} r)))
 
-(defn- wf-id
-  "Compatibility accessor for workflow identifiers.
-   Accepts either {:workflow-id n} (current) or {:id n} (legacy)."
+(defn- event-workflow-id
+  "Prefer explicit :workflow-id in params, fallback to compatibility id accessor."
   [event]
-  (or (get-in event [:params :workflow-id])
-      (get-in event [:params :id])))
+  (let [p (:params event)]
+    (or (:workflow-id p) (compat/wf-id event))))
+
+(defn- event-slash-id
+  "Prefer explicit :slash-id, then :workflow-id, then compatibility id accessor."
+  [event]
+  (let [p (:params event)]
+    (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
 
 ;; ---------------------------------------------------------------------------
 ;; Dispatch (The SEW State Machine Actions)
@@ -107,20 +100,15 @@
 (defmulti apply-action
   "Dispatch on action name (string), converting underscores to hyphens for compatibility."
   (fn [_ctx _world event]
-    (-> (:action event)
-        name
-        (str/replace "_" "-"))))
+    (compat/canonical-action event)))
 
 (defmethod apply-action "create-escrow"
   [{:keys [agent-index snapshot]} world event]
-  (let [p       (:params event)
-        ar      (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (let [caller (:address ar)
-              token  (:token p)
+  (let [p (:params event)]
+    (actx/with-resolved-actor-and-unpaused
+      agent-index world event
+      (fn [caller]
+        (let [token  (:token p)
               to     (:to p)
               amount (:amount p)]
           ;; Guard against Long overflow in fee arithmetic
@@ -129,11 +117,11 @@
              :detail {:amount amount :max max-safe-amount}}
             (let [cres     (get p :custom-resolver)
                   settings (t/make-escrow-settings
-                            {:custom-resolver cres
-                             :release-address (:release-address p)
-                             :yield-preset (:yield-preset p)
-                             :auto-release-time (:auto-release-time p)
-                             :auto-cancel-time (:auto-cancel-time p)})
+                             {:custom-resolver cres
+                              :release-address (:release-address p)
+                              :yield-preset (:yield-preset p)
+                              :auto-release-time (:auto-release-time p)
+                              :auto-cancel-time (:auto-cancel-time p)})
                   result   (lc/create-escrow world caller token to amount settings snapshot)]
               (if (:ok result)
                 (assoc result :extra {:workflow-id (:workflow-id result)})
@@ -141,97 +129,84 @@
 
 (defmethod apply-action "raise-dispute"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (lc/raise-dispute world (wf-id event) (:address ar))))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      (lc/raise-dispute world (compat/wf-id event) addr))))
 
 (defmethod apply-action "execute-resolution"
   [{:keys [agent-index resolution-module-fn resolution-level-map]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (let [p               (:params event)
-              workflow-id     (:workflow-id p)
-              is-release      (get p :is-release true)
-              resolution-hash (get p :resolution-hash "0xsimhash")
-              ;; Kleros mode: build module fn per-step so it reads the live dispute level
-              ;; from world (level changes after each escalation).
-              effective-rm-fn (or (when resolution-level-map
-                                    (auth/make-kleros-module
-                                     resolution-level-map
-                                     #(t/dispute-level world %)))
-                                  resolution-module-fn)]
-          (res/execute-resolution world (or workflow-id (wf-id event)) (:address ar)
-                                  is-release resolution-hash effective-rm-fn))))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      (let [p               (:params event)
+            workflow-id     (:workflow-id p)
+            is-release      (get p :is-release true)
+            resolution-hash (get p :resolution-hash "0xsimhash")
+            ;; Kleros mode: build module fn per-step so it reads the live dispute level
+            ;; from world (level changes after each escalation).
+            effective-rm-fn (or (when resolution-level-map
+                                  (auth/make-kleros-module
+                                    resolution-level-map
+                                    #(t/dispute-level world %)))
+                                resolution-module-fn)]
+        (res/execute-resolution world (or workflow-id (compat/wf-id event)) addr
+                                is-release resolution-hash effective-rm-fn)))))
 
 (defmethod apply-action "execute-pending-settlement"
   [_ctx world event]
   (if (:paused? world)
     (t/fail :protocol-paused)
-    (res/execute-pending-settlement world (wf-id event))))
+    (res/execute-pending-settlement world (compat/wf-id event))))
 
 (defmethod apply-action "automate-timed-actions"
   [_ctx world event]
-  (res/automate-timed-actions world (wf-id event)))
+  (res/automate-timed-actions world (compat/wf-id event)))
 
 (defmethod apply-action "release"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (lc/release world (wf-id event)
-                    (:address ar) sender-only-release)))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      (lc/release world (compat/wf-id event) addr sender-only-release))))
 
 (defmethod apply-action "sender-cancel"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        ;; nil cancel-strategy → mutual-consent path only
-        (lc/sender-cancel world (wf-id event) (:address ar) nil)))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      ;; nil cancel-strategy → mutual-consent path only
+      (lc/sender-cancel world (compat/wf-id event) addr nil))))
 
 (defmethod apply-action "recipient-cancel"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (lc/recipient-cancel world (wf-id event) (:address ar) nil)))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      (lc/recipient-cancel world (compat/wf-id event) addr nil))))
 
 (defmethod apply-action "auto-cancel-disputed"
   [_ctx world event]
-  (lc/auto-cancel-disputed-escrow world (wf-id event)))
+  (lc/auto-cancel-disputed-escrow world (compat/wf-id event)))
 
 (defmethod apply-action "escalate-dispute"
   [{:keys [agent-index escalation-fn]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (if (:paused? world)
-        (t/fail :protocol-paused)
-        (let [workflow-id (wf-id event)
-              result      (res/escalate-dispute world workflow-id (:address ar) escalation-fn)]
-          (if (:ok result)
-            (assoc result :extra {:new-level    (:new-level result)
-                                  :new-resolver (:new-resolver result)})
-            result))))))
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
+    (fn [addr]
+      (let [workflow-id (compat/wf-id event)
+            result      (res/escalate-dispute world workflow-id addr escalation-fn)]
+        (if (:ok result)
+          (assoc result :extra {:new-level    (:new-level result)
+                                :new-resolver (:new-resolver result)})
+          result)))))
 
 (defmethod apply-action "rotate-dispute-resolver"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [workflow-id   (wf-id event)
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [_addr]
+      (let [workflow-id   (compat/wf-id event)
             new-resolver  (get-in event [:params :new-resolver])
             result        (res/rotate-dispute-resolver world workflow-id new-resolver)]
         (if (:ok result)
@@ -241,19 +216,18 @@
 
 (defmethod apply-action "register-stake"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
       (let [amount (get-in event [:params :amount] 0)]
-        (t/ok (reg/register-stake world (:address ar) amount))))))
+        (t/ok (reg/register-stake world addr amount))))))
 
 (defmethod apply-action "withdraw-stake"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [resolver-addr (:address ar)
-            amount       (get-in event [:params :amount])
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [resolver-addr]
+      (let [amount       (get-in event [:params :amount])
             current      (reg/get-stake world resolver-addr)
             pending-slash-amount (reduce + 0
                                   (for [[_ slash] (:pending-fraud-slashes world)
@@ -278,12 +252,10 @@
 
 (defmethod apply-action "withdraw-escrow"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [p           (:params event)
-            workflow-id (or (:workflow-id p) (wf-id event))]
-        (acct/withdraw-escrow world workflow-id (:address ar))))))
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (acct/withdraw-escrow world (event-workflow-id event) addr))))
 
 (defmethod apply-action "execute-reentrant-withdraw"
   [ctx world event]
@@ -305,18 +277,18 @@
 
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [_addr]
       (let [p     (:params event)
             token (:token p)]
         (acct/withdraw-fees world token)))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [_addr]
       (let [agent (get agent-index (:agent event))]
         ;; Only governance or a 'system' actor should be able to trigger this in a real simulation,
         ;; but for deterministic scenarios we allow the caller to be anyone if they have the strategy.
@@ -330,37 +302,37 @@
 
 (defmethod apply-action "set-paused"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [_addr]
       (t/ok (assoc world :paused? (get-in event [:params :paused?] true))))))
 
 (defmethod apply-action "register-resolver-bond"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
       (let [p      (:params event)
             stable (get p :stable 0)
             sew    (get p :sew 0)]
-        (t/ok (assoc-in world [:resolver-bonds (:address ar)]
+        (t/ok (assoc-in world [:resolver-bonds addr]
                         {:stable stable :sew sew}))))))
 
 (defmethod apply-action "register-senior-bond"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
       (let [p            (:params event)
             coverage-max (get p :coverage-max 0)]
-        (t/ok (assoc-in world [:senior-bonds (:address ar)]
+        (t/ok (assoc-in world [:senior-bonds addr]
                         {:coverage-max coverage-max :reserved-coverage 0}))))))
 
 (defmethod apply-action "delegate-to-senior"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [_addr]
       (let [p           (:params event)
             senior-addr (:senior-addr p)
             coverage    (:coverage p 0)
@@ -376,58 +348,52 @@
 
 (defmethod apply-action "propose-fraud-slash"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [agent (get agent-index (:agent event))]
-        (if-not (governance-actor? agent)
-          (t/fail :not-governance)
-          (let [p             (:params event)
-                workflow-id   (or (:workflow-id p) (wf-id event))
-                resolver-addr (:resolver-addr p)
-                amount        (:amount p)]
-            (res/propose-fraud-slash world workflow-id (:address ar) resolver-addr amount)))))))
+  (actx/with-governance-actor
+    agent-index event
+    governance-actor?
+    (fn [addr _agent]
+      (let [p             (:params event)
+            workflow-id   (event-workflow-id event)
+            resolver-addr (:resolver-addr p)
+            amount        (:amount p)]
+        (res/propose-fraud-slash world workflow-id addr resolver-addr amount)))))
 
 (defmethod apply-action "challenge-resolution"
   [{:keys [agent-index escalation-fn]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (res/challenge-resolution world (wf-id event) (:address ar) escalation-fn))))
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (res/challenge-resolution world (compat/wf-id event) addr escalation-fn))))
 
 (defmethod apply-action "appeal-slash"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [p (:params event)]
-        (res/appeal-slash world (or (:workflow-id p) (wf-id event)) (:address ar)
-                          (or (:slash-id p) (:workflow-id p) (wf-id event)))))))
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (res/appeal-slash world (event-workflow-id event) addr
+                        (event-slash-id event)))))
 
 (defmethod apply-action "resolve-appeal"
   [{:keys [agent-index]} world event]
-  (let [ar (resolve-address agent-index (:agent event))]
-    (if-not (:ok ar)
-      ar
-      (let [agent (get agent-index (:agent event))]
-        (if-not (governance-actor? agent)
-          (t/fail :not-governance)
-          (let [p (:params event)]
-            (res/resolve-appeal world
-            ;; NOTE: event param key remains :upheld? for wire compatibility.
-            ;; Semantics: this flag is about the APPEAL outcome.
-            ;;   true  => appeal upheld (accepted)  => slash reversed
-            ;;   false => appeal rejected           => slash remains pending
-                                (or (:workflow-id p) (wf-id event))
-                                (:address ar)
-                                (:upheld? p)
-                                (or (:slash-id p) (:workflow-id p) (wf-id event)))))))))
+  (actx/with-governance-actor
+    agent-index event
+    governance-actor?
+    (fn [addr _agent]
+      (let [p (:params event)]
+        (res/resolve-appeal world
+        ;; NOTE: event param key remains :upheld? for wire compatibility.
+        ;; Semantics: this flag is about the APPEAL outcome.
+        ;;   true  => appeal upheld (accepted)  => slash reversed
+        ;;   false => appeal rejected           => slash remains pending
+                            (event-workflow-id event)
+                            addr
+                            (:upheld? p)
+                            (event-slash-id event))))))
 
 (defmethod apply-action "execute-fraud-slash"
   [_ctx world event]
-  (let [p (:params event)]
-    (res/execute-fraud-slash world (or (:workflow-id p) (wf-id event))
-                             (or (:slash-id p) (:workflow-id p) (wf-id event)))))
+  (res/execute-fraud-slash world (event-workflow-id event)
+                           (event-slash-id event)))
 
 (defmethod apply-action "advance-time"
   [_ctx world _event]

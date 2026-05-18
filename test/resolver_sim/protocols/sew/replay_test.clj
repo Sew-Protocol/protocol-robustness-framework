@@ -10,6 +10,7 @@
      - Escalation flows: full chain (0→1→2), mid-pending escalation, adversarial rejections"
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.contract-model.replay    :as replay]
+            [resolver-sim.db.temporal              :as temporal]
             [resolver-sim.protocols.protocol       :as engine]
             [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.protocols.sew.invariants :as inv]
@@ -159,6 +160,73 @@
     (is (= :ok (get-in r [:trace 0 :result])))
     (is (= :ok (get-in r [:trace 1 :result])))
     (is (= 0 (get-in r [:trace 0 :extra :workflow-id])))))
+
+(deftest test-compat-action-alias-underscore-vs-hyphen
+  (let [base-events
+        [{:seq 0 :time 1000 :agent "alice"
+          :params {:token "0xUSDC" :to "0xBob" :amount 10000 :custom-resolver "0xResolver"}}
+         {:seq 1 :time 1001 :agent "alice" :params {:workflow-id 0}}]
+        r-underscore
+        (sew/replay-with-sew-protocol
+          (sc :events [(assoc (nth base-events 0) :action "create_escrow")
+                       (assoc (nth base-events 1) :action "release")]))
+        r-hyphen
+        (sew/replay-with-sew-protocol
+          (sc :events [(assoc (nth base-events 0) :action "create-escrow")
+                       (assoc (nth base-events 1) :action "release")]))]
+    (is (= :pass (:outcome r-underscore)))
+    (is (= :pass (:outcome r-hyphen)))
+    (is (= (mapv :result (:trace r-underscore))
+           (mapv :result (:trace r-hyphen))))
+    (is (= (get-in r-underscore [:trace 0 :extra :workflow-id])
+           (get-in r-hyphen [:trace 0 :extra :workflow-id])))))
+
+(deftest test-compat-workflow-id-alias-id-vs-workflow-id
+  (let [create {:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                :params {:token "0xUSDC" :to "0xBob" :amount 10000 :custom-resolver "0xResolver"}}
+        release-workflow-id {:seq 1 :time 1001 :agent "alice" :action "release"
+                             :params {:workflow-id 0}}
+        release-id          {:seq 1 :time 1001 :agent "alice" :action "release"
+                             :params {:id 0}}
+        r-workflow-id (sew/replay-with-sew-protocol (sc :events [create release-workflow-id]))
+        r-id          (sew/replay-with-sew-protocol (sc :events [create release-id]))]
+    (is (= :pass (:outcome r-workflow-id)))
+    (is (= :pass (:outcome r-id)))
+    (is (= (mapv :result (:trace r-workflow-id))
+           (mapv :result (:trace r-id))))
+    (is (= (get-in r-workflow-id [:trace 1 :error])
+           (get-in r-id [:trace 1 :error])))))
+
+(deftest test-temporal-evidence-wiring-opt-in
+  (testing "temporal evidence is emitted only when :temporal-evidence {:enabled? true}"
+    (let [calls (atom [])
+          scenario-base
+          (sc :events
+              [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                :params {:token "0xUSDC" :to "0xBob" :amount 10000
+                         :custom-resolver "0xResolver"}}
+               {:seq 1 :time 1001 :agent "alice" :action "release"
+                :params {:workflow-id 0}}])]
+      (with-redefs [temporal/record-temporal-run!
+                    (fn [ds payload]
+                      (swap! calls conj {:ds ds :payload payload})
+                      {:ok true})]
+        ;; disabled / absent => no call
+        (sew/replay-with-sew-protocol scenario-base)
+        (is (= 0 (count @calls)))
+
+        ;; enabled => exactly one terminal emission
+        (sew/replay-with-sew-protocol
+         (assoc scenario-base
+                :temporal-evidence {:enabled? true
+                                    :datasource nil
+                                    :run-id "wire-test-run"
+                                    :batch-id :wire-batch
+                                    :suite-id :wire-suite
+                                    :git-sha "abc123"}))
+        (is (= 1 (count @calls)))
+        (is (= "wire-test-run" (get-in @calls [0 :payload :run :run-id])))
+        (is (= :pass (get-in @calls [0 :payload :run :outcome])))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 4: Dispute + resolution

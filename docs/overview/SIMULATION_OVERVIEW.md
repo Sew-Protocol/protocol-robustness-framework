@@ -1,4 +1,4 @@
-# SEW Simulation — System Overview
+# Protocol Robustness Framework — System Overview
 
 ## What this system is
 
@@ -21,6 +21,7 @@ remain reusable while protocol-specific rules stay isolated.
 |---|---|---|
 | Protocol-agnostic kernel | Deterministic replay of scenario actions | `contract_model/replay.clj` |
 | Protocol adapters | Plug-in interface + concrete implementation wiring | `protocols/protocol.clj`, `protocols/sew.clj`, `protocols/dummy.clj` |
+| Shared adapter flow-control | Reusable precondition wrappers (actor resolution, checks, role gates) | `protocols/common/action_context.clj` |
 | SEW domain implementation | State machine, lifecycle, accounting, resolution, invariants | `protocols/sew/*` |
 | Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*` |
 | Shell/integration | Persistence, file I/O, gRPC/session management, CLI | `db/*`, `io/*`, `server/*`, `core.clj` |
@@ -30,6 +31,7 @@ remain reusable while protocol-specific rules stay isolated.
 ### Generalized
 - Replay orchestration and step execution flow
 - Protocol interface and adapter boundary
+- Shared adapter flow-control wrappers (`protocols/common/action_context.clj`)
 - A significant portion of simulation harness and I/O/telemetry plumbing
 
 ### SEW-specific (current primary implementation)

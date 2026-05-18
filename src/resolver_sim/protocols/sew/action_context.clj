@@ -1,0 +1,43 @@
+(ns resolver-sim.protocols.sew.action-context
+  "Shared action precondition helpers for SEW handlers."
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.protocols.common.action-context :as common-actx]))
+
+(defn resolve-address
+  "Return {:ok true :address addr} or {:ok false :error :unknown-agent}.
+   Never throws."
+  [agent-index agent-id]
+  (if-let [agent (get agent-index agent-id)]
+    {:ok true :address (:address agent)}
+    {:ok false :error :unknown-agent :detail {:agent-id agent-id}}))
+
+(defn check-paused
+  [world]
+  (if (:paused? world)
+    (t/fail :protocol-paused)
+    {:ok true}))
+
+(defn with-resolved-actor
+  "Resolve event actor and call (f actor-address).
+   Returns the unresolved actor error map unchanged when unknown."
+  [agent-index event f]
+  (common-actx/with-resolved-actor resolve-address agent-index event f))
+
+(defn with-resolved-actor-and-unpaused
+  "Resolve event actor, reject when world is paused, then call (f actor-address)."
+  [agent-index world event f]
+  (common-actx/with-resolved-actor-and-check
+    resolve-address
+    #(if (:paused? world) (t/fail :protocol-paused) {:ok true})
+    agent-index event f))
+
+(defn with-governance-actor
+  "Resolve actor and enforce governance predicate.
+   Calls (f actor-address actor-map) when governance check passes."
+  [agent-index event governance-pred? f]
+  (common-actx/with-role-actor
+    resolve-address
+    (fn [idx ev] (get idx (:agent ev)))
+    governance-pred?
+    #(t/fail :not-governance)
+    agent-index event f))
