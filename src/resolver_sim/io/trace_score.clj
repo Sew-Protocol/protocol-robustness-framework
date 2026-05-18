@@ -26,6 +26,12 @@
      1 if any escrow in the final state is still :pending or :disputed at
      the last trace step (escrow never resolved).  Weighted ×5.
 
+   Adapter status
+   --------------
+   This namespace preserves a stable, generic call surface while delegating
+   protocol-specific score semantics to protocol-scoped providers.
+   Current default provider: SEW (`resolver-sim.io.sew.trace-score`).
+
    Categories
    ----------
    score-category classifies a scored result into one or more category
@@ -50,7 +56,7 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Compatibility adapter: currently delegates to SEW scorer.
+   Compatibility adapter: currently delegates to the SEW scorer.
    Works with replay results regardless of :outcome."
   [result]
   (sew-ts/score-result result))

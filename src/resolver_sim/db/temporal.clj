@@ -3,8 +3,8 @@
 
    This layer is intentionally write-side and analysis-side only.
    It must not influence deterministic transition semantics."
-  (:require [resolver-sim.db.store :as store]
-            [resolver-sim.protocols.protocol :as engine])
+  (:require [resolver-sim.db.store               :as ss]
+            [resolver-sim.protocols.protocol      :as proto])
   (:import [java.util Date UUID]))
 
 (defn- sim-date [block-time]
@@ -14,7 +14,7 @@
   [{:keys [run-id batch-id protocol suite-id scenario-id seed git-sha outcome metrics block-time]}]
   {:id         (or run-id (str (UUID/randomUUID)))
    :batch-id   (or batch-id :temporal-batch)
-   :protocol-id (engine/protocol-id protocol)
+   :protocol-id (proto/protocol-id protocol)
    :suite-id   (or suite-id :temporal-suite)
    :scenario-id (or scenario-id :unknown-scenario)
    :seed       (long (or seed 0))
@@ -63,10 +63,10 @@
         steps*  (map #(build-step-record (assoc % :run-id run-id)) (or steps []))
         invs*   (map #(build-invariant-record (assoc % :run-id run-id)) (or invariants []))
         cov*    (when coverage (build-coverage-record (assoc coverage :run-id run-id)))]
-    (store/insert-temporal-run! ds run-rec)
-    (doseq [s steps*] (store/insert-temporal-step! ds s))
-    (doseq [i invs*] (store/insert-temporal-invariant! ds i))
-    (when cov* (store/insert-temporal-coverage! ds cov*))
+    (ss/insert-temporal-run! ds run-rec)
+    (doseq [s steps*] (ss/insert-temporal-step! ds s))
+    (doseq [i invs*] (ss/insert-temporal-invariant! ds i))
+    (when cov* (ss/insert-temporal-coverage! ds cov*))
     {:run run-rec :steps (vec steps*) :invariants (vec invs*) :coverage cov*}))
 
 (defn summarize-boundary-outcomes

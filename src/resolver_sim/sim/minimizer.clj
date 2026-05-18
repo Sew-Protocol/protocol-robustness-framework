@@ -1,5 +1,5 @@
 (ns resolver-sim.sim.minimizer
-  "Trace minimisation engine.
+  "Trace minimisation proto.
    Reduces a failing event sequence to its 1-minimal subset that still
    triggers a target invariant violation.
 

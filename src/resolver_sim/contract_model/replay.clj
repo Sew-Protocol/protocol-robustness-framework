@@ -1,5 +1,5 @@
 (ns resolver-sim.contract-model.replay
-  "Open-world scenario replay engine. (Protocol Simulation Kernel)
+  "Open-world scenario replay proto. (Protocol Simulation Kernel)
 
    Provides the deterministic harness for executing scenarios. This engine
    is designed as a protocol-agnostic template. Implementation details
@@ -12,9 +12,8 @@
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
-             [resolver-sim.protocols.protocol :as engine]
+             [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.db.temporal       :as temporal]))
-
 ;; ---------------------------------------------------------------------------
 ;; Constants
 ;; ---------------------------------------------------------------------------
@@ -217,31 +216,27 @@
 (defn- zero-metrics
   "Initialise the metrics accumulator for one replay run.
 
-   Produces a map containing:
-   - All base-metrics keys, zeroed to 0 (numeric) or {} (:invariant-results).
-   - All protocol-specific keys declared via metric-vocabulary, zeroed to 0.
-
-   The two sets are disjoint by contract: protocol implementations must not
-   declare base-metric keys in their vocabulary."
+   Produces a map containing all base-metrics keys, zeroed, plus any
+   protocol-specific keys declared via EconomicModel/metric-vocabulary."
   [protocol]
   (let [base {:attack-attempts      0
               :attack-successes     0
               :rejected-attacks     0
               :reverts              0
               :invariant-violations 0
-              ;; Per-invariant failure map: {inv-kw :fail} for any invariant that
-              ;; violated at least once during the run.  Invariants NOT in this map
-              ;; either passed throughout or were never exercised.  Used exclusively
-              ;; by evaluate-invariants — not evaluated by evaluate-metric-op.
               :invariant-results    {}}
-        vocab (engine/metric-vocabulary protocol)]
+        vocab (if (satisfies? proto/EconomicModel protocol)
+                (proto/metric-vocabulary protocol)
+                #{})]
     (into base (map #(vector % 0) vocab))))
 
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (let [result-kw (:result trace-entry)
         accepted? (= result-kw :ok)
         agent     (get agent-index (:agent event))
-        attack?   (engine/adversarial-event? protocol event agent)
+        attack?   (if (satisfies? proto/EconomicModel protocol)
+                    (proto/adversarial-event? protocol event agent)
+                    false)
         tags      (:event-tags trace-entry)
         world-after (:world trace-entry)
         base (cond-> metrics
@@ -257,10 +252,6 @@
                (not accepted?)
                (update :reverts inc)
 
-               ;; Increment aggregate violation counter and record which specific
-               ;; invariants failed.  :violations is a map {inv-kw result-map}
-               ;; from check-all / check-transition; only entries where :holds? is
-               ;; false should be marked :fail.
                (:violations trace-entry)
                (-> (update :invariant-violations inc)
                    (update :invariant-results
@@ -269,24 +260,26 @@
                                        (if (:holds? r) m (assoc m kw :fail)))
                                      acc
                                      (:violations trace-entry))))))]
-    ;; Delegate protocol-specific metric accumulation to the protocol.
-    ;; Passes world-before and world-after so protocols can compute
-    ;; value-based metrics such as :funds-lost without knowledge of the
-    ;; specific world structure being hard-coded in the generic engine.
-    (engine/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)))
+    (if (satisfies? proto/EconomicModel protocol)
+      (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
+      base)))
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
 ;; ---------------------------------------------------------------------------
 
 (defn process-step
-  "Apply one scenario event using a specific DisputeProtocol implementation."
+  "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
   (let [event-time (:time event)
         now        (:block-time world)]
     (if (< event-time now)
-      (let [[proj proj-hash] (engine/compute-projection protocol world)
-            tags             (engine/classify-event protocol event :rejected :time-regression)]
+      (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
+                        (proto/compute-projection protocol world)
+                        [nil nil])
+            tags      (if (satisfies? proto/EconomicModel protocol)
+                        (proto/classify-event protocol event :rejected :time-regression)
+                        #{})]
         {:ok?    true
          :world  world
          :trace-entry {:seq             (:seq event)
@@ -299,14 +292,14 @@
                        :event-tags      tags
                        :invariants-ok?  true
                        :violations      nil
-                       :world           (engine/world-snapshot protocol world)
+                       :world           (proto/world-snapshot protocol world)
                        :projection      proj
-                       :projection-hash proj-hash}
+                       :projection-hash ph}
          :halted? false})
 
       (let [world-t    (if (> event-time now) (assoc world :block-time event-time) world)
             result     (try
-                         (engine/dispatch-action protocol context world-t event)
+                         (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
                            (println "[CRITICAL] Dispatch Exception:" (.getMessage e))
                            (.printStackTrace e)
@@ -316,8 +309,8 @@
             ok?        (:ok result)
             world-next (if (and ok? (:world result)) (:world result) world-t)
 
-            inv-single (when ok? (engine/check-invariants-single protocol world-next))
-            inv-trans  (when ok? (engine/check-invariants-transition protocol world-t world-next))
+            inv-single (when ok? (proto/check-invariants-single protocol world-next))
+            inv-trans  (when ok? (proto/check-invariants-transition protocol world-t world-next))
             violated?  (and ok? (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
                              (merge (when-not (:ok? inv-single) (:violations inv-single))
@@ -325,9 +318,16 @@
 
         (let [result-kw    (cond violated? :invariant-violated ok? :ok :else :rejected)
               error-kw     (when-not ok? (:error result))
-              event-tags   (engine/classify-event protocol event result-kw error-kw)
+              event-tags   (if (satisfies? proto/EconomicModel protocol)
+                             (proto/classify-event protocol event result-kw error-kw)
+                             #{})
               final-world  (if violated? world-t world-next)
-              [proj ph]    (engine/compute-projection protocol final-world)]
+              [proj ph]    (if (satisfies? proto/AnalysisModule protocol)
+                             (proto/compute-projection protocol final-world)
+                             [nil nil])
+              metadata     (if (satisfies? proto/AnalysisModule protocol)
+                             (proto/classify-transition protocol (:action event) result-kw)
+                             nil)]
           {:ok?    (and ok? (not violated?))
            :world  final-world
            :trace-entry
@@ -339,10 +339,11 @@
             :error           error-kw
             :extra           (:extra result)
             :detail          (:detail result)
-            :event-tags      event-tags            :invariants-ok?  (if ok? (and (:ok? inv-single) (:ok? inv-trans)) true)
+            :event-tags      event-tags
+            :invariants-ok?  (if ok? (and (:ok? inv-single) (:ok? inv-trans)) true)
             :violations      all-violations
-            :trace-metadata  (engine/classify-transition protocol (:action event) result-kw)
-            :world           (engine/world-snapshot protocol final-world)
+            :trace-metadata  metadata
+            :world           (proto/world-snapshot protocol final-world)
             :projection      proj
             :projection-hash ph}
            :halted? violated?})))))
@@ -354,9 +355,12 @@
 (require '[clojure.tools.logging :as log])
 
 (defn replay-with-protocol
-  "Replay a scenario map using a specific DisputeProtocol implementation."
+  "Replay a scenario map using tiered protocol implementations."
   [protocol scenario]
-  (let [effective-metrics (into base-metrics (engine/metric-vocabulary protocol))
+  (let [vocab              (if (satisfies? proto/EconomicModel protocol)
+                             (proto/metric-vocabulary protocol)
+                             #{})
+        effective-metrics  (into base-metrics vocab)
         validation (validate-scenario scenario effective-metrics)
         temporal-cfg (:temporal-evidence scenario)
         temporal-enabled? (boolean (:enabled? temporal-cfg))]
@@ -364,17 +368,17 @@
       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
       (let [agents   (:agents scenario)
             p-params (get scenario :protocol-params {})
-            context  (engine/build-execution-context protocol agents p-params)
+            context  (proto/build-execution-context protocol agents p-params)
             agent-index (:agent-index context)
-            world0  (engine/init-world protocol scenario)
+            world0  (proto/init-world protocol scenario)
             events  (sort-by :seq (:events scenario))
             scenario-id (:scenario-id scenario)]
         (log/info :scenario/start {:id scenario-id})
         (loop [world world0 events events trace [] metrics (zero-metrics protocol) id-alias-map {}]
           (if (empty? events)
             (let [open (when-not (or (:allow-open-entities? scenario)
-                                     (:allow-open-disputes? scenario))  ; backward-compat alias
-                         (seq (engine/open-entities protocol world)))]
+                                     (:allow-open-disputes? scenario))
+                         (seq (proto/open-entities protocol world)))]
               (if open
                 {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
                 (do
@@ -416,7 +420,7 @@
                   (log/info :scenario/end {:id scenario-id :outcome :pass})
                   {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics :agents agents :protocol protocol})))
             (let [raw-event  (first events)
-                  alias-res  (engine/resolve-id-alias protocol raw-event id-alias-map)]
+                  alias-res  (proto/resolve-id-alias protocol raw-event id-alias-map)]
               (if-not (:ok alias-res)
                 {:outcome :invalid :scenario-id scenario-id :events-processed (count trace) :halted-at-seq (:seq raw-event) :halt-reason :unresolved-alias :detail (dissoc alias-res :ok) :trace trace :metrics metrics :protocol protocol}
                 (let [event    (:event alias-res)
@@ -425,12 +429,11 @@
                       new-trace   (conj trace entry)
                       new-metrics (accum-metrics protocol metrics event entry agent-index world)
                       created     (when (and (= :ok (:result entry)) (:save-id-as raw-event))
-                                    (engine/created-id protocol (:action event) (:extra entry)))
+                                    (proto/created-id protocol (:action event) (:extra entry)))
                       new-alias-map (if created
                                       (assoc id-alias-map (:save-id-as raw-event) created)
                                       id-alias-map)]
                   
-                  ;; Telemetry hook
                   (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
                   (log/debug :scenario/step {:id scenario-id :seq (:seq event) :action (:action event)})
 

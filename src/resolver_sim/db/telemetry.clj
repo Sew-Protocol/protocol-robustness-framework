@@ -6,22 +6,13 @@
 
    Records are stored in the protocol-agnostic sim_trial_results table.
    Protocol-specific fields are serialised as a metrics_edn blob, populated via
-   DisputeProtocol/io-projection with the :telemetry-record target.
+   AnalysisModule/io-projection with the :telemetry-record target.
 
    All write functions accept a datasource as their first argument.
    Passing nil is safe: writes become no-ops, enabling offline simulation
-   runs and unit tests without a live XTDB instance.
-
-   Typical usage:
-
-     ;; With XTDB running:
-     (def ds (evaluation.store/->datasource))
-     (telemetry/record-trial! ds protocol batch-id trial-id params result)
-
-     ;; Without XTDB (default, tests):
-     (telemetry/record-trial! nil protocol batch-id trial-id params result)"
+   runs and unit tests without a live XTDB instance."
   (:require [resolver-sim.db.store               :as ss]
-            [resolver-sim.protocols.protocol      :as engine])
+            [resolver-sim.protocols.protocol      :as proto])
   (:import [java.util Date UUID]))
 
 ;; ---------------------------------------------------------------------------
@@ -41,7 +32,7 @@
    expected by resolver-sim.db.store/insert-trial-result!.
 
    Arguments:
-     protocol   — a DisputeProtocol instance (used for protocol-id and metrics blob)
+     protocol   — a CoreProtocol instance (used for protocol-id)
      trial-id   — unique string identifier for this trial
      batch-id   — string or keyword identifying the simulation batch
      params     — the params map passed to run-trial
@@ -50,34 +41,33 @@
    The returned map has:
      Top-level generic fields: :id, :batch-id, :protocol-id, :outcome,
        :invariants-ok?, :divergence?, :params, :violations, :valid-from
-     :metrics blob: protocol-specific fields from io-projection :telemetry-record.
-
-   When result is a run-with-divergence-check map (contains :contract),
-   the :contract sub-map is used for trial fields and :divergence for diffs."
+     :metrics blob: protocol-specific fields from AnalysisModule/io-projection."
   [protocol trial-id batch-id params result]
   (let [cm    (if (contains? result :contract) (:contract result) result)
         div   (get result :divergence {})
         btime (get params :block-time 1000)]
     {:id             trial-id
      :batch-id       batch-id
-     :protocol-id    (engine/protocol-id protocol)
+     :protocol-id    (proto/protocol-id protocol)
      :outcome        (get cm :cm/final-state)
      :invariants-ok? (boolean (get cm :cm/invariants-ok? true))
      :divergence?    (boolean (get div :divergence?))
      :params         params
-     :metrics        (engine/io-projection protocol result :telemetry-record)
+     :metrics        (when (satisfies? proto/AnalysisModule protocol)
+                       (proto/io-projection protocol result :telemetry-record))
      :violations     (get cm :cm/inv-violations)
      :valid-from     (sim-date btime)}))
 
 (defn trial->event-records
   "Derive a sequence of sim_entity_events records from a run-trial result.
 
-   Delegates to (engine/io-projection protocol {:trial-id :params :result} :event-records).
-   The protocol is responsible for defining its own event timeline.
+   Delegates to (AnalysisModule/io-projection protocol data :event-records).
    Returns [] when the protocol does not support event record projection."
   [protocol trial-id params result]
-  (or (engine/io-projection protocol {:trial-id trial-id :params params :result result} :event-records)
-      []))
+  (if (satisfies? proto/AnalysisModule protocol)
+    (or (proto/io-projection protocol {:trial-id trial-id :params params :result result} :event-records)
+        [])
+    []))
 
 ;; ---------------------------------------------------------------------------
 ;; Write functions (side-effecting — require XTDB datasource)
@@ -120,14 +110,14 @@
   "Return summary statistics for a stored batch.
 
    Fetches all trial outcomes for batch-id from XTDB and computes
-   aggregate statistics using the protocol's summarise-batch method.
+   aggregate statistics using the protocol's EconomicModel/summarise-batch method.
 
-   Returns {} when ds is nil."
+   Returns {} when ds is nil or protocol does not implement EconomicModel."
   [ds protocol batch-id]
-  (if (nil? ds)
+  (if (or (nil? ds) (not (satisfies? proto/EconomicModel protocol)))
     {}
     (let [results (ss/trial-results ds {:batch-id batch-id
-                                        :protocol-id (engine/protocol-id protocol)})
+                                        :protocol-id (proto/protocol-id protocol)})
           outcomes (mapv (fn [r]
                            (let [m (:result/metrics r)]
                              (cond-> {:trial/id             (:result/id r)
@@ -141,4 +131,4 @@
                                                      (for [[k v] m]
                                                        [(keyword "trial" (name k)) v]))))))
                          results)]
-      (engine/summarise-batch protocol outcomes))))
+      (proto/summarise-batch protocol outcomes))))

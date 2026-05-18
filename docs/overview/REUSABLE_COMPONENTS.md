@@ -96,6 +96,51 @@ Why this matters:
 - makes onboarding for new protocol adapters explicit,
 - avoids hidden SEW assumptions in framework-level modules.
 
+## 6) Optional read-only funds-ledger projection contract (new)
+
+Purpose:
+- provide a protocol-consumer-friendly **use-of-funds** view,
+- expose explicit conservation verdict and drift,
+- keep analysis/reporting read-only and deterministic.
+
+Current implementation status:
+- contract shape is reusable,
+- implementation is currently SEW-scoped via:
+  - `resolver-sim.protocols.sew/protocol` `io-projection` target `:funds-ledger-view`,
+  - `src/resolver_sim/protocols/sew/projection.clj` (`funds-ledger-view`).
+
+Scope-1 extraction status (completed):
+- contract is now documented at the core adapter boundary in
+  `src/resolver_sim/protocols/protocol.clj` (`AnalysisModule/io-projection` docstring),
+- no shared computation module introduced yet,
+- no cross-adapter behavior changes required.
+
+Recommended cross-protocol output shape (optional AnalysisModule target):
+
+```clj
+{:as-of-block-time ...
+ :by-token {token {:held ...
+                   :released ...
+                   :refunded ...
+                   :withdrawn ...
+                   :bond-posted ...
+                   :bond-slashed ...}}
+ :global {:claimable-total ...
+          :bond-locked-total ...
+          :bond-fees-total ...
+          :bond-distribution-total ...
+          :retained-slash-reserves ...}
+ :conservation {:holds? ...
+                :drift-total ...
+                :drift-by-token {...}
+                :violations [...]}}
+```
+
+Boundary rules:
+- this projection is **read-only** (must not mutate world/session state),
+- protocol-specific accounting semantics remain protocol-scoped,
+- only the output contract should be treated as reusable framework guidance.
+
 ## Suggested onboarding path for new developers
 
 1. `src/resolver_sim/protocols/sew.clj` and `protocols/sew/state_machine.clj`
@@ -104,6 +149,10 @@ Why this matters:
 4. `src/resolver_sim/contract_model/replay.clj`
 5. `data/fixtures/README.md`
 6. `src/resolver_sim/scenario/expectations.clj`
+
+Architecture boundary references:
+- `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`
+- `docs/architecture/ARCHITECTURE.md` ("Stable Framework vs Reference Implementation vs Research")
 
 ## Scope note
 

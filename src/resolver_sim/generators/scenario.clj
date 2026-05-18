@@ -1,7 +1,7 @@
 (ns resolver-sim.generators.scenario
   "SEW Protocol scenario composition for deterministic generator output."
   (:require [resolver-sim.generators.stateful :as stateful]
-            [resolver-sim.protocols.protocol :as engine]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.registry :as preg]))
 
 (def default-agents
@@ -20,8 +20,8 @@
   [{:keys [seed max-steps initial-block-time profile protocol]
     :or {seed 42 max-steps 4 initial-block-time 1000 profile :phase1-lifecycle}}]
   (let [protocol (or protocol (preg/get-protocol preg/default-protocol-id))
-        context (engine/build-execution-context protocol default-agents default-protocol-params)
-        world0  (engine/init-world protocol {:initial-block-time initial-block-time})
+        context (proto/build-execution-context protocol default-agents default-protocol-params)
+        world0  (proto/init-world protocol {:initial-block-time initial-block-time})
         {:keys [events]} (stateful/generate-event-sequence
                           {:seed seed
                            :max-steps max-steps

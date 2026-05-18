@@ -843,6 +843,36 @@ out = {
   "targets": rows,
 }
 
+# Status-count block for quick dashboard/CLI consumption
+target_total = len(rows)
+target_pass = sum(1 for r in rows if r.get("status") == "pass")
+target_fail = sum(1 for r in rows if r.get("status") == "fail")
+target_unknown = max(0, target_total - target_pass - target_fail)
+
+critical_count = len(risk_digest.get("critical_findings", []))
+warning_count = len(risk_digest.get("warnings", []))
+info_count = len(risk_digest.get("infos", []))
+gates_failed_count = len(risk_digest.get("gates_failed", []))
+gates_passed_count = len(risk_digest.get("gates_passed", []))
+
+out["status_counts"] = {
+  "targets": {
+    "total": target_total,
+    "pass": target_pass,
+    "fail": target_fail,
+    "unknown": target_unknown
+  },
+  "risk": {
+    "critical": critical_count,
+    "warning": warning_count,
+    "info": info_count
+  },
+  "gates": {
+    "failed": gates_failed_count,
+    "passed": gates_passed_count
+  }
+}
+
 # P2: per-phase failure counters for dashboard-friendly aggregation
 phase_failures = {
     "phase_ai": 0,

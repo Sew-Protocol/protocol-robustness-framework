@@ -127,6 +127,89 @@ Shell code flows inward; core code never reaches out.
 
 ---
 
+## Stable Framework vs Reference Implementation vs Research
+
+This section is the canonical maturity boundary for contributors and external
+readers.
+
+### 1) Stable framework substrate (reusable)
+
+Purpose:
+- deterministic replay orchestration,
+- adapter contract boundaries,
+- scenario execution plumbing,
+- invariant/reporting scaffolding,
+- temporal/state tooling where semantics are protocol-agnostic.
+
+Primary namespaces:
+- `contract_model/*`
+- `protocols/protocol.clj`
+- `protocols/common/*`
+- `scenario/*`
+- `time/*` (where logic is protocol-neutral)
+- infrastructure portions of `server/*`, `db/*`, `io/*`
+
+Rule:
+- may define reusable mechanics and contracts,
+- must not encode protocol-specific economic semantics.
+
+### 2) Reference implementation (SEW)
+
+Purpose:
+- provide a complete, testable protocol implementation using framework
+  interfaces,
+- serve as the primary reference adapter for architecture and testing patterns.
+
+Primary namespaces:
+- `protocols/sew/*`
+- SEW-backed adapter providers under `generators/sew/*`, `io/sew/*`
+- SEW-integrated policy/accounting modules (including current yield integration)
+
+Rule:
+- protocol semantics are owned here (escrow/dispute/claimability/payout/
+  authority/bond/resolution semantics),
+- reusable output contracts are allowed, but semantic interpretation remains
+  SEW-specific unless proven otherwise.
+
+### 3) Research / exploratory modules
+
+Purpose:
+- hypothesis testing,
+- adversarial exploration,
+- phase-specific studies,
+- robustness research support.
+
+Typical locations:
+- exploratory portions of `sim/*`
+- `sim/adversarial/*`
+- research-oriented Python workflows under `python/*`
+
+Rule:
+- valuable for investigation, but not treated as stable framework API,
+- should be labeled or placed to avoid implying production-grade generic
+  capability.
+
+### Cross-cutting accounting boundary
+
+The framework can generalize:
+- reconciliation mechanics,
+- aggregation mechanics,
+- drift/conservation reporting contracts,
+- read-only projection interfaces.
+
+The framework must not prematurely generalize:
+- escrow liability meaning,
+- dispute/payout semantics,
+- claimability semantics,
+- resolver/bond economic semantics,
+- protocol-specific solvency interpretation.
+
+Current position:
+- `:funds-ledger-view` is a reusable output contract,
+- current computation remains SEW-scoped by design.
+
+---
+
 ## Layering rules
 
 | Namespace | May import | Must NOT import |

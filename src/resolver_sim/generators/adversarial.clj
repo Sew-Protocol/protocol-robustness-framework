@@ -4,9 +4,10 @@
    Encodes both action-priority policy and time-shaping policy so profiles
    are more than simple ordering maps.
 
-   Compatibility adapter: delegates to protocol-scoped adversarial generators
-   (currently SEW)."
-  (:require [resolver-sim.protocols.protocol :as engine]
+   Compatibility adapter status:
+   - Delegates to protocol-scoped adversarial generators.
+   - SEW is the currently wired default provider."
+  (:require [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.generators.sew.adversarial :as sew-adv]))
 
 (defn profile-priority
@@ -16,7 +17,7 @@
 (defn valid-next-actions
   "Delegates to canonical action validity and applies adversarial profile sort bias."
   [profile protocol context world seq time]
-  (case (engine/protocol-id protocol)
+  (case (proto/protocol-id protocol)
     "sew-v1" (sew-adv/valid-next-actions profile protocol context world seq time)
     []))
 

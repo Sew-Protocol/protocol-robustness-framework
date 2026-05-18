@@ -11,7 +11,8 @@
    re-used here.
 
    This namespace is pure — no I/O, no DB, no side effects."
-  (:require [resolver-sim.scenario.projection :as proj]))
+  (:require [resolver-sim.scenario.projection :as proj]
+            [resolver-sim.protocols.sew.invariants :as inv]))
 
 ;; ---------------------------------------------------------------------------
 ;; SEW terminal-state vocabulary
@@ -23,6 +24,8 @@
 
 (defn- terminal-state? [state]
   (contains? terminal-escrow-states (keyword (or state ""))))
+
+(declare funds-ledger-view)
 
 ;; ---------------------------------------------------------------------------
 ;; SEW trace-end projection
@@ -229,7 +232,8 @@
                                       :non-terminal)}])
                        escrows))]
 
-        {:terminal-world
+        (let [funds-ledger (funds-ledger-view world)]
+          {:terminal-world
          {:escrows             escrows
           :total-held-by-token (get world :total-held {})
           :total-fees-by-token (get world :total-fees {})
@@ -266,7 +270,10 @@
           :dispute-count     (get metrics :disputes-triggered 0)
           :escalation-levels escalation-levels
           :terminal-time     (get world :block-time 0)
-          :halt-reason       (:halt-reason result nil)}
+          :halt-reason       (:halt-reason result nil)
+          :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
+          :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
+          :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
 
          :money-movement-summary
          {:workflow-outcomes workflow-outcomes
@@ -282,4 +289,79 @@
          :stake-flow-summary stake-flow
 
          :decisions decisions
-         :raw-trace trace}))))
+         :raw-trace trace
+         :funds-ledger-summary funds-ledger})))))
+
+;; ---------------------------------------------------------------------------
+;; Read-only use-of-funds projection
+;; ---------------------------------------------------------------------------
+
+(defn funds-ledger-view
+  "Return a read-only use-of-funds ledger projection for a SEW world.
+
+   Output is intentionally accounting-centric and protocol-consumer friendly:
+   - token-level buckets (held/released/refunded/withdrawn/bond flows)
+   - global custody buckets (claimable, bond-locked, bond-fees, distribution)
+   - conservation verdict and explicit drift summaries."
+  [world]
+  (let [held         (:total-held world {})
+        released     (:total-released world {})
+        refunded     (:total-refunded world {})
+        withdrawn    (:total-withdrawn world {})
+        posted       (:total-bonds-posted world {})
+        slashed      (:bond-slashed world {})
+        escrows      (:escrow-transfers world {})
+        tokens       (-> #{}
+                         (into (keys held))
+                         (into (keys released))
+                         (into (keys refunded))
+                         (into (keys withdrawn))
+                         (into (keys posted))
+                         (into (map :token (vals escrows))))
+        slashed-by-token
+        (reduce (fn [acc [wf amt]]
+                  (if-let [token (get-in escrows [wf :token])]
+                    (update acc token (fnil + 0) amt)
+                    acc))
+                {}
+                slashed)
+        by-token
+        (into {}
+              (for [token tokens]
+                [token {:held         (long (get held token 0))
+                        :released     (long (get released token 0))
+                        :refunded     (long (get refunded token 0))
+                        :withdrawn    (long (get withdrawn token 0))
+                        :bond-posted  (long (get posted token 0))
+                        :bond-slashed (long (get slashed-by-token token 0))}]))
+        claimable-total
+        (reduce + 0 (for [wf (vals (:claimable world {}))
+                          amt (vals wf)]
+                      (long amt)))
+        bond-locked-total
+        (reduce + 0 (for [wf (vals (:bond-balances world {}))
+                          amt (vals wf)]
+                      (long amt)))
+        bond-fees-total (reduce + 0 (map long (vals (:bond-fees world {}))))
+        bond-distribution-total
+        (let [d (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})]
+          (+ (long (:insurance d 0))
+             (long (:protocol d 0))
+             (long (:burned d 0))))
+        retained-total (long (:retained-slash-reserves world 0))
+        conservation   (inv/conservation-of-funds? world)
+        drift-by-token (into {}
+                             (for [{:keys [token accounted deposited]} (:violations conservation [])]
+                               [token (- (long accounted) (long deposited))]))
+        drift-total    (reduce + 0 (vals drift-by-token))]
+    {:as-of-block-time (:block-time world)
+     :by-token by-token
+     :global {:claimable-total          claimable-total
+              :bond-locked-total        bond-locked-total
+              :bond-fees-total          bond-fees-total
+              :bond-distribution-total  bond-distribution-total
+              :retained-slash-reserves  retained-total}
+     :conservation {:holds?        (:holds? conservation)
+                    :drift-total   drift-total
+                    :drift-by-token drift-by-token
+                    :violations    (:violations conservation [])}}))

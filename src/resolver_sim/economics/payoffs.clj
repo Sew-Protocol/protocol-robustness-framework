@@ -1,8 +1,12 @@
 (ns resolver-sim.economics.payoffs
-  "Economic logic for dispute-protocol simulations.
+  "[REFERENCE-IMPLEMENTATION ALIGNED] Economic logic for dispute-protocol simulations.
    Centralizes payoff, fee, and bounty calculations used by simulation and
-   contract-model flows. Fee semantics are currently aligned with the active
-   SEW accounting path." )
+   contract-model flows.
+
+   Boundary note:
+   - This namespace is currently aligned with the active SEW accounting path.
+   - Treat constants and payout formulas here as reference defaults, not
+     universal cross-protocol economics." )
 
 ;; Fee denominator constant
 (def ^:private fee-denominator 10000)

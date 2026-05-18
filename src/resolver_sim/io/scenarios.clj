@@ -1,5 +1,5 @@
 (ns resolver-sim.io.scenarios
-  "Load and parse scenario JSON files for the contract-model replay engine.
+  "Load and parse scenario JSON files for the contract-model replay proto.
 
    Layering: io/* shell layer — file I/O only.  Callers combine this with
    replay/replay-with-protocol (using resolver-sim.protocols.registry) for

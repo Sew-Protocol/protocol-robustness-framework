@@ -2,7 +2,7 @@
   "Deterministic stateful scenario sequence generation."
   (:require [resolver-sim.generators.actions :as actions]
             [resolver-sim.generators.adversarial :as adv]
-            [resolver-sim.protocols.protocol :as engine]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.registry :as preg]))
 
 (def ^:private phase1-action-order
@@ -57,7 +57,7 @@
               ev    (choose-event valid rng profile)]
           (if-not ev
             {:events events :world world}
-             (let [r (engine/dispatch-action protocol context world ev)]
+             (let [r (proto/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
                 {:events events :world world}))))))))
@@ -91,7 +91,7 @@
                       (nth (vec valid) (mod idx (count valid))))]
           (if-not ev
             {:events events :world world}
-             (let [r (engine/dispatch-action protocol context world ev)]
+             (let [r (proto/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
                  {:events events :world world}))))))))

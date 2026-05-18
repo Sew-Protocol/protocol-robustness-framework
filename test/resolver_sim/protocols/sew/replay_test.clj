@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.replay-test
-  "Unit tests for the open-world scenario replay engine.
+  "Unit tests for the open-world scenario replay proto.
 
    Covers:
      - Structural validation (schema-version, seq, time)
@@ -11,7 +11,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.contract-model.replay    :as replay]
             [resolver-sim.db.temporal              :as temporal]
-            [resolver-sim.protocols.protocol       :as engine]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.types     :as t]
@@ -247,6 +247,20 @@
     (is (= 1 (get-in r [:metrics :resolutions-executed])))
     (is (= 0 (get-in r [:metrics :invariant-violations])))
     (is (every? #(= :ok (:result %)) (:trace r)))))
+
+(deftest test-trace-projection-includes-funds-ledger-summary
+  (let [r (sew/replay-with-sew-protocol
+           (sc :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 10000
+                          :custom-resolver "0xResolver"}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}]))
+        p (proto/trace-projection sew/protocol r)]
+    (is (map? (:funds-ledger-summary p)))
+    (is (contains? (:trace-summary p) :funds-conservation-holds?))
+    (is (contains? (:trace-summary p) :funds-drift-total))
+    (is (contains? (:trace-summary p) :funds-drift-by-token))))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 5: Adversarial rejections — non-fatal
@@ -516,7 +530,7 @@
                 {:id "resolver0" :address res-level-0  :type "resolver"}
                 {:id "resolver1" :address res-level-1  :type "resolver"}
                 {:id "resolver2" :address res-level-2  :type "resolver"}]]
-    (engine/build-execution-context sew/protocol agents
+    (proto/build-execution-context sew/protocol agents
                           (assoc appeal-params :escalation-resolvers {:1 res-level-1 :2 res-level-2}))))
 
 (defn- initial-disputed-world
@@ -636,7 +650,7 @@
                       {:id "mallory"  :address "0xMallory"  :type "attacker"}
                       {:id "resolver0" :address res-level-0 :type "resolver"}
                       {:id "resolver1" :address res-level-1 :type "resolver"}]]
-          (engine/build-execution-context sew/protocol agents
+          (proto/build-execution-context sew/protocol agents
                                 (assoc appeal-params :escalation-resolvers {:1 res-level-1})))
         w   (initial-disputed-world ctx-with-mallory)
         ;; Submit verdict → deferred

@@ -1,9 +1,15 @@
 (ns resolver-sim.sim.adversarial.reorg-check
-  "Stochastic reorg and fork-reconciliation validation.
+  "[EXPERIMENTAL] Stochastic reorg and fork-reconciliation validation.
    
    Simulates competing L1/L2 forks by snapshotting world state and
    applying divergent transaction paths. Asserts that solvency and
-   idempotence invariants hold across all forks."
+   idempotence invariants hold across all forks.
+
+   Maturity:
+   - This namespace is currently a research scaffold, not a production-grade
+     validation component.
+   - Keep out of core public capability claims until replay-integrated
+     execution and assertions are fully implemented."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.runner :as runner]
             [resolver-sim.stochastic.rng :as rng]

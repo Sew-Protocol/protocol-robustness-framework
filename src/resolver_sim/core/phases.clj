@@ -17,28 +17,28 @@
             [resolver-sim.sim.multi-epoch       :as multi-epoch]
             [resolver-sim.sim.waterfall         :as waterfall]
             [resolver-sim.sim.governance-impact :as gov-impact]
-            [resolver-sim.sim.economic.phase-o          :as phase-o]
-            [resolver-sim.sim.adversarial.phase-p-lite  :as phase-p-lite]
-            [resolver-sim.sim.adversarial.phase-y       :as phase-y]
-            [resolver-sim.sim.adversarial.phase-z       :as phase-z]
-            [resolver-sim.sim.governance.phase-aa       :as phase-aa]
-            [resolver-sim.sim.governance.phase-ab       :as phase-ab]
-            [resolver-sim.sim.adversarial.phase-ac      :as phase-ac]
-            [resolver-sim.sim.governance.phase-ad       :as phase-ad]
-            [resolver-sim.sim.adversarial.phase-ae      :as phase-ae]
-            [resolver-sim.sim.adversarial.phase-af      :as phase-af]
-            [resolver-sim.sim.adversarial.phase-ag      :as phase-ag]
-            [resolver-sim.sim.adversarial.phase-ah      :as phase-ah]
-            [resolver-sim.sim.adversarial.phase-ai      :as phase-ai]
-            [resolver-sim.sim.adversarial.phase-f       :as phase-f]
-            [resolver-sim.sim.governance.phase-t        :as phase-t]
-            [resolver-sim.sim.adversarial.phase-p-revised :as phase-p-revised]
-            [resolver-sim.sim.adversarial.phase-q       :as phase-q]
-            [resolver-sim.sim.adversarial.phase-r       :as phase-r]
-            [resolver-sim.sim.economic.phase-u          :as phase-u]
-            [resolver-sim.sim.economic.phase-v          :as phase-v]
-            [resolver-sim.sim.economic.phase-w          :as phase-w]
-            [resolver-sim.sim.economic.phase-x          :as phase-x]
+            [resolver-sim.research.sew.economic.market-exit             :as market-exit]
+            [resolver-sim.research.sew.adversarial.falsification-lite   :as falsification-lite]
+            [resolver-sim.research.sew.adversarial.evidence-fog         :as evidence-fog]
+            [resolver-sim.research.sew.adversarial.legitimacy-loop      :as legitimacy-loop]
+            [resolver-sim.research.sew.governance.adversary             :as adversary]
+            [resolver-sim.research.sew.governance.effort-rewards        :as effort-rewards]
+            [resolver-sim.research.sew.adversarial.trust-floor          :as trust-floor]
+            [resolver-sim.research.sew.governance.bandwidth-floor       :as bandwidth-floor]
+            [resolver-sim.research.sew.adversarial.fair-slashing        :as fair-slashing]
+            [resolver-sim.research.sew.adversarial.epoch-solvency       :as epoch-solvency]
+            [resolver-sim.research.sew.adversarial.ema-convergence      :as ema-convergence]
+            [resolver-sim.research.sew.adversarial.equity-divergence    :as equity-divergence]
+            [resolver-sim.research.sew.adversarial.escalation-trap      :as escalation-trap]
+            [resolver-sim.research.sew.adversarial.collusion-ring       :as collusion-ring]
+            [resolver-sim.research.sew.governance.capture-drift         :as capture-drift]
+            [resolver-sim.research.sew.adversarial.falsification-revised :as falsification-revised]
+            [resolver-sim.research.sew.adversarial.advanced-vulnerability :as advanced-vulnerability]
+            [resolver-sim.research.sew.adversarial.liveness-participation :as liveness-participation]
+            [resolver-sim.research.sew.economic.adaptive-attacker       :as adaptive-attacker]
+            [resolver-sim.research.sew.economic.belief-cascades         :as belief-cascades]
+            [resolver-sim.research.sew.economic.dispute-clustering       :as dispute-clustering]
+            [resolver-sim.research.sew.economic.burst-concurrency       :as burst-concurrency]
             [resolver-sim.sim.adversarial               :as adversarial]
             [resolver-sim.stochastic.rng                :as rng]))
 
@@ -300,49 +300,49 @@
 
 (def phase-runners
   {:phase-p-lite    ["\n📊 Running Phase P Lite Falsification Test"
-                     (fn [p _] (phase-p-lite/run-phase-p-lite p))]
+                     (fn [p _] (falsification-lite/run-phase-p-lite p))]
    :market-exit     ["\n🔄 Running Phase O Market Exit Cascade"
-                     (fn [p _] (phase-o/run-phase-o-complete p))]
+                     (fn [p _] (market-exit/run-phase-o-complete p))]
    :phase-y         ["\n🔬 Running Phase Y: Evidence Fog & Attention Budgets"
-                     (fn [p _] (phase-y/run-phase-y-sweep p))]
+                     (fn [p _] (evidence-fog/run-phase-y-sweep p))]
    :phase-z         ["\n🔄 Running Phase Z: Legitimacy & Reflexive Participation"
-                     (fn [p _] (phase-z/run-phase-z-sweep p))]
+                     (fn [p _] (legitimacy-loop/run-phase-z-sweep p))]
    :phase-aa        ["\n🏛️  Running Phase AA: Governance as Adversary"
-                     (fn [p _] (phase-aa/run-phase-aa-sweep p))]
+                     (fn [p _] (adversary/run-phase-aa-sweep p))]
    :phase-ab        ["\n📊 Running Phase AB: Per-Dispute Effort Rewards"
-                     (fn [p _] (phase-ab/run-phase-ab-sweep p))]
+                     (fn [p _] (effort-rewards/run-phase-ab-sweep p))]
    :phase-ac        ["\n🔄 Running Phase AC: Trust Floor & Emergency Onboarding"
-                     (fn [p _] (phase-ac/run-phase-ac-sweep p))]
+                     (fn [p _] (trust-floor/run-phase-ac-sweep p))]
    :phase-ad        ["\n🏛️  Running Phase AD: Governance Bandwidth Floor"
-                     (fn [p _] (phase-ad/run-phase-ad-sweep p))]
-   :phase-ae        [nil (fn [p _] (phase-ae/run-phase-ae p))]
-   :phase-af        [nil (fn [p _] (phase-af/run-phase-af p))]
-   :phase-ag        [nil (fn [p _] (phase-ag/run-phase-ag p))]
-   :phase-ah        [nil (fn [p _] (phase-ah/run-phase-ah p))]
-   :phase-ai        [nil (fn [p _] (phase-ai/run-phase-ai p))]
-   :phase-f         [nil (fn [p _] (phase-f/run-phase-f p))]
+                     (fn [p _] (bandwidth-floor/run-phase-ad-sweep p))]
+   :phase-ae        [nil (fn [p _] (fair-slashing/run-phase-ae p))]
+   :phase-af        [nil (fn [p _] (epoch-solvency/run-phase-af p))]
+   :phase-ag        [nil (fn [p _] (ema-convergence/run-phase-ag p))]
+   :phase-ah        [nil (fn [p _] (equity-divergence/run-phase-ah p))]
+   :phase-ai        [nil (fn [p _] (escalation-trap/run-phase-ai p))]
+   :phase-f         [nil (fn [p _] (collusion-ring/run-phase-f p))]
    :phase-ac-sweep  ["\n🔬 Running Phase AC Threshold Search"
-                     (fn [p _] (phase-ac/run-phase-ac-threshold-sweep p))]
+                     (fn [p _] (trust-floor/run-phase-ac-threshold-sweep p))]
    :phase-ad-sweep  ["\n🔬 Running Phase AD Threshold Search"
-                     (fn [p _] (phase-ad/run-phase-ad-threshold-sweep p))]
+                     (fn [p _] (bandwidth-floor/run-phase-ad-threshold-sweep p))]
    :phase-ac-cap    ["\n🔬 Running Phase AC Capacity Expansion"
-                     (fn [p _] (phase-ac/run-phase-ac-capacity-expansion p))]
+                     (fn [p _] (trust-floor/run-phase-ac-capacity-expansion p))]
    :phase-t         ["\n🏛️  Running Phase T: Governance Capture via Rule Drift"
-                     (fn [p _] (phase-t/run-phase-t-sweep p))]
+                     (fn [p _] (capture-drift/run-phase-t-sweep p))]
    :phase-p-revised ["\n📊 Running Phase P Revised: Sequential Appeal Falsification"
-                     (fn [_ _] (phase-p-revised/run-phase-p-revised-sweep))]
+                     (fn [_ _] (falsification-revised/run-phase-p-revised-sweep))]
    :phase-q         ["\n🔬 Running Phase Q: Advanced Vulnerability"
-                     (fn [_ _] (phase-q/run-phase-q-sweep))]
+                     (fn [_ _] (advanced-vulnerability/run-phase-q-sweep))]
    :phase-r         ["\n🔬 Running Phase R: Liveness & Participation Failure"
-                     (fn [_ _] (phase-r/run-phase-r-sweep))]
+                     (fn [_ _] (liveness-participation/run-phase-r-sweep))]
    :phase-u         ["\n🎯 Running Phase U: Adaptive Attacker Learning"
-                     (fn [_ _] (phase-u/run-phase-u-sweep))]
+                     (fn [_ _] (adaptive-attacker/run-phase-u-sweep))]
    :phase-v         ["\n🌊 Running Phase V: Correlated Belief Cascades"
-                     (fn [_ _] (phase-v/run-phase-v-sweep))]
+                     (fn [_ _] (belief-cascades/run-phase-v-sweep))]
    :phase-w         ["\n🎯 Running Phase W: Dispute Type Clustering"
-                     (fn [_ _] (phase-w/run-phase-w-sweep))]
+                     (fn [_ _] (dispute-clustering/run-phase-w-sweep))]
    :phase-x         ["\n💥 Running Phase X: Burst Concurrency Exploit"
-                     (fn [_ _] (phase-x/run-phase-x-sweep))]
+                     (fn [_ _] (burst-concurrency/run-phase-x-sweep))]
    :governance-impact [nil run-governance-impact-simulation]
    :waterfall         [nil run-waterfall-simulation]
    :multi-epoch       [nil run-multi-epoch-simulation]

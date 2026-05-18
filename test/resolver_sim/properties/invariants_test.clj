@@ -7,7 +7,7 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.generators.scenario :as scenario]
             [resolver-sim.generators.stateful :as stateful]
-            [resolver-sim.protocols.protocol :as engine]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew :as sew]))
 
 (def ^:private trials 120)
@@ -42,10 +42,10 @@
     (is (every? #(not= :invalid (:outcome %)) results) (pr-str results))))
 
 (deftest intents-interpreter-is-shrink-friendly
-  (let [context (engine/build-execution-context sew/protocol
+  (let [context (proto/build-execution-context sew/protocol
                                                 scenario/default-agents
                                                 scenario/default-protocol-params)
-        world0  (engine/init-world sew/protocol {:initial-block-time 1000})
+        world0  (proto/init-world sew/protocol {:initial-block-time 1000})
         failing-prop
         (prop/for-all [intents (gen/vector gen/nat 0 8)]
           (let [{:keys [events]} (stateful/generate-event-sequence-from-intents

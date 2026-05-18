@@ -8,7 +8,7 @@
      - Python → Clojure: snake_case keys  (parse: snake_case → kebab-case keywords)
      - Clojure → Python: snake_case keys  (stream: kebab-case keywords → snake_case)
 
-   Service: simulation.engine.SimulationEngine
+   Service: simulation.proto.SimulationEngine
      rpc StartSession   (StartRequest)   → StartResponse
      rpc Step           (StepRequest)    → StepResponse
      rpc DestroySession (DestroyRequest) → DestroyResponse
@@ -71,7 +71,7 @@
   (let [m (json-marshaller)]
     (-> (MethodDescriptor/newBuilder m m)
         (.setType MethodDescriptor$MethodType/UNARY)
-        (.setFullMethodName (str "simulation.engine." service-name "/" rpc-name))
+        (.setFullMethodName (str "simulation.proto." service-name "/" rpc-name))
         (.build))))
 
 ;; ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@
         step-m    (make-method "SimulationEngine" "Step")
         destroy-m (make-method "SimulationEngine" "DestroySession")
         state-m   (make-method "SimulationEngine" "GetSessionState")
-        svc-desc  (-> (ServiceDescriptor/newBuilder "simulation.engine.SimulationEngine")
+        svc-desc  (-> (ServiceDescriptor/newBuilder "simulation.proto.SimulationEngine")
                       (.addMethod start-m)
                       (.addMethod step-m)
                       (.addMethod destroy-m)
@@ -218,7 +218,7 @@
         signals-m   (make-method "AdvisoryService" "SessionSignals")
         payoff-m    (make-method "AdvisoryService" "EvaluatePayoff")
         objective-m (make-method "AdvisoryService" "EvaluateAttackObjective")
-        svc-desc    (-> (ServiceDescriptor/newBuilder "simulation.engine.AdvisoryService")
+        svc-desc    (-> (ServiceDescriptor/newBuilder "simulation.proto.AdvisoryService")
                         (.addMethod suggest-m)
                         (.addMethod signals-m)
                         (.addMethod payoff-m)

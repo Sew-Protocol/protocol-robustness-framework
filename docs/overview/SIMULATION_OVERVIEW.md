@@ -26,6 +26,29 @@ remain reusable while protocol-specific rules stay isolated.
 | Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*` |
 | Shell/integration | Persistence, file I/O, gRPC/session management, CLI | `db/*`, `io/*`, `server/*`, `core.clj` |
 
+## Namespace maturity map (public-facing)
+
+### Stable core (framework-level)
+- `contract_model/*`
+- `protocols/protocol.clj`
+- `protocols/common/*`
+- `scenario/*`
+- `io/scenarios.clj`, `db/*`, `server/*`
+
+### SEW bespoke implementation (production-grade for this repo)
+- `protocols/sew/*`
+- `yield/modules/aave.clj` and SEW-integrated yield flows
+
+### Generic adapters (stable API surface; SEW default providers today)
+- `generators/actions.clj` → `generators/sew/actions.clj`
+- `generators/adversarial.clj` → `generators/sew/adversarial.clj`
+- `io/trace_score.clj` → `io/sew/trace_score.clj`
+
+### Experimental / research track (exclude from core capability claims)
+- `sim/adversarial/reorg_check.clj`
+- selected exploratory `sim/*` modules
+- `research/sew/*`
+
 ## What is generalized vs SEW-specific
 
 ### Generalized
@@ -76,8 +99,12 @@ For current test shape and suite details, see:
 
 - Deep architecture and layering rules:
   `docs/architecture/ARCHITECTURE.md`
+- Adapter implementation boundaries and authoring:
+  `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`
 - Reusable adapter/harness design notes:
   `docs/overview/REUSABLE_COMPONENTS.md`
+- Use-of-funds accounting contract and drift interpretation:
+  `docs/overview/USE_OF_FUNDS.md`
 - End-user and CLI workflows:
   `docs/quickstart/QUICKSTART.md`, `docs/usage.md`
 
