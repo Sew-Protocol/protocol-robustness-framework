@@ -64,6 +64,20 @@
    [:div [:label "Outcome"] [:code "filter-outcome=\"" filter-outcome "\""]]
    [:div [:label "Invariants"] [:code "filter-invariants=\"" filter-invariants "\""]]]])
 
+;; ---
+;; ## P2 Interactive Trial Selector
+
+(def selected-trial-id nil)
+
+(clerk/html
+ [:div {:style {:marginBottom "16px" :padding "12px" :backgroundColor "#fef3c7" :border "1px solid #f59e0b" :borderRadius "4px"}}
+  [:label {:style {:display "block" :marginBottom "8px" :fontWeight "600" :fontSize "0.9em" :color "#92400e"}}
+   "Selected Trial ID:"]
+  [:div {:style {:fontFamily "monospace" :fontSize "0.85em" :padding "8px 12px" :backgroundColor "white" :border "1px solid #f59e0b" :borderRadius "3px" :minHeight "20px" :wordBreak "break-all"}}
+   (if selected-trial-id selected-trial-id "None selected")]
+  [:div {:style {:fontSize "0.75em" :color "#92400e" :marginTop "6px"}}
+   "Click 'Inspect' button on any trial below to populate this field"]])
+
 ;; Trial Results Table
 ^{::clerk/no-cache true}
 (let [rows (q ["SELECT _id, batch_id, outcome, invariants_ok FROM sim_trial_results ORDER BY _id DESC LIMIT 100"])
@@ -80,6 +94,8 @@
       [:h3 "Trial Results (" (count filtered-rows) " trials)"]
       [:table {:style {:borderCollapse "collapse" :fontSize "0.9em" :width "100%"}}
        [:thead [:tr
+                [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1" :width "60px"}}
+                 "Action"]
                 [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1"}}
                  "Trial ID"]
                 [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1"}}
@@ -95,7 +111,12 @@
                      outcome (:outcome r)
                      color (case outcome "released" "#10b981" "slashed" "#ef4444" "disputed" "#f59e0b" "#94a3b8")]
                  [:tr
-                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0"}}
+                  [:td {:style {:padding "5px 6px" :borderBottom "1px solid #e2e8f0" :textAlign "center"}}
+                   [:button {:style {:padding "4px 10px" :backgroundColor "#3b82f6" :color "white" :border "none" :borderRadius "3px" :cursor "pointer" :fontSize "0.75em" :fontWeight "600" :whiteSpace "nowrap"}
+                             :on-click (fn []
+                                         (def selected-trial-id trial-id))}
+                    "Inspect"]]
+                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0" :title trial-id}}
                    short-id]
                   [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0"}}
                    (subs (str (:batch_id r)) 0 8)]
@@ -108,17 +129,15 @@
      [:div "No trials found"])))
 
 ;; ---
-;; ## P2 Event Trace Viewer
-
-(def selected-trial-id nil)
+;; ## Event Trace Viewer
 
 ^{::clerk/no-cache true}
 (clerk/html
  (if selected-trial-id
-   [:div [:p (str "Inspecting trial: " selected-trial-id)]]
+   [:div [:p "Inspecting trial: " [:code selected-trial-id]]]
    [:div {:style {:padding "12px" :backgroundColor "#f0f9ff" :border "1px solid #bfdbfe"
                   :borderRadius "3px"}}
-    [:p "Set " [:code "selected-trial-id"] " to inspect a trial"]]))
+    [:p "Click " [:strong "Inspect"] " button on a trial above to view its event trace"]]))
 
 ^{::clerk/no-cache true}
 (let [events (if selected-trial-id
@@ -166,19 +185,20 @@
                 events))]
         [:div "No events recorded"])]
      [:div {:style {:padding "20px" :textAlign "center" :color "#999" :backgroundColor "#f8fafc" :borderRadius "4px" :border "1px solid #e2e8f0" :fontSize "0.9em"}}
-      "Set selected-trial-id to inspect a trial"])))
+      "No trial selected"])))
 
 (clerk/html
  [:div {:style {:fontSize "0.85em" :color "#666" :lineHeight "1.6"}}
   [:p "Workflow:"]
   [:ul
    [:li "Edit " [:code "filter-outcome"] " and " [:code "filter-invariants"] " defs above to filter trials"]
-   [:li "Set " [:code "selected-trial-id"] " (e.g., \"12345678-0000-0000-0000-000000000000\") to inspect a trial"]
+   [:li "Click " [:strong "Inspect"] " button on any trial row to select and inspect it"]
    [:li "Event trace will populate below"]
    [:li "Coming: P3 trial comparison view, outcome distribution histogram"]]
-  [:p [:strong "Status: P1 & P2 implemented"]]
+  [:p [:strong "Status: P1 & P2 implemented with interactive selection"]]
   [:ul
    [:li "✓ Live database queries from XTDB"]
    [:li "✓ Trial filtering"]
-   [:li "✓ Event trace viewer"]]
+   [:li "✓ Event trace viewer"]
+   [:li "✓ Interactive trial selection (no file edits needed)"]]
   ])
