@@ -72,20 +72,18 @@
 (clerk/html
  [:div {:style {:marginBottom "16px" :padding "12px" :backgroundColor "#fef3c7" :border "1px solid #f59e0b" :borderRadius "4px"}}
   [:label {:style {:display "block" :marginBottom "8px" :fontWeight "600" :fontSize "0.9em" :color "#92400e"}}
-   "Select Trial ID:"]
+   "Select Trial ID (paste or copy from table):"]
   [:input {:id "trial-id-input"
            :type "text"
-           :placeholder "Paste trial UUID here or copy from table below"
-           :style {:width "100%" :padding "8px 12px" :border "1px solid #f59e0b" :borderRadius "3px" :fontFamily "monospace" :fontSize "0.85em" :boxSizing "border-box" :marginBottom "8px"}
+           :placeholder "Paste trial UUID here"
+           :style {:width "100%" :padding "8px 12px" :border "1px solid #f59e0b" :borderRadius "3px" :fontFamily "monospace" :fontSize "0.85em" :boxSizing "border-box"}
            :value (or selected-trial-id "")
            :on-change (fn [e]
                         (let [val (-> e .-target .-value)]
                           (if (empty? val)
                             (def selected-trial-id nil)
                             (when (re-matches #"[0-9a-f\-]{36}" val)
-                              (def selected-trial-id val)))))}]
-  [:div {:style {:fontSize "0.75em" :color "#92400e"}}
-   "📋 Tip: Copy trial ID from table below and paste into field above"]])
+                              (def selected-trial-id val)))))}]])
 
 ;; Trial Results Table
 ^{::clerk/no-cache true}
@@ -118,7 +116,7 @@
                      outcome (:outcome r)
                      color (case outcome "released" "#10b981" "slashed" "#ef4444" "disputed" "#f59e0b" "#94a3b8")]
                  [:tr
-                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0" :cursor "pointer" :title (str "Click to copy: " trial-id)}
+                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0" :cursor "pointer" :color "#3b82f6" :fontWeight "600" :title (str "Click to select: " trial-id)}
                         :on-click (fn [] (def selected-trial-id trial-id))}
                    short-id]
                   [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0"}}
@@ -140,7 +138,7 @@
    [:div [:p "Inspecting trial: " [:code selected-trial-id]]]
    [:div {:style {:padding "12px" :backgroundColor "#f0f9ff" :border "1px solid #bfdbfe"
                   :borderRadius "3px"}}
-    [:p "Click a trial ID in the table above to view its event trace"]]))
+    [:p "Click a trial ID above (blue text) or paste into field to view event trace"]]))
 
 ^{::clerk/no-cache true}
 (let [events (if selected-trial-id
@@ -199,8 +197,7 @@
   [:p "Workflow:"]
   [:ul
    [:li "Edit " [:code "filter-outcome"] " and " [:code "filter-invariants"] " defs above to filter trials"]
-   [:li "Click trial ID in the table (shows as clickable)"]
-   [:li "ID is auto-populated in the input field above"]
+   [:li "Click trial ID (blue text) in the table OR paste UUID in field above"]
    [:li "Event trace updates automatically"]
    [:li "Coming: P3 trial comparison view, outcome distribution histogram"]]
   [:p [:strong "Status: P1 & P2 fully functional"]]
@@ -208,5 +205,5 @@
    [:li "✓ Live database queries from XTDB"]
    [:li "✓ Trial filtering"]
    [:li "✓ Event trace viewer"]
-   [:li "✓ Clickable trial selection (click ID in table)"]]
+   [:li "✓ Clickable trial IDs or paste into field"]]
   ])
