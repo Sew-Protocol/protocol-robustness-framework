@@ -85,7 +85,7 @@
                             (when (re-matches #"[0-9a-f\-]{36}" val)
                               (def selected-trial-id val)))))}]
   [:div {:style {:fontSize "0.75em" :color "#92400e"}}
-   "📋 Tip: Click the copy icon or double-click trial ID in table below to auto-populate"]])
+   "📋 Tip: Copy trial ID from table below and paste into field above"]])
 
 ;; Trial Results Table
 ^{::clerk/no-cache true}
@@ -103,8 +103,6 @@
       [:h3 "Trial Results (" (count filtered-rows) " trials)"]
       [:table {:style {:borderCollapse "collapse" :fontSize "0.85em" :width "100%"}}
        [:thead [:tr
-                [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1" :width "50px"}}
-                 "Copy"]
                 [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1"}}
                  "Trial ID"]
                 [:th {:style {:padding "8px 12px" :fontWeight "600" :backgroundColor "#f1f5f9" :borderBottom "2px solid #cbd5e1"}}
@@ -120,13 +118,8 @@
                      outcome (:outcome r)
                      color (case outcome "released" "#10b981" "slashed" "#ef4444" "disputed" "#f59e0b" "#94a3b8")]
                  [:tr
-                  [:td {:style {:padding "5px 6px" :borderBottom "1px solid #e2e8f0" :textAlign "center"}}
-                   [:button {:style {:padding "4px 10px" :backgroundColor "#3b82f6" :color "white" :border "none" :borderRadius "3px" :cursor "pointer" :fontSize "0.75em" :fontWeight "600" :whiteSpace "nowrap"}
-                             :on-click (fn []
-                                         (js/navigator.clipboard.writeText trial-id)
-                                         (def selected-trial-id trial-id))}
-                    "Copy"]]
-                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0" :title trial-id}}
+                  [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0" :cursor "pointer" :title (str "Click to copy: " trial-id)}
+                        :on-click (fn [] (def selected-trial-id trial-id))}
                    short-id]
                   [:td {:style {:padding "5px 12px" :fontFamily "monospace" :fontSize "0.8em" :borderBottom "1px solid #e2e8f0"}}
                    (subs (str (:batch_id r)) 0 8)]
@@ -147,7 +140,7 @@
    [:div [:p "Inspecting trial: " [:code selected-trial-id]]]
    [:div {:style {:padding "12px" :backgroundColor "#f0f9ff" :border "1px solid #bfdbfe"
                   :borderRadius "3px"}}
-    [:p "Paste or copy a trial ID above to view its event trace"]]))
+    [:p "Click a trial ID in the table above to view its event trace"]]))
 
 ^{::clerk/no-cache true}
 (let [events (if selected-trial-id
@@ -206,8 +199,8 @@
   [:p "Workflow:"]
   [:ul
    [:li "Edit " [:code "filter-outcome"] " and " [:code "filter-invariants"] " defs above to filter trials"]
-   [:li "Click " [:strong "Copy"] " button on any trial row"]
-   [:li "ID is copied to clipboard and field is populated"]
+   [:li "Click trial ID in the table (shows as clickable)"]
+   [:li "ID is auto-populated in the input field above"]
    [:li "Event trace updates automatically"]
    [:li "Coming: P3 trial comparison view, outcome distribution histogram"]]
   [:p [:strong "Status: P1 & P2 fully functional"]]
@@ -215,5 +208,5 @@
    [:li "✓ Live database queries from XTDB"]
    [:li "✓ Trial filtering"]
    [:li "✓ Event trace viewer"]
-   [:li "✓ One-click trial selection (copy button + input field)"]]
+   [:li "✓ Clickable trial selection (click ID in table)"]]
   ])
