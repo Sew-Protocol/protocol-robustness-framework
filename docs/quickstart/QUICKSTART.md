@@ -29,12 +29,12 @@ No server required. Runs in ~1 second.
 clojure -M:run -- --invariants
 ```
 
-Executes all S01–S41 in-process scenarios against the SEW state machine and checks
+Executes all S01–S41 in-process scenarios against the Sew state machine and checks
 invariants at every transition. Each scenario is pass/fail with explicit violation
 counts. Expect output like:
 
 ```
-  SEW Invariant Suite — Deterministic Scenarios
+  Sew Invariant Suite — Deterministic Scenarios
   ✓ PASS  S01  baseline-happy-path          steps=3   reverts=0
   ✓ PASS  S02  dr3-dispute-release          steps=4   reverts=0
   ...
@@ -80,8 +80,8 @@ phase hypothesis tests.
 ```
 src/resolver_sim/
   contract_model/   — Protocol-agnostic deterministic replay kernel
-  protocols/        — DisputeProtocol adapter interface + SEW and Dummy implementations
-    sew/            — SEW state machine, lifecycle, accounting, invariants
+  protocols/        — SimulationAdapter interfaces + Sew and Dummy adapters
+    sew/            — Sew state machine, lifecycle, accounting, invariants
   stochastic/       — Statistical models (rng, economics, decision quality)
   sim/              — Monte Carlo simulation phases and harness
   io/               — Parameter loading and result serialization

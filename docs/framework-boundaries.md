@@ -4,10 +4,10 @@ This document is the canonical boundary guide for contributors.
 
 Terminology used throughout:
 
-- **framework substrate**
-- **adapter**
-- **reference implementation**
-- **research track**
+- **framework substrate** — protocol-agnostic replay and adapter infrastructure
+- **adapter** — a protocol-specific implementation of the framework interfaces
+- **primary adapter** — the Sew adapter (`protocols/sew/*`); the most complete example of how to build a framework adapter
+- **research track** — exploratory modules not part of stable framework API
 
 ## 1) What is reusable today (framework substrate)
 
@@ -21,16 +21,19 @@ Reusable today:
 
 These should remain protocol-agnostic and adapter-oriented.
 
-## 2) What is SEW-specific (reference implementation)
+## 2) What is Sew-specific (primary adapter)
 
-SEW is the current **reference adapter** and most complete **reference implementation**:
+The Sew adapter (`protocols/sew.clj` + `protocols/sew/*`) is the most complete
+example of how to implement the framework interfaces. It is the primary adapter
+in this repository. The Sew Protocol is what is being simulated; the adapter
+code is the example of how to wire a protocol into the framework.
 
 - `protocols/sew.clj`
 - `protocols/sew/*`
-- SEW-integrated yield/accounting interpretation modules
-- SEW-oriented providers under `generators/sew/*`, `io/sew/*`
+- Sew-integrated yield/accounting interpretation modules
+- Sew-oriented providers under `generators/sew/*`, `io/sew/*`
 
-SEW semantics are not assumed to be universal protocol semantics.
+Sew semantics are not assumed to be universal protocol semantics.
 
 ## 3) What an adapter must implement
 
@@ -118,7 +121,7 @@ Typical locations:
 Current priority is **Scope 1 + carefully bounded Scope 2**:
 
 1. Stabilize and document framework boundaries.
-2. Keep SEW explicit as reference adapter/reference implementation.
+2. Keep the Sew adapter explicit as the primary example of the adapter pattern.
 3. Promote `:funds-ledger-view` as documented adapter-facing capability.
 4. Extract only post-projection reconciliation utilities.
 

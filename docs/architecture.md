@@ -19,7 +19,7 @@
 │                │                                             │
 │  contract_model/replay.clj  ← protocol-agnostic kernel       │
 │                │                                             │
-│  protocols/sew.clj          ← SEWProtocol adapter            │
+│  protocols/sew.clj          ← SewProtocol adapter            │
 │    sew/state_machine.clj    ← escrow state transitions       │
 │    sew/lifecycle.clj        ← create → dispute → resolve     │
 │    sew/invariants.clj       ← 28+ post-condition checks      │
@@ -38,7 +38,7 @@ The system is strictly layered. The functional core has no I/O. Only `db/` and `
 
 ```
 contract_model/     protocol-agnostic replay kernel (replay.clj only)
-protocols/          DisputeProtocol interface + SEW and Dummy implementations
+protocols/          SimulationAdapter interfaces + Sew and Dummy adapters
 stochastic/         statistical/economic models (pure functions)
 sim/                Monte Carlo simulation phases (pure sweeps)
 governance/         governance rule models (pure)
@@ -79,14 +79,14 @@ server/             gRPC session server
 
 1. Python opens a gRPC session with `StartSession`
 2. Python sends a sequence of `Step` calls, each encoding one actor action (e.g., `raise_dispute`, `resolve`, `escalate`)
-3. The Clojure server applies the action to the current escrow state, runs all 28+ invariants via the SEWProtocol adapter, and returns a `trace_entry` with the new state, any invariant violations, and whether the step was accepted or rejected
+3. The Clojure server applies the action to the current escrow state, runs all 28+ invariants via the SewProtocol adapter, and returns a `trace_entry` with the new state, any invariant violations, and whether the step was accepted or rejected
 4. Python agents inspect the response and choose their next action (adversarial agents use this to decide whether to escalate, attack, or retreat)
 5. Python asserts the scenario's specific success condition (e.g., "attack succeeded at least once" or "0 invariant violations")
 6. Session is closed with `DestroySession`
 
 ## The 28+ Protocol Invariants
 
-Checked after every state transition via `SEWProtocol.check-invariants-single`
+Checked after every state transition via `SewProtocol.check-invariants-single`
 and `check-invariants-transition` (implemented in `protocols/sew/invariants.clj`):
 
 | Category | Invariants |

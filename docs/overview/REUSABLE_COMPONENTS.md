@@ -1,6 +1,6 @@
 # Reusable Components Guide
 
-This repository is the **SEW validation implementation**. It also exposes a
+This repository is the **Sew validation implementation**. It also exposes a
 set of reusable components that other dispute-resolution protocol teams can
 adapt with low coupling.
 
@@ -8,7 +8,7 @@ adapt with low coupling.
 
 File: `src/resolver_sim/protocols/protocol.clj`
 
-- Defines `DisputeProtocol`.
+- Defines `SimulationAdapter`, `EconomicModel`, and `AnalysisModule`.
 - Establishes the boundary between protocol-specific logic and replay harness.
 - Requires deterministic, pure behavior for replayed transitions.
 
@@ -21,7 +21,7 @@ Practical value:
 
 Files:
 - `src/resolver_sim/protocols/common/action_context.clj`
-- `src/resolver_sim/protocols/sew/action_context.clj` (SEW façade over common wrappers)
+- `src/resolver_sim/protocols/sew/action_context.clj` (Sew façade over common wrappers)
 
 Reusable control-flow wrappers:
 - `with-resolved-actor`
@@ -82,7 +82,7 @@ Practical value:
 
 Files:
 - `src/resolver_sim/generators/actions.clj` (protocol-agnostic orchestration)
-- `src/resolver_sim/generators/sew/actions.clj` (SEW candidate templates)
+- `src/resolver_sim/generators/sew/actions.clj` (Sew candidate templates)
 
 Pattern:
 - `generators/actions.clj` should only orchestrate:
@@ -94,7 +94,7 @@ Pattern:
 Why this matters:
 - keeps generic generator code free of protocol storage/action coupling,
 - makes onboarding for new protocol adapters explicit,
-- avoids hidden SEW assumptions in framework-level modules.
+- avoids hidden Sew assumptions in framework-level modules.
 
 ## 6) Optional read-only funds-ledger projection contract (new)
 
@@ -105,7 +105,7 @@ Purpose:
 
 Current implementation status:
 - contract shape is reusable,
-- implementation is currently SEW-scoped via:
+- implementation is currently Sew-scoped via:
   - `resolver-sim.protocols.sew/protocol` `io-projection` target `:funds-ledger-view`,
   - `src/resolver_sim/protocols/sew/projection.clj` (`funds-ledger-view`).
 

@@ -3,14 +3,16 @@
 ## What this system is
 
 `sew-simulation` is an adapter-oriented robustness framework with a **framework substrate**
-and a **protocol adapter layer** (with SEW as the current **reference adapter/reference implementation**).
+and a **protocol adapter layer**. Sew is the current protocol adapter — the main
+simulation target.
 
 At a high level:
 
 - The replay kernel (`contract_model/replay.clj`) is protocol-agnostic.
-- Protocol logic is provided via the `DisputeProtocol` interface
-  (`protocols/protocol.clj`).
-- SEW is the current reference adapter/reference implementation (`protocols/sew.clj` + `protocols/sew/*`).
+- Protocol logic is provided via the `SimulationAdapter` interface
+  (`protocols/protocol.clj`), with optional `EconomicModel` and `AnalysisModule` extensions.
+- `SewProtocol` (`protocols/sew.clj`) is the adapter that connects the Sew domain
+  logic (`protocols/sew/*`) to those interfaces.
 
 This allows the simulation engine, fixtures, and many testing workflows to
 remain reusable while protocol-specific rules stay isolated.
@@ -22,7 +24,7 @@ remain reusable while protocol-specific rules stay isolated.
 | Protocol-agnostic kernel | Deterministic replay of scenario actions | `contract_model/replay.clj` |
 | Protocol adapters | Plug-in interface + concrete implementation wiring | `protocols/protocol.clj`, `protocols/sew.clj`, `protocols/dummy.clj` |
 | Shared adapter flow-control | Reusable precondition wrappers (actor resolution, checks, role gates) | `protocols/common/action_context.clj` |
-| SEW domain implementation | State machine, lifecycle, accounting, resolution, invariants | `protocols/sew/*` |
+| Sew domain implementation | State machine, lifecycle, accounting, resolution, invariants | `protocols/sew/*` |
 | Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*` |
 | Shell/integration | Persistence, file I/O, gRPC/session management, CLI | `db/*`, `io/*`, `server/*`, `core.clj` |
 
@@ -35,14 +37,14 @@ remain reusable while protocol-specific rules stay isolated.
 - `scenario/*`
 - `io/scenarios.clj`, `db/*`, `server/*`
 
-### SEW bespoke implementation (production-grade for this repo)
+### Sew bespoke implementation (production-grade for this repo)
 - `protocols/sew/*`
-- `yield/modules/aave.clj` and SEW-integrated yield flows
+- `yield/modules/aave.clj` and Sew-integrated yield flows
 
-SEW should be treated as the reference implementation (reference study), not as
-proof that all protocol semantics are already framework-generic.
+Sew is the current protocol implementation. It is not proof that all protocol
+semantics are already framework-generic.
 
-### Generic adapters (stable API surface; SEW default providers today)
+### Generic adapters (stable API surface; Sew default providers today)
 - `generators/actions.clj` → `generators/sew/actions.clj`
 - `generators/adversarial.clj` → `generators/sew/adversarial.clj`
 - `io/trace_score.clj` → `io/sew/trace_score.clj`
@@ -52,7 +54,7 @@ proof that all protocol semantics are already framework-generic.
 - selected exploratory `sim/*` modules
 - `research/sew/*`
 
-## What is generalized vs SEW-specific
+## What is generalized vs Sew-specific
 
 ### Generalized
 - Replay orchestration and step execution flow
@@ -60,10 +62,10 @@ proof that all protocol semantics are already framework-generic.
 - Shared adapter flow-control wrappers (`protocols/common/action_context.clj`)
 - A significant portion of simulation harness and I/O/telemetry plumbing
 
-### SEW-specific (current primary implementation)
+### Sew-specific (current primary implementation)
 - Escrow lifecycle and dispute transitions
 - Resolver authority and registry behavior
-- SEW invariants, accounting, and projection semantics
+- Sew invariants, accounting, and projection semantics
 
 ### Yield module status/risk controls (Phase 2)
 
@@ -104,7 +106,7 @@ For current test shape and suite details, see:
   `docs/architecture/ARCHITECTURE.md`
 - Adapter implementation boundaries and authoring:
   `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`
-- Framework substrate vs adapter vs reference implementation vs research track:
+- Framework substrate vs adapter vs Sew implementation vs research track:
   `docs/framework-boundaries.md`
 - Reusable adapter/harness design notes:
   `docs/overview/REUSABLE_COMPONENTS.md`

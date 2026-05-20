@@ -13,7 +13,7 @@ The framework provides reusable building blocks for protocol engineering:
 - **Deterministic Replay Harness**: (`src/resolver_sim/contract_model/replay.clj`)
 - **Composable Fixture System**: (`data/fixtures/`)
 
-*Implementation Note: The SEW Protocol is included as the primary reference implementation for this framework.*
+*The Sew Protocol is the primary simulation target. The Sew adapter (`protocols/sew/*`) is the main example of how to implement the framework interfaces for a new protocol.*
 
 ## Why it exists
 
@@ -49,7 +49,7 @@ For escrow and dispute resolution systems, failures rarely stem from invalid cod
 ## Current Status
 
 - **Core Framework**: Robust, in-process deterministic runner operational.
-- **Reference Implementation**: SEW Protocol (v1) fully integrated.
+- **Reference Implementation**: Sew Protocol (v1) fully integrated.
 - **Integration**: Python-based adversarial suite via gRPC bridge.
 
 ## Quick Start
