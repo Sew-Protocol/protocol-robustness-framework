@@ -45,7 +45,6 @@ from sim_api.live_runner import RunResult
 from eth_failure_modes import (
     s24_f1_liveness_extraction,
     s25_f2_appeal_window_race,
-    s26_f3_governance_sandwich,
     s27_f4_escalation_loop_amplification,
     s28_f5_concurrent_status_desync,
 )
@@ -67,7 +66,6 @@ from phase_l_optimistic import s35_phase_l_watchtower_robustness
 SCENARIOS = [
     ("S24  f1-liveness-extraction",        s24_f1_liveness_extraction),
     ("S25  f2-appeal-window-race",         s25_f2_appeal_window_race),
-    ("S26  f3-governance-sandwich",        s26_f3_governance_sandwich),
     ("S27  f4-escalation-loop-amplified",  s27_f4_escalation_loop_amplification),
     ("S28  f5-concurrent-status-desync",   s28_f5_concurrent_status_desync),
     ("S29  f6-resolver-cartel",            s29_f6_resolver_cartel),

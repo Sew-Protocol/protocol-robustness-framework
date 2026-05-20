@@ -23,6 +23,7 @@
 ;; - `results/test-artifacts/coverage.json` — transition / threat-tag coverage
 ;; - Live: `resolver-sim.protocols.sew.invariant-runner/run-all` — in-process invariant suite
 
+^{:nextjournal.clerk/visibility {:code :hide}}
 (ns notebooks.dispute-resolution
   (:require [nextjournal.clerk :as clerk]
             [clojure.java.io :as io]
