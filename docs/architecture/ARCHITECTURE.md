@@ -1,43 +1,138 @@
 # Protocol Robustness Framework — Architecture
 
-## What this system is
+## What this is
 
-A protocol-agnostic adversarial testing and robustness-analysis framework,
-with the SEW Protocol as the primary reference implementation.
+A framework for adversarial testing and robustness analysis of decentralised
+protocols — escrow, dispute resolution, coordination, multi-agent Ethereum
+protocols. The SEW Protocol is the main subject of the current simulation work.
 
-It operates at two levels:
+The framework operates at two levels:
 
-1. **Statistical simulation** (`sim/`, `stochastic/`) — probabilistic phases
-   that test incentive properties across parameter spaces.
-2. **Deterministic replay** (`contract_model/`, `protocols/`) — step-by-step
-   execution of protocol scenarios against adversarial strategies, checked
-   against invariants at every transition.
+1. **Deterministic replay** (`contract_model/`, `protocols/`) — step-by-step
+   execution of protocol scenarios against adversarial strategies; invariants
+   are checked at every transition; traces are recorded.
 
-The replay kernel is protocol-agnostic. SEW is one implementation of the
-`DisputeProtocol` adapter interface; other protocols can be plugged in without
-touching the kernel. See `docs/framework-boundaries.md` for what is reusable
-today vs. what is SEW-specific.
-
-Results feed engineering and research documentation in `docs/` (overview,
-evidence, testing, and challenge artifacts) that drive protocol remediation.
-
-Primary boundary reference for contributors:
-- `docs/framework-boundaries.md`
+2. **Statistical simulation** (`sim/`, `stochastic/`) — probabilistic Monte
+   Carlo phases that test incentive properties across parameter spaces.
 
 ---
 
-## Design principles
+## Two-engine design
 
-- **Functional core, imperative shell**: all protocol and simulation logic is
-  pure (no I/O, no DB). Only `io/` (file I/O) and `db/` (XTDB) are effectful.
-- **Pure functions, explicit RNG**: randomness is an explicit parameter — same
-  seed + params → identical output, byte-for-byte.
-- **Pluggable protocol layer**: the replay kernel (`contract_model/replay.clj`)
-  is protocol-agnostic. SEW is one implementation of `DisputeProtocol`; other
-  protocols can be plugged in without touching the kernel.
-- **Reproducibility**: every run is auditable via params EDN + git commit.
-- **Transparent economics**: fee, bond, slashing calculations are explicit and
-  independently verifiable.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Replay engine  (contract_model/replay.clj)                     │
+│  Protocol-agnostic harness. Drives event sequences, collects    │
+│  metrics, calls invariant checks. Knows nothing about escrow,   │
+│  disputes, or bonds.                                            │
+│                          │                                      │
+│              SimulationAdapter interface                        │
+│                          │                                      │
+│        ┌─────────────────┴──────────────────┐                  │
+│        │ SEWProtocol                         │ DummyProtocol   │
+│        │ (protocols/sew.clj)                 │ (test double)   │
+│        │ Wires SEW domain logic into the     │                  │
+│        │ adapter interfaces.                 │                  │
+│        │                                     │                  │
+│        │  protocols/sew/*                    │                  │
+│        │  state_machine, lifecycle,          │                  │
+│        │  resolution, accounting,            │                  │
+│        │  invariants, authority, ...         │                  │
+│        └─────────────────────────────────────┘                  │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+              Statistical simulation layer
+              (sim/*, stochastic/*, adversaries/*, ...)
+```
+
+---
+
+## Adapter interfaces
+
+The replay engine interacts with all protocols through three Clojure
+`defprotocol` interfaces defined in `protocols/protocol.clj`. The engine
+checks `satisfies?` at runtime for the optional ones.
+
+### 1. `SimulationAdapter` — mandatory
+
+The minimal contract required for deterministic replay, invariant checking,
+and trace generation.
+
+| Method | Purpose |
+|--------|---------|
+| `protocol-id` | Stable string identifier (`"sew-v1"`, `"dummy"`) |
+| `init-world` | Construct initial world-state from a scenario map |
+| `build-execution-context` | Build the context passed opaquely to `dispatch-action` |
+| `dispatch-action` | Apply one event to the world; returns `{:ok bool :world world' :error kw}` |
+| `check-invariants-single` | Single-world invariant checks |
+| `check-invariants-transition` | Cross-transition invariant checks |
+| `world-snapshot` | Lean serializable world snapshot for trace output |
+| `resolve-id-alias` | Resolve string ID aliases in event params to entity IDs |
+| `created-id` | Return the entity ID created by a `create-*` action, or nil |
+| `open-entities` | Seq of entity IDs still unresolved at end of scenario |
+
+### 2. `EconomicModel` — optional
+
+Required for adversarial metrics and payoff analysis. The engine degrades
+gracefully if this is absent.
+
+| Method | Purpose |
+|--------|---------|
+| `adversarial-event?` | Classify an event as adversarial (affects attack-success/failure counters) |
+| `classify-event` | Tag an event with metric labels |
+| `metric-vocabulary` | Protocol-specific metric keyword set |
+| `accum-protocol-metrics` | Update the metrics accumulator after each event |
+| `summarise-batch` | Compute summary statistics over a batch of trial outcomes |
+| `advisory` | Protocol-specific analysis (action suggestions, attack-surface signals) |
+
+### 3. `AnalysisModule` — optional
+
+Required for differential testing, formal projections, and mechanism
+validation. Used in equilibrium-concept validation suites.
+
+| Method | Purpose |
+|--------|---------|
+| `compute-projection` | `[projection hash]` for differential testing |
+| `classify-transition` | Trace metadata for a completed transition |
+| `trace-projection` | Terminal trace projection for a replay result |
+| `io-projection` | Protocol I/O projection (e.g. `:funds-ledger-view` read-only accounting view) |
+| `mechanism-property-validators` | Protocol-specific mechanism validators |
+| `equilibrium-concept-validators` | Protocol-specific equilibrium validators |
+| `reference-model` | Idealised reference model result for a scenario |
+
+---
+
+## How SEW plugs in
+
+`protocols/sew.clj` defines `SEWProtocol`, a Clojure `deftype` that
+implements all three adapter interfaces. It is the glue layer between the
+framework and the SEW domain logic.
+
+**`SEWProtocol` does not contain domain logic.** It delegates:
+
+- `dispatch-action` → `apply-action` multimethod (in `protocols/sew.clj`),
+  which dispatches by action string to `protocols/sew/lifecycle.clj`,
+  `protocols/sew/resolution.clj`, `protocols/sew/accounting.clj`, etc.
+- `check-invariants-*` → `protocols/sew/invariants.clj`
+- `compute-projection` → `protocols/sew/diff.clj`
+- `advisory` → `protocols/sew/advisory.clj`
+- `summarise-batch` → `protocols/sew/db.clj`
+
+The SEW domain logic lives in `protocols/sew/*` (pure functions, no I/O).
+`SEWProtocol` assembles those functions behind the adapter interface.
+
+### Protocol registry
+
+`protocols/registry.clj` maps protocol-id strings to concrete adapter
+instances. The replay engine looks up adapters by id at runtime.
+
+```clojure
+{"sew-v1" resolver-sim.protocols.sew/protocol
+ "dummy"  resolver-sim.protocols.dummy/protocol}
+```
+
+`default-protocol-id` is `"sew-v1"`. Additional protocols are registered
+here as they are added.
 
 ---
 
@@ -46,73 +141,91 @@ Primary boundary reference for contributors:
 ```
 src/resolver_sim/
 
-  contract_model/       ← Protocol-agnostic kernel (pure)
-    replay.clj            open-world scenario replay engine; delegates all
-                          protocol logic to a DisputeProtocol implementation
+  contract_model/         ← Replay engine (pure, protocol-agnostic)
+    replay.clj              Scenario execution harness; calls SimulationAdapter
+                            methods; owns metrics accumulation and trace output.
+                            Does not know about escrow, disputes, or bonds.
 
-  protocols/            ← DisputeProtocol interface + implementations (pure)
-    protocol.clj          DefProtocol: protocol adapter interface
-                            (execution context, dispatch, invariants,
-                             projection/metadata, advisory, persistence views)
-    dummy.clj             DummyProtocol — always-pass proof-of-concept
-    sew.clj               SEWProtocol adapter — wires sew/* into the interface
-    sew/                  SEW Protocol implementation (pure)
-      state_machine.clj     escrow FSM transitions
-      lifecycle.clj         contract lifecycle (create → dispute → resolve)
-      accounting.clj        fee/bond/slashing arithmetic
-      resolution.clj        DR1/DR2/DR3 resolution logic
-      authority.clj         resolver authority checks
-      invariants.clj        protocol post-condition checks
+  protocols/              ← Adapter interfaces + implementations (all pure)
+    protocol.clj            Defines SimulationAdapter, EconomicModel, AnalysisModule
+    registry.clj            Maps protocol-id → adapter instance
+    sew.clj                 SEWProtocol adapter (wires sew/* into the interfaces)
+    dummy.clj               DummyProtocol test double (always-pass, no domain logic)
+
+    common/
+      action_context.clj    Shared actor-resolution helpers
+
+    sew/                  ← SEW domain logic (pure functions, no I/O)
+      state_machine.clj     Escrow FSM: allowed-transitions graph, apply-transition!
+      lifecycle.clj         Escrow lifecycle actions (create, release, cancel, dispute)
+      resolution.clj        Dispute resolution (execute-resolution, escalate, settle)
+      accounting.clj        Fee/bond/slashing arithmetic; fund conservation checks
+      authority.clj         Resolver authority checks; Kleros module integration
+      invariants.clj        Protocol post-conditions (30+ invariants)
       invariants/
-        accounting.clj      accounting sub-invariants (FoT, projection hash)
-      types.clj             SEW world-state shape, constructors, accessors
-      runner.clj            top-level trial runner (live sim)
-      invariant_runner.clj  in-process deterministic scenario runner
-      invariant_scenarios.clj deterministic scenario definitions
-      diff.clj              world-state hashing + EVM diff helpers
-      trace_metadata.clj    transition/effect/resolution type vocabulary
-      registry.clj          resolver stake/bond registry
+        accounting.clj      Accounting sub-invariants (FoT, projection hash)
+      types.clj             World-state shape, constructors, accessors, constants
+      diff.clj              World-state hashing and EVM differential testing helpers
+      trace_metadata.clj    Transition/effect/resolution type vocabulary
+      registry.clj          Resolver stake/bond registry
+      invariant_runner.clj  In-process deterministic scenario runner
+      invariant_scenarios.clj Scenario definitions for the deterministic suite
+      runner.clj            Top-level live-simulation trial runner
+      action_context.clj    SEW-specific actor-resolution helpers
+      advisory.clj          Action suggestions and attack-surface signals
+      projection.clj        Formal projection helpers
+      equilibrium.clj       Equilibrium concept validators
+      compat.clj            Action-name normalisation (legacy aliases)
+      db.clj                Batch summarisation helpers (pure)
+      io/
+        trace_export.clj    Trace export helpers
 
-  stochastic/           ← statistical/economic models (pure)
-    types.clj, rng.clj, economics.clj, dispute.clj
-    bribery_markets.clj, contingent_bribery.clj
-    correlated_failures.clj, decision_quality.clj
-    delegation.clj, difficulty.clj
-    escalation_economics.clj, evidence_costs.clj, evidence_spoofing.clj
-    information_cascade.clj, liveness_failures.clj
-    panel_decision.clj, resolver_ring.clj
+    sew/research_models/  ← SEW-specific research models (pure)
+      bribery_markets.clj, contingent_bribery.clj, delegation.clj
+      escalation_economics.clj, evidence_spoofing.clj
+      information_cascade.clj, panel_decision.clj, resolver_ring.clj
 
-  sim/                  ← simulation phases (pure sweeps)
-    phase_o.clj … phase_ai.clj   individual hypothesis phases
-    engine.clj                   phase harness (make-result, run-parameter-sweep)
-    batch.clj, sweep.clj         batch runners
-    fixtures.clj                 deterministic suite runner
-    minimizer.clj                trace minimisation
-    adversarial.clj, waterfall.clj, multi_epoch.clj
-    governance_impact.clj, trajectory.clj
+    sew/yield/            ← Yield module integration (pure)
+      invariants.clj, policy.clj
 
-  governance/           ← governance rule models (pure)
-  adversaries/          ← adversary strategy models (pure)
-    strategy.clj
-    ring_attacker.clj
-  oracle/               ← detection models (pure)
+  stochastic/             ← Statistical/economic models (pure)
+    economics.clj, dispute.clj, decision_quality.clj, rng.clj, types.clj
+    bribery_markets.clj, contingent_bribery.clj, correlated_failures.clj
+    delegation.clj, difficulty.clj, escalation_economics.clj
+    evidence_costs.clj, evidence_spoofing.clj, information_cascade.clj
+    liveness_failures.clj, panel_decision.clj, resolver_ring.clj
 
-  economics/            ← canonical payoff calculations (pure)
-  canonical/            ← canonical action vocabulary (pure)
+  sim/                    ← Simulation phases (pure Monte Carlo sweeps)
+    phase_o.clj … phase_ai.clj   One file per hypothesis phase
+    engine.clj                   Phase harness (make-result, run-parameter-sweep)
+    batch.clj, sweep.clj         Batch/sweep runners
+    fixtures.clj                 Fixture suite runner (run-suite, list-suites)
+    minimizer.clj                Trace minimisation (failing trace → 1-minimal subset)
+    trajectory.clj               Equity/spread/displacement trajectory helpers
+    multi_epoch.clj              Multi-epoch reputation simulation
+    adversarial.clj, waterfall.clj, governance_impact.clj
 
-  db/                   ← imperative shell: XTDB persistence
-    store.clj             sim_trial_results + sim_entity_events tables;
-                          summarise-outcomes (pure aggregate helper)
-    telemetry.clj         adapter: protocols/sew/runner output → db writes
+  governance/             ← Governance rule models (pure)
+  adversaries/            ← Adversary strategy models (pure)
+    strategy.clj            Adversary defprotocol
+    ring_attacker.clj       RingAttack adversary
+  oracle/                 ← Detection models (pure)
+  economics/              ← Canonical payoff calculations (pure)
+  canonical/              ← Canonical action vocabulary (pure)
 
-  io/                   ← imperative shell: file I/O
-    params.clj            load + validate EDN params
-    results.clj           write CSV / EDN / metadata
-    trace_store.clj       trace persistence
-    trace_export.clj      trace export helpers
+  db/                     ← Imperative shell: XTDB persistence
+    store.clj               sim_trial_results + sim_entity_events table ops
+    telemetry.clj           Adapter: sew/runner output → XTDB writes
 
-  server/               ← gRPC server + session management
-  core.clj              ← CLI entry point (imperative shell)
+  io/                     ← Imperative shell: file I/O
+    params.clj              Load and validate EDN params
+    results.clj             Write CSV / EDN / metadata
+    trace_store.clj         Trace persistence
+    trace_export.clj        Trace export helpers
+
+  server/                 ← gRPC server + session management
+  notebooks/              ← Notebook data helpers (read-only)
+  core.clj                ← CLI entry point (imperative shell; dispatch only)
 ```
 
 ---
@@ -120,109 +233,27 @@ src/resolver_sim/
 ## Functional core / imperative shell boundary
 
 ```
-FUNCTIONAL CORE (no I/O, easily testable)
-  contract_model/*, protocols/*, stochastic/*, sim/*,
-  governance/*, adversaries/*, oracle/*, economics/*, canonical/*
+FUNCTIONAL CORE (no I/O, testable without a live DB or filesystem)
+  contract_model/*   protocols/*   stochastic/*   sim/*
+  governance/*       adversaries/* oracle/*
+  economics/*        canonical/*
 
 IMPERATIVE SHELL (effectful)
-  db/*      — XTDB reads/writes
-  io/*      — file reads/writes
-  server/*  — gRPC session state
-  core.clj  — CLI, wires shell to core
+  db/*       — XTDB reads/writes
+  io/*       — filesystem reads/writes
+  server/*   — gRPC session state
+  core.clj   — CLI entry point
 ```
 
-**Rule**: namespaces in the functional core must never import `db/*` or `io/*`.
-Shell code flows inward; core code never reaches out.
-
----
-
-## Stable Framework vs Reference Implementation vs Research
-
-This section is the canonical maturity boundary for contributors and external
-readers.
-
-### 1) Stable framework substrate (reusable)
-
-Purpose:
-- deterministic replay orchestration,
-- adapter contract boundaries,
-- scenario execution plumbing,
-- invariant/reporting scaffolding,
-- temporal/state tooling where semantics are protocol-agnostic.
-
-Primary namespaces:
-- `contract_model/*`
-- `protocols/protocol.clj`
-- `protocols/common/*`
-- `scenario/*`
-- `time/*` (where logic is protocol-neutral)
-- infrastructure portions of `server/*`, `db/*`, `io/*`
-
-Rule:
-- may define reusable mechanics and contracts,
-- must not encode protocol-specific economic semantics.
-
-### 2) Reference implementation (SEW)
-
-Purpose:
-- provide a complete, testable protocol implementation using framework
-  interfaces,
-- serve as the primary reference adapter for architecture and testing patterns.
-
-Primary namespaces:
-- `protocols/sew/*`
-- SEW-backed adapter providers under `generators/sew/*`, `io/sew/*`
-- SEW-integrated policy/accounting modules (including current yield integration)
-
-Rule:
-- protocol semantics are owned here (escrow/dispute/claimability/payout/
-  authority/bond/resolution semantics),
-- reusable output contracts are allowed, but semantic interpretation remains
-  SEW-specific unless proven otherwise.
-
-### 3) Research / exploratory modules
-
-Purpose:
-- hypothesis testing,
-- adversarial exploration,
-- phase-specific studies,
-- robustness research support.
-
-Typical locations:
-- exploratory portions of `sim/*`
-- `sim/adversarial/*`
-- research-oriented Python workflows under `python/*`
-
-Rule:
-- valuable for investigation, but not treated as stable framework API,
-- should be labeled or placed to avoid implying production-grade generic
-  capability.
-
-### Cross-cutting accounting boundary
-
-The framework can generalize:
-- reconciliation mechanics,
-- aggregation mechanics,
-- drift/conservation reporting contracts,
-- read-only projection interfaces.
-
-The framework must not prematurely generalize:
-- escrow liability meaning,
-- dispute/payout semantics,
-- claimability semantics,
-- resolver/bond economic semantics,
-- protocol-specific solvency interpretation.
-
-Current position:
-- `:funds-ledger-view` is a reusable output contract,
-- current computation remains SEW-scoped by design.
+**Rule**: namespaces in the functional core must never import `db/*` or
+`io/*`. Shell code flows inward; core code never reaches out.
 
 ---
 
 ## Layering rules
 
 | Namespace | May import | Must NOT import |
-|---|---|---|
+|-----------|-----------|----------------|
 | `protocols/protocol.clj` | nothing | everything else |
 | `contract_model/*` | `protocols/protocol` | anything else |
 | `protocols/sew/*` | `protocols/protocol`, `contract_model/*` | `sim/*`, `db/*`, `io/*` |
@@ -234,9 +265,43 @@ Current position:
 | `io/*` | `stochastic/*`, `sim/*` | `db/*` |
 | `core.clj` | everything | — |
 
-**Key invariant**: the functional core is testable without a running XTDB
-instance or filesystem. `db/` and `io/` are the only namespaces with
+**Key invariant**: the functional core is fully testable without a running
+XTDB instance or filesystem. `db/` and `io/` are the only namespaces with
 side effects.
+
+---
+
+## Design principles
+
+- **Functional core, imperative shell** — all protocol logic and simulation
+  logic is pure. Only `db/` and `io/` have side effects.
+- **Explicit RNG** — randomness is a parameter, never implicit. Same seed +
+  params → identical output, byte-for-byte.
+- **Pluggable adapters** — the replay engine knows only `SimulationAdapter`.
+  Adding a new protocol means implementing the adapter interfaces and
+  registering an id in `protocols/registry.clj`.
+- **Reproducibility** — every run captures git SHA, seed, JVM version, and
+  params in `metadata.edn`.
+
+---
+
+## Testing
+
+**Canonical test runner**: `./scripts/test.sh [mode]`
+
+| Mode | What runs |
+|------|-----------|
+| `all` (default) | unit tests + deterministic invariant suite + fixture suites |
+| `unit` | Clojure unit tests only |
+| `invariants` | `clojure -M:run -- --invariants` (S01–S41, ~1 s, no server required) |
+| `suites` | Fixture suites (all-invariants + equilibrium-validation) |
+
+Unit test namespaces:
+- `test/resolver_sim/protocols/sew/*_test.clj` — state machine, invariants, lifecycle
+- `test/resolver_sim/contract_model/replay_bridge_test.clj` — kernel bridge
+- `test/resolver_sim/protocols/protocol_adapter_test.clj` — SEWProtocol + DummyProtocol interface parity
+
+Integration tests in `test/resolver_sim/db/` require a live XTDB instance on localhost:5432.
 
 ---
 
@@ -247,100 +312,24 @@ side effects.
 og/eval-engine {:local/root "../og/eval-engine"}
 ```
 
-Only `resolver-sim.db.*` may import `evaluation.xtdb` (eval-engine's shared
-XTDB infrastructure). The rest of the codebase is decoupled from eval-engine.
+Only `resolver-sim.db.*` may import `evaluation.xtdb`. The rest of the
+codebase is decoupled from eval-engine.
 
 ---
 
-## XTDB persistence layer (`db/`)
+## XTDB persistence layer
 
-Two tables, auto-created by XTDB on first INSERT:
+Two tables, auto-created on first write:
 
 | Table | Purpose |
-|---|---|
-| `sim_trial_results` | One row per simulation trial — protocol id, outcome, invariants/divergence, params/metrics blobs |
-| `sim_entity_events` | One row per entity state transition within a trial — protocol-agnostic event stream with valid-time semantics |
+|-------|---------|
+| `sim_trial_results` | One row per simulation trial — adapter id, outcome, invariant results, params/metrics blobs |
+| `sim_entity_events` | One row per entity state transition — protocol-agnostic event stream with valid-time semantics |
 
-Valid-time semantics: `_valid_from` = simulated block timestamp. Queries with
-`FOR VALID_TIME AS OF` reproduce the escrow state at any point in the simulated
+`_valid_from` = simulated block timestamp. Queries with
+`FOR VALID_TIME AS OF` reproduce world state at any point in the simulated
 chain timeline.
 
-Pass `nil` as datasource to skip all writes — enables offline simulation runs
-and unit tests without a live XTDB instance.
+Pass `nil` as datasource to skip all writes — enables offline runs and unit
+tests without a live XTDB instance.
 
----
-
-## Evaluation pipeline (live simulation)
-
-```
-data/fixtures/*.edn / *.json
-  ↓  sim/fixtures.clj  (load + compose scenario)
-Scenario map
-  ↓  contract_model/replay.clj  (replay-with-protocol / replay-scenario)
-  │     ↓  protocols/sew.clj   (SEWProtocol.dispatch-action)
-  │           ↓  protocols/sew/*.clj  (state machine, lifecycle, resolution)
-  │     ↓  protocols/sew.clj   (SEWProtocol.check-invariants-*)
-  │           ↓  protocols/sew/invariants.clj  (28+ invariant checks)
-  │   Trace map (per-step outcomes) returned to caller
-  │
-  └── db/telemetry.clj  (write to XTDB if ds provided)
-```
-
----
-
-## Namespace growth guidance
-
-### `sim/` — currently ~38 files
-When it reaches ~50, group by test domain:
-```
-sim/
-  economic/     phases testing fee/profit/incentive hypotheses
-  governance/   phases testing governance capture, rule drift
-  adversarial/  phases testing attack strategies
-  engine.clj, batch.clj, sweep.clj, waterfall.clj  (shared infrastructure)
-```
-
-### `stochastic/` — currently ~17 files
-Split into sub-domains only when two distinct areas emerge (e.g.
-`stochastic/economic/` vs `stochastic/adversarial/`). Flat is correct for ≤20 files.
-
-### `protocols/sew/` — currently ~13 files
-If the SEW kernel expands significantly, consider splitting by concern:
-```
-protocols/sew/
-  core/         state_machine, lifecycle, resolution, authority
-  accounting/   accounting, invariants/accounting
-  dr3/          registry, runner (DR3-specific logic)
-```
-
-### `db/` — currently 2 files
-New tables get new files here (e.g. `db/governance.clj`). Do not grow
-`store.clj` indefinitely — one file per table group.
-
----
-
-## Validation phases
-
-The simulation stack includes multiple phase modules and adversarial programs
-that are run through `scripts/test.sh`, fixture suites, and research/evidence
-workflows. Treat exact phase ranges and counts as moving targets; use the
-testing and usage docs as the operational source of truth.
-
----
-
-## Testing
-
-**Canonical test runner:** `./scripts/test.sh [mode]`
-
-| Mode | What runs | Command |
-|---|---|---|
-| `all` (default) | unit + invariants + suites | `./scripts/test.sh` |
-| `unit` | Clojure unit tests only | `./scripts/test.sh unit` |
-| `invariants` | deterministic scenario run (`--invariants`) | `./scripts/test.sh invariants` |
-| `suites` | Fixture suites (all-invariants + equilibrium-validation) | `./scripts/test.sh suites` |
-
-Unit test namespaces:
-- `test/resolver_sim/protocols/sew/*_test.clj` — SEW state machine, invariants, lifecycle
-- `test/resolver_sim/contract_model/replay_bridge_test.clj` — kernel bridge functions
-- `test/resolver_sim/protocols/protocol_adapter_test.clj` — SEWProtocol + DummyProtocol parity
-- `test/resolver_sim/db/` — XTDB persistence (requires live XTDB on localhost:5432)
