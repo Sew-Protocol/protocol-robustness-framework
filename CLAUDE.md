@@ -2,13 +2,14 @@
 
 ## What this system is
 
-A **statistical simulation** of the SEW decentralised dispute-resolution protocol,
-plus a **live contract model** that simulates actual contract execution.
+A **protocol-agnostic adversarial testing framework** for decentralised dispute
+resolution, escrow, and coordination protocols — with the **SEW Protocol** as the
+primary reference implementation and research case study.
 
 Two distinct modes:
 - **Statistical model** (`sim/`, `stochastic/`) — Monte Carlo sweeps over protocol
   parameter space; tests falsifiable hypotheses about resolver incentives.
-- **Live simulation** (`contract_model/`) — deterministic execution of dispute
+- **Live simulation** (`contract_model/`) — deterministic replay of dispute
   protocol kernels against adversarial strategies; records outcomes to XTDB.
 
 ---

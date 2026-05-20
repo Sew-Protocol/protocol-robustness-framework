@@ -26,7 +26,36 @@
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.data.json :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.notebooks.ui :as ui]))
+
+(defn notebook-nav [current-label]
+  (if-let [v (ns-resolve 'resolver-sim.notebooks.ui 'notebook-navigation)]
+    (try
+      ((var-get v) current-label)
+      (catch Throwable _
+        [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
+                       :padding "10px 12px" :marginBottom "12px"}}
+         [:strong "Notebook navigation"]
+         [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
+          [:a {:href "/notebooks/dispute_resolution"} "Dispute Resolution Workbench"]
+          [:a {:href "/notebooks/report"} "Report Notebook"]
+          [:a {:href "/notebooks/invariant_failures"} "Invariant Failure Triage"]
+          [:a {:href "/notebooks/telemetry"} "Telemetry Trial Timeline"]
+          [:a {:href "/notebooks/xtdb_overview"} "XTDB Overview"]
+          [:span {:style {:color "#334155"}} (str "• current: " current-label)]]]))
+    [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
+                   :padding "10px 12px" :marginBottom "12px"}}
+     [:strong "Notebook navigation"]
+     [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
+      [:a {:href "/notebooks/dispute_resolution"} "Dispute Resolution Workbench"]
+      [:a {:href "/notebooks/report"} "Report Notebook"]
+      [:a {:href "/notebooks/invariant_failures"} "Invariant Failure Triage"]
+      [:a {:href "/notebooks/telemetry"} "Telemetry Trial Timeline"]
+      [:a {:href "/notebooks/xtdb_overview"} "XTDB Overview"]
+      [:span {:style {:color "#334155"}} (str "• current: " current-label)]]]))
+
+(clerk/html (notebook-nav "Report Notebook"))
 
 ;; ---
 ;; ## R/A/G Legend
@@ -35,7 +64,7 @@
 ;; |--------|--------|---------|
 ;; | 🟢 Green | `:green` | Validation condition holds / invariant passes |
 ;; | 🟠 Amber | `:amber` | Inconclusive / warning / research finding / artifact missing |
-;; | �� Red   | `:red`   | Hard gate failure / invariant violation / vulnerability evidence |
+;; | 🔴 Red   | `:red`   | Hard gate failure / invariant violation / vulnerability evidence |
 ;;
 ;; **Critical note on red:** Red can mean *either*:
 ;; 1. **A validation failure** — invariant violated, unexpected outcome, funds drift.
@@ -137,7 +166,10 @@
              (filter #(str/ends-with? (.getName %) ".report.edn"))
              (map (fn [f]
                     (try
-                      (let [d (edn/read-string (slurp f))]
+                      (let [d (edn/read-string (slurp f))
+                            d (assoc d
+                                     :_source-file (.getAbsolutePath f)
+                                     :_source-mtime (.lastModified f))]
                         [(str (:trace-id d)) d])
                       (catch Exception e
                         (println "WARN: skipping golden" (.getName f) "-" (.getMessage e))
@@ -240,6 +272,50 @@
       {:rag :amber :status-kind :missing-data
        :reason (str "Outcome: " (pr-str outcome))})))
 
+(defn classify-validation-failure
+  "Evidence-aware, low-confidence-first failure class derivation.
+   Returns — when available data does not strongly support a class label."
+  [{:keys [threat-tags]} golden status-kind]
+  (let [tags (set (map #(-> % name str/lower-case) (or threat-tags [])))
+        tag-text (str/join " " tags)
+        outcome (:outcome golden)
+        reverts (get-in golden [:metrics :reverts] 0)
+        resolutions (get-in golden [:metrics :resolutions-executed] 0)
+        tag-has? (fn [needle] (str/includes? tag-text needle))]
+    (cond
+      (= status-kind :missing-data)
+      "no replay artifact"
+
+      (not= status-kind :validation)
+      "—"
+
+      (= outcome :pass)
+      "—"
+
+      (and (= outcome :fail) (pos? reverts) (zero? resolutions))
+      "likely unexpected revert / missing terminal state"
+
+      (or (tag-has? "timeout") (tag-has? "deadline"))
+      "timeout behavior mismatch"
+
+      (or (tag-has? "appeal") (tag-has? "escalation"))
+      "escalation lifecycle mismatch"
+
+      (or (tag-has? "authorization")
+          (tag-has? "unauthorized")
+          (tag-has? "auth"))
+      "authorization policy mismatch"
+
+      (or (tag-has? "state-leak")
+          (tag-has? "state_leak")
+          (tag-has? "status-leak")
+          (tag-has? "state-machine")
+          (tag-has? "guard"))
+      "state machine guard mismatch"
+
+      :else
+      "—")))
+
 ;; ---
 ;; ## Card / Layout Helpers
 
@@ -287,6 +363,17 @@
           total-inv  (reduce + (map #(get-in % [:metrics :invariant-violations] 0)
                                     (vals (or golden-reports {}))))
           funds-rag  (cond (zero? golden-n) :amber (pos? total-inv) :red :else :green)
+          replay-outcomes (frequencies (map :outcome (vals (or golden-reports {}))))
+          replay-pass-n (get replay-outcomes :pass 0)
+          replay-fail-n (get replay-outcomes :fail 0)
+          replay-missing-n (- trace-n golden-n)
+          replay-rag (cond
+                       (pos? replay-fail-n) :red
+                       (pos? replay-missing-n) :amber
+                       :else :green)
+          expected-negative-n (count (filter #(= :expected-negative
+                                                  (:status-kind (scenario-row->rag % (get golden-reports (:id %)))))
+                                            (or all-traces [])))
           vuln-count (count (filter #(= "theory-falsification" (:purpose %))
                                     (or all-traces [])))
           vuln-rag   (if (pos? vuln-count) :amber :green)
@@ -297,6 +384,12 @@
        [:p {:style {:color "#555" :fontSize "0.9em"}}
         "Aggregated status from the most recent validation run. "
         "Inspect each panel for detail before acting on colour alone."]
+       [:div {:style {:background "#eff6ff" :border "1px solid #93c5fd" :borderRadius "6px"
+                      :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em" :color "#1e3a8a"}}
+        [:strong "Why CI can be green while corpus is non-clean: "]
+        "PASS_CLEAN means the configured CI targets completed successfully. "
+        "It does not mean every trace in the evidence corpus has a passing golden replay. "
+        "The corpus includes additional research and replay artifacts whose status is reported separately in this workbook."]
        [:div {:style {:fontSize "0.82em" :color "#444" :marginBottom "12px"
                       :fontFamily "monospace" :background "#f5f5f5"
                       :padding "6px 10px" :borderRadius "3px"}}
@@ -304,24 +397,46 @@
              " │ Targets: " (get-in sc [:targets :total] "—")
              " │ traces=" trace-n ", golden=" golden-n)]
        (render-card
-        {:label "Validation gate"
+        {:label "Top-level interpretation"
+         :rag   (if (or (pos? replay-fail-n) (pos? replay-missing-n)) :red :green)
+         :value (if (or (pos? replay-fail-n) (pos? replay-missing-n))
+                  "CI targets passed, but replay corpus contains validation failures or missing evidence"
+                  "CI targets and replay corpus are aligned")
+         :note  "Do not interpret PASS_CLEAN alone as protocol-clean. Evaluate replay corpus status and scenario matrix together."})
+       (render-card
+        {:label "CI target gate"
          :rag   gate-rag
          :value (str (get-in sc [:targets :pass] "—")
                      "/" (get-in sc [:targets :total] "—") " targets pass")
          :note  "Hard gate: did all canonical test targets complete successfully? Source: test-summary.json"})
        (render-card
-        {:label "Critical findings"
+        {:label "Replay corpus status"
+         :rag   replay-rag
+         :value (str replay-pass-n " pass, " replay-fail-n " fail, " replay-missing-n " missing golden")
+         :note  "Scenario replay/evidence status from golden corpus. Failures/missing data keep evidence status non-clean even when CI gate passes."})
+       (render-card
+        {:label "Structured risk digest criticals"
          :rag   risk-rag
-         :value (str critical-n " critical finding(s)")
+         :value (str critical-n)
          :note  (str "Structured critical findings in risk_digest. "
                      (if (pos? critical-n) "Review test-summary.json immediately." "Clean."))})
+       (render-card
+        {:label "Replay validation failures requiring investigation"
+         :rag   (if (pos? replay-fail-n) :red :green)
+         :value (str replay-fail-n)
+         :note  "Count of scenarios with status-kind :validation (requires investigation)."})
+       (render-card
+        {:label "Expected-negative findings"
+         :rag   (if (pos? expected-negative-n) :amber :green)
+         :value (str expected-negative-n)
+         :note  "Count of scenarios with status-kind :expected-negative (theory-falsification evidence)."})
        (render-card
         {:label "Warnings"
          :rag   warn-rag
          :value (str warning-n " warning(s)")
          :note  "Warning count from risk_digest. Amber = warnings present; does not imply protocol failure."})
        (render-card
-        {:label "Scenario corpus"
+        {:label "Trace corpus coverage"
          :rag   corpus-rag
          :value (str trace-n " traces; " golden-n " with golden outcome")
          :note  (str (- trace-n golden-n) " traces have no golden report (amber in matrix). "
@@ -332,13 +447,158 @@
          :value (str "Total invariant violations across corpus: " total-inv)
          :note  "Aggregated violations from all golden reports. Non-zero = protocol invariant breached — investigate."})
        (render-card
-        {:label "Vulnerability evidence"
+        {:label "Theory-falsification scenarios declared"
          :rag   vuln-rag
          :value (str vuln-count " theory-falsification scenario(s)")
          :note  "Known theory-falsification scenarios exist. These are research findings, NOT test failures. See status-kind in Scenario Matrix."})]))))
 
 ;; ---
-;; ## 2. Scenario Matrix
+;; ## 2. Corpus Evidence Status
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (safe-render
+  "Corpus Evidence Status"
+  (fn []
+    (let [traces (or all-traces [])
+          golds (or golden-reports {})
+          total-traces (count traces)
+          golden-count (count golds)
+          missing-count (max 0 (- total-traces golden-count))
+          with-golden (keep #(get golds (:id %)) traces)
+          outcomes (frequencies (map :outcome with-golden))
+          pass-count (get outcomes :pass 0)
+          fail-count (get outcomes :fail 0)
+          evidence-rag (cond
+                         (pos? fail-count) :red
+                         (pos? missing-count) :amber
+                         :else :green)]
+      [:div
+       [:h2 "Corpus Evidence Status"]
+       [:p {:style {:fontSize "0.85em" :color "#555"}}
+        "Separate corpus-level evidence summary to track replay outcome coverage and quality independently of CI target status."]
+       [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b" :borderRadius "6px" :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em"}}
+        [:strong "Coverage statement: "]
+        (str "Only " golden-count "/" total-traces
+             " traces currently have replay outcome artifacts. Coverage is broad at trace metadata level, but evidence-backed replay coverage is partial.")]
+       [:div {:style {:display "grid" :gridTemplateColumns "repeat(auto-fit, minmax(180px, 1fr))" :gap "10px" :marginBottom "10px"}}
+        (render-card {:label "Evidence status" :rag evidence-rag :value (name evidence-rag)
+                      :note "Red: replay fails present. Amber: missing replay outcomes. Green: full evidence-backed pass."})
+        (render-card {:label "Trace metadata coverage" :rag (if (pos? total-traces) :green :amber)
+                      :value (str total-traces " traces") :note "Total scenarios discovered in trace metadata."})
+        (render-card {:label "Replay outcome coverage" :rag (if (zero? missing-count) :green :amber)
+                      :value (str golden-count "/" total-traces) :note "Scenarios with golden replay artifacts."})
+        (render-card {:label "Replay failures" :rag (if (pos? fail-count) :red :green)
+                      :value (str fail-count) :note "Golden outcomes marked :fail."})
+        (render-card {:label "Missing replay artifacts" :rag (if (pos? missing-count) :amber :green)
+                      :value (str missing-count) :note "Traces lacking golden outcome artifacts."})
+        (render-card {:label "Replay passes" :rag :green :value (str pass-count)
+                      :note "Golden outcomes marked :pass."})]]))))
+
+;; ---
+;; ## 3. Validation Work Queue (Top 10)
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (safe-render
+  "Validation Work Queue (Top 10)"
+  (fn []
+    (let [priority-ids #{{"s04" "s14" "s15" "s17" "s18" "s19" "s20" "s21" "s22" "s23"}}
+          id-prefix? (fn [id prefix] (str/starts-with? (str/lower-case (str id)) prefix))
+          selected? (fn [id]
+                      (or (id-prefix? id "s04")
+                          (id-prefix? id "s14")
+                          (id-prefix? id "s15")
+                          (id-prefix? id "s17")
+                          (id-prefix? id "s18")
+                          (id-prefix? id "s19")
+                          (id-prefix? id "s20")
+                          (id-prefix? id "s21")
+                          (id-prefix? id "s22")
+                          (id-prefix? id "s23")))
+          rows (->> (or all-traces [])
+                    (filter #(selected? (:id %)))
+                    (map (fn [t]
+                           (let [golden (get golden-reports (:id t))
+                                 verdict (scenario-row->rag t golden)]
+                             {:id (:id t)
+                              :title (:title t)
+                              :status-kind (:status-kind verdict)
+                              :replay-outcome (if golden (name (:outcome golden)) "missing")
+                              :failure-class (classify-validation-failure t golden (:status-kind verdict))})))
+                    (sort-by :id))]
+      [:div
+       [:h2 "Validation Work Queue (Top 10)"]
+       [:p {:style {:fontSize "0.84em" :color "#555"}}
+        "Primary reviewer queue promoted ahead of the full matrix: s04, s14–s15, s17, s18–s21, s22, s23."]
+       (if (seq rows)
+         [:div {:style {:overflowX "auto"}}
+          [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.84em"}}
+           [:thead
+            [:tr {:style {:background "#f3f4f6" :textAlign "left"}}
+             [:th {:style {:padding "6px 8px"}} "ID"]
+             [:th {:style {:padding "6px 8px"}} "Title"]
+             [:th {:style {:padding "6px 8px"}} "status-kind"]
+             [:th {:style {:padding "6px 8px"}} "Replay"]
+             [:th {:style {:padding "6px 8px"}} "Failure class"]]]
+           (into [:tbody]
+                 (for [r rows]
+                   [:tr {:style {:borderBottom "1px solid #e5e7eb"
+                                 :background (if (= :validation (:status-kind r)) "#fef2f2" "#fff7ed")}}
+                    [:td {:style {:padding "5px 8px" :fontFamily "monospace" :whiteSpace "nowrap"}} (:id r)]
+                    [:td {:style {:padding "5px 8px"}} (:title r)]
+                    [:td {:style {:padding "5px 8px"}} (status-kind-label (:status-kind r))]
+                    [:td {:style {:padding "5px 8px" :textAlign "center"}} (:replay-outcome r)]
+                    [:td {:style {:padding "5px 8px"}} (:failure-class r)] ]))]]
+         (ui/callout :amber [:div "No queue scenarios found in current trace corpus."]))]))) )
+
+;; Debug panel for notebook sync/path drift issues.
+;; This makes the data source explicit so stale sessions / wrong working dir are obvious.
+^{::clerk/visibility {:code :hide}}
+(clerk/html
+ (safe-render
+  "Queue Data Source Debug"
+  (fn []
+    (let [ids ["s04-dispute-timeout-autocancel"
+               "s14-dr3-module-authorized"
+               "s15-dr3-module-unauthorized-rejected"
+               "s17-ieo-dispute-no-resolver-timeout"
+               "s18-dr3-kleros-l0-resolves"
+               "s19-dr3-kleros-escalation-rejected-l0-resolves"
+               "s20-dr3-kleros-max-escalation-guard"
+               "s21-dr3-kleros-pending-cleared-on-escalation"
+               "s22-status-leak-agree-cancel-over-dispute"
+               "s23-preemptive-escalation-blocked"]]
+      [:details {:style {:margin "8px 0 14px" :background "#eff6ff" :border "1px solid #93c5fd"
+                         :borderRadius "6px" :padding "8px 10px"}}
+       [:summary {:style {:cursor "pointer" :fontWeight "600"}}
+        "Debug: queue data source (cwd + loaded golden files)"]
+       [:div {:style {:fontSize "0.8em" :color "#334155" :marginTop "8px"}}
+        [:div [:strong "user.dir:"] " " (System/getProperty "user.dir")]
+        [:div [:strong "golden dir absolute:"] " " (.getAbsolutePath (io/file "data/fixtures/golden"))]
+        [:div [:strong "golden count loaded:"] " " (count (or golden-reports {}))]]
+       [:div {:style {:overflowX "auto" :marginTop "8px"}}
+        [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.8em"}}
+         [:thead
+          [:tr {:style {:background "#dbeafe" :textAlign "left"}}
+           [:th {:style {:padding "5px 8px"}} "ID"]
+           [:th {:style {:padding "5px 8px"}} "Outcome"]
+           [:th {:style {:padding "5px 8px"}} "Source file"]
+           [:th {:style {:padding "5px 8px"}} "MTime(ms)"]]]
+         (into [:tbody]
+               (for [id ids
+                     :let [g (get golden-reports id)]]
+                 [:tr {:style {:borderBottom "1px solid #bfdbfe"}}
+                  [:td {:style {:padding "5px 8px" :fontFamily "monospace" :whiteSpace "nowrap"}} id]
+                  [:td {:style {:padding "5px 8px" :fontFamily "monospace"}}
+                   (if g (name (:outcome g)) "missing")]
+                  [:td {:style {:padding "5px 8px" :fontFamily "monospace" :fontSize "0.75em"}}
+                   (or (:_source-file g) "—")]
+                  [:td {:style {:padding "5px 8px" :fontFamily "monospace"}}
+                   (or (:_source-mtime g) "—")]]))]]]))))
+
+;; ---
+;; ## 4. Scenario Matrix
 ;;
 ;; One row per trace. **Red ≠ CI failure** — inspect `status-kind`.
 ;; Theory-falsification scenarios marked `:expected-negative` are red as
@@ -350,47 +610,261 @@
   "Scenario Matrix"
   (fn []
     (let [traces (or all-traces [])
-          golds  (or golden-reports {})
-          rows
-          (for [t traces
-                :let [golden  (get golds (:id t))
-                      verdict (scenario-row->rag t golden)
-                      rag     (:rag verdict)
-                      kind    (:status-kind verdict)
-                      inv-v   (if golden (str (get-in golden [:metrics :invariant-violations] 0)) "—")
-                      atk-s   (if golden (str (get-in golden [:metrics :attack-successes] 0)) "—")
-                      outcome (if golden (name (:outcome golden)) "—")
-                      tags    (let [tt (:threat-tags t)]
-                                (if (seq tt) (str/join ", " (map name tt)) "—"))
-                      bg      (case rag :green "#f0fdf4" :amber "#fffbeb" :red "#fef2f2" "white")]]
-            [:tr {:style {:background bg}}
-             [:td {:style {:textAlign "center" :fontSize "1.1em"}} (status-emoji rag)]
-             [:td {:style {:fontSize "0.75em" :color "#555"}} (status-kind-label kind)]
-             [:td {:style {:fontFamily "monospace" :fontSize "0.8em" :whiteSpace "nowrap"}} (:id t)]
-             [:td {:style {:fontSize "0.82em" :maxWidth "220px"}} (:title t)]
-             [:td {:style {:fontSize "0.78em"}} (:purpose t)]
-             [:td {:style {:fontSize "0.78em" :maxWidth "160px"}} tags]
-             [:td {:style {:textAlign "center"}} inv-v]
-             [:td {:style {:textAlign "center"}} atk-s]
-             [:td {:style {:fontSize "0.78em"}} outcome]
-             [:td {:style {:fontSize "0.72em" :color "#555" :maxWidth "220px"}} (:reason verdict)]])]
+          golds (or golden-reports {})
+          rows (for [t traces
+                     :let [golden (get golds (:id t))
+                           verdict (scenario-row->rag t golden)
+                           rag (:rag verdict)
+                           kind (:status-kind verdict)
+                           reason (:reason verdict)
+                           failure-class (classify-validation-failure t golden kind)
+                           tags (if (seq (:threat-tags t))
+                                  (str/join ", " (map name (:threat-tags t)))
+                                  "—")
+                           inv-v (if golden (str (get-in golden [:metrics :invariant-violations] 0)) "—")
+                           atk-s (if golden (str (get-in golden [:metrics :attack-successes] 0)) "—")
+                           outcome (if golden (name (:outcome golden)) "—")
+                           bg (case rag :green "#f0fdf4" :amber "#fffbeb" :red "#fef2f2" "white")]]
+                 {:kind (cond
+                          (= kind :validation) :validation-failure
+                          (= kind :expected-negative) :expected-negative
+                          (= kind :missing-data) :missing-golden
+                          :else :passing-validation)
+                  :status (status-emoji rag)
+                  :status-kind (status-kind-label kind)
+                  :id (:id t)
+                  :title (:title t)
+                  :purpose (:purpose t)
+                  :failure-class failure-class
+                  :tags tags
+                  :inv-v inv-v
+                  :atk-s atk-s
+                  :outcome outcome
+                  :reason reason
+                  :bg bg})
+          by-kind (group-by :kind rows)
+          missing-golden-priority
+          (let [missing (get by-kind :missing-golden [])
+                classify-priority
+                (fn [r]
+                  (let [id-l (str/lower-case (str (:id r)))
+                        title-l (str/lower-case (str (:title r)))
+                        purpose-l (str/lower-case (str (:purpose r)))
+                        text (str id-l " " title-l " " purpose-l " " (str/lower-case (str (:tags r))))]
+                    (cond
+                      ;; High priority security/adversarial
+                      (or (str/includes? text "auth")
+                          (str/includes? text "unauthorized")
+                          (str/includes? text "escalat")
+                          (str/includes? text "appeal")
+                          (str/includes? text "race")
+                          (str/includes? text "settlement")
+                          (str/includes? text "state leak")
+                          (str/includes? text "status leak")
+                          (str/includes? text "state-machine")
+                          (str/includes? text "guard")
+                          (str/includes? text "adversarial")
+                          (str/includes? text "attack"))
+                      {:priority 1 :bucket "High priority security/adversarial"}
+
+                      ;; Boundary/timing
+                      (or (str/includes? text "window")
+                          (str/includes? text "1s")
+                          (str/includes? text "deadline")
+                          (str/includes? text "timeout")
+                          (str/includes? text "boundary")
+                          (str/includes? text "same-block")
+                          (str/includes? text "ordering")
+                          (str/includes? text "max escalation"))
+                      {:priority 2 :bucket "Boundary/timing"}
+
+                      ;; Economic/SPE research
+                      (or (str/includes? text "spe")
+                          (str/includes? text "nash")
+                          (str/includes? text "incentive")
+                          (str/includes? text "collusion")
+                          (str/includes? text "economic")
+                          (str/includes? text "equilibrium")
+                          (str/includes? text "theory"))
+                      {:priority 3 :bucket "Economic/SPE research"}
+
+                      ;; Lower-risk regression coverage
+                      :else
+                      {:priority 4 :bucket "Lower-risk regression coverage"})))]
+            (->> missing
+                 (map (fn [r] (merge r (classify-priority r))))
+                 (sort-by (juxt :priority :id))))
+          render-section (fn [title rows' default-open? tone validation?]
+                           [:details (cond-> {:style {:marginBottom "10px" :border "1px solid #e2e8f0" :borderRadius "6px" :padding "8px 10px"
+                                                      :backgroundColor (case tone :red "#fff7f7" :amber "#fffbeb" :green "#f0fdf4" "white")}}
+                                        default-open? (assoc :open true))
+                            [:summary {:style {:cursor "pointer" :fontWeight "600"}} (str title " (" (count rows') ")")]
+                            (if (seq rows')
+                              [:div {:style {:overflowX "auto" :marginTop "8px"}}
+                               [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.9em"}}
+                                [:thead
+                                 (into [:tr {:style {:background "#f3f4f6" :textAlign "left"}}]
+                                       (map #(vector :th {:style {:padding "6px 8px"}} %)
+                                            (if validation?
+                                              ["Status" "status-kind" "ID" "Title" "Purpose" "Failure class" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]
+                                              ["Status" "status-kind" "ID" "Title" "Purpose" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]))) ]
+                                (into [:tbody]
+                                      (for [r rows']
+                                        [:tr {:style {:background (:bg r)}}
+                                         [:td {:style {:textAlign "center" :fontSize "1.1em"}} (:status r)]
+                                         [:td {:style {:fontSize "0.75em" :color "#555"}} (:status-kind r)]
+                                         [:td {:style {:fontFamily "monospace" :fontSize "0.8em" :whiteSpace "nowrap"}} (:id r)]
+                                         [:td {:style {:fontSize "0.82em" :maxWidth "220px"}} (:title r)]
+                                         [:td {:style {:fontSize "0.78em"}} (:purpose r)]
+                                         (when validation?
+                                           [:td {:style {:fontSize "0.78em" :maxWidth "170px"}} (:failure-class r)])
+                                         [:td {:style {:fontSize "0.78em" :maxWidth "160px"}} (:tags r)]
+                                         [:td {:style {:textAlign "center"}} (:inv-v r)]
+                                         [:td {:style {:textAlign "center"}} (:atk-s r)]
+                                         [:td {:style {:fontSize "0.78em"}} (:outcome r)]
+                                         [:td {:style {:fontSize "0.72em" :color "#555" :maxWidth "220px"}} (:reason r)]]))]]
+                              [:div {:style {:fontSize "0.84em" :color "#64748b" :marginTop "6px"}} "None in this section."])])]
       [:div
        [:h2 "Scenario Matrix"]
+       [:div {:style {:position "sticky" :top "8px" :zIndex "10" :background "#ffffff" :border "1px solid #e2e8f0"
+                      :borderRadius "6px" :padding "6px 10px" :marginBottom "10px" :fontSize "0.82em"}}
+        [:strong {:style {:marginRight "8px"}} "Jump to:"]
+        [:a {:href "#scenario-validation-failures" :style {:marginRight "10px"}} "Failures"]
+        [:a {:href "#scenario-expected-negative" :style {:marginRight "10px"}} "Expected-negative"]
+        [:a {:href "#scenario-passing" :style {:marginRight "10px"}} "Passing"]
+        [:a {:href "#scenario-missing"} "Missing"]]
        [:p {:style {:fontSize "0.85em" :color "#555"}}
         "One row per scenario trace. "
         [:strong "Red ≠ CI failure"] " — inspect status-kind column. "
         "Rows without a golden report show amber (missing data, not failure)."]
-       [:div {:style {:overflowX "auto"}}
-        [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.9em"}}
-         [:thead
-          (into [:tr {:style {:background "#f3f4f6" :textAlign "left"}}]
-                (map #(vector :th {:style {:padding "6px 8px"}} %)
-                     ["Status" "status-kind" "ID" "Title" "Purpose"
-                      "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]))]
-         (into [:tbody] rows)]]]))))
+       [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b" :borderRadius "6px" :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em"}}
+        [:strong "Replay coverage status: "]
+        (str "Only " (count golden-reports) "/" (count all-traces)
+             " traces currently have replay outcome artifacts. Coverage is broad at trace metadata level, but evidence-backed replay coverage is partial.")]
+       [:div {:style {:background "#f8fafc" :border "1px solid #cbd5e1" :borderRadius "6px" :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em"}}
+        [:strong "Interpretation for replay failures with invariants pass:"]
+        [:div "These failures do not show funds drift or invariant breach. They show expected outcome mismatch, rejected path, missing resolution, or model/fixture divergence."]]
+       [:div {:id "scenario-validation-failures"}
+        (render-section "Validation failures requiring investigation" (get by-kind :validation-failure []) true :red true)]
+       [:div {:id "scenario-expected-negative"}
+        (render-section "Expected-negative / theory-falsification findings" (get by-kind :expected-negative []) false :amber false)]
+       [:div {:id "scenario-passing"}
+        (render-section "Passing validation scenarios" (get by-kind :passing-validation []) false :green false)]
+       [:div {:id "scenario-missing"}
+        (render-section "Missing golden reports" (get by-kind :missing-golden []) false :amber false)]
+       [:details {:style {:marginTop "8px" :background "#fff7ed" :border "1px solid #fdba74" :borderRadius "6px" :padding "8px 10px"}}
+        [:summary {:style {:cursor "pointer" :fontWeight "600"}}
+         (str "Prioritised missing golden reports (" (count missing-golden-priority) ")")]
+        [:p {:style {:fontSize "0.83em" :color "#7c2d12" :marginTop "6px"}}
+         "Grouped triage buckets: security/adversarial → boundary/timing → economic/SPE → lower-risk regression."]
+        (let [grouped (group-by :bucket missing-golden-priority)
+              ordered-buckets ["High priority security/adversarial"
+                               "Boundary/timing"
+                               "Economic/SPE research"
+                               "Lower-risk regression coverage"]]
+          (into [:div]
+                (for [bucket ordered-buckets
+                      :let [bucket-rows (sort-by :id (get grouped bucket []))]]
+                  [:details {:style {:marginTop "8px" :background "#fff" :border "1px solid #fed7aa"
+                                     :borderRadius "6px" :padding "8px 10px"}}
+                   [:summary {:style {:cursor "pointer" :fontWeight "600"}}
+                    (str bucket " (" (count bucket-rows) ")")]
+                   (if (seq bucket-rows)
+                     [:div {:style {:overflowX "auto" :marginTop "6px"}}
+                      [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.84em"}}
+                       [:thead
+                        [:tr {:style {:background "#fff7ed" :textAlign "left"}}
+                         [:th {:style {:padding "6px 8px"}} "Scenario ID"]
+                         [:th {:style {:padding "6px 8px"}} "Title"]
+                         [:th {:style {:padding "6px 8px"}} "Purpose"]]]
+                       (into [:tbody]
+                             (for [r bucket-rows]
+                               [:tr
+                                [:td {:style {:padding "5px 8px" :fontFamily "monospace" :fontSize "0.8em"}} (:id r)]
+                                [:td {:style {:padding "5px 8px" :fontSize "0.8em"}} (:title r)]
+                                [:td {:style {:padding "5px 8px" :fontSize "0.78em"}} (:purpose r)]]))]]
+                     [:div {:style {:fontSize "0.8em" :color "#9a3412" :marginTop "6px"}}
+                      "No missing scenarios in this bucket."])])))]]))))
 
 ;; ---
-;; ## 3. Substatus Detail
+;; ## 4. Validation Failures Triage
+
+(defn triage-next-action
+  "Reviewer-oriented next action from likely failure class."
+  [likely-class invariants-pass?]
+  (cond
+    (not invariants-pass?) "Escalate: investigate invariant breach and funds/accounting state first"
+    (= likely-class "unexpected revert") "Inspect revert reason and authorization/guard preconditions"
+    (= likely-class "missing terminal state") "Trace terminal transition path and verify fixture completion conditions"
+    (= likely-class "unauthorized path accepted/rejected mismatch") "Reconcile auth policy expectations vs observed path outcome"
+    (= likely-class "timeout behavior mismatch") "Review deadlines/timeout boundary assumptions and event ordering"
+    (= likely-class "escalation lifecycle mismatch") "Audit escalation lifecycle transitions and pending-state clearing"
+    :else "Compare expected outcome contract vs replay artifact for mismatch source"))
+
+^{::clerk/visibility {:code :fold}}
+(clerk/html
+ (safe-render
+  "Validation Failures Triage"
+  (fn []
+    (let [traces (or all-traces [])
+          golds (or golden-reports {})
+          triage-rows
+          (->> traces
+               (keep (fn [t]
+                       (let [golden (get golds (:id t))
+                             verdict (scenario-row->rag t golden)
+                             status-kind (:status-kind verdict)
+                             replay-ok? (and golden (not= :fail (:outcome golden)))
+                             invariants-pass? (boolean (and golden (zero? (get-in golden [:metrics :invariant-violations] 0))))
+                             likely-class (classify-validation-failure t golden status-kind)]
+                         (when (= status-kind :validation)
+                           {:id (:id t)
+                            :title (:title t)
+                            :threat-tags (if (seq (:threat-tags t))
+                                           (str/join ", " (map name (:threat-tags t)))
+                                           "—")
+                            :replay-ok replay-ok?
+                            :invariants-pass invariants-pass?
+                            :reverts (if golden (get-in golden [:metrics :reverts] 0) "—")
+                            :resolutions (if golden (get-in golden [:metrics :resolutions-executed] 0) "—")
+                            :likely-class likely-class
+                            :next-action (triage-next-action likely-class invariants-pass?)}))))
+               (sort-by (juxt (fn [r] (if (:invariants-pass r) 1 0)) :id)))]
+      [:div
+       [:h2 "Validation Failures Triage"]
+       [:p {:style {:fontSize "0.84em" :color "#555"}}
+        "Reviewer-priority queue for validation failures. Focus here first when replay corpus is non-clean."]
+       (if (seq triage-rows)
+         [:div {:style {:overflowX "auto"}}
+          [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.84em"}}
+           [:thead
+            [:tr {:style {:background "#f3f4f6" :textAlign "left"}}
+             [:th {:style {:padding "6px 8px"}} "ID"]
+             [:th {:style {:padding "6px 8px"}} "Title"]
+             [:th {:style {:padding "6px 8px"}} "Threat tags"]
+             [:th {:style {:padding "6px 8px"}} "Replay ok?"]
+             [:th {:style {:padding "6px 8px"}} "Invariants pass?"]
+             [:th {:style {:padding "6px 8px"}} "Reverts"]
+             [:th {:style {:padding "6px 8px"}} "Resolutions"]
+             [:th {:style {:padding "6px 8px"}} "Likely class"]
+             [:th {:style {:padding "6px 8px"}} "Next action"]]]
+           (into [:tbody]
+                 (for [r triage-rows]
+                   [:tr {:style {:borderBottom "1px solid #e5e7eb"
+                                 :background (if (:invariants-pass r) "#fff7ed" "#fef2f2")}}
+                    [:td {:style {:padding "5px 8px" :fontFamily "monospace" :fontSize "0.8em" :whiteSpace "nowrap"}} (:id r)]
+                    [:td {:style {:padding "5px 8px" :fontSize "0.8em"}} (:title r)]
+                    [:td {:style {:padding "5px 8px" :fontSize "0.78em"}} (:threat-tags r)]
+                    [:td {:style {:padding "5px 8px" :textAlign "center"}} (if (:replay-ok r) "✓" "✗")]
+                    [:td {:style {:padding "5px 8px" :textAlign "center"}} (if (:invariants-pass r) "✓" "✗")]
+                    [:td {:style {:padding "5px 8px" :textAlign "center"}} (str (:reverts r))]
+                    [:td {:style {:padding "5px 8px" :textAlign "center"}} (str (:resolutions r))]
+                    [:td {:style {:padding "5px 8px" :fontSize "0.78em"}} (:likely-class r)]
+                    [:td {:style {:padding "5px 8px" :fontSize "0.78em" :maxWidth "320px"}} (:next-action r)]]))]]
+         (ui/callout :green [:div "No validation-failure rows detected in current corpus."]))]))))
+
+;; ---
+;; ## 5. Substatus Detail
 ;;
 ;; Expanded columns for scenarios with a golden report.
 ;; Helps distinguish: protocol invariant pass, research claim status,

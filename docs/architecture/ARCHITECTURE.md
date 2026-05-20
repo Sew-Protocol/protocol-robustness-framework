@@ -1,16 +1,22 @@
-# sew-simulation Architecture
+# Protocol Robustness Framework — Architecture
 
 ## What this system is
 
-A Monte Carlo + protocol simulation engine validating that honest dispute
-resolution incentives dominate malicious strategies in the SEW protocol.
+A protocol-agnostic adversarial testing and robustness-analysis framework,
+with the SEW Protocol as the primary reference implementation.
+
 It operates at two levels:
 
 1. **Statistical simulation** (`sim/`, `stochastic/`) — probabilistic phases
    that test incentive properties across parameter spaces.
-2. **Live protocol simulation** (`contract_model/`, `protocols/`) — deterministic
-   execution of the SEW dispute protocol against adversarial strategies,
-   recorded to XTDB.
+2. **Deterministic replay** (`contract_model/`, `protocols/`) — step-by-step
+   execution of protocol scenarios against adversarial strategies, checked
+   against invariants at every transition.
+
+The replay kernel is protocol-agnostic. SEW is one implementation of the
+`DisputeProtocol` adapter interface; other protocols can be plugged in without
+touching the kernel. See `docs/framework-boundaries.md` for what is reusable
+today vs. what is SEW-specific.
 
 Results feed engineering and research documentation in `docs/` (overview,
 evidence, testing, and challenge artifacts) that drive protocol remediation.

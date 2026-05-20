@@ -264,6 +264,52 @@ run_suites() {
   return $?
 }
 
+run_dr3_coverage() {
+  require_clojure || return $?
+  echo "Running DR3 critical suite + release-mapping drift checks..."
+
+  # 1) Run the dedicated DR3-critical suite.
+  clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [r (f/run-suite :suites/dr3-critical)]
+  (println (str :suites/dr3-critical \" → \" (if (:ok? r) \"PASS\" \"FAIL\")))
+  (when-not (:ok? r)
+    (doseq [x (:results r)]
+      (when (not= :pass (:outcome x))
+        (println (str \"  FAIL: \" (:trace-id x) \" [\" (:outcome x) \"]\")))))
+  (when-not (:ok? r) (System/exit 1)))" || return $?
+
+  # 2) Verify DR3 release mapping file references valid traces and suite IDs.
+  clojure -M:test -e "
+(require '[clojure.edn :as edn]
+         '[clojure.java.io :as io])
+
+(let [m (edn/read-string (slurp \"data/fixtures/protocol/dr3-release-modules.edn\"))
+      traces (:dr3-critical-traces m)
+      suites (:dr3-critical-suites m)
+      missing-traces (->> traces
+                          (map name)
+                          (map #(str \"data/fixtures/traces/\" % \".trace.json\"))
+                          (remove #(-> % io/file .exists))
+                          vec)
+      missing-suites (->> suites
+                          (map name)
+                          (map #(str \"data/fixtures/suites/\" % \".edn\"))
+                          (remove #(-> % io/file .exists))
+                          vec)]
+  (when (seq missing-traces)
+    (println \"Missing DR3 mapped traces:\")
+    (doseq [p missing-traces] (println \" -\" p))
+    (System/exit 1))
+  (when (seq missing-suites)
+    (println \"Missing DR3 mapped suites:\")
+    (doseq [p missing-suites] (println \" -\" p))
+    (System/exit 1))
+  (println \"DR3 mapping drift checks passed\"))" || return $?
+
+  return $?
+}
+
 run_equivalence_new() {
   require_clojure || return $?
   echo "Running new equivalence comparison suites (auth/race/escalation/accounting + money-path)..."
@@ -719,6 +765,9 @@ case "$MODE" in
   suites)
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     ;;
+  dr3-coverage)
+    run_target dr3-coverage run_dr3_coverage || FAILURES=$((FAILURES + 1))
+    ;;
   equivalence-new)
     run_target equivalence-new run_equivalence_new || FAILURES=$((FAILURES + 1))
     ;;
@@ -761,7 +810,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

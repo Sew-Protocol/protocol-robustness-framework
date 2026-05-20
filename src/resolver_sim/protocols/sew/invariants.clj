@@ -57,7 +57,9 @@
     :no-withdrawal-during-dispute
     :time-lock-integrity
     :token-tax-reconciliation
-    :fees-monotone})
+     :fees-monotone
+     :single-resolution-payout-consistent
+     :fraud-slash-executions-accounted})
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
@@ -1022,6 +1024,84 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
+;; ---------------------------------------------------------------------------
+;; Invariant 31: Single-resolution payout consistency
+;;
+;; A workflow can only be finalized once. At world-level this implies:
+;;  - terminal escrows must not retain pending settlements
+;;  - terminal escrows must expose at most one positive claimable beneficiary
+;;  - released  => beneficiary must be :to only
+;;  - refunded  => beneficiary must be :from only
+;; ---------------------------------------------------------------------------
+
+(defn single-resolution-payout-consistent?
+  "True when terminal workflows have exactly one payout direction.
+
+   Detects double-resolution style corruption where both buyer and seller end up
+   with positive claimable balances for the same workflow."
+  [world]
+  (let [terminals #{:released :refunded :resolved}
+        violations
+        (for [[wf et] (:escrow-transfers world {})
+              :when (contains? terminals (:escrow-state et))
+              :let [state         (:escrow-state et)
+                    pending?      (:exists (t/get-pending world wf))
+                    claimable-map (get-in world [:claimable wf] {})
+                    positives     (->> claimable-map
+                                       (filter (fn [[_ amt]] (pos? (or amt 0))))
+                                       (map first)
+                                       vec)
+                    valid-direction?
+                    (case state
+                      :released (= positives [(:to et)])
+                      :refunded (= positives [(:from et)])
+                      ;; :resolved is legacy/terminal umbrella: allow either single side,
+                      ;; but never dual-positive payouts.
+                      :resolved (<= (count positives) 1)
+                      true)
+                    valid? (and (not pending?) valid-direction?)]
+              :when (not valid?)]
+          {:workflow-id wf
+           :state state
+           :pending? pending?
+           :positive-claimable-addrs positives
+           :to (:to et)
+           :from (:from et)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant 32: Executed fraud slashes are accounted in resolver slash totals
+;;
+;; For each resolver, cumulative :resolver-slash-total must be at least the sum
+;; of executed fraud slash amounts recorded in :pending-fraud-slashes.
+;; ---------------------------------------------------------------------------
+
+(defn fraud-slash-executions-accounted?
+  "True when executed fraud slashes are reflected in :resolver-slash-total.
+
+   This enforces that successful fraud challenges actually debit stake in
+   accounting terms, not just status terms."
+  [world]
+  (let [executed-by-resolver
+        (reduce (fn [acc [_ ev]]
+                  (if (and (= :executed (:status ev))
+                           (= :fraud (:reason ev))
+                           (some? (:resolver ev)))
+                    (update acc (:resolver ev) (fnil + 0) (or (:amount ev) 0))
+                    acc))
+                {}
+                (:pending-fraud-slashes world {}))
+        violations
+        (for [[resolver executed-total] executed-by-resolver
+              :let [accounted (get-in world [:resolver-slash-total resolver] 0)]
+              :when (< accounted executed-total)]
+          {:resolver resolver
+           :executed-fraud-total executed-total
+           :resolver-slash-total accounted})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
@@ -1058,6 +1138,8 @@
                   :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
                   :reversal-slash-disabled        (reversal-slash-disabled? world)
                   :resolver-capacity              (resolver-capacity-invariant? world)
+                   :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
+                   :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
                   :yield-position-consistency     {:holds? (generic-yield-inv/check-position-consistency world) :violations nil}
                   :yield-exposure                 {:holds? (sew-yield-inv/check-sew-yield-exposure world) :violations nil}}
 

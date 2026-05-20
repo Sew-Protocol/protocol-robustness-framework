@@ -1,5 +1,28 @@
 # Weakness Analysis: SEW Resolver Simulation
 
+> **SUPERSEDED — Historical record only.**
+> This analysis was written on **February 12, 2026**, reflecting the state at Phase I
+> (50,000 Monte Carlo trials, single-epoch only). Many of the gaps identified here have
+> since been explicitly modeled:
+>
+> - **Sybil resistance** → modeled in Phase J (multi-epoch reputation / sybil re-entry)
+>   and Phase AI (ring attacker with cheap re-entry identity profile).
+> - **Governance failure** → Phase AA (governance capacity + learning attacker), and
+>   deterministic scenarios S12, S14/S15, and the governance-decay-exploit trace.
+> - **Coverage exhaustion** → F10 (cascade escalation drain), F1 (liveness extraction).
+>
+> For current evidence, see:
+> - [`docs/evidence/RESEARCHER_EVIDENCE_PACK.md`](evidence/RESEARCHER_EVIDENCE_PACK.md) — current reproducibility pack
+> - [`docs/evidence/summary.md`](evidence/summary.md) — current suite-level statistics
+> - [`docs/RESEARCH_NOTE_V0.md`](RESEARCH_NOTE_V0.md) — current research note
+>
+> The "production-ready for immediate deployment" claim in the summary below
+> refers to the Phase I Monte Carlo result only and does not imply that all
+> identified gaps have been resolved. Read the current evidence pack for an
+> honest assessment of remaining open questions.
+
+---
+
 **Date**: February 12, 2026  
 **Status**: Phase I Complete + 50,000+ trials  
 **Confidence**: 92% for single-epoch, 40% for multi-year  
