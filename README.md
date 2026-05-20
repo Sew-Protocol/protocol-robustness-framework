@@ -13,7 +13,7 @@ The framework provides reusable building blocks for protocol engineering:
 - **Deterministic Replay Harness**: (`src/resolver_sim/contract_model/replay.clj`)
 - **Composable Fixture System**: (`data/fixtures/`)
 
-*The Sew Protocol is the primary simulation target. The Sew adapter (`protocols/sew/*`) is the main example of how to implement the framework interfaces for a new protocol.*
+*The repository includes a detailed Sew protocol model as the primary validation target. The Sew adapter (`protocols/sew/*`) is also the main worked example of how to implement the framework interfaces for a new protocol.*
 
 ## Why it exists
 

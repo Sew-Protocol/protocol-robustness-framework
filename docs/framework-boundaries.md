@@ -6,7 +6,8 @@ Terminology used throughout:
 
 - **framework substrate** — protocol-agnostic replay and adapter infrastructure
 - **adapter** — a protocol-specific implementation of the framework interfaces
-- **primary adapter** — the Sew adapter (`protocols/sew/*`); the most complete example of how to build a framework adapter
+- **primary protocol model** — the Sew protocol model; the primary validation target in this repo
+- **Sew adapter** — `protocols/sew.clj` + `protocols/sew/*`; the adapter code that wires the Sew protocol model into the framework interfaces; also the main worked example of the adapter pattern
 - **research track** — exploratory modules not part of stable framework API
 
 ## 1) What is reusable today (framework substrate)
@@ -21,12 +22,12 @@ Reusable today:
 
 These should remain protocol-agnostic and adapter-oriented.
 
-## 2) What is Sew-specific (primary adapter)
+## 2) What is Sew-specific (primary protocol model + Sew adapter)
 
-The Sew adapter (`protocols/sew.clj` + `protocols/sew/*`) is the most complete
-example of how to implement the framework interfaces. It is the primary adapter
-in this repository. The Sew Protocol is what is being simulated; the adapter
-code is the example of how to wire a protocol into the framework.
+The Sew protocol model is the primary validation target in this repository.
+The Sew adapter (`protocols/sew.clj` + `protocols/sew/*`) is the adapter code
+that wires it into the framework, and the main worked example of the adapter
+pattern.
 
 - `protocols/sew.clj`
 - `protocols/sew/*`
@@ -121,7 +122,7 @@ Typical locations:
 Current priority is **Scope 1 + carefully bounded Scope 2**:
 
 1. Stabilize and document framework boundaries.
-2. Keep the Sew adapter explicit as the primary example of the adapter pattern.
+2. Keep the Sew adapter explicit as the primary protocol model and main adapter example.
 3. Promote `:funds-ledger-view` as documented adapter-facing capability.
 4. Extract only post-projection reconciliation utilities.
 

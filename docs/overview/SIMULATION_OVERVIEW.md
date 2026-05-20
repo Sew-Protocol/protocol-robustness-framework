@@ -3,8 +3,8 @@
 ## What this system is
 
 `sew-simulation` is an adapter-oriented robustness framework with a **framework substrate**
-and a **protocol adapter layer**. Sew is the current protocol adapter — the main
-simulation target.
+and a **protocol adapter layer**. The repository currently includes the Sew protocol model
+as the primary validation target.
 
 At a high level:
 
@@ -41,8 +41,8 @@ remain reusable while protocol-specific rules stay isolated.
 - `protocols/sew/*`
 - `yield/modules/aave.clj` and Sew-integrated yield flows
 
-Sew is the current protocol implementation. It is not proof that all protocol
-semantics are already framework-generic.
+Sew is the primary protocol model currently implemented in the framework. Its
+semantics are not assumed to be universal protocol semantics.
 
 ### Generic adapters (stable API surface; Sew default providers today)
 - `generators/actions.clj` → `generators/sew/actions.clj`

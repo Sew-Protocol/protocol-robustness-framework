@@ -5,8 +5,8 @@ boundary between reusable framework infrastructure and protocol-owned semantics.
 
 Canonical terminology:
 - framework substrate
-- adapter
-- primary adapter (the Sew adapter — the main example of the pattern)
+- adapter / Sew adapter
+- primary protocol model (Sew — the main validation target in this repo)
 - research track
 
 See also: `docs/framework-boundaries.md`
@@ -67,9 +67,9 @@ See:
 - Protocol implementation: `resolver_sim/protocols/<protocol>/*`
 - Experimental studies: `resolver_sim/research/*` (or clearly marked `sim/*`)
 
-## 5) Primary adapter pattern
+## 5) Sew adapter — worked example
 
-The Sew adapter is the most complete example of how to implement the framework interfaces:
+The Sew adapter is the main worked example of how to implement the framework interfaces:
 
 - complete protocol semantics in `protocols/sew/*`,
 - framework-compatible projections/reporting exposed through adapter interfaces,
