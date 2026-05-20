@@ -10,7 +10,7 @@
     (every? (fn [token]
               (let [held (get-in world [:total-held token] 0)
                     total-needed (reduce (fn [acc [oid pos]]
-                                           ;; Only count positions owned by SEW escrows that are still live
+                                           ;; Only count positions owned by Sew escrows that are still live
                                            (let [[owner-type escrow-id] oid
                                                  et (t/get-transfer world escrow-id)]
                                              (if (and (= owner-type :sew/escrow)

@@ -1,5 +1,5 @@
 (ns resolver-sim.io.sew.trace-score
-  "SEW-specific scoring for replay traces.")
+  "Sew-specific scoring for replay traces.")
 
 (defn- classify-issue
   "Protocol-agnostic issue classifier used by scoring.

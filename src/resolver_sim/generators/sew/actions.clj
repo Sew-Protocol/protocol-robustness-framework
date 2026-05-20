@@ -1,12 +1,12 @@
 (ns resolver-sim.generators.sew.actions
-  "SEW-specific candidate action templates used by generic generators.")
+  "Sew-specific candidate action templates used by generic generators.")
 
 (def ^:private buyer-id "buyer")
 (def ^:private seller-id "seller")
 (def ^:private resolver-id "resolver")
 
 (defn candidate-events
-  "Build SEW candidate events for the current world.
+  "Build Sew candidate events for the current world.
    Returned events are still filtered by protocol dispatch validity upstream."
   [world seq time]
   (let [escrows (:escrow-transfers world)

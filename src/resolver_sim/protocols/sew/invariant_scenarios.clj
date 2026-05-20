@@ -1615,12 +1615,12 @@
 ;; ---------------------------------------------------------------------------
 ;; S38 — DR3 resolver bond 80/20 mix invariant holds
 ;;
-;; A resolver registers a valid bond mix (80% stable, 20% SEW) and completes
+;; A resolver registers a valid bond mix (80% stable, 20% Sew) and completes
 ;; a full dispute lifecycle.  The resolver-bond-mix-valid? invariant is checked
 ;; after every step and must hold throughout.
 ;;
 ;; Invariants exercised:
-;;   resolver-bond-mix-valid?  — 8000 stable + 2000 SEW = exactly 80/20
+;;   resolver-bond-mix-valid?  — 8000 stable + 2000 Sew = exactly 80/20
 ;;   solvency-holds?           — full dispute with appeal window
 ;;   conservation-of-funds?   — AFA released; resolver stake intact
 ;; ---------------------------------------------------------------------------

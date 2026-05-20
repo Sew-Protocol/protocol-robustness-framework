@@ -49,9 +49,9 @@ action_move() {
 echo ""
 echo -e "${CYAN}══════════════════════════════════════════${NC}"
 if $APPLY; then
-  echo -e "${CYAN}  SEW Simulation — Cleanup (APPLYING)${NC}"
+  echo -e "${CYAN}  Sew Simulation — Cleanup (APPLYING)${NC}"
 else
-  echo -e "${CYAN}  SEW Simulation — Cleanup (DRY RUN)${NC}"
+  echo -e "${CYAN}  Sew Simulation — Cleanup (DRY RUN)${NC}"
   echo -e "${CYAN}  Run with --apply to execute changes${NC}"
 fi
 echo -e "${CYAN}══════════════════════════════════════════${NC}"

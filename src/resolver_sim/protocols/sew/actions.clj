@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.actions
-  "SEW Protocol action vocabulary.
+  "Sew Protocol action vocabulary.
 
    Provides a decoupling layer between gRPC action strings and
    internal behaviour-model keywords.
@@ -8,7 +8,7 @@
    Must NOT import contract_model/*, sim/*, db/*, or io/*.")
 
 (def action-map
-  "Mapping of SEW implementation action strings to canonical identifiers."
+  "Mapping of Sew implementation action strings to canonical identifiers."
   {"create_escrow"              :transfer/create-protected
    "raise_dispute"              :case/dispute-raised
    "execute_resolution"         :case/resolution-executed

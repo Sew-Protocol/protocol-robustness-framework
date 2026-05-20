@@ -1,8 +1,8 @@
 (ns resolver-sim.yield.registry
-  "[SEW-INTEGRATED] Yield module registry and dispatch.
+  "[Sew-INTEGRATED] Yield module registry and dispatch.
 
    Registry mechanics are reusable, but current policy/module assumptions are
-   integrated with SEW world/accounting semantics."
+   integrated with Sew world/accounting semantics."
   (:require [resolver-sim.yield.modules.aave :as aave]
             [resolver-sim.yield.modules.fixed :as fixed]
             [resolver-sim.yield.modules.none :as none]

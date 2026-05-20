@@ -4,7 +4,7 @@
 
 A framework for adversarial testing and robustness analysis of decentralised
 protocols — escrow, dispute resolution, coordination, multi-agent Ethereum
-protocols. The SEW Protocol is the main subject of the current simulation work.
+protocols. The Sew Protocol is the main subject of the current simulation work.
 
 The framework operates at two levels:
 
@@ -29,9 +29,9 @@ The framework operates at two levels:
 │              SimulationAdapter interface                        │
 │                          │                                      │
 │        ┌─────────────────┴──────────────────┐                  │
-│        │ SEWProtocol                         │ DummyProtocol   │
+│        │ SewProtocol                         │ DummyProtocol   │
 │        │ (protocols/sew.clj)                 │ (test double)   │
-│        │ Wires SEW domain logic into the     │                  │
+│        │ Wires Sew domain logic into the     │                  │
 │        │ adapter interfaces.                 │                  │
 │        │                                     │                  │
 │        │  protocols/sew/*                    │                  │
@@ -102,13 +102,13 @@ validation. Used in equilibrium-concept validation suites.
 
 ---
 
-## How SEW plugs in
+## How Sew plugs in
 
-`protocols/sew.clj` defines `SEWProtocol`, a Clojure `deftype` that
+`protocols/sew.clj` defines `SewProtocol`, a Clojure `deftype` that
 implements all three adapter interfaces. It is the glue layer between the
-framework and the SEW domain logic.
+framework and the Sew domain logic.
 
-**`SEWProtocol` does not contain domain logic.** It delegates:
+**`SewProtocol` does not contain domain logic.** It delegates:
 
 - `dispatch-action` → `apply-action` multimethod (in `protocols/sew.clj`),
   which dispatches by action string to `protocols/sew/lifecycle.clj`,
@@ -118,8 +118,8 @@ framework and the SEW domain logic.
 - `advisory` → `protocols/sew/advisory.clj`
 - `summarise-batch` → `protocols/sew/db.clj`
 
-The SEW domain logic lives in `protocols/sew/*` (pure functions, no I/O).
-`SEWProtocol` assembles those functions behind the adapter interface.
+The Sew domain logic lives in `protocols/sew/*` (pure functions, no I/O).
+`SewProtocol` assembles those functions behind the adapter interface.
 
 ### Protocol registry
 
@@ -149,13 +149,13 @@ src/resolver_sim/
   protocols/              ← Adapter interfaces + implementations (all pure)
     protocol.clj            Defines SimulationAdapter, EconomicModel, AnalysisModule
     registry.clj            Maps protocol-id → adapter instance
-    sew.clj                 SEWProtocol adapter (wires sew/* into the interfaces)
+    sew.clj                 SewProtocol adapter (wires sew/* into the interfaces)
     dummy.clj               DummyProtocol test double (always-pass, no domain logic)
 
     common/
       action_context.clj    Shared actor-resolution helpers
 
-    sew/                  ← SEW domain logic (pure functions, no I/O)
+    sew/                  ← Sew domain logic (pure functions, no I/O)
       state_machine.clj     Escrow FSM: allowed-transitions graph, apply-transition!
       lifecycle.clj         Escrow lifecycle actions (create, release, cancel, dispute)
       resolution.clj        Dispute resolution (execute-resolution, escalate, settle)
@@ -171,7 +171,7 @@ src/resolver_sim/
       invariant_runner.clj  In-process deterministic scenario runner
       invariant_scenarios.clj Scenario definitions for the deterministic suite
       runner.clj            Top-level live-simulation trial runner
-      action_context.clj    SEW-specific actor-resolution helpers
+      action_context.clj    Sew-specific actor-resolution helpers
       advisory.clj          Action suggestions and attack-surface signals
       projection.clj        Formal projection helpers
       equilibrium.clj       Equilibrium concept validators
@@ -180,7 +180,7 @@ src/resolver_sim/
       io/
         trace_export.clj    Trace export helpers
 
-    sew/research_models/  ← SEW-specific research models (pure)
+    sew/research_models/  ← Sew-specific research models (pure)
       bribery_markets.clj, contingent_bribery.clj, delegation.clj
       escalation_economics.clj, evidence_spoofing.clj
       information_cascade.clj, panel_decision.clj, resolver_ring.clj
@@ -299,7 +299,7 @@ side effects.
 Unit test namespaces:
 - `test/resolver_sim/protocols/sew/*_test.clj` — state machine, invariants, lifecycle
 - `test/resolver_sim/contract_model/replay_bridge_test.clj` — kernel bridge
-- `test/resolver_sim/protocols/protocol_adapter_test.clj` — SEWProtocol + DummyProtocol interface parity
+- `test/resolver_sim/protocols/protocol_adapter_test.clj` — SewProtocol + DummyProtocol interface parity
 
 Integration tests in `test/resolver_sim/db/` require a live XTDB instance on localhost:5432.
 

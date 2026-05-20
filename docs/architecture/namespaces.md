@@ -14,7 +14,7 @@ The public conceptual system boundary is the **Protocol Robustness Framework**:
 - adapter-oriented robustness framework,
 - replay + protocol adapter substrate,
 - scenario-analysis and accounting evidence surfaces,
-- reference-study-driven evolution (SEW first, additional adapters later).
+- reference-study-driven evolution (Sew first, additional adapters later).
 
 This is the architectural/product framing contributors and external readers
 should use.
@@ -35,7 +35,7 @@ It exists for code organization and compatibility, not to define product scope.
 
 If we conflate the two, contributors may incorrectly infer:
 
-- that `resolver_sim` equals SEW-only scope,
+- that `resolver_sim` equals Sew-only scope,
 - or that naming implies hard protocol lock-in,
 - or that framework/adapters/research tracks are not intentionally separated.
 

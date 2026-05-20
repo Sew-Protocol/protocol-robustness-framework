@@ -1,4 +1,4 @@
-# SEW Coverage Roadmap (2 / 4 / 8 Weeks)
+# Sew Coverage Roadmap (2 / 4 / 8 Weeks)
 
 ## Goal
 

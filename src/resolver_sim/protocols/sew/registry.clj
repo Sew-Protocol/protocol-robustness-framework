@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.registry
-  "Resolver registration and staking registry for the SEW protocol.
+  "Resolver registration and staking registry for the Sew protocol.
    Supports Phase K (Tiered Authority) by tracking resolver 'Skin in the Game'.
 
    Key concepts:

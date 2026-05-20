@@ -1,6 +1,6 @@
 # Adversarial Simulation Evidence — Summary
 
-**Repository:** SEW Dispute Resolution Simulator
+**Repository:** Protocol Robustness Framework — Sew Protocol Model
 **Suite version:** git `31ba27b` (ethereum branch)
 **Run date:** 2026-04-15
 **Result:** 33/33 scenarios passed · 0 invariant violations

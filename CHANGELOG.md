@@ -6,7 +6,7 @@
   - Replaced `YieldModule` protocol with declarative module definitions.
   - Implemented Aave v3 (share-based), Fixed-rate (principal-based), and Adversarial yield modules.
   - Decoupled yield mechanics (external mechanism) from yield policy (Sew-specific distribution).
-  - Integrated yield-specific invariants into the main SEW invariant checker.
+  - Integrated yield-specific invariants into the main Sew invariant checker.
 - **Yield Validation (Phase Y):** Created `phase_y.clj` to validate yield efficiency. Confirmed that 10% APR effectively covers protocol fees over long-duration disputes.
 - **Protocol Solvency KPI:** Added a real-time solvency indicator to the Evidence Dashboard to monitor aggregate protocol health and value conservation.
 - **Reorg Resilience (S46):** Added stochastic reorg and fork-reconciliation validation to ensure state derivation is idempotent across non-linear histories.
@@ -34,7 +34,7 @@
 
 ### Fixed
 - **Generalisation Reader/Load Stabilisation:** Cleared multiple malformed escaped-docstring/string reader failures and namespace-load blockers across core protocol/server/db namespaces.
-- **Protocol Adapter Loading:** Removed a cyclic namespace-load path between `resolver-sim.protocols.sew` and `resolver-sim.protocols.sew.io.trace-export` by lazy-loading trace export in the SEW `:forge-trace` projection branch.
+- **Protocol Adapter Loading:** Removed a cyclic namespace-load path between `resolver-sim.protocols.sew` and `resolver-sim.protocols.sew.io.trace-export` by lazy-loading trace export in the Sew `:forge-trace` projection branch.
 - **Simulation Logic (Phase AI):** Fixed capital drain bug in `phase_ai.clj` where system-wide costs were incorrectly applied in full to every individual resolver.
 - **Protocol Logic:** Fixed cooldown bug that was incorrectly blocking first-time escalations.
 - **Unit Tests:** Updated `replay_test.clj` to respect mandatory cooldown periods.

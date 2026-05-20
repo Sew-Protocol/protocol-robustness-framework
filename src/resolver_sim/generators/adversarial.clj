@@ -6,7 +6,7 @@
 
    Compatibility adapter status:
    - Delegates to protocol-scoped adversarial generators.
-   - SEW is the currently wired default provider."
+   - Sew is the currently wired default provider."
   (:require [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.generators.sew.adversarial :as sew-adv]))
 
@@ -27,6 +27,6 @@
    - :timeout-boundary targets pending-settlement deadline at t-1/t/t+1 when known.
    - default increments by 1.
 
-   Compatibility adapter: currently delegates to SEW semantics."
+   Compatibility adapter: currently delegates to Sew semantics."
   [profile world prev-time step-idx]
   (sew-adv/next-time profile world prev-time step-idx))

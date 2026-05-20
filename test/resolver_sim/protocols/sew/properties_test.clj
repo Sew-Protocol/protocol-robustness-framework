@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.properties-test
-  "Property-based tests for the SEW contract model using test.check.
+  "Property-based tests for the Sew contract model using test.check.
 
    Single-step properties (1–8) verify individual invariants.
    Multi-step / sequence properties (9–14) generate operation chains and verify

@@ -112,7 +112,7 @@
   [{:keys [passed total elapsed-ms results]}]
   (let [w 72]
     (println (apply str (repeat w "═")))
-    (println "  SEW Invariant Suite — Deterministic Scenarios (Clojure in-process)")
+    (println "  Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)")
     (println (apply str (repeat w "═")))
     (println (format "  %-47s %5s  %7s  %s" "Scenario" "steps" "reverts" "status"))
     (println (str "  " (apply str (repeat (- w 2) "─"))))

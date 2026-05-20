@@ -1,10 +1,10 @@
 (ns resolver-sim.protocols.sew.db
-  "SEW-specific persistence helpers — query wrappers that unpack the generic
-   sim_trial_results / sim_entity_events tables into SEW-shaped :trial/* maps.
+  "Sew-specific persistence helpers — query wrappers that unpack the generic
+   sim_trial_results / sim_entity_events tables into Sew-shaped :trial/* maps.
 
-   These functions belong here (in the SEW protocol namespace) rather than in
+   These functions belong here (in the Sew protocol namespace) rather than in
    the generic resolver-sim.db.store because the generic store has no knowledge
-   of the SEW metrics blob schema or the SEW entity lifecycle.
+   of the Sew metrics blob schema or the Sew entity lifecycle.
 
    Callers:
      resolver-sim.db.telemetry  — batch-summary uses sew-trial-outcomes
@@ -21,7 +21,7 @@
 
 (defn- row->sew-trial-outcome
   "Convert a sim_trial_results row into a :trial/* namespaced map.
-   Unpacks the metrics_edn blob to restore individual SEW fields."
+   Unpacks the metrics_edn blob to restore individual Sew fields."
   [row]
   (let [metrics (some-> (:metrics_edn row) xtdb/parse-edn)]
     (cond-> {:trial/id                (:_id row)
@@ -46,7 +46,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn sew-trial-outcomes
-  "Query sim_trial_results for SEW trials (protocol_id = 'sew-v1').
+  "Query sim_trial_results for Sew trials (protocol_id = 'sew-v1').
    Returns :trial/* namespaced maps compatible with db.store/summarise-batch.
 
    Options:
@@ -75,7 +75,7 @@
            (.toInstant d)))
 
 (defn sew-trial-outcomes-at
-  "Bitemporal query for SEW trial outcomes AS OF a valid-time.
+  "Bitemporal query for Sew trial outcomes AS OF a valid-time.
    Returns :trial/* namespaced maps, or [] when ds is nil."
   [ds valid-at]
   (if (nil? ds)
@@ -89,7 +89,7 @@
             xtdb/opts))))
 
 (defn sew-escrow-events-for-trial
-  "Return entity events for a trial in SEW-shaped maps (remaps generic
+  "Return entity events for a trial in Sew-shaped maps (remaps generic
    entity-id → workflow-id and entity-state → escrow-state).
    Returns [] when ds is nil."
   [ds trial-id]
@@ -103,13 +103,13 @@
         (store/entity-events-for-trial ds trial-id)))
 
 ;; ---------------------------------------------------------------------------
-;; Aggregate helpers (SEW-specific — pure, no database required)
+;; Aggregate helpers (Sew-specific — pure, no database required)
 ;; ---------------------------------------------------------------------------
 
 (defn sew-summarise-batch
-  "Compute SEW-specific summary statistics over a vector of :trial/* outcome maps.
+  "Compute Sew-specific summary statistics over a vector of :trial/* outcome maps.
 
-   Extends the generic store/summarise-outcomes with SEW financial metrics
+   Extends the generic store/summarise-outcomes with Sew financial metrics
    (:trial/slashed?, :trial/profit-honest, :trial/profit-malice).
 
    Returns:

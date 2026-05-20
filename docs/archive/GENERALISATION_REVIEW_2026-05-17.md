@@ -2,7 +2,7 @@
 
 ## Scope
 
-This review captures completed and remaining work for reducing hard SEW coupling in shared simulation modules.
+This review captures completed and remaining work for reducing hard Sew coupling in shared simulation modules.
 
 ## Completed in this tranche
 
@@ -13,9 +13,9 @@ This review captures completed and remaining work for reducing hard SEW coupling
   - Removed direct call to `sew/replay-with-sew-protocol`
   - Uses `replay/replay-with-protocol` with protocol resolved via `resolver-sim.protocols.registry`
 - Effect:
-  - Shared simulation flow no longer imports SEW protocol namespace directly.
+  - Shared simulation flow no longer imports Sew protocol namespace directly.
 
-### 2) Shared trace scoring decoupled from SEW metadata module
+### 2) Shared trace scoring decoupled from Sew metadata module
 
 - File: `src/resolver_sim/io/trace_score.clj`
 - Change:
@@ -47,15 +47,15 @@ This review captures completed and remaining work for reducing hard SEW coupling
 ### B) Expected protocol registration coupling
 
 - `src/resolver_sim/protocols/registry.clj`
-  - Must reference concrete protocols (including SEW) by design.
+  - Must reference concrete protocols (including Sew) by design.
 
-### C) Deferred SEW internals used by simulation modules
+### C) Deferred Sew internals used by simulation modules
 
 - `src/resolver_sim/sim/economic/phase_y.clj`
 - `src/resolver_sim/sim/capacity_exhaustion.clj`
 - `src/resolver_sim/sim/adversarial/reorg_check.clj`
 
-These currently exercise SEW internal lifecycle/resolution/state helpers directly.
+These currently exercise Sew internal lifecycle/resolution/state helpers directly.
 
 ## Recommended next refactor tranche
 
@@ -68,7 +68,7 @@ These currently exercise SEW internal lifecycle/resolution/state helpers directl
    - Keep invariant checks through protocol boundary hooks.
 
 3. **Reorg check**
-   - Convert skeleton to replay-level fork tests without direct SEW invariants namespace imports.
+   - Convert skeleton to replay-level fork tests without direct Sew invariants namespace imports.
 
 4. **Economics/payoffs extraction (careful)**
    - Introduce shared fee math utility module with proven equivalence tests.

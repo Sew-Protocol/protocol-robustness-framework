@@ -1,4 +1,4 @@
-;; # SEW Protocol — Evidence Workbook
+;; # Sew Protocol — Evidence Workbook
 ;;
 ;; **Audience:** Protocol reviewers, security researchers, contributors.
 ;;

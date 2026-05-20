@@ -1,10 +1,10 @@
 (ns resolver-sim.protocols.sew
-  "SEWProtocol — SEW reference adapter/reference implementation of tiered protocol interfaces.
+  "SewProtocol — Sew reference adapter/reference implementation of tiered protocol interfaces.
 
    Boundary note:
-   - This namespace is the canonical SEW adapter for the framework substrate.
+   - This namespace is the canonical Sew adapter for the framework substrate.
    - Reusable adapter contracts are defined in protocols/protocol.clj.
-   - Domain semantics implemented here remain SEW-specific unless explicitly
+   - Domain semantics implemented here remain Sew-specific unless explicitly
      promoted via adapter-facing contracts."
   (:require [resolver-sim.protocols.protocol             :as proto]
             [resolver-sim.protocols.sew.types            :as t]
@@ -425,10 +425,10 @@
     :resolution-without-settlement})
 
 ;; ---------------------------------------------------------------------------
-;; SEWProtocol Implementation (Tiered)
+;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
 
-(deftype SEWProtocol []
+(deftype SewProtocol []
   proto/SimulationAdapter
 
   (protocol-id [_] "sew-v1")
@@ -641,7 +641,7 @@
   (reference-model [_ scenario]
     nil))
 
-(def protocol (SEWProtocol.))
+(def protocol (SewProtocol.))
 
 (defn replay-with-sew-protocol
   [scenario]

@@ -1,9 +1,9 @@
 (ns resolver-sim.sim.kernel-bridge
   "Kernel validation bridge: validates batch simulation params against the
-   SEW protocol replay kernel.
+   Sew protocol replay kernel.
 
    The stochastic batch runner (sim.batch) models dispute outcomes as probability
-   distributions. This namespace validates that the underlying SEW protocol state
+   distributions. This namespace validates that the underlying Sew protocol state
    machine is consistent with those parameters by generating minimal dispute
    scenarios and running them through the full replay kernel.
 
@@ -120,7 +120,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-kernel-validation
-  "Run n-samples minimal dispute scenarios through the SEW replay kernel.
+  "Run n-samples minimal dispute scenarios through the Sew replay kernel.
 
    Each scenario is generated from the given params and validated against
    the full invariant suite. Violations are reported with scenario ID and
@@ -288,7 +288,7 @@
      :missing missing}))
 
 (defn run-full-kernel-validation
-  "Run all four scenario types through the SEW replay kernel.
+  "Run all four scenario types through the Sew replay kernel.
 
    Extends run-kernel-validation with Phase 5 pending-settlement and
    appeal-slash scenario types. All four paths must pass for :all-paths-pass? true.

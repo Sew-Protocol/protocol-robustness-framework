@@ -1,9 +1,9 @@
 (ns resolver-sim.yield.modules.aave
-  "[REFERENCE MODULE / SEW-INTEGRATED]
+  "[REFERENCE MODULE / Sew-INTEGRATED]
 
    Aave-inspired yield module used as the current reference module.
    The interface pattern is reusable; concrete world-field coupling and
-   policy assumptions are currently tuned to SEW integration."
+   policy assumptions are currently tuned to Sew integration."
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]))
 

@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.adversarial-test
-  "Adversarial test suite for the SEW contract model.
+  "Adversarial test suite for the Sew contract model.
 
    Tests six attack categories:
      A. State machine attacks   — illegal transitions, double-finalize

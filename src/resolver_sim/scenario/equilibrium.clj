@@ -95,7 +95,7 @@
    :requires  [reason]})
 
 ;; ---------------------------------------------------------------------------
-;; Mechanism-property validators (generic — SEW-specific validators are in
+;; Mechanism-property validators (generic — Sew-specific validators are in
 ;; protocols/sew/equilibrium.clj and injected via mechanism-property-validators)
 ;; ---------------------------------------------------------------------------
 
@@ -129,7 +129,7 @@
             "no adversarial action succeeded; no funds lost"))))
 
 ;; ---------------------------------------------------------------------------
-;; Equilibrium-concept validators (generic — SEW-specific SPE validators are
+;; Equilibrium-concept validators (generic — Sew-specific SPE validators are
 ;; in protocols/sew/equilibrium.clj and injected via equilibrium-concept-validators)
 ;; ---------------------------------------------------------------------------
 
@@ -156,7 +156,7 @@
             "no unauthorized identity attack succeeded"))))
 
 ;; ---------------------------------------------------------------------------
-;; Equilibrium-concept validators (generic — SEW-specific SPE validators are
+;; Equilibrium-concept validators (generic — Sew-specific SPE validators are
 ;; in protocols/sew/equilibrium.clj and injected via equilibrium-concept-validators)
 ;; ---------------------------------------------------------------------------
 

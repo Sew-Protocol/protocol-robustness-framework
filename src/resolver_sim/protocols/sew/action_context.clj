@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.action-context
-  "Shared action precondition helpers for SEW handlers."
+  "Shared action precondition helpers for Sew handlers."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.common.action-context :as common-actx]))
 

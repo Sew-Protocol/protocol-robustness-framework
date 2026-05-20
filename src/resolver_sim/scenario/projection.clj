@@ -5,7 +5,7 @@
    trace-projection method on DisputeProtocol.  The utilities below are
    available to all protocol implementations when building their projection.
 
-   See protocols/sew/projection.clj for the SEW reference implementation.
+   See protocols/sew/projection.clj for the Sew reference implementation.
 
    This namespace is pure — no I/O, no DB, no side effects.")
 

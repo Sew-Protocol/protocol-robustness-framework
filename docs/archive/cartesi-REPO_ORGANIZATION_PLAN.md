@@ -1,4 +1,4 @@
-# SEW On-Chain Repository Organization Plan
+# Sew On-Chain Repository Organization Plan
 
 ## Goal
 

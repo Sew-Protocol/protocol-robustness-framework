@@ -14,14 +14,14 @@ Typical namespaces:
 - `protocols/common/*`
 - reusable portions of `scenario/*`, `time/*`, `db/*`, `io/*`, `server/*`
 
-## 2) Reference implementation (SEW)
+## 2) Reference implementation (Sew)
 
-Includes the complete SEW adapter and semantics.
+Includes the complete Sew adapter and semantics.
 
 Typical namespaces:
 - `protocols/sew/*`
-- SEW-backed providers under `generators/sew/*`, `io/sew/*`
-- currently SEW-integrated yield/accounting interpretation modules
+- Sew-backed providers under `generators/sew/*`, `io/sew/*`
+- currently Sew-integrated yield/accounting interpretation modules
 
 ## 3) Exploratory research
 
@@ -35,7 +35,7 @@ Typical namespaces:
 ## Claiming guidance
 
 - For framework claims, cite only stable framework modules.
-- For protocol-semantic claims, cite SEW reference modules.
+- For protocol-semantic claims, cite Sew reference modules.
 - For exploratory claims, mark results as research/evidence, not framework API.
 
 ## Accounting-specific boundary

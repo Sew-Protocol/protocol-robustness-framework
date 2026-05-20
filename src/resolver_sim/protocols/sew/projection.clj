@@ -1,11 +1,11 @@
 (ns resolver-sim.protocols.sew.projection
-  "SEW-specific terminal trace projection.
+  "Sew-specific terminal trace projection.
 
    Produces the :terminal-world / :metrics / :trace-summary map expected by
    evaluate-mechanism-properties and evaluate-equilibrium-concepts when the
-   SEW DisputeProtocol implementation is in use.
+   Sew DisputeProtocol implementation is in use.
 
-   This is the SEW reference implementation of the trace-projection protocol
+   This is the Sew reference implementation of the trace-projection protocol
    method.  The generic projection utilities (map-delta, nested-sum-by-actor,
    classify-coalition-actor?) live in resolver-sim.scenario.projection and are
    re-used here.
@@ -15,11 +15,11 @@
             [resolver-sim.protocols.sew.invariants :as inv]))
 
 ;; ---------------------------------------------------------------------------
-;; SEW terminal-state vocabulary
+;; Sew terminal-state vocabulary
 ;; ---------------------------------------------------------------------------
 
 (def ^:private terminal-escrow-states
-  "SEW escrow states from which no further transitions are possible."
+  "Sew escrow states from which no further transitions are possible."
   #{:released :refunded :cancelled :timeout})
 
 (defn- terminal-state? [state]
@@ -28,11 +28,11 @@
 (declare funds-ledger-view)
 
 ;; ---------------------------------------------------------------------------
-;; SEW trace-end projection
+;; Sew trace-end projection
 ;; ---------------------------------------------------------------------------
 
 (defn trace-end-projection
-  "Produce a stable, minimal projection of a SEW replay result for use by
+  "Produce a stable, minimal projection of a Sew replay result for use by
    mechanism-property and equilibrium-concept validators.
 
    Returns a map with keys:
@@ -74,7 +74,7 @@
             actors
             (into #{} (keep :agent trace))
 
-            ;; Strategic decision nodes — SEW-specific action vocabulary.
+            ;; Strategic decision nodes — Sew-specific action vocabulary.
             decisions (vec (keep (fn [entry]
                                    (when (contains? #{"raise_dispute" "escalate_dispute"
                                                       "execute_resolution"}
@@ -297,7 +297,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn funds-ledger-view
-  "Return a read-only use-of-funds ledger projection for a SEW world.
+  "Return a read-only use-of-funds ledger projection for a Sew world.
 
    Output is intentionally accounting-centric and protocol-consumer friendly:
    - token-level buckets (held/released/refunded/withdrawn/bond flows)

@@ -648,7 +648,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
       [:div
        (section-header
         "Invariant Coverage"
-        (str total-inv " canonical invariants across SEW v1; "
+        (str total-inv " canonical invariants across Sew v1; "
              covered-n " with deterministic scenario coverage."))
 
        (note-box

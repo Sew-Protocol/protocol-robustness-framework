@@ -4,7 +4,7 @@
    contract-model flows.
 
    Boundary note:
-   - This namespace is currently aligned with the active SEW accounting path.
+   - This namespace is currently aligned with the active Sew accounting path.
    - Treat constants and payout formulas here as reference defaults, not
      universal cross-protocol economics." )
 

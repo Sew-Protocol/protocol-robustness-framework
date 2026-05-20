@@ -1,5 +1,5 @@
   1. High-Priority Infrastructure & Documentation
-   * ✅ Architecture docs updated: docs/ now reflects DisputeProtocol kernel vs. SEW plugin split.
+   * ✅ Architecture docs updated: docs/ now reflects DisputeProtocol kernel vs. Sew plugin split.
    * Suite Manifest: Create the data/fixtures/suites/manifest.edn as a single registry file, making it easy for users to list and discover all available suites.
    * Determinism Proof: Execute the "Double Run" check (run-suite twice, byte-compare golden/ reports) and document the result as a guarantee.
 
@@ -10,7 +10,7 @@
 
   3. ✅ Abstraction (The "Protocol Kernel" Layer) — COMPLETE
    * ✅ DisputeProtocol interface extracted to protocols/protocol.clj (8 methods).
-   * ✅ SEW implementation migrated from contract_model/ to protocols/sew/*.
+   * ✅ Sew implementation migrated from contract_model/ to protocols/sew/*.
    * ✅ DummyProtocol proof-of-concept implemented and tested against all 41 scenarios.
    * ✅ replay.clj is now genuinely protocol-agnostic (no protocols/sew/* imports).
 

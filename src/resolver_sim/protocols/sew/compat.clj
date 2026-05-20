@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.compat
-  "Compatibility and normalization helpers for SEW event inputs."
+  "Compatibility and normalization helpers for Sew event inputs."
   (:require [clojure.string :as str]))
 
 (defn wf-id

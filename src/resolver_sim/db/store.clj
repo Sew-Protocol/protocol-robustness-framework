@@ -99,7 +99,7 @@
    Keys:
      :id           — unique event id string
      :trial-id     — parent trial id
-     :entity-id    — entity identifier (any string; e.g. \"0\" for SEW workflow 0)
+     :entity-id    — entity identifier (any string; e.g. \"0\" for Sew workflow 0)
      :event-type   — keyword, e.g. :sew/escrow-created
      :entity-state — keyword representing current entity state
      :block-time   — long (simulated unix timestamp)

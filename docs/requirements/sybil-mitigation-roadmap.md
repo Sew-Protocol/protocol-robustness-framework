@@ -1,4 +1,4 @@
-# SEW Protocol: Security Requirements for Sybil Ring Mitigation
+# Sew Protocol: Security Requirements for Sybil Ring Mitigation
 
 ## Executive Summary
 Stochastic simulations (`phase-ai`, `H2`) reveal that the protocol is vulnerable to a "Sybil Escalation Trap." In this attack, a coalition of Sybil resolvers forces honest participants into repeated L2 escalations, draining their capital reserves until they are displaced. Simulations demonstrate that simple detection, mandatory escalation delays, or exponential bond scaling are **insufficient as standalone defenses**. A multi-layered defense is required to maintain protocol liveness and honest market share.
@@ -30,4 +30,4 @@ To achieve resilience, the protocol implementation must transition from static c
 3. **Continuous Validation:** Use the `sybil-ring-mitigation-*` scenario suite in the CI gate to ensure that these defenses remain effective as protocol parameters evolve.
 
 ---
-*Documentation generated from SEW Simulation Test Suite (Phase AI/H2 Findings).*
+*Documentation generated from Sew Simulation Test Suite (Phase AI/H2 Findings).*

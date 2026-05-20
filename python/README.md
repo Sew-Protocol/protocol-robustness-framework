@@ -1,6 +1,6 @@
 # Python Simulation Tools
 
-This directory contains the Python-side validation and tooling that interacts with the SEW simulation engine via gRPC.
+This directory contains the Python-side validation and tooling that interacts with the Sew simulation engine via gRPC.
 
 **Scope:** adversarial strategy generation + visual artifact rendering. All protocol simulation logic lives in Clojure/Babashka. Python handles gRPC client interactions and diagram output.
 

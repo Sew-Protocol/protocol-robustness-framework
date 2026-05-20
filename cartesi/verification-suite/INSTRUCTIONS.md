@@ -1,6 +1,6 @@
-# SEW On-Chain Verification Suite
+# Sew On-Chain Verification Suite
 
-This directory contains the tools required to run the full SEW Protocol validation suite on Cartesi Rollups.
+This directory contains the tools required to run the full Sew Protocol validation suite on Cartesi Rollups.
 
 ## Contents
 - `../../scenarios/`: Canonical scenario source (S-series JSON scenarios).

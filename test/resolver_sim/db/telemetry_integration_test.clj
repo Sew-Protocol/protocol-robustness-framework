@@ -30,8 +30,8 @@
       (try
         (f)
         (finally
-          ;; Remove all SEW test rows so re-runs start clean
-          ;; (evaluation.store/truncate! clears eval-engine tables, not SEW tables)
+          ;; Remove all Sew test rows so re-runs start clean
+          ;; (evaluation.store/truncate! clears eval-engine tables, not Sew tables)
           (ss/truncate! ds))))))
 
 (use-fixtures :once xtdb-fixture)

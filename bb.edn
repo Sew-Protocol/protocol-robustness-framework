@@ -94,7 +94,7 @@
 
   help:first {:doc "First-time visitor quick commands"
               :task (do
-                      (println "SEW first-time quickstart")
+                      (println "Sew first-time quickstart")
                       (println "")
                       (println "1) Evidence dashboard (read-only):")
                       (println "   bb notebook")

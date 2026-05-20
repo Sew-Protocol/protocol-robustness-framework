@@ -1,7 +1,7 @@
-# SEW Dispute Protocol — "Break This Mechanism" Benchmark Challenge
+# Sew Dispute Protocol — "Break This Mechanism" Benchmark Challenge
 
 **Repository:** [Sew-Protocol/sew-simulation](https://github.com/Sew-Protocol/sew-simulation)
-**Protocol version:** SEW v0.1 (ethereum branch)
+**Protocol version:** Sew v0.1 (ethereum branch)
 **Challenge status:** Open
 
 > This is a standing challenge. There is no deadline. All valid submissions are logged.
@@ -10,7 +10,7 @@
 
 ## Background
 
-The SEW protocol is a decentralised escrow dispute-resolution mechanism. It has been simulated against **41 deterministic invariant scenarios** (S01–S41, Clojure in-process suite) and **33 adversarial scenarios** (S24–S35, Python gRPC suite), with 31 protocol invariants checked at every state transition.
+The Sew protocol is a decentralised escrow dispute-resolution mechanism. It has been simulated against **41 deterministic invariant scenarios** (S01–S41, Clojure in-process suite) and **33 adversarial scenarios** (S24–S35, Python gRPC suite), with 31 protocol invariants checked at every state transition.
 
 **Headline result:** 22% adversarial success rate across the corpus. Zero invariant violations. All attacks succeed through *correct* use of the protocol against itself — not implementation bugs.
 

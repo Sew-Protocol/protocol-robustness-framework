@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.advisory
-  "SEW-specific advisory analysis functions.
+  "Sew-specific advisory analysis functions.
 
    These functions read canonical world state and return lightweight analysis
    results (action suggestions, risk signals, payoff projections) without
@@ -128,7 +128,7 @@
 (defn session-signals
   "Return read-only risk/economic signals from world state.
 
-   Returns a flat map of SEW-specific signal fields."
+   Returns a flat map of Sew-specific signal fields."
   [world _context]
   (let [transfers     (get world :escrow-transfers {})
         pending-slashes (get world :pending-fraud-slashes {})]

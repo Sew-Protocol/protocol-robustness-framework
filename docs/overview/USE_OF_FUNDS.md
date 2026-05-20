@@ -1,6 +1,6 @@
 # Use of Funds — Accounting View
 
-This document defines the canonical **use-of-funds** framing for the SEW simulation implementation and its reusable accounting shape.
+This document defines the canonical **use-of-funds** framing for the Sew simulation implementation and its reusable accounting shape.
 
 ## Purpose
 
@@ -83,7 +83,7 @@ Interpretation:
 
 ## Read-only projection contract
 
-SEW exposes this via `io-projection` target:
+Sew exposes this via `io-projection` target:
 
 - `:funds-ledger-view`
 
@@ -92,10 +92,10 @@ The projection is read-only and intended for analysis/reporting. It does not mut
 ## Contract-level vs computation-level generalisation
 
 - **Output-contract level:** high generalisation intent (adapter-facing capability).
-- **Computation/producer level:** currently SEW-specific.
+- **Computation/producer level:** currently Sew-specific.
 
 In other words, `:funds-ledger-view` is treated as framework-facing contract
-surface, while current production of that view is owned by the SEW reference
+surface, while current production of that view is owned by the Sew reference
 adapter.
 
 ## Quick check: "funds-lost = 0"

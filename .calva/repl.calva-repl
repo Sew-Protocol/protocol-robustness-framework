@@ -13,7 +13,7 @@ clj꞉user꞉> 
           '[resolver-sim.protocols.sew.invariant-runner :as ir])
 clj꞉user꞉> 
  (let [ds      (xtdb/->datasource)
-       protocol (sew/->SEWProtocol)
+       protocol (sew/->SewProtocol)
        results  (:results (ir/run-all))
        batch-id \"invariants-$(date +%Y%m%d)\"]
    (tel/record-batch! ds protocol batch-id
@@ -30,7 +30,7 @@ clj꞉user꞉> 
 
 clj꞉user꞉> 
  (let [ds      (xtdb/->datasource)
-       protocol (sew/->SEWProtocol)
+       protocol (sew/->SewProtocol)
        results  (:results (ir/run-all))
        batch-id "invariants-20260518"]
    (tel/record-batch! ds protocol batch-id
@@ -42,7 +42,7 @@ clj꞉user꞉> 
 ; Unsupported character: \"Done.
 clj꞉user꞉> 
  (let [ds      (xtdb/->datasource)
-       protocol (sew/->SEWProtocol)
+       protocol (sew/->SewProtocol)
        results  (:results (ir/run-all))
        batch-id "invariants-20260518"]
    (tel/record-batch! ds protocol batch-id

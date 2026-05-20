@@ -1,15 +1,15 @@
 (ns resolver-sim.protocols.sew.equilibrium
-  "SEW-specific mechanism-property and equilibrium-concept validators.
+  "Sew-specific mechanism-property and equilibrium-concept validators.
 
    These validators are registered with evaluate-mechanism-properties and
-   evaluate-equilibrium-concepts via SEWProtocol's mechanism-property-validators
+   evaluate-equilibrium-concepts via SewProtocol's mechanism-property-validators
    and equilibrium-concept-validators methods.
 
-   SEW-specific validators included here:
+   Sew-specific validators included here:
      Mechanism properties:
        :individual-rationality       — uses negative-payoff-count / payoff-ledger
        :collusion-resistance         — uses coalition-net-profit / payoff-ledger
-       :stake-flow-conservation      — uses resolver-stakes SEW world field
+       :stake-flow-conservation      — uses resolver-stakes Sew world field
      Equilibrium concepts:
        :subgame-perfect-equilibrium                — delegates to subgame-cf
        :bounded-public-state-epsilon-spe           — delegates to subgame-cf
@@ -70,13 +70,13 @@
    :requires  [reason]})
 
 ;; ---------------------------------------------------------------------------
-;; SEW mechanism-property validators
+;; Sew mechanism-property validators
 ;; ---------------------------------------------------------------------------
 
 (defn- check-individual-rationality
   "No required honest participant has a negative net payoff.
 
-   Uses the SEW payoff-ledger (negative-payoff-count metric) when present.
+   Uses the Sew payoff-ledger (negative-payoff-count metric) when present.
    Falls back to funds-lost proxy when the ledger is absent.
    :pass when negative-payoff-count = 0 or (partial) funds-lost = 0."
   [{:keys [metrics payoff-ledger-summary]}]
@@ -117,7 +117,7 @@
 (defn- check-collusion-resistance
   "Labelled coalition does not profit relative to non-collusive baseline.
 
-   Uses the SEW coalition-net-profit metric.
+   Uses the Sew coalition-net-profit metric.
    :inconclusive for single-trace (requires multi-epoch runner or population data)."
   [{:keys [metrics payoff-ledger-summary]}]
   (let [cnp (:coalition-net-profit metrics)]
@@ -137,7 +137,7 @@
 
 (defn- check-stake-flow-conservation
   "For each resolver: start - withdrawn - slashed == end.
-   Uses the SEW resolver-stakes world field via stake-flow-summary."
+   Uses the Sew resolver-stakes world field via stake-flow-summary."
   [{:keys [stake-flow-summary]}]
   (let [violations (->> stake-flow-summary
                         (keep (fn [[resolver {:keys [start withdrawn slashed end]}]]
@@ -155,7 +155,7 @@
             "stake flow balances for all resolvers"))))
 
 ;; ---------------------------------------------------------------------------
-;; SEW equilibrium-concept validators (all delegate to subgame-cf)
+;; Sew equilibrium-concept validators (all delegate to subgame-cf)
 ;; ---------------------------------------------------------------------------
 
 (defn- check-subgame-perfect-equilibrium
@@ -506,7 +506,7 @@
                       (filter #(= :fail (:status %)) profile-results))))))))
 
 ;; ---------------------------------------------------------------------------
-;; SEW-specific mechanism-property validators (moved from scenario/equilibrium)
+;; Sew-specific mechanism-property validators (moved from scenario/equilibrium)
 ;; ---------------------------------------------------------------------------
 
 (defn- check-budget-balance
@@ -585,8 +585,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def mechanism-property-validators
-  "Map of SEW-specific mechanism-property keyword → validator-fn.
-   Returned by SEWProtocol/mechanism-property-validators and merged with the
+  "Map of Sew-specific mechanism-property keyword → validator-fn.
+   Returned by SewProtocol/mechanism-property-validators and merged with the
    framework's built-in generic validators."
   {:individual-rationality      check-individual-rationality
    :collusion-resistance        check-collusion-resistance
@@ -596,8 +596,8 @@
    :pending-lifecycle-integrity check-pending-lifecycle-integrity})
 
 (def equilibrium-concept-validators
-  "Map of SEW-specific equilibrium-concept keyword → validator-fn.
-   Returned by SEWProtocol/equilibrium-concept-validators and merged with the
+  "Map of Sew-specific equilibrium-concept keyword → validator-fn.
+   Returned by SewProtocol/equilibrium-concept-validators and merged with the
    framework's built-in generic validators."
   {:subgame-perfect-equilibrium             check-subgame-perfect-equilibrium
    :bounded-public-state-epsilon-spe        check-bounded-public-state-epsilon-spe

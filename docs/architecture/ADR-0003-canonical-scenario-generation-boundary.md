@@ -2,7 +2,7 @@
 
 - Status: **Accepted**
 - Date: 2026-05-02
-- Deciders: SEW simulation maintainers
+- Deciders: Sew simulation maintainers
 - Related: `docs/interface-contract.md`, `docs/architecture.md`
 
 ---

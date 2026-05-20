@@ -2,7 +2,7 @@
   "Verifies the tiered protocol interfaces.
 
    Tests:
-   1. SEWProtocol satisfies Core, Economic, and Analytical protocols.
+   1. SewProtocol satisfies Core, Economic, and Analytical protocols.
    2. DummyProtocol satisfies Core and Economic protocols.
    3. Both protocols produce expected outcomes via the replay proto."
   (:require [clojure.test :refer [deftest is testing]]
@@ -16,7 +16,7 @@
   (if (map? entry) entry (first entry)))
 
 (deftest sew-protocol-replay-passes
-  "replay-with-protocol using SEWProtocol must produce identical results to
+  "replay-with-protocol using SewProtocol must produce identical results to
    the old direct replay (now migrated to this path)."
   (testing "all scenarios"
     (doseq [[name entry] sc/all-scenarios]
@@ -39,7 +39,7 @@
 
 (deftest protocol-interfaces-satisfied
   "Verify protocol satisfaction for tiered interfaces."
-  (testing "SEWProtocol"
+  (testing "SewProtocol"
     (is (satisfies? proto/SimulationAdapter sew/protocol))
     (is (satisfies? proto/EconomicModel sew/protocol))
     (is (satisfies? proto/AnalysisModule sew/protocol)))

@@ -1,12 +1,12 @@
 (ns resolver-sim.yield.accounting
-  "[SEW-INTEGRATED ACCOUNTING SUBSTRATE]
+  "[Sew-INTEGRATED ACCOUNTING SUBSTRATE]
 
    Provides reusable arithmetic/reconciliation mechanics for yield-related
    balances and accrual transformations.
 
    Boundary note:
    - operation semantics and interpretation remain adapter-owned,
-   - current integration and field assumptions are aligned to SEW world shape.")
+   - current integration and field assumptions are aligned to Sew world shape.")
 
 (defn update-position-yield
   "Update unrealized yield for a position based on new index/price.

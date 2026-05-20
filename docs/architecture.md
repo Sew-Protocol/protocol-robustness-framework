@@ -19,14 +19,14 @@
 │                │                                             │
 │  contract_model/replay.clj  ← protocol-agnostic kernel       │
 │                │                                             │
-│  protocols/sew.clj          ← SewProtocol adapter            │
-│    sew/state_machine.clj    ← escrow state transitions       │
-│    sew/lifecycle.clj        ← create → dispute → resolve     │
-│    sew/invariants.clj       ← 28+ post-condition checks      │
-│    sew/resolution.clj       ← DR1/DR2/DR3 resolution logic   │
-│    sew/authority.clj        ← resolver authorization         │
-│    sew/accounting.clj       ← fee and profit calculations    │
-│    sew/runner.clj           ← top-level trial runner         │
+│  protocols/sew.clj               ← SewProtocol adapter           │
+│    protocols/sew/state_machine.clj ← escrow state transitions    │
+│    protocols/sew/lifecycle.clj     ← create → dispute → resolve  │
+│    protocols/sew/invariants.clj    ← 30+ post-condition checks   │
+│    protocols/sew/resolution.clj    ← DR1/DR2/DR3 resolution      │
+│    protocols/sew/authority.clj     ← resolver authorization      │
+│    protocols/sew/accounting.clj    ← fee and profit calculations │
+│    protocols/sew/runner.clj        ← top-level trial runner      │
 └─────────────────────────────────────────────────────────────┘
 ```
 

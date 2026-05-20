@@ -1,5 +1,5 @@
 (ns resolver-sim.generators.sew.adversarial
-  "SEW-specific adversarial profile semantics for stateful generation."
+  "Sew-specific adversarial profile semantics for stateful generation."
   (:require [resolver-sim.generators.actions :as actions]))
 
 (def ^:private profile-order

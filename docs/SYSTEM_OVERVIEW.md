@@ -1,4 +1,4 @@
-# SEW Simulation: State, Interpretation, and Roadmap
+# Sew Simulation: State, Interpretation, and Roadmap
 
 *A plain-language guide for protocol designers, researchers, and grant reviewers.*
 
@@ -6,7 +6,7 @@
 
 ## What this system is
 
-SEW is a dispute-resolution protocol for on-chain escrow. When a buyer and seller
+Sew is a dispute-resolution protocol for on-chain escrow. When a buyer and seller
 disagree, a resolver is called in to make a binding decision. The protocol must ensure
 that the resolver behaves honestly — and that an attacker cannot game the outcome,
 exhaust the resolver network, or drain the insurance pool.
@@ -343,7 +343,7 @@ event sequence, and the protocol interface is pluggable.
 
 ### Target end state
 
-A complete security argument for the SEW protocol requires three layers that reinforce
+A complete security argument for the Sew protocol requires three layers that reinforce
 each other:
 
 ```

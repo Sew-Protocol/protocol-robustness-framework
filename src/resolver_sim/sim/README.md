@@ -30,7 +30,7 @@ surfaces.
 
 **Question:** *Does this specific attack sequence violate a protocol guarantee?*
 
-**Mechanism:** Replays deterministic event sequences through the SEW state
+**Mechanism:** Replays deterministic event sequences through the Sew state
 machine (`contract_model/replay`), checking all 31 invariants at every step.
 Produces machine-readable JSON traces (`data/fixtures/traces/`).
 

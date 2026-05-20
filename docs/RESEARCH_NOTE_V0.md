@@ -1,6 +1,6 @@
 # Research Note v0: Structural Failure Modes in Decentralised Escrow Dispute Protocols
 
-**Authors:** SEW Protocol Research
+**Authors:** Sew Protocol Research
 **Version:** v0 (pre-peer-review)
 **Date:** 2026-05
 **Repository:** https://github.com/Sew-Protocol/sew-simulation
@@ -12,7 +12,7 @@
 
 > **Governance rotation mid-dispute enables 100% outcome manipulation with zero invariant violations — structurally invisible to per-function audits, fuzz testing, and unit testing.**
 
-More broadly: in a 33-scenario adversarial simulation of the SEW dispute protocol, adversarial agents succeeded in **22% of attack attempts** (9 of 41 attempts across 33 adversarial scenarios). In zero cases did the protocol enter an inconsistent state. The failures are not implementation bugs — they are **correct uses of the protocol against its own users**.
+More broadly: in a 33-scenario adversarial simulation of the Sew dispute protocol, adversarial agents succeeded in **22% of attack attempts** (9 of 41 attempts across 33 adversarial scenarios). In zero cases did the protocol enter an inconsistent state. The failures are not implementation bugs — they are **correct uses of the protocol against its own users**.
 
 ---
 
@@ -20,7 +20,7 @@ More broadly: in a 33-scenario adversarial simulation of the SEW dispute protoco
 
 ### 2.1 What We Simulated
 
-The SEW protocol is a decentralised escrow dispute-resolution mechanism. It defines:
+The Sew protocol is a decentralised escrow dispute-resolution mechanism. It defines:
 - An escrow state machine (`created → funded → disputed → [released | refunded]`)
 - A resolver authority model (custom resolver + Kleros L0/L1 escalation)
 - A fee and accounting model
@@ -185,7 +185,7 @@ These are the highest-value open questions for follow-up research:
 
 **Q4 — Composability attacks:** Do flash-loan or re-entrancy patterns enable profitable attacks against this protocol class that are invisible in single-contract simulation?
 
-**Q5 — Mechanism equivalence:** Is the SEW mechanism strategically equivalent to any well-studied mechanism in the mechanism design literature (Kleros, Optimistic Oracle, UMA)? If so, do known results from those systems transfer?
+**Q5 — Mechanism equivalence:** Is the Sew mechanism strategically equivalent to any well-studied mechanism in the mechanism design literature (Kleros, Optimistic Oracle, UMA)? If so, do known results from those systems transfer?
 
 ---
 

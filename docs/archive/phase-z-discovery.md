@@ -2,7 +2,7 @@
 
 > "No state transition without full economic reconciliation."
 
-This document details how the SEW Simulator identified a critical liquidity leak in the protocol's liveness logic and how that discovery led to a fundamental architectural rule for all future dispute-resolution standards.
+This document details how the Sew Simulator identified a critical liquidity leak in the protocol's liveness logic and how that discovery led to a fundamental architectural rule for all future dispute-resolution standards.
 
 ---
 
@@ -53,4 +53,4 @@ This discovery formalized a core mandate for the **Common Dispute Resolution Sta
 Any protocol conforming to this standard must prove that every state change is accompanied by a balance adjustment that maintains the global solvency invariant:  
 `TotalValueIn == TotalValueOut + TotalValueHeld`
 
-By using trace-equivalence and differential testing, the SEW Simulator ensures that these "hidden" accounting bugs are caught in the model before they reach the blockchain.
+By using trace-equivalence and differential testing, the Sew Simulator ensures that these "hidden" accounting bugs are caught in the model before they reach the blockchain.

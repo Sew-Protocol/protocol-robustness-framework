@@ -21,7 +21,7 @@
      instead of running independent honest/malicious batches. Models genuine
      competition: n-trials disputes total, split between resolver groups.
    - :kernel-validation-sample-size N — validate N scenarios per epoch through
-     the SEW replay kernel to check protocol-param self-consistency."
+     the Sew replay kernel to check protocol-param self-consistency."
   (:require [resolver-sim.sim.batch         :as batch]
             [resolver-sim.sim.shared-batch         :as shared-batch]
             [resolver-sim.sim.kernel-bridge        :as kernel-bridge]
@@ -138,7 +138,7 @@
                                      so honest and malicious resolvers compete over
                                      the same n-trials disputes (not independent 2n).
      :kernel-validation-sample-size — when set to N>0, validate N scenarios per
-                                      epoch through the SEW replay kernel; results
+                                      epoch through the Sew replay kernel; results
                                       added to :kernel-validation in epoch-summary.
 
    Returns: {:epoch-summary {...} :updated-histories {...}}"

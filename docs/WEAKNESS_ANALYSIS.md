@@ -1,4 +1,4 @@
-# Weakness Analysis: SEW Resolver Simulation
+# Weakness Analysis: Sew Resolver Simulation
 
 > **SUPERSEDED — Historical record only.**
 > This analysis was written on **February 12, 2026**, reflecting the state at Phase I
@@ -551,9 +551,9 @@ competition, not parallel independent evaluation.
 **Gap 2 — Replay-kernel validation of batch params** (`sim/kernel_bridge.clj`)
 
 The stochastic batch model uses probability distributions. There was no check that
-the underlying SEW protocol state machine was self-consistent with those parameters.
+the underlying Sew protocol state machine was self-consistent with those parameters.
 
-`kernel-bridge/run-kernel-validation` generates minimal SEW scenarios from batch
+`kernel-bridge/run-kernel-validation` generates minimal Sew scenarios from batch
 params and runs them through `replay-with-protocol` (the full invariant-checked
 protocol kernel). Any invariant violation indicates a parameter inconsistency.
 

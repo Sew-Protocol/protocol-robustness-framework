@@ -68,7 +68,7 @@
 ;;
 ;; Those belong in a separate future registry, e.g.:
 ;;
-;;   resolver-sim.sim.multi-epoch/known-metrics   (stochastic, multi-epoch; SEW-specific)
+;;   resolver-sim.sim.multi-epoch/known-metrics   (stochastic, multi-epoch; Sew-specific)
 ;;
 ;; Do NOT add population/batch metrics here. Blending the two worlds would
 ;; cause validate-scenario to accept :theory/falsifies-if conditions that

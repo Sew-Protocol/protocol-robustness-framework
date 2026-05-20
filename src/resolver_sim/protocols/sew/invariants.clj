@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.invariants
-  "Checkable invariant predicates for the SEW contract model.
+  "Checkable invariant predicates for the Sew contract model.
 
    These mirror the runtime guards in InvariantGuardInternal.sol and define
    the specification for future Foundry invariant tests and Halmos properties.
@@ -21,7 +21,7 @@
             [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
 
 (def canonical-ids
-  "The full set of canonical invariant IDs across SEW v1.
+  "The full set of canonical invariant IDs across Sew v1.
    Used for standardized error mapping and validation gates."
   #{:solvency
     :fees-non-negative
@@ -247,7 +247,7 @@
 ;; Invariant 7: Valid status combinations
 ;;
 ;; Every escrow must have a (escrow-state × sender-status × recipient-status)
-;; combination that is permitted by the SEW protocol.
+;; combination that is permitted by the Sew protocol.
 ;; ---------------------------------------------------------------------------
 
 (defn all-status-combinations-valid?
@@ -875,15 +875,15 @@
          :violations [{:dist-total dist-total :slash-total slash-total}]}))))
 
 ;; ---------------------------------------------------------------------------
-;; Invariant 25: Resolver bond mix valid (80/20 stable/SEW)
+;; Invariant 25: Resolver bond mix valid (80/20 stable/Sew)
 ;;
 ;; Every resolver with a registered bond must hold at least 80% stable and
-;; at most 20% SEW by value.  Uses integer BPS arithmetic (no floating point).
+;; at most 20% Sew by value.  Uses integer BPS arithmetic (no floating point).
 ;; ---------------------------------------------------------------------------
 
 (defn resolver-bond-mix-valid?
-  "True when every resolver's bond satisfies the 80/20 stable/SEW mix rule.
-   Mirrors StakingModuleInvariants: stable >= 80%, SEW <= 20%."
+  "True when every resolver's bond satisfies the 80/20 stable/Sew mix rule.
+   Mirrors StakingModuleInvariants: stable >= 80%, Sew <= 20%."
   [world]
   (let [violations
         (for [[addr bond] (:resolver-bonds world {})

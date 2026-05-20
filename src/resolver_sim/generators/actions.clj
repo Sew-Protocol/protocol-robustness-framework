@@ -5,7 +5,7 @@
 
    Current provider status:
    - Uses protocol-scoped candidate-template providers.
-   - SEW is the currently wired default provider.
+   - Sew is the currently wired default provider.
 
    Protocol-specific candidate templates live in protocol-scoped generator
    namespaces."

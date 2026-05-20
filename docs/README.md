@@ -41,6 +41,13 @@ existing links remain useful.
 - `security-model.md` — threat model assumptions
 - `usage.md` — CLI/API usage notes
 
+## Sew Protocol Reference
+
+Technical reference documents derived from the Sew Protocol smart contracts:
+
+- `protocol/DISPUTE_RESOLUTION_ARCHITECTURE.md` — state machine, DRM three-round model, Kleros integration, module snapshot isolation
+- `protocol/FORWARD_ONLY_UPGRADES.md` — governance safety: two-layer delay, escrow immutability, what cannot be rolled back
+
 ## Research Outputs
 
 - `RESEARCH_NOTE_V0.md` — 6-page research note: headline claim, model, results, limitations, open questions
@@ -48,5 +55,4 @@ existing links remain useful.
 - `evidence/` — per-failure-class evidence with raw JSON traces
 - `challenge/BENCHMARK_CHALLENGE.md` — "Break This Mechanism" benchmark: 3 adversarial tasks with scoring
 
-Historical planning docs are kept for context (for example
-`archived/docs/roadmap-generalisation.md`).
+Historical and superseded docs are in `archive/`.

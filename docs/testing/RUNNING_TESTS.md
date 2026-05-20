@@ -233,7 +233,7 @@ Current observed baseline from `./scripts/test.sh all`:
   - `src/resolver_sim/protocols/sew.clj`
   - `src/resolver_sim/server/session.clj`
 - **Namespace cycle fixed**: `protocols/sew` ↔ `protocols/sew/io/trace_export`
-  via lazy load in SEW `:forge-trace` projection path.
+  via lazy load in Sew `:forge-trace` projection path.
 
 Remaining failures are now **behavioural** (not parser-level):
 
@@ -241,7 +241,7 @@ Remaining failures are now **behavioural** (not parser-level):
    - escalation chain expectations failing (0→1→2 progression, pending
      settlement clearing, level-specific resolver transitions)
 2. JSON serialization error in replay tests
-   - `Don't know how to write JSON of class resolver_sim.protocols.sew.SEWProtocol`
+   - `Don't know how to write JSON of class resolver_sim.protocols.sew.SewProtocol`
 3. transition/guard coverage gate step
    - `FileNotFoundException` in release-gate path (environment/path issue)
 

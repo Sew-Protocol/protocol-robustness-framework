@@ -30,7 +30,7 @@
    --------------
    This namespace preserves a stable, generic call surface while delegating
    protocol-specific score semantics to protocol-scoped providers.
-   Current default provider: SEW (`resolver-sim.io.sew.trace-score`).
+   Current default provider: Sew (`resolver-sim.io.sew.trace-score`).
 
    Categories
    ----------
@@ -56,7 +56,7 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Compatibility adapter: currently delegates to the SEW scorer.
+   Compatibility adapter: currently delegates to the Sew scorer.
    Works with replay results regardless of :outcome."
   [result]
   (sew-ts/score-result result))

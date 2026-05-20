@@ -6,10 +6,10 @@ Date: 2026-05-18
 
 ## Context
 
-The repository now exposes a SEW implementation of a read-only funds ledger via
+The repository now exposes a Sew implementation of a read-only funds ledger via
 `io-projection` target `:funds-ledger-view`.
 
-Current shape is intentionally reusable, but computation is SEW-scoped in:
+Current shape is intentionally reusable, but computation is Sew-scoped in:
 
 - `src/resolver_sim/protocols/sew/projection.clj`
 
@@ -22,7 +22,7 @@ Contract-only extraction is complete:
 
 - reusable `:funds-ledger-view` output shape is documented in core protocol
   interface docs (`protocols/protocol.clj`, `AnalysisModule/io-projection`),
-- SEW remains the concrete implementation,
+- Sew remains the concrete implementation,
 - no shared computation module or cross-adapter behavior migration performed.
 
 ## Decision
@@ -73,7 +73,7 @@ The shared module validates/normalizes and emits final `:funds-ledger-view`.
 
 1. Keeps protocol semantics protocol-scoped (no false generalization).
 2. Reuses one stable output contract across adapters.
-3. Minimizes churn in existing SEW logic.
+3. Minimizes churn in existing Sew logic.
 4. Allows progressive onboarding of additional adapters.
 
 ## Non-goals
@@ -89,9 +89,9 @@ The shared module validates/normalizes and emits final `:funds-ledger-view`.
 - Create `scenario/funds_ledger.clj` with pure constructors/validators.
 - Add unit tests for contract shape and drift aggregation behavior.
 
-### Step 2 — Wire SEW through shared helper
+### Step 2 — Wire Sew through shared helper
 
-- Keep SEW-specific collection logic in `protocols/sew/projection.clj`.
+- Keep Sew-specific collection logic in `protocols/sew/projection.clj`.
 - Replace final assembly with shared helper call.
 - Ensure `:funds-ledger-view` output is byte-for-byte compatible where possible.
 
@@ -118,7 +118,7 @@ The shared module validates/normalizes and emits final `:funds-ledger-view`.
 1. **Semantic drift risk**: adapters may map unlike concepts into same bucket names.
    - Mitigation: adapter-side explicit mapping docs + validation checks.
 
-2. **Contract creep**: pressure to over-generalize niche SEW semantics.
+2. **Contract creep**: pressure to over-generalize niche Sew semantics.
    - Mitigation: keep contract minimal and accounting-centric.
 
 3. **Compatibility risk**: changing payload structure could break downstream consumers.
@@ -126,7 +126,7 @@ The shared module validates/normalizes and emits final `:funds-ledger-view`.
 
 ## Rollback Strategy
 
-- If extraction causes regressions, keep shared helper unused and preserve SEW-local
+- If extraction causes regressions, keep shared helper unused and preserve Sew-local
   assembly path until mappings are stabilized.
 
 ## Effort Estimate
@@ -134,12 +134,12 @@ The shared module validates/normalizes and emits final `:funds-ledger-view`.
 Scope-2 extraction total: **2–4 engineering days**
 
 - Shared helper + tests: 0.75–1.5 days
-- SEW migration + compatibility pass: 0.5–1 day
+- Sew migration + compatibility pass: 0.5–1 day
 - Docs + optional pilot adapter: 0.75–1.5 days
 
 ## Acceptance Criteria
 
 1. `:funds-ledger-view` remains available with stable shape.
-2. SEW outputs unchanged or intentionally documented when changed.
+2. Sew outputs unchanged or intentionally documented when changed.
 3. Shared helper has unit tests for shape and drift aggregation.
 4. Docs clearly separate reusable contract vs adapter-specific semantics.
