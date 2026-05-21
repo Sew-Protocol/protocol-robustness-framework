@@ -17,7 +17,7 @@ The framework has three interlocking layers:
 |---|---|---|
 | **Deterministic replay** | Replays event sequences against the protocol kernel; checks every invariant after every transition | `contract_model/replay.clj` |
 | **Adversarial simulation** | Runs Monte Carlo trials with adversarial and honest agents across a production threat envelope | `sim/adversarial.clj`, `adversaries/` |
-| **Statistical phases** | Hypothesis-driven sweeps over protocol parameter space; each phase produces a pass/fail verdict | `sim/phase_*.clj`, research sub-namespaces |
+| **Statistical simulations** | Hypothesis-driven sweeps over protocol parameter space; each module produces a pass/fail verdict | `sim/waterfall.clj`, `sim/multi_epoch.clj`, `sim/governance_impact.clj`, etc. |
 
 All three layers are pure-functional. No I/O touches the core computation; the
 shell layer (`io/`, `db/`) handles persistence. This means the kernel is
@@ -107,10 +107,11 @@ implementation via the registry.
 
 ## 2. Invariant Catalogue
 
-36 canonical invariant IDs are enforced across the Sew v1 model. They are
-organized into six groups:
+**37 canonical invariant IDs** are enforced across the Sew v1 model, defined in
+`protocols/sew/invariants.clj` under `canonical-ids`. They are organized into
+six groups.
 
-### Accounting invariants (enforced after every step)
+### Accounting invariants
 
 | ID | Meaning |
 |---|---|
@@ -135,6 +136,7 @@ organized into six groups:
 | `:escalation-level-monotonic` | Escalation level is non-decreasing within a dispute |
 | `:no-withdrawal-during-dispute` | `withdrawEscrow` cannot be called while escrow is in `DISPUTED` state |
 | `:no-auto-fraud-execute` | Automated execution cannot fire on an escrow flagged for fraud |
+| `:no-stale-automatable-escrows` | No escrow remains in an automatable state past its scheduled execution time |
 
 ### Time invariants
 
@@ -182,36 +184,34 @@ organized into six groups:
 
 ### Suite composition
 
-The canonical suite (`invariant_scenarios.clj`) currently contains **48+
+The canonical suite (`protocols/sew/invariant_scenarios.clj`) contains **48
 named scenarios** spanning four types:
 
 | Type | Count | Purpose |
 |---|---|---|
-| `:baseline` | 11 | Happy-path flows; confirm basic protocol operations work correctly |
-| `:edge-case` | 14 | Boundary conditions; confirm guards and error paths fire correctly |
-| `:stress` | 6 | Multi-escrow or multi-resolver conditions; confirm accounting holds under load |
-| `:adversarial` | 18+ | Active adversary agents; confirm incentive alignment holds under attack |
+| `:baseline` | 8 | Happy-path flows; confirm basic protocol operations work correctly |
+| `:edge-case` | 17 | Boundary conditions; confirm guards and error paths fire correctly |
+| `:stress` | 7 | Multi-escrow or high-load conditions; confirm accounting holds under pressure |
+| `:adversarial` | 16 | Active adversary agents; confirm incentive alignment holds under attack |
 
-### Baseline scenarios (S01–S23 selected)
+### Baseline scenarios
 
 | Scenario | Coverage |
 |---|---|
 | `s01-baseline-happy-path` | Create → release; no dispute |
 | `s02-dr3-dispute-release` | Dispute raised; resolver releases to buyer |
 | `s03-dr3-dispute-refund` | Dispute raised; resolver refunds to seller |
-| `s04-dispute-timeout-autocancel` | Dispute opened; resolver non-responsive; timeout auto-cancels |
 | `s05-pending-settlement-execute` | Split settlement proposed and executed |
 | `s06-mutual-cancel` | Mutual cancel without dispute |
 | `s13-pending-settlement-refund` | Pending settlement refunded |
 | `s16-ieo-create-release` | Instant-escrow-only flow (no resolver) |
-| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute times out without resolver |
 | `s18-dr3-kleros-l0-resolves` | Kleros L0 round resolves without escalation |
-| `s46-reorg-idempotence` | Re-submitted event is idempotent (reorg safety) |
 
 ### Edge-case scenarios
 
 | Scenario | What it validates |
 |---|---|
+| `s04-dispute-timeout-autocancel` | Resolver non-responsive; timeout auto-cancels dispute |
 | `s07-unauthorized-resolver-rejected` | Only the authorized resolver may call `resolve` |
 | `s08-state-machine-attack-gauntlet` | 12+ invalid transitions attempted; all rejected |
 | `s10-double-finalize-rejected` | Calling finalize twice on the same escrow is rejected |
@@ -219,7 +219,13 @@ named scenarios** spanning four types:
 | `s12a/s12b-snapshot-isolation` | Fee-param change after escrow creation does not apply retroactively |
 | `s14-dr3-module-authorized` | Module-authorized resolution path accepted |
 | `s15-dr3-module-unauthorized-rejected` | Unauthorized module resolution rejected |
-| `s19–s23` (Kleros edge cases) | Escalation guards, max-level cap, pending-settlement clearing |
+| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute times out without resolver |
+| `s19-dr3-kleros-escalation-rejected-l0-resolves` | Escalation attempt rejected; L0 resolver already resolved |
+| `s20-dr3-kleros-max-escalation-guard` | Escalation beyond max level is rejected |
+| `s21-dr3-kleros-pending-cleared-on-escalation` | Pending settlement is cleared when escalation begins |
+| `s22-status-leak-agree-cancel-over-dispute` | Agree-cancel cannot override an open dispute |
+| `s23-preemptive-escalation-blocked` | Escalation before appeal window opens is blocked |
+| `s46-reorg-idempotence` | Re-submitted event is idempotent (reorg safety) |
 | `s66-cooldown-boundary-reorg` | Cooldown window boundary is correctly enforced across reorg |
 
 ### Stress scenarios
@@ -232,6 +238,7 @@ named scenarios** spanning four types:
 | `s39-dr3-senior-coverage-delegation` | Senior coverage limit respected under delegation |
 | `s40-dr3-freeze-post-slash` | Resolver correctly frozen after slash; no new assignments |
 | `s41-dr3-reversal-slash-disabled` | Reversal slash does not fire when config gate is closed |
+| `s68-yield-pool-insolvency` | Yield pool insolvency is detected and isolated; escrow accounting holds |
 
 ### Adversarial scenarios
 
@@ -279,14 +286,14 @@ Models coordinated multi-agent attacks involving bribery or collusion.
 
 ---
 
-## 4. Monte Carlo Simulation
+## 4. Monte Carlo and Statistical Simulations
 
 ### Architecture
 
-The Monte Carlo layer (`sim/batch.clj`, `sim/sweep.clj`) runs independent
-trials across a parameter space. Each trial instantiates an honest agent and
-a malicious agent with the same protocol parameters, simulates the dispute
-process stochastically, and records expected value (EV) for each strategy.
+The stochastic layer runs independent trials across a parameter space. Each
+trial instantiates an honest agent and a malicious agent with the same protocol
+parameters, simulates the dispute process stochastically, and records expected
+value (EV) for each strategy.
 
 The primary question: **is honest behavior the dominant strategy under the
 production threat envelope?**
@@ -303,7 +310,8 @@ sweep satisfying this condition.
 
 ### Production Threat Envelope (PTE)
 
-The adversarial search uses a defined parameter envelope:
+The adversarial search uses a defined parameter envelope
+(`sim/adversarial.clj`):
 
 ```clojure
 (def pte-v1
@@ -313,73 +321,56 @@ The adversarial search uses a defined parameter envelope:
    :slashing-detection-probability [0.03 0.30]}) ; 3–30% fraud detection rate
 ```
 
-The hill-climbing adversarial search (`adversarial/hill-climb`) finds the
-parameter combination within the PTE that maximises malicious EV, and reports
-whether honest behavior is still dominant at that worst-case point.
+The hill-climbing adversarial search finds the parameter combination within
+the PTE that maximises malicious EV, and reports whether honest behavior is
+still dominant at that worst-case point.
 
-### Simulation phases
+### Statistical simulation modules
 
-Each phase tests a specific hypothesis. All phases are pure functions; I/O is
-confined to the runner in `core/phases.clj`.
+| Module | File | What it tests |
+|---|---|---|
+| **Adversarial search** | `sim/adversarial.clj` | Honest/malicious EV dominance across the full PTE; hill-climb + grid search |
+| **Waterfall cascade** | `sim/waterfall.clj` | Simultaneous multi-resolver slashes; insurance pool survival; six stress scenarios |
+| **Multi-epoch reputation** | `sim/multi_epoch.clj` | Reputation decay over 10+ epochs; Sybil re-entry; governance failure scenarios |
+| **Governance delay / impact** | `sim/governance_delay.clj`, `sim/governance_impact.clj` | Resolver freezing eliminates response-time sensitivity; 3-day to 14-day window sweep |
+| **Appeal outcomes** | `sim/appeal_outcomes.clj` | Bond waterfall at 50% appeal success rate; surplus maintained above 3,300% |
+| **Capacity exhaustion** | `sim/capacity_exhaustion.clj` | Six concurrent-dispute exhaustion scenarios; per-resolver `maxConcurrentDisputes` enforcement |
+| **Defection dynamics** | `sim/defection.clj` | Rational defection model; strategy-switching after epoch payoff observation |
+| **Stochastic equilibrium** | `sim/stochastic_equilibrium.clj` | Equilibrium stability under stochastic parameter draws |
 
-#### Economic and incentive phases
+### Phase parameter configurations
 
-| Phase | Hypothesis | Trials | Key finding |
-|---|---|---|---|
-| **G** — Slashing delays | Slash delay does not invert the honest/malicious EV ratio | 5,000 | Passes; ratio stable across delay ranges |
-| **H** — Bond mechanics | Bond sizing creates correct incentive gradients | 5,000 + 2D sweep | Passes; higher bond increases dominance ratio |
-| **I** — Automatic detection | Detection mechanisms (fraud, timeout, reversal) increase malicious cost | 5,000 | Passes; all 3 detection paths effective |
-| **N** — Appeal outcomes | Even at 50% appeal success, waterfall maintains surplus | 5,000 | Passes; 3,300%+ surplus at 50% appeal rate |
-| **O** — Market exit cascade | Resolver pool depletion does not destabilize remaining resolvers | 40,000 | Passes; graceful degradation |
+All statistical modules accept EDN parameter files from `data/params/`. The
+main configurations are:
 
-#### Multi-epoch and governance phases
+| Config | DR tier | Notable feature |
+|---|---|---|
+| `baseline.edn` | DR3 full system | 10% bond, 2.5% fee, progressive slash, Kleros L2 |
+| `dr1-fee-only.edn` | DR1 | No bonds; honest/malicious ratio ≈ 1.0 (baseline comparison) |
+| `dr2-reputation.edn` | DR2 | 5% bond, 1.5× slash; ratio ≈ 5.0 |
+| `phase-g-slashing-delays.edn` | DR3 | Slash delay sensitivity sweep |
+| `phase-h-2d-realistic.edn` | DR3 | 2D bond-mechanics sweep |
+| `phase-i-all-mechanisms.edn` | DR3 | All detection mechanisms: fraud + timeout + reversal |
+| `phase-j-*.edn` | DR3 | Multi-epoch reputation: stable, Sybil, governance failure |
+| `phase-l-*.edn` | DR3 | Waterfall: baseline, cascade, simultaneous slashes, senior degraded |
+| `phase-m-*.edn` | DR3 | Governance response time: instant, 3-day, 7-day, 14-day |
+| `phase-n-*.edn` | DR3 | Appeal outcomes at varying success rates |
+| `phase-o-*.edn` | DR3 | Market exit cascade; graceful pool degradation |
+| `phase-ah-*.edn` | DR3 | Ring attacker trajectory sweep |
+| `phase-ai-*.edn` | DR3 | Dual-layer ring + escalation trap + mitigation variants |
 
-| Phase | Hypothesis | Trials | Key finding |
-|---|---|---|---|
-| **J** — Multi-epoch reputation | Reputation decay over 10 epochs does not invert incentives | 50,000 | Passes; EMA convergence stable |
-| **L** — Waterfall cascade | Simultaneous multi-resolver slashes do not drain insurance pool | 5,000 | Passes; 10%/30%/cascade/simultaneous tested |
-| **M** — Governance response time | Resolver freezing eliminates governance response-time sensitivity | 50,000 | **Passes; with freeze, response time is irrelevant** |
+### Stochastic model layer
 
-#### Research-phase adversarial simulations
+The statistical modules draw from pure model functions in `stochastic/`:
 
-Beyond the canonical phases, a library of research simulations probes specific
-attack hypotheses. Each is a falsifiable test with a defined pass criterion.
-
-**Adversarial economics:**
-
-| Simulation | What it probes |
+| Module | What it models |
 |---|---|
-| `falsification-lite` / `falsification-revised` | Can an adversary falsify evidence to swing a dispute outcome? |
-| `evidence-fog` | Does evidence cost asymmetry create exploitable fog-of-war for adversaries? |
-| `legitimacy-loop` | Can a resolver maintain legitimacy score while defecting in selected disputes? |
-| `trust-floor` | Is there a trust-score floor below which resolver is barred regardless of bond? |
-| `fair-slashing` | Does the slashing model correctly distinguish malicious vs negligent failure? |
-| `epoch-solvency` | Is per-epoch solvency maintained under maximum adversarial pressure? |
-| `ema-convergence` | Does the EMA reputation signal converge correctly under manipulation? |
-| `equity-divergence` | Can equity divergence be induced by coordinated defection? |
-| `escalation-trap` | Can an adversary force unnecessary escalation to drain appeal bonds? |
-| `collusion-ring` | Does a coordinated resolver ring break detection thresholds? |
-| `advanced-vulnerability` | Known vulnerability patterns from literature (not Sew-specific) |
-| `liveness-participation` | Can a liveness attacker block resolution without being detected? |
-| `adaptive-attacker` | An attacker that adapts strategy based on protocol response |
-
-**Governance:**
-
-| Simulation | What it probes |
-|---|---|
-| `adversary` (governance) | Can a governance adversary capture protocol parameters? |
-| `effort-rewards` | Do effort-proportional rewards maintain resolver quality? |
-| `capture-drift` | Does governance capture drift over multi-epoch runs? |
-| `bandwidth-floor` | Is there a minimum governance participation floor for security? |
-
-**Economic:**
-
-| Simulation | What it probes |
-|---|---|
-| `market-exit` | Does market exit cascade cause resolver pool collapse? |
-| `belief-cascades` | Can belief cascades in dispute outcome shift equilibrium? |
-| `dispute-clustering` | Does dispute clustering stress the waterfall more than uniform distribution? |
-| `burst-concurrency` | Does burst concurrent dispute volume break accounting under stress? |
+| `stochastic/economics.clj` | Fee, bond, slashing, and honest/malicious EV calculations |
+| `stochastic/dispute.clj` | Dispute resolution and outcome distributions |
+| `stochastic/decision_quality.clj` | Accuracy loss from time pressure; evidence review bonuses |
+| `stochastic/evidence_costs.clj` | Effort budget and evidence-verification cost models |
+| `stochastic/liveness_failures.clj` | Juror opportunity cost; boredom threshold; adverse selection |
+| `stochastic/correlated_failures.clj` | Shared-bias and herding effects in resolver panels |
 
 ### Ring attacker model
 
@@ -396,19 +387,66 @@ The ring earns the same gross profit as an individual attacker, but each
 member stays below the detection threshold longer. This model is the
 foundation of the Phase AH/AI multi-epoch ring evasion tests.
 
+### Research simulation coverage
+
+Beyond the canonical phase configurations, `data/params/` contains
+purpose-built configurations for specific attack hypotheses:
+
+**Adversarial economics:**
+
+| Config | What it probes |
+|---|---|
+| `phase-y-evidence-fog.edn` | Does evidence cost asymmetry create exploitable fog-of-war? |
+| `phase-z-legitimacy.edn` | Can a resolver maintain legitimacy score while selectively defecting? |
+| `phase-ae-fair-slashing.edn` | Does slashing correctly distinguish malicious vs negligent failure? |
+| `phase-ai-escalation-trap.edn` | Can an adversary force unnecessary escalation to drain appeal bonds? |
+| `phase-ai-ring-model-stochastic.edn` | Ring evasion under stochastic detection regime |
+| `phase-ai-ring-detection-mitigation.edn` | Mitigation: dual-layer detection closes ring advantage |
+
+**Governance:**
+
+| Config | What it probes |
+|---|---|
+| `phase-aa-governance.edn` | Can a governance adversary capture protocol parameters? |
+| `phase-ab-effort-rewards.edn` | Do effort-proportional rewards maintain resolver quality? |
+| `phase-ac-threshold-sweep.edn` / `phase-ac-trust-floor.edn` | Trust-score floor below which resolver is barred |
+| `phase-ad-governance-floor.edn` | Minimum governance participation floor for security |
+| `phase-t-governance-capture.edn` | Governance capture drift over multi-epoch runs |
+
+**Economic:**
+
+| Config | What it probes |
+|---|---|
+| `phase-f-baseline.edn` / `phase-f1-delegation-ring.edn` | Delegation ring; resolver bond mixing |
+| `phase-e1-kleros.edn` | Kleros-round economics under adversarial escalation |
+| `cartel.edn` / `whale-attack.edn` | Cartel and whale concentration attacks |
+| `two-layer.edn` | Two-layer detection (resolver + oracle) interaction |
+
 ---
 
 ## 5. Fixture Suite and Golden Reports
 
 The fixture suite (`sim/fixtures.clj`) loads scenarios from `data/fixtures/`
-as EDN or JSON and runs them through the replay engine. The suite runner
-supports three named suites:
+as EDN and runs them through the replay engine. The suite runner supports
+named suites defined in `data/fixtures/suites/manifest.edn`.
 
-| Suite | Coverage |
-|---|---|
-| `:suites/all-invariants` | All S01–S41+ named invariant scenarios |
-| `:suites/equilibrium-validation` | Equilibrium property scenarios |
-| `:suites/spe-validation` | Subgame-perfect equilibrium validation scenarios |
+### Available suites
+
+| Suite key | File | Coverage |
+|---|---|---|
+| `:suites/all-invariants` | `all-invariants.edn` | All 48 named invariant scenarios |
+| `:suites/baseline-safety` | `baseline-safety.edn` | Core baseline safety properties |
+| `:suites/dr3-critical` | `dr3-critical.edn` | DR3-specific critical paths |
+| `:suites/equilibrium-validation` | `equilibrium-validation.edn` | Equilibrium property scenarios |
+| `:suites/spe-validation` | `spe-validation.edn` | Subgame-perfect equilibrium validation |
+| `:suites/spe-regression` | `spe-regression.edn` | SPE regression cases |
+| `:suites/governance-decay` | `governance-decay.edn` | Governance decay scenarios |
+| `:suites/token-pathologies` | `token-pathologies.edn` | Fee-on-transfer and rebase token edge cases |
+| `:suites/withdrawal-adversarial` | `withdrawal-adversarial.edn` | Adversarial withdrawal paths |
+| `:suites/timelock-regression` | `timelock-regression.edn` | Timelock integrity regression |
+| `:suites/escalation-collision` | `escalation-collision.edn` | Concurrent escalation race conditions |
+| `:suites/same-block-ordering` | `same-block-ordering.edn` | Same-block event ordering determinism |
+| Equivalence suites (×8) | `equivalence-*.edn` | Semantic equivalence: accounting, auth paths, ordering, race pairs, money-path integrity, economic stress, escalation boundaries, governance snapshot |
 
 Golden reports (`generate-golden-report`) record the expected pass/fail
 outcome for each fixture, allowing regression detection: if a scenario
@@ -426,20 +464,23 @@ treated as bugs.
 
 ```
 protocols/sew/*        ← Domain logic (pure)
-  invariants.clj         36 invariant predicates
-  invariant_scenarios.clj  48+ named scenarios
-  invariant_runner.clj     In-process suite runner
+  invariants.clj         37 canonical invariant predicates
+  invariant_scenarios.clj  48 named scenarios
+  invariant_runner.clj     In-process suite runner (run-all / run-and-report)
 
 contract_model/replay.clj  ← Protocol-agnostic kernel (pure)
   - imports: protocols/protocol only
   - no db/*, no io/*
 
-sim/*                  ← Monte Carlo and research phases (pure)
+sim/*                  ← Statistical and adversarial simulations (pure)
   - imports: contract_model/*, protocols/*, stochastic/*, adversaries/*
   - no db/*, no io/*
 
 adversaries/*          ← Adversary strategies (pure)
   - imports: stochastic/* only
+
+stochastic/*           ← Pure statistical model functions
+  - no imports outside stochastic/
 
 db/*                   ← XTDB persistence (shell; side-effectful)
 io/*                   ← File I/O (shell; side-effectful)
@@ -462,7 +503,7 @@ process with a fixed seed and no external dependencies.
 ```
 
 This runs: unit tests → generator regressions → cross-layer contract checks →
-deterministic invariant suite (S01–S41) → fixture suites.
+deterministic invariant suite → fixture suites.
 
 ### Invariant suite only (fast, ~1s, no gRPC required)
 
@@ -477,7 +518,7 @@ clojure -M:run -- --invariants
 (f/run-suite :suites/all-invariants)
 ```
 
-### Monte Carlo phase (example)
+### Monte Carlo simulation (example)
 
 ```bash
 clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
@@ -498,30 +539,39 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 (m/minimize failing-scenario :solvency)
 ```
 
+### List available suites
+
+```clojure
+(require '[resolver-sim.sim.fixtures :as f])
+(f/list-suites)
+```
+
 ---
 
 ## 8. Evidence Strength and Known Gaps
 
 ### What the framework currently covers
 
-- ✅ 36 invariants enforced after every step of every deterministic replay
-- ✅ 48+ named scenarios across baseline, edge-case, stress, and adversarial types
-- ✅ 147,500+ Monte Carlo trials across 8 statistical phases
-- ✅ 18+ adversarial research simulations with falsifiable hypotheses
+- ✅ **37 invariants** enforced after every step of every deterministic replay
+- ✅ **48 named scenarios** across baseline, edge-case, stress, and adversarial types
+- ✅ **20+ named fixture suites** including equivalence, regression, and adversarial suites
+- ✅ **8 statistical simulation modules** with hundreds of thousands of trials
+- ✅ **40+ EDN parameter configurations** covering DR1/DR2/DR3 and all research hypotheses
 - ✅ Ring attacker, bribery, collusion, flash-loan, reentrancy, and escalation
   trap adversary models
-- ✅ Multi-epoch reputation decay, governance capture, and waterfall cascade
+- ✅ Multi-epoch reputation decay, governance capture, waterfall cascade
+- ✅ Correlated failure models: shared-bias, herding, evidence-fog
 
 ### Known gaps (not yet covered)
 
 | Gap | Risk level | Notes |
 |---|---|---|
 | Formal verification (Halmos / Echidna) | Medium | Invariant predicates are designed to be portable to Foundry invariant tests; not yet wired |
-| Cross-module yield failure interaction | Medium | Yield dual-failure edge case modelled analytically; no deterministic scenario |
-| Kleros round-2 final-appeal path | Low–Medium | S18–S23 cover L0/L1 Kleros paths; L2 final path (`MAX_ROUND`) not yet a named scenario |
-| Governance collusion across multiple epochs | Medium | `capture-drift` research simulation exists; no deterministic invariant scenario |
-| Token rebase / fee-on-transfer tokens | Medium | `token-tax-reconciliation` invariant defined; no stress scenario with non-standard token |
-| Concurrent dispute flood (on-chain gas) | Out of scope | `burst-concurrency` covers accounting; gas model is not simulated |
+| Cross-module yield failure interaction | Medium | Yield dual-failure edge case modelled analytically; no deterministic scenario beyond s68 |
+| Kleros round-2 final-appeal path | Low–Medium | S18–S23 cover L0/L1 Kleros paths; `MAX_ROUND` final path not yet a named deterministic scenario |
+| Governance collusion across multiple epochs | Medium | `phase-t-governance-capture.edn` exists; no deterministic invariant scenario |
+| Token rebase / fee-on-transfer tokens | Medium | `:token-tax-reconciliation` invariant defined; `token-pathologies` suite exists but stochastic coverage limited |
+| Concurrent dispute flood (on-chain gas) | Out of scope | `capacity_exhaustion.clj` covers accounting; gas model is not simulated |
 
 ---
 
@@ -530,5 +580,16 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 - [`docs/testing/TEST_SUITE.md`](testing/TEST_SUITE.md) — canonical test matrix and run commands
 - [`docs/testing/RUNNING_TESTS.md`](testing/RUNNING_TESTS.md) — test entrypoints and current baseline
 - [`docs/evidence/RESEARCHER_EVIDENCE_PACK.md`](evidence/RESEARCHER_EVIDENCE_PACK.md) — condensed evidence for external reviewers
-- [`docs/security-model.md`](security-model.md) — threat model and security assumptions
-- [`docs/CDRS-v1.1-THEORY-SCHEMA.md`](CDRS-v1.1-THEORY-SCHEMA.md) — CDRS theory schema (scenario classification)
+- [`docs/SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md) — simulation architecture overview
+- [`docs/architecture/ARCHITECTURE.md`](architecture/ARCHITECTURE.md) — namespace and layer map
+
+---
+
+## Evidence
+
+| | |
+|---|---|
+| **Contracts** | `sew-protocol` @ `8785826` |
+| **Simulation** | `sew-simulation` @ `9fbb4ba` (branch: `further-refactoring`) |
+| **Generated/reviewed** | 2026-05-21 |
+| **Verification status** | Invariant IDs and counts verified against `protocols/sew/invariants.clj` `canonical-ids`. Scenario IDs verified against `protocols/sew/invariant_scenarios.clj`. Suite list verified against `data/fixtures/suites/manifest.edn`. Statistical module list verified against `src/resolver_sim/sim/`. Phase configs verified against `data/params/`. |
