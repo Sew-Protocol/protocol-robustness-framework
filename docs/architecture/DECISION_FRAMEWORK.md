@@ -1,5 +1,15 @@
 # Decision Framework: Reinterpret Your 99% Confidence
 
+> **Context note (2026-05-21):** This document was written when Phase P Lite was
+> approximately 2 weeks of future work and overall observability-adjusted confidence
+> was estimated at ~55%. Many of the phases described as "upcoming" (P, Q, R, S, T,
+> and beyond through AI) have since been implemented. The **structural calibration
+> model** in this document — the distinction between bond-mechanics confidence and
+> observability-adjusted confidence, and the falsification path — remains valid and
+> useful. The specific timeline estimates, "currently 55%", and "2 weeks" figures
+> are planning-era estimates and should not be read as current status.
+> For current phase coverage see `docs/SYSTEM_OVERVIEW.md` and `docs/ROBUSTNESS_FRAMEWORK.md`.
+
 ## What You Have (Validated at 99%+)
 
 **Mechanism security under perfect observability**:
