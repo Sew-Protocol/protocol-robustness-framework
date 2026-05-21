@@ -75,7 +75,9 @@ python3 python/invariant_suite.py
 ```
 
 ## Documentation
-- `data/fixtures/README.md` — Fixture composition and schema
-- `docs/testing/` — Validation coverage and status
-- `docs/scenarios.md` — Scenario index and protocol properties
-- `docs/overview/REUSABLE_COMPONENTS.md` — Framework harness and adapter components
+- `docs/README.md` — documentation index
+- `docs/SYSTEM_OVERVIEW.md` — narrative overview: two engines, findings, roadmap, technical architecture
+- `docs/ROBUSTNESS_FRAMEWORK.md` — adversarial validation and simulation architecture
+- `docs/testing/` — validation coverage and status
+- `docs/scenarios.md` — scenario index and protocol properties
+- `docs/overview/REUSABLE_COMPONENTS.md` — framework harness and adapter components

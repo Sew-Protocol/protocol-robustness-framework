@@ -528,8 +528,7 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 ## Related Documents
 
 - [`docs/testing/TEST_SUITE.md`](testing/TEST_SUITE.md) — canonical test matrix and run commands
-- [`docs/testing/SIMULATION_TESTING_OUTLINE.md`](testing/SIMULATION_TESTING_OUTLINE.md) — test planning outline
+- [`docs/testing/RUNNING_TESTS.md`](testing/RUNNING_TESTS.md) — test entrypoints and current baseline
 - [`docs/evidence/RESEARCHER_EVIDENCE_PACK.md`](evidence/RESEARCHER_EVIDENCE_PACK.md) — condensed evidence for external reviewers
 - [`docs/security-model.md`](security-model.md) — threat model and security assumptions
-- [`docs/WEAKNESS_ANALYSIS.md`](WEAKNESS_ANALYSIS.md) — known weaknesses and mitigations
 - [`docs/CDRS-v1.1-THEORY-SCHEMA.md`](CDRS-v1.1-THEORY-SCHEMA.md) — CDRS theory schema (scenario classification)

@@ -259,13 +259,11 @@ as sensitivity analysis, not as security proofs.
 
 ### For researchers who want to challenge the results
 
-See `docs/challenge/BENCHMARK_CHALLENGE.md` for three specific tasks:
-- Find a profitable attack not covered by the 41 scenarios
-- Find an invariant violation in the deterministic suite
-- Beat the baseline dispute resolution cost/latency model
-
 The falsification checklist in the evidence pack lists the exact assumptions that
-would invalidate the headline claim if violated.
+would invalidate the headline claim if violated. Three specific challenge tasks
+(find a profitable attack not covered by the 41 scenarios, find an invariant violation,
+beat the baseline DR cost/latency model) are documented in
+`docs/archive/challenge/BENCHMARK_CHALLENGE.md`.
 
 ---
 
