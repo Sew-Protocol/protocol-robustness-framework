@@ -128,3 +128,39 @@ Current priority is **Scope 1 + carefully bounded Scope 2**:
 
 Delay full multi-protocol provider extraction until a second real adapter or
 clear contributor demand exists.
+
+---
+
+## Research vs Stable Boundary
+
+> Merged from `docs/architecture/RESEARCH_BOUNDARY.md`.
+
+### Stable framework (reusable public-good substrate)
+
+Includes deterministic replay infrastructure, adapter contracts, shared orchestration helpers, protocol-agnostic reporting/reconciliation mechanics, and shell wiring.
+
+Typical namespaces: `contract_model/*`, `protocols/protocol.clj`, `protocols/common/*`, reusable portions of `scenario/*`, `time/*`, `db/*`, `io/*`, `server/*`.
+
+### Reference implementation (Sew)
+
+Includes the complete Sew adapter and semantics.
+
+Typical namespaces: `protocols/sew/*`, Sew-backed providers under `generators/sew/*`, `io/sew/*`, Sew-integrated yield/accounting modules.
+
+### Exploratory research
+
+Includes phase studies, hypothesis sweeps, and adversarial exploration.
+
+Typical namespaces: exploratory `sim/*`, `sim/adversarial/*`, research-oriented Python scripts under `python/*`.
+
+### Claiming guidance
+
+- For **framework** claims, cite only stable framework modules.
+- For **protocol-semantic** claims, cite Sew reference modules.
+- For **exploratory** claims, mark results as research/evidence, not framework API.
+
+### Accounting-specific boundary
+
+Safe to generalize: reconciliation mechanics, aggregation mechanics, drift/conservation reporting contracts.
+
+Do not prematurely generalize: escrow/dispute/claimability semantics, resolver/bond semantics, payout economics, protocol-specific solvency meaning.

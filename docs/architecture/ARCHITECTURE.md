@@ -333,3 +333,97 @@ chain timeline.
 Pass `nil` as datasource to skip all writes — enables offline runs and unit
 tests without a live XTDB instance.
 
+
+---
+
+## Appendix A: Namespace → Layer Map
+
+> Merged from `docs/architecture/layers.md`.
+
+### Layer definitions
+
+| Layer | Meaning |
+|---|---|
+| Framework Substrate | Reusable mechanics/infrastructure that remains protocol-agnostic (or adapter-pluggable). |
+| Adapter Contract | Interface boundary and adapter wiring points. |
+| Sew Protocol Model | Sew protocol model (primary validation target) and tightly coupled Sew-specific modules. |
+| Research Track | Exploratory/phase-study modules and evidence-generation code not treated as stable framework API. |
+
+> Rule of thumb: classification follows dominant intent, not every incidental use.
+
+| Namespace / Path | Layer | Notes |
+|---|---|---|
+| `resolver-sim.contract-model.*` | Framework Substrate | Deterministic replay kernel, protocol-agnostic orchestration. |
+| `resolver-sim.protocols.protocol` | Adapter Contract | Core protocol interface contracts. |
+| `resolver-sim.protocols.registry` | Adapter Contract | Adapter registry/wiring boundary. |
+| `resolver-sim.protocols.common.*` | Framework Substrate | Reusable adapter flow-control wrappers. |
+| `resolver-sim.protocols.dummy` | Adapter Contract | Minimal reference for adapter conformance. |
+| `resolver-sim.protocols.sew` | Sew Protocol Model | Sew adapter — wires Sew domain logic into framework interfaces. |
+| `resolver-sim.protocols.sew.*` | Sew Protocol Model | Sew domain semantics and invariants. |
+| `resolver-sim.scenario.*` | Framework Substrate | Scenario analysis/projection/evaluation substrate. |
+| `resolver-sim.time.model` | Framework Substrate | Generic temporal model primitives. |
+| `resolver-sim.time.deadlines` | Framework Substrate | Time/deadline mechanics usable across adapters. |
+| `resolver-sim.time.invariants` | Framework Substrate | Temporal invariant scaffolding/helpers. |
+| `resolver-sim.db.*` | Framework Substrate | Persistence shell and run/event storage infrastructure. |
+| `resolver-sim.io.scenarios` | Framework Substrate | Scenario loading/validation substrate. |
+| `resolver-sim.io.trace-score` | Framework Substrate | Generic scoring façade (delegates to protocol-specific providers). |
+| `resolver-sim.io.sew.trace-score` | Sew Protocol Model | Sew-specific scoring semantics. |
+| `resolver-sim.server.*` | Framework Substrate | Session/server infrastructure with protocol pluggability. |
+| `resolver-sim.generators.actions` | Framework Substrate | Generic generation orchestration façade. |
+| `resolver-sim.generators.adversarial` | Framework Substrate | Generic adversarial generation façade. |
+| `resolver-sim.generators.sew.*` | Sew Protocol Model | Sew-specific action/adversarial templates. |
+| `resolver-sim.economics.payoffs` | Sew Protocol Model | Currently Sew-aligned economic defaults. |
+| `resolver-sim.yield.accounting` | Sew Protocol Model | Sew-integrated accounting mechanics. |
+| `resolver-sim.yield.registry` | Sew Protocol Model | Sew-integrated module registry/policy assumptions. |
+| `resolver-sim.yield.modules.*` | Sew Protocol Model | Current yield modules integrated to Sew semantics. |
+| `resolver-sim.sim.minimizer` | Framework Substrate | Protocol-agnostic minimization harness. |
+| `resolver-sim.sim.phase-z-scenarios` | Research Track | Phase/scenario study module. |
+| `resolver-sim.sim.adversarial.*` | Research Track | Exploratory adversarial studies. |
+| `resolver-sim.sim.phase_*` | Research Track | Hypothesis/phase experiments unless explicitly promoted. |
+| `resolver-sim.stochastic.*` | Research Track | Statistical/economic exploration models. |
+| `resolver-sim.adversaries.*` | Research Track | Strategy-model exploration layer. |
+| `resolver-sim.oracle.*` | Research Track | Detection-model research layer. |
+
+**Promotion guidance:** Move a namespace from Research Track to Framework Substrate only when its semantics are adapter-agnostic, it has stable interfaces and tests, and its guarantees are documented here.
+
+---
+
+## Appendix B: Namespace Semantics (Conceptual vs Implementation)
+
+> Merged from `docs/architecture/namespaces.md`.
+
+A recurring source of confusion:
+
+- **Conceptual/public framing**: **Protocol Robustness Framework**
+- **Implementation namespace root**: `resolver_sim` (Clojure ns: `resolver-sim.*`)
+
+These are intentionally different concerns. The public conceptual system boundary is the **Protocol Robustness Framework**. The implementation is rooted at `src/resolver_sim/*` as a **stable implementation namespace**, not the public conceptual boundary.
+
+**One-line policy:**
+> **Protocol Robustness Framework** (conceptual boundary), implemented under stable namespace root **`resolver_sim`**.
+
+---
+
+## Appendix C: Generalisation Matrix
+
+> Merged from `docs/overview/GENERALISATION_MATRIX.md`.
+
+| Area | Generalisation Level | Reusability | Sew-Specificness | Notes |
+|---|---|---|---|---|
+| Replay kernel (`contract_model/replay.clj`) | **High** | **High** | Low | Protocol-agnostic orchestration boundary is stable. |
+| Protocol interface (`protocols/protocol.clj`) | **High** | **High** | Low | Tiered adapter contracts (Simulation/Economic/Analysis). |
+| Shared action context (`protocols/common/action_context.clj`) | **High** | **High** | Low | Reusable flow-control wrappers; no domain error semantics. |
+| Scenario analysis utilities (`scenario/*`) | **Medium-High** | **High** | Low-Medium | Generic over trace shape; domain meaning may be protocol-specific. |
+| Fixtures + scenario DSL (`data/fixtures/*`) | **Medium** | **Medium-High** | Medium | Reusable structure, but many fixtures encode Sew domain behaviors. |
+| Generic adapter façades (`generators/actions.clj`, `io/trace_score.clj`) | **Medium** | **Medium-High** | Medium | Stable façade, currently defaulting to Sew providers. |
+| Use-of-funds output contract (`:funds-ledger-view`) | **High (contract), Medium (computation)** | **High** | Medium | Output contract is protocol-adaptable; current computation is Sew-specific. |
+| Sew projection implementation (`protocols/sew/projection.clj`) | Low-Medium | Medium | **High** | Contains Sew semantics and funds/drift summaries. |
+| Sew protocol implementation (`protocols/sew/*`) | Low | Low-Medium | **Very High** | Core domain state machine, accounting, resolution, invariants. |
+| Yield modules (`yield/modules/*`) | Low-Medium | Medium | **High** | Conceptually portable, but integrated to Sew world semantics. |
+| Server session layer (`server/session.clj`) | **Medium** | **Medium-High** | Medium | Generic session pattern with optional protocol projections. |
+| Experimental simulation (`sim/adversarial/*`, exploratory `sim/*`) | Low | Low-Medium | High | Research-track; not treated as core reusable capability. |
+
+**Quick readout:**
+- Most generalised/reusable today: replay kernel + protocol contracts + shared action context.
+- Best "reusable with adapter hooks" layer: scenario analysis + funds-ledger output contract.
+- Most Sew-specific: `protocols/sew` domain modules and their direct accounting semantics.
