@@ -4,12 +4,48 @@
 
 ---
 
+## Why this is included in the Kleros packet
+
+This document is included as optional background for the Kleros team because the
+same simulation workbench used to validate Sew's resolver and escalation economics
+may be applicable to Kleros-style dispute systems more broadly.
+
+For Kleros review, the most relevant sections are:
+
+- **§1** — Deterministic Replay Engine (how protocol behavior is replayed and checked)
+- **§3** — Scenario Suite, specifically S18–S23 (Kleros integration paths)
+- **§4** — Monte Carlo and Statistical Simulations (escalation trap, ring attacker)
+- **§8** — Evidence Strength and Known Gaps
+
+The framework design — a protocol-adapter boundary with a shared replay/simulation
+kernel — was chosen partly to allow the same infrastructure to be applied to other
+dispute protocols. This document is not required reading for the Kleros integration
+review; it is offered for researchers and teams interested in the validation methodology.
+
+---
+
+## Current coverage at a glance
+
+| Area | Count |
+|---|---|
+| Canonical invariant IDs | **37** |
+| Named deterministic scenarios | **48** |
+| Named fixture suites | **20+** |
+| Statistical simulation modules | **8** |
+| EDN parameter configurations | **40+** |
+| Adversary models | Ring attacker, colluder, profit-maximizer, forking strategist, flash-loan, reentrancy |
+
+Detailed tables for each area follow in §2–§5 below.
+
+---
+
 ## Overview
 
-The Sew simulation engine is a protocol-specific adversarial testing framework
-built on a protocol-agnostic kernel. Its purpose is to generate falsifiable
-evidence about protocol correctness under adversarial, edge-case, and stress
-conditions — not to produce qualitative claims.
+The Sew protocol robustness workbench is a protocol-specific adversarial testing
+framework built around a protocol-adapter boundary intended to support
+protocol-specific models behind a shared replay/simulation kernel. Its purpose is
+to generate falsifiable evidence about protocol correctness under adversarial,
+edge-case, and stress conditions — not to produce qualitative claims.
 
 The framework has three interlocking layers:
 
@@ -205,7 +241,7 @@ named scenarios** spanning four types:
 | `s06-mutual-cancel` | Mutual cancel without dispute |
 | `s13-pending-settlement-refund` | Pending settlement refunded |
 | `s16-ieo-create-release` | Instant-escrow-only flow (no resolver) |
-| `s18-dr3-kleros-l0-resolves` | Kleros L0 round resolves without escalation |
+| `s18-dr3-kleros-l0-resolves` | Kleros round-2 resolves without further escalation *(note: "L0" in the scenario ID refers to the Kleros-internal dispute index starting at 0, not the Sew escalation round; Sew treats this as round 2)* |
 
 ### Edge-case scenarios
 
@@ -555,7 +591,7 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 - ✅ **37 invariants** enforced after every step of every deterministic replay
 - ✅ **48 named scenarios** across baseline, edge-case, stress, and adversarial types
 - ✅ **20+ named fixture suites** including equivalence, regression, and adversarial suites
-- ✅ **8 statistical simulation modules** with hundreds of thousands of trials
+- ✅ **8 statistical simulation modules** with large parameter sweeps across the production threat envelope
 - ✅ **40+ EDN parameter configurations** covering DR1/DR2/DR3 and all research hypotheses
 - ✅ Ring attacker, bribery, collusion, flash-loan, reentrancy, and escalation
   trap adversary models
