@@ -208,8 +208,14 @@
   (testing "sew-escrow-events-for-trial with nil ds returns []"
     (is (= [] (sew-db/sew-escrow-events-for-trial nil "any-id"))))
 
+  (testing "sew-escrow-events-for-trial-at with nil ds returns []"
+    (is (= [] (sew-db/sew-escrow-events-for-trial-at nil "any-id" (java.util.Date.)))))
+
   (testing "batch-summary with nil ds returns {}"
-    (is (= {} (tel/batch-summary nil sew/protocol :any-batch)))))
+    (is (= {} (tel/batch-summary nil sew/protocol :any-batch))))
+
+  (testing "batch-summary-at with nil ds returns {}"
+    (is (= {} (tel/batch-summary-at nil sew/protocol :any-batch (java.util.Date.))))))
 
 (deftest dummy-summarise-batch-shape
   (testing "dummy protocol summarise-batch handles generic :trial/* outcomes"

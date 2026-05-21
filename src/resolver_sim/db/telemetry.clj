@@ -106,6 +106,32 @@
 ;; Query helpers (protocol-agnostic)
 ;; ---------------------------------------------------------------------------
 
+(defn- results->trial-outcomes
+  "Convert generic :result/* rows to the :trial/* shape expected by
+   EconomicModel/summarise-batch."
+  [results]
+  (mapv (fn [r]
+          (let [m (:result/metrics r)]
+            (cond-> {:trial/id             (:result/id r)
+                     :trial/batch-id       (:result/batch-id r)
+                     :trial/outcome        (:result/outcome r)
+                     :trial/invariants-ok? (:result/invariants-ok? r)
+                     :trial/divergence?    (:result/divergence? r)
+                     :trial/params         (:result/params r)
+                     :trial/violations     (:result/violations r)}
+              (map? m) (merge (into {}
+                                    (for [[k v] m]
+                                      [(keyword "trial" (name k)) v]))))))
+        results))
+
+(defn- add-temporal-metadata
+  [summary {:keys [query-mode explicit-valid-time?]}]
+  (assoc summary
+         :temporal-confidence {:queries-using-explicit-valid-time (if explicit-valid-time? 1.0 0.0)
+                               :temporal-consistency-status       :snapshot-consistent
+                               :time-basis                        (if explicit-valid-time? :valid-time :mixed)}
+         :temporal-query-mode query-mode))
+
 (defn batch-summary
   "Return summary statistics for a stored batch.
 
@@ -118,17 +144,24 @@
     {}
     (let [results (ss/trial-results ds {:batch-id batch-id
                                         :protocol-id (proto/protocol-id protocol)})
-          outcomes (mapv (fn [r]
-                           (let [m (:result/metrics r)]
-                             (cond-> {:trial/id             (:result/id r)
-                                      :trial/batch-id       (:result/batch-id r)
-                                      :trial/outcome        (:result/outcome r)
-                                      :trial/invariants-ok? (:result/invariants-ok? r)
-                                      :trial/divergence?    (:result/divergence? r)
-                                      :trial/params         (:result/params r)
-                                      :trial/violations     (:result/violations r)}
-                               (map? m) (merge (into {}
-                                                     (for [[k v] m]
-                                                       [(keyword "trial" (name k)) v]))))))
-                         results)]
-      (proto/summarise-batch protocol outcomes))))
+          outcomes (results->trial-outcomes results)]
+      (-> (proto/summarise-batch protocol outcomes)
+          (add-temporal-metadata {:query-mode :latest
+                                  :explicit-valid-time? false})))))
+
+(defn batch-summary-at
+  "Return summary statistics for a stored batch AS OF a valid-time.
+
+   Like batch-summary, but uses bitemporal read semantics via
+   resolver-sim.db.store/trial-results-at.
+
+   Returns {} when ds is nil or protocol does not implement EconomicModel."
+  [ds protocol batch-id valid-at]
+  (if (or (nil? ds) (not (satisfies? proto/EconomicModel protocol)))
+    {}
+    (let [results (ss/trial-results-at ds valid-at {:protocol-id (proto/protocol-id protocol)})
+          filtered (filterv #(= (keyword batch-id) (:result/batch-id %)) results)
+          outcomes (results->trial-outcomes filtered)]
+      (-> (proto/summarise-batch protocol outcomes)
+          (add-temporal-metadata {:query-mode :as-of
+                                  :explicit-valid-time? true})))))

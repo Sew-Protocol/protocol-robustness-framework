@@ -56,6 +56,19 @@
       (is (= 1 (count (:invariants out))))
       (is (= {:same-block true} (get-in out [:coverage :coverage]))))))
 
+(deftest record-temporal-run-rejects-decreasing-valid-time
+  (testing "record-temporal-run! rejects decreasing valid-time in steps/invariants"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"non-decreasing valid-time violated"
+         (temporal/record-temporal-run!
+          nil
+          {:run {:run-id "r3" :batch-id :b3 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-time 1300}
+           :steps [{:step-index 1 :action :advance_time :result :ok :block-time 1301}
+                   {:step-index 2 :action :advance_time :result :ok :block-time 1300}]
+           :invariants [{:step-index 1 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1301}
+                        {:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1300}]})))))
+
 (deftest summary-helpers
   (testing "boundary/drift/determinism helper outputs"
     (let [boundary (temporal/summarize-boundary-outcomes

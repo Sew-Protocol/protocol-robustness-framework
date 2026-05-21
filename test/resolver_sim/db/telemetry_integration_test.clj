@@ -5,10 +5,10 @@
    Run with: clojure -M:test -e \"(require '...)(clojure.test/run-tests '...)\"
 
    The test batch is written under a unique batch-id and cleaned up via
-   evaluation.store/truncate! at the end of the suite so repeated runs
+   resolver-sim.db.store/truncate! at the end of the suite so repeated runs
    don't accumulate rows."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [evaluation.store     :as store]
+            [evaluation.xtdb      :as xtdb]
             [resolver-sim.db.store :as ss]
             [resolver-sim.protocols.sew           :as sew]
             [resolver-sim.protocols.sew.runner    :as runner]
@@ -24,14 +24,14 @@
 (def ^:dynamic *batch-id* nil)
 
 (defn xtdb-fixture [f]
-  (let [ds       (store/->datasource)
+  (let [ds       (xtdb/->datasource)
         batch-id (str "integ-test-" (UUID/randomUUID))]
     (binding [*ds* ds *batch-id* batch-id]
       (try
         (f)
         (finally
           ;; Remove all Sew test rows so re-runs start clean
-          ;; (evaluation.store/truncate! clears eval-engine tables, not Sew tables)
+          ;; (resolver-sim.db.store/truncate! clears sim_* tables used here)
           (ss/truncate! ds))))))
 
 (use-fixtures :once xtdb-fixture)
@@ -125,12 +125,44 @@
       (let [our-after (filter #(= our-kw (:trial/batch-id %)) after-all)]
         (is (= 5 (count our-after)) "all 5 rows visible far after their valid-from")))))
 
+(deftest test-bitemporal-summary-ordering
+  (testing "batch-summary-at respects t0 < t1 < t2 snapshot growth"
+    (let [t0 (Date. 0)
+          t1 (Date. (* 1000 1000))
+          t2 (Date. (* 1000 5000))
+          s0 (tel/batch-summary-at *ds* sew/protocol *batch-id* t0)
+          s1 (tel/batch-summary-at *ds* sew/protocol *batch-id* t1)
+          s2 (tel/batch-summary-at *ds* sew/protocol *batch-id* t2)]
+      (is (= 0 (:n s0 0)) "t0 before all valid-times => 0 rows")
+      (is (= 1 (:n s1 0)) "t1 should include first trial snapshot")
+      (is (= 2 (:n s2 0)) "t2 should include first two trial snapshots")
+      (is (= :as-of (:temporal-query-mode s2)))
+      (is (= :valid-time (get-in s2 [:temporal-confidence :time-basis]))))))
+
+(deftest test-bitemporal-entity-events-query
+  (testing "Entity events FOR VALID_TIME AS OF support boundary snapshots (t-1 / t / t+1)"
+    (let [stored-outcomes (sew-db/sew-trial-outcomes *ds* {:batch-id *batch-id*})
+          first-trial-id  (:trial/id (first stored-outcomes))
+          all-events      (sew-db/sew-escrow-events-for-trial *ds* first-trial-id)
+          first-event-ts  (:event/block-time (first all-events))
+          t-1             (Date. (* 1000 (dec first-event-ts)))
+          t               (Date. (* 1000 first-event-ts))
+          t+1             (Date. (* 1000 (inc first-event-ts)))
+          asof-t-1        (sew-db/sew-escrow-events-for-trial-at *ds* first-trial-id t-1)
+          asof-t          (sew-db/sew-escrow-events-for-trial-at *ds* first-trial-id t)
+          asof-t+1        (sew-db/sew-escrow-events-for-trial-at *ds* first-trial-id t+1)]
+      (is (empty? asof-t-1) "no events visible before first event valid-time")
+      (is (= 1 (count asof-t)) "exact boundary includes the first event")
+      (is (<= 1 (count asof-t+1)) "t+1 should include at least the first event")
+      (is (= :sew/escrow-created (get-in asof-t [0 :event/type]))
+          "first visible event should be escrow creation"))))
+
 (deftest test-summarise-batch
-  (testing \"batch-summary returns aggregate statistics matching raw data\"
+  (testing "batch-summary returns aggregate statistics matching raw data"
     (let [summary (tel/batch-summary *ds* sew/protocol *batch-id*)]
-      (is (= 5 (:n summary)) \"5 trials in batch\")
-      (is (= {:released 5} (:by-outcome summary)) \"all released by honest resolver\")
-      (is (= 5 (get-in summary [:by-strategy :honest :n])) \"5 honest trials\")
+      (is (= 5 (:n summary)) "5 trials in batch")
+      (is (= {:released 5} (:by-outcome summary)) "all released by honest resolver")
+      (is (= 5 (get-in summary [:by-strategy :honest :n])) "5 honest trials")
       (is (zero? (get-in summary [:by-strategy :honest :invariant-failures]))
           "no invariant failures")
       (is (number? (get-in summary [:profit-honest :mean])) "mean profit-honest is numeric")

@@ -82,6 +82,15 @@ These scenarios verify that the protocol behaves correctly under normal and edge
 | S21 | dr3-kleros-pending-cleared-on-escalation | Pending settlement cleared when dispute escalates |
 | S22 | status-leak-agree-cancel-over-dispute | **Bug regression**: stale agree_to_cancel flag on disputed escrow |
 | S23 | preemptive-escalation-blocked | Seller cannot escalate without a pending settlement |
+| S76 | sponsored-appeal-third-party-funding | Third-party sponsor challenges a pending decision and funds escalation via challenge bond |
+
+### Appeal sponsorship policy (current model)
+
+- Bond payer is the **caller** of `escalate_dispute` / `challenge_resolution`.
+- `escalate_dispute` remains participant-only (`from`/`to` required).
+- `challenge_resolution` is open-challenger and can be called by non-participants.
+- The sponsor address is recorded as the bond poster of record in `:bond-balances`.
+- In practice, third-party sponsorship currently flows through `challenge_resolution`.
 
 ---
 

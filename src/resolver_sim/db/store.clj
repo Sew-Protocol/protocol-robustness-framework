@@ -203,6 +203,26 @@
              trial-id]
             xtdb/opts))))
 
+(defn entity-events-for-trial-at
+  "Return entity state-transition events for a trial AS OF a specific valid time
+   (bitemporal query), ordered by block_time.
+
+   Returns a vector of :event/* namespaced maps, or [] when ds is nil."
+  [ds trial-id valid-at]
+  (if (nil? ds)
+    []
+    (let [sql (str "SELECT * FROM sim_entity_events "
+                   "FOR VALID_TIME AS OF TIMESTAMP '" (inst->iso valid-at) "' "
+                   "WHERE trial_id = ? ORDER BY block_time ASC")]
+      (mapv (fn [row]
+              {:event/id           (:_id row)
+               :event/trial-id     (:trial_id row)
+               :event/entity-id    (:entity_id row)
+               :event/type         (some-> (:event_type row) keyword)
+               :event/entity-state (some-> (:entity_state row) keyword)
+               :event/block-time   (:block_time row)})
+            (jdbc/execute! ds [sql trial-id] xtdb/opts)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Temporal evidence tables — writes
 ;; ---------------------------------------------------------------------------

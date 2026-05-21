@@ -33,6 +33,8 @@
 - **Docs Navigation/Status UX:** Updated `docs/README.md` with a task-oriented "Start here" section and explicit doc status conventions (canonical/companion/archived) to improve contributor onboarding and reduce doc drift.
 
 ### Fixed
+- **Appeal-Window Edge Case (S77):** Prevented pending-settlement loss when a challenge/escalation occurs at `t-1` by archiving superseded pending decisions and allowing deadline execution fallback when no active replacement pending exists.
+- **Temporal Boundary Expectations:** Updated S77 temporal boundary assertions to reflect fixed behavior: settlement executes at deadline from archived pending, and subsequent resolver action is rejected because the transfer is no longer in dispute.
 - **Generalisation Reader/Load Stabilisation:** Cleared multiple malformed escaped-docstring/string reader failures and namespace-load blockers across core protocol/server/db namespaces.
 - **Protocol Adapter Loading:** Removed a cyclic namespace-load path between `resolver-sim.protocols.sew` and `resolver-sim.protocols.sew.io.trace-export` by lazy-loading trace export in the Sew `:forge-trace` projection branch.
 - **Simulation Logic (Phase AI):** Fixed capital drain bug in `phase_ai.clj` where system-wide costs were incorrectly applied in full to every individual resolver.

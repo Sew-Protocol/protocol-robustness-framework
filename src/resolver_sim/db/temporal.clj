@@ -54,6 +54,23 @@
    :coverage   (or coverage {})
    :valid-from (sim-date block-time)})
 
+(defn- non-decreasing-valid-from?
+  "True when :valid-from values are non-decreasing across records.
+   Nil valid-from values are treated as now by builders, so this is defensive."
+  [records]
+  (or (empty? records)
+      (every? true?
+              (map (fn [[a b]]
+                     (not (pos? (.compareTo ^Date (:valid-from a) ^Date (:valid-from b)))))
+                   (partition 2 1 records)))))
+
+(defn- assert-non-decreasing-valid-from!
+  [records kind]
+  (when-not (non-decreasing-valid-from? records)
+    (throw (ex-info (str "non-decreasing valid-time violated for " kind)
+                    {:error :non-decreasing-valid-time-violation
+                     :kind kind}))))
+
 (defn record-temporal-run!
   "Writes run + step + invariant + optional coverage docs.
    Safe with ds=nil (all writes no-op)."
@@ -63,6 +80,8 @@
         steps*  (map #(build-step-record (assoc % :run-id run-id)) (or steps []))
         invs*   (map #(build-invariant-record (assoc % :run-id run-id)) (or invariants []))
         cov*    (when coverage (build-coverage-record (assoc coverage :run-id run-id)))]
+    (assert-non-decreasing-valid-from! (vec steps*) :steps)
+    (assert-non-decreasing-valid-from! (vec invs*) :invariants)
     (ss/insert-temporal-run! ds run-rec)
     (doseq [s steps*] (ss/insert-temporal-step! ds s))
     (doseq [i invs*] (ss/insert-temporal-invariant! ds i))

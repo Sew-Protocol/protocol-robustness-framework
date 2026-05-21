@@ -191,6 +191,8 @@
           (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
       world'')))
 
+(declare pick-eligible-superseded-pending)
+
 ;; ---------------------------------------------------------------------------
 ;; execute-resolution
 ;;
@@ -287,36 +289,59 @@
 (defn execute-pending-settlement
   "Execute a deferred settlement after the appeal window has closed."
   [world workflow-id]
-  (cond
-    (not (t/valid-workflow-id? world workflow-id))
+  (if-not (t/valid-workflow-id? world workflow-id)
     (t/fail :invalid-workflow-id)
+    (let [active-pending (t/get-pending world workflow-id)
+          now-ts         (:block-time world)
+          pending        (if (:exists active-pending)
+                           active-pending
+                           (pick-eligible-superseded-pending world workflow-id now-ts))]
+      (cond
+        (not (:exists pending))
+        (t/fail :no-pending-settlement)
 
-    (not (:exists (t/get-pending world workflow-id)))
-    (t/fail :no-pending-settlement)
+        (not= :disputed (t/escrow-state world workflow-id))
+        (t/fail :transfer-not-in-dispute)
 
-    (not= :disputed (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-in-dispute)
+        (< now-ts (:appeal-deadline pending))
+        (t/fail :appeal-window-not-expired)
 
-    (< (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
-    (t/fail :appeal-window-not-expired)
-
-    :else
-    (let [pending (t/get-pending world workflow-id)]
-      (t/ok (if (:is-release pending)
-              (finalize-release world workflow-id)
-              (finalize-refund  world workflow-id))))))
+        :else
+        (t/ok (if (:is-release pending)
+                (finalize-release world workflow-id)
+                (finalize-refund  world workflow-id)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal building block: _validateAndPrepareEscalation deletes
 ;; pendingSettlements[workflowId] before escalation proceeds.
 ;; ---------------------------------------------------------------------------
 
-(defn cancel-pending-on-escalation
-  "Cancel pending-settlement when a dispute is being escalated.
-   Called as a side-effect of escalation before the new level is set.
-   Returns the updated world (not a result map)."
+(defn- archive-pending-on-escalation
+  "Archive the current pending settlement as superseded and clear active pending.
+   This preserves a fallback execution path for edge-cases where escalation/challenge
+   clears pending near the deadline but no replacement decision is produced in time."
   [world workflow-id]
-  (update world :pending-settlements dissoc workflow-id))
+  (let [pending (t/get-pending world workflow-id)]
+    (if (:exists pending)
+      (-> world
+          (update-in [:superseded-pending-settlements workflow-id]
+                     (fnil conj [])
+                     {:pending pending
+                      :superseded-at (:block-time world)
+                      :level (t/dispute-level world workflow-id)})
+          (update :pending-settlements dissoc workflow-id))
+      world)))
+
+(defn- pick-eligible-superseded-pending
+  "Select the latest superseded pending that is executable at now-ts.
+   Returns a pending-settlement map or nil."
+  [world workflow-id now-ts]
+  (->> (get-in world [:superseded-pending-settlements workflow-id] [])
+       (map :pending)
+       (filter :exists)
+       (filter #(<= (:appeal-deadline %) now-ts))
+       (sort-by :appeal-deadline)
+       last))
 
 ;; ---------------------------------------------------------------------------
 ;; challenge-resolution (Phase L)
@@ -378,7 +403,7 @@
               world'       (-> world
                                (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
                                (assoc-in [:challengers workflow-id current-level] caller)
-                               (cancel-pending-on-escalation workflow-id)
+                               (archive-pending-on-escalation workflow-id)
                                (assoc-in [:dispute-levels workflow-id] new-level)
                                (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                          new-resolver)
@@ -535,7 +560,7 @@
               ;; post-appeal-bond adds to :total-held internally.
               world'       (-> world-prepared
                                (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
-                               (cancel-pending-on-escalation workflow-id)
+                               (archive-pending-on-escalation workflow-id)
                                (assoc-in [:dispute-levels workflow-id] new-level)
                                (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                          new-resolver)

@@ -42,3 +42,20 @@
       ;; cause illegal transition; trace path remains deterministic.
       (is (= :ok (get-in trace [2 :result])))
       (is (= :rejected (get-in trace [3 :result]))))))
+
+(deftest test-s77-challenge-clears-pending-before-deadline-without-next-resolver
+  (testing "BUG repro: challenge at t-1 can clear pending even if no usable next resolver executes"
+    (let [scenario (load-scenario "scenarios/S77_appeal-window-challenge-clears-pending-without-next-resolver.json")
+          r1       (replay/replay-with-protocol sew/protocol scenario)
+          trace    (:trace r1)
+          p1       (-> r1 :trace last :projection)]
+      ;; Fixed behavior: challenge archives superseded pending, allowing execution
+      ;; at deadline if no replacement decision has been submitted.
+      (is (= :pass (:outcome r1)))
+      (is (= :ok (get-in trace [3 :result])) "challenge succeeds at t-1")
+      (is (= :ok (get-in trace [4 :result])) "deadline settlement executes from superseded pending")
+      (is (nil? (get-in trace [4 :error])))
+      (is (= :rejected (get-in trace [5 :result]))
+          "after deadline execution, dispute is terminal and later resolver action is rejected")
+      (is (= :transfer-not-in-dispute (get-in trace [5 :error])))
+      (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state]))))))

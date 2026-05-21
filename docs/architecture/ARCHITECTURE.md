@@ -19,6 +19,36 @@ The framework operates at two levels:
 
 ## Two-engine design
 
+## Temporal semantics contract (event-time vs valid-time vs record-time)
+
+To avoid overloading one timestamp with multiple meanings, the framework uses
+three distinct temporal notions:
+
+- **event-time**
+  - Scenario/replay logical time from events (`:time`) and world snapshots
+    (`:block-time`).
+  - This is protocol-simulation time used for transition semantics,
+    invariant checks, deadlines, and ordering.
+
+- **valid-time**
+  - XTDB bitemporal truth time (`_valid_from`) used by
+    `FOR VALID_TIME AS OF ...` queries.
+  - In this repo, valid-time is derived from simulated block-time and represents
+    when a persisted fact is considered true in simulated-chain time.
+
+- **record/system-time**
+  - Host ingestion/write clock time (when the row/doc was written in real life).
+  - Useful for ops/debugging, but **not** used for protocol semantics.
+
+### Policy
+
+1. Protocol semantics and invariants must use **event-time** only.
+2. Historical snapshot queries must use explicit **valid-time** (`*-at` APIs).
+3. Reporting should expose whether a result used latest/mixed reads vs explicit
+   valid-time snapshots.
+4. Write paths that emit ordered temporal records should reject decreasing
+   valid-time within a run.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Replay engine  (contract_model/replay.clj)                     │

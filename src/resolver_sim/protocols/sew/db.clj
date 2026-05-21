@@ -71,7 +71,7 @@
          all)))))
 
 (defn- inst->iso ^String [^java.util.Date d]
-  (.format (java.time.format.DateTimeFormatter/ISO_INSTANT)
+  (.format java.time.format.DateTimeFormatter/ISO_INSTANT
            (.toInstant d)))
 
 (defn sew-trial-outcomes-at
@@ -101,6 +101,21 @@
            :event/escrow-state (:event/entity-state ev)
            :event/block-time   (:event/block-time ev)})
         (store/entity-events-for-trial ds trial-id)))
+
+(defn sew-escrow-events-for-trial-at
+  "Return entity events for a trial AS OF a specific valid-time in Sew-shaped
+   maps (remaps generic entity-id → workflow-id and entity-state → escrow-state).
+
+   Returns [] when ds is nil."
+  [ds trial-id valid-at]
+  (mapv (fn [ev]
+          {:event/id           (:event/id ev)
+           :event/trial-id     (:event/trial-id ev)
+           :event/workflow-id  (some-> (:event/entity-id ev) parse-long)
+           :event/type         (:event/type ev)
+           :event/escrow-state (:event/entity-state ev)
+           :event/block-time   (:event/block-time ev)})
+        (store/entity-events-for-trial-at ds trial-id valid-at)))
 
 ;; ---------------------------------------------------------------------------
 ;; Aggregate helpers (Sew-specific — pure, no database required)
