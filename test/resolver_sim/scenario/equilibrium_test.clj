@@ -231,6 +231,30 @@
                      :nash-equilibrium)]
       (is (= :fail (:status result))))))
 
+(deftest test-claim-tier-deviation-bundle-gating
+  (testing "deviation-tested tier requires deviation bundle evidence for DSE/Nash"
+    (let [proj   (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})
+          result (-> (eq/evaluate-equilibrium-concepts
+                      [:dominant-strategy-equilibrium :nash-equilibrium]
+                      proj
+                      {}
+                      {:claim-tier :deviation-tested}))]
+      (is (= :inconclusive (get-in result [:dominant-strategy-equilibrium :status])))
+      (is (= :multi-trace-required (get-in result [:dominant-strategy-equilibrium :basis])))
+      (is (= :inconclusive (get-in result [:nash-equilibrium :status])))
+      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))))
+
+  (testing "deviation-tested tier passes through when deviation bundle evidence is present"
+    (let [proj   (assoc (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})
+                        :deviation-bundle {:meets-minimum? true})
+          result (-> (eq/evaluate-equilibrium-concepts
+                      [:dominant-strategy-equilibrium :nash-equilibrium]
+                      proj
+                      {}
+                      {:claim-tier :deviation-tested}))]
+      (is (= :pass (get-in result [:dominant-strategy-equilibrium :status])))
+      (is (= :pass (get-in result [:nash-equilibrium :status]))))))
+
 ;; ---------------------------------------------------------------------------
 ;; SPE / BNE — always :inconclusive
 ;; ---------------------------------------------------------------------------

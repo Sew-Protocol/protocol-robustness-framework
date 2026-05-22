@@ -315,6 +315,13 @@ clojure -M:run -- -p data/params/phase-i.edn -s
 
 Phase J multi-epoch simulation now integrated into main CLI:
 
+### Cancellation game-theory next steps
+
+For a focused roadmap on upgrading cancellation analysis from proxy checks to
+stronger game-theoretic evidence, see:
+
+- `docs/testing/CANCELLATION_GAME_THEORY_GAP_CHECKLIST.md`
+
 ```bash
 # Run baseline (stable) scenario
 clojure -M:run -- -p data/params/phase-j-baseline-stable.edn -m

@@ -50,6 +50,18 @@
    This namespace is pure — no I/O, no DB, no side effects."
   (:require [resolver-sim.protocols.protocol :as protocol]))
 
+(def ^:private evidence-schema-version
+  "Semantic version for equilibrium/mechanism evidence payload shape."
+  "1.0")
+
+(def ^:private deviation-bundle-gated-concepts
+  #{:dominant-strategy-equilibrium :nash-equilibrium})
+
+(defn- requires-deviation-bundle?
+  [claim-tier concept]
+  (and (contains? #{:deviation-tested :population-tested} claim-tier)
+       (contains? deviation-bundle-gated-concepts concept)))
+
 ;; ---------------------------------------------------------------------------
 ;; Result constructors
 ;; ---------------------------------------------------------------------------
@@ -289,16 +301,28 @@
    Merges built-in generic validators with protocol-specific extra-validators.
    Returns a map of {concept-kw → result-map}."
   ([concepts projection]
-   (evaluate-equilibrium-concepts concepts projection {}))
+   (evaluate-equilibrium-concepts concepts projection {} {}))
   ([concepts projection extra-validators]
+   (evaluate-equilibrium-concepts concepts projection extra-validators {}))
+  ([concepts projection extra-validators {:keys [claim-tier] :or {claim-tier :proxy}}]
    (let [validators (merge equilibrium-validators extra-validators)]
      (into {} (map (fn [concept]
                      (let [kw  (keyword concept)
-                           chk (get validators kw)]
-                       [kw (if chk
+                           chk (get validators kw)
+                           bundle-ok? (true? (get-in projection [:deviation-bundle :meets-minimum?]))]
+                       [kw (cond
+                             (and (requires-deviation-bundle? claim-tier kw)
+                                  (not bundle-ok?))
+                             (inconclusive kw :multi-trace-required
+                                           (str "claim tier " claim-tier
+                                                " requires deviation bundle evidence; projection missing :deviation-bundle.meets-minimum? true"))
+
+                             chk
                              (chk projection)
+
+                             :else
                              (inconclusive kw :absent-evidence
-                                           (str "no validator implemented for equilibrium concept: " (name kw))))]))
+                                            (str "no validator implemented for equilibrium concept: " (name kw))))]))
                    concepts)))))
 
 (defn evaluate-equilibrium
@@ -334,11 +358,15 @@
                        (evaluate-mechanism-properties mech-props projection
                                                       (or extra-mech-validators {}))
                        {})
+        claim-tier  (keyword (or (:equilibrium-claim-tier theory) :proxy))
         eq-results   (if (and projection eq-concepts)
                        (evaluate-equilibrium-concepts eq-concepts projection
-                                                      (or extra-eq-validators {}))
+                                                      (or extra-eq-validators {})
+                                                      {:claim-tier claim-tier})
                        {})]
-    {:mechanism-results  mech-results
+    {:evidence-schema-version evidence-schema-version
+     :equilibrium-claim-tier claim-tier
+     :mechanism-results  mech-results
      :mechanism-status   (roll-up-status (vals mech-results))
      :equilibrium-results eq-results
      :equilibrium-status  (roll-up-status (vals eq-results))}))

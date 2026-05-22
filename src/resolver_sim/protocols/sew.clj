@@ -259,9 +259,10 @@
 
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
+  (actx/with-governance-actor
     agent-index event
-    (fn [_addr]
+    governance-actor?
+    (fn [_addr _agent]
       (let [p     (:params event)
             token (:token p)]
         (acct/withdraw-fees world token)))))

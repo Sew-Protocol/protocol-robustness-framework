@@ -883,6 +883,189 @@
     (is (= :rejected (get-in r [:trace 3 :result])))
     (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 3 :error])))))
 
+(deftest test-withdraw-stake-blocked-while-resolver-frozen
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params :appeal-window-duration 100)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                ;; appeal window expired (1001 + 100)
+                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                 :params {:workflow-id 0}}
+                ;; still within freeze window: withdraw must be blocked
+                {:seq 4 :time 2000 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 100}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 3 :result])))
+    (is (= :rejected (get-in r [:trace 4 :result])))
+    (is (= :resolver-frozen (get-in r [:trace 4 :error])))))
+
+(deftest test-withdraw-stake-allows-at-unfreeze-boundary
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        freeze-until (+ 1101 259200)
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params :appeal-window-duration 100)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                 :params {:workflow-id 0}}
+                ;; exactly at freeze boundary: should be allowed
+                {:seq 4 :time freeze-until :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 100}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 3 :result])))
+    (is (= :ok (get-in r [:trace 4 :result])))))
+
+(deftest test-withdraw-escrow-liquidity-crunch-ordering-toggle-then-withdraw
+  "Same timestamp ordering: if liquidity crunch is enabled first,
+   withdraw_escrow should be rejected as liquidity-insufficient."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}
+                {:seq 3 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :rejected (get-in r [:trace 3 :result])))
+    (is (= :liquidity-insufficient (get-in r [:trace 3 :error])))))
+
+(deftest test-withdraw-escrow-liquidity-crunch-ordering-withdraw-then-toggle
+  "Same timestamp ordering: if withdraw_escrow executes before liquidity crunch
+   is enabled, withdrawal should succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1002 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
+(deftest test-withdraw-fees-liquidity-crunch-ordering-toggle-then-withdraw
+  "Same timestamp ordering: if liquidity crunch is enabled first,
+   withdraw_fees should be rejected as liquidity-insufficient."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}
+                {:seq 2 :time 1001 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :rejected (get-in r [:trace 2 :result])))
+    (is (= :liquidity-insufficient (get-in r [:trace 2 :error])))))
+
+(deftest test-withdraw-fees-liquidity-crunch-ordering-withdraw-then-toggle
+  "Same timestamp ordering: if withdraw_fees executes before liquidity crunch
+   is enabled, fee withdrawal should succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                {:seq 2 :time 1001 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))))
+
+(deftest test-withdraw-fees-non-governance-rejected
+  "Security: only governance may withdraw protocol fees."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                ;; alice is not governance; fee withdrawal must be rejected
+                {:seq 1 :time 1001 :agent "alice" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                ;; governance path remains valid
+                {:seq 2 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :not-governance (get-in r [:trace 1 :error])))
+    (is (= :ok (get-in r [:trace 2 :result])))))
+
+(deftest test-mixed-withdraw-ordering-same-timestamp-escrow-then-fees
+  "With both withdrawals in same block/time after release:
+   withdraw_escrow first then withdraw_fees should both succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
+(deftest test-mixed-withdraw-ordering-same-timestamp-fees-then-escrow
+  "With both withdrawals in same block/time after release:
+   withdraw_fees first then withdraw_escrow should both succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                {:seq 3 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 20: Invariant-violation metric tracking
 ;;

@@ -118,10 +118,41 @@
     (is (false? (:ok r)))
     (is (= :appeal-window-not-expired (:error r)))))
 
+(deftest execute-pending-at-deadline
+  "Boundary behavior: settlement is executable exactly at t == appeal-deadline."
+  (let [w (world-with-pending 2800 2800 true)
+        r (res/execute-pending-settlement w 0)]
+    (is (true? (:ok r)))
+    (is (= :released (t/escrow-state (:world r) 0)))))
+
 (deftest execute-pending-no-pending-settlement
   (let [r (res/execute-pending-settlement (base-world 0) 0)]
     (is (false? (:ok r)))
     (is (= :no-pending-settlement (:error r)))))
+
+(deftest execute-pending-falls-back-to-eligible-superseded
+  "If active pending was cleared by escalation/challenge, execution should fall back
+   to an eligible superseded pending at/after its deadline."
+  (let [w (-> (base-world 0)
+              (assoc :block-time 5000)
+              (assoc :pending-settlements {})
+              (assoc-in [:superseded-pending-settlements 0]
+                        [{:pending (t/make-pending-settlement {:exists true
+                                                               :is-release false
+                                                               :appeal-deadline 4500
+                                                               :resolution-hash "older"})
+                          :superseded-at 4600
+                          :level 0}
+                         {:pending (t/make-pending-settlement {:exists true
+                                                               :is-release true
+                                                               :appeal-deadline 5000
+                                                               :resolution-hash "newer"})
+                          :superseded-at 4999
+                          :level 1}]))
+        r (res/execute-pending-settlement w 0)]
+    (is (true? (:ok r)))
+    (is (= :released (t/escrow-state (:world r) 0))
+        "latest eligible superseded pending (deadline 5000) should be executed")))
 
 ;; ---------------------------------------------------------------------------
 ;; automate-timed-actions
@@ -162,14 +193,22 @@
     (is (= :none (:action r)))))
 
 ;; ---------------------------------------------------------------------------
-;; cancel-pending-on-escalation
+;; pending cleared on escalation (public API behavior)
 ;; ---------------------------------------------------------------------------
 
 (deftest escalation-cancels-pending-settlement
-  (let [w  (world-with-pending 3000 2800 true)
-        w' (res/cancel-pending-on-escalation w 0)]
+  (let [w  (-> (base-world 0)
+               (assoc-in [:pending-settlements 0]
+                         (t/make-pending-settlement {:exists true :is-release true
+                                                     :appeal-deadline 5000
+                                                     :resolution-hash "0xhash"})))
+        esc-fn (fn [_world _wf _caller _level]
+                 {:ok true :new-resolver "0xSenior"})
+        r  (res/escalate-dispute w 0 alice esc-fn)
+        w' (:world r)]
+    (is (true? (:ok r)))
     (is (nil? (get-in w' [:pending-settlements 0]))
-        "pending settlement cleared on escalation")))
+        "pending settlement cleared when escalation proceeds")))
 
 ;; ---------------------------------------------------------------------------
 ;; escalate-dispute
@@ -257,6 +296,22 @@
         r (res/escalate-dispute w 0 alice nil)]
     (is (false? (:ok r)))
     (is (= :escalation-not-configured (:error r)))))
+
+(deftest escalate-dispute-deadline-boundary
+  "Boundary behavior: escalation is allowed at t-1 and rejected at t.
+   This protects pending finality exactly at the appeal deadline."
+  (let [esc-fn (make-escalation-fn senior-resolver)
+        w-t-1  (-> (base-world 0)
+                   (assoc :block-time 4999)
+                   (with-pending 0 true 5000))
+        r-t-1  (res/escalate-dispute w-t-1 0 alice esc-fn)
+        w-t    (-> (base-world 0)
+                   (assoc :block-time 5000)
+                   (with-pending 0 true 5000))
+        r-t    (res/escalate-dispute w-t 0 alice esc-fn)]
+    (is (true? (:ok r-t-1)) "t-1 should still be appealable")
+    (is (false? (:ok r-t)) "t should be expired for appeal")
+    (is (= :appeal-window-expired (:error r-t)))))
 
 (deftest escalate-dispute-at-max-level-rejected
   (let [w (-> (base-world 0)
@@ -350,3 +405,54 @@
     (is (pos? (get-in w1 [:bond-balances 0 carol] 0))
         "third-party challenger posted challenge bond")
     (is (= carol (get-in w1 [:challengers 0 0])))))
+
+(deftest challenge-resolution-deadline-boundary
+  "Boundary behavior: challenge is allowed at t-1 and rejected at t.
+   Open challengers must still respect exact deadline finality."
+  (let [esc-fn (make-escalation-fn senior-resolver)
+        w-t-1  (-> (base-world 0)
+                   (assoc :block-time 4999)
+                   (with-pending 0 true 5000)
+                   (assoc-in [:bond-balances 0] {}))
+        r-t-1  (res/challenge-resolution w-t-1 0 carol esc-fn)
+        w-t    (-> (base-world 0)
+                   (assoc :block-time 5000)
+                   (with-pending 0 true 5000)
+                   (assoc-in [:bond-balances 0] {}))
+        r-t    (res/challenge-resolution w-t 0 carol esc-fn)]
+    (is (true? (:ok r-t-1)) "t-1 should still be challengeable")
+    (is (false? (:ok r-t)) "t should be expired for challenge")
+    (is (= :appeal-window-expired (:error r-t)))))
+
+(deftest deadline-ordering-execute-then-escalate
+  "At exact deadline, executing pending settlement first should finalize dispute,
+   and a same-timestamp escalation attempt must then be rejected."
+  (let [esc-fn (make-escalation-fn senior-resolver)
+        w0     (-> (base-world 0)
+                   (assoc :block-time 5000)
+                   (with-pending 0 true 5000))
+        r-exec (res/execute-pending-settlement w0 0)
+        w1     (:world r-exec)
+        r-esc  (res/escalate-dispute w1 0 alice esc-fn)]
+    (is (true? (:ok r-exec)))
+    (is (= :released (t/escrow-state w1 0)))
+    (is (false? (:ok r-esc)))
+    (is (= :transfer-not-in-dispute (:error r-esc)))))
+
+(deftest deadline-ordering-escalate-then-execute
+  "At exact deadline, escalation/challenge should be expired, and same-timestamp
+   pending execution should still succeed immediately afterward."
+  (let [esc-fn  (make-escalation-fn senior-resolver)
+        w-base  (-> (base-world 0)
+                    (assoc :block-time 5000)
+                    (with-pending 0 true 5000)
+                    (assoc-in [:bond-balances 0] {}))
+        r-esc   (res/escalate-dispute w-base 0 alice esc-fn)
+        r-chal  (res/challenge-resolution w-base 0 carol esc-fn)
+        r-exec  (res/execute-pending-settlement w-base 0)]
+    (is (false? (:ok r-esc)))
+    (is (= :appeal-window-expired (:error r-esc)))
+    (is (false? (:ok r-chal)))
+    (is (= :appeal-window-expired (:error r-chal)))
+    (is (true? (:ok r-exec)))
+    (is (= :released (t/escrow-state (:world r-exec) 0)))))

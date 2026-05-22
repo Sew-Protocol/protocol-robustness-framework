@@ -757,17 +757,34 @@
 ;; ---------------------------------------------------------------------------
 
 (defn fees-monotone?
-  "True when total-fees for every token does not decrease across a transition.
-   Fee withdrawals are not modelled in the contract layer, so any decrease is
-   a bug or an unauthenticated drain."
+  "True when total-fees decreases are fully explained by withdraw-fees accounting.
+
+   Allowed transitions per token:
+   - fee-after >= fee-before (normal accumulation)
+   - fee-after < fee-before only if :total-withdrawn increased by exactly
+     (fee-before - fee-after)
+
+   This permits explicit fee withdrawals while still catching silent fee drains."
   [world-before world-after]
   (let [all-tokens (into #{} (concat (keys (:total-fees world-before))
                                      (keys (:total-fees world-after))))
         violations (for [token all-tokens
                          :let [fee-before (get (:total-fees world-before) token 0)
-                               fee-after  (get (:total-fees world-after)  token 0)]
-                         :when (< fee-after fee-before)]
-                     {:token token :fee-before fee-before :fee-after fee-after})]
+                               fee-after  (get (:total-fees world-after)  token 0)
+                               withdrawn-before (get (:total-withdrawn world-before) token 0)
+                               withdrawn-after  (get (:total-withdrawn world-after) token 0)
+                               fee-drop         (- fee-before fee-after)
+                               withdrawn-delta  (- withdrawn-after withdrawn-before)
+                               valid? (or (<= fee-before fee-after)
+                                          (= withdrawn-delta fee-drop))]
+                         :when (not valid?)]
+                     {:token token
+                      :fee-before fee-before
+                      :fee-after fee-after
+                      :withdrawn-before withdrawn-before
+                      :withdrawn-after withdrawn-after
+                      :fee-drop fee-drop
+                      :withdrawn-delta withdrawn-delta})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -1030,8 +1047,8 @@
 ;; A workflow can only be finalized once. At world-level this implies:
 ;;  - terminal escrows must not retain pending settlements
 ;;  - terminal escrows must expose at most one positive claimable beneficiary
-;;  - released  => beneficiary must be :to only
-;;  - refunded  => beneficiary must be :from only
+;;  - released  => beneficiary may be :to, or none after withdraw_escrow
+;;  - refunded  => beneficiary may be :from, or none after withdraw_escrow
 ;; ---------------------------------------------------------------------------
 
 (defn single-resolution-payout-consistent?
@@ -1053,8 +1070,10 @@
                                        vec)
                     valid-direction?
                     (case state
-                      :released (= positives [(:to et)])
-                      :refunded (= positives [(:from et)])
+                      :released (or (= positives [(:to et)])
+                                    (empty? positives))
+                      :refunded (or (= positives [(:from et)])
+                                    (empty? positives))
                       ;; :resolved is legacy/terminal umbrella: allow either single side,
                       ;; but never dual-positive payouts.
                       :resolved (<= (count positives) 1)
