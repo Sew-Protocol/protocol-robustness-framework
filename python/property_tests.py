@@ -33,7 +33,7 @@ import pytest
 from hypothesis import HealthCheck, given, note, settings
 from hypothesis import strategies as st
 
-from sew_sim.grpc_client import SimulationClient, managed_session
+from sim_api.grpc_client import SimulationClient, managed_session
 
 
 # ---------------------------------------------------------------------------

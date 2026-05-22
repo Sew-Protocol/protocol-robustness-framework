@@ -183,6 +183,235 @@
   (UniformRandomRouter.))
 
 ;; ---------------------------------------------------------------------------
+;; Weighted trial distribution helper (used by reputation + capacity routers)
+;; ---------------------------------------------------------------------------
+
+(defn- distribute-weighted
+  "Assign n-trials to ids according to weights using largest-remainder method.
+   Returns {id → trial-count} where every id has a non-negative count and
+   sum of counts == n-trials.
+
+   weights — {id → non-negative numeric weight}. Zero-weight ids receive 0 trials.
+   Resolvers not present in weights default to weight 0.
+   If all weights are zero, falls back to uniform distribution."
+  [ids weights n-trials]
+  (let [ids-vec (vec ids)
+        n       (count ids-vec)]
+    (if (zero? n)
+      {}
+      (let [raw-weights  (mapv #(max 0.0 (double (get weights % 0.0))) ids-vec)
+            total-weight (reduce + 0.0 raw-weights)
+            ;; Fall back to uniform if all weights zero (e.g. first epoch)
+            eff-weights  (if (pos? total-weight)
+                           raw-weights
+                           (vec (repeat n 1.0)))
+            eff-total    (if (pos? total-weight) total-weight (double n))
+            ;; Each id's exact fractional share
+            exact        (mapv #(* n-trials (/ % eff-total)) eff-weights)
+            ;; Floor allocation
+            floors       (mapv #(long (Math/floor %)) exact)
+            allocated    (reduce + floors)
+            remainder    (- n-trials allocated)
+            ;; Distribute remainder by largest fractional part (largest-remainder)
+            residuals    (mapv - exact floors)
+            sorted-idxs  (sort-by #(- (nth residuals %)) (range n))
+            final-counts (reduce (fn [acc [rank idx]]
+                                   (if (< rank remainder)
+                                     (update acc idx inc)
+                                     acc))
+                                 floors
+                                 (map-indexed vector sorted-idxs))]
+        (zipmap ids-vec final-counts)))))
+
+;; ---------------------------------------------------------------------------
+;; ReputationWeightedRouter
+;; ---------------------------------------------------------------------------
+
+(deftype ReputationWeightedRouter [scores]
+  ;; scores — {resolver-id → non-negative double} reputation score per resolver.
+  ;; Higher score → proportionally more trials. Resolvers absent from scores
+  ;; receive weight 0 (but get an empty attribution entry for conservation).
+  TrialRouter
+
+  (route [_ resolver-ids trial-pool rng]
+    (let [ids-vec (vec resolver-ids)
+          n-ids   (count ids-vec)]
+      (if (zero? n-ids)
+        {}
+        (let [counts   (distribute-weighted ids-vec scores (count trial-pool))
+              shuffled (seeded-shuffle trial-pool rng)
+              ;; Slice the shuffled pool according to computed counts
+              grouped  (loop [remaining shuffled
+                              acc       {}
+                              ids       ids-vec]
+                         (if (empty? ids)
+                           acc
+                           (let [id    (first ids)
+                                 n     (get counts id 0)
+                                 taken (vec (take n remaining))
+                                 left  (drop n remaining)]
+                             (recur left
+                                    (assoc acc id taken)
+                                    (rest ids)))))]
+          (reduce-kv (fn [acc rid trials]
+                       (assoc acc rid (aggregate-trials trials)))
+                     {}
+                     grouped)))))
+
+  (routing-mode [_] :reputation-weighted))
+
+(defn make-reputation-router
+  "Build a ReputationWeightedRouter from resolver-histories.
+
+   resolver-histories — {id → resolver-state} from reputation/initialize-resolvers
+                        or reputation/update-resolver-history.
+
+   Score formula: correct-rate * 2 + 1  (minimum 1 for every active resolver).
+   - Correct rate ranges [0, 1], so score ranges [1, 3].
+   - New resolvers (no history) get score 1 — same as a 0%-accuracy resolver,
+     ensuring they receive some trials and can build a history.
+   - Strategic resolvers have correct=0 by design, so score=1 (minimum weight)."
+  [resolver-histories]
+  (let [scores (reduce-kv
+                (fn [acc id r]
+                  (let [verdicts (:total-verdicts r 0)
+                        correct  (:total-correct r 0)
+                        rate     (if (pos? verdicts) (double (/ correct verdicts)) 0.0)]
+                    (assoc acc id (+ 1.0 (* 2.0 rate)))))
+                {}
+                resolver-histories)]
+    (ReputationWeightedRouter. scores)))
+
+;; ---------------------------------------------------------------------------
+;; CapacityWeightedRouter
+;; ---------------------------------------------------------------------------
+
+(deftype CapacityWeightedRouter [capacities]
+  ;; capacities — {resolver-id → max-trials-per-epoch} hard caps.
+  ;; Resolvers absent from capacities are treated as having unlimited capacity.
+  ;; Algorithm: uniform distribution, then cap and redistribute overflow iteratively.
+  TrialRouter
+
+  (route [_ resolver-ids trial-pool rng]
+    (let [ids-vec (vec resolver-ids)
+          n-ids   (count ids-vec)]
+      (if (zero? n-ids)
+        {}
+        (let [n-trials (count trial-pool)
+              ;; cap(id) — max trials for resolver id; Long/MAX_VALUE = uncapped
+              cap      (fn [id] (get capacities id Long/MAX_VALUE))
+              ;; Iteratively distribute: uniform among available resolvers, cap and repeat.
+              counts   (loop [remaining n-trials
+                              result    (zipmap ids-vec (repeat 0))]
+                         (if (zero? remaining)
+                           result
+                           (let [avail (filterv #(< (get result %) (cap %)) ids-vec)
+                                 n-av  (count avail)]
+                             (if (zero? n-av)
+                               result
+                               ;; Uniform weights among available resolvers
+                               (let [uniform-w  (zipmap avail (repeat 1.0))
+                                     per-id     (distribute-weighted avail uniform-w remaining)
+                                     ;; Apply caps: each resolver gets at most (cap - already-assigned)
+                                     new-result (reduce (fn [acc id]
+                                                          (update acc id +
+                                                                  (min (get per-id id 0)
+                                                                       (- (cap id) (get acc id 0)))))
+                                                        result
+                                                        avail)
+                                     placed     (reduce + 0 (map #(- (get new-result %) (get result %)) avail))
+                                     overflow   (- remaining placed)]
+                                 (if (zero? overflow)
+                                   new-result
+                                   (recur overflow new-result)))))))
+              shuffled (seeded-shuffle trial-pool rng)
+              grouped  (loop [rem shuffled
+                              acc {}
+                              ids ids-vec]
+                         (if (empty? ids)
+                           acc
+                           (let [id    (first ids)
+                                 n     (get counts id 0)
+                                 taken (vec (take n rem))
+                                 left  (drop n rem)]
+                             (recur left (assoc acc id taken) (rest ids)))))]
+          (reduce-kv (fn [acc rid trials]
+                       (assoc acc rid (aggregate-trials trials)))
+                     {}
+                     grouped)))))
+
+  (routing-mode [_] :capacity-weighted))
+
+(defn make-capacity-router
+  "Build a CapacityWeightedRouter.
+
+   capacities — {resolver-id → max-trials-per-epoch} integer caps.
+   Resolvers absent from this map are uncapped (receive their fair share of overflow)."
+  [capacities]
+  (CapacityWeightedRouter. capacities))
+
+;; ---------------------------------------------------------------------------
+;; AdversarialRoutingRouter
+;; ---------------------------------------------------------------------------
+
+(deftype AdversarialRoutingRouter [target-ids pressure]
+  ;; target-ids — set of resolver IDs to preferentially load (slow-drip / ring pressure)
+  ;; pressure   — double in [0, 1]; fraction of trials routed to targets above fair share.
+  ;;              0.0 = uniform; 1.0 = all trials to targets (if any exist)
+  TrialRouter
+
+  (route [_ resolver-ids trial-pool rng]
+    (let [ids-vec  (vec resolver-ids)
+          n-ids    (count ids-vec)]
+      (if (zero? n-ids)
+        {}
+        (let [targets    (filterv #(contains? target-ids %) ids-vec)
+              others     (filterv #(not (contains? target-ids %)) ids-vec)
+              n-trials   (count trial-pool)
+              n-targets  (count targets)
+              n-others   (count others)
+              ;; Route pressure * n-trials to targets, remainder to others
+              n-for-targets (if (pos? n-targets)
+                              (min n-trials (long (Math/round (* pressure n-trials))))
+                              0)
+              n-for-others  (- n-trials n-for-targets)
+              shuffled (seeded-shuffle trial-pool rng)
+              target-trials (vec (take n-for-targets shuffled))
+              other-trials  (vec (drop n-for-targets shuffled))
+              target-counts (distribute-weighted targets (zipmap targets (repeat 1.0)) n-for-targets)
+              other-counts  (distribute-weighted others  (zipmap others  (repeat 1.0)) n-for-others)
+              all-counts    (merge target-counts other-counts)
+              grouped  (loop [remaining shuffled
+                              acc       {}
+                              ids       (concat targets others)
+                              remaining-trials (concat target-trials other-trials)]
+                         (if (empty? ids)
+                           acc
+                           (let [id    (first ids)
+                                 n     (get all-counts id 0)
+                                 taken (vec (take n remaining-trials))
+                                 left  (drop n remaining-trials)]
+                             (recur remaining
+                                    (assoc acc id taken)
+                                    (rest ids)
+                                    left))))]
+          (reduce-kv (fn [acc rid trials]
+                       (assoc acc rid (aggregate-trials trials)))
+                     {}
+                     grouped)))))
+
+  (routing-mode [_] :adversarial-routing))
+
+(defn make-adversarial-router
+  "Build an AdversarialRoutingRouter.
+
+   target-ids — set of resolver IDs to overload (models ring-backed routing attack).
+   pressure   — fraction of trials routed to targets above fair share.
+                Typical values: 0.6–0.9 for a meaningful slow-drip attack."
+  [target-ids pressure]
+  (AdversarialRoutingRouter. (set target-ids) (double pressure)))
+
+;; ---------------------------------------------------------------------------
 ;; Two-pool routing helper
 ;; ---------------------------------------------------------------------------
 

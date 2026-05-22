@@ -88,6 +88,16 @@ Expected equilibrium concept(s) for the mechanism.
 - **Examples:** `[:subgame-perfect-equilibrium]`, `[:dominant-strategy-equilibrium :bayesian-nash-equilibrium]`
 - **Evaluation:** **ACTIVE** — evaluated by `scenario/equilibrium.clj` as terminal-state proxy checks. See [Equilibrium Proxy Validation](#equilibrium-proxy-validation) below.
 
+#### `:equilibrium-claim-tier` → keyword (optional)
+
+Declares the minimum evidence tier expected for equilibrium-concept claims.
+
+- **Type:** keyword
+- **Required:** no (defaults to `:proxy`)
+- **Allowed values:** `:proxy`, `:deviation-tested`, `:population-tested`
+- **Evaluation:** **ACTIVE** — consumed by `scenario/equilibrium.clj` to enforce evidence-policy gating for selected concepts.
+  - For `:deviation-tested` / `:population-tested`, concepts `:dominant-strategy-equilibrium` and `:nash-equilibrium` require `projection[:deviation-bundle :meets-minimum?] = true`; otherwise result is `:inconclusive` with basis `:multi-trace-required`.
+
 #### `:mechanism-properties` → vector of keywords (optional)
 
 Properties the mechanism is claimed to satisfy.
@@ -450,17 +460,15 @@ All metrics usable in `:expectations/:metrics` and `:theory/:falsifies-if` must 
 These fields activate **trace-end mechanism-property validation**: a lightweight falsification layer that checks whether realised terminal outcomes are consistent with claimed economic properties.
 
 > **Claim strength note:** These are *single-trace proxy checks*, not full game-theoretic proofs.
-> A `:pass` means "the realised trace is consistent with the claimed property." It does not prove equilibrium holds in all strategy profiles. Results are labelled with `:basis :single-trace-falsification` or `:basis :single-trace-terminal-proxy`.
+> A `:pass` means "the realised trace is consistent with the claimed property." It does not prove equilibrium holds in all strategy profiles. Results are labelled with `:basis` values such as `:single-trace-metric-proxy`, `:single-trace-terminal-proxy`, `:multi-trace-required`, or `:multi-epoch-required`.
 
 ### Mechanism Properties
 
 | Property | Proxy condition | `:inconclusive` when | Severity |
 |---|---|---|---|
 | `:budget-balance` | `total-held[token] == 0` for all tokens, all escrows terminal | non-terminal escrows remain | hard |
-| `:incentive-compatibility` | `resolutions-executed > 0` and `invariant-violations == 0` | no disputes raised | hard |
-| `:individual-rationality` | `invariant-violations == 0` and `attack-successes == 0` | no payoff ledger (always inconclusive in single-trace) | hard |
-| `:collusion-resistance` | `coalition-net-profit <= 0` | coalition metric absent (always inconclusive in single-trace) | hard |
-| `:sybil-resistance` | `unauthorized-resolutions == 0` | metric absent | hard |
+| `:incentive-compatibility` | `attack-successes == 0` and `funds-lost == 0` | no adversarial attempts in trace | hard |
+| `:sybil-resistance` | `attack-successes == 0` (identity-agnostic proxy) | no adversarial attempts in trace | hard |
 
 ### Equilibrium Concepts
 
@@ -486,7 +494,9 @@ These fields activate **trace-end mechanism-property validation**: a lightweight
 When `:mechanism-properties` or `:equilibrium-concept` are declared, `evaluate-theory` returns:
 
 ```clojure
-{:mechanism-results  {<property-kw> {:property kw :status kw :severity kw :observed ... :expected ... :basis ...}}
+ {:evidence-schema-version "1.0"
+  :equilibrium-claim-tier :proxy | :deviation-tested | :population-tested
+  :mechanism-results  {<property-kw> {:property kw :status kw :severity kw :observed ... :expected ... :basis ...}}
  :mechanism-status   :pass | :fail | :inconclusive | :not-applicable | :not-checked
  :equilibrium-results {<concept-kw> {:property kw :status kw ...}}
  :equilibrium-status  :pass | :fail | :inconclusive | :not-applicable | :not-checked}

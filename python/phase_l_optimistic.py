@@ -8,9 +8,9 @@ to challenge fraudulent resolutions via challenge bonds and bounties.
 
 from __future__ import annotations
 
-from sew_sim.grpc_client import SimulationClient, managed_session
-from sew_sim.live_agents import HonestBuyerLive, HonestResolverLive, ColludingResolverLive
-from sew_sim.live_runner import LiveRunner, RunResult
+from sim_api.grpc_client import SimulationClient, managed_session
+from sim_api.live_agents import HonestBuyerLive, HonestResolverLive, ColludingResolverLive
+from sim_api.live_runner import LiveRunner, RunResult
 
 
 def s35_phase_l_watchtower_robustness() -> tuple[RunResult, bool]:

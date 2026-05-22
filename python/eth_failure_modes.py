@@ -20,8 +20,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from sew_sim.grpc_client import SimulationClient
-from sew_sim.live_agents import (
+from sim_api.grpc_client import SimulationClient
+from sim_api.live_agents import (
     LiveAgent,
     HonestResolverLive,
     GriefingBuyerLive,
@@ -30,7 +30,7 @@ from sew_sim.live_agents import (
     AppealWindowRacerLive,
     EscalationLoopAgent,
 )
-from sew_sim.live_runner import LiveRunner, RunResult
+from sim_api.live_runner import LiveRunner, RunResult
 
 
 # ---------------------------------------------------------------------------

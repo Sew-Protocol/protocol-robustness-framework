@@ -1,7 +1,8 @@
 (ns resolver-sim.sim.adversarial
   "Adversarial parameter search with Production Threat Envelope (PTE)."
   (:require [resolver-sim.sim.batch :as batch]
-            [resolver-sim.stochastic.rng :as rng]))
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
 
 (def pte-v1
   {:resolver-fee-bps [100 300]
@@ -21,22 +22,33 @@
      :appeal-probability-if-correct 0.05 :appeal-probability-if-wrong 0.40
      :allow-slashing? true}))
 
-(defn eval-params [params n-trials]
-  (let [full-params (merge {:strategy :honest :appeal-bond-bps 700
-                            :freeze-on-detection? true :freeze-duration-days 3
-                            :appeal-window-days 7} params)
-        r1 (rng/make-rng 42) r2 (rng/make-rng 43)
-        res-h (batch/run-batch r1 n-trials (assoc full-params :strategy :honest))
-        res-m (batch/run-batch r2 n-trials (assoc full-params :strategy :malicious))
-        he (double (:honest-mean res-h))
-        me (double (:malice-mean res-m))]
-    {:honest-ev he :malicious-ev me
-     :dominance-ratio (if (zero? me) Double/POSITIVE_INFINITY (/ he me))
-     :params params}))
+(defn eval-params
+  ([params n-trials] (eval-params params n-trials nil))
+  ([params n-trials profile-id]
+   (let [full-params (merge {:strategy :honest :appeal-bond-bps 700
+                             :freeze-on-detection? true :freeze-duration-days 3
+                             :appeal-window-days 7} params)
+         r1 (rng/make-rng 42) r2 (rng/make-rng 43)
+         res-h (batch/run-batch r1 n-trials (assoc full-params :strategy :honest))
+         res-m (batch/run-batch r2 n-trials (assoc full-params :strategy :malicious))
+         
+         ;; Reputation adjustments
+         profile (when profile-id (rep-profiles/resolve-utility-profile profile-id))
+         rep-penalty (or (get-in profile [:reputation-event-penalties :resolver-slashed]) 0)
+         
+         he (double (:honest-mean res-h))
+         ;; Malicious EV is reduced by expected reputation loss: (slash-rate * penalty)
+         me (- (double (:malice-mean res-m)) 
+               (* (:slash-rate res-m) rep-penalty))]
+     {:honest-ev he :malicious-ev me
+      :dominance-ratio (if (zero? me) Double/POSITIVE_INFINITY (/ he me))
+      :params params
+      :profile-id profile-id
+      :rep-penalty rep-penalty})))
 
-(defn hill-climb [rng pte n-iter]
+(defn hill-climb [rng pte n-iter & [profile-id]]
   (let [start (random-point-constrained rng pte)
-        best (eval-params start 500)]
+        best (eval-params start 500 profile-id)]
     (loop [cur best i 0]
       (if (>= i n-iter) cur
         (let [k (rand-nth [:resolver-fee-bps :resolver-bond-bps :slash-multiplier :slashing-detection-probability])
@@ -45,7 +57,7 @@
               curr-v (get (:params cur) k 0)
               new-v (max (first v) (min (second v) (+ curr-v delta)))
               cand-params (assoc (:params cur) k new-v)
-              cand (eval-params cand-params 500)]
+              cand (eval-params cand-params 500 profile-id)]
           (if (> (:malicious-ev cand) (:malicious-ev cur))
             (recur cand (inc i)) (recur cur (inc i))))))))
 
@@ -105,9 +117,42 @@
       (println (format "  Worst dominance ratio: %.2f" wr))
       (println (format "  Attacker >= honest: %d/%d" (count wins) (count all-results)))
       (cond
-        (>= we 0) (println "  OK: Attacker profitable but below honest")
-        (>= wr 1.0) (println "  WARNING: Attacker can beat honest!")
-        :else (println "  OK: System secure")))))
+        (and (> we 0) (< wr 1.0)) (println "  WARNING: Attacker can beat honest!")
+        (> we 0)                  (println "  OK: Attacker profitable but below honest")
+        :else                     (println "  OK: System secure")))))
+
+(defn run-cheap-reentry-analysis [& {:keys [n-trials n-restarts] :or {n-trials 1000 n-restarts 20}}]
+  (println "\n=== Cheap Re-entry Adversary Analysis (H1) ===\n")
+  (println "Profile: :identity/cheap-reentry (Low slash penalty, low identity value)")
+  (println "Goal: Determine if weak identity continuity allows profitable attacks.\n")
+  
+  (let [profile-id :identity/cheap-reentry
+        grid-results (doall (map #(eval-params % n-trials profile-id) (grid-search pte-v1)))
+        hill-results (doall (for [i (range n-restarts)] (hill-climb (rng/make-rng (+ 100 i)) pte-v1 50 profile-id)))
+        all-results (concat grid-results hill-results)
+        ;; Sort by dominance-ratio ascending: find where attacker is closest to or beats honest
+        sorted (sort-by :dominance-ratio all-results)
+        worst (first sorted)
+        wins (filter #(and (> (:malicious-ev %) 0) (< (:dominance-ratio %) 1.0)) all-results)]
+    
+    (println "Worst cases for cheap-reentry (by dominance ratio):")
+    (doseq [r (take 5 sorted)]
+      (let [p (:params r)]
+        (println (format "  A:%+.0f H:%+.0f R:%.2f | F:%d B:%d S:%.1f D:%.0f"
+                       (double (:malicious-ev r)) (double (:honest-ev r)) (double (:dominance-ratio r))
+                       (int (:resolver-fee-bps p)) (int (:resolver-bond-bps p))
+                       (double (:slash-multiplier p)) (* 100 (double (:slashing-detection-probability p)))))))
+    
+    (println "\n=== SUMMARY (Cheap Re-entry) ===\n")
+    (let [we (double (:malicious-ev worst))
+          wr (double (:dominance-ratio worst))]
+      (println (format "  Max attacker EV: %+.0f" we))
+      (println (format "  Worst dominance ratio: %.2f" wr))
+      (println (format "  Attacker >= honest: %d/%d" (count wins) (count all-results)))
+      (cond
+        (and (> we 0) (< wr 1.0)) (println "  CRITICAL: Cheap re-entry makes attacks profitable and better than honest!")
+        (> we 0)                  (println "  WARNING: Cheap re-entry allows profitable attacks (but below honest EV).")
+        :else                     (println "  OK: System remains secure even with cheap re-entry.")))))
 
 (defn run-adversarial-search [params & {:keys [n-trials method] :or {n-trials 1000}}]
   (run-pte-analysis :n-trials n-trials :n-restarts 50))

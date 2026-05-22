@@ -3,7 +3,7 @@
 > Status: Archived planning document.
 >
 > This document captures a historical architecture direction that is **not** the
-> current repo claim. The current positioning is: SEW validation implementation
+> current repo claim. The current positioning is: Sew validation implementation
 > built on a protocol-adapter replay harness and deterministic fixture tooling.
 
 ## Historical Objectives
@@ -25,5 +25,5 @@ Concrete implementation modules (like `sew/` and `uma/`) that map their internal
 
 ## Timeline (Historical)
 This refactor concept was scoped as post-launch. Current engineering emphasis in
-this repository remains SEW-specific robustness, deterministic replay, and trace
+this repository remains Sew-specific robustness, deterministic replay, and trace
 verification.

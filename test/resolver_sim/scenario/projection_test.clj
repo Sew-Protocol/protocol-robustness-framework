@@ -39,18 +39,18 @@
        (is (= 1300 (get-in p [:trace-summary :terminal-time]))))))
 
  (deftest test-trace-end-projection-open-dispute
-   (testing "open dispute keeps terminal=false and preserves halt reason"
+   (testing "open entity keeps terminal=false and preserves halt reason"
      (let [result (replay-result
                    {:world {:live-states {0 :disputed}
                             :total-held {"USDC" 9950}
                             :total-fees {"USDC" 50}
                             :pending-count 0
                             :block-time 1060}
-                    :halt-reason :open-disputes-at-end
+                    :halt-reason :open-entities-at-end
                     :metrics {:disputes-triggered 1}})
            p      (proj/trace-end-projection result)]
        (is (= false (get-in p [:terminal-world :terminal?])))
-       (is (= :open-disputes-at-end (get-in p [:trace-summary :halt-reason])))
+       (is (= :open-entities-at-end (get-in p [:trace-summary :halt-reason])))
        (is (= 1 (get-in p [:trace-summary :dispute-count]))))))
 
  (deftest test-trace-end-projection-multi-token

@@ -17,6 +17,8 @@
       :senior-bonds        {addr {:coverage-max nat-int :reserved-coverage nat-int}}
       :resolver-frozen-until {addr nat-int}          ; freeze expiry (0 = not frozen)
       :resolver-epoch-slashed {addr {:epoch-start nat-int :amount nat-int}}
+      :resolver-capacities {addr {:max-concurrent nat-int   ; 0 = unlimited (matches DRM setResolverCapacity unlimited=true)
+                                  :current-active nat-int}} ; mirrors DRM.resolverCapacity.currentDisputes
       :paused?             boolean                   ; protocol pause state
       :block-time          nat-int}                  ; injected clock
 
@@ -70,7 +72,7 @@
      :recipient-status  — keyword, default :none"
   [{:keys [token to from amount-after-fee dispute-resolver
            auto-release-time auto-cancel-time
-           escrow-state sender-status recipient-status initial-fee]}]
+           escrow-state sender-status recipient-status initial-fee] :as args}]
   {:token             token
    :to                to
    :from              from
@@ -79,6 +81,8 @@
    :dispute-resolver  dispute-resolver
    :auto-release-time (or auto-release-time 0)
    :auto-cancel-time  (or auto-cancel-time 0)
+   :accumulated-yield 0                ; uint256 — total yield accrued to this escrow
+   :last-accrual-time (or (:last-accrual-time args) 0) ; uint64 — timestamp of last yield update
    :escrow-state      (or escrow-state :pending)
    :sender-status     (or sender-status :none)
    :recipient-status  (or recipient-status :none)})
@@ -182,6 +186,8 @@
     :total-fees          {}
     :total-released      {}   ; {token-addr nat-int} — cumulative AFAs finalized via release
     :total-refunded      {}   ; {token-addr nat-int} — cumulative AFAs finalized via refund
+    :total-withdrawn     {}   ; {token-addr nat-int} — cumulative withdrawals by users/resolvers
+    :total-principal-deposited {} ; {token-addr nat-int} — cumulative gross amount deposited
     :pending-settlements {}
     :module-snapshots    {}
     :dispute-timestamps  {}
@@ -195,6 +201,7 @@
     :challengers         {}   ; {wf-id {level challenger-addr}} — for Phase L Bounties
     :bond-balances       {}   ; {workflow-id {addr amount}}
     :bond-fees           {}   ; {token amount}
+    :total-bonds-posted  {}   ; {token amount} — cumulative bonds ever posted
     :bond-slashed        {}   ; {workflow-id amount}
     :bond-distribution   {:insurance 0 :protocol 0 :burned 0} ; 50/30/20 split
      :retained-slash-reserves 0 ; explicit accounting for retained slash residue
@@ -202,10 +209,16 @@
     :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
     :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
     :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
+     :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
      :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
      :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
      :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
     :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)
+    :token-liquidity-crunch #{} ; #{token-addr} — currently insolvent yield pools
+    :last-escalation-block-time-per-addr {} ; {addr block-time} — Sybil mitigation Layer A
+    :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
+    :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
+    :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
     :paused?                false
     :block-time          block-time}))
 
@@ -325,3 +338,46 @@
   "True when the escrow is at the maximum escalation round (no further appeals)."
   [world workflow-id]
   (>= (dispute-level world workflow-id) max-dispute-level))
+
+;; ---------------------------------------------------------------------------
+;; Resolver capacity accessors
+;; ---------------------------------------------------------------------------
+
+(defn resolver-capacity
+  "Return the capacity entry for resolver-addr, or nil if not configured.
+   Structure: {:max-concurrent nat-int :current-active nat-int}
+   A missing entry means unlimited (matches DRM setResolverCapacity with unlimited=true)."
+  [world resolver-addr]
+  (get-in world [:resolver-capacities resolver-addr]))
+
+(defn resolver-at-capacity?
+  "True when resolver-addr has a finite capacity limit AND current-active >= max-concurrent.
+   Returns false when capacity is not configured (unlimited)."
+  [world resolver-addr]
+  (when-let [{:keys [max-concurrent current-active]} (resolver-capacity world resolver-addr)]
+    (and (pos? max-concurrent)
+         (>= current-active max-concurrent))))
+
+(defn set-resolver-capacity
+  "Configure or overwrite the capacity for resolver-addr.
+   max-concurrent=0 means unlimited (mirrors DRM setResolverCapacity unlimited=true)."
+  [world resolver-addr max-concurrent]
+  (assoc-in world [:resolver-capacities resolver-addr]
+            {:max-concurrent (long max-concurrent) :current-active 0}))
+
+(defn increment-resolver-capacity
+  "Increment current-active for resolver-addr.
+   No-op if resolver has no configured capacity (unlimited)."
+  [world resolver-addr]
+  (if (contains? (:resolver-capacities world) resolver-addr)
+    (update-in world [:resolver-capacities resolver-addr :current-active] inc)
+    world))
+
+(defn decrement-resolver-capacity
+  "Decrement current-active for resolver-addr, clamped to 0.
+   No-op if resolver has no configured capacity (unlimited)."
+  [world resolver-addr]
+  (if (contains? (:resolver-capacities world) resolver-addr)
+    (update-in world [:resolver-capacities resolver-addr :current-active]
+               (fn [n] (max 0 (dec n))))
+    world))

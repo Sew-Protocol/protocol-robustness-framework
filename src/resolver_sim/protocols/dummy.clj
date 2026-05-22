@@ -1,32 +1,32 @@
 (ns resolver-sim.protocols.dummy
-  "DummyProtocol — minimal always-pass DisputeProtocol implementation.
+  "DummyProtocol — minimal always-pass tiered protocol implementation.
 
-   A SEW test double used to verify that the DisputeProtocol adapter layer
-   compiles, type-checks, and that the generic replay engine machinery (alias
-   resolution, metrics, trace shape) does not crash when every protocol method
-   is a no-op.
+   A protocol test double used to verify that the tiered protocol interfaces
+   work and that the generic replay engine machinery (alias resolution, metrics,
+   trace shape) does not crash when optional protocols are missing or no-op.
 
    Behaviour:
    - All actions: succeed without modifying world state.
-   - resolve-id-alias: always passes — no alias resolution needed since
-     dispatch-action ignores all params.
-   - created-id: always nil — no alias tracking.
-   - open-disputes: always [] — no open-dispute end-check enforcement.
-   - classify-event: always #{} — no lifecycle metrics incremented.
-   - Invariant checks: always pass (no invariants enforced).
+   - resolve-id-alias: always passes.
+   - Invariant checks: always pass.
 
-   This is a test double, not a useful protocol.  Use SEWProtocol for real runs.
+   This is a test double, not a useful protocol.
 
    Layering: may import protocols/protocol only.
    Must NOT import contract_model/*, model/*, db/*, io/*."
   (:require [resolver-sim.protocols.protocol :as proto]))
 
 ;; ---------------------------------------------------------------------------
-;; DummyProtocol implementation
+;; DummyProtocol implementation (Core only)
 ;; ---------------------------------------------------------------------------
 
 (deftype DummyProtocol []
-  proto/DisputeProtocol
+  proto/SimulationAdapter
+
+  (protocol-id [_] "dummy")
+
+  (init-world [_ scenario]
+    {:block-time (get scenario :initial-block-time 1000)})
 
   (build-execution-context [_ agents _protocol-params]
     {:agent-index (into {} (map (juxt :id identity) agents))})
@@ -43,26 +43,38 @@
   (world-snapshot [_ world]
     {:block-time (:block-time world)})
 
-  (init-world [_ scenario]
-    {:block-time (get scenario :initial-block-time 1000)})
-
-  (compute-projection [_ _world]
-    [nil nil])
-
-  (classify-transition [_ _action _result-kw]
-    nil)
-
   (resolve-id-alias [_ event _id-alias-map]
     {:ok true :event event})
 
   (created-id [_ _action _extra]
     nil)
 
-  (open-disputes [_ _world]
+  (open-entities [_ _world]
     [])
 
+  proto/EconomicModel
+
+  (adversarial-event? [_ _event _agent]
+    false)
+
   (classify-event [_ _event _result-kw _error-kw]
-    #{}))
+    #{})
+
+  (metric-vocabulary [_]
+    #{})
+
+  (accum-protocol-metrics [_ metrics _ _ _ _ _ _]
+    metrics)
+
+  (summarise-batch [_ outcomes]
+    {:n (count outcomes)
+     :by-outcome (->> outcomes
+                      (group-by :trial/outcome)
+                      (map (fn [[k vs]] [k (count vs)]))
+                      (into {}))})
+
+  (advisory [_ _world _request-type _context]
+    {:not-supported true}))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared singleton

@@ -7,7 +7,9 @@
    :not-applicable paths for each validator."
   (:require [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.scenario.equilibrium :as eq]
-            [resolver-sim.scenario.projection  :as proj]
+            [resolver-sim.protocols.sew :as sew-protocol]
+            [resolver-sim.protocols.sew.equilibrium :as sew-eq]
+            [resolver-sim.protocols.sew.projection :as sew-proj]
             [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]
             [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
 
@@ -54,7 +56,7 @@
 (deftest test-budget-balance-pass
   (testing "terminal escrows, total-held = 0 → :pass"
     (let [proj (projection {:terminal? true :total-held {"USDC" 0}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :pass (:status result)))
       (is (= :hard (:severity result))))))
@@ -62,7 +64,7 @@
 (deftest test-budget-balance-fail
   (testing "terminal escrows but total-held > 0 → :fail"
     (let [proj (projection {:terminal? true :total-held {"USDC" 500}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
@@ -70,7 +72,7 @@
 (deftest test-budget-balance-not-applicable-non-terminal
   (testing "non-terminal escrows → :not-applicable"
     (let [proj (projection {:terminal? false :total-held {"USDC" 5000}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :not-applicable (:status result))))))
 
@@ -79,7 +81,7 @@
     (let [proj (projection {:terminal? false
                             :halt-reason :open-disputes-at-end
                             :total-held {"USDC" 5000}})
-          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:budget-balance] proj sew-eq/mechanism-property-validators)
                      :budget-balance)]
       (is (= :not-applicable (:status result))))))
 
@@ -122,28 +124,28 @@
 (deftest test-individual-rationality-inconclusive
   (testing "no payoff-ledger (negative-payoff-count nil), funds-lost = 0 → :inconclusive"
     (let [proj (projection {:negative-payoff-count nil :funds-lost 0})
-          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj)
+          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj sew-eq/mechanism-property-validators)
                      :individual-rationality)]
       (is (= :inconclusive (:status result))))))
 
 (deftest test-individual-rationality-pass-with-ledger
   (testing "negative-payoff-count = 0 → :pass"
     (let [proj (projection {:negative-payoff-count 0 :funds-lost 0})
-          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj)
+          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj sew-eq/mechanism-property-validators)
                      :individual-rationality)]
       (is (= :pass (:status result))))))
 
 (deftest test-individual-rationality-fail-negative-payoff
   (testing "negative-payoff-count > 0 → :fail"
     (let [proj (projection {:negative-payoff-count 2 :funds-lost 0})
-          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj)
+          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj sew-eq/mechanism-property-validators)
                      :individual-rationality)]
       (is (= :fail (:status result))))))
 
 (deftest test-individual-rationality-fail-funds-lost
   (testing "funds-lost > 0 (partial proxy) → :fail"
     (let [proj (projection {:negative-payoff-count nil :funds-lost 100})
-          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj)
+          result (-> (eq/evaluate-mechanism-properties [:individual-rationality] proj sew-eq/mechanism-property-validators)
                      :individual-rationality)]
       (is (= :fail (:status result))))))
 
@@ -154,21 +156,21 @@
 (deftest test-collusion-resistance-inconclusive
   (testing "coalition-net-profit absent → :inconclusive"
     (let [proj (projection {:coalition-net-profit nil})
-          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj sew-eq/mechanism-property-validators)
                      :collusion-resistance)]
       (is (= :inconclusive (:status result))))))
 
 (deftest test-collusion-resistance-pass
   (testing "coalition-net-profit <= 0 → :pass"
     (let [proj (projection {:coalition-net-profit -50})
-          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj sew-eq/mechanism-property-validators)
                      :collusion-resistance)]
       (is (= :pass (:status result))))))
 
 (deftest test-collusion-resistance-fail
   (testing "coalition-net-profit > 0 → :fail"
     (let [proj (projection {:coalition-net-profit 100})
-          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj)
+          result (-> (eq/evaluate-mechanism-properties [:collusion-resistance] proj sew-eq/mechanism-property-validators)
                      :collusion-resistance)]
       (is (= :fail (:status result))))))
 
@@ -229,6 +231,30 @@
                      :nash-equilibrium)]
       (is (= :fail (:status result))))))
 
+(deftest test-claim-tier-deviation-bundle-gating
+  (testing "deviation-tested tier requires deviation bundle evidence for DSE/Nash"
+    (let [proj   (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})
+          result (-> (eq/evaluate-equilibrium-concepts
+                      [:dominant-strategy-equilibrium :nash-equilibrium]
+                      proj
+                      {}
+                      {:claim-tier :deviation-tested}))]
+      (is (= :inconclusive (get-in result [:dominant-strategy-equilibrium :status])))
+      (is (= :multi-trace-required (get-in result [:dominant-strategy-equilibrium :basis])))
+      (is (= :inconclusive (get-in result [:nash-equilibrium :status])))
+      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))))
+
+  (testing "deviation-tested tier passes through when deviation bundle evidence is present"
+    (let [proj   (assoc (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})
+                        :deviation-bundle {:meets-minimum? true})
+          result (-> (eq/evaluate-equilibrium-concepts
+                      [:dominant-strategy-equilibrium :nash-equilibrium]
+                      proj
+                      {}
+                      {:claim-tier :deviation-tested}))]
+      (is (= :pass (get-in result [:dominant-strategy-equilibrium :status])))
+      (is (= :pass (get-in result [:nash-equilibrium :status]))))))
+
 ;; ---------------------------------------------------------------------------
 ;; SPE / BNE — always :inconclusive
 ;; ---------------------------------------------------------------------------
@@ -236,7 +262,7 @@
 (deftest test-subgame-perfect-equilibrium
   (testing "SPE inconclusive when no strategic decisions made"
     (let [proj {:raw-trace [{:world {}}] :decisions [] :terminal-world {:terminal? true}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :inconclusive (:status result)))
       (is (= :absent-evidence (:basis result)))))
@@ -245,7 +271,7 @@
     (let [proj {:raw-trace [{:world {}}]
                 :decisions [{:index 0 :seq 1 :agent "buyer" :action "escalate_dispute"}]
                 :terminal-world {:terminal? false}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :inconclusive (:status result)))
       (is (= :multi-trace-required (:basis result)))))
@@ -256,7 +282,7 @@
                             {:world {:claimable {"e1" {"buyer" 150}}}}] ; t=2 (won: escrow 100 + bond 50)
                 :decisions [{:index 1 :seq 1 :agent "buyer" :action "escalate_dispute"}]
                 :terminal-world {:terminal? true}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :pass (:status result)))
       (is (= :single-trace-node-counterfactual-proxy (:basis result)))
@@ -277,7 +303,7 @@
                             {:world {:claimable {"e1" {"buyer" 0}}}}] ; t=2 (lost: bond slashed)
                 :decisions [{:index 1 :seq 1 :agent "buyer" :action "escalate_dispute"}]
                 :terminal-world {:terminal? true}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :fail (:status result)))
       (is (= :single-trace-node-counterfactual-proxy (:basis result)))
@@ -291,7 +317,7 @@
                             {:world {:claimable {"e1" {"seller" 100}}}}]
                 :decisions [{:index 1 :seq 1 :agent "seller" :action "raise_dispute"}]
                 :terminal-world {:terminal? true}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :pass (:status result)))))
 
@@ -303,7 +329,7 @@
                 :decisions [{:index 1 :seq 1 :agent "a" :action "escalate_dispute"}
                             {:index 2 :seq 2 :agent "b" :action "escalate_dispute"}]
                 :terminal-world {:terminal? true}}
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :fail (:status result)))
       (is (= 2 (count (get-in result [:observed :spe-violations]))))))
@@ -314,11 +340,11 @@
                             {:world {:claimable {"e1" {"buyer" 0}}}}]
                 :decisions [{:index 1 :seq 1 :agent "buyer" :action "escalate_dispute"}]
                 :terminal-world {:terminal? true}}
-          r1 (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          r1 (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                  :subgame-perfect-equilibrium
                  :observed
                  :spe-regret-table)
-          r2 (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          r2 (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                  :subgame-perfect-equilibrium
                  :observed
                  :spe-regret-table)]
@@ -345,7 +371,8 @@
                    :trace   [{:world {:total-held    {"USDC" 0}
                                       :total-fees    {"USDC" 0}
                                       :live-states   {1 :released}
-                                      :escrow-count  1}}]}
+                                      :escrow-count  1}}]
+                   :protocol sew-protocol/protocol}
           eq-out  (eq/evaluate-equilibrium theory result)]
       ;; budget-balance: terminal world with 0 held → :pass
       (is (= :pass (get-in eq-out [:mechanism-results :budget-balance :status])))
@@ -362,7 +389,8 @@
                   :trace   [{:world {:total-held    {"USDC" 5000}
                                      :total-fees    {"USDC" 0}
                                      :live-states   {1 :released}
-                                     :escrow-count  1}}]}
+                                     :escrow-count  1}}]
+                  :protocol sew-protocol/protocol}
           eq-out (eq/evaluate-equilibrium theory result)]
       ;; Escrow is in :released but total-held = 5000 → terminal? check
       ;; live-states has 1 :released → terminal? = true → budget-balance FAIL
@@ -382,7 +410,7 @@
     (let [proj (assoc (projection {})
                       :money-movement-summary
                       {:workflow-outcomes {0 {:terminal-state :refunded :path :refund}}})
-          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj)
+          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj sew-eq/mechanism-property-validators)
                      :force-refund-path-integrity)]
       (is (= :pass (:status result))))))
 
@@ -391,7 +419,7 @@
     (let [proj (assoc (projection {})
                       :money-movement-summary
                       {:workflow-outcomes {0 {:terminal-state :refunded :path :release}}})
-          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj)
+          result (-> (eq/evaluate-mechanism-properties [:force-refund-path-integrity] proj sew-eq/mechanism-property-validators)
                      :force-refund-path-integrity)]
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
@@ -404,9 +432,9 @@
           fail-proj (assoc (projection {})
                            :money-movement-summary
                            {:pending-lifecycle {:unknown {:created 1 :cleared 2 :superseded 0}}})
-          pass-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] pass-proj)
+          pass-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] pass-proj sew-eq/mechanism-property-validators)
                      :pending-lifecycle-integrity)
-          fail-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] fail-proj)
+          fail-r (-> (eq/evaluate-mechanism-properties [:pending-lifecycle-integrity] fail-proj sew-eq/mechanism-property-validators)
                      :pending-lifecycle-integrity)]
       (is (= :pass (:status pass-r)))
       (is (= :fail (:status fail-r))))))
@@ -419,9 +447,9 @@
           fail-proj (assoc (projection {})
                            :stake-flow-summary
                            {"0xR" {:start 100 :withdrawn 20 :slashed 30 :end 60}})
-          pass-r (-> (eq/evaluate-mechanism-properties [:stake-flow-conservation] pass-proj)
+          pass-r (-> (eq/evaluate-mechanism-properties [:stake-flow-conservation] pass-proj sew-eq/mechanism-property-validators)
                      :stake-flow-conservation)
-          fail-r (-> (eq/evaluate-mechanism-properties [:stake-flow-conservation] fail-proj)
+          fail-r (-> (eq/evaluate-mechanism-properties [:stake-flow-conservation] fail-proj sew-eq/mechanism-property-validators)
                      :stake-flow-conservation)]
       (is (= :pass (:status pass-r)))
       (is (= :fail (:status fail-r))))))
@@ -456,7 +484,7 @@
   (testing "SPE observed payload includes all Phase F-J and L fields"
     (let [proj (spe-projection {:chosen-wealth 200 :terminal-wealth 200
                                 :regret-threshold 1000})
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
       (is (some? (:spe-result obs)))
@@ -471,7 +499,7 @@
 (deftest test-spe-result-vocab-pass
   (testing ":spe-result is :spe/pass on no-regret resolver verdict"
     (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
       (is (= :pass (:status result)))
@@ -480,7 +508,7 @@
 (deftest test-spe-counterexamples-on-fail
   (testing ":spe-counterexamples non-empty on profitable deviation"
     (let [proj (spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
-          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
       (is (= :fail (:status result)))
@@ -492,7 +520,7 @@
 (deftest test-spe-proof-sketch-emitted
   (testing ":spe-proof-sketch is a non-empty string"
     (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          obs (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          obs (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                   :subgame-perfect-equilibrium :observed)]
       (is (string? (:spe-proof-sketch obs)))
       (is (pos? (count (:spe-proof-sketch obs)))))))
@@ -500,7 +528,7 @@
 (deftest test-spe-proof-sketch-method-section-and-memoization-line
   (testing ":spe-proof-sketch includes method metadata and memoization diagnostics"
     (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          sketch (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj)
+          sketch (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium :observed :spe-proof-sketch)]
       (is (re-find #"Method:" sketch))
       (is (re-find #"continuation-policy:" sketch))
@@ -512,7 +540,7 @@
 (deftest test-bounded-public-state-epsilon-spe-pass
   (testing ":bounded-public-state-epsilon-spe passes with a proper-subgame resolver node"
     (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
       (is (= :pass (:status result)))
       (is (= :hard (:severity result))))))
@@ -520,7 +548,7 @@
 (deftest test-bounded-public-state-epsilon-spe-fail-deviation
   (testing ":bounded-public-state-epsilon-spe fails when regret exceeds threshold"
     (let [proj (spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
-          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
@@ -530,7 +558,7 @@
     ;; buyer raise_dispute is an info-set node → no proper subgames → inconclusive
     (let [proj (spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0
                                 :agent "buyer" :action "raise_dispute"})
-          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj)
+          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
       (is (= :inconclusive (:status result))))))
 
@@ -559,7 +587,8 @@
                      :total-fees {}}
              :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
-   :metrics {}})
+   :metrics {}
+   :protocol sew-protocol/protocol})
 
 (deftest test-spe-config-threading-from-theory
   (testing "spe-config from theory block is used by the evaluator (not defaults)"
@@ -594,7 +623,7 @@
    Node seq=3 — resolver execute_resolution (proper-subgame)
    Resolver receives fee at execute_resolution; buyer wealth is 0 throughout."
   []
-  {:raw-trace
+  {:trace
    [{:world {:resolver-stakes {} :claimable {} :bond-balances {} :live-states {} :total-held {}}
      :agent "buyer" :action "create_escrow" :seq 0 :time 1000}
     {:world {:resolver-stakes {} :claimable {} :bond-balances {} :live-states {"e1" "pending"} :total-held {"e1" 1000}}
@@ -605,7 +634,8 @@
      :agent "resolver" :action "settle" :seq 4 :time 1070}]
    :agents [{:id "buyer" :address "0xbuyer" :role "buyer" :strategy "rational"}
             {:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
-   :metrics {}})
+   :metrics {}
+   :protocol sew-protocol/protocol})
 
 (deftest test-backward-induction-mode-vs-forward-single-node
   (testing "backward-induction and forward modes produce identical results on single-node trace"
@@ -691,7 +721,8 @@
                       :terminal? true}
               :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
     :agents [{:id "resolver" :address addr :role "resolver" :strategy "malicious"}]
-    :metrics {}}))
+    :metrics {}
+    :protocol sew-protocol/protocol}))
 
 (defn- reputation-no-slash-replay-result
   "Replay result where resolver executes_resolution and earns fee — no slash.
@@ -717,7 +748,8 @@
                      :terminal? true}
              :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
-   :metrics {}})
+   :metrics {}
+   :protocol sew-protocol/protocol})
 
 (defn- reputation-withdrawal-replay-result
   "Replay result where resolver's stake drops due to withdrawal (not slash).
@@ -741,7 +773,8 @@
                      :terminal? true}
              :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
-   :metrics {}})
+   :metrics {}
+   :protocol sew-protocol/protocol})
 
 (defn- reputation-multi-resolver-replay-result
   "Two resolvers. Resolver-B is slashed but Resolver-A is the decision actor.
@@ -766,7 +799,8 @@
              :agent "resolver-a" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver-a" :address "0xresolver-a" :role "resolver" :strategy "honest"}
             {:id "resolver-b" :address "0xresolver-b" :role "resolver" :strategy "malicious"}]
-   :metrics {}})
+   :metrics {}
+   :protocol sew-protocol/protocol})
 
 (deftest test-reputation-slash-detected-penalty-applied
   (testing ":resolver-reputation-v1 — slash detected, penalty reduces total utility"
@@ -879,7 +913,7 @@
           rows     (get-in r [:observed :counterexamples] [])
           ;; Get the actual projection to inspect the regret-table directly
           raw-proj (-> result
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation-slash-penalty 200
@@ -907,7 +941,7 @@
     ;; min-required = ceil(50/1.0) = 50
     (let [result (reputation-slash-replay-result)
           raw-proj (-> result
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation-slash-penalty 200
@@ -964,7 +998,8 @@
                        :terminal? true}
                :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
      :agents [{:id "resolver" :address addr :role "resolver" :strategy "malicious"}]
-     :metrics {}}))
+     :metrics {}
+     :protocol sew-protocol/protocol}))
 
 (deftest test-resolve-utility-profile-keyword
   (testing "resolve-utility-profile returns built-in profile for known keyword"
@@ -992,7 +1027,7 @@
   (testing ":expected-future-earnings model computes penalty from routing probability delta"
     (let [result (reputation-slash-replay-result)
           raw-proj (-> result
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation/model :expected-future-earnings
@@ -1020,7 +1055,7 @@
     ;; none:         adj=0,   chosen=140 > 100 → PASS
     ;; baseline:     adj=-80, chosen=60  < 100 → FAIL
     (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/none :reputation/baseline])]
       (is (map? matrix) "should return a map")
@@ -1039,7 +1074,7 @@
 (deftest test-profile-matrix-all-pass
   (testing "run-profile-matrix all-pass? when resolver is honest (no slash, chosen > pre)"
     (let [raw-proj (-> (reputation-no-slash-replay-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0}))
           ;; No slash → no reputation penalty applied → chosen=150, pre=100 → PASS for all
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/none :reputation/conservative])]
@@ -1053,7 +1088,7 @@
     ;; conservative: adj=-13, chosen=127 < best-alt=140 → regret=13 → FAIL
     ;; This shows deterrence kicks in at any non-zero reputation penalty.
     (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/conservative])]
       (is (= :fail (-> matrix :profile-results first :status))
@@ -1062,10 +1097,11 @@
 (deftest test-profile-matrix-validator-no-profiles-inconclusive
   (testing ":resolver-reputation-profile-matrix → inconclusive when no utility-profiles declared"
     (let [raw-proj (-> (reputation-slash-replay-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0}))
           eq-map   (eq/evaluate-equilibrium-concepts
-                    [:resolver-reputation-profile-matrix] raw-proj)
+                    [:resolver-reputation-profile-matrix] raw-proj
+                    sew-eq/equilibrium-concept-validators)
           r        (get eq-map :resolver-reputation-profile-matrix)]
       (is (= 1 (count eq-map)) "should have exactly one concept result")
       (is (= :inconclusive (:status r))
@@ -1074,12 +1110,13 @@
 (deftest test-profile-matrix-validator-dispatches
   (testing ":resolver-reputation-profile-matrix validator dispatches and returns profile-results"
     (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0
                                            :utility-profiles [:reputation/none
                                                               :reputation/baseline]}))
           eq-map   (eq/evaluate-equilibrium-concepts
-                    [:resolver-reputation-profile-matrix] raw-proj)
+                    [:resolver-reputation-profile-matrix] raw-proj
+                    sew-eq/equilibrium-concept-validators)
           r        (get eq-map :resolver-reputation-profile-matrix)]
       (is (= 1 (count eq-map)))
       ;; none=PASS, baseline=FAIL → any-pass?=true, all-pass?=false → overall :fail
@@ -1101,7 +1138,7 @@
     ;; This shows deterrence is active under conservative and strong assumptions; only purely
     ;; reputationless actors (none) are indifferent.
     (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       proj/trace-end-projection
+                       sew-proj/trace-end-projection
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj
                                                   [:reputation/none

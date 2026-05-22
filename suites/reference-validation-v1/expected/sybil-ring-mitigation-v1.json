@@ -1,0 +1,14 @@
+{
+  "scenario_id": "sybil-ring-mitigation-v1",
+  "status": "fail",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Evaluates mitigation of the sybil ring (H2) via 15% correlation-based detection. Finding: Detection probability alone is insufficient to prevent the Escalation Trap; structural changes (bonds/delays) are required.",
+  "results": {
+    "mitigation_method": "correlation-detection",
+    "detection_prob": 0.15,
+    "displacement_rate": 1.0,
+    "pass": false
+  },
+  "upgrade_path": "Implement escalation bond increases and mandatory escalation delays between coordinated calls."
+}

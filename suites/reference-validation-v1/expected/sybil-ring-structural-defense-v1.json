@@ -1,0 +1,13 @@
+{
+  "scenario_id": "sybil-ring-structural-defense-v1",
+  "status": "pass",
+  "evidence_type": "simulator-backed-branch-covered",
+  "confidence": "high",
+  "description": "Validates the protocol's structural defense against Sybil ring escalation traps. Verifies that (1) sequential escalations from the same address within the 1-epoch cooldown are rejected, and (2) valid escalations after the cooldown are subject to linear bond scaling.",
+  "results": {
+    "cooldown_enforced": true,
+    "bond_scaling_active": true,
+    "linear_multiplier": 1.1
+  },
+  "upgrade_path": "Consider exponential scaling if linear scaling is found insufficient under extreme adversarial capital depth."
+}

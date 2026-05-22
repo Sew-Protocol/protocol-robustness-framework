@@ -216,6 +216,38 @@ results/
 
 ## Troubleshooting
 
+### Current baseline (2026-05-17)
+
+Recent generalisation and protocol-adapter cleanup removed multiple reader/
+namespace-load blockers (malformed docstrings/escaped literals and a protocol
+namespace cycle). The canonical test entrypoint now progresses into substantive
+runtime assertions.
+
+Current observed baseline from `./scripts/test.sh all`:
+
+- **Reader/macroexpansion blockers fixed** in:
+  - `src/resolver_sim/protocols/protocol.clj`
+  - `src/resolver_sim/protocols/sew/io/trace_export.clj`
+  - `src/resolver_sim/db/store.clj`
+  - `src/resolver_sim/protocols/sew/db.clj`
+  - `src/resolver_sim/protocols/sew.clj`
+  - `src/resolver_sim/server/session.clj`
+- **Namespace cycle fixed**: `protocols/sew` ↔ `protocols/sew/io/trace_export`
+  via lazy load in Sew `:forge-trace` projection path.
+
+Remaining failures are now **behavioural** (not parser-level):
+
+1. `resolver-sim.protocols.sew.replay-test`
+   - escalation chain expectations failing (0→1→2 progression, pending
+     settlement clearing, level-specific resolver transitions)
+2. JSON serialization error in replay tests
+   - `Don't know how to write JSON of class resolver_sim.protocols.sew.SewProtocol`
+3. transition/guard coverage gate step
+   - `FileNotFoundException` in release-gate path (environment/path issue)
+
+This means contributors can now focus on domain logic regressions and test
+expectation alignment rather than syntax recovery.
+
 ### "Could not find artifact io.github.nextjournal:clerk"
 Clerk report generation not available (network/dependency issue).
 - This is optional - simulation results still saved to markdown
@@ -282,6 +314,13 @@ clojure -M:run -- -p data/params/phase-i.edn -s
 ## Phase J CLI Integration (NEW)
 
 Phase J multi-epoch simulation now integrated into main CLI:
+
+### Cancellation game-theory next steps
+
+For a focused roadmap on upgrading cancellation analysis from proxy checks to
+stronger game-theoretic evidence, see:
+
+- `docs/testing/CANCELLATION_GAME_THEORY_GAP_CHECKLIST.md`
 
 ```bash
 # Run baseline (stable) scenario

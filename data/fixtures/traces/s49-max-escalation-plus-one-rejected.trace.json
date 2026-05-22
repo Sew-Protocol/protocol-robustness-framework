@@ -41,6 +41,7 @@
     {"seq": 4, "time": 1190, "agent": "l1resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl1hash"}},
     {"seq": 5, "time": 1200, "agent": "buyer", "action": "escalate_dispute", "params": {"workflow-id": "wf0"}},
     {"seq": 6, "time": 1260, "agent": "l2resolver", "action": "execute_resolution", "params": {"workflow-id": "wf0", "is-release": true, "resolution-hash": "0xl2hash"}},
-    {"seq": 7, "time": 1270, "agent": "buyer", "action": "escalate_dispute", "params": {"workflow-id": "wf0"}}
+    {"seq": 7, "time": 1270, "agent": "buyer", "action": "escalate_dispute", "params": {"workflow-id": "wf0"}},
+    {"seq": 8, "time": 1330, "agent": "l2resolver", "action": "execute_pending_settlement", "params": {"workflow-id": "wf0"}}
   ]
 }

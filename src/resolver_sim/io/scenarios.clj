@@ -1,8 +1,9 @@
 (ns resolver-sim.io.scenarios
-  "Load and parse scenario JSON files for the contract-model replay engine.
+  "Load and parse scenario JSON files for the contract-model replay proto.
 
    Layering: io/* shell layer — file I/O only.  Callers combine this with
-   resolver-sim.contract-model.replay/replay-scenario for full file replay."
+   replay/replay-with-protocol (using resolver-sim.protocols.registry) for
+   full file replay."
   (:require [clojure.data.json :as json]
             [clojure.java.io   :as io]
             [clojure.string    :as str]))

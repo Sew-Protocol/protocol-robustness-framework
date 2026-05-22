@@ -2,7 +2,7 @@
   "S01–S23 deterministic invariant scenarios as Clojure data.
 
    Each entry in `all-scenarios` is a scenario map accepted by
-   resolver-sim.contract-model.replay/replay-scenario.
+   resolver-sim.protocols.sew/replay-with-sew-protocol.
 
    Events use :save-id-as annotations on create_escrow steps and string
    :workflow-id aliases (e.g. \"wf0\") on subsequent steps.  The replay
@@ -1615,12 +1615,12 @@
 ;; ---------------------------------------------------------------------------
 ;; S38 — DR3 resolver bond 80/20 mix invariant holds
 ;;
-;; A resolver registers a valid bond mix (80% stable, 20% SEW) and completes
+;; A resolver registers a valid bond mix (80% stable, 20% Sew) and completes
 ;; a full dispute lifecycle.  The resolver-bond-mix-valid? invariant is checked
 ;; after every step and must hold throughout.
 ;;
 ;; Invariants exercised:
-;;   resolver-bond-mix-valid?  — 8000 stable + 2000 SEW = exactly 80/20
+;;   resolver-bond-mix-valid?  — 8000 stable + 2000 Sew = exactly 80/20
 ;;   solvency-holds?           — full dispute with appeal window
 ;;   conservation-of-funds?   — AFA released; resolver stake intact
 ;; ---------------------------------------------------------------------------
@@ -1874,133 +1874,269 @@
     {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id "wf0"}}]})
 
-;; ---------------------------------------------------------------------------
-;; Scenario registry
-;; ---------------------------------------------------------------------------
+    ;; ---------------------------------------------------------------------------
+    ;; S46 — Reorg Idempotence
+    ;;
+    ;; Validates that duplicate (replayed) events from divergent reorg branches
+    ;; are handled gracefully (idempotence).
+    ;; ---------------------------------------------------------------------------
 
-(def all-scenarios
-  "Ordered list of [display-name scenario-or-pair] entries.
-   Pairs (S12) are two scenarios that must both pass to count as one passing test.
-   Single entries are plain scenario maps."
-  [["S01  baseline-happy-path"                      s01]
-   ["S02  dr3-dispute-release"                      s02]
-   ["S03  dr3-dispute-refund"                       s03]
-   ["S04  dispute-timeout-autocancel"               s04]
-   ["S05  pending-settlement-execute"               s05]
-   ["S06  mutual-cancel"                            s06]
-   ["S07  unauthorized-resolver-rejected"           s07]
-   ["S08  state-machine-attack-gauntlet"            s08]
-   ["S09  multi-escrow-solvency"                    s09]
-   ["S10  double-finalize-rejected"                 s10]
-   ["S11  zero-fee-edge-case"                       s11]
-   ["S12  governance-snapshot-isolation"            [s12a s12b]]
-   ["S13  pending-settlement-refund"                s13]
-   ["S14  dr3-module-authorized"                    s14]
-   ["S15  dr3-module-unauthorized-rejected"         s15]
-   ["S16  ieo-create-release"                       s16]
-   ["S17  ieo-dispute-no-resolver-timeout"          s17]
-   ["S18  dr3-kleros-l0-resolves"                   s18]
-   ["S19  dr3-kleros-escalation-rejected-l0-resolves" s19]
-   ["S20  dr3-kleros-max-escalation-guard"          s20]
-   ["S21  dr3-kleros-pending-cleared-on-escalation" s21]
-   ["S22  status-leak-agree-cancel-over-dispute"    s22]
-   ["S23  preemptive-escalation-blocked"            s23]
-   ["S24  resolver-stake-depletion-cascade"         s24]
-   ["S25  profit-maximizer-slash-lifecycle"         s25]
-   ["S26  forking-strategist-l1-reversal"           s26]
-   ["S27  forking-strategist-l2-fork"               s27]
-   ["S28  forking-strategist-late-escalation-rejected" s28]
-   ["S29  forking-strategist-seller-escalates"      s29]
-   ["S30  forking-strategist-double-loss"           s30]
-   ["S31  forking-strategist-all-levels-confirm"    s31]
-   ["S32  forking-strategist-premature-settlement-rejected" s32]
-   ["S33  forking-strategist-two-escrow-fork-isolation" s33]
-   ["S34  profit-maximizer-unchallenged-slash"          s34]
-   ["S35  profit-maximizer-governance-wins-appeal"      s35]
-   ["S36  profit-maximizer-pre-window-execute-rejected" s36]
-   ["S37  profit-maximizer-two-resolver-split-outcomes" s37]
-   ["S38  dr3-bond-mix-valid"                           s38]
-   ["S39  dr3-senior-coverage-delegation"               s39]
-   ["S40  dr3-freeze-post-slash"                        s40]
-   ["S41  dr3-reversal-slash-disabled"                  s41]
-   ["S42  resolver-buyer-bribery-loop"                  s42]
-   ["S45  flash-loan-stake-inflation"                   s45]])
+    (def s46
+    {:scenario-id     "s46-reorg-idempotence"
+    :schema-version  "1.0"
+    :initial-block-time 1000
+    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}]
+    :protocol-params dr3
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xbranchA"}}
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xbranchA"}}
+    {:seq 4 :time 1180 :agent "buyer" :action "challenge_resolution"
+    :params {:workflow-id "wf0"}}
+    {:seq 5 :time 1181 :agent "buyer" :action "challenge_resolution"
+    :params {:workflow-id "wf0"}}]})
 
-;; ---------------------------------------------------------------------------
-;; Scenario type registry
-;;
-;; Maps scenario-id → {:scenario/type kw :adversary? bool
-;;                      :adversary/type kw :adversary/traits #{kw}}
-;;
-;; This is the authoritative source for scenario classification metadata.
-;; invariant-runner merges this into run results for queryable output.
-;; trace_metadata/classify-scenario uses scenario-id as a fallback signal.
-;; ---------------------------------------------------------------------------
+    ;; ---------------------------------------------------------------------------
+    ;; S66 — Cooldown Boundary Reorg
+    ;;
+    ;; Validates that the Layer A Sybil-mitigation cooldown (1 day) is correctly
+    ;; enforced across reorgs where timestamps might shift across the boundary.
+    ;; ---------------------------------------------------------------------------
 
-(def scenario-type-registry
-  "Type metadata for all S01–S45 invariant scenarios, keyed by scenario-id."
-  {;; ── Baseline: standard happy-path protocol flows ───────────────────────
-   "s01-baseline-happy-path"                {:scenario/type :baseline}
-   "s02-dr3-dispute-release"                {:scenario/type :baseline}
-   "s03-dr3-dispute-refund"                 {:scenario/type :baseline}
-   "s04-dispute-timeout-autocancel"         {:scenario/type :baseline}
-   "s05-pending-settlement-execute"         {:scenario/type :baseline}
-   "s06-mutual-cancel"                      {:scenario/type :baseline}
-   "s13-pending-settlement-refund"          {:scenario/type :baseline}
-   "s16-ieo-create-release"                 {:scenario/type :baseline}
-   "s17-ieo-dispute-no-resolver-timeout"    {:scenario/type :baseline}
-   "s18-dr3-kleros-l0-resolves"             {:scenario/type :baseline}
+    (def s66
+    {:scenario-id     "s66-cooldown-boundary-reorg"
+    :schema-version  "1.0"
+    :initial-block-time 1000
+    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}]
+    :protocol-params dr3
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    ;; First escalation (0→1) at T=1130
+    {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+    :params {:workflow-id "wf0"}}
+    ;; Second escalation attempt at T=80000 (rejected: < 86400 cooldown)
+    {:seq 4 :time 80000 :agent "buyer" :action "escalate_dispute"
+    :params {:workflow-id "wf0"}}
+    ;; Third escalation attempt at T=90000 (succeeds: > 86400 cooldown since T=1130)
+    {:seq 5 :time 90000 :agent "buyer" :action "escalate_dispute"
+     :params {:workflow-id "wf0"}}]})
 
-   ;; ── Edge-case: permission checks, boundary conditions, state guards ────
-   "s07-unauthorized-resolver-rejected"     {:scenario/type :edge-case}
-   "s08-state-machine-attack-gauntlet"      {:scenario/type :edge-case}
-   "s10-double-finalize-rejected"           {:scenario/type :edge-case}
-   "s11-zero-fee-edge-case"                 {:scenario/type :edge-case}
-   "s12a-snapshot-isolation-fee-zero"             {:scenario/type :edge-case}
-   "s12b-snapshot-isolation-fee-500"              {:scenario/type :edge-case}
-   "s14-dr3-module-authorized"              {:scenario/type :edge-case}
-   "s15-dr3-module-unauthorized-rejected"   {:scenario/type :edge-case}
-   "s19-dr3-kleros-escalation-rejected-l0-resolves" {:scenario/type :edge-case}
-   "s20-dr3-kleros-max-escalation-guard"    {:scenario/type :edge-case}
-   "s21-dr3-kleros-pending-cleared-on-escalation"   {:scenario/type :edge-case}
-   "s22-status-leak-agree-cancel-over-dispute" {:scenario/type :edge-case}
-   "s23-preemptive-escalation-blocked"      {:scenario/type :edge-case}
+    ;; ---------------------------------------------------------------------------
+    ;; S67 — Reentrancy Callback
+    ;;
+    ;; Validates that the protocol is resistant to reentrancy during fund withdrawal.
+    ;; The execute_reentrant_withdraw action triggers a callback to withdraw_escrow
+    ;; BEFORE finalizing its own state change.
+    ;;
+    ;; Expected: The main action should be REJECTED with :no-claimable-balance
+    ;; because the callback (simulating the attacker receiving funds) correctly
+    ;; drains the balance first in the chained state.
+    ;; ---------------------------------------------------------------------------
 
-   ;; ── Stress: solvency, multi-escrow, depletion ─────────────────────────
-   "s09-multi-escrow-solvency"              {:scenario/type :stress}
-   "s24-resolver-stake-depletion-cascade"   {:scenario/type :stress}
-   "s38-dr3-bond-mix-valid"                 {:scenario/type :stress}
-   "s39-dr3-senior-coverage-delegation"     {:scenario/type :stress}
-   "s40-dr3-freeze-post-slash"              {:scenario/type :stress}
-   "s41-dr3-reversal-slash-disabled"        {:scenario/type :stress}
+    (def s67
+    {:scenario-id     "s67-reentrancy-callback"
+    :schema-version  "1.0"
+    :initial-block-time 1000
+    :agents          [{:id "attacker" :address "0xattacker" :strategy "malicious"}
+                     {:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                     {:id "seller"   :address "0xseller"   :strategy "honest"}
+                     {:id "resolver" :address "0xresolver" :role "resolver"}]
+    :protocol-params dr3
+    ;; The main action is expected to fail because the callback succeeds first.
+    :expected-revert? true
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xattacker" :amount 10000 :custom-resolver "0xresolver"}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "release"
+     :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
+      :params {:workflow-id "wf0"
+               :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id "wf0"}}}}]})
 
-   ;; ── Adversarial: profit-maximizer ─────────────────────────────────────
-   "s25-profit-maximizer-slash-lifecycle"
-   {:scenario/type    :adversarial
+     ;; ---------------------------------------------------------------------------
+     ;; S68 — Yield Pool Insolvency
+     ;;
+     ;; Validates that the protocol correctly handles external liquidity shortages.
+     ;; A 'liquidity crunch' is triggered for USDC, and a subsequent withdrawal
+     ;; attempt is rejected.
+     ;;
+     ;; Expected: The withdrawal action should be REJECTED with :liquidity-insufficient.
+     ;; ---------------------------------------------------------------------------
+
+     (def s68
+     {:scenario-id     "s68-yield-pool-insolvency"
+     :schema-version  "1.0"
+     :initial-block-time 1000
+     :agents          [{:id "buyer"    :address "0xbuyer"  :strategy "honest"}
+                      {:id "seller"   :address "0xseller" :strategy "honest"}
+                      {:id "governance" :address "0xgov"  :role "governance"}]
+     :protocol-params dr3
+     :events
+     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 5000}
+      :save-id-as "wf0"}
+     {:seq 1 :time 1060 :agent "buyer" :action "release"
+      :params {:workflow-id "wf0"}}
+     ;; Trigger liquidity crunch for USDC
+     {:seq 2 :time 1100 :agent "governance" :action "set_token_liquidity_crunch"
+      :params {:token "USDC" :active? true}}
+     ;; Attempt withdrawal while crunch is active
+     {:seq 3 :time 1120 :agent "seller" :action "withdraw_escrow"
+      :params {:workflow-id "wf0"}}]})
+
+     ;; ---------------------------------------------------------------------------
+     ;; Scenario registry
+     ;; ---------------------------------------------------------------------------
+    (def all-scenarios
+    "Ordered list of [display-name scenario-or-pair] entries.
+    Pairs (S12) are two scenarios that must both pass to count as one passing test.
+    Single entries are plain scenario maps."
+    [["S01  baseline-happy-path"                      s01]
+    ["S02  dr3-dispute-release"                      s02]
+    ["S03  dr3-dispute-refund"                       s03]
+    ["S04  dispute-timeout-autocancel"               s04]
+    ["S05  pending-settlement-execute"               s05]
+    ["S06  mutual-cancel"                            s06]
+    ["S07  unauthorized-resolver-rejected"           s07]
+    ["S08  state-machine-attack-gauntlet"            s08]
+    ["S09  multi-escrow-solvency"                    s09]
+    ["S10  double-finalize-rejected"                 s10]
+    ["S11  zero-fee-edge-case"                       s11]
+    ["S12  governance-snapshot-isolation"            [s12a s12b]]
+    ["S13  pending-settlement-refund"                s13]
+    ["S14  dr3-module-authorized"                    s14]
+    ["S15  dr3-module-unauthorized-rejected"         s15]
+    ["S16  ieo-create-release"                       s16]
+    ["S17  ieo-dispute-no-resolver-timeout"          s17]
+    ["S18  dr3-kleros-l0-resolves"                   s18]
+    ["S19  dr3-kleros-escalation-rejected-l0-resolves" s19]
+    ["S20  dr3-kleros-max-escalation-guard"          s20]
+    ["S21  dr3-kleros-pending-cleared-on-escalation" s21]
+    ["S22  status-leak-agree-cancel-over-dispute"    s22]
+    ["S23  preemptive-escalation-blocked"            s23]
+    ["S24  resolver-stake-depletion-cascade"         s24]
+    ["S25  profit-maximizer-slash-lifecycle"         s25]
+    ["S26  forking-strategist-l1-reversal"           s26]
+    ["S27  forking-strategist-l2-fork"               s27]
+    ["S28  forking-strategist-late-escalation-rejected" s28]
+    ["S29  forking-strategist-seller-escalates"      s29]
+    ["S30  forking-strategist-double-loss"           s30]
+    ["S31  forking-strategist-all-levels-confirm"    s31]
+    ["S32  forking-strategist-premature-settlement-rejected" s32]
+    ["S33  forking-strategist-two-escrow-fork-isolation" s33]
+    ["S34  profit-maximizer-unchallenged-slash"          s34]
+    ["S35  profit-maximizer-governance-wins-appeal"      s35]
+    ["S36  profit-maximizer-pre-window-execute-rejected" s36]
+    ["S37  profit-maximizer-two-resolver-split-outcomes" s37]
+    ["S38  dr3-bond-mix-valid"                           s38]
+    ["S39  dr3-senior-coverage-delegation"               s39]
+    ["S40  dr3-freeze-post-slash"                        s40]
+    ["S41  dr3-reversal-slash-disabled"                  s41]
+    ["S42  resolver-buyer-bribery-loop"                  s42]
+    ["S45  flash-loan-stake-inflation"                   s45]
+    ["S46  reorg-idempotence"                            s46]
+    ["S66  cooldown-boundary-reorg"                      s66]
+    ["S67  reentrancy-callback"                          s67]])
+
+    ;; ---------------------------------------------------------------------------
+    ;; Scenario type registry
+    ;;
+    ;; Maps scenario-id → {:scenario/type kw :adversary? bool
+    ;;                      :adversary/type kw :adversary/traits #{kw}}
+    ;;
+    ;; This is the authoritative source for scenario classification metadata.
+    ;; invariant-runner merges this into run results for queryable output.
+    ;; trace_metadata/classify-scenario uses scenario-id as a fallback signal.
+    ;; ---------------------------------------------------------------------------
+
+    (def scenario-type-registry
+    "Type metadata for all S01–S67 invariant scenarios, keyed by scenario-id."
+    {;; ── Baseline: standard happy-path protocol flows ───────────────────────
+    "s01-baseline-happy-path"                {:scenario/type :baseline}
+    "s02-dr3-dispute-release"                {:scenario/type :baseline}
+    "s03-dr3-dispute-refund"                 {:scenario/type :baseline}
+    "s04-dispute-timeout-autocancel"         {:scenario/type :baseline}
+    "s05-pending-settlement-execute"         {:scenario/type :baseline}
+    "s06-mutual-cancel"                      {:scenario/type :baseline}
+    "s13-pending-settlement-refund"          {:scenario/type :baseline}
+    "s16-ieo-create-release"                 {:scenario/type :baseline}
+    "s17-ieo-dispute-no-resolver-timeout"    {:scenario/type :baseline}
+    "s18-dr3-kleros-l0-resolves"             {:scenario/type :baseline}
+    "s46-reorg-idempotence"                  {:scenario/type :baseline}
+
+    ;; ── Edge-case: permission checks, boundary conditions, state guards ────
+    "s07-unauthorized-resolver-rejected"     {:scenario/type :edge-case}
+    "s08-state-machine-attack-gauntlet"      {:scenario/type :edge-case}
+    "s10-double-finalize-rejected"           {:scenario/type :edge-case}
+    "s11-zero-fee-edge-case"                 {:scenario/type :edge-case}
+    "s12a-snapshot-isolation-fee-zero"             {:scenario/type :edge-case}
+    "s12b-snapshot-isolation-fee-500"              {:scenario/type :edge-case}
+    "s14-dr3-module-authorized"              {:scenario/type :edge-case}
+    "s15-dr3-module-unauthorized-rejected"   {:scenario/type :edge-case}
+    "s19-dr3-kleros-escalation-rejected-l0-resolves" {:scenario/type :edge-case}
+    "s20-dr3-kleros-max-escalation-guard"    {:scenario/type :edge-case}
+    "s21-dr3-kleros-pending-cleared-on-escalation"   {:scenario/type :edge-case}
+    "s22-status-leak-agree-cancel-over-dispute" {:scenario/type :edge-case}
+    "s23-preemptive-escalation-blocked"      {:scenario/type :edge-case}
+    "s66-cooldown-boundary-reorg"            {:scenario/type :edge-case}
+
+    ;; ── Stress: solvency, multi-escrow, depletion ─────────────────────────
+    "s09-multi-escrow-solvency"              {:scenario/type :stress}
+    "s24-resolver-stake-depletion-cascade"   {:scenario/type :stress}
+    "s38-dr3-bond-mix-valid"                 {:scenario/type :stress}
+    "s39-dr3-senior-coverage-delegation"     {:scenario/type :stress}
+    "s40-dr3-freeze-post-slash"              {:scenario/type :stress}
+    "s41-dr3-reversal-slash-disabled"        {:scenario/type :stress}
+
+    ;; ── Adversarial: profit-maximizer ─────────────────────────────────────
+    "s25-profit-maximizer-slash-lifecycle"
+    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:multi-step :capital-efficient}}
 
-   "s34-profit-maximizer-unchallenged-slash"
-   {:scenario/type    :adversarial
+    "s34-profit-maximizer-unchallenged-slash"
+    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:stealthy :capital-efficient}}
 
-   "s35-profit-maximizer-governance-wins-appeal"
-   {:scenario/type    :adversarial
+    "s35-profit-maximizer-governance-wins-appeal"
+    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:adaptive :multi-step}}
 
-   "s36-profit-maximizer-pre-window-execute-rejected"
-   {:scenario/type    :adversarial
+    "s36-profit-maximizer-pre-window-execute-rejected"
+    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:capital-efficient}}
 
-   "s37-profit-maximizer-two-resolver-split-outcomes"
-   {:scenario/type    :adversarial
+    "s37-profit-maximizer-two-resolver-split-outcomes"
+    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:multi-step :high-capital}}
 
-   ;; ── Adversarial: forking-strategist ───────────────────────────────────
+    "s67-reentrancy-callback"
+    {:scenario/type    :adversarial
+    :adversary/type   :profit-maximizer
+    :adversary/traits #{:reentrancy :callback}}
+
+    ;; ── Adversarial: forking-strategist ───────────────────────────────────
    "s26-forking-strategist-l1-reversal"
    {:scenario/type    :adversarial
     :adversary/type   :forking-strategist

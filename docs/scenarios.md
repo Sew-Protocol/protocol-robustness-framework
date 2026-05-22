@@ -1,9 +1,55 @@
-# Adversarial Scenarios
+# Scenario Index
 
-All 33 adversarial scenarios (S24–S35) run against the live Clojure contract state machine via gRPC. 31 protocol invariants are checked at every state transition. The Clojure deterministic suite (S01–S41) runs in-process without a server.
+## Evidence Classification
 
-Run all: `cd python && python invariant_suite.py`
-Run one: `python invariant_suite.py --scenario F3`
+> Merged from `docs/simulation-checklist.md`.
+
+Scenarios mature along three dimensions:
+
+| Dimension | Scope | Values |
+| :--- | :--- | :--- |
+| **Execution backing** | How was the trace generated? | `pinned-derivation`, `simulator-backed-single-path`, `simulator-backed-parameter-sweep` |
+| **Model depth** | Adversarial coverage | `single-path`, `branch-covered`, `counterfactual`, `adversarial-sweep` |
+| **Claim confidence** | Strength of evidence | `provisional`, `medium`, `high` |
+
+**Promotion criteria:**
+1. A scenario moves from `pinned-derivation` to `simulator-backed` only when the simulator executes it and CI verifies the trace hash.
+2. `high` confidence requires sufficient branch coverage, adversarial variants (including negative "should-fail" cases), and sensitivity analysis.
+3. For every passing scenario, implement at least one "should-fail/reject" variant.
+
+**Required meta-scenarios:**
+- `reference-suite-integrity-v1` — verifies metadata consistency (trace hashes, artifact sources, confidence levels).
+- `contract-sim-parity-v1` — validates simulator/Solidity parity on core state transitions.
+- `economic-assumption-sensitivity-v1` — stress-tests complex assumptions across pessimistic parameter ranges.
+
+---
+
+
+
+## Scenario naming and suite structure
+
+This repository maintains two scenario suites:
+
+| Suite | Prefix | Count | Runtime | Purpose |
+|-------|--------|-------|---------|---------|
+| **Deterministic invariant suite** | `S` | S01–S41 (41 scenarios) | ~1 s in-process, no server | Protocol correctness, state machine validation, adversarial rejection, edge cases |
+| **Adversarial gRPC suite** | `F` (failure class) via `S24–S35` | 33 scenarios | Requires gRPC server | Live adversarial agents, failure-mode reproduction, attack-surface mapping |
+
+**S-prefix** — all in-process deterministic scenarios (S01–S67 in the full suite; S01–S41 in the baseline invariant run). Each has fixed inputs, a known expected outcome, and invariants checked at every step.
+
+**F-prefix** — the 10 adversarial failure-mode categories (F1–F10). Each F-class maps to one or more scenarios in the gRPC suite (S24–S35 in the current baseline). The F-prefix is used when referring to the failure class independent of the specific scenario number.
+
+**Running the suites:**
+```bash
+# Deterministic in-process suite (S01–S41)
+clojure -M:run -- --invariants
+
+# Adversarial gRPC suite (all 33 scenarios)
+cd python && python invariant_suite.py
+
+# Adversarial gRPC suite (one F-class)
+python invariant_suite.py --scenario F3
+```
 
 ---
 
@@ -36,6 +82,15 @@ These scenarios verify that the protocol behaves correctly under normal and edge
 | S21 | dr3-kleros-pending-cleared-on-escalation | Pending settlement cleared when dispute escalates |
 | S22 | status-leak-agree-cancel-over-dispute | **Bug regression**: stale agree_to_cancel flag on disputed escrow |
 | S23 | preemptive-escalation-blocked | Seller cannot escalate without a pending settlement |
+| S76 | sponsored-appeal-third-party-funding | Third-party sponsor challenges a pending decision and funds escalation via challenge bond |
+
+### Appeal sponsorship policy (current model)
+
+- Bond payer is the **caller** of `escalate_dispute` / `challenge_resolution`.
+- `escalate_dispute` remains participant-only (`from`/`to` required).
+- `challenge_resolution` is open-challenger and can be called by non-participants.
+- The sponsor address is recorded as the bond poster of record in `:bond-balances`.
+- In practice, third-party sponsorship currently flows through `challenge_resolution`.
 
 ---
 

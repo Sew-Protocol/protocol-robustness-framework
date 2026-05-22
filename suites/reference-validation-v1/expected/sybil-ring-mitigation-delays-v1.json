@@ -1,0 +1,14 @@
+{
+  "scenario_id": "sybil-ring-mitigation-delays-v1",
+  "status": "fail",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Evaluates mitigation of the sybil ring (H2) via mandatory escalation delays (1-50 epochs). Finding: Delays alone are insufficient to prevent honest resolver displacement; they merely stall the collapse. A multi-layered defense is required.",
+  "results": {
+    "mitigation_method": "escalation-delay",
+    "max_delay_tested": 50,
+    "displacement_rate": 1.0,
+    "pass": false
+  },
+  "upgrade_path": "Implement a multi-layered defense (Escalation Bond increases + Mandatory Delays + Correlation-based detection)."
+}

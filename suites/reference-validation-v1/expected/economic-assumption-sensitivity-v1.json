@@ -1,0 +1,13 @@
+{
+  "scenario_id": "economic-assumption-sensitivity-v1",
+  "status": "pass",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "medium",
+  "description": "Stress-tests malicious resolver assumptions across pessimistic parameter ranges, specifically focusing on the cheap re-entry adversary.",
+  "results": {
+    "cheap_reentry_ev_bounded": true,
+    "max_attacker_ev": -42,
+    "worst_dominance_ratio": 0.15
+  },
+  "upgrade_path": "Integrate more diverse reputation profiles and adversarial strategy mixtures."
+}

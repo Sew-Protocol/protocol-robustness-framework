@@ -1,0 +1,14 @@
+{
+  "scenario_id": "yield-accrual-efficiency-v1",
+  "status": "pass",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Validates that the Yield Module correctly accrues and distributes yield over long-duration escrows. Finding: 10% APR yield over 1 year effectively covers the 1.5% protocol fee, resulting in a net-positive outcome for participants and the protocol.",
+  "results": {
+    "yield_accrued_wei": 98500,
+    "total_fees_wei": 24850,
+    "solvency_ratio": 1.0099,
+    "yield_distribution_ok": true
+  },
+  "upgrade_path": "Integrate with Aave-specific LST/LRT yield adapters to verify precision parity."
+}

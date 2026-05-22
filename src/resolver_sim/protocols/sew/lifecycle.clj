@@ -17,7 +17,9 @@
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
-            [resolver-sim.economics.payoffs            :as payoffs]))
+            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.yield.ops                   :as yield-ops]
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal accounting helpers
@@ -41,21 +43,56 @@
 ;; ---------------------------------------------------------------------------
 
 ;; ---------------------------------------------------------------------------
+;; Yield Accrual
+;; ---------------------------------------------------------------------------
+
+(def ^:const seconds-per-year 31536000)
+
+(defn- escrow-yield-owner [escrow-id]
+  [:sew/escrow escrow-id])
+
+(defn accrue-yield
+  "Calculate and update accrued yield for an escrow based on time delta."
+  [world workflow-id]
+  (let [snap (t/get-snapshot world workflow-id)
+        mid  (:yield-generation-module snap)]
+    (if (and mid (contains? (:yield/modules world) mid))
+      (let [et    (t/get-transfer world workflow-id)
+            now   (:block-time world)
+            last  (:last-accrual-time et now)
+            dt    (- now last)]
+        (if (pos? dt)
+          (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
+                                                        :module/id mid
+                                                        :owner/id (escrow-yield-owner workflow-id)
+                                                        :token (:token et)
+                                                        :dt dt})]
+            ;; Update last-accrual-time to now
+            (assoc-in world' [:escrow-transfers workflow-id :last-accrual-time] now))
+          world))
+      world)))
+
+;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
 
 (defn- finalize-release
-  "Internal: transition to :released, update accounting.
-   If the token has a Fee-on-Transfer (FoT) tax configured on the world, only the
-   net amount (after tax) is recorded as released; the full AFA is still removed
-   from held.  The gap is the unexplained drain that token-tax-reconciliation? catches."
+  "Internal: transition to :released, update accounting."
   [world workflow-id]
   (let [et      (t/get-transfer world workflow-id)
         token   (:token et)
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))]
+        net-amt (- amt (t/compute-fee amt fot-bps))
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
+        (accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :released)
         (acct/sub-held token amt)
         (acct/record-released token net-amt)
         (acct/record-claimable workflow-id (:to et) net-amt)
@@ -63,24 +100,28 @@
         (sm/apply-transition! workflow-id :released))))
 
 (defn- finalize-refund
-  "Internal: transition to :refunded, update accounting.
-   If the token has a Fee-on-Transfer (FoT) tax configured on the world, only the
-   net amount (after tax) is recorded as refunded; the gap triggers token-tax-reconciliation?."
+  "Internal: transition to :refunded, update accounting."
   [world workflow-id]
   (let [et      (t/get-transfer world workflow-id)
         token   (:token et)
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))]
+        net-amt (- amt (t/compute-fee amt fot-bps))
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
+        (accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :refunded)
         (acct/sub-held token amt)
         (acct/record-refunded token net-amt)
         (acct/record-claimable workflow-id (:from et) net-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id :refunded))))
 
-;; ---------------------------------------------------------------------------
-;; create-escrow
 ;;
 ;; Mirrors: BaseEscrow.createEscrow
 ;;
@@ -166,15 +207,26 @@
                               :dispute-resolver  resolver
                               :auto-release-time auto-rel
                               :auto-cancel-time  auto-can
+                              :last-accrual-time (:block-time world)
                               :escrow-state      :pending})
               world'        (-> world
                                 (assoc-in [:escrow-transfers workflow-id] et)
                                 (assoc-in [:escrow-settings workflow-id]
                                           (t/make-escrow-settings settings))
                                 (assoc-in [:module-snapshots workflow-id] snapshot)
+                                (update-in [:total-principal-deposited token] (fnil + 0) amount)
                                 (add-held token afa)
-                                (add-fee token fee))]
-          (assoc (t/ok world') :workflow-id workflow-id))))))
+                                (add-fee token fee))
+              ;; Trigger yield deposit if module is configured
+              ymid          (:yield-generation-module snapshot)
+              world''       (if (and ymid (contains? (:yield/modules world') ymid))
+                              (yield-ops/apply-yield-op world' {:op/type :yield/deposit
+                                                                :module/id ymid
+                                                                :owner/id (escrow-yield-owner workflow-id)
+                                                                :amount afa
+                                                                :token token})
+                              world')]
+          (assoc (t/ok world'') :workflow-id workflow-id))))))
 
 ;; ---------------------------------------------------------------------------
 ;; raise-dispute
@@ -184,9 +236,20 @@
 
 (defn raise-dispute
   "Raise a dispute on a :pending escrow.
-   Caller must be :from or :to."
+   Caller must be :from or :to.
+
+   Also checks DRM resolver capacity: if the escrow has a dispute-resolver assigned
+   and that resolver is at maxConcurrentDisputes, the call fails with
+   :resolver-capacity-exceeded — mirroring DRM.initializeDispute behaviour.
+   On success, increments the resolver's current-active counter."
   [world workflow-id caller]
-  (sm/transition-to-disputed world workflow-id caller))
+  (let [result (sm/transition-to-disputed world workflow-id caller)]
+    (if-not (:ok result)
+      result
+      (let [resolver (get-in (:world result) [:escrow-transfers workflow-id :dispute-resolver])]
+        (if (and resolver (t/resolver-at-capacity? world resolver))
+          (t/fail :resolver-capacity-exceeded)
+          (t/ok (t/increment-resolver-capacity (:world result) resolver)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; release
@@ -356,5 +419,6 @@
           world'          (-> world-slashed
                               (acct/distribute-slashed-funds slash-amt)
                               (finalize-refund workflow-id)
+                              (t/decrement-resolver-capacity resolver)
                               (update :dispute-timestamps dissoc workflow-id))]
       (t/ok world'))))

@@ -1,0 +1,14 @@
+{
+  "scenario_id": "sybil-ring-stochastic-v1",
+  "status": "fail",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Validates the per-member stochastic ring model (H2) and tests the Escalation Trap vulnerability. This scenario identifies that a sybil ring can displace 100% of honest resolvers if their capital reserves are insufficient to cover repeated appeal bonds.",
+  "results": {
+    "displacement_rate": 1.0,
+    "pattern": "collapse",
+    "stochastic_model_active": true,
+    "cascade_signalling_verified": true
+  },
+  "upgrade_path": "Implement ring detection correlation analysis and increase escalation bond requirements as recommended by the simulation findings."
+}

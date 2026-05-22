@@ -2,12 +2,12 @@
 # Canonical test runner for sew-simulation.
 #
 # Usage:
-#   ./scripts/test.sh            # run all suites (unit + invariants + fixtures)
+#   ./scripts/test.sh            # run all suites (unit + invariants + fixtures + triage)
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S41 deterministic invariant scenarios only
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
-#   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation)
+#   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
 #   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
 #   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
@@ -125,9 +125,9 @@ run_contracts() {
   grep -q 'rpc DestroySession' proto/simulation.proto
 
   # Python client must target same service/methods
-  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sew_sim/grpc_client.py
-  grep -q 'StartSession' python/sew_sim/grpc_client.py
-  grep -q 'DestroySession' python/sew_sim/grpc_client.py
+  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
+  grep -q 'StartSession' python/sim_api/grpc_client.py
+  grep -q 'DestroySession' python/sim_api/grpc_client.py
 
   # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
   grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
@@ -248,10 +248,10 @@ run_triage() {
 
 run_suites() {
   require_clojure || return $?
-  echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation)..."
+  echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation + spe-regression)..."
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
-(let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation]
+(let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]
       results (map (fn [id] [id (f/run-suite id)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
@@ -261,6 +261,52 @@ run_suites() {
         (when (not= :pass (:outcome r))
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
+  return $?
+}
+
+run_dr3_coverage() {
+  require_clojure || return $?
+  echo "Running DR3 critical suite + release-mapping drift checks..."
+
+  # 1) Run the dedicated DR3-critical suite.
+  clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [r (f/run-suite :suites/dr3-critical)]
+  (println (str :suites/dr3-critical \" → \" (if (:ok? r) \"PASS\" \"FAIL\")))
+  (when-not (:ok? r)
+    (doseq [x (:results r)]
+      (when (not= :pass (:outcome x))
+        (println (str \"  FAIL: \" (:trace-id x) \" [\" (:outcome x) \"]\")))))
+  (when-not (:ok? r) (System/exit 1)))" || return $?
+
+  # 2) Verify DR3 release mapping file references valid traces and suite IDs.
+  clojure -M:test -e "
+(require '[clojure.edn :as edn]
+         '[clojure.java.io :as io])
+
+(let [m (edn/read-string (slurp \"data/fixtures/protocol/dr3-release-modules.edn\"))
+      traces (:dr3-critical-traces m)
+      suites (:dr3-critical-suites m)
+      missing-traces (->> traces
+                          (map name)
+                          (map #(str \"data/fixtures/traces/\" % \".trace.json\"))
+                          (remove #(-> % io/file .exists))
+                          vec)
+      missing-suites (->> suites
+                          (map name)
+                          (map #(str \"data/fixtures/suites/\" % \".edn\"))
+                          (remove #(-> % io/file .exists))
+                          vec)]
+  (when (seq missing-traces)
+    (println \"Missing DR3 mapped traces:\")
+    (doseq [p missing-traces] (println \" -\" p))
+    (System/exit 1))
+  (when (seq missing-suites)
+    (println \"Missing DR3 mapped suites:\")
+    (doseq [p missing-suites] (println \" -\" p))
+    (System/exit 1))
+  (println \"DR3 mapping drift checks passed\"))" || return $?
+
   return $?
 }
 
@@ -447,7 +493,7 @@ run_coverage_gates() {
   require_clojure || return $?
   echo "Running transition/guard coverage report + gates..."
   mkdir -p "$ARTIFACT_DIR"
-  clojure -M:coverage-report -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
+  clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
   python - <<PY
 import json, sys
 from pathlib import Path
@@ -557,6 +603,7 @@ run_monte_carlo() {
   echo "  Phase P  — Adversarial: appeals falsification (difficulty/evidence/herding)"
   echo "  Phase AA — Governance:  governance-as-adversary (selective enforcement gaming)"
   echo "  Phase AD — Governance:  bandwidth floor safeguard (AA remediation)"
+  echo "  Phase F  — Adversarial: collusion ring deterrence (waterfall slashing)"
   echo ""
 
   local mc_fail=0
@@ -577,13 +624,63 @@ run_monte_carlo() {
   clojure -M:run -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
+  echo "── Phase F: Collusion Ring Deterrence ────────────────────────────────────"
+  clojure -M:run -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
   if [ "$mc_fail" -eq 0 ]; then
-    echo "Monte Carlo sweep: all 4 phases PASSED"
+    echo "Monte Carlo sweep: all 5 phases PASSED"
   else
     echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
   fi
 
   return $mc_fail
+}
+
+run_outcome_classification_report() {
+  echo ""
+  echo "Outcome classification report"
+  echo "============================="
+  python - <<PY
+import json
+from pathlib import Path
+
+artifact = Path("$ARTIFACT_FILE")
+if not artifact.exists():
+    print("No test summary found; skipping classification report.")
+    raise SystemExit(0)
+
+data = json.loads(artifact.read_text())
+targets = data.get("targets", [])
+
+hard_fail_targets = [t for t in targets if t.get("status") == "fail"]
+print("1) Gate/Test status")
+if hard_fail_targets:
+    print(f"   FAIL: {len(hard_fail_targets)} failing target(s)")
+    for t in hard_fail_targets:
+        print(f"   - {t.get('target')} (exit={t.get('exit_code')})")
+else:
+    print("   PASS: all executed targets passed")
+
+mc = next((t for t in targets if t.get("target") == "monte-carlo"), None)
+print("\n2) Model findings (non-gating diagnostics)")
+if not mc:
+    print("   Monte Carlo target not run in this mode.")
+    raise SystemExit(0)
+
+log_path = Path(mc.get("log_file", ""))
+if not log_path.exists():
+    print("   Monte Carlo log missing; cannot summarize findings.")
+    raise SystemExit(0)
+
+txt = log_path.read_text(errors="ignore")
+claim_fails = txt.count("❌")
+claim_pass = txt.count("✅")
+
+print(f"   Indicators in Monte Carlo output: ✅={claim_pass}, ❌={claim_fails}")
+print("   Note: these are model/theory outcome signals, not unit-test assertion failures.")
+PY
+  return $?
 }
 
 run_long_horizon() {
@@ -668,6 +765,9 @@ case "$MODE" in
   suites)
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     ;;
+  dr3-coverage)
+    run_target dr3-coverage run_dr3_coverage || FAILURES=$((FAILURES + 1))
+    ;;
   equivalence-new)
     run_target equivalence-new run_equivalence_new || FAILURES=$((FAILURES + 1))
     ;;
@@ -703,11 +803,14 @@ case "$MODE" in
     echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target triage run_triage || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+    run_outcome_classification_report || true
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac
@@ -787,6 +890,36 @@ out = {
   "failure_count": $FAILURES,
   "risk_digest": risk_digest,
   "targets": rows,
+}
+
+# Status-count block for quick dashboard/CLI consumption
+target_total = len(rows)
+target_pass = sum(1 for r in rows if r.get("status") == "pass")
+target_fail = sum(1 for r in rows if r.get("status") == "fail")
+target_unknown = max(0, target_total - target_pass - target_fail)
+
+critical_count = len(risk_digest.get("critical_findings", []))
+warning_count = len(risk_digest.get("warnings", []))
+info_count = len(risk_digest.get("infos", []))
+gates_failed_count = len(risk_digest.get("gates_failed", []))
+gates_passed_count = len(risk_digest.get("gates_passed", []))
+
+out["status_counts"] = {
+  "targets": {
+    "total": target_total,
+    "pass": target_pass,
+    "fail": target_fail,
+    "unknown": target_unknown
+  },
+  "risk": {
+    "critical": critical_count,
+    "warning": warning_count,
+    "info": info_count
+  },
+  "gates": {
+    "failed": gates_failed_count,
+    "passed": gates_passed_count
+  }
 }
 
 # P2: per-phase failure counters for dashboard-friendly aggregation

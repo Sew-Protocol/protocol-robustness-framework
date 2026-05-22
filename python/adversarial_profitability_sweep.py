@@ -23,7 +23,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sew_sim.live_agents import (
+from sim_api.live_agents import (
     GriefingBuyerLive,
     ProfitThresholdResolver,
     EscalatingBuyerLive,
@@ -31,8 +31,8 @@ from sew_sim.live_agents import (
     AutomateTimedActionsLive,
     CapacityLimitedArbitrator,
 )
-from sew_sim.live_runner import LiveRunner
-from sew_sim.grpc_client import SimulationClient
+from sim_api.live_runner import LiveRunner
+from sim_api.grpc_client import SimulationClient
 
 
 def _ts() -> str:

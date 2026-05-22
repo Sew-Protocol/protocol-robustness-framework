@@ -1,9 +1,15 @@
 # Adversarial Simulation Evidence — Summary
 
-**Repository:** SEW Dispute Resolution Simulator
-**Suite version:** git `31ba27b` (ethereum branch)
-**Run date:** 2026-04-15
-**Result:** 33/33 scenarios passed · 0 invariant violations
+> ⚠️ **Stale snapshot** — this summary was generated at `git 31ba27b` (ethereum branch,
+> 2026-04-15) against 33 scenarios. The current scenario suite is larger (S01–S41+) and
+> the codebase has been significantly updated since this run. **Do not cite the
+> scenario counts, invariant counts, or pass/fail figures below as current evidence.**
+> Re-run `./scripts/test.sh invariants` against HEAD to generate a current summary.
+
+**Repository:** Protocol Robustness Framework — Sew Protocol Model
+**Suite version:** git `31ba27b` (ethereum branch) *(stale)*
+**Run date:** 2026-04-15 *(stale)*
+**Result:** 33/33 scenarios passed · 0 invariant violations *(stale — see warning above)*
 
 ---
 

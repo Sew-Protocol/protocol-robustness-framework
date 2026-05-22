@@ -10,7 +10,7 @@ import time
 # Ensure we can import sew_sim
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
-from sew_sim.grpc_client import SimulationClient, managed_session
+from sim_api.grpc_client import SimulationClient, managed_session
 
 def test_readiness():
     print("Starting Readiness Smoke Test...")

@@ -60,10 +60,11 @@
             ;; Watchtower receives bounty
             (is (= expected-bounty (get-in world-final [:claimable watchtower])))
             
-            ;; Protocol and Insurance receive remaining (50/30 split minus bounty)
+            ;; Protocol and Insurance receive remaining; retained share is tracked
+            ;; in :retained-slash-reserves (not :bond-distribution :burned).
             (let [remaining (- net-escrow expected-bounty)
                   insurance (get-in world-final [:bond-distribution :insurance])
-                  protocol  (get-in world-final [:bond-distribution :protocol])]
+                  protocol  (get-in world-final [:bond-distribution :protocol])
+                  retained  (get-in world-final [:retained-slash-reserves] 0)]
               ;; Check that total distributed = net_escrow
-              (is (= net-escrow (+ insurance protocol expected-bounty 
-                                   (get-in world-final [:bond-distribution :burned])))))))))))
+              (is (= net-escrow (+ insurance protocol expected-bounty retained))))))))))

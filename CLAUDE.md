@@ -2,13 +2,14 @@
 
 ## What this system is
 
-A **statistical simulation** of the SEW decentralised dispute-resolution protocol,
-plus a **live contract model** that simulates actual contract execution.
+A **protocol-agnostic adversarial testing framework** for decentralised dispute
+resolution, escrow, and coordination protocols — with the **Sew Protocol** as
+the main subject of the current simulation work.
 
 Two distinct modes:
 - **Statistical model** (`sim/`, `stochastic/`) — Monte Carlo sweeps over protocol
   parameter space; tests falsifiable hypotheses about resolver incentives.
-- **Live simulation** (`contract_model/`) — deterministic execution of dispute
+- **Live simulation** (`contract_model/`) — deterministic replay of dispute
   protocol kernels against adversarial strategies; records outcomes to XTDB.
 
 ---
@@ -33,22 +34,22 @@ contract_model/     ← Protocol-agnostic kernel (pure)
   diff.clj            generic world diffing helpers (moved to protocols/sew for now)
   trace_metadata.clj  generic trace vocabulary (actors, effects, outcomes)
 
-protocols/          ← Pluggable protocol interface + implementations
-  protocol.clj        DisputeProtocol interface (pure; no deps)
-  dummy.clj           DummyProtocol — always-pass proof-of-concept
-  sew/                SEW Protocol implementation (formerly contract_model/*)
-    state_machine.clj   escrow state transitions
-    lifecycle.clj       contract lifecycle (create → dispute → resolve)
-    accounting.clj      fee and profit calculations
-    resolution.clj      dispute resolution logic
+protocols/          ← Adapter interfaces + implementations
+  protocol.clj        SimulationAdapter / EconomicModel / AnalysisModule interfaces (pure; no deps)
+  dummy.clj           DummyProtocol — always-pass test double
+  sew/                Sew domain logic (pure functions)
+    state_machine.clj   escrow FSM and allowed-transitions graph
+    lifecycle.clj       escrow lifecycle (create, release, cancel, dispute)
+    accounting.clj      fee/bond/slashing arithmetic
+    resolution.clj      dispute resolution (execute, escalate, settle)
     authority.clj       resolver authority checks
-    invariants.clj      post-condition checks (30+ invariants)
-    types.clj           SEW-specific types / constants
-    invariant_runner.clj in-process runner for SEW scenarios
-    invariant_scenarios.clj S01–S41 deterministic SEW scenarios
-    runner.clj          top-level trial runner (live sim)
+    invariants.clj      protocol post-conditions (30+ invariants)
+    types.clj           world-state shape, constructors, accessors
+    invariant_runner.clj in-process runner for deterministic scenarios
+    invariant_scenarios.clj S01–S41 deterministic scenarios
+    runner.clj          top-level live-simulation trial runner
 
-  sew.clj             SEWProtocol adapter — wires sew/* into DisputeProtocol
+  sew.clj             SewProtocol adapter — wires sew/* into the adapter interfaces
 
 stochastic/         ← statistical/economic models (pure functions)
   economics.clj, dispute.clj, decision_quality.clj, ...
@@ -117,7 +118,7 @@ or filesystem.** `db/` and `io/` are the only namespaces with side effects.
 
 > **`sim/engine.clj` vs `protocols/`** — `sim/engine.clj` is the *phase harness*
 > (run-parameter-sweep, make-result, print-phase-header).  `protocols/` is the
-> *protocol abstraction layer* (DisputeProtocol interface + SEW/Dummy implementations).
+> *adapter layer* (SimulationAdapter/EconomicModel/AnalysisModule interfaces + Sew/Dummy implementations).
 > These are unrelated; the similar-sounding names are coincidental.
 
 ---
@@ -128,9 +129,9 @@ or filesystem.** `db/` and `io/` are the only namespaces with side effects.
 
 ```
 src/resolver_sim/         ← Clojure namespace root (resolver-sim.*)
-  contract_model/         Protocol-agnostic kernel
-  protocols/              DisputeProtocol interface + implementations
-    sew/                  SEW Protocol logic
+  contract_model/         Replay engine (protocol-agnostic)
+  protocols/              SimulationAdapter interfaces + implementations
+    sew/                  Sew domain logic (pure functions)
   scenario/               CDRS v1.1 theory and expectation evaluators
   stochastic/             pure statistical/economic models (~17 files)
   sim/                    simulation phases + phase infrastructure (~38 files)
@@ -214,11 +215,11 @@ When eval-engine moves `xtdb.clj` → `evaluation/db/xtdb.clj`, update:
 |---|---|
 | `core.clj` | CLI entry point; dispatch only, no logic |
 | `contract_model/replay.clj` | Open-world scenario replay; agnostic harness |
-| `protocols/protocol.clj` | `DisputeProtocol` defprotocol — the plugin interface |
-| `protocols/sew.clj` | `SEWProtocol` adapter — wires sew/* logic |
+| `protocols/protocol.clj` | `SimulationAdapter` / `EconomicModel` / `AnalysisModule` interfaces |
+| `protocols/sew.clj` | `SewProtocol` adapter — wires sew/* logic |
 | `scenario/theory.clj` | Game-theoretic claim falsification (v1.1) |
 | `scenario/expectations.clj` | Execution-level outcome validation (v1.1) |
-| `protocols/sew/invariant_runner.clj` | SEW-specific deterministic test runner |
+| `protocols/sew/invariant_runner.clj` | Sew-specific deterministic test runner |
 | `db/store.clj` | XTDB table ops + `summarise-batch` (pure) |
 | `sim/phase_*.clj` | One file per simulation phase; entry point `run-phase-*-sweep` |
 | `sim/fixtures.clj` | Fixture suite runner: `run-suite`, `list-suites`, `minimise-suite` |

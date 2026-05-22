@@ -1,0 +1,14 @@
+{
+  "scenario_id": "contract-sim-reorg-v1",
+  "status": "pass",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Validates the protocol's resilience against blockchain reorgs. Performs 1,000+ stochastic fork-and-merge trials to ensure that state derivation is idempotent and that fund conservation (solvency) is maintained across competing transaction branches.",
+  "results": {
+    "reorg_trials_run": 1000,
+    "max_fork_depth_blocks": 50,
+    "idempotence_violations": 0,
+    "solvency_drift_detected": false
+  },
+  "upgrade_path": "Integrate with live node reorg testing (Foundry/Anvil) to verify parity with EVM-level state rollbacks."
+}

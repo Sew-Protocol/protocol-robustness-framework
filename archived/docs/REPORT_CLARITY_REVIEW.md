@@ -1,4 +1,4 @@
-# SEW Simulation: Report Output Clarity & Usability Review
+# Sew Simulation: Report Output Clarity & Usability Review
 
 **Date:** 2026-05-01  
 **Scope:** All available reporting functionality across phases, invariant suites, and test harnesses  
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The SEW simulation system provides **comprehensive falsifiable hypothesis testing** across 9 major test phases plus deterministic invariant scenarios. The reporting outputs are **well-structured** with clear visual hierarchy, but have **moderate to high usability** with room for improvement in:
+The Sew simulation system provides **comprehensive falsifiable hypothesis testing** across 9 major test phases plus deterministic invariant scenarios. The reporting outputs are **well-structured** with clear visual hierarchy, but have **moderate to high usability** with room for improvement in:
 
 1. **Context/preamble clarity** — Not all reports state their hypothesis clearly upfront
 2. **Pass/fail threshold documentation** — What constitutes PASS vs FAIL is sometimes implicit
@@ -29,7 +29,7 @@ Runs 41 deterministic protocol scenarios to verify state machine correctness, sa
 **Output format:**
 ```
 ════════════════════════════════════════════════════════════════════════
-  SEW Invariant Suite — Deterministic Scenarios (Clojure in-process)
+  Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)
 ════════════════════════════════════════════════════════════════════════
   Scenario                                        steps  reverts  status
   ──────────────────────────────────────────────────────────────────────
@@ -455,7 +455,7 @@ Recommended mitigation:
 
 ## Conclusion
 
-The SEW simulation reports are **well-designed and data-rich**, but benefit from:
+The Sew simulation reports are **well-designed and data-rich**, but benefit from:
 
 1. ✅ Stronger hypothesis statements upfront (Phase T is a great model)
 2. ✅ Better explanation of metrics and what constitutes "good" vs "bad" outcomes

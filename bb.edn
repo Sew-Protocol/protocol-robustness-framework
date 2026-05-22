@@ -36,6 +36,14 @@
   trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
                  :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
 
+  trace:diff {:doc "Run two scenarios and compare their results. Usage: bb trace:diff <scenario-1> <scenario-2> <out-dir>"
+              :task (let [s1 (first *command-line-args*)
+                          s2 (second *command-line-args*)
+                          od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
+                      (shell "clojure -M:run -- --invariants --scenario" s1 "--output-file results/diff-1.json")
+                      (shell "clojure -M:run -- --invariants --scenario" s2 "--output-file results/diff-2.json")
+                      (shell "python3 python/trace_compare.py --baseline results/diff-1.json --candidate results/diff-2.json --out-dir" od))}
+
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
 
@@ -86,7 +94,7 @@
 
   help:first {:doc "First-time visitor quick commands"
               :task (do
-                      (println "SEW first-time quickstart")
+                      (println "Sew first-time quickstart")
                       (println "")
                       (println "1) Evidence dashboard (read-only):")
                       (println "   bb notebook")

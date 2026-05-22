@@ -86,57 +86,131 @@
 
 (defn calculate-exit-probability
   "Based on cumulative losses and slashing, probability resolver exits.
+
+   Accounts for probationary period: resolvers re-entering after a slashed exit
+   carry :probation-until-epoch. If the current epoch is within their probation
+   window, a :probation-exit-multiplier (default 1.5) is applied to model the
+   elevated scrutiny they face. This makes repeat attackers more likely to be
+   detected and exit again quickly.
+
    Returns: Double between 0 and 1"
   [resolver epoch params]
-  (let [total-loss (:total-slashing-loss resolver 0.0)
+  (let [total-loss    (:total-slashing-loss resolver 0.0)
         times-slashed (:total-slashed resolver 0)
-        total-profit (:total-profit resolver 0.0)
-        strategy (:strategy resolver)
-        
+        total-profit  (:total-profit resolver 0.0)
+        strategy      (:strategy resolver)
+
         ; Base exit probability by strategy
         base-prob (case strategy
-                    :honest 0.001      ; Honest almost never exit (profit positive)
-                    :lazy 0.01         ; Lazy occasionally exit (lower profits)
+                    :honest    0.001   ; Honest almost never exit (profit positive)
+                    :lazy      0.01    ; Lazy occasionally exit (lower profits)
                     :malicious 0.05    ; Malicious frequently exit (slashed & unprofitable)
                     :collusive 0.03    ; Collusive sometimes exit (detected)
                     0.01)
-        
-        ; Increase probability if slashed recently
-        slashing-penalty (if (> times-slashed 0) (* 0.02 times-slashed) 0.0)
-        
+
+        ; Increase probability if slashed
+        slashing-penalty    (if (> times-slashed 0) (* 0.02 times-slashed) 0.0)
+
         ; Decrease probability if profitable
-        profitability-bonus (if (> total-profit 0) (- 0.01) 0.0)]
-    
-    (max 0.0 (min 1.0 (+ base-prob slashing-penalty profitability-bonus)))))
+        profitability-bonus (if (> total-profit 0) (- 0.01) 0.0)
+
+        raw-prob (max 0.0 (min 1.0 (+ base-prob slashing-penalty profitability-bonus)))
+
+        ; Probation multiplier: elevated exit pressure during re-entry window
+        probation-until     (:probation-until-epoch resolver)
+        probation-mult      (if (and probation-until (<= epoch probation-until))
+                              (:probation-exit-multiplier params 1.5)
+                              1.0)]
+
+    (max 0.0 (min 1.0 (* raw-prob probation-mult)))))
 
 (defn apply-epoch-decay
   "After each epoch, remove exited resolvers, add new ones to maintain population.
 
+   Classifies each exit as either a :slashed-exit (resolver had ≥1 slash event)
+   or a :natural-exit (profit-driven / base-rate). This distinction drives two
+   behaviour differences for replacements:
+
+   1. Identity cost — replacement resolvers filling slashed-exit slots start with
+      a negative initial profit equal to (identity-cost-bps / 10000) * escrow-size.
+      This models the on-chain registration stake or cooldown cost that the real
+      protocol can impose on re-registering resolvers.
+
+   2. Probationary period — replacements for slashed exits carry
+      :probation-until-epoch = (epoch-num + probation-epochs). During this window
+      calculate-exit-probability applies :probation-exit-multiplier, making these
+      resolvers more likely to exit again (elevated scrutiny).
+
+   New params consumed (all default to 0 / backward-compatible):
+     :identity-cost-bps         — registration cost in bps of :escrow-size (default 0)
+     :probation-epochs          — epochs of elevated scrutiny after slashed re-entry (default 0)
+     :probation-exit-multiplier — exit-prob multiplier during probation (default 1.5)
+     :slashed-replacement-mix   — strategy mix for slashed-exit replacements
+                                  (defaults to :replacement-strategy-mix or standard mix)
+
    decay-rng  — seeded RNG for deterministic exit decisions.
    next-id    — starting numeric suffix for new entrant IDs (avoids ID collisions).
-   Returns: {:histories updated-map :next-id N}"
+
+   Returns: {:histories updated-map :next-id N :slashed-exits N :natural-exits N}"
   [resolver-histories epoch-num params decay-rng next-id]
-  (let [n-total (count resolver-histories)
-        active-resolvers
-        (reduce-kv (fn [acc id resolver]
-                     (let [exit-prob (calculate-exit-probability resolver epoch-num params)]
-                       (if (<= (rng/next-double decay-rng) exit-prob)
-                         acc
-                         (assoc acc id (assoc resolver :status :active)))))
-                   {} resolver-histories)
-        n-new (- n-total (count active-resolvers))
-        new-strategy-mix (when (pos? n-new)
-                           (or (:replacement-strategy-mix params)
-                               {:honest    0.50
-                                :lazy      0.25
-                                :malicious 0.125
-                                :collusive 0.125}))]
+  (let [n-total        (count resolver-histories)
+        identity-cost  (let [cost-bps   (:identity-cost-bps params 0)
+                             escrow-sz  (:escrow-size params 10000)]
+                         (* (/ cost-bps 10000.0) escrow-sz))
+        probation-end  (+ epoch-num (:probation-epochs params 0))
+
+        ;; Classify each resolver: keep active ones, tag exits as slashed or natural
+        {active-resolvers true, exiting-resolvers false}
+        (group-by (fn [[_id resolver]]
+                    (let [exit-prob (calculate-exit-probability resolver epoch-num params)]
+                      (> (rng/next-double decay-rng) exit-prob)))
+                  resolver-histories)
+
+        active-map     (into {} active-resolvers)
+        slashed-exits  (count (filter (fn [[_id r]] (pos? (:total-slashed r 0))) exiting-resolvers))
+        natural-exits  (count (filter (fn [[_id r]] (zero? (:total-slashed r 0))) exiting-resolvers))
+        n-new          (- n-total (count active-map))
+
+        ;; Strategy mix for replacements — slashed exits may use a different mix
+        ;; (e.g., more honest entrants replacing deterred malicious resolvers)
+        standard-mix   (or (:replacement-strategy-mix params)
+                           {:honest 0.50 :lazy 0.25 :malicious 0.125 :collusive 0.125})
+        slashed-mix    (or (:slashed-replacement-mix params) standard-mix)]
+
     (if (pos? n-new)
-      (let [new-resolvers (initialize-resolvers n-new new-strategy-mix next-id)]
-        {:histories (merge active-resolvers new-resolvers)
-         :next-id   (+ next-id n-new)})
-      {:histories active-resolvers
-       :next-id   next-id})))
+      (let [;; Spawn replacements: slashed-exit slots get identity-cost + probation
+            ;; Natural-exit slots get standard treatment
+            n-slashed-new (min n-new slashed-exits)
+            n-natural-new (- n-new n-slashed-new)
+
+            slashed-replacements
+            (when (pos? n-slashed-new)
+              (let [base (initialize-resolvers n-slashed-new slashed-mix next-id)]
+                ;; Apply identity cost and probation to each slashed replacement
+                (reduce-kv (fn [acc id r]
+                             (assoc acc id
+                                    (cond-> r
+                                      (pos? identity-cost)
+                                      (assoc :total-profit (- identity-cost))
+                                      (pos? (:probation-epochs params 0))
+                                      (assoc :probation-until-epoch probation-end))))
+                           {} base)))
+
+            natural-replacements
+            (when (pos? n-natural-new)
+              (initialize-resolvers n-natural-new standard-mix (+ next-id n-slashed-new)))
+
+            all-replacements (merge slashed-replacements natural-replacements)]
+
+        {:histories     (merge active-map all-replacements)
+         :next-id       (+ next-id n-new)
+         :slashed-exits slashed-exits
+         :natural-exits natural-exits})
+
+      {:histories     active-map
+       :next-id       next-id
+       :slashed-exits 0
+       :natural-exits 0})))
 
 (defn win-rate
   "Calculate per-resolver win rate.

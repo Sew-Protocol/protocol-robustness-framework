@@ -51,7 +51,10 @@
           fee          (* escrow (/ fee-bps 10000.0))
           ; Expected profit = fee - (effective detection rate × slashing loss)
           slash-loss   (* escrow slash-mult eff-det)]
-      (- fee slash-loss))))
+      (- fee slash-loss)))
+
+  (observe-outcome! [_ _outcome]
+    nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Ring-adjusted epoch params

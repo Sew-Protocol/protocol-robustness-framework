@@ -257,7 +257,7 @@
 
 (defn valid-status-combination?
   "True when {:escrow-state :sender-status :recipient-status} is a valid
-   combination according to the SEW protocol."
+   combination according to the Sew protocol."
   [{:keys [escrow-state sender-status recipient-status]}]
   (let [terminals #{:released :refunded :resolved}]
     (cond

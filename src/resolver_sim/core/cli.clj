@@ -1,7 +1,8 @@
 (ns resolver-sim.core.cli
   "CLI option definitions and argument validation.
    Knows nothing about phases or simulation logic."
-  (:require [clojure.tools.cli :refer [parse-opts]]))
+  (:require [clojure.tools.cli :refer [parse-opts]]
+            [resolver-sim.protocols.registry :as preg]))
 
 (def cli-options
   [["-p" "--params PATH" "Path to params.edn file"
@@ -29,6 +30,7 @@
    ["-T" "--phase-ag" "Run Phase AG: EMA convergence (BM-05) — quality signal and cold-start gap"]
    ["-U" "--phase-ah" "Run Phase AH: equity divergence sweep (honest vs strategic)"]
    ["-V" "--phase-ai" "Run Phase AI: escalation trap — sybil ring forces honest resolver displacement"]
+   ["-W" "--phase-f"  "Run Phase F: multi-resolver collusion ring deterrence (waterfall slashing)"]
    ["-I" "--phase-p-revised"   "Run Phase P Revised: sequential appeal falsification"]
    ["-J" "--phase-q"           "Run Phase Q: advanced vulnerability (bribery, evidence spoofing, correlated failures)"]
    ["-K" "--phase-r"           "Run Phase R: liveness & participation failure"]
@@ -39,6 +41,10 @@
    ["-a" "--adversarial" "Run adversarial parameter search (falsification)"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
    [nil "--invariants" "Run S01-S41 deterministic invariant scenarios (in-process, no gRPC)"]
+   [nil "--scenario PATH" "Path to a single scenario JSON file to run (requires --invariants)"]
+   [nil "--output-file PATH" "Path to write the replay result JSON (requires --scenario)"]
+   [nil "--protocol ID" (str "Protocol to use for --invariants (default: " preg/default-protocol-id ")")
+    :default preg/default-protocol-id]
    [nil  "--port PORT" "gRPC server port (used with --serve, default: 7070)"
     :default 7070
     :parse-fn #(Integer/parseInt %)]

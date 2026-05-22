@@ -181,3 +181,37 @@ For PRs touching generation or adversarial logic, confirm:
 - [ ] Seed determinism is preserved
 - [ ] Interface contract docs updated if behavior changed
 
+
+---
+
+## System Diagram
+
+> Preserved from `docs/architecture.md`.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Python adversarial layer                                    │
+│                                                              │
+│  invariant_suite.py          eth_failure_modes.py            │
+│  (scenarios, harness)        (attack agents)                 │
+│                │                                             │
+│                │  gRPC (port 7070)                           │
+└────────────────┼────────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────────┐
+│  Clojure gRPC server  (src/resolver_sim/server/)             │
+│                                                              │
+│  Session API: StartSession / Step / DestroySession            │
+│                │                                             │
+│  contract_model/replay.clj  ← protocol-agnostic kernel       │
+│                │                                             │
+│  protocols/sew.clj               ← SewProtocol adapter           │
+│    protocols/sew/state_machine.clj ← escrow state transitions    │
+│    protocols/sew/lifecycle.clj     ← create → dispute → resolve  │
+│    protocols/sew/invariants.clj    ← 30+ post-condition checks   │
+│    protocols/sew/resolution.clj    ← DR1/DR2/DR3 resolution      │
+│    protocols/sew/authority.clj     ← resolver authorization      │
+│    protocols/sew/accounting.clj    ← fee and profit calculations │
+│    protocols/sew/runner.clj        ← top-level trial runner      │
+└─────────────────────────────────────────────────────────────┘
+```

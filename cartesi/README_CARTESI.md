@@ -1,6 +1,12 @@
-# SEW Cartesi DApp
+# Sew Cartesi DApp — Experimental
 
-This DApp runs the SEW protocol simulation verifiably on the Cartesi Rollups stack.
+> **Status: Experimental / Proof-of-concept.**
+> This integration has not been audited. It is not production-ready.
+> It demonstrates that the Sew simulation kernel can be compiled for the
+> Cartesi Rollups stack and run verifiably on-chain, but the integration
+> is incomplete and not actively maintained.
+
+This DApp runs the Sew protocol simulation verifiably on the Cartesi Rollups stack.
 
 ## Quick Start
 

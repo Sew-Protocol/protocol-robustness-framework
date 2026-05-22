@@ -220,3 +220,25 @@
   [escrow-wei fee-wei bond-loss]
   (let [escrow-net (- escrow-wei fee-wei)]
     (double (/ escrow-net (+ bond-loss escrow-net)))))
+
+;; ---------------------------------------------------------------------------
+;; Yield Modeling
+;; ---------------------------------------------------------------------------
+
+(def ^:const seconds-per-year 31536000)
+
+(defn calculate-accrued-yield
+  "Calculate accrued yield based on principal, annual rate (bps), and duration (seconds).
+   
+   yield = (principal * rate-bps * duration) / (10000 * seconds-per-year)"
+  [principal-wei rate-bps duration-seconds]
+  (let [num (* (bigint principal-wei) (bigint rate-bps) (bigint duration-seconds))
+        den (* 10000 (bigint seconds-per-year))]
+    (long (quot num den))))
+
+(defn random-aave-rate
+  "Simulate a volatile Aave-style yield rate (bps) for a token.
+   Base rate with random walk noise."
+  [rng base-rate-bps volatility]
+  (let [noise (* volatility (- (rng/next-double rng) 0.5))]
+    (max 0 (int (+ base-rate-bps noise)))))

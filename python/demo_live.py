@@ -10,15 +10,15 @@ Requires the Clojure gRPC server running on localhost:7070:
 
 import json
 import textwrap
-from sew_sim.grpc_client import SimulationClient
-from sew_sim.live_agents import (
+from sim_api.grpc_client import SimulationClient
+from sim_api.live_agents import (
     HonestBuyerLive,
     HonestResolverLive,
     GriefingBuyerLive,
     AttackingBuyerLive,
     TimedAutomatorLive,
 )
-from sew_sim.live_runner import LiveRunner
+from sim_api.live_runner import LiveRunner
 
 
 def run_scenario(name: str, agents_meta: list, live_agents: list, **runner_kwargs):

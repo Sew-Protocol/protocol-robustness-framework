@@ -1,0 +1,14 @@
+{
+  "scenario_id": "sybil-ring-mitigation-bonds-v1",
+  "status": "fail",
+  "evidence_type": "simulator-backed-parameter-sweep",
+  "confidence": "high",
+  "description": "Evaluates mitigation of the sybil ring (H2) via exponential bond scaling (2x cost per escalation). Finding: Bond scaling alone is insufficient to prevent displacement; the sybil coalition maintains profitability by adjusting frequency.",
+  "results": {
+    "mitigation_method": "dynamic-bond-scaling",
+    "multiplier": 2.0,
+    "displacement_rate": 1.0,
+    "pass": false
+  },
+  "upgrade_path": "Implement a full multi-layered defense: Bond Scaling + Mandatory Delays + Correlation Detection."
+}

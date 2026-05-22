@@ -1,6 +1,6 @@
 # Explainer: Verifiable On-Chain Simulation with Cartesi
 
-This document explains how we use Cartesi Rollups to run complex, verifiable simulations of the SEW dispute resolution protocol directly on the blockchain.
+This document explains how we use Cartesi Rollups to run complex, verifiable simulations of the Sew dispute resolution protocol directly on the blockchain.
 
 ## 1. The Big Picture
 Normally, blockchains are limited in the complexity of code they can run. Running a full statistical simulation in a traditional Smart Contract (Solidity) would be impossibly expensive and slow.

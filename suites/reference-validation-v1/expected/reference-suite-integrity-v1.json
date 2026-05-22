@@ -1,0 +1,13 @@
+{
+  "scenario_id": "reference-suite-integrity-v1",
+  "status": "pass",
+  "evidence_type": "simulator-backed-single-path",
+  "confidence": "high",
+  "meta_checks": {
+    "all_scenarios_have_source_artifact": true,
+    "all_simulator_backed_have_trace_hash": true,
+    "all_scenarios_have_explicit_assumptions": true,
+    "all_scenarios_have_claim_scope": true
+  },
+  "description": "Meta-scenario to ensure the integrity of the reference validation suite metadata."
+}
