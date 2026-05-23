@@ -2802,11 +2802,268 @@
     {:seq 3 :time 1500 :agent "keeper" :action "execute_pending_settlement"
     :params {:workflow-id "wf0"}}]})
 
+(def s81
+  {:scenario-id     "s81-appeal-deadline-boundary-before"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :expected-fail?   true
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Boundary test: execute settlement 1 second before appeal deadline (should reject)."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1239 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
 
-     ;; ---------------------------------------------------------------------------
-     ;; Scenario registry
-     ;; ---------------------------------------------------------------------------
-    (def all-scenarios
+(def s82
+  {:scenario-id     "s82-appeal-deadline-boundary-exact"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Boundary test: execute settlement exactly at appeal deadline (should succeed)."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s83
+  {:scenario-id     "s83-appeal-deadline-boundary-after"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Boundary test: execute settlement 1 second after appeal deadline (should succeed)."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s84
+  {:scenario-id     "s84-false-assertion-unchallenged"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Honest resolver accepts a dispute resolution without challenge. Nobody disputes the resolution. Tests assumption: honest majority prevents wrong resolutions."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash_accepted"}}
+    {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s85
+  {:scenario-id     "s85-watchdog-challenges-resolution"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Watchdog observes resolution and challenges it with evidence. Tests watchdog challenge flow."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xwrong_call"}}
+    {:seq 3 :time 1150 :agent "watchdog" :action "challenge_resolution"
+    :params {:workflow-id "wf0" :evidence-hash "0xcorrect_evidence"}}
+    {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s86
+  {:scenario-id     "s86-reentrant-withdrawal-guard"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Tests that settlement guards against reentrant calls. Escrow reaches terminal state atomically."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}
+    {:seq 4 :time 1260 :agent "seller" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s87
+  {:scenario-id     "s87-cross-escrow-isolation"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller1"  :address "0xseller1"  :strategy "honest"}
+                    {:id "seller2"  :address "0xseller2"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Two escrows: one disputed, one released. Ensures settlement of disputed escrow doesn't affect un-disputed."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller1" :amount 3000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1020 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller2" :amount 2000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf1"}
+    {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 3 :time 1100 :agent "seller2" :action "recipient_release"
+    :params {:workflow-id "wf1"}}
+    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 5 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s88
+  {:scenario-id     "s88-resolution-with-conflicting-evidence"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Dispute with multiple evidence entries. Resolver picks one resolution. Tests evidence handling in resolution."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1090 :agent "seller" :action "challenge_resolution"
+    :params {:workflow-id "wf0" :evidence-hash "0xseller_evidence"}}
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xresolver_finds_buyer_right"}}
+    {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s89
+  {:scenario-id     "s89-dispute-resolution-with-zero-appeal-window"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params kleros
+   :notes "Resolution in kleros mode (zero appeal window). Settlement executes immediately. Tests fast-path resolution."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver" :resolution-module "0xkleros-proxy"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1121 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s90
+  {:scenario-id     "s90-resolver-capacity-stress"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller1"  :address "0xseller1"  :strategy "honest"}
+                    {:id "seller2"  :address "0xseller2"  :strategy "honest"}
+                    {:id "seller3"  :address "0xseller3"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Resolver handles 3 large escrows in dispute simultaneously. Tests capacity under load."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller1" :amount 50000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1010 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller2" :amount 40000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf1"}
+    {:seq 2 :time 1020 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller3" :amount 30000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf2"}
+    {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 4 :time 1070 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf1"}}
+    {:seq 5 :time 1080 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf2"}}
+    {:seq 6 :time 1140 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash0"}}
+    {:seq 7 :time 1145 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf1" :is-release true :resolution-hash "0xhash1"}}
+    {:seq 8 :time 1150 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf2" :is-release true :resolution-hash "0xhash2"}}
+    {:seq 9 :time 1260 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}
+    {:seq 10 :time 1265 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf1"}}
+    {:seq 11 :time 1270 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf2"}}]})
+
+
+    ;; ---------------------------------------------------------------------------
+    ;; Scenario registry
+    ;; ---------------------------------------------------------------------------
+   (def all-scenarios
     "Ordered list of [display-name scenario-or-pair] entries.
     Pairs (S12) are two scenarios that must both pass to count as one passing test.
     Single entries are plain scenario maps."
@@ -2884,6 +3141,16 @@
     ["S78  many-appeals-eventually-rejects"             s78]
     ["S79  partial-resolution-release"                 s79]
     ["S80  disputed-escrow-expiry-settlement"           s80]
+    ["S81  appeal-deadline-boundary-before"             s81]
+    ["S82  appeal-deadline-boundary-exact"              s82]
+    ["S83  appeal-deadline-boundary-after"              s83]
+    ["S84  false-assertion-unchallenged"                s84]
+    ["S85  watchdog-challenges-resolution"              s85]
+    ["S86  reentrant-withdrawal-guard"                  s86]
+    ["S87  cross-escrow-isolation"                      s87]
+    ["S88  resolution-with-conflicting-evidence"        s88]
+    ["S89  dispute-resolution-with-zero-appeal-window"  s89]
+    ["S90  resolver-capacity-stress"                    s90]
     ["S66  cooldown-boundary-reorg"                      s66]
     ["S67  reentrancy-callback"                          s67]])
 
@@ -3144,4 +3411,44 @@
 
    "s80-disputed-escrow-expiry-settlement"
    {:scenario/type :timing-integration
-    :tests #{:escrow-expiry-during-dispute :post-expiry-settlement :deadline-ordering}}})
+    :tests #{:escrow-expiry-during-dispute :post-expiry-settlement :deadline-ordering}}
+
+   "s81-appeal-deadline-boundary-before"
+   {:scenario/type :timing-boundary
+    :tests #{:appeal-window :settlement-timing :pre-deadline}}
+
+   "s82-appeal-deadline-boundary-exact"
+   {:scenario/type :timing-boundary
+    :tests #{:appeal-window :boundary-exact :settlement-eligible}}
+
+   "s83-appeal-deadline-boundary-after"
+   {:scenario/type :timing-boundary
+    :tests #{:appeal-window :settlement-timing :post-deadline}}
+
+   "s84-false-assertion-unchallenged"
+   {:scenario/type :monitoring-assumption
+    :tests #{:honest-majority :unchallenged-resolution :assumption-validation}}
+
+   "s85-watchdog-challenges-resolution"
+   {:scenario/type :watchdog-flow
+    :tests #{:challenge-mechanics :evidence-handling :watchdog-protection}}
+
+   "s86-reentrant-withdrawal-guard"
+   {:scenario/type :settlement-security
+    :tests #{:reentrancy-guard :atomic-settlement :double-execution}}
+
+   "s87-cross-escrow-isolation"
+   {:scenario/type :settlement-isolation
+    :tests #{:cross-escrow-ledger :dispute-release-mix :ledger-integrity}}
+
+   "s88-resolution-with-conflicting-evidence"
+   {:scenario/type :evidence-handling
+    :tests #{:evidence-types :conflicting-evidence :resolver-discretion}}
+
+   "s89-dispute-resolution-with-zero-appeal-window"
+   {:scenario/type :protocol-variant
+    :tests #{:fast-path-resolution :zero-appeal-window :kleros-mode}}
+
+   "s90-resolver-capacity-stress"
+   {:scenario/type :stress
+    :tests #{:multi-dispute-resolution :capacity-limits :parallel-workload}}})
