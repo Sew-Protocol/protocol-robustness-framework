@@ -2214,14 +2214,111 @@
     :params {:token "USDC" :to "0xseller" :amount 3000
              :custom-resolver "0xresolver"}
     :save-id-as "wf1"}
-    {:seq 2 :time 1060 :agent "buyer1" :action "raise_dispute"
+    {:seq 2 :time 1020 :agent "buyer2" :action "release"
+    :params {:workflow-id "wf1"}}
+    {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute"
     :params {:workflow-id "wf0"}}
-    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
-    {:seq 4 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 5 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s55
+  {:scenario-id     "s55-resolver-unavailable-timeout-fallback"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Resolver becomes paused during dispute. Tests fallback to timeout if resolver unavailable. Dispute should auto-cancel at timeout."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
     :params {:workflow-id "wf0"}}
-    {:seq 5 :time 1060 :agent "buyer2" :action "release"
-    :params {:workflow-id "wf1"}}]})
+    {:seq 2 :time 1100 :agent "keeper" :action "set_paused"
+    :params {:paused? true}}
+    {:seq 3 :time 2100 :agent "keeper" :action "auto_cancel_disputed"
+    :params {:workflow-id "wf0"}}]})
+
+(def s56
+  {:scenario-id     "s56-resolver-diversity"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"     :address "0xbuyer"     :strategy "honest"}
+                    {:id "seller"    :address "0xseller"    :strategy "honest"}
+                    {:id "resolver1" :address "0xresolver1" :role "resolver"}
+                    {:id "keeper"    :address "0xkeeper"    :role "keeper"}]
+   :protocol-params appeal
+   :notes "Tests standard dispute resolution flow with no special governance actions. Baseline for resolver authority tests."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver1"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver1" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s57
+  {:scenario-id     "s57-corruption-cost-vs-profit"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"     :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"    :address "0xseller"   :strategy "honest"}
+                    {:id "attacker"  :address "0xattacker" :strategy "profit-maximizer"}
+                    {:id "resolver"  :address "0xresolver" :role "resolver"}
+                    {:id "keeper"    :address "0xkeeper"   :role "keeper"}]
+   :protocol-params dr3
+   :notes "Profit-maximizer corrupts resolution to capture full escrow value. Tests cost-of-corruption analysis. Attacker uses external bribe (epsilon)."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xattacker" :amount 10000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}
+    {:seq 4 :time 1250 :agent "attacker" :action "withdraw_escrow"
+    :params {:workflow-id "wf0"}}]})
+
+(def s58
+  {:scenario-id     "s58-watchdog-valid-challenge"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Watchdog challenges a bad resolution. Tests challenge_resolution and bounty allocation. Validator accepts challenge."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xbad_hash"}}
+    {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
+    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}
+    {:seq 4 :time 1200 :agent "keeper" :action "resolve_appeal"
+    :params {:workflow-id "wf0" :appeal-winner "watchdog"}}
+    {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
 
      ;; ---------------------------------------------------------------------------
      ;; Scenario registry
@@ -2280,6 +2377,10 @@
     ["S52  yield-accrued-during-dispute"                s52]
     ["S53  reentrant-withdrawal-guard"                  s53]
     ["S54  multi-claim-ledger-isolation"                s54]
+    ["S55  resolver-unavailable-timeout-fallback"       s55]
+    ["S56  rapid-resolver-rotation"                     s56]
+    ["S57  corruption-cost-vs-profit"                   s57]
+    ["S58  watchdog-valid-challenge"                    s58]
     ["S66  cooldown-boundary-reorg"                      s66]
     ["S67  reentrancy-callback"                          s67]])
 
@@ -2440,4 +2541,21 @@
 
    "s54-multi-claim-ledger-isolation"
    {:scenario/type :settlement-ledger
-    :tests #{:ledger-isolation :per-escrow-accounting :claim-independence}}})
+    :tests #{:ledger-isolation :per-escrow-accounting :claim-independence}}
+
+   "s55-resolver-unavailable-timeout-fallback"
+   {:scenario/type :governance
+    :tests #{:resolver-availability :timeout-fallback :state-recovery}}
+
+   "s56-rapid-resolver-rotation"
+   {:scenario/type :governance
+    :tests #{:resolver-rotation :state-continuity :multi-authority}}
+
+   "s57-corruption-cost-vs-profit"
+   {:scenario/type    :adversarial
+    :adversary/type   :profit-maximizer
+    :adversary/traits #{:corruption :economic-attack}}
+
+   "s58-watchdog-valid-challenge"
+   {:scenario/type :challenge-mechanism
+    :tests #{:challenge-acceptance :appeal-flow :bounty-allocation}}})
