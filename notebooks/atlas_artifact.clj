@@ -164,4 +164,4 @@
           [:div.tag-label (name tag)]
           [:div.tag-bar-bg [:div.tag-bar-fill {:style {:width (str (min 100 (* freq 10)) "%")}}]]
           [:div.tag-count freq]])]]]]
-   ]])
+   ]))

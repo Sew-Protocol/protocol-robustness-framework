@@ -342,8 +342,7 @@
   ;; 7. Scenario Matrix Explorer
   [:div.section-card
    [:div.section-title "Scenario Corpus Explorer"]
-   [:input {:type "text" :placeholder "Filter scenarios by title or threat tag..." :class "search-input"
-            :on-input (clerk/sync-as !search-state :query)}]
+   [:input {:type "text" :placeholder "Filter scenarios by title or threat tag..." :class "search-input"}]
    (let [query (str/lower-case (or (:query @!search-state) ""))
          filtered (filter (fn [s] 
                             (or (str/includes? (str/lower-case (or (:title s) "")) query)
@@ -379,4 +378,4 @@
   [:div {:style {:marginTop "64px" :paddingTop "32px" :borderTop "1px solid #004D59" :display "flex" :justifyContent "space-between" :color "#004D59" :fontSize "0.85rem" :fontWeight 700}}
    [:div "© 2026 Sew Protocol Foundation"]
    [:div (str "Deterministic Replay Evidence Bundle — " run-id)]]
-  ])
+  ]])

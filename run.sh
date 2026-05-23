@@ -77,6 +77,31 @@ if [[ "$RUN_PHASE" == "all" ]] || [[ "$RUN_PHASE" == "phase-j" ]]; then
     run_simulation "05-phase-j-sybil-re-entry" "data/params/phase-j-sybil-re-entry.edn" "-m"
 fi
 
+# Dispute Resolution Robustness Phases (F, C, E, M)
+if [[ "$RUN_PHASE" == "all" ]] || [[ "$RUN_PHASE" == "phase-f-dr" ]]; then
+    echo -e "${YELLOW}Running: Phase F DR - Economic Parameter Validation${NC}"
+    clojure -M:run -- --phase-f-dr -o "$RESULTS_DIR" 2>&1 | tee "$RESULTS_DIR/phase-f-dr.log"
+    echo ""
+fi
+
+if [[ "$RUN_PHASE" == "all" ]] || [[ "$RUN_PHASE" == "phase-c-dr" ]]; then
+    echo -e "${YELLOW}Running: Phase C DR - Corruption Economics${NC}"
+    clojure -M:run -- --phase-c-dr -o "$RESULTS_DIR" 2>&1 | tee "$RESULTS_DIR/phase-c-dr.log"
+    echo ""
+fi
+
+if [[ "$RUN_PHASE" == "all" ]] || [[ "$RUN_PHASE" == "phase-e-dr" ]]; then
+    echo -e "${YELLOW}Running: Phase E DR - Evidence Integrity${NC}"
+    clojure -M:run -- --phase-e-dr -o "$RESULTS_DIR" 2>&1 | tee "$RESULTS_DIR/phase-e-dr.log"
+    echo ""
+fi
+
+if [[ "$RUN_PHASE" == "all" ]] || [[ "$RUN_PHASE" == "phase-m-dr" ]]; then
+    echo -e "${YELLOW}Running: Phase M DR - Fairness Analysis${NC}"
+    clojure -M:run -- --phase-m-dr -o "$RESULTS_DIR" 2>&1 | tee "$RESULTS_DIR/phase-m-dr.log"
+    echo ""
+fi
+
 # Generate report
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}✓ All simulations complete${NC}"

@@ -74,6 +74,57 @@ nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 python3 python/invariant_suite.py
 ```
 
+### 4. Dispute Resolution Robustness Validation (Monte Carlo)
+```bash
+# Run all DR phases (Economic Parameters, Corruption, Evidence, Fairness)
+./run.sh all
+
+# Or run individual phases
+./run.sh phase-f-dr  # Economic parameter validation sweep
+./run.sh phase-c-dr  # Corruption economics sweep
+./run.sh phase-e-dr  # Evidence integrity sweep
+./run.sh phase-m-dr  # Fairness analysis sweep
+
+# Or via direct CLI
+clojure -M:run -- --phase-f-dr
+clojure -M:run -- --phase-c-dr
+clojure -M:run -- --phase-e-dr
+clojure -M:run -- --phase-m-dr
+```
+
+**Dispute Resolution Phases (22 sub-phases total):**
+
+- **Phase F (Economic Parameters)**: 6 sweeps validating safe parameter zones where malicious EV < 0
+  - F1: Detection Probability Sensitivity (0.1–0.9)
+  - F2: Bond Size Sweep (0.5×–10.0× escrow)
+  - F3: Fee Adequacy (50–1000 bps)
+  - F4: Escrow Concentration (100–1M)
+  - F5: Multi-resolver Equilibrium (1–100 resolvers)
+  - F6: Appeal Window Adequacy (0–10k blocks)
+
+- **Phase C (Corruption Economics)**: 6 sweeps validating cost-of-corruption exceeds profit
+  - C1: Bribery Cost Model (0.1×–2.0× escrow)
+  - C2: External Collusion (2–50 parties)
+  - C3: Layer Escalation Attack (1–5 rounds)
+  - C4: Detection Probability Trade-off (2D grid)
+  - C5: Profit-Maximizer Lifecycle (slash sweep)
+  - C6: Strategic Abstention (timeout penalty sweep)
+
+- **Phase E (Evidence Integrity)**: 6 sweeps validating evidence layer robustness
+  - E1: Deadline Enforcement
+  - E2: Hash Mismatch Detection
+  - E3: Conflicting Evidence Resolution
+  - E4: Evidence Bloat Griefing Bounds (1KB–1GB)
+  - E5: Yield Accrual During Dispute (0%–10% APY)
+  - E6: Evidence Availability Guarantee
+
+- **Phase M (Fairness Analysis)**: 4 sweeps validating procedural fairness
+  - M1: Access-to-Justice Validation (95%+ can afford appeals)
+  - M2: Asymmetric Information Cost (≤10% asymmetry)
+  - M3: Frivolous Appeal Discouragement (70%+ reduction)
+  - M4: Expert Availability & Cost (80%+ have supply)
+
+
 ## Documentation
 - `docs/README.md` — documentation index
 - `docs/SYSTEM_OVERVIEW.md` — narrative overview: two engines, findings, roadmap, technical architecture
