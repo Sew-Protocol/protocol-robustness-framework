@@ -2319,6 +2319,102 @@
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
     :params {:workflow-id "wf0"}}]})
 
+(def s59
+  {:scenario-id     "s59-watchdog-false-challenge-loss"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "watchdog" :address "0xwatchdog" :strategy "profit-maximizer"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Watchdog falsely challenges a valid resolution. Tests that false challenger loses bond. Validator rejects challenge."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xcorrect_hash"}}
+    {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
+    :params {:workflow-id "wf0" :evidence-hash "0xfalse_evidence"}}
+    {:seq 4 :time 1200 :agent "keeper" :action "resolve_appeal"
+    :params {:workflow-id "wf0" :appeal-winner "resolver"}}
+    {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s60
+  {:scenario-id     "s60-resolver-abstention-timeout-griefing"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :strategy "profit-maximizer"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Resolver abstains from resolving (doesn't call execute_resolution). Dispute times out and auto-cancels. Tests resolver timeout penalties."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 2100 :agent "keeper" :action "auto_cancel_disputed"
+    :params {:workflow-id "wf0"}}]})
+
+(def s61
+  {:scenario-id     "s61-fee-on-transfer-token-handling"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params appeal
+   :notes "Tests settlement with a fee-on-transfer token (e.g., USDT variants). Ensures ledger accounts for transfer fees."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDT_FEE" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
+(def s62
+  {:scenario-id     "s62-multi-appeal-escalation-chain"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
+                    {:id "seller"   :address "0xseller"  :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
+                    {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
+   :protocol-params kleros
+   :notes "Tests multi-level appeal chain: resolution → challenge → escalation. Tests Kleros-style jurisdiction transitions."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+    {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
+    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}
+    {:seq 4 :time 1140 :agent "buyer" :action "escalate_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}]})
+
 
      ;; ---------------------------------------------------------------------------
      ;; Scenario registry
@@ -2381,6 +2477,10 @@
     ["S56  rapid-resolver-rotation"                     s56]
     ["S57  corruption-cost-vs-profit"                   s57]
     ["S58  watchdog-valid-challenge"                    s58]
+    ["S59  watchdog-false-challenge-loss"               s59]
+    ["S60  resolver-abstention-timeout-griefing"        s60]
+    ["S61  fee-on-transfer-token-handling"              s61]
+    ["S62  multi-appeal-escalation-chain"               s62]
     ["S66  cooldown-boundary-reorg"                      s66]
     ["S67  reentrancy-callback"                          s67]])
 
@@ -2558,4 +2658,21 @@
 
    "s58-watchdog-valid-challenge"
    {:scenario/type :challenge-mechanism
-    :tests #{:challenge-acceptance :appeal-flow :bounty-allocation}}})
+    :tests #{:challenge-acceptance :appeal-flow :bounty-allocation}}
+
+   "s59-watchdog-false-challenge-loss"
+   {:scenario/type :challenge-mechanism
+    :tests #{:false-challenge :bond-forfeiture :appeal-rejection}}
+
+   "s60-resolver-abstention-timeout-griefing"
+   {:scenario/type :timeout-mechanism
+    :tests #{:resolver-abstention :timeout-fallback :auto-cancel}}
+
+   "s61-fee-on-transfer-token-handling"
+   {:scenario/type :token-handling
+    :tests #{:fee-on-transfer :settlement-accuracy :ledger-balance}}
+
+   "s62-multi-appeal-escalation-chain"
+   {:scenario/type    :escalation-mechanism
+    :adversary/type   :colluder
+    :tests #{:challenge-chain :escalation-flow :multi-level-appeal}}})
