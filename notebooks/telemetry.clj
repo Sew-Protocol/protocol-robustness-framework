@@ -1,10 +1,12 @@
+;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.telemetry
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]))
 
 ;; Deterministic synchronized workbench state.
-^{::clerk/sync true}
+^{:nextjournal.clerk/sync true}
 (defonce !ui-state (atom ui/default-ui-state))
 
 (defn ds-result []
@@ -60,7 +62,7 @@
     (= invariants "fail")
     (->> (filter #(false? (:invariants_ok %))))))
 
-^{::clerk/no-cache true}
+^{:nextjournal.clerk/no-cache true}
 (let [ui-state @!ui-state
       {:keys [filters pagination selected-trial-id]} ui-state
       limit (-> (get pagination :limit 100) (max 1) (min 1000))

@@ -57,10 +57,38 @@
 (def ^:private deviation-bundle-gated-concepts
   #{:dominant-strategy-equilibrium :nash-equilibrium})
 
+(defn- build-provenance
+  "Extract temporal + local-attestation provenance from run result for
+   downstream game-theoretic evidence consumers.
+
+   This is metadata-only in Slice 1: it does not change pass/fail semantics.
+   Future strict modes may gate on these fields."
+  [result]
+  (let [temporal-confidence (:temporal-confidence result)
+        temporal-query-mode (:temporal-query-mode result)
+        attestation         (:attestation result)
+        attestation-status  (or (:status attestation)
+                                (:attestation-status result)
+                                :unknown)]
+    {:temporal {:query-mode          (or temporal-query-mode :unknown)
+                :confidence          temporal-confidence
+                :explicit-valid-time? (boolean (= :valid-time (get-in temporal-confidence [:time-basis])))}
+     :attestation {:status attestation-status
+                   :source :local-self-signed
+                   :details (or attestation {})}}))
+
 (defn- requires-deviation-bundle?
   [claim-tier concept]
   (and (contains? #{:deviation-tested :population-tested} claim-tier)
        (contains? deviation-bundle-gated-concepts concept)))
+
+(defn- strict-valid-time-required?
+  [trust-mode]
+  (= :strict-valid-time trust-mode))
+
+(defn- strict-attestation-required?
+  [trust-mode]
+  (= :strict-attestation trust-mode))
 
 ;; ---------------------------------------------------------------------------
 ;; Result constructors
@@ -304,13 +332,26 @@
    (evaluate-equilibrium-concepts concepts projection {} {}))
   ([concepts projection extra-validators]
    (evaluate-equilibrium-concepts concepts projection extra-validators {}))
-  ([concepts projection extra-validators {:keys [claim-tier] :or {claim-tier :proxy}}]
+  ([concepts projection extra-validators {:keys [claim-tier trust-mode explicit-valid-time? attestation-status]
+                                          :or {claim-tier :proxy trust-mode :relaxed explicit-valid-time? false attestation-status :unknown}}]
    (let [validators (merge equilibrium-validators extra-validators)]
      (into {} (map (fn [concept]
                      (let [kw  (keyword concept)
                            chk (get validators kw)
                            bundle-ok? (true? (get-in projection [:deviation-bundle :meets-minimum?]))]
                        [kw (cond
+                             (and (strict-valid-time-required? trust-mode)
+                                  (not explicit-valid-time?))
+                             (inconclusive kw :absent-evidence
+                                           (str "trust mode " trust-mode
+                                                " requires explicit valid-time provenance; projection/result missing :temporal-confidence.time-basis=:valid-time"))
+
+                             (and (strict-attestation-required? trust-mode)
+                                  (not= :verified attestation-status))
+                             (inconclusive kw :absent-evidence
+                                           (str "trust mode " trust-mode
+                                                " requires attestation status :verified; observed status=" attestation-status))
+
                              (and (requires-deviation-bundle? claim-tier kw)
                                   (not bundle-ok?))
                              (inconclusive kw :multi-trace-required
@@ -350,6 +391,10 @@
                        (:spe-config theory) (assoc :spe-config (:spe-config theory)))
         mech-props   (seq (:mechanism-properties theory))
         eq-concepts  (seq (:equilibrium-concept theory))
+        provenance   (build-provenance result)
+        explicit-valid-time? (true? (get-in provenance [:temporal :explicit-valid-time?]))
+        attestation-status (or (get-in provenance [:attestation :status]) :unknown)
+        trust-mode   (keyword (or (:equilibrium-trust-mode theory) :relaxed))
 
         extra-mech-validators (when proto (protocol/mechanism-property-validators proto))
         extra-eq-validators   (when proto (protocol/equilibrium-concept-validators proto))
@@ -362,10 +407,15 @@
         eq-results   (if (and projection eq-concepts)
                        (evaluate-equilibrium-concepts eq-concepts projection
                                                       (or extra-eq-validators {})
-                                                      {:claim-tier claim-tier})
+                                                      {:claim-tier claim-tier
+                                                       :trust-mode trust-mode
+                                                       :explicit-valid-time? explicit-valid-time?
+                                                       :attestation-status attestation-status})
                        {})]
     {:evidence-schema-version evidence-schema-version
      :equilibrium-claim-tier claim-tier
+     :equilibrium-trust-mode trust-mode
+      :provenance          provenance
      :mechanism-results  mech-results
      :mechanism-status   (roll-up-status (vals mech-results))
      :equilibrium-results eq-results

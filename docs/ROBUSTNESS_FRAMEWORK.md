@@ -602,7 +602,7 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 
 | Gap | Risk level | Notes |
 |---|---|---|
-| Formal verification (Halmos / Echidna) | Medium | Invariant predicates are designed to be portable to Foundry invariant tests; not yet wired |
+| Formal verification (Halmos / Echidna) | Medium | Foundry invariant suites are present (state/resolver/DR/yield/slashing), but simulator-to-contract parity is not yet tracked by a formal mapping matrix; Halmos harness/profile exists but is not yet a stable CI gate |
 | Cross-module yield failure interaction | Medium | Yield dual-failure edge case modelled analytically; no deterministic scenario beyond s68 |
 | Kleros round-2 final-appeal path | Low–Medium | S18–S23 cover L0/L1 Kleros paths; `MAX_ROUND` final path not yet a named deterministic scenario |
 | Governance collusion across multiple epochs | Medium | `phase-t-governance-capture.edn` exists; no deterministic invariant scenario |

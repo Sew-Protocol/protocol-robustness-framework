@@ -376,12 +376,6 @@
     (nil? escalation-fn)
     (t/fail :escalation-not-configured)
 
-    ;; Sybil Mitigation Layer A: Mandatory Cooldown (1 day)
-    (let [last-esc (get-in world [:last-escalation-block-time-per-addr caller] 0)
-          cooldown 86400] ;; 1 day
-      (and (pos? last-esc) (< (- (:block-time world) last-esc) cooldown)))
-    (t/fail :escalation-cooldown-active)
-
     :else
     (let [current-level (t/dispute-level world workflow-id)
           esc-result    (escalation-fn world workflow-id caller current-level)]
@@ -407,7 +401,8 @@
                                (assoc-in [:dispute-levels workflow-id] new-level)
                                (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                          new-resolver)
-                               ;; Track when this escalation occurred for this address (Layer A)
+                                ;; Track last escalation timestamp per address (used by
+                                ;; challenge-resolution cooldown for open challengers).
                                (assoc-in [:last-escalation-block-time-per-addr caller]
                                          (:block-time world))
                                ;; Increment escalation count for this address (Layer B)
@@ -527,12 +522,6 @@
 
     (nil? escalation-fn)
     (t/fail :escalation-not-configured)
-
-    ;; Sybil Mitigation Layer A: Mandatory Cooldown (1 day)
-    (let [last-esc (get-in world [:last-escalation-block-time-per-addr caller] 0)
-          cooldown 86400] ;; 1 day
-      (and (pos? last-esc) (< (- (:block-time world) last-esc) cooldown)))
-    (t/fail :escalation-cooldown-active)
 
     :else
     (let [current-level (t/dispute-level world workflow-id)

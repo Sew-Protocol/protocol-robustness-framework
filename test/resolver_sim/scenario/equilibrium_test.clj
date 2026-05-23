@@ -379,7 +379,132 @@
       ;; dominant-strategy: attack-attempts 2, successes 0 → :pass
       (is (= :pass (get-in eq-out [:equilibrium-results :dominant-strategy-equilibrium :status])))
       (is (= :pass (:mechanism-status eq-out)))
-      (is (= :pass (:equilibrium-status eq-out))))))
+      (is (= :pass (:equilibrium-status eq-out)))
+      (is (= :unknown (get-in eq-out [:provenance :temporal :query-mode])))
+      (is (= :unknown (get-in eq-out [:provenance :attestation :status]))))))
+
+(deftest test-evaluate-equilibrium-includes-provenance
+  (testing "equilibrium output includes temporal and local self-signed attestation provenance"
+    (let [theory  {:mechanism-properties [:budget-balance]
+                   :equilibrium-concept  [:dominant-strategy-equilibrium]}
+          result  {:metrics {:attack-attempts 2 :attack-successes 0
+                             :invariant-violations 0 :funds-lost 0}
+                   :trace   [{:world {:total-held    {"USDC" 0}
+                                      :total-fees    {"USDC" 0}
+                                      :live-states   {1 :released}
+                                      :escrow-count  1}}]
+                   :protocol sew-protocol/protocol
+                   :temporal-query-mode :as-of
+                   :temporal-confidence {:time-basis :valid-time
+                                         :queries-using-explicit-valid-time 1.0
+                                         :temporal-consistency-status :snapshot-consistent}
+                   :attestation {:status :verified :signer "local-key-1"}}
+          eq-out  (eq/evaluate-equilibrium theory result)]
+      (is (= :as-of (get-in eq-out [:provenance :temporal :query-mode])))
+      (is (true? (get-in eq-out [:provenance :temporal :explicit-valid-time?])))
+      (is (= :verified (get-in eq-out [:provenance :attestation :status])))
+      (is (= :local-self-signed (get-in eq-out [:provenance :attestation :source]))))))
+
+(deftest test-evaluate-equilibrium-strict-valid-time-gating
+  (testing "strict-valid-time trust mode forces equilibrium concepts to inconclusive without explicit valid-time provenance"
+    (let [theory {:equilibrium-concept [:dominant-strategy-equilibrium]
+                  :equilibrium-trust-mode :strict-valid-time}
+          result {:metrics {:attack-attempts 2 :attack-successes 0 :invariant-violations 0 :funds-lost 0}
+                  :trace   [{:world {:total-held {"USDC" 0}
+                                     :total-fees {"USDC" 0}
+                                     :live-states {1 :released}
+                                     :escrow-count 1}}]
+                  :protocol sew-protocol/protocol}
+          eq-out (eq/evaluate-equilibrium theory result)]
+      (is (= :strict-valid-time (:equilibrium-trust-mode eq-out)))
+      (is (= :inconclusive (get-in eq-out [:equilibrium-results :dominant-strategy-equilibrium :status])))
+      (is (= :inconclusive (:equilibrium-status eq-out)))))
+
+  (testing "strict-valid-time trust mode allows normal concept evaluation when explicit valid-time provenance is present"
+    (let [theory {:equilibrium-concept [:dominant-strategy-equilibrium]
+                  :equilibrium-trust-mode :strict-valid-time}
+          result {:metrics {:attack-attempts 2 :attack-successes 0 :invariant-violations 0 :funds-lost 0}
+                  :trace   [{:world {:total-held {"USDC" 0}
+                                     :total-fees {"USDC" 0}
+                                     :live-states {1 :released}
+                                     :escrow-count 1}}]
+                  :protocol sew-protocol/protocol
+                  :temporal-confidence {:time-basis :valid-time}}
+          eq-out (eq/evaluate-equilibrium theory result)]
+      (is (= :strict-valid-time (:equilibrium-trust-mode eq-out)))
+      (is (= :pass (get-in eq-out [:equilibrium-results :dominant-strategy-equilibrium :status]))))))
+
+(deftest test-evaluate-equilibrium-strict-attestation-gating
+  (testing "strict-attestation trust mode forces equilibrium concepts to inconclusive without verified attestation"
+    (let [theory {:equilibrium-concept [:dominant-strategy-equilibrium]
+                  :equilibrium-trust-mode :strict-attestation}
+          result {:metrics {:attack-attempts 2 :attack-successes 0 :invariant-violations 0 :funds-lost 0}
+                  :trace   [{:world {:total-held {"USDC" 0}
+                                     :total-fees {"USDC" 0}
+                                     :live-states {1 :released}
+                                     :escrow-count 1}}]
+                  :protocol sew-protocol/protocol
+                  :attestation {:status :missing}}
+          eq-out (eq/evaluate-equilibrium theory result)]
+      (is (= :strict-attestation (:equilibrium-trust-mode eq-out)))
+      (is (= :inconclusive (get-in eq-out [:equilibrium-results :dominant-strategy-equilibrium :status])))
+      (is (= :inconclusive (:equilibrium-status eq-out)))))
+
+  (testing "strict-attestation trust mode allows normal concept evaluation when attestation is verified"
+    (let [theory {:equilibrium-concept [:dominant-strategy-equilibrium]
+                  :equilibrium-trust-mode :strict-attestation}
+          result {:metrics {:attack-attempts 2 :attack-successes 0 :invariant-violations 0 :funds-lost 0}
+                  :trace   [{:world {:total-held {"USDC" 0}
+                                     :total-fees {"USDC" 0}
+                                     :live-states {1 :released}
+                                     :escrow-count 1}}]
+                  :protocol sew-protocol/protocol
+                  :attestation {:status :verified}}
+          eq-out (eq/evaluate-equilibrium theory result)]
+      (is (= :strict-attestation (:equilibrium-trust-mode eq-out)))
+      (is (= :pass (get-in eq-out [:equilibrium-results :dominant-strategy-equilibrium :status]))))))
+
+(deftest test-evaluate-equilibrium-trust-mode-integration-matrix
+  (testing "relaxed vs strict trust modes across missing/partial/complete provenance"
+    (let [base-result {:metrics {:attack-attempts 2 :attack-successes 0 :invariant-violations 0 :funds-lost 0}
+                       :trace   [{:world {:total-held {"USDC" 0}
+                                          :total-fees {"USDC" 0}
+                                          :live-states {1 :released}
+                                          :escrow-count 1}}]
+                       :protocol sew-protocol/protocol}
+          run* (fn [trust-mode result]
+                 (eq/evaluate-equilibrium {:equilibrium-concept [:dominant-strategy-equilibrium]
+                                           :equilibrium-trust-mode trust-mode}
+                                          result))
+
+          relaxed-missing   (run* :relaxed base-result)
+          strict-vt-missing (run* :strict-valid-time base-result)
+          strict-att-missing (run* :strict-attestation base-result)
+
+          with-valid-time   (assoc base-result :temporal-confidence {:time-basis :valid-time})
+          strict-vt-pass    (run* :strict-valid-time with-valid-time)
+
+          with-attestation  (assoc base-result :attestation {:status :verified})
+          strict-att-pass   (run* :strict-attestation with-attestation)
+
+          with-both         (assoc with-valid-time :attestation {:status :verified})
+          strict-vt-both    (run* :strict-valid-time with-both)
+          strict-att-both   (run* :strict-attestation with-both)]
+
+      ;; relaxed: no provenance requirements
+      (is (= :pass (get-in relaxed-missing [:equilibrium-results :dominant-strategy-equilibrium :status])))
+
+      ;; strict modes independently gate on their required evidence
+      (is (= :inconclusive (get-in strict-vt-missing [:equilibrium-results :dominant-strategy-equilibrium :status])))
+      (is (= :inconclusive (get-in strict-att-missing [:equilibrium-results :dominant-strategy-equilibrium :status])))
+
+      ;; each strict mode passes when its required provenance is present
+      (is (= :pass (get-in strict-vt-pass [:equilibrium-results :dominant-strategy-equilibrium :status])))
+      (is (= :pass (get-in strict-att-pass [:equilibrium-results :dominant-strategy-equilibrium :status])))
+
+      ;; fully trusted payload satisfies both strict modes
+      (is (= :pass (get-in strict-vt-both [:equilibrium-results :dominant-strategy-equilibrium :status])))
+      (is (= :pass (get-in strict-att-both [:equilibrium-results :dominant-strategy-equilibrium :status]))))))
 
 (deftest test-evaluate-equilibrium-fail-propagates
   (testing "a :fail in mechanism results rolls up to :fail status"

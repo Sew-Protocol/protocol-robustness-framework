@@ -14,7 +14,8 @@
 
    Also covers the governance capture gap (rule drift) not tested in Phases M/J."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.engine :as proto]))
+            [resolver-sim.sim.engine :as proto]
+            [resolver-sim.research.sew.governance.bandwidth-floor :as floor]))
 
 ;; ============ Governance Models (Pure) ============
 
@@ -106,10 +107,10 @@
                                      :random (+ 1000 (rng/next-int d-rng 150000)))]
                            {:id (str epoch "-" i) :value val}))
 
-        reviewed (if bias
-                   (select-reviewed-disputes-biased epoch-disputes capacity bias d-rng)
-                   (select-reviewed-disputes epoch-disputes capacity d-rng))
-        reviewed-ids (set (map :id reviewed))
+        ;; Governance bandwidth floor: mandate 2 low-value reviews (threshold=10000)
+        ;; Enforce floor + probabilistic review of others
+        reviewed-ids (floor/select-reviewed-with-floor
+                      epoch-disputes capacity 2 10000 d-rng)
 
         outcomes (for [d epoch-disputes]
                    (let [won? (simulate-dispute-outcome d reviewed-ids d-rng bwp rwp)]
@@ -121,6 +122,7 @@
      :history (concat history outcomes)
      :total-wins (+ (:total-wins state 0) new-wins)
      :total-attempts (+ (:total-attempts state 0) (count epoch-disputes))}))
+
 
 (defn summarize-aa-history
   [history params]

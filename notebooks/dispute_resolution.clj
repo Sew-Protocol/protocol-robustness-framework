@@ -23,7 +23,8 @@
 ;; - `results/test-artifacts/coverage.json` — transition / threat-tag coverage
 ;; - Live: `resolver-sim.protocols.sew.invariant-runner/run-all` — in-process invariant suite
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.dispute-resolution
   (:require [nextjournal.clerk :as clerk]
             [clojure.java.io :as io]
@@ -31,6 +32,7 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
+            [resolver-sim.notebooks.common :as common]
             [resolver-sim.protocols.sew.invariants :as invariants]
             [resolver-sim.protocols.sew.invariant-runner :as runner]
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]
@@ -38,54 +40,41 @@
             [resolver-sim.protocols.sew.types :as t]))
 
 ;; ---------------------------------------------------------------------------
-;; Utilities: safe I/O
+;; Notebook Configuration
 ;; ---------------------------------------------------------------------------
 
-^{::clerk/visibility {:result :hide}}
-(defn- safe-slurp [path]
-  (try
-    (let [f (io/file path)]
-      (when (.exists f) (slurp f)))
-    (catch Exception e
-      (println "WARN: could not read" path "-" (.getMessage e))
-      nil)))
+(def default-code-visibility :fold)
 
-^{::clerk/visibility {:result :hide}}
-(defn- read-json [path]
-  (when-let [s (safe-slurp path)]
-    (try (json/read-str s {:key-fn keyword})
-         (catch Exception e
-           (println "WARN: JSON parse error" path "-" (.getMessage e))
-           nil))))
+;; ===========================================================================
+;; Navigation
+;; ===========================================================================
 
-^{::clerk/visibility {:result :hide}}
-(defn- read-edn [path]
-  (when-let [s (safe-slurp path)]
-    (try (edn/read-string s)
-         (catch Exception e
-           (println "WARN: EDN parse error" path "-" (.getMessage e))
-           nil))))
-
-^{::clerk/visibility {:result :hide}}
-(defn- safe-render [label f]
-  (try (f)
-       (catch Exception e
-         [:div {:style {:background "#fef2f2" :border "1px solid #dc2626"
-                        :borderRadius "4px" :padding "12px" :margin "8px 0"}}
-          [:strong (str "⚠ " label " render error: ")]
-          [:code (.getMessage e)]])))
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
+(clerk/html
+ [:div {:style {:background "#f8fafc" :border "1px solid #e2e8f0" :borderRadius "6px" :padding "10px" :marginBottom "20px"}}
+  [:strong "Index: "]
+  [:a {:href "#section-1-executive-overview"} "Executive Overview"] " · "
+  [:a {:href "#section-2-dispute-lifecycle-model"} "Dispute Lifecycle"] " · "
+  [:a {:href "#section-3-invariant-coverage"} "Invariant Coverage"] " · "
+  [:a {:href "#section-4-scenario-matrix-live"} "Scenario Matrix"] " · "
+  [:a {:href "#section-5-adversarial-scenario-breakdown"} "Adversarial Breakdown"] " · "
+  [:a {:href "#section-6-kleros-integration-model"} "Kleros Integration"] " · "
+  [:a {:href "#section-7-confidence-summary-by-area"} "Confidence Summary"] " · "
+  [:a {:href "#section-8-open-validation-gaps"} "Open Validation Gaps"] " · "
+  [:a {:href "#section-9-artifact-provenance"} "Artifact Provenance"] " · "
+  [:a {:href "#section-10-appeal-window-deadline-testing"} "Appeal/Deadline Testing"]])
 
 ;; ---------------------------------------------------------------------------
 ;; Artifact loading
 ;; ---------------------------------------------------------------------------
 
-^{::clerk/visibility {:result :hide}}
-(def test-summary (read-json "results/test-artifacts/test-summary.json"))
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
+(def test-summary (common/read-json "results/test-artifacts/test-summary.json"))
 
-^{::clerk/visibility {:result :hide}}
-(def coverage-data (read-json "results/test-artifacts/coverage.json"))
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
+(def coverage-data (common/read-json "results/test-artifacts/coverage.json"))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def golden-reports
   (try
     (let [dir (io/file "data/fixtures/golden")]
@@ -94,13 +83,13 @@
              (filter #(str/ends-with? (.getName %) ".report.edn"))
              (keep (fn [f]
                      (try
-                       (let [d (edn/read-string (slurp f))]
+                       (let [d (common/read-edn (.getAbsolutePath f))]
                          [(str (:trace-id d)) d])
                        (catch Exception _ nil))))
              (into {}))))
     (catch Exception _ {})))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
   (try
     (let [dir (io/file "data/fixtures/traces")]
@@ -122,8 +111,8 @@
     (catch Exception _ [])))
 
 ;; Live invariant suite run — executes all S01–S67 scenarios in-process.
-;; Cached by Clerk across re-evaluations unless `::clerk/no-cache true` is set.
-^{::clerk/visibility {:result :hide}}
+;; Cached by Clerk across re-evaluations unless `:nextjournal.clerk/no-cache true` is set.
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def live-suite-results
   (try (runner/run-all)
        (catch Exception e
@@ -142,7 +131,7 @@
 ;; Regenerate by re-evaluating this cell; no manual maintenance required.
 ;; ---------------------------------------------------------------------------
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def ^:private edge-labels
   "Human-readable labels for each top-level edge.
    Keys are [from-kw to-kw]. Values: {:op string :actor string :note string}."
@@ -154,7 +143,7 @@
    [:disputed :refunded] {:op "executeResolution(refund) / autoCancelDisputedEscrow()" :actor "Resolver · Keeper"}
    [:disputed :resolved] {:op "transitionToResolved()" :actor "(internal)" :note "no production call site"}})
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn generate-state-machine-mermaid
   "Generate a Mermaid stateDiagram-v2 string from the live simulator state machine.
    Returns a string ready to embed in a ```mermaid fenced block."
@@ -219,7 +208,7 @@
       (emit (indent 1 "end note")))
     (str/join "\n" @lines)))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def canonical-mermaid-source
   "The canonical Mermaid diagram source, generated from the live simulator at
    notebook evaluation time. Saved here so it can be inspected as plain text."
@@ -229,15 +218,15 @@
 ;; RAG / Status helpers (pure)
 ;; ---------------------------------------------------------------------------
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn rag-badge [rag text]
   (ui/rag-badge rag text))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- status-emoji [rag]
   (case rag :green "🟢" :amber "🟠" :red "🔴" "⚪"))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- conf-badge [level]
   (let [[bg border fg]
         (case level
@@ -251,7 +240,7 @@
                     :backgroundColor bg :color fg :fontSize "0.75em" :fontWeight "600"}}
      level]))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- card [rag label value note]
   (let [border (case rag :green "#16a34a" :red "#dc2626" "#d97706")
         bg     (case rag :green "#f0fdf4" :red "#fef2f2" "#fffbeb")
@@ -269,27 +258,27 @@
      (when note
        [:div {:style {:fontSize "0.82em" :marginTop "4px" :opacity "0.8"}} note])]))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- section-header [title sub]
   [:div {:style {:borderBottom "2px solid #e2e8f0" :paddingBottom "8px" :marginTop "28px" :marginBottom "12px"}}
    [:h2 {:style {:margin "0 0 4px 0"}} title]
    (when sub [:p {:style {:color "#64748b" :fontSize "0.88em" :margin "0"}} sub])])
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- note-box [text]
   [:div {:style {:background "#eff6ff" :border "1px solid #93c5fd"
                  :borderRadius "4px" :padding "10px 14px"
                  :fontSize "0.84em" :color "#1e3a8a" :marginBottom "10px"}}
    text])
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- warn-box [text]
   [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b"
                  :borderRadius "4px" :padding "10px 14px"
                  :fontSize "0.84em" :color "#78350f" :marginBottom "10px"}}
    text])
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- simple-table [headers rows]
   [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.84em"}}
    [:thead
@@ -327,7 +316,7 @@
 ;; ===========================================================================
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Executive Overview"
   (fn []
     (let [{:keys [passed total elapsed-ms error]} live-suite-results
@@ -527,7 +516,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 
 ;; Live transition table — raw map from the simulator
 (clerk/html
- (safe-render
+ (common/safe-render
   "Transition Graph"
   (fn []
     [:div {:style {:marginBottom "16px"}}
@@ -581,7 +570,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 
 ;; Raw Mermaid source for copy/export
 (clerk/html
- (safe-render
+ (common/safe-render
   "Raw Mermaid Source"
   (fn []
     [:details {:style {:marginTop "8px"}}
@@ -596,7 +585,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 ;; ===========================================================================
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Invariant Coverage"
   (fn []
     (let [inv-ids (sort (map name invariants/canonical-ids))
@@ -709,11 +698,11 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 ;; ===========================================================================
 
 ;; Interactive: select a scenario to see its type metadata and live result.
-^{::clerk/sync true}
+^{:nextjournal.clerk/sync true}
 (defonce !selected-scenario (atom nil))
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Scenario Matrix"
   (fn []
     (let [results      (:results live-suite-results [])
@@ -827,7 +816,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
 ;; ## Section 5 — Adversarial Scenario Breakdown
 ;; ===========================================================================
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (defn- render-adversary-card [adv-type scenarios adversary-descriptions]
   (let [meta       (get adversary-descriptions adv-type {})
         pass-count (count (filter :pass? scenarios))
@@ -876,7 +865,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
                   scenarios))]]]))
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Adversarial Breakdown"
   (fn []
     (let [results     (:results live-suite-results [])
@@ -1011,7 +1000,7 @@ Kleros protocol team before production deployment.")
 
 ;; Live Kleros scenario results panel
 (clerk/html
- (safe-render
+ (common/safe-render
   "Kleros Scenario Results"
   (fn []
     (let [results      (:results live-suite-results [])
@@ -1061,7 +1050,7 @@ Kleros protocol team before production deployment.")
 ;; ===========================================================================
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Confidence Summary"
   (fn []
     (let [results  (:results live-suite-results [])
@@ -1139,12 +1128,10 @@ Kleros protocol team before production deployment.")
             :rag         :amber
             :caveat      "Multi-epoch reputation drift and ring-attack collusion are modeled in Phase J. No deterministic scenario exists."}
            {:area        "On-chain / gas correctness"
-            :confidence  "Missing"
-            :backing     "Not yet assessed"
-            :scenarios   "—"
-            :invariants  "—"
+            :confidence  "Partial"
+            :backing     "Partially assessed"
             :rag         :amber
-            :caveat      "The simulator is a pure Clojure model. Foundry invariant tests and gas analysis are planned but not complete."}
+            :caveat      "The simulator remains a pure Clojure model for protocol semantics. On-chain verification has partial coverage via existing Foundry invariant suites, but canonical parity against simulator invariants is still incomplete. Gas correctness/performance baselines are not yet systematically assessed or enforced as release gates."}
            {:area        "Yield position accounting"
             :confidence  "Low"
             :backing     "Partial — invariant exists, limited coverage"
@@ -1196,13 +1183,13 @@ Kleros protocol team before production deployment.")
 ;; ===========================================================================
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Open Gaps"
   (fn []
     (let [gaps
           [{:id    "G01"
             :area  "Formal verification"
-            :desc  "No Foundry invariant tests or Halmos properties yet. The simulator defines the spec; the on-chain implementation has not been formally verified against it."
+            :desc  "Foundry invariant suites exist (state, resolver, DRv1/DRv2, slashing, staking, yield), but simulator-to-contract invariant parity is incomplete and not yet tracked by a formal mapping matrix. Halmos profile/harness exists, but bounded symbolic checks are not yet wired into a stable CI gate."
             :risk  "High"
             :path  "Define Foundry invariant tests mirroring canonical-ids. Run Halmos for symbolic bounded checking on the state machine."}
            {:id    "G02"
@@ -1303,7 +1290,7 @@ Kleros protocol team before production deployment.")
 ;; ===========================================================================
 
 (clerk/html
- (safe-render
+ (common/safe-render
   "Artifact Provenance"
   (fn []
     (let [suite       live-suite-results
@@ -1380,6 +1367,58 @@ Kleros protocol team before production deployment.")
         [:code "clojure -M:clerk"] " or "
         [:code "clerk/serve!"]
         " to refresh. File artifacts use graceful degradation — absent files show amber status, not red."]]))))
+
+;; ===========================================================================
+;; ## Section 10 — Appeal Window & Deadline Testing
+;; ===========================================================================
+
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
+(clerk/md "## Appeal Window & Deadline Testing
+
+This section documents the deterministic stress-testing of appeal windows, dispute escalation deadlines, and pending-settlement expiration boundaries.
+
+### Scenarios
+- **S05 (Pending-settlement-execute):** Tests execution of settlements after the appeal deadline.
+- **S13 (Pending-settlement-refund):** Tests refund logic when pending settlement is cleared.
+- **S21 (DR3 Kleros pending cleared):** Tests pending settlement clearing on escalation.
+- **S57 (Pending-settlement-expiry):** Tests 1s boundary conditions on settlement expiry.
+- **S74 (Appeal-deadline-boundary):** Validates appeal window boundaries with sub-second precision.
+
+### Status (Live)
+")
+
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
+(clerk/html
+ (common/safe-render
+  "Appeal Status"
+  (fn []
+    (let [results      (:results live-suite-results [])
+          appeal-ids   #{"S05  pending-settlement-execute"
+                         "S13  pending-settlement-refund"
+                         "S21  dr3-kleros-pending-cleared-on-escalation"
+                         "S57  pending-settlement-expiry-boundary-1s"
+                         "S74  appeal-deadline-boundary"}
+          appeal-res   (filter #(appeal-ids (:name %)) results)
+          pass-n       (count (filter :pass? appeal-res))
+          total-n      (count appeal-res)]
+      [:div
+       (card (if (= pass-n total-n) :green :red)
+             "Appeal-path scenarios"
+             (str pass-n "/" total-n " pass")
+             "Tests pending settlement expiration and appeal window boundaries.")
+       [:table {:style {:borderCollapse "collapse" :fontSize "0.82em" :width "100%"}}
+        [:thead
+         [:tr {:style {:background "#f1f5f9"}}
+          [:th {:style {:padding "6px 10px" :textAlign "left"}} ""]
+          [:th {:style {:padding "6px 10px" :textAlign "left"}} "Scenario"]
+          [:th {:style {:padding "6px 10px" :textAlign "right"}} "Result"]]]
+        (into [:tbody]
+              (map (fn [{:keys [name pass?]}]
+                     [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
+                      [:td {:style {:padding "5px 10px"}} (if pass? "🟢" "🔴")]
+                      [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} name]
+                      [:td {:style {:padding "5px 10px"}} (if pass? "✓ PASS" "✗ FAIL")]])
+                   appeal-res))]]))))
 
 ;; ---
 ;; *Notebook generated by the Sew Protocol simulation toolchain.*

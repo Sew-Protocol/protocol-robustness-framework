@@ -212,31 +212,39 @@
   (let [stats      (:aggregated-stats result)
         h-final    (:honest-final-count stats)
         m-final    (:malice-final-count stats)
-        initial    (:initial-resolver-count result 0)
-        ;; We don't have the exact initial split in the result — use epoch 1 if available
-        epoch-1    (first (:epoch-results result))
-        ;; epoch-results don't carry initial counts; use a reasonable proxy
-        ;; If stats are available, check relative dominance
-        total-final (+ (or h-final 0) (or m-final 0))]
+        init-comp  (:initial-composition result)
+        h-init     (:honest-count init-comp)
+        m-init     (:malice-count init-comp)]
     (cond
       (nil? h-final)
       (inconclusive :honest-survival-rate "final resolver counts missing from aggregated-stats")
 
-      (zero? total-final)
-      (inconclusive :honest-survival-rate "no resolvers remain at end of simulation")
+      (or (nil? h-init) (nil? m-init))
+      (inconclusive :honest-survival-rate "initial-composition missing honest/malice counts")
+
+      (or (zero? h-init) (zero? m-init))
+      (inconclusive :honest-survival-rate "initial-composition has zero honest or malice cohort")
 
       :else
-      (let [h-share (/ (double h-final) total-final)
-            ;; A simple check: honest resolvers should comprise >50% of survivors
-            ;; (true by construction if initial mix is honest-majority, but can degrade)
-            healthy? (>= h-share 0.50)]
+      (let [h-survival (/ (double h-final) (double h-init))
+            m-survival (/ (double m-final) (double m-init))
+            margin (- h-survival m-survival)
+            healthy? (> margin 0.0)]
         (if healthy?
           (pass :honest-survival-rate
-                {:honest-final h-final :malice-final m-final :honest-share h-share}
-                (format "honest share of survivors=%.1f%% ≥ 50%%: honest resolvers dominate" (* 100 h-share)))
+                {:honest-final h-final :malice-final m-final
+                 :honest-initial h-init :malice-initial m-init
+                 :honest-survival-rate h-survival :malice-survival-rate m-survival
+                 :survival-margin margin}
+                (format "honest survival=%.1f%% > malice survival=%.1f%%"
+                        (* 100 h-survival) (* 100 m-survival)))
           (fail :honest-survival-rate
-                {:honest-final h-final :malice-final m-final :honest-share h-share}
-                (format "honest share of survivors=%.1f%% < 50%%: malicious resolvers outlasted honest" (* 100 h-share))))))))
+                {:honest-final h-final :malice-final m-final
+                 :honest-initial h-init :malice-initial m-init
+                 :honest-survival-rate h-survival :malice-survival-rate m-survival
+                 :survival-margin margin}
+                (format "honest survival=%.1f%% ≤ malice survival=%.1f%%"
+                        (* 100 h-survival) (* 100 m-survival))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registry
@@ -384,20 +392,19 @@
   [result]
   (let [stats        (:aggregated-stats result)
         m-final      (:malice-final-count stats)
-        initial      (:initial-resolver-count result)
-        ;; Default strategy mix has 35% non-honest (0.25 malicious + 0.10 collusive)
-        initial-malice-approx (when initial (* 0.35 initial))]
-    (if (some nil? [m-final initial-malice-approx])
-      (mech-inconclusive :collusion-resistance "malice final count or initial resolver count missing")
-      (let [growth-ratio (/ (double m-final) (max 1 initial-malice-approx))
+        init-comp    (:initial-composition result)
+        m-initial    (:malice-count init-comp)]
+    (if (some nil? [m-final m-initial])
+      (mech-inconclusive :collusion-resistance "malice final count or initial-composition.malice-count missing")
+      (let [growth-ratio (/ (double m-final) (max 1 (double m-initial)))
             grew?        (> growth-ratio 1.10)]  ; >10% growth = coalition expanded
         (if grew?
           (mech-fail :collusion-resistance
-                     {:malice-final m-final :initial-malice-approx initial-malice-approx :growth-ratio growth-ratio}
-                     (format "malice pool grew ×%.2f from initial approx: collusion may be attracting new actors"
+                     {:malice-final m-final :initial-malice-count m-initial :growth-ratio growth-ratio}
+                     (format "malice pool grew ×%.2f from explicit initial cohort: collusion may be attracting new actors"
                              growth-ratio))
           (mech-pass :collusion-resistance
-                     {:malice-final m-final :initial-malice-approx initial-malice-approx :growth-ratio growth-ratio}
+                     {:malice-final m-final :initial-malice-count m-initial :growth-ratio growth-ratio}
                      (format "malice pool ×%.2f of initial (≤1.1): no coalition growth detected"
                              growth-ratio)))))))
 

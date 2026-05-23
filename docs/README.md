@@ -9,6 +9,7 @@ Primary project framing and status live in the root `../README.md`.
 | System overview (narrative) | `SYSTEM_OVERVIEW.md` |
 | System overview (technical / architecture) | `architecture/ARCHITECTURE.md` |
 | Run validation suite | `testing/RUNNING_TESTS.md` |
+| Understand trust controls for game-theoretic claims | `testing/ADDING_GAME_THEORETIC_VALIDATION.md` |
 | Set up and run locally | `quickstart/QUICKSTART.md` |
 | Understand adapter / framework boundaries | `framework-boundaries.md` |
 | Reusable abstractions (kernel/adapter/components) | `overview/REUSABLE_COMPONENTS.md` |
@@ -40,6 +41,11 @@ Primary project framing and status live in the root `../README.md`.
 - `testing/TRAJECTORIES.md` — trajectory technical reference
 - `scenarios.md` — scenario index, evidence classification, protocol properties
 - `CDRS-v1.1-THEORY-SCHEMA.md` — CDRS theory schema (scenario classification)
+- `testing/ADDING_GAME_THEORETIC_VALIDATION.md` — contributor guide for adding new game-theoretic validation checks (single-trace and multi-epoch)
+  - Includes trust-control slices for equilibrium evidence:
+    - `:equilibrium-trust-mode :relaxed` (default)
+    - `:equilibrium-trust-mode :strict-valid-time`
+    - `:equilibrium-trust-mode :strict-attestation`
 
 ## Evidence and research
 

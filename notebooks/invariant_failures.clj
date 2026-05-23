@@ -1,10 +1,12 @@
+;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.invariant-failures
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
             [resolver-sim.notebooks.db :as ndb]))
 
-^{::clerk/sync true}
+^{:nextjournal.clerk/sync true}
 (defonce !ui-state
   (atom {:selected-invariant ""
          :selected-run-id ""
@@ -57,7 +59,7 @@
     {:ok? true :rows []}
     (exec! ds ["SELECT _id, step_index, action, result, projection_hash, time_before_edn, time_advance_edn, time_after_edn FROM sim_temporal_steps WHERE run_id = ? AND step_index = ?" run-id step-index])))
 
-^{::clerk/no-cache true}
+^{:nextjournal.clerk/no-cache true}
 (let [{:keys [ok? ds error]} (ndb/ds-result)
       {:keys [selected-invariant selected-run-id selected-step-index filters pagination]} @!ui-state
       severity (or (:severity filters) "")
