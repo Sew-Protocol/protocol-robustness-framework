@@ -1370,24 +1370,26 @@
                      {:id "keeper"     :address "0xkeeper"   :role "keeper"}]
    :protocol-params appeal ; appeal-window=120 s, fee-bps=150
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+   [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
               :custom-resolver "0xresolver"}
      :save-id-as "wf0"}
-    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id "wf0"}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
-    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
-    {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
+    {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
      :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
     ;; [Resolver does not appeal — forfeits.]
     ;; Settle escrow first (deadline 1240 has passed)
-    {:seq 4 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id "wf0"}}
     ;; Governance executes after appeal-deadline → slash :executed
-    {:seq 5 :time 1255 :agent "governance" :action "execute_fraud_slash"
+    {:seq 6 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf0"}}]})
 
 ;; ---------------------------------------------------------------------------
@@ -1430,29 +1432,31 @@
                      {:id "keeper"     :address "0xkeeper"   :role "keeper"}]
    :protocol-params appeal ; appeal-window=120 s, fee-bps=150
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+   [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
               :custom-resolver "0xresolver"}
      :save-id-as "wf0"}
-    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id "wf0"}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
-    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
-    {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
+    {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
      :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
     ;; Resolver contests the slash within the window → :appealed
-    {:seq 4 :time 1140 :agent "resolver" :action "appeal_slash"
+    {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
      :params {:workflow-id "wf0"}}
     ;; Governance rejects the appeal (upheld?=false) → slash returns to :pending
-    {:seq 5 :time 1160 :agent "governance" :action "resolve_appeal"
+    {:seq 6 :time 1160 :agent "governance" :action "resolve_appeal"
      :params {:workflow-id "wf0" :upheld? false}}
     ;; Keeper settles the escrow first (pending deadline 1240 has passed)
-    {:seq 6 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id "wf0"}}
     ;; Governance executes after original appeal-deadline (1255 > 1250) → :executed
-    {:seq 7 :time 1255 :agent "governance" :action "execute_fraud_slash"
+    {:seq 8 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf0"}}]})
 
 ;; ---------------------------------------------------------------------------
@@ -1495,27 +1499,29 @@
                      {:id "keeper"     :address "0xkeeper"   :role "keeper"}]
    :protocol-params appeal ; appeal-window=120 s, fee-bps=150
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+   [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
               :custom-resolver "0xresolver"}
      :save-id-as "wf0"}
-    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id "wf0"}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
-    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
-    {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
+    {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
      :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
     ;; Governance attempts early execution (1135 < 1250) → rejected :timelock-not-expired
-    {:seq 4 :time 1135 :agent "governance" :action "execute_fraud_slash"
+    {:seq 5 :time 1135 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf0"}}
     ;; [Resolver does not appeal.  Appeal window passes.]
     ;; Keeper settles escrow first (pending deadline 1240 has passed)
-    {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 6 :time 1241 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id "wf0"}}
     ;; Governance retries after deadline → slash :executed
-    {:seq 6 :time 1255 :agent "governance" :action "execute_fraud_slash"
+    {:seq 7 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf0"}}]})
 
 ;; ---------------------------------------------------------------------------
@@ -1566,50 +1572,54 @@
                      {:id "keeper"      :address "0xkeeper"    :role "keeper"}]
    :protocol-params appeal ; appeal-window=120 s, fee-bps=150
    :events
-   [{:seq 0 :time 1000 :agent "buyer0" :action "create_escrow"
+   [{:seq 0 :time 1000 :agent "resolver0" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 1 :time 1000 :agent "resolver1" :action "register_stake"
+     :params {:amount 10000}}
+    {:seq 2 :time 1000 :agent "buyer0" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
               :custom-resolver "0xresolver0"}
      :save-id-as "wf0"}
-    {:seq 1 :time 1000 :agent "buyer1" :action "create_escrow"
+    {:seq 3 :time 1000 :agent "buyer1" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 6000
               :custom-resolver "0xresolver1"}
      :save-id-as "wf1"}
-    {:seq 2 :time 1060 :agent "buyer0" :action "raise_dispute"
+    {:seq 4 :time 1060 :agent "buyer0" :action "raise_dispute"
      :params {:workflow-id "wf0"}}
-    {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute"
+    {:seq 5 :time 1060 :agent "buyer1" :action "raise_dispute"
      :params {:workflow-id "wf1"}}
     ;; wf0: resolver0 submits at t=1120 → pending deadline = 1120+120 = 1240.
     ;; wf1: resolver1 submits at t=1125 → pending deadline = 1125+120 = 1245.
     ;; Staggering the deadlines prevents both from being simultaneously stale
     ;; when the keeper runs, satisfying the no-stale-automatable-escrows invariant.
-    {:seq 4 :time 1120 :agent "resolver0" :action "execute_resolution"
+    {:seq 6 :time 1120 :agent "resolver0" :action "execute_resolution"
      :params {:workflow-id "wf0" :is-release true :resolution-hash "0xr0hash"}}
-    {:seq 5 :time 1125 :agent "resolver1" :action "execute_resolution"
+    {:seq 7 :time 1125 :agent "resolver1" :action "execute_resolution"
      :params {:workflow-id "wf1" :is-release true :resolution-hash "0xr1hash"}}
     ;; Governance proposes slashes on both. Slash deadlines = 1130+120 = 1250.
-    {:seq 6 :time 1130 :agent "governance" :action "propose_fraud_slash"
+    {:seq 8 :time 1130 :agent "governance" :action "propose_fraud_slash"
      :params {:workflow-id "wf0" :resolver-addr "0xresolver0" :amount 500}}
-    {:seq 7 :time 1130 :agent "governance" :action "propose_fraud_slash"
+    {:seq 9 :time 1130 :agent "governance" :action "propose_fraud_slash"
      :params {:workflow-id "wf1" :resolver-addr "0xresolver1" :amount 300}}
     ;; Resolver-0 appeals within the window → wf0 slash :appealed
-    {:seq 8 :time 1140 :agent "resolver0" :action "appeal_slash"
+    {:seq 10 :time 1140 :agent "resolver0" :action "appeal_slash"
      :params {:workflow-id "wf0"}}
     ;; [Resolver-1 does NOT appeal (forfeits).]
     ;; Governance resolves wf0 appeal in resolver-0's favour → wf0 slash :reversed
-    {:seq 9 :time 1160 :agent "governance" :action "resolve_appeal"
+    {:seq 11 :time 1160 :agent "governance" :action "resolve_appeal"
      :params {:workflow-id "wf0" :upheld? true}}
     ;; Settle wf0 once its pending deadline has passed.
-    {:seq 10 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 12 :time 1241 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id "wf0"}}
     ;; Settle wf1 after its own pending deadline has passed.
-    {:seq 11 :time 1246 :agent "keeper" :action "execute_pending_settlement"
+    {:seq 13 :time 1246 :agent "keeper" :action "execute_pending_settlement"
      :params {:workflow-id "wf1"}}
     ;; After slash deadlines have passed:
     ;; Governance tries to execute wf0 slash → rejected (:slash-already-reversed)
-    {:seq 12 :time 1255 :agent "governance" :action "execute_fraud_slash"
+    {:seq 14 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf0"}}
     ;; Governance executes wf1 slash (forfeited, status :pending) → :executed
-    {:seq 13 :time 1255 :agent "governance" :action "execute_fraud_slash"
+    {:seq 15 :time 1255 :agent "governance" :action "execute_fraud_slash"
      :params {:workflow-id "wf1"}}]})
 
 ;; ---------------------------------------------------------------------------
@@ -2001,6 +2011,218 @@
      {:seq 3 :time 1120 :agent "seller" :action "withdraw_escrow"
       :params {:workflow-id "wf0"}}]})
 
+;; ---------------------------------------------------------------------------
+;; S49 — B2 Appeal window persistence
+;; Test that appeal window is enforced when escalating.
+;; Sequence: L0 resolves → pending (60s window) → L1 escalates within window.
+;; Expected: Escalation accepted, pending settlement cleared, level advanced.
+;; ---------------------------------------------------------------------------
+
+(def s49
+  {:scenario-id     "s49-appeal-deadline-boundary"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
+                    {:id "seller"     :address "0xseller" :strategy "honest"}
+                    {:id "l0resolver" :address "0xl0"     :role "resolver"}
+                    {:id "l1resolver" :address "0xl1"     :role "resolver"}
+                    {:id "keeper"     :address "0xkeeper" :role "resolver"}]
+   :protocol-params kleros-appeal
+   :notes "Validate appeal window boundary enforcement. L0 resolves at t=1120 (deadline=1180), buyer escalates at t=1150 (within 60s window) successfully. L1 then resolves, and settlement executes after deadline."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; L0 resolves → creates pending (deadline = 1120+60 = 1180)
+    {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+    ;; Buyer escalates at t=1150 (within 60s appeal window) → accepted
+    {:seq 3 :time 1150 :agent "buyer" :action "escalate_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; L1 resolves → new pending (deadline = 1210+60 = 1270)
+    {:seq 4 :time 1210 :agent "l1resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+    ;; Keeper executes settlement after deadline
+    {:seq 5 :time 1270 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S50 — D1 False assertion unchallenged (monitoring assumption validation)
+;; Resolver makes clearly wrong decision (refunds when release is correct).
+;; No one challenges or appeals → bad resolution finalizes.
+;; Purpose: Validate that protocol DETECTS if monitoring assumption fails.
+;; ---------------------------------------------------------------------------
+
+(def s50
+  {:scenario-id     "s50-false-assertion-unchallenged"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver" :strategy "malicious"}]
+   :protocol-params appeal
+   :expected-fail? false
+   :notes "This is NOT a protocol failure; it demonstrates the monitoring assumption: if no watchdog challenges a malicious resolution, the bad outcome settles. The scenario outcome is 'pass' iff all invariants hold even under malicious settlement."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 4000
+             :custom-resolver "0xresolver"}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "release"
+     :params {:workflow-id "wf0"}}
+    ;; Buyer then raises dispute claiming refund (lies)
+    {:seq 2 :time 1080 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; Malicious resolver sides with buyer (refund), even though release already occurred
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+    ;; Appeal window closes; no one escalates
+    {:seq 4 :time 1240 :agent "buyer" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S51 — D7 Same-block challenge/finalize race
+;; Appeal window just closing; two txs in same block.
+;; One finalizes, one escalates → deterministic ordering.
+;; ---------------------------------------------------------------------------
+
+(def s51
+  {:scenario-id     "s51-same-block-challenge-finalize-race"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "executor" :address "0xexecutor" :role "keeper"}
+                    {:id "appealer" :address "0xappealer" :role "keeper"}]
+   :protocol-params appeal
+   :notes "Same-block ordering: executor and appealer both act at t=1240 (deadline). Deterministic ordering ensures one succeeds and other fails."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 3000
+             :custom-resolver "0xresolver"}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; Resolver decides at t=1120 → appeal deadline = 1240
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    ;; At t=1240, two transactions in same block:
+    ;; First: finalize (succeeds, locks settlement)
+    {:seq 3 :time 1240 :agent "executor" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}
+    ;; Second: escalate (fails, appeal window closed and finalized)
+    {:seq 4 :time 1240 :agent "appealer" :action "escalate_dispute"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S52 — I4 Yield accrued during dispute
+;; Escrow earning yield while disputed; yield should be distributed per outcome.
+;; ---------------------------------------------------------------------------
+
+(def s52
+  {:scenario-id     "s52-yield-accrued-during-dispute"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}]
+   :protocol-params appeal
+   :notes "Escrow principal: 5000 USDC. Yield accrues at 0.1%/block. During dispute (1060–1120 = 60 blocks), yield ≈ 3 USDC. On release, seller receives principal + yield."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"
+             :yield-rate 0.001}
+     :save-id-as "wf0"}
+    ;; Yield accrues from t=1000 → t=1060 (60 blocks, 0.06% yield → ~3 USDC)
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id "wf0"}}
+    ;; More yield accrues during dispute (t=1060 → t=1120)
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    ;; Execute settlement
+    {:seq 3 :time 1240 :agent "buyer" :action "execute_pending_settlement"
+     :params {:workflow-id "wf0"}}
+    ;; Seller withdraws: principal (5000) + yield (≥3)
+    {:seq 4 :time 1250 :agent "seller" :action "withdraw_escrow"
+     :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S53 — I2 Reentrant withdrawal guard
+;; Buyer and seller attempt to withdraw the same escrow simultaneously
+;; Expected: Only one succeeds; second is rejected (already-withdrawn or similar)
+;; Validates: Atomicity of settlement ledger; no double-payout
+;; ---------------------------------------------------------------------------
+
+(def s53
+  {:scenario-id     "s53-reentrant-withdrawal-guard"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                    {:id "seller"   :address "0xseller"   :strategy "honest"}
+                    {:id "resolver" :address "0xresolver" :role "resolver"}
+                    {:id "keeper"   :address "0xkeeper"   :role "keeper"}]
+   :protocol-params appeal
+   :notes "Settlement ledger isolation: buyer and seller attempt withdrawal at same time. One succeeds; second is rejected to prevent ledger duplication."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    ;; Resolver decides → pending (deadline = 1120+120 = 1240)
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    ;; Keeper executes settlement after deadline
+    {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}
+    ;; Buyer withdraws (succeeds)
+    {:seq 4 :time 1250 :agent "buyer" :action "withdraw_escrow"
+    :params {:workflow-id "wf0"}}
+    ;; Seller attempts withdrawal at same time (rejected—already withdrawn)
+    {:seq 5 :time 1250 :agent "seller" :action "withdraw_escrow"
+    :params {:workflow-id "wf0"}}]})
+
+;; ---------------------------------------------------------------------------
+;; S54 — I6 Multi-claim ledger isolation
+;; Two parallel escrows settled by same parties; verify claims stay isolated
+;; Expected: Each party gets correct escrow amounts; no ledger bleed
+;; Validates: Claim isolation; per-escrow accounting
+;; ---------------------------------------------------------------------------
+
+(def s54
+  {:scenario-id     "s54-multi-claim-ledger-isolation"
+   :schema-version  "1.0"
+   :initial-block-time 1000
+   :agents          [{:id "buyer1"    :address "0xbuyer1"   :strategy "honest"}
+                    {:id "buyer2"    :address "0xbuyer2"   :strategy "honest"}
+                    {:id "seller"    :address "0xseller"   :strategy "honest"}
+                    {:id "resolver"  :address "0xresolver" :role "resolver"}
+                    {:id "keeper"    :address "0xkeeper"   :role "keeper"}]
+   :protocol-params appeal
+   :notes "Two independent escrows (wf0=5000, wf1=3000). First disputed and settled; second released. Tests that ledger isolation holds."
+   :events
+   [{:seq 0 :time 1000 :agent "buyer1" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 5000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf0"}
+    {:seq 1 :time 1000 :agent "buyer2" :action "create_escrow"
+    :params {:token "USDC" :to "0xseller" :amount 3000
+             :custom-resolver "0xresolver"}
+    :save-id-as "wf1"}
+    {:seq 2 :time 1060 :agent "buyer1" :action "raise_dispute"
+    :params {:workflow-id "wf0"}}
+    {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    {:seq 4 :time 1240 :agent "keeper" :action "execute_pending_settlement"
+    :params {:workflow-id "wf0"}}
+    {:seq 5 :time 1060 :agent "buyer2" :action "release"
+    :params {:workflow-id "wf1"}}]})
+
      ;; ---------------------------------------------------------------------------
      ;; Scenario registry
      ;; ---------------------------------------------------------------------------
@@ -2052,6 +2274,12 @@
     ["S42  resolver-buyer-bribery-loop"                  s42]
     ["S45  flash-loan-stake-inflation"                   s45]
     ["S46  reorg-idempotence"                            s46]
+    ["S49  appeal-deadline-boundary"                     s49]
+    ["S50  false-assertion-unchallenged"                 s50]
+    ["S51  same-block-challenge-finalize-race"          s51]
+    ["S52  yield-accrued-during-dispute"                s52]
+    ["S53  reentrant-withdrawal-guard"                  s53]
+    ["S54  multi-claim-ledger-isolation"                s54]
     ["S66  cooldown-boundary-reorg"                      s66]
     ["S67  reentrancy-callback"                          s67]])
 
@@ -2187,4 +2415,29 @@
    "s45-flash-loan-stake-inflation"
    {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
-    :adversary/traits #{:flash-loan :stake-inflation}}})
+    :adversary/traits #{:flash-loan :stake-inflation}}
+
+   ;; ── Boundary & Timing Tests ──────────────────────────────────────
+   "s49-appeal-deadline-boundary"
+   {:scenario/type :boundary-test
+    :tests #{:appeal-deadline :timing :determinism}}
+
+   "s50-false-assertion-unchallenged"
+   {:scenario/type :monitoring-assumption
+    :tests #{:assumption-validation :monitoring-failure}}
+
+   "s51-same-block-challenge-finalize-race"
+   {:scenario/type :mev-ordering
+    :tests #{:ordering-determinism :finality :race-condition}}
+
+   "s52-yield-accrued-during-dispute"
+   {:scenario/type :accounting
+    :tests #{:yield-accounting :fund-conservation :settlement}}
+
+   "s53-reentrant-withdrawal-guard"
+   {:scenario/type :settlement-ledger
+    :tests #{:atomicity :ledger-isolation :idempotence}}
+
+   "s54-multi-claim-ledger-isolation"
+   {:scenario/type :settlement-ledger
+    :tests #{:ledger-isolation :per-escrow-accounting :claim-independence}}})

@@ -821,7 +821,8 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
   (let [meta       (get adversary-descriptions adv-type {})
         pass-count (count (filter :pass? scenarios))
         total      (count scenarios)
-        rag        (if (= pass-count total) :green :red)]
+        rag        (if (= pass-count total) :green :red)
+        failed     (->> scenarios (remove :pass?) (map :name) (sort) vec)]
     [:div {:style {:border "1px solid #e2e8f0" :borderRadius "6px"
                    :padding "14px 16px" :marginBottom "12px"}}
      [:div {:style {:display "flex" :gap "10px" :alignItems "baseline"
@@ -841,7 +842,13 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
       [:div
        [:strong {:style {:fontSize "0.83em"}} "Finding"]
        [:p {:style {:fontSize "0.82em" :color "#374151" :margin "4px 0"}}
-        (or (:finding meta) "—")]]]
+        (if (= pass-count total)
+          (or (:finding meta) "—")
+          (str "⚠ Live suite currently shows failing scenarios for "
+               (or (:label meta) (name adv-type))
+               ": "
+               (str/join ", " failed)
+               ". Investigate these before treating this adversary class as bounded."))]]]
      [:div {:style {:marginTop "10px" :overflowX "auto"}}
       [:table {:style {:borderCollapse "collapse" :fontSize "0.8em" :width "100%"}}
        [:thead
@@ -920,6 +927,100 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
              (map (fn [[adv-type scenarios]]
                     (render-adversary-card adv-type scenarios adversary-descriptions))
                   by-adversary))]))))
+
+;; ===========================================================================
+;; ## Section 5b — Failure Triage Summary (Actionable)
+;; ===========================================================================
+
+(clerk/html
+ (common/safe-render
+  "Failure Triage Summary"
+  (fn []
+    (let [results (:results live-suite-results [])
+          by-name (into {} (map (juxt :name identity) results))
+          scenario-row
+          (fn [name criticality ease action root]
+            (let [{:keys [pass? steps reverts violations]} (get by-name name)
+                  status (if pass? "✓ PASS" "✗ FAIL")]
+              [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
+               [:td {:style {:padding "6px 10px" :fontFamily "monospace"}} name]
+               [:td {:style {:padding "6px 10px"}} status]
+               [:td {:style {:padding "6px 10px" :textAlign "right"}} (or steps "—")]
+               [:td {:style {:padding "6px 10px" :textAlign "right"}} (or reverts "—")]
+               [:td {:style {:padding "6px 10px" :textAlign "right"}} (or violations "—")]
+               [:td {:style {:padding "6px 10px"}} criticality]
+               [:td {:style {:padding "6px 10px"}} ease]
+               [:td {:style {:padding "6px 10px" :color "#475569"}} action]
+               [:td {:style {:padding "6px 10px" :color "#475569"}} root]]))
+          rows [(scenario-row "S34  profit-maximizer-unchallenged-slash"
+                              "High"
+                              "Medium"
+                              "Trace slash accounting + expected post-slash invariants; verify settlement path cannot create unbounded credit."
+                              "R1: Slash/lifecycle accounting consistency")
+                (scenario-row "S35  profit-maximizer-governance-wins-appeal"
+                              "High"
+                              "Medium"
+                              "Audit governance appeal resolution transitions and snapshot boundaries; add explicit invariant for appeal-finalization accounting." 
+                              "R1: Slash/lifecycle accounting consistency")
+                (scenario-row "S36  profit-maximizer-pre-window-execute-rejected"
+                              "Critical"
+                              "Easy"
+                              "Tighten/verify deadline guard and add boundary tests (t-1/t/t+1) for executePendingSettlement."
+                              "R2: Temporal boundary enforcement")
+                (scenario-row "S37  profit-maximizer-two-resolver-split-outcomes"
+                              "Critical"
+                              "Hard"
+                              "Validate cross-resolver payout isolation and single-resolution payout invariants under concurrent disputes."
+                              "R3: Multi-escrow/concurrency isolation")
+                [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
+                 [:td {:style {:padding "6px 10px" :fontFamily "monospace"}} "Phase J stochastic claims"]
+                 [:td {:style {:padding "6px 10px"}} "❌ mixed-fail"]
+                 [:td {:style {:padding "6px 10px" :textAlign "right"}} "—"]
+                 [:td {:style {:padding "6px 10px" :textAlign "right"}} "—"]
+                 [:td {:style {:padding "6px 10px" :textAlign "right"}} "—"]
+                 [:td {:style {:padding "6px 10px"}} "High (economic/governance)"]
+                 [:td {:style {:padding "6px 10px"}
+                       :title "Model tuning + policy constraints"}
+                  "Medium"]
+                 [:td {:style {:padding "6px 10px" :color "#475569"}}
+                  "Prioritize resolver participation stability + budget-balance; enforce governance review floor >=2/epoch (Phase AD finding)."]
+                 [:td {:style {:padding "6px 10px" :color "#475569"}}
+                  "R4: Incentive/budget dynamics under multi-epoch stress"]]]]
+      [:div
+       (section-header
+        "Failure Triage Summary (Live + Actionable)"
+        "Criticality, ease of fixing, recommended action, and root-cause clustering for current failures.")
+
+       [:div {:style {:overflowX "auto"}}
+        [:table {:style {:borderCollapse "collapse" :width "100%" :fontSize "0.82em"}}
+         [:thead
+          [:tr {:style {:background "#f1f5f9"}}
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Failure group"]
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Live status"]
+           [:th {:style {:padding "7px 10px" :textAlign "right"}} "Steps"]
+           [:th {:style {:padding "7px 10px" :textAlign "right"}} "Reverts"]
+           [:th {:style {:padding "7px 10px" :textAlign "right"}} "Violations"]
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Criticality"]
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Ease of fixing"]
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Recommended action"]
+           [:th {:style {:padding "7px 10px" :textAlign "left"}} "Underlying root cause"]]]
+         (into [:tbody] rows)]]
+
+       [:h4 {:style {:margin "14px 0 8px 0"}} "Root-cause clusters that unlock multiple fixes"]
+       [:ul {:style {:fontSize "0.84em" :color "#334155" :lineHeight "1.8"}}
+        [:li [:strong "R1 — Slash/lifecycle accounting consistency"]
+         ": likely addresses both S34 and S35 if accounting and appeal-finalization semantics are unified around one invariant set."]
+        [:li [:strong "R2 — Temporal boundary enforcement"]
+         ": directly targets S36 and reduces race-condition regressions globally (appeal windows, pre-window execution)."]
+        [:li [:strong "R3 — Multi-escrow/concurrency isolation"]
+         ": addresses S37 and strengthens flooding/split-outcome resilience under concurrent disputes."]
+        [:li [:strong "R4 — Incentive/budget dynamics"]
+         ": explains repeated Phase J failures (participation-stable, budget-balance); policy-level hardening such as governance bandwidth floor can mitigate system-level fragility."]]
+
+       (warn-box
+        [:span
+         [:strong "Priority recommendation: "]
+         "Fix in order: S36 (temporal guard), then R1 accounting unification (S34/S35), then R3 concurrency isolation (S37), followed by R4 economic/governance hardening from Phase J/AA/AD outputs."]) ]))))
 
 ;; ===========================================================================
 ;; ## Section 6 — Kleros Integration Model
