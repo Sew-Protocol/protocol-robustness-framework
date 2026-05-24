@@ -5,6 +5,7 @@
             [resolver-sim.benchmark.signing :as signing]
             [clojure.java.shell :refer [sh]]
             [clojure.java.io :as io]
+            [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.string :as str]))
 
@@ -74,7 +75,11 @@
 (defn publish-ipfs [export-tar-path]
   (let [{:keys [exit out err]} (sh "ipfs" "add" "-Q" export-tar-path)]
     (if (zero? exit)
-      (let [cid (str/trim out)]
+      (let [cid (str/trim out)
+            manifest {:ipfs-cid cid
+                      :timestamp (System/currentTimeMillis)
+                      :bundle-path export-tar-path}]
+        (spit "evidence-manifest.json" (json/write-str manifest :key-fn name))
         (println "Published to IPFS")
         (println "\nCID:\n" cid)
         (println "\nGateway:\n" (str "https://ipfs.io/ipfs/" cid))

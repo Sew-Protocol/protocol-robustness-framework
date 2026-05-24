@@ -5,7 +5,15 @@
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 
 ### Added
-- **Contributor Guide — Game-Theoretic Validation:** Added `docs/testing/ADDING_GAME_THEORETIC_VALIDATION.md` with a practical extension workflow for adding custom single-trace and multi-epoch game-theoretic checks, including testing and evidence-strength guidance.
+- **Golden Evidence Artifacts:** Created a library of 6 technical validation artifacts mapping core protocol robustness (Reorgs, Timing, Collusion, Economic Stability, and Governance Hardening) using the **VENS** and **SPEDS** design systems.
+- **Production Evidence Workbench:** Implemented `notebooks/workbench-v2.clj` and `notebooks/evidence_explorer.clj`—a data-driven observability surface that bridges high-level simulation metrics with raw, signed cryptographic evidence bundles.
+- **Evidence-to-Share Workflow:** Integrated the `bb benchmark:publish-ipfs` pipeline to automatically generate an `evidence-manifest.json` for workbench consumption, cryptographically binding every visual artifact to an immutable IPFS bundle.
+
+### Fixed
+- **CLI Compilation:** Resolved the `load-index` symbol resolution error in `src/resolver_sim/benchmark/cli.clj`.
+- **JSON Serialization:** Corrected `publish-ipfs` to use `clojure.data.json/write-str` to properly generate IPFS manifests.
+- **Artifact Readability:** Finalized the high-contrast design for the Golden Artifacts, optimizing typography and color palettes for mobile readability and social sharing.
+- **Workbench Stability:** Resolved syntax errors and namespace-unresolved symbols in `workbench-v2.clj` for a seamless interactive experience.
 - **Data-Driven Yield Mechanism:** Refactored yield implementation into a modular, data-driven system (`resolver-sim.yield` namespaces).
   - Replaced `YieldModule` protocol with declarative module definitions.
   - Implemented Aave v3 (share-based), Fixed-rate (principal-based), and Adversarial yield modules.

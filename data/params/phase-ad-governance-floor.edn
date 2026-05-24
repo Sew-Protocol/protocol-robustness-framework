@@ -20,4 +20,4 @@
  ;; Phase AD specific params
  :n-epochs 50
  :disputes-per-epoch 5
- :floor-threshold 10000}
+ :floor-threshold 20000}

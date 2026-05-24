@@ -8,6 +8,9 @@
             [clojure.java.io :as io]
             [clojure.tools.cli :refer [parse-opts]]))
 
+(defn- load-index []
+  (clojure.edn/read-string (slurp "BENCHMARKS.edn")))
+
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
     :default "evidence/latest.edn"]
