@@ -13,7 +13,8 @@
    pure and accept a seq of metadata maps, so they can be tested independently."
   (:require [clojure.java.io  :as io]
             [clojure.data.json :as json]
-            [clojure.string    :as str]))
+            [clojure.string    :as str]
+            [resolver-sim.scenario.schema-profile :as schema-profile]))
 
 (declare coverage-report)
 
@@ -149,7 +150,8 @@
 
    Returns:
      :total             — total scenario count
-     :schema-versions   — {version-str count}
+      :schema-versions   — {version-str count}
+      :enriched-version  — schema-profile/enriched-version marker
      :by-purpose        — {purpose [id ...]}  (:unclassified for nil purpose)
      :by-threat-tag     — {tag [id ...]}
      :threat-tag-freq   — {tag count} sorted by frequency desc
@@ -234,8 +236,9 @@
                                (remove seen-transitions)
                                sort
                                vec)]
-    {:total              (count scenarios)
+     {:total              (count scenarios)
      :schema-versions    by-version
+      :enriched-version   (schema-profile/enriched-version)
      :by-purpose         by-purpose
      :by-threat-tag      (group-ids-by identity
                            (for [s scenarios t (:threat-tags s)]

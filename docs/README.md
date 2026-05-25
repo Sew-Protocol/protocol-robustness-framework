@@ -13,6 +13,7 @@ Primary project framing and status live in the root `../README.md`.
 | Set up and run locally | `quickstart/QUICKSTART.md` |
 | Understand adapter / framework boundaries | `framework-boundaries.md` |
 | Reusable abstractions (kernel/adapter/components) | `overview/REUSABLE_COMPONENTS.md` |
+| Generalized outcomes contract (cross-protocol) | `overview/OUTCOME_MODEL.md` |
 | Scenario index and protocol properties | `scenarios.md` |
 | Evidence for external reviewers | `evidence/RESEARCHER_EVIDENCE_PACK.md` |
 
@@ -62,6 +63,7 @@ Primary project framing and status live in the root `../README.md`.
 
 - `quickstart/QUICKSTART.md` — setup and first run
 - `usage.md` — CLI/API usage reference
+- `make speds-comparator-shadow` — generate `results/test-artifacts/comparator-shadow.json` for side-by-side comparator strategy rollout checks
 
 ## Notebooks
 
@@ -71,6 +73,7 @@ Primary project framing and status live in the root `../README.md`.
 
 - `overview/REUSABLE_COMPONENTS.md` — adapter/harness/fixture reuse guide
 - `overview/USE_OF_FUNDS.md` — use-of-funds accounting contract
+- `overview/OUTCOME_MODEL.md` — canonical cross-protocol outcome model and migration plan
 - `requirements/sybil-mitigation-roadmap.md` — Sybil ring mitigation requirements
 
 ## Historical and superseded

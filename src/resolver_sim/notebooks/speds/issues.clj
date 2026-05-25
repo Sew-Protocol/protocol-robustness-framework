@@ -6,28 +6,28 @@
             [resolver-sim.notebooks.common :as common]
             [resolver-sim.notebooks.speds.data :as data]
             [resolver-sim.notebooks.speds.findings :as findings]
+            [resolver-sim.notebooks.speds.semantics :as sem]
+            [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.notebooks.speds.config :as config]))
 
 (def issues-path "results/test-artifacts/issues.json")
+(def comparator-shadow-path "results/test-artifacts/comparator-shadow.json")
 
 (def required-issue-keys
   #{:issue/id :scenario/id :kind :severity :status-kind :title
     :story/family :priority :evidence/refs :provenance})
 
 (defn- purpose->family [purpose]
-  (case (str/lower-case (str purpose))
-    "theory-falsification" :theory-falsification
-    "adversarial-robustness" :threat-detected
-    :scenario-deep-dive))
+  (sem/purpose->story-family-kw purpose))
 
 (defn- status-kind [scenario summary]
-  (let [purpose (str/lower-case (str (:purpose scenario)))
+  (let [purpose (:purpose scenario)
         failed (or (:failing_scenarios summary)
                    (:failed_scenarios summary)
                    (:failed summary)
                    0)]
     (cond
-      (= purpose "theory-falsification") :expected-negative
+      (ose/negative-test-purpose? purpose) :expected-negative
       (pos? (long (or failed 0))) :detected
       :else :observed)))
 
@@ -91,11 +91,15 @@
 
 (defn generate-issues-bundle
   "Builds actionable issues from findings + issue policy."
-  ([artifacts] (generate-issues-bundle artifacts default-issue-policy))
-  ([artifacts policy]
+  ([artifacts] (generate-issues-bundle artifacts default-issue-policy {}))
+  ([artifacts policy] (generate-issues-bundle artifacts policy {}))
+  ([artifacts policy {:keys [comparator-config]}]
    (let [findings-bundle (or (findings/load-findings)
-                             (findings/generate-findings-bundle artifacts))
+                             (findings/generate-findings-bundle
+                              artifacts
+                              {:comparator-config (or comparator-config findings/default-comparator-config)}))
         run-id (get-in findings-bundle [:run :run_id])
+         comparator-config (get findings-bundle :comparator_config findings/default-comparator-config)
         findings-list (or (:findings findings-bundle) [])
         issues (->> findings-list
                     (filter #(should-open-issue? % policy))
@@ -104,6 +108,7 @@
                     vec)]
     {:schema/version "speds-issues-v1"
      :run/id run-id
+     :comparator_config comparator-config
      :generated-at (str (java.time.Instant/now))
      :issue-count (count issues)
      :issues issues
@@ -120,3 +125,49 @@
 
 (defn load-issues []
   (common/read-json issues-path))
+
+(defn generate-comparator-shadow-report
+  "Runs findings/issues generation under multiple comparator strategies and
+   returns a side-by-side summary for safe rollout evaluation.
+
+   opts:
+   {:strategies [:nearest-baseline-by-id :matched-by-purpose :matched-by-tags]
+    :enabled? true
+    :policy default-issue-policy}"
+  ([artifacts] (generate-comparator-shadow-report artifacts {}))
+  ([artifacts {:keys [strategies enabled? policy]
+               :or {strategies [:nearest-baseline-by-id :matched-by-purpose :matched-by-tags]
+                    enabled? true
+                    policy default-issue-policy}}]
+   (let [runs (mapv
+               (fn [strategy]
+                 (let [bundle (generate-issues-bundle
+                               artifacts
+                               policy
+                               {:comparator-config {:strategy strategy :enabled? enabled?}})
+                       findings-bundle (findings/generate-findings-bundle
+                                        artifacts
+                                        {:comparator-config {:strategy strategy :enabled? enabled?}})]
+                   {:strategy strategy
+                    :enabled? enabled?
+                    :finding-count (count (or (:findings findings-bundle) []))
+                    :issue-count (:issue-count bundle)
+                    :run-id (:run/id bundle)
+                    :comparator-config (:comparator_config bundle)}))
+               strategies)]
+     {:schema/version "speds-comparator-shadow-v1"
+      :generated-at (str (java.time.Instant/now))
+      :strategies strategies
+      :runs runs})))
+
+(defn save-comparator-shadow-report!
+  "Writes comparator shadow report to results/test-artifacts/comparator-shadow.json"
+  ([artifacts] (save-comparator-shadow-report! artifacts {}))
+  ([artifacts opts]
+   (let [report (generate-comparator-shadow-report artifacts opts)]
+     (.mkdirs (java.io.File. "results/test-artifacts"))
+     (spit comparator-shadow-path (json/write-str report))
+     report)))
+
+(defn load-comparator-shadow-report []
+  (common/read-json comparator-shadow-path))

@@ -6,6 +6,8 @@
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
             [resolver-sim.notebooks.speds.data :as data]
+            [resolver-sim.notebooks.speds.semantics :as sem]
+            [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.notebooks.speds.config :as config]))
 
 (def findings-path "results/test-artifacts/findings.json")
@@ -14,72 +16,78 @@
   #{:finding_id :scenario_id :kind :severity :status_kind :title
     :summary :story :evidence_refs :provenance})
 
+(def default-comparator-config
+  {:strategy :nearest-baseline-by-id
+   :enabled? true})
+
 (defn- purpose->kind [purpose]
-  (case (str/lower-case (str purpose))
-    "theory-falsification" "expected_negative"
-    "adversarial-robustness" "liveness_risk"
-    "regression" "regression"
-    "inconclusive_result"))
+  (sem/purpose->kind purpose))
 
 (defn- purpose->family [purpose]
-  (case (str/lower-case (str purpose))
-    "theory-falsification" "theory_falsification"
-    "adversarial-robustness" "threat_detected"
-    "scenario_deep_dive"))
+  (sem/purpose->story-family-str purpose))
 
 (defn- classification-for [scenario]
-  (let [purpose (str/lower-case (str (:purpose scenario)))]
-    (cond
-      (= purpose "theory-falsification")
-      {:label "research_finding"
-       :status "assumption_falsified"
-       :confidence "high"
-       :rationale "Scenario is explicitly tagged theory-falsification; negative outcomes are expected evidence, not regressions."}
-
-      (= purpose "regression")
-      {:label "regression"
-       :status "unexpected_behavior"
-       :confidence "high"
-       :rationale "Scenario is explicitly tagged regression and should be treated as engineering defect signal."}
-
-      :else
-      {:label "operational_signal"
-       :status "requires_triage"
-       :confidence "medium"
-       :rationale "Scenario does not explicitly declare falsification/regression semantics; manual triage recommended."})))
+  (sem/classification-for-purpose (:purpose scenario)))
 
 (defn- scenario-id-num [sid]
   (some->> sid (re-find #"S(\d+)") second parse-long))
 
 (defn- nearest-baseline-scenario [scenarios scenario]
   (let [sid-num  (scenario-id-num (:id scenario))
-        baselines (filter #(= "baseline" (str/lower-case (str (:purpose %)))) scenarios)]
+        baselines (filter #(= :baseline (ose/normalize-purpose (:purpose %))) scenarios)]
     (or (first (sort-by #(Math/abs ^long (- (long (or (scenario-id-num (:id %)) 0))
                                             (long (or sid-num 0)))) baselines))
         (first baselines))))
 
-(defn- baseline-comparison [artifacts scenario]
+(defn- baseline-by-purpose [scenarios scenario]
+  (let [purpose (ose/normalize-purpose (:purpose scenario))]
+    (or (first (filter #(= purpose (ose/normalize-purpose (:purpose %))) scenarios))
+        (nearest-baseline-scenario scenarios scenario))))
+
+(defn- baseline-by-tags [scenarios scenario]
+  (let [scenario-tags (set (or (:threat-tags scenario) []))
+        scored (->> scenarios
+                    (map (fn [s]
+                           (let [tags (set (or (:threat-tags s) []))
+                                 overlap (count (set/intersection scenario-tags tags))]
+                             [overlap s])))
+                    (sort-by (fn [[overlap _]] (- overlap))))]
+    (or (some (fn [[overlap s]] (when (pos? overlap) s)) scored)
+        (nearest-baseline-scenario scenarios scenario))))
+
+(defn- choose-baseline [scenarios scenario strategy]
+  (case strategy
+    :matched-by-purpose (baseline-by-purpose scenarios scenario)
+    :matched-by-tags    (baseline-by-tags scenarios scenario)
+    :nearest-baseline-by-id (nearest-baseline-scenario scenarios scenario)
+    ;; Safe fallback to maintain behavior for unknown strategies.
+    (nearest-baseline-scenario scenarios scenario)))
+
+(defn- baseline-comparison [artifacts scenario comparator-config]
   (let [scenarios (or (get-in artifacts [:coverage :scenarios]) [])
-        baseline (nearest-baseline-scenario scenarios scenario)
+        strategy (or (:strategy comparator-config) :nearest-baseline-by-id)
+        baseline (choose-baseline scenarios scenario strategy)
         scenario-tags (set (or (:threat-tags scenario) []))
         baseline-tags (set (or (:threat-tags baseline) []))
         scenario-tag-count (count scenario-tags)
         baseline-tag-count (count baseline-tags)
-        overlap-count (count (set/intersection scenario-tags baseline-tags))]
+        overlap-count (count (set/intersection scenario-tags baseline-tags))
+        enabled? (not= false (:enabled? comparator-config))]
     {:baseline_scenario_id (or (:id baseline) "unavailable")
-     :comparator_kind "nearest_baseline_by_id"
-     :delta_summary (if baseline
+     :comparator_kind (-> strategy name (str/replace "-" "_"))
+     :enabled? enabled?
+     :delta_summary (if (and enabled? baseline)
                       {:threat_tag_count_delta (- scenario-tag-count baseline-tag-count)
                        :threat_tag_overlap_count overlap-count
-                       :purpose_delta {:scenario (str/lower-case (str (:purpose scenario)))
-                                       :baseline (str/lower-case (str (:purpose baseline)))}
+                       :purpose_delta {:scenario (name (ose/normalize-purpose (:purpose scenario)))
+                                       :baseline (name (ose/normalize-purpose (:purpose baseline)))}
                        :narrative (str "Compared against baseline " (:id baseline)
                                        ": tag delta=" (- scenario-tag-count baseline-tag-count)
                                        ", overlap=" overlap-count ".")}
                       {:narrative "No baseline scenario available in coverage artifact for automatic delta extraction."})
      :available? (boolean baseline)}))
 
-(defn- narrative-artifact-spec [artifacts scenario sid sev st-kind]
+(defn- narrative-artifact-spec [artifacts scenario sid sev st-kind comparator-config]
   (let [canon (data/canonical-summary (:summary artifacts))
         classification (classification-for scenario)
         replay-label (:replay-match-label (data/narrative-metrics artifacts))]
@@ -100,11 +108,60 @@
                :value replay-label
                :source_artifact "summary"
                :source_path [:summary :replay_match_pct]}]
-     :baseline_comparison (baseline-comparison artifacts scenario)
+     :baseline_comparison (baseline-comparison artifacts scenario comparator-config)
      :visual_blocks [{:block "headline" :text (or (:title scenario) sid)}
                      {:block "what_happened" :text (str "Scenario " sid " produced status kind " st-kind ".")}
                      {:block "why_it_matters" :text (:rationale classification)}
                      {:block "action" :text "Classify as research finding vs regression before publication."}]}))
+
+(defn- ->outcome-class [classification]
+  (case (:label classification)
+    "research_finding" :research-finding
+    "regression" :regression
+    "operational_signal" :operational-signal
+    :inconclusive))
+
+(defn- ->outcome-status [classification]
+  (case (:status classification)
+    "assumption_falsified" :assumption-falsified
+    "unexpected_behavior" :unexpected-behavior
+    "requires_triage" :requires-triage
+    :unknown))
+
+(defn- ->outcome-severity [sev]
+  (case sev
+    "critical" :critical
+    "high" :high
+    "medium" :medium
+    "low" :low
+    :low))
+
+(defn- canonical-outcome [artifacts scenario sid sev st-kind classification story-spec]
+  {:outcome-model/version "v0.1"
+   :outcome
+   {:class (->outcome-class classification)
+    :status (->outcome-status classification)
+    :severity (->outcome-severity sev)
+    :confidence {:level (keyword (or (:confidence classification) "medium"))
+                 :basis :single-run-artifact-derived
+                 :rationale (:rationale classification)}
+    :execution {:result (keyword (or st-kind "observed"))
+                :halt-reason nil
+                :scenario-id sid
+                :scenario-purpose (ose/normalize-purpose (:purpose scenario))}
+    :evidence {:claims (get story-spec :claims [])
+               :provenance (get story-spec :provenance {})}
+    :comparison {:comparator-id (get-in story-spec [:baseline_comparison :baseline_scenario_id])
+                 :strategy (keyword (or (get-in story-spec [:baseline_comparison :comparator_kind])
+                                        "nearest-baseline-by-id"))
+                 :deltas (get-in story-spec [:baseline_comparison :delta_summary])
+                 :narrative (get-in story-spec [:baseline_comparison :delta_summary :narrative])}
+    :actionability {:owner :triage
+                    :release-gate-impact :review-required
+                    :next-step "Classify as research finding vs regression before publication."}
+    :visual {:blocks (mapv (fn [b] {:block (keyword (str/replace (or (:block b) "") "_" "-"))
+                                    :text (:text b)})
+                          (get story-spec :visual_blocks []))}}})
 
 (defn- severity [scenario]
   (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))]
@@ -114,10 +171,9 @@
       :else "low")))
 
 (defn- status-kind [scenario]
-  (let [purpose (str/lower-case (str (:purpose scenario)))]
-    (if (= purpose "theory-falsification")
+  (if (ose/negative-test-purpose? (:purpose scenario))
       "expected_negative"
-      "observed")))
+      "observed"))
 
 (defn- priority [severity]
   (case severity "high" 90 "medium" 60 "low" 30 10))
@@ -129,17 +185,18 @@
 (defn- finding-id [run-id scenario-id]
   (str "FINDING-" run-id "-" (truncate-safe (Math/abs (hash (str scenario-id))) 6)))
 
-(defn scenario->finding [artifacts scenario]
+(defn scenario->finding [artifacts scenario comparator-config]
   (let [summary (:summary artifacts)
         canon (data/canonical-summary summary)
         sid (or (:id scenario) "unknown-scenario")
         sev (severity scenario)
         st-kind (status-kind scenario)
-        classif (classification-for scenario)]
+        classif (classification-for scenario)
+        story-spec (narrative-artifact-spec artifacts scenario sid sev st-kind comparator-config)]
     {:finding_id (finding-id (or (:run-id canon) (:run-id config/protocol-defaults)) sid)
      :scenario_id sid
      :kind (purpose->kind (:purpose scenario))
-     :category "dispute_resolution"
+     :category (:finding-category config/profile)
      :severity sev
      :status_kind st-kind
       :confidence "medium"
@@ -154,7 +211,8 @@
      :story {:eligible true
              :priority (priority sev)
              :family (purpose->family (:purpose scenario))}
-      :story_artifact_spec (narrative-artifact-spec artifacts scenario sid sev st-kind)
+      :story_artifact_spec story-spec
+      :outcome (canonical-outcome artifacts scenario sid sev st-kind classif story-spec)
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
                   :trace_digest nil
@@ -171,20 +229,23 @@
      :inconclusive (get by-kind "inconclusive_result" 0)
      :robustness_confirmations (get by-kind "robustness_confirmation" 0)}))
 
-(defn generate-findings-bundle [artifacts]
-  (let [scenarios (or (get-in artifacts [:coverage :scenarios]) [])
+(defn generate-findings-bundle
+  ([artifacts] (generate-findings-bundle artifacts {:comparator-config default-comparator-config}))
+  ([artifacts {:keys [comparator-config] :or {comparator-config default-comparator-config}}]
+   (let [scenarios (or (get-in artifacts [:coverage :scenarios]) [])
         summary (:summary artifacts)
         canon (data/canonical-summary summary)
         findings (->> scenarios
-                      (map #(scenario->finding artifacts %))
+                      (map #(scenario->finding artifacts % comparator-config))
                       (sort-by (juxt (comp - :priority :story) :scenario_id))
                       vec)
         cnt (counts findings)]
     {:schema_version "speds.findings.v1"
+     :comparator_config comparator-config
      :run {:run_id (:run-id canon)
            :generated_at (str (java.time.Instant/now))
            :git_sha (:git-sha canon)
-           :suite_id "dispute-resolution-validation-v1"
+           :suite_id (:suite-id config/profile)
            :artifact_root "results/test-artifacts"}
      :overall_status {:status (if (= "pass" (:overall-status canon)) "passed" "warning")
                       :status_kind (if (empty? findings) "no_findings_detected" "validated_with_gaps")
@@ -203,7 +264,7 @@
                          [])
      :provenance {:source_artifacts [{:kind "summary" :path (:test-summary config/artifact-paths) :digest nil}
                                      {:kind "coverage" :path (:coverage config/artifact-paths) :digest nil}]
-                  :claim_map_path "results/test-artifacts/claim-map.json"}}))
+                  :claim_map_path "results/test-artifacts/claim-map.json"}})))
 
 (defn save-findings!
   ([] (save-findings! (data/load-run-artifacts)))

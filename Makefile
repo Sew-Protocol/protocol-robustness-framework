@@ -10,6 +10,10 @@ speds-check:
 speds-issues:
 	clojure scripts/speds_generate_issues.clj
 
+.PHONY: speds-comparator-shadow
+speds-comparator-shadow:
+	clojure -M:speds-comparator-shadow
+
 .PHONY: speds-findings
 speds-findings:
 	clojure scripts/speds_generate_issues.clj

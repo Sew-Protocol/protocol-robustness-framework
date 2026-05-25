@@ -12,13 +12,14 @@
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
+             [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.db.temporal       :as temporal]))
 ;; ---------------------------------------------------------------------------
 ;; Constants
 ;; ---------------------------------------------------------------------------
 
-(def ^:private supported-versions #{"1.0" "1.1"})
+(def ^:private supported-versions (:supported-versions schema-profile/default-profile))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -127,25 +128,26 @@
       {:ok false :error :unsupported-schema-version
        :detail {:expected supported-versions :got version}}
 
-      (and (= version "1.1") (not (:id scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :id)
+           (not (:id scenario)))
       {:ok false :error :missing-id :detail "v1.1 scenarios must have a unique :id"}
 
-      (and (= version "1.1") (not (:title scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :title)
+           (not (:title scenario)))
       {:ok false :error :missing-title :detail "v1.1 scenarios must have a human-readable :title"}
 
-      (and (= version "1.1") (not (:purpose scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+           (not (:purpose scenario)))
       {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
 
       ;; :theory-falsification scenarios must include a :theory block
-      (and (= version "1.1")
-           (= :theory-falsification (:purpose scenario))
+      (and (schema-profile/requires-theory? (:purpose scenario))
            (not (:theory scenario)))
       {:ok false :error :theory-required
        :detail "purpose :theory-falsification requires a :theory block"}
 
       ;; :adversarial-robustness scenarios must include :theory or meaningful :expectations
-      (and (= version "1.1")
-           (= :adversarial-robustness (:purpose scenario))
+      (and (schema-profile/requires-theory-or-expectations? (:purpose scenario))
            (not (:theory scenario))
            (empty? (get-in scenario [:expectations :metrics]))
            (empty? (get-in scenario [:expectations :terminal]))

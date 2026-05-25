@@ -6,6 +6,7 @@
             [resolver-sim.notebooks.speds.data :as data]
             [resolver-sim.notebooks.speds.findings :as findings]
             [resolver-sim.notebooks.speds.tokens :as tokens]
+            [resolver-sim.scenario.outcome-semantics :as ose]
             [clojure.string :as str]))
 
 ;; ---
@@ -13,7 +14,7 @@
 
 (defn- render-story-frame [frame-idx total-frames header footer-left footer-right & content]
   (speds/v-frame
-   {:header (str "[SEW_PROT] FRAME: " frame-idx "/" total-frames " | " header)
+   {:header (str "[" (:protocol-label config/profile) "] FRAME: " frame-idx "/" total-frames " | " header)
     :footer-left footer-left
     :footer-right footer-right}
    content))
@@ -29,35 +30,16 @@
 (defn- story-family
   [scenario-id scenario]
   (let [id-lc (str/lower-case (or scenario-id ""))
-        purpose (str/lower-case (str (or (:purpose scenario) "")))
-        tag-text (->> (or (:threat-tags scenario) []) (map name) (str/join " ") str/lower-case)]
-    (cond
-      (= purpose "theory-falsification")
-      :theory-falsification
-
-      (or (str/includes? id-lc "appeal-deadline")
-          (str/includes? id-lc "deadline")
-          (str/includes? tag-text "timing-boundary")
-          (str/includes? tag-text "appeal-escalation"))
-      :deadline-boundary
-
-      (or (str/includes? id-lc "collusion")
-          (str/includes? id-lc "bribery")
-          (str/includes? tag-text "collusion"))
-      :collusion
-
-      (or (str/includes? id-lc "yield")
-          (str/includes? id-lc "solvency")
-          (str/includes? tag-text "solvency")
-          (str/includes? tag-text "conservation"))
-      :economic-solvency
-
-      (or (= purpose "adversarial-robustness")
-          (str/includes? tag-text "fork")
-          (str/includes? tag-text "reorg"))
-      :deflection
-
-      :else :deflection)))
+        purpose (ose/normalize-purpose (:purpose scenario))
+        tag-text (->> (or (:threat-tags scenario) []) (map name) (str/join " ") str/lower-case)
+        {:keys [families default]} (:story-family-rules config/profile)
+        matches? (fn [{:keys [purposes id-substrings tag-substrings]}]
+                   (or (and (seq purposes) (contains? purposes purpose))
+                       (some #(str/includes? id-lc %) (or id-substrings []))
+                       (some #(str/includes? tag-text %) (or tag-substrings []))))]
+    (or (:family (first (filter matches? families)))
+        default
+        :deflection)))
 
 (defn- deflection-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -274,8 +256,8 @@
   "Renders a theory-falsification multi-frame story from a scenario id,
    defaulting to the first theory-falsification scenario in coverage."
   ([artifacts]
-   (let [scn (some #(when (= "theory-falsification" (str/lower-case (str (:purpose %)))) %) (or (get-in artifacts [:coverage :scenarios]) []))
-         scenario-id (or (:id scn) "scenarios/S26_forking-strategist-l1-reversal")]
+   (let [scn (some #(when (= :theory-falsification (ose/normalize-purpose (:purpose %))) %) (or (get-in artifacts [:coverage :scenarios]) []))
+         scenario-id (or (:id scn) (:default-theory-falsification-scenario-id config/profile))]
      (generate-deflection-story scenario-id artifacts)))
   ([scenario-id artifacts]
    (generate-deflection-story scenario-id artifacts)))
@@ -315,10 +297,17 @@
      [:div {:style {:display "grid" :gap "30px"}}
       (for [f finding-list]
         (let [spec (or (:story_artifact_spec f) {})
-              classif (or (:classification spec) (:classification f) {})
-              class-label (or (:label classif) "unclassified")
-              class-status (or (:status classif) "unknown")
-              baseline-note (get-in spec [:baseline_comparison :delta_summary :narrative])]
+              outcome (:outcome f)
+              class-label (or (some-> outcome :outcome :class name)
+                              (get-in spec [:classification :label])
+                              (some-> (:classification f) :label)
+                              "unclassified")
+              class-status (or (some-> outcome :outcome :status name)
+                               (get-in spec [:classification :status])
+                               (some-> (:classification f) :status)
+                               "unknown")
+              baseline-note (or (get-in outcome [:outcome :comparison :narrative])
+                                (get-in spec [:baseline_comparison :delta_summary :narrative]))]
           [:div {:style {:border "1px solid #004D59" :padding "16px" :background "#020617"}}
          [:div {:style {:fontSize "10px" :color "#FF9800"}} (str "FINDING " (:finding_id f) " · " (str/upper-case (str (:severity f))))]
          [:div {:style {:fontSize "10px" :color "#7ADDDC" :marginTop "4px"}}

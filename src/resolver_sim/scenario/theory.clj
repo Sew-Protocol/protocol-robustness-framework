@@ -1,5 +1,5 @@
 (ns resolver-sim.scenario.theory
-  "Theory evaluator for CDRS v1.1 scenarios.
+  "Theory evaluator for schema-profile-driven scenarios.
 
    Determines whether a theoretical claim is falsified by replay metrics.
    This namespace is pure — no I/O, no DB, no side effects.
@@ -90,7 +90,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Theory field consumption table
 ;;
-;; This function reads the :theory map from a CDRS v1.1 scenario.
+;; This function reads the :theory map from schema-profile-driven scenarios.
 ;; Not all schema fields drive evaluation — see the table below.
 ;;
 ;;   Field                   Status      Consumed by this fn?
