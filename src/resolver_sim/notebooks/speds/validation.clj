@@ -11,7 +11,7 @@
 
 (def required-issue-keys
   #{:issue/id :scenario/id :kind :severity :status-kind :title
-    :story/family :priority :evidence/refs :provenance})
+    :story/family :priority :evidence/refs :provenance :one_line_description})
 
 (def required-finding-keys
   #{:finding_id :scenario_id :kind :severity :status_kind :title

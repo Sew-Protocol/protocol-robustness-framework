@@ -12,6 +12,21 @@ Define a protocol-agnostic outcome contract that separates:
 
 This allows SPEDS/story tooling to generalize beyond Sew-specific scenario sets.
 
+## Single-declaration pipeline
+
+Semantic definitions are centralized and reused across runtime and narrative layers:
+
+- Registry: `src/resolver_sim/definitions/registry.clj`
+- Replay/schema assumptions: `src/resolver_sim/scenario/schema_profile.clj`
+- Outcome interpretation: `src/resolver_sim/scenario/outcome_semantics.clj`
+
+Pipeline intent:
+
+`definitions -> replay validation/report labels -> evidence exports -> Clerk/SPEDS framing`
+
+When adding or changing semantics (purposes, statuses, severity meaning, story-family mappings),
+update the registry first and keep consumers as lookups, not duplicated conditionals.
+
 ---
 
 ## Canonical Shape

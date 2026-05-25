@@ -12,6 +12,7 @@
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
+             [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.db.temporal       :as temporal]))
@@ -106,6 +107,18 @@
   (let [s  (if (keyword? x) (name x) (str x))
         s' (if (.startsWith s ":") (subs s 1) s)]
     (keyword s')))
+
+(defn- action->transition-id
+  "Map an event action string/keyword to canonical transition semantic id.
+   Keeps backward compatibility by tolerating hyphen/underscore forms."
+  [action]
+  (let [s (-> (if (keyword? action) (name action) (str action))
+              str/lower-case
+              (str/replace "-" "_"))
+        k (keyword s)]
+    (if (defs/transition-def k)
+      (keyword "scenario.transition" s)
+      (keyword "scenario.transition" "unknown"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
@@ -288,6 +301,7 @@
                        :time            event-time
                        :agent           (:agent event)
                        :action          (:action event)
+                       :transition/id   (action->transition-id (:action event))
                        :result          :rejected
                        :error           :time-regression
                        :extra           nil
@@ -337,6 +351,7 @@
             :time            event-time
             :agent           (:agent event)
             :action          (:action event)
+             :transition/id   (action->transition-id (:action event))
             :result          result-kw
             :error           error-kw
             :extra           (:extra result)

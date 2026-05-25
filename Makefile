@@ -24,6 +24,32 @@ speds-artifacts:
 	$(MAKE) speds-issues
 	$(MAKE) speds-check
 
+.PHONY: semantic-registry-generate
+semantic-registry-generate:
+	clojure -M:test -m resolver-sim.tools.generate-semantic-vocab
+
+.PHONY: semantic-registry-check
+semantic-registry-check:
+	clojure -M:test -m resolver-sim.tools.generate-semantic-vocab --check
+
+.PHONY: semantic-phase3-check
+semantic-phase3-check:
+	$(MAKE) semantic-registry-check
+	clojure -M:test -e "(require 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test) (clojure.test/run-tests 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test)" 2>&1
+
+.PHONY: state-machine-docs-generate
+state-machine-docs-generate:
+	clojure scripts/generate_state_machine_docs.clj
+
+.PHONY: state-machine-docs-check
+state-machine-docs-check:
+	clojure scripts/generate_state_machine_docs.clj --check
+
+.PHONY: docs-as-code-check
+docs-as-code-check:
+	$(MAKE) semantic-registry-check
+	$(MAKE) state-machine-docs-check
+
 .PHONY: verify-reference-validation-v1
 verify-reference-validation-v1:
 	./suites/reference-validation-v1/scripts/verify.sh

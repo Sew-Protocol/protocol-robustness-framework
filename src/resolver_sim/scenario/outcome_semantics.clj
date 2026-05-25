@@ -1,5 +1,6 @@
 (ns resolver-sim.scenario.outcome-semantics
-  "Shared outcome interpretation semantics used across reporting and suite evaluation.")
+  "Shared outcome interpretation semantics used across reporting and suite evaluation."
+  (:require [resolver-sim.definitions.registry :as defs]))
 
 (defn normalize-purpose [purpose]
   (keyword (or purpose "")))
@@ -10,12 +11,9 @@
   (= (normalize-purpose purpose) :theory-falsification))
 
 (defn theory-label [status]
-  (case status
-    :not-evaluated "Not evaluated"
-    :not-falsified "Claim not falsified"
-    :falsified     "Claim falsified"
-    :inconclusive  "Inconclusive"
-    "Not evaluated"))
+  (or (get-in (defs/status-def status) [:label])
+      (get-in (defs/status-def :not-evaluated) [:label])
+      "Not evaluated"))
 
 (defn theory-expected?
   "Whether a theory status is expected under a scenario purpose.
@@ -66,9 +64,5 @@
 (defn purpose-label
   "Human-readable purpose label with stable fallback for unknown purposes."
   [p]
-  (case p
-    :regression              "Regression"
-    :adversarial-robustness  "Adversarial Robustness"
-    :theory-falsification    "Theory Falsification"
-    :unclassified            "Unclassified (v1.0)"
-    (if p (name p) "Unclassified (v1.0)")))
+  (or (get-in (defs/purpose-def p) [:label])
+      (if p (name p) (get-in (defs/purpose-def :unclassified) [:label]))))

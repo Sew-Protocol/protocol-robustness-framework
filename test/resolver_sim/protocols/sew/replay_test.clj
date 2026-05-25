@@ -178,6 +178,10 @@
     (is (= :pass (:outcome r-hyphen)))
     (is (= (mapv :result (:trace r-underscore))
            (mapv :result (:trace r-hyphen))))
+    (is (= (get-in r-underscore [:trace 0 :transition/id])
+           (get-in r-hyphen [:trace 0 :transition/id])))
+    (is (= :scenario.transition/create_escrow
+           (get-in r-underscore [:trace 0 :transition/id])))
     (is (= (get-in r-underscore [:trace 0 :extra :workflow-id])
            (get-in r-hyphen [:trace 0 :extra :workflow-id])))))
 

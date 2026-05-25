@@ -1,6 +1,7 @@
 (ns resolver-sim.sim.reporter
   "Result reporting for schema-profile-driven suite execution."
   (:require [clojure.string :as str]
+            [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.schema-profile :as schema-profile]
             [resolver-sim.scenario.outcome-semantics :as ose]))
 
@@ -62,6 +63,10 @@
 (defn- purpose-label [p]
   (ose/purpose-label p))
 
+(defn- transition-label [tr]
+  (or (get-in (defs/transition-def tr) [:label])
+      (name tr)))
+
 (defn print-coverage
   "Print a human-readable coverage report from a map returned by
    resolver-sim.scenario.coverage/coverage-report."
@@ -118,7 +123,7 @@
       (do
         (println "  Transition hits (all scenarios):")
         (doseq [[tr cnt] (sort-by (comp - val) transition-freq)]
-          (println (str "    " (format "%-32s" (name tr)) cnt " hit(s)"))))
+          (println (str "    " (format "%-32s" (transition-label tr)) cnt " hit(s)"))))
       (println "  Transition hits: none"))
     (println)
 
@@ -129,7 +134,7 @@
               :when (seq tf)]
         (println (str "    " (format "%-28s" (purpose-label p))))
         (doseq [[tr cnt] (sort-by (comp - val) tf)]
-          (println (str "      · " (format "%-28s" (name tr)) cnt)))))
+          (println (str "      · " (format "%-28s" (transition-label tr)) cnt)))))
     (println)
 
     ;; Guard coverage
@@ -154,7 +159,7 @@
     (println "  Unhit transitions backlog (release gate):")
     (if (seq unhit-transitions)
       (doseq [tr unhit-transitions]
-        (println (str "    · " (name tr))))
+        (println (str "    · " (transition-label tr))))
       (println "    none (all canonical transitions covered)"))
     (println)
 

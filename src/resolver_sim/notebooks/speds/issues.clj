@@ -3,6 +3,7 @@
    Converts trial artifacts into deterministic issue bundles used by story rendering."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [resolver-sim.definitions.registry :as defs]
             [resolver-sim.notebooks.common :as common]
             [resolver-sim.notebooks.speds.data :as data]
             [resolver-sim.notebooks.speds.findings :as findings]
@@ -15,7 +16,7 @@
 
 (def required-issue-keys
   #{:issue/id :scenario/id :kind :severity :status-kind :title
-    :story/family :priority :evidence/refs :provenance})
+    :story/family :priority :evidence/refs :provenance :one_line_description})
 
 (defn- purpose->family [purpose]
   (sem/purpose->story-family-kw purpose))
@@ -52,11 +53,14 @@
    :do-not-open-for #{"robustness_confirmation" "expected_negative"}})
 
 (defn- severity-rank [s]
-  (case (str/lower-case (name s))
-    ("critical" "high") 3
-    "medium" 2
-    "low" 1
-    0))
+  (let [k (keyword (str/lower-case (name s)))]
+    (or (get-in (defs/severity-def k) [:rank])
+        (case k
+          :critical 4
+          :high 3
+          :medium 2
+          :low 1
+          0))))
 
 (defn- should-open-issue? [finding policy]
   (let [kind (or (:kind finding) "")
@@ -72,7 +76,11 @@
                    (:open-issue-when policy))))))
 
 (defn finding->issue [finding run-id]
-  {:issue/id (str "ISSUE-" (or run-id (:run-id config/protocol-defaults)) "-" (truncate-safe (Math/abs (hash (:finding_id finding))) 6))
+  (let [one-line (or (:one_line_description finding)
+                     (:summary finding)
+                     (:title finding)
+                     "Issue derived from finding")]
+    {:issue/id (str "ISSUE-" (or run-id (:run-id config/protocol-defaults)) "-" (truncate-safe (Math/abs (hash (:finding_id finding))) 6))
    :source-finding-ids [(:finding_id finding)]
    :scenario/id (:scenario_id finding)
    :kind :policy-projected
@@ -82,12 +90,13 @@
    :severity (keyword (str/lower-case (str (:severity finding))))
    :priority (or (get-in finding [:story :priority]) 50)
    :title (str "Investigate: " (:title finding))
-   :summary (:summary finding)
+   :one_line_description one-line
+   :summary one-line
    :story/family (keyword (str/lower-case (str (get-in finding [:story :family] "scenario_deep_dive"))))
    :evidence/refs (vec (map (fn [r] {:artifact (:artifact r) :path (:path r)}) (or (:evidence_refs finding) [])))
    :provenance {:run-id run-id
                 :git-sha (get-in finding [:provenance :git_sha])
-                :trace-digest (get-in finding [:provenance :trace_digest])}})
+                :trace-digest (get-in finding [:provenance :trace_digest])}}))
 
 (defn generate-issues-bundle
   "Builds actionable issues from findings + issue policy."
@@ -108,6 +117,7 @@
                     vec)]
     {:schema/version "speds-issues-v1"
      :run/id run-id
+     :definitions/hash (defs/definitions-hash)
      :comparator_config comparator-config
      :generated-at (str (java.time.Instant/now))
      :issue-count (count issues)
@@ -156,6 +166,7 @@
                     :comparator-config (:comparator_config bundle)}))
                strategies)]
      {:schema/version "speds-comparator-shadow-v1"
+      :definitions/hash (defs/definitions-hash)
       :generated-at (str (java.time.Instant/now))
       :strategies strategies
       :runs runs})))

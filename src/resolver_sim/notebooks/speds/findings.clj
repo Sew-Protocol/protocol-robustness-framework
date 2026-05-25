@@ -5,6 +5,7 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
+            [resolver-sim.definitions.registry :as defs]
             [resolver-sim.notebooks.speds.data :as data]
             [resolver-sim.notebooks.speds.semantics :as sem]
             [resolver-sim.scenario.outcome-semantics :as ose]
@@ -25,6 +26,27 @@
 
 (defn- purpose->family [purpose]
   (sem/purpose->story-family-str purpose))
+
+(defn- purpose-label [purpose]
+  (or (get-in (defs/purpose-def (ose/normalize-purpose purpose)) [:label])
+      (some-> purpose name)
+      "Unclassified"))
+
+(defn- transition-label [tr]
+  (or (get-in (defs/transition-def tr) [:label])
+      (some-> tr name (str/replace "_" " "))
+      "unknown transition"))
+
+(defn- one-line-description [scenario]
+  (or (:description scenario)
+      (:summary scenario)
+      (let [sid (or (:id scenario) "unknown-scenario")
+            p-label (purpose-label (:purpose scenario))
+            tr (first (or (:transitions scenario) []))
+            tr-label (when tr (transition-label tr))]
+        (str p-label " scenario " sid
+             (when tr-label (str " exercises " tr-label))
+             "."))))
 
 (defn- classification-for [scenario]
   (sem/classification-for-purpose (:purpose scenario)))
@@ -98,7 +120,9 @@
                   :basis "single-run-artifact-derived"}
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
-                  :trace_digest_status "missing"}
+                  :trace_digest_status "missing"
+                  :definitions/hash (defs/definitions-hash)
+                  :definitions_hash (defs/definitions-hash)}
      :claims [{:claim_id "scenario-kind"
                :value st-kind
                :severity sev
@@ -164,8 +188,15 @@
                           (get story-spec :visual_blocks []))}}})
 
 (defn- severity [scenario]
-  (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))]
+  (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))
+        invariant-severities (->> (or (:invariant-results scenario) {})
+                                  (keep (fn [[inv status]]
+                                          (when (= status :fail)
+                                            (get-in (defs/invariant-def inv) [:default-severity]))))
+                                  set)]
     (cond
+      (contains? invariant-severities :high) "high"
+      (contains? invariant-severities :medium) "medium"
       (or (contains? tags "reentrancy") (contains? tags "solvency")) "high"
       (or (contains? tags "appeal-escalation") (contains? tags "timing-boundary")) "medium"
       :else "low")))
@@ -199,10 +230,11 @@
      :category (:finding-category config/profile)
      :severity sev
      :status_kind st-kind
+     :one_line_description (one-line-description scenario)
       :confidence "medium"
       :classification classif
      :title (or (:title scenario) sid)
-     :summary (str "Finding derived from scenario " sid ".")
+     :summary (one-line-description scenario)
      :metrics {:replay_success_pct (:replay-match-pct (data/narrative-metrics artifacts))}
      :evidence_refs [{:artifact "coverage"
                       :path [:scenarios sid]
@@ -216,7 +248,9 @@
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
                   :trace_digest nil
-                  :trace_digest_status "missing"}}))
+                  :trace_digest_status "missing"
+                  :definitions/hash (defs/definitions-hash)
+                  :definitions_hash (defs/definitions-hash)}}))
 
 (defn- counts [findings]
   (let [by-sev (frequencies (map :severity findings))
@@ -264,6 +298,8 @@
                          [])
      :provenance {:source_artifacts [{:kind "summary" :path (:test-summary config/artifact-paths) :digest nil}
                                      {:kind "coverage" :path (:coverage config/artifact-paths) :digest nil}]
+                  :definitions/hash (defs/definitions-hash)
+                  :definitions_hash (defs/definitions-hash)
                   :claim_map_path "results/test-artifacts/claim-map.json"}})))
 
 (defn save-findings!
