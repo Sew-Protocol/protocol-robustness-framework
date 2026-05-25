@@ -981,6 +981,7 @@
 (def s28
   {:scenario-id     "s28-forking-strategist-late-escalation-rejected"
    :schema-version  "1.0"
+   :expected-errors [{:seq 3 :action "escalate_dispute" :error :appeal-window-expired}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; attempts late escalation
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -1154,6 +1155,7 @@
 (def s31
   {:scenario-id     "s31-forking-strategist-all-levels-confirm"
    :schema-version  "1.0"
+   :expected-errors [{:seq 7 :action "escalate_dispute" :error :escalation-not-allowed}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates twice; no fork
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -1225,6 +1227,7 @@
 (def s32
   {:scenario-id     "s32-forking-strategist-premature-settlement-rejected"
    :schema-version  "1.0"
+   :expected-errors [{:seq 5 :action "execute_pending_settlement" :error :appeal-window-not-expired}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates; fork lands at L1
                      {:id "seller"     :address "0xseller" :strategy "honest"}

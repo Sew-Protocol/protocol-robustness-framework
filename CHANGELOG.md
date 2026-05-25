@@ -24,6 +24,15 @@
 - **Governance Bandwidth Floor (Phase AD):** Hardened the governance protocol by implementing a mandatory floor (min 2 reviews/epoch for low-value disputes). This mitigates the vulnerability where low-value dispute flooding exceeded the 20% win-rate safety threshold under low-capacity conditions. Confirmed via Phase AD empirical sweep.
 
 ### Changed
+- **Forking Strategist Transition Classification:** Updated `src/resolver_sim/protocols/sew.clj` to split rejected transition telemetry into two explicit classes:
+  - `:invalid-state-transition` for escrow-state edge invalidity, and
+  - `:invalid-guard-condition` for timing/auth/pending/final-round guard failures.
+  Also added `:invalid-guard-conditions` to metric vocabulary and accumulation to keep guard failures separately auditable from state-graph failures.
+- **Forking Strategist Scenario Expectations:** Added explicit `:expected-errors` metadata in `src/resolver_sim/protocols/sew/invariant_scenarios.clj` for:
+  - `s28-forking-strategist-late-escalation-rejected` (`:appeal-window-expired`),
+  - `s31-forking-strategist-all-levels-confirm` (`:escalation-not-allowed`),
+  - `s32-forking-strategist-premature-settlement-rejected` (`:appeal-window-not-expired`).
+  This makes allowed-transition audits unambiguous and machine-checkable for these forking-strategist boundary cases.
 - **Simulator↔Solidity Invariant Parity Work:** Added `docs/testing/SIMULATOR_TO_SOLIDITY_INVARIANT_MAPPING.md` with canonical invariant-to-Solidity coverage mapping, corrected Halmos profile compatibility in `resources/symlink_to_smart_contracts/sew-protocol-smart-contracts-solidity/foundry.toml` (`[profile.halmos].via_ir = false`), and extended Solidity checks in `test/foundry/invariants/StateInvariants.t.sol` plus Halmos properties in `test/foundry/halmos/HalmosEscrowProperties.t.sol` for pending-settlement consistency and single-sided terminal claimable payout semantics.
 - **Validation Evidence Wording Alignment:** Updated `notebooks/dispute_resolution.clj` and `docs/ROBUSTNESS_FRAMEWORK.md` to reflect current verification reality: Foundry invariant suites already exist, while simulator↔contract parity mapping and Halmos CI-gated bounded checks remain incomplete.
 - **Dispute Deadline Safety (Clojure):** Updated escalation flow in `src/resolver_sim/protocols/sew/resolution.clj` to avoid participant appeal deadlocks caused by global per-caller cooldown blocking valid within-window second escalations. Also aligned adversarial timing expectations with superseded-pending fallback semantics in `test/resolver_sim/protocols/sew/adversarial_test.clj` (execution can succeed from eligible superseded pending after escalation clears active pending).

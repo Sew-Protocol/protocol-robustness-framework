@@ -3,7 +3,8 @@
 (ns notebooks.workbench
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]
+            [resolver-sim.notebooks.speds.config :as config]
             [resolver-sim.notebooks.ui :as ui]))
 
 ;; # Sew Protocol — Adversarial Validation Workbench
@@ -16,20 +17,48 @@
 ;; ---
 ;; Data Ingestion
 
-(def summary (common/read-json "results/test-artifacts/test-summary.json"))
-(def coverage (common/read-json "results/test-artifacts/coverage.json"))
-(def equivalence (common/read-json "results/test-artifacts/equivalence-comparison-summary.json"))
+(def artifacts (speds-data/load-run-artifacts))
+(def summary (:summary artifacts))
+(def summary-canonical (:summary-canonical artifacts))
+(def coverage (:coverage artifacts))
+(def equivalence (:equivalence artifacts))
 
 (def scenarios (vec (or (:scenarios coverage) [])))
 (def transition-hit-freq (or (:transition-hit-freq coverage) {}))
 (def threat-tag-freq (or (:threat-tag-freq coverage) {}))
 (def unhit-transitions (vec (or (:unhit-transitions coverage) [])))
-(def overall-pass? (= "pass" (str/lower-case (str (or (:overall_status summary) "")))))
-(def run-id (or (:run_id summary) "—"))
+(def overall-pass? (= "pass" (:overall-status summary-canonical)))
+(def run-id (or (:run-id summary-canonical) "—"))
 
 (def scenario-count (count scenarios))
 (def transition-types (count transition-hit-freq))
 (def threat-vector-count (count threat-tag-freq))
+
+;; ---
+;; Computed Metrics
+
+(defn compute-replay-determinism-pct
+  "Compute determinism percentage from equivalence data.
+   If available, use replay_match_pct from summary, else compute from equivalence group success rate."
+  []
+  (if-let [pct (:replay-match-pct summary-canonical)]
+    (double pct)
+    (if equivalence
+      (let [groups (vals (:groups equivalence))
+            total (count groups)
+            successful (count (filter #(= "expected-divergence-observed" (:status %)) groups))]
+        (if (> total 0) (* 100.0 (/ successful total)) 0.0))
+      0.0)))
+
+(defn compute-adversarial-entropy-bits
+  "Compute adversarial entropy as log2 of threat vector count.
+   Approximates Monte Carlo search space dimensionality."
+  []
+  (if (> threat-vector-count 0)
+    (Math/log (double threat-vector-count)) 0.0))
+
+(def replay-determinism-pct (compute-replay-determinism-pct))
+(def adversarial-entropy-bits (compute-adversarial-entropy-bits))
 
 ;; ---
 ;; Workbench View
@@ -209,7 +238,7 @@
    
    [:div.metric-panel
     [:div.label "Replay Determinism"]
-    [:div.value "100.0%"]
+    [:div.value (str (Math/round replay-determinism-pct) "%")]
     [:div.subtext "TRACE EQUIVALENCE VERIFIED"]]
 
    [:div.metric-panel
@@ -224,12 +253,12 @@
 
    [:div.metric-panel
     [:div.label "Adversarial Entropy"]
-    [:div.value "2.4 bits"]
+    [:div.value (str (Math/round (* 10.0 adversarial-entropy-bits)) " bits")]
     [:div.subtext "MONTE CARLO SEARCH DEPTH"]]
 
    [:div.metric-panel
     [:div.label "Git SHA"]
-    [:div.value {:style {:fontSize "1.2rem" :letterSpacing "0.1em"}} (subs (or (:git_sha summary) "AE8F2C1") 0 7)]
+    [:div.value {:style {:fontSize "1.2rem" :letterSpacing "0.1em"}} (subs (or (:git-sha summary-canonical) (:git-sha config/protocol-defaults)) 0 7)]
     [:div.subtext "BRANCH: main"]]
    ]
 
@@ -271,7 +300,7 @@
      (clerk/vl
       {:width 500 :height 300 :background "transparent"
        :data {:values (for [x (range 0 10 1) y (range 0 10 1)]
-                        {:cost x :benefit y :risk (Math/max 0 (- y (* x 1.2)))})}
+                        {:cost x :benefit y :risk (max 0 (- y (* x 1.2)))})}
        :config {:view {:stroke "transparent"} :axis {:domainColor "#004D59" :gridColor "#004D59" :labelColor "#7ADDDC" :titleColor "#7ADDDC"}}
        :mark "rect"
        :encoding {:x {:field "cost" :type "quantitative" :title "Dispute Cost Multiplier"}

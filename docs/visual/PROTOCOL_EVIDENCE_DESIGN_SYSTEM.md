@@ -114,3 +114,68 @@ SPEDS is the foundational visual language for the Sew Protocol. It is designed t
 3. **Tertiary:** How was it stopped? (V-RES).
 4. **Context:** Who and When? (V-ACT, V-TIM).
 5. **Validation:** Is this real? (V-RPY).
+
+---
+
+## 6. SPEDS Layering & Data-Driven Contracts (Implementation)
+
+To keep visuals auditable and maintainable, SPEDS implementation follows strict layering:
+
+1. **Data Layer** (`resolver-sim.notebooks.speds.data`)
+   - Loads artifacts and computes derived metrics.
+   - Must not include rendering primitives or style decisions.
+
+2. **Narrative Layer** (`resolver-sim.notebooks.speds.story`)
+   - Selects story family adapters and builds frame specs.
+   - Must not hardcode outcome claims that can be computed from artifacts.
+
+3. **Primitive/View Layer** (`resolver-sim.notebooks.speds.core` + tokens)
+   - Renders visual primitives and applies semantic tokens.
+   - Must not read artifact files directly.
+
+4. **Notebook Composition Layer** (`notebooks/*.clj`)
+   - Thin wrappers that load artifacts and compose sections.
+   - Should avoid duplicating raw CSS frame systems already represented in SPEDS.
+
+### 6.1 Canonical Frame Spec Contract
+
+Each narrative frame spec must include:
+
+- `:header`
+- `:footer-left`
+- `:footer-right`
+- `:content`
+
+This contract is validated by `resolver-sim.notebooks.speds.validation/validate-frame-schema`.
+
+### 6.2 Claim Provenance Contract
+
+Each frame can include `:claims`, where every claim must include:
+
+- `:claim-id`
+- `:value`
+- `:source-artifact`
+- `:source-path`
+
+This is validated by `resolver-sim.notebooks.speds.validation/validate-frame-claims`.
+
+### 6.3 Consistency Gate
+
+Use the SPEDS consistency script to enforce contract + copy checks:
+
+```bash
+make speds-check
+```
+
+The check currently verifies:
+
+- frame schema completeness
+- claim provenance completeness
+- absence of hardcoded success-claim patterns
+- claim-source presence checks (with optional required flags)
+
+### 6.4 Hardcoded Claim Policy
+
+- Do not hardcode replay/confidence success strings in production narratives.
+- Prefer artifact-derived values from `speds.data/narrative-metrics`.
+- If a source is unavailable, render an explicit fallback state instead of implying success.

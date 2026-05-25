@@ -604,19 +604,21 @@
    Mirrors: ResolverSlashingModuleV1.proposeSlash.
    Marks status as :pending to allow for appeal."
   [world workflow-id caller resolver-addr amount]
-  (if-not (t/valid-workflow-id? world workflow-id)
-    (t/fail :invalid-workflow-id)
-    (let [snap (t/get-snapshot world workflow-id)
-          gov-delay (or (:appeal-window-duration snap) 259200)] ; 3 days default
-      (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
-                      {:resolver         resolver-addr
-                       :amount           amount
-                        :reason           :fraud
-                       :status           :pending
-                       :proposed-at      (:block-time world)
-                       :appeal-deadline  (+ (:block-time world) gov-delay)
-                       :appeal-bond-held 0
-                       :contest-deadline 0})))))
+  (if (or (nil? caller) (= "" caller))
+    (t/fail :missing-caller-context)
+    (if-not (t/valid-workflow-id? world workflow-id)
+      (t/fail :invalid-workflow-id)
+      (let [snap (t/get-snapshot world workflow-id)
+            gov-delay (or (:appeal-window-duration snap) 259200)] ; 3 days default
+        (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
+                        {:resolver         resolver-addr
+                         :amount           amount
+                         :reason           :fraud
+                         :status           :pending
+                         :proposed-at      (:block-time world)
+                         :appeal-deadline  (+ (:block-time world) gov-delay)
+                         :appeal-bond-held 0
+                         :contest-deadline 0}))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
@@ -628,8 +630,12 @@
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id _caller appeal-upheld? slash-id]
-   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
+   (let [caller _caller
+         pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
+       (or (nil? caller) (= "" caller))
+       (t/fail :missing-caller-context)
+
        (nil? pending)
        (t/fail :no-pending-slash)
 

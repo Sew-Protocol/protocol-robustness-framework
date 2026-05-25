@@ -1,7 +1,8 @@
 (ns notebooks.challenge-drilldown
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]))
 
 ;; # Evidence Drilldown — Challenge Window Mechanics
 ;; ## Scenario S74: Deterministic Deadline Enforcement (t ± 1ms)
@@ -12,7 +13,7 @@
 ;; ---
 ;; Data Loading
 
-(def scenario (common/read-json "results/test-artifacts/coverage.json")) ;; Simplification for drilldown focus
+(def scenario (speds-data/load-coverage)) ;; Simplification for drilldown focus
 (def events (get-in (common/read-json "scenarios/S74_appeal-deadline-boundary.json") [:events]))
 
 ;; ---

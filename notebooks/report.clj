@@ -29,7 +29,8 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]))
 
 (clerk/html (ui/notebook-navigation "Report Notebook"))
 
@@ -59,67 +60,30 @@
 ;; ## Artifact Loading
 
 ^{:nextjournal.clerk/visibility {:result :hide}}
-(def test-summary
-  (common/read-json "results/test-artifacts/test-summary.json"))
+(def test-summary (speds-data/load-summary))
 
 ^{:nextjournal.clerk/visibility {:result :hide}}
-(def coverage-data
-  (common/read-json "results/test-artifacts/coverage.json"))
+(def coverage-data (speds-data/load-coverage))
 
 ^{:nextjournal.clerk/visibility {:result :hide}}
-(def equivalence-summary
-  (common/read-json "results/test-artifacts/equivalence-comparison-summary.json"))
+(def equivalence-summary (speds-data/load-equivalence))
 
 ^{:nextjournal.clerk/visibility {:result :hide}}
 (def all-traces
-  (try
-    (let [dir (io/file "data/fixtures/traces")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".trace.json"))
-             (map (fn [f]
-                    (try
-                      (let [d (json/read-str (slurp f) {:key-fn keyword})]
-                        {:id          (or (:scenario-id d)
-                                         (str/replace (.getName f) ".trace.json" ""))
-                         :title       (or (:title d) "")
-                         :description (or (:description d) "")
-                         :purpose     (or (:purpose d) "")
-                         :threat-tags (or (:threat-tags d) [])
-                         :has-theory  (contains? d :theory)
-                         :theory      (:theory d)
-                         :trace-file  (.getName f)})
-                      (catch Exception e
-                        (println "WARN: skipping trace" (.getName f) "-" (.getMessage e))
-                        nil))))
-             (remove nil?)
-             (sort-by :id))))
-    (catch Exception e
-      (println "WARN: could not load traces -" (.getMessage e))
-      [])))
+  (map (fn [d]
+         {:id          (or (:scenario-id d)
+                           (str/replace (:_filename d) ".trace.json" ""))
+          :title       (or (:title d) "")
+          :description (or (:description d) "")
+          :purpose     (or (:purpose d) "")
+          :threat-tags (or (:threat-tags d) [])
+          :has-theory  (contains? d :theory)
+          :theory      (:theory d)
+          :trace-file  (:_filename d)})
+       (speds-data/load-all-traces)))
 
 ^{:nextjournal.clerk/visibility {:result :hide}}
-(def golden-reports
-  (try
-    (let [dir (io/file "data/fixtures/golden")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".report.edn"))
-             (map (fn [f]
-                    (try
-                       (let [d (common/read-edn (.getAbsolutePath f))
-                            d (assoc d
-                                     :_source-file (.getAbsolutePath f)
-                                     :_source-mtime (.lastModified f))]
-                        [(str (:trace-id d)) d])
-                      (catch Exception e
-                        (println "WARN: skipping golden" (.getName f) "-" (.getMessage e))
-                        nil))))
-             (remove nil?)
-             (into {}))))
-    (catch Exception e
-      (println "WARN: could not load golden reports -" (.getMessage e))
-      {})))
+(def golden-reports (speds-data/load-all-golden-reports))
 
 ;; ---
 ;; ## R/A/G Status Helpers (pure, auditable)

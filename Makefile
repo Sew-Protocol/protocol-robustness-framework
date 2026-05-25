@@ -2,6 +2,24 @@
 reference-validation-v1:
 	./suites/reference-validation-v1/scripts/run.sh
 
+.PHONY: speds-check
+speds-check:
+	clojure scripts/speds_consistency_check.clj
+
+.PHONY: speds-issues
+speds-issues:
+	clojure scripts/speds_generate_issues.clj
+
+.PHONY: speds-findings
+speds-findings:
+	clojure scripts/speds_generate_issues.clj
+
+.PHONY: speds-artifacts
+speds-artifacts:
+	$(MAKE) speds-findings
+	$(MAKE) speds-issues
+	$(MAKE) speds-check
+
 .PHONY: verify-reference-validation-v1
 verify-reference-validation-v1:
 	./suites/reference-validation-v1/scripts/verify.sh

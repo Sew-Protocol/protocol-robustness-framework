@@ -33,6 +33,7 @@
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
             [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]
             [resolver-sim.protocols.sew.invariants :as invariants]
             [resolver-sim.protocols.sew.invariant-runner :as runner]
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]
@@ -69,46 +70,33 @@
 ;; ---------------------------------------------------------------------------
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def test-summary (common/read-json "results/test-artifacts/test-summary.json"))
+(do
+  (require '[resolver-sim.notebooks.speds.data :as speds-data])
+  (def test-summary (speds-data/load-summary)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def coverage-data (common/read-json "results/test-artifacts/coverage.json"))
+(do
+  (require '[resolver-sim.notebooks.speds.data :as speds-data])
+  (def coverage-data (speds-data/load-coverage)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def golden-reports
-  (try
-    (let [dir (io/file "data/fixtures/golden")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".report.edn"))
-             (keep (fn [f]
-                     (try
-                       (let [d (common/read-edn (.getAbsolutePath f))]
-                         [(str (:trace-id d)) d])
-                       (catch Exception _ nil))))
-             (into {}))))
-    (catch Exception _ {})))
+  (do
+    (require '[resolver-sim.notebooks.speds.data :as speds-data])
+    (speds-data/load-all-golden-reports)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
-  (try
-    (let [dir (io/file "data/fixtures/traces")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".trace.json"))
-             (keep (fn [f]
-                     (try
-                       (let [d (json/read-str (slurp f) {:key-fn keyword})]
-                         {:id          (or (:scenario-id d)
-                                          (str/replace (.getName f) ".trace.json" ""))
-                          :title       (or (:title d) "")
-                          :description (or (:description d) "")
-                          :purpose     (or (:purpose d) "")
-                          :threat-tags (or (:threat-tags d) [])})
-                       (catch Exception _ nil))))
-             (remove nil?)
-             (sort-by :id))))
-    (catch Exception _ [])))
+  (do
+    (require '[resolver-sim.notebooks.speds.data :as speds-data])
+    (map (fn [d]
+           {:id          (or (:scenario-id d)
+                             (str/replace (:_filename d) ".trace.json" ""))
+            :title       (or (:title d) "")
+            :description (or (:description d) "")
+            :purpose     (or (:purpose d) "")
+            :threat-tags (or (:threat-tags d) [])})
+         (speds-data/load-all-traces))))
 
 ;; Live invariant suite run — executes all S01–S67 scenarios in-process.
 ;; Cached by Clerk across re-evaluations unless `:nextjournal.clerk/no-cache true` is set.

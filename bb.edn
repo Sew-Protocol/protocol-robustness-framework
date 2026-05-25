@@ -155,4 +155,7 @@
                     :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
 
   benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
-                  :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}}}
+                  :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+
+  evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
+                     :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}}}

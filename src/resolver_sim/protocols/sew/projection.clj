@@ -275,6 +275,24 @@
           :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
           :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
 
+         :story-facts
+         {:scenario-classification
+          (cond
+            (pos? (get metrics :attack-successes 0)) :adversarial-success
+            (pos? (get metrics :rejected-attacks 0)) :adversarial-deflected
+            :else :neutral)
+          :attack-attempts (get metrics :attack-attempts 0)
+          :attack-successes (get metrics :attack-successes 0)
+          :rejected-attacks (get metrics :rejected-attacks 0)
+          :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
+          :funds-drift-total (get-in funds-ledger [:conservation :drift-total])
+          :coalition-net-profit (let [mval (get metrics :coalition-net-profit)]
+                                  (if (some? mval) mval coalition-net-profit))
+          :negative-payoff-count (let [mval (get metrics :negative-payoff-count)]
+                                   (if (some? mval) mval negative-payoff-count))
+          :terminal-state-counts (frequencies (vals escrows))
+          :terminal-time (get world :block-time 0)}
+
          :money-movement-summary
          {:workflow-outcomes workflow-outcomes
           :post-dispute-transfers {:unknown {:to-sender 0 :to-recipient 0 :fees 0}}

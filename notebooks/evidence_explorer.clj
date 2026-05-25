@@ -1,7 +1,8 @@
 (ns notebooks.evidence-explorer
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]))
 
 ;; # Evidence Explorer — Technical Audit Surface
 ;; ## Deep-Dive Trace Inspection for Verified Scenarios
@@ -9,8 +10,8 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}
   :nextjournal.clerk/width :full}
 (clerk/html
- (let [all-scenarios (get (common/read-json "results/test-artifacts/coverage.json") :scenarios)
-       selected-id (or (first *1) "scenarios/s08-state-machine-attack-gauntlet")] ;; Default to attack gauntlet
+ (let [all-scenarios (get (speds-data/load-coverage) :scenarios)
+       selected-id "scenarios/s08-state-machine-attack-gauntlet"] ;; Default to attack gauntlet
    [:div.explorer-engine
     [:style "
       .explorer-engine { background: #020617; color: #7ADDDC; padding: 40px; font-family: 'JetBrains Mono', monospace; }
@@ -44,4 +45,4 @@
            [:div.log-row
             [:span.ts (str (:time e) "ms")]
             [:span.action (:action e)]
-            [:span (str (:params e))]]))]]]]]))
+            [:span (str (:params e))]]))]]]]))

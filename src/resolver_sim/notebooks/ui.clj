@@ -148,18 +148,24 @@
   (let [rows (filter #(= (str entity-id) (str (:entity-id %))) events)]
     (event-timeline-view rows)))
 
-(defn notebook-navigation [current-label]
-  [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
-                 :padding "10px 12px" :marginBottom "12px"}}
-   [:div {:style {:fontWeight "600" :marginBottom "6px"}} "Notebook navigation"]
-   [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
-    [:a {:href "/notebooks/dispute_resolution" :style {:color "#1d4ed8"}} "Dispute Resolution Workbench"]
-    [:a {:href "/notebooks/report" :style {:color "#1d4ed8"}} "Report Notebook"]
-    [:a {:href "/notebooks/invariant_failures" :style {:color "#1d4ed8"}} "Invariant Failure Triage"]
-    [:a {:href "/notebooks/telemetry" :style {:color "#1d4ed8"}} "Telemetry Trial Timeline"]
-    [:a {:href "/notebooks/xtdb_overview" :style {:color "#1d4ed8"}} "XTDB Overview"]
-    (when current-label
-      [:span {:style {:color "#334155"}} (str "• current: " current-label)])]])
+(defn notebook-navigation
+  ([] (notebook-navigation nil nil))
+  ([current-label] (notebook-navigation current-label nil))
+  ([current-label custom-links]
+   (let [default-links [{:label "Dispute Resolution Workbench" :href "/notebooks/dispute_resolution"}
+                        {:label "Report Notebook" :href "/notebooks/report"}
+                        {:label "Invariant Failure Triage" :href "/notebooks/invariant_failures"}
+                        {:label "Telemetry Trial Timeline" :href "/notebooks/telemetry"}
+                        {:label "XTDB Overview" :href "/notebooks/xtdb_overview"}]
+         links (or custom-links default-links)]
+     [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
+                    :padding "10px 12px" :marginBottom "12px"}}
+      [:div {:style {:fontWeight "600" :marginBottom "6px"}} "Notebook navigation"]
+      [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
+       (for [{:keys [label href]} links]
+         [:a {:href href :style {:color "#1d4ed8"}} label])
+       (when current-label
+         [:span {:style {:color "#334155"}} (str "• current: " current-label)])]])))
 
 (defn reference-validation-status []
   (let [required ["suites/reference-validation-v1/expected/summary.json"

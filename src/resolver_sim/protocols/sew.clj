@@ -425,6 +425,15 @@
     :invalid-state-for-refund
     :resolution-without-settlement})
 
+(def ^:private sew-guard-error-codes
+  #{:no-resolution-to-appeal
+    :appeal-window-expired
+    :appeal-window-not-expired
+    :escalation-not-allowed
+    :resolution-already-pending
+    :not-participant
+    :not-authorized-resolver})
+
 ;; ---------------------------------------------------------------------------
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
@@ -514,7 +523,9 @@
         (and accepted? (= action "execute_resolution"))      (conj :dispute-resolved)
         (and accepted? (= action "execute_pending_settlement")) (conj :settlement-executed)
         (and (= result-kw :rejected)
-             (contains? sew-state-error-codes error-kw))    (conj :invalid-state-transition))))
+             (contains? sew-state-error-codes error-kw))       (conj :invalid-state-transition)
+        (and (= result-kw :rejected)
+             (contains? sew-guard-error-codes error-kw))       (conj :invalid-guard-condition))))
 
   (metric-vocabulary [_]
     #{:total-escrows
@@ -524,6 +535,7 @@
       :pending-settlements-executed
       :double-settlements
       :invalid-state-transitions
+      :invalid-guard-conditions
       :negative-payoff-count
       :coalition-net-profit
       :funds-lost})
@@ -557,6 +569,9 @@
 
         (contains? event-tags :invalid-state-transition)
         (update :invalid-state-transitions inc)
+
+        (contains? event-tags :invalid-guard-condition)
+        (update :invalid-guard-conditions (fnil inc 0))
 
         (and funds-lost-delta (pos? funds-lost-delta))
         (update :funds-lost + funds-lost-delta))))
