@@ -37,8 +37,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-snapshot [pp]
-  (t/make-module-snapshot
-   {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
+  (let [yield-id (or (get pp :yield-generation-module nil)
+                     (get pp :yield-profile nil))
+        {:keys [profile-id archetype module-id]} (yield-reg/resolve-yield-profile yield-id)]
+    (t/make-module-snapshot
+     {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
     :resolution-module            (get pp :resolution-module nil)
     :appeal-window-duration       (get pp :appeal-window-duration 0)
     :max-dispute-duration         (get pp :max-dispute-duration 2592000)
@@ -54,12 +57,19 @@
     :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
     :default-auto-release-delay   (get pp :default-auto-release-delay 0)
     :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-    :yield-generation-module      (get pp :yield-generation-module nil)
+     :escrow-modules               {:resolution (get pp :resolution-module nil)
+                                    :yield      profile-id
+                                    :release    (get pp :release-strategy nil)
+                                    :cancel     (get pp :cancellation-strategy nil)}
+     :yield-module-id              :module/aave-yield
+     :yield-profile                profile-id
+     :yield-archetype              archetype
+     :yield-generation-module      module-id
     :yield-distribution-module    (get pp :yield-distribution-module nil)
     :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
     :cancellation-strategy        (get pp :cancellation-strategy nil)
     :release-strategy             (get pp :release-strategy nil)
-    :incentive-module             (get pp :incentive-module nil)}))
+     :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]

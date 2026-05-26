@@ -28,6 +28,25 @@
     :yield.profile/aave-v3-like :yield.provider/liquid-lending
     nil))
 
+(defn- normalize-module-id [module-id]
+  (cond
+    (keyword? module-id) module-id
+    (string? module-id)  (keyword module-id)
+    :else                module-id))
+
+(defn resolve-yield-profile
+  "Resolve a profile/module id into {:profile-id :archetype :module-id}.
+   Falls back to the provided id when no explicit profile mapping is known."
+  [profile-or-module-id]
+  (let [profile-id (normalize-module-id profile-or-module-id)
+        archetype  (or (profile->archetype profile-id)
+                       (when (= profile-id :yield.provider/liquid-lending)
+                         :yield.provider/liquid-lending))
+        module-id  (or (archetype->module-id archetype) profile-id)]
+    {:profile-id profile-id
+     :archetype  archetype
+     :module-id  module-id}))
+
 (def default-modules
   {:yield.provider/liquid-lending liquid-lending/liquid-lending-module
    :aave-v3 (liquid-lending/make-module :aave-v3 :yield.profile/aave-v3-like)
@@ -40,12 +59,6 @@
 
 (defn init-yield-modules [world]
   (reduce register-module world (vals default-modules)))
-
-(defn- normalize-module-id [module-id]
-  (cond
-    (keyword? module-id) module-id
-    (string? module-id)  (keyword module-id)
-    :else                module-id))
 
 (defn- normalize-token-config [{:keys [initial-index initial-index-ray apy apy-bps
                                        liquidity-mode loss-mode rate-mode

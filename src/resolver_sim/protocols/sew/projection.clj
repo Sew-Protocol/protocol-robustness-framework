@@ -232,7 +232,24 @@
                                       :non-terminal)}])
                        escrows))]
 
-        (let [funds-ledger (funds-ledger-view world)]
+        (let [snapshot-routing
+              (into {}
+                    (for [[wf snap] (get world :module-snapshots {})]
+                      [wf {:escrow/modules          (:escrow/modules snap)
+                           :yield-module-id         (:yield-module-id snap)
+                           :yield-profile           (:yield-profile snap)
+                           :yield-archetype         (:yield-archetype snap)
+                           :yield-generation-module (:yield-generation-module snap)}]))
+              snapshot-topology
+              (into {}
+                    (for [[wf snap] (get world :module-snapshots {})]
+                      [wf {:resolution-module        (:resolution-module snap)
+                           :release-strategy         (:release-strategy snap)
+                           :cancellation-strategy    (:cancellation-strategy snap)
+                           :yield-generation-module  (:yield-generation-module snap)
+                           :yield-distribution-module (:yield-distribution-module snap)
+                           :incentive-module         (:incentive-module snap)}]))
+              funds-ledger (funds-ledger-view world)]
           {:terminal-world
          {:escrows             escrows
           :total-held-by-token (get world :total-held {})
@@ -240,6 +257,8 @@
           :escrow-amounts      (get world :escrow-amounts {})
           :dispute-resolvers   (get world :dispute-resolvers {})
           :dispute-levels      (get world :dispute-levels {})
+           :module-topology-by-workflow snapshot-topology
+           :yield-routing-by-workflow snapshot-routing
           :pending-count       (get world :pending-count 0)
           :resolver-stakes     (get world :resolver-stakes {})
           :terminal?           all-terminal
