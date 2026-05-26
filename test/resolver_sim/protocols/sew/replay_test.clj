@@ -178,6 +178,10 @@
     (is (= :pass (:outcome r-hyphen)))
     (is (= (mapv :result (:trace r-underscore))
            (mapv :result (:trace r-hyphen))))
+    (is (= (get-in r-underscore [:trace 0 :transition/id])
+           (get-in r-hyphen [:trace 0 :transition/id])))
+    (is (= :scenario.transition/create_escrow
+           (get-in r-underscore [:trace 0 :transition/id])))
     (is (= (get-in r-underscore [:trace 0 :extra :workflow-id])
            (get-in r-hyphen [:trace 0 :extra :workflow-id])))))
 
@@ -1193,10 +1197,61 @@
               {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? false}}]))
         w-upheld   (get-in r-upheld [:trace 4 :world])
-        w-rejected (get-in r-rejected [:trace 4 :world])]
+        w-rejected (get-in r-rejected [:trace 4 :world])
+        assert-appeal-resolution-semantics
+        (fn [world upheld?]
+          ;; Helper to remove ambiguity around `upheld?` semantics using
+          ;; snapshot-visible effects (world snapshot omits pending-fraud-slashes).
+          ;; true  => APPEAL upheld  => bond refunded to resolver claimable
+          ;; false => APPEAL rejected => bond forfeited to insurance
+          (if upheld?
+            (is (pos? (get-in world [:claimable 0 "0xResolver"] 0))
+                "upheld?=true should refund appeal bond to resolver claimable")
+            (is (pos? (get-in world [:bond-distribution :insurance] 0))
+                "upheld?=false should forfeit appeal bond to insurance")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
+    (assert-appeal-resolution-semantics w-upheld true)
+    (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
-    (is (= 0 (get-in w-upheld [:pending-fraud-slashes 0 :appeal-bond-held] 0)))
     (is (= 80 (get-in w-rejected [:bond-distribution :insurance] 0)))
-    (is (= 0 (get-in w-rejected [:pending-fraud-slashes 0 :appeal-bond-held] 0)))))
+    (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
+
+(deftest test-replay-s35-profit-maximizer-governance-wins-appeal
+  "Dedicated replay test mirroring invariant scenario S35 exactly.
+   Path: pending -> appealed -> pending (upheld? false) -> executed after deadline."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r   (sew/replay-with-sew-protocol
+             (sc :agents [alice bob resolver gov]
+                 :params (assoc default-params :appeal-window-duration 120)
+                 :events
+                 [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                   :params {:amount 10000}}
+                  {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                   :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                  {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                   :params {:workflow-id 0}}
+                  {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                   :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                  {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+                   :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                  {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
+                   :params {:workflow-id 0}}
+                  {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
+                   :params {:workflow-id 0 :upheld? false}}
+                  {:seq 7 :time 1241 :agent "alice" :action "execute_pending_settlement"
+                   :params {:workflow-id 0}}
+                  {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
+                   :params {:workflow-id 0}}]))
+        w-appealed (get-in r [:trace 5 :world])
+        w-resolved (get-in r [:trace 6 :world])
+        w-final    (get-in r [:trace 8 :world])]
+    (is (= :pass (:outcome r)))
+    ;; Snapshot-level proxy checks for appealed->rejected path.
+    ;; In this S35 mirror, appeal-bond-amount is default 0, so no insurance
+    ;; movement occurs at resolve_appeal; slash remains live until execution.
+    (is (= 0 (get-in w-appealed [:claimable 0 "0xResolver"] 0)))
+    (is (= 0 (get-in w-resolved [:claimable 0 "0xResolver"] 0)))
+    (is (= :released (get-in w-final [:live-states 0])))
+    (is (= 9500 (get-in w-final [:resolver-stakes "0xResolver"])))
+    (is (= 500 (get-in w-final [:resolver-slash-total "0xResolver"])))))

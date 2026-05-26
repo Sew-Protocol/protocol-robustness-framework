@@ -12,13 +12,16 @@
    (:require [clojure.data.json              :as json]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
+              [resolver-sim.logging          :as log]
+             [resolver-sim.definitions.registry :as defs]
+             [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.db.temporal       :as temporal]))
 ;; ---------------------------------------------------------------------------
 ;; Constants
 ;; ---------------------------------------------------------------------------
 
-(def ^:private supported-versions #{"1.0" "1.1"})
+(def ^:private supported-versions (:supported-versions schema-profile/default-profile))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -106,6 +109,18 @@
         s' (if (.startsWith s ":") (subs s 1) s)]
     (keyword s')))
 
+(defn- action->transition-id
+  "Map an event action string/keyword to canonical transition semantic id.
+   Keeps backward compatibility by tolerating hyphen/underscore forms."
+  [action]
+  (let [s (-> (if (keyword? action) (name action) (str action))
+              str/lower-case
+              (str/replace "-" "_"))
+        k (keyword s)]
+    (if (defs/transition-def k)
+      (keyword "scenario.transition" s)
+      (keyword "scenario.transition" "unknown"))))
+
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
 ;; ---------------------------------------------------------------------------
@@ -127,25 +142,26 @@
       {:ok false :error :unsupported-schema-version
        :detail {:expected supported-versions :got version}}
 
-      (and (= version "1.1") (not (:id scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :id)
+           (not (:id scenario)))
       {:ok false :error :missing-id :detail "v1.1 scenarios must have a unique :id"}
 
-      (and (= version "1.1") (not (:title scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :title)
+           (not (:title scenario)))
       {:ok false :error :missing-title :detail "v1.1 scenarios must have a human-readable :title"}
 
-      (and (= version "1.1") (not (:purpose scenario)))
+      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+           (not (:purpose scenario)))
       {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
 
       ;; :theory-falsification scenarios must include a :theory block
-      (and (= version "1.1")
-           (= :theory-falsification (:purpose scenario))
+      (and (schema-profile/requires-theory? (:purpose scenario))
            (not (:theory scenario)))
       {:ok false :error :theory-required
        :detail "purpose :theory-falsification requires a :theory block"}
 
       ;; :adversarial-robustness scenarios must include :theory or meaningful :expectations
-      (and (= version "1.1")
-           (= :adversarial-robustness (:purpose scenario))
+      (and (schema-profile/requires-theory-or-expectations? (:purpose scenario))
            (not (:theory scenario))
            (empty? (get-in scenario [:expectations :metrics]))
            (empty? (get-in scenario [:expectations :terminal]))
@@ -264,6 +280,50 @@
       (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
       base)))
 
+(defn- advance-world-time
+  "Canonical simulation-time transition helper.
+   Returns {:world w' :delta-ms n :advanced? bool}."
+  [world event-time]
+  (let [now (:block-time world)
+        delta (- event-time now)]
+    (if (pos? delta)
+      {:world (assoc world :block-time event-time)
+       :delta-ms delta
+       :advanced? true}
+      {:world world
+       :delta-ms 0
+       :advanced? false})))
+
+(def ^:private temporal-rules
+  [{:id :missing-event-time
+    :check (fn [{:keys [event-time]}]
+             (if (number? event-time)
+               {:ok? true}
+               {:ok? false :error :invalid-event-time}))}
+   {:id :non-regressive-time
+    :check (fn [{:keys [event-time now]}]
+             (if (< event-time now)
+               {:ok? false :error :time-regression}
+               {:ok? true}))}])
+
+(defn- effective-temporal-rules
+  "Base temporal rules + optional protocol/context-provided rules.
+   Extra rules must be maps with keys {:id kw :check (fn [ctx] -> {:ok? bool ...})}."
+  [context]
+  (let [extra (:temporal-rules context)
+        extra' (if (sequential? extra) extra [])]
+    (into temporal-rules extra')))
+
+(defn- evaluate-temporal-rules
+  [rules ctx]
+  (reduce (fn [_ {:keys [id check]}]
+            (let [r (check ctx)]
+              (if (:ok? r)
+                nil
+                (reduced (assoc r :rule-id id)))))
+          nil
+          rules))
+
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
 ;; ---------------------------------------------------------------------------
@@ -272,13 +332,20 @@
   "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
   (let [event-time (:time event)
-        now        (:block-time world)]
-    (if (< event-time now)
+        now        (:block-time world)
+        rules      (effective-temporal-rules context)
+        temporal-failure (evaluate-temporal-rules rules {:event-time event-time
+                                                         :now now
+                                                         :world world
+                                                         :event event
+                                                         :context context
+                                                         :protocol protocol})]
+    (if temporal-failure
       (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
                         (proto/compute-projection protocol world)
                         [nil nil])
             tags      (if (satisfies? proto/EconomicModel protocol)
-                        (proto/classify-event protocol event :rejected :time-regression)
+                        (proto/classify-event protocol event :rejected (:error temporal-failure))
                         #{})]
         {:ok?    true
          :world  world
@@ -286,8 +353,10 @@
                        :time            event-time
                        :agent           (:agent event)
                        :action          (:action event)
+                       :transition/id   (action->transition-id (:action event))
                        :result          :rejected
-                       :error           :time-regression
+                       :error           (:error temporal-failure)
+                       :temporal-rule-id (:rule-id temporal-failure)
                        :extra           nil
                        :event-tags      tags
                        :invariants-ok?  true
@@ -297,11 +366,14 @@
                        :projection-hash ph}
          :halted? false})
 
-      (let [world-t    (if (> event-time now) (assoc world :block-time event-time) world)
+      (let [{world-t :world} (advance-world-time world event-time)
             result     (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
-                           (println "[CRITICAL] Dispatch Exception:" (.getMessage e))
+                            (log/error! "dispatch exception"
+                                        {:error (.getMessage e)
+                                         :scenario-step (:seq event)
+                                         :action (:action event)})
                            (.printStackTrace e)
                            {:ok false :error :dispatch-exception
                             :detail {:message (.getMessage e)
@@ -335,6 +407,7 @@
             :time            event-time
             :agent           (:agent event)
             :action          (:action event)
+             :transition/id   (action->transition-id (:action event))
             :result          result-kw
             :error           error-kw
             :extra           (:extra result)
@@ -351,8 +424,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Public API (Generic)
 ;; ---------------------------------------------------------------------------
-
-(require '[clojure.tools.logging :as log])
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations."
@@ -373,7 +444,7 @@
             world0  (proto/init-world protocol scenario)
             events  (sort-by :seq (:events scenario))
             scenario-id (:scenario-id scenario)]
-        (log/info :scenario/start {:id scenario-id})
+        (log/info! "scenario/start" {:id scenario-id})
         (loop [world world0 events events trace [] metrics (zero-metrics protocol) id-alias-map {}]
           (if (empty? events)
             (let [open (when-not (or (:allow-open-entities? scenario)
@@ -417,7 +488,7 @@
                                           (range)
                                           trace)
                       :coverage (:coverage temporal-cfg)}))
-                  (log/info :scenario/end {:id scenario-id :outcome :pass})
+                  (log/info! "scenario/end" {:id scenario-id :outcome :pass})
                   {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics :agents agents :protocol protocol})))
             (let [raw-event  (first events)
                   alias-res  (proto/resolve-id-alias protocol raw-event id-alias-map)]
@@ -435,7 +506,7 @@
                                       id-alias-map)]
                   
                   (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
-                  (log/debug :scenario/step {:id scenario-id :seq (:seq event) :action (:action event)})
+                  (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
 
                   (if (:halted? step)
                     (do
@@ -474,7 +545,7 @@
                                               (range)
                                               new-trace)
                           :coverage (:coverage temporal-cfg)}))
-                      (log/error :scenario/halt {:id scenario-id :seq (:seq event) :reason :invariant-violation})
+                      (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
                       {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
                     (recur (:world step) (rest events) new-trace new-metrics new-alias-map)))))))))))
 

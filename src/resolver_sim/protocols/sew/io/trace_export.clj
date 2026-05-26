@@ -10,7 +10,9 @@
   (:require [clojure.data.json                 :as json]
             [clojure.java.io                   :as io]
             [clojure.string                    :as str]
+             [resolver-sim.logging              :as log]
             [resolver-sim.protocols.sew          :as sew]
+            [resolver-sim.protocols.sew.projection :as sew-proj]
             [resolver-sim.protocols.sew.diff  :as diff]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.io.scenarios          :as scenarios]
@@ -323,6 +325,9 @@
              :attributes    (cond-> {:action action :seq seq-n}
                               wf-alias (assoc :wf_alias wf-alias)
                               params   (merge params)
+                              (:temporal-rule-id entry)
+                              (assoc :temporal_rule_id
+                                     (kw-val->str-flat (:temporal-rule-id entry)))
                               metadata (merge (into {} (map (fn [[k v]] [(kw-val->str-flat k) (kw-val->str-flat v)]) metadata))))}
       expected-v2 (assoc :expected expected-v2))))
 
@@ -335,7 +340,7 @@
   [result scenario & {:keys [token-sym] :or {token-sym "TOKEN"}}]
   (let [trace       (:trace result)
         events      (:events scenario)
-        last-world  (:world (last trace))
+        last-world  (sew-proj/terminal-world-from-result result)
         ;; Reverse map from simulation address → agent ID (for to_role resolution)
         addr->agent-id
         (into {} (map (fn [a] [(:address a) (:id a)]) (:agents scenario [])))
@@ -399,14 +404,21 @@
   "CLI: replay a scenario file and write the Forge trace fixture."
   [& args]
   (when (not= (count args) 2)
+    (log/warn! "trace-export/usage-error" {:args args})
     (println "Usage: trace-export <scenario-json> <output-fixture-json>")
     (System/exit 1))
   (let [[scenario-path output-path] args
         scenario (scenarios/load-scenario-file scenario-path)
         result   (sew/replay-with-sew-protocol scenario)]
     (if (= :invalid (:outcome result))
-      (do (println "ERROR: scenario invalid:" (:halt-reason result))
-          (System/exit 2))
+      (do
+        (log/error! "trace-export/scenario-invalid"
+                    {:reason (:halt-reason result)
+                     :scenario scenario-path})
+        (println "ERROR: scenario invalid:" (:halt-reason result))
+        (System/exit 2))
       (let [fixture (export-trace-fixture result scenario)]
         (write-fixture-file fixture output-path)
+        (log/info! "trace-export/written"
+                   {:output output-path :steps (count (:steps fixture))})
         (println "Written" (count (:steps fixture)) "steps to" output-path)))))

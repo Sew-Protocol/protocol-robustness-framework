@@ -1,6 +1,6 @@
 (ns resolver-sim.scenario.projection-test
   (:require [clojure.test :refer [deftest is testing run-tests]]
-            [resolver-sim.scenario.projection :as proj]))
+            [resolver-sim.protocols.sew.projection :as proj]))
 
 (defn -main
   "Allow direct execution via: clojure -M:test -m resolver-sim.scenario.projection-test"
@@ -66,6 +66,41 @@
        (is (= {"USDC" 25 "DAI" 40} (get-in p [:terminal-world :total-fees-by-token])))
        (is (= 0 (get-in p [:metrics :attack-successes])))
        (is (nil? (get-in p [:metrics :coalition-net-profit]))))))
+
+ (deftest test-trace-end-projection-includes-yield-routing-topology
+   (testing "terminal-world includes snapshot module topology and yield profile->archetype routing"
+     (let [result (replay-result
+                   {:world {:live-states {0 :released}
+                            :total-held {"USDC" 0}
+                            :total-fees {"USDC" 10}
+                            :module-snapshots
+                            {0 {:resolution-module :module/decentralized-dispute-resolution
+                                :release-strategy :module/release-default
+                                :cancellation-strategy :module/cancellation-default
+                                :yield-generation-module :yield.provider/liquid-lending
+                                :yield-distribution-module :module/yield-distribution-default
+                                :incentive-module :module/incentive-default
+                                :escrow/modules {:resolution :module/decentralized-dispute-resolution
+                                                 :yield :aave-v3
+                                                 :release :module/release-default
+                                                 :cancel :module/cancellation-default}
+                                :yield-module-id :module/aave-yield
+                                :yield-profile :aave-v3
+                                :yield-archetype :yield.provider/liquid-lending}}
+                            :block-time 1400}
+                    :metrics {}})
+           p      (proj/trace-end-projection result)]
+       (is (= :module/aave-yield
+              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-module-id])))
+       (is (= :aave-v3
+              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-profile])))
+       (is (= :yield.provider/liquid-lending
+              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-archetype])))
+       (is (= :aave-v3
+              (get-in p [:yield-evidence :routing-by-workflow 0 :yield-profile])))
+       (is (contains? (get-in p [:yield-evidence :supported-failure-modes]) :partial-liquidity))
+       (is (= :module/decentralized-dispute-resolution
+              (get-in p [:terminal-world :module-topology-by-workflow 0 :resolution-module]))))))
 
  (deftest test-trace-end-projection-escalation-summary
    (testing "escalation levels are derived from escalation actions and actors are distinct"

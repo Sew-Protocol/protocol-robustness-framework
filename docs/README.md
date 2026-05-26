@@ -9,9 +9,11 @@ Primary project framing and status live in the root `../README.md`.
 | System overview (narrative) | `SYSTEM_OVERVIEW.md` |
 | System overview (technical / architecture) | `architecture/ARCHITECTURE.md` |
 | Run validation suite | `testing/RUNNING_TESTS.md` |
+| Understand trust controls for game-theoretic claims | `testing/ADDING_GAME_THEORETIC_VALIDATION.md` |
 | Set up and run locally | `quickstart/QUICKSTART.md` |
 | Understand adapter / framework boundaries | `framework-boundaries.md` |
 | Reusable abstractions (kernel/adapter/components) | `overview/REUSABLE_COMPONENTS.md` |
+| Generalized outcomes contract (cross-protocol) | `overview/OUTCOME_MODEL.md` |
 | Scenario index and protocol properties | `scenarios.md` |
 | Evidence for external reviewers | `evidence/RESEARCHER_EVIDENCE_PACK.md` |
 
@@ -40,6 +42,11 @@ Primary project framing and status live in the root `../README.md`.
 - `testing/TRAJECTORIES.md` — trajectory technical reference
 - `scenarios.md` — scenario index, evidence classification, protocol properties
 - `CDRS-v1.1-THEORY-SCHEMA.md` — CDRS theory schema (scenario classification)
+- `testing/ADDING_GAME_THEORETIC_VALIDATION.md` — contributor guide for adding new game-theoretic validation checks (single-trace and multi-epoch)
+  - Includes trust-control slices for equilibrium evidence:
+    - `:equilibrium-trust-mode :relaxed` (default)
+    - `:equilibrium-trust-mode :strict-valid-time`
+    - `:equilibrium-trust-mode :strict-attestation`
 
 ## Evidence and research
 
@@ -56,6 +63,7 @@ Primary project framing and status live in the root `../README.md`.
 
 - `quickstart/QUICKSTART.md` — setup and first run
 - `usage.md` — CLI/API usage reference
+- `make speds-comparator-shadow` — generate `results/test-artifacts/comparator-shadow.json` for side-by-side comparator strategy rollout checks
 
 ## Notebooks
 
@@ -65,6 +73,7 @@ Primary project framing and status live in the root `../README.md`.
 
 - `overview/REUSABLE_COMPONENTS.md` — adapter/harness/fixture reuse guide
 - `overview/USE_OF_FUNDS.md` — use-of-funds accounting contract
+- `overview/OUTCOME_MODEL.md` — canonical cross-protocol outcome model and migration plan
 - `requirements/sybil-mitigation-roadmap.md` — Sybil ring mitigation requirements
 
 ## Historical and superseded

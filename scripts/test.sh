@@ -21,6 +21,9 @@ MODE="${1:-all}"
 FAILURES=0
 ARTIFACT_DIR="results/test-artifacts"
 ARTIFACT_FILE="$ARTIFACT_DIR/test-summary.json"
+RUN_MANIFEST_FILE="$ARTIFACT_DIR/test-run.json"
+ARTIFACT_REGISTRY_FILE="$ARTIFACT_DIR/test-artifacts.json"
+CLAIMABLE_CLASSIFICATION_FILE="$ARTIFACT_DIR/claimable-classification.json"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 MAX_UNHIT_TRANSITIONS="${MAX_UNHIT_TRANSITIONS:-4}"
 MAX_UNSAFE_REGION_DELTA_PCT="${MAX_UNSAFE_REGION_DELTA_PCT:-10}"
@@ -235,6 +238,12 @@ if errors:
 
 print('Collusion fixture/claim alignment checks passed')
 PY
+
+  # Artifact registry integrity + compatibility checks
+  python scripts/validate_artifact_registry.py
+
+  # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
+  python scripts/validate_claim_registry.py
 
   return $?
 }
@@ -817,7 +826,7 @@ esac
 
 if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
   python - <<PY
-import csv, json, pathlib
+import csv, json, pathlib, datetime, subprocess
 csv_path = pathlib.Path("$ARTIFACT_DIR/.targets-${RUN_ID}.csv")
 risk_path = pathlib.Path("$ARTIFACT_DIR/.risk-${RUN_ID}.lines")
 lh_meta_path = pathlib.Path("$ARTIFACT_DIR/.long-horizon-${RUN_ID}.meta")
@@ -883,6 +892,7 @@ else:
     decision = "REJECTED"
 
 out = {
+  "schema_version": "test-summary.v2",
   "run_id": "$RUN_ID",
   "mode": "$MODE",
   "overall_status": overall,
@@ -890,6 +900,196 @@ out = {
   "failure_count": $FAILURES,
   "risk_digest": risk_digest,
   "targets": rows,
+}
+
+def scenario_capabilities_summary(scenarios_dir: pathlib.Path):
+    profiles = set()
+    archetypes = set()
+    module_statuses = set()
+    liquidity_modes = set()
+    failure_modes = set()
+    required_capabilities = set()
+    actor_abilities_present = 0
+    yield_enabled_scenarios = 0
+    yield_disabled_scenarios = 0
+    shortfall_related_scenarios = 0
+    partial_liquidity_enabled_scenarios = 0
+
+    for p in sorted(scenarios_dir.glob("*.json")):
+        try:
+            obj = json.loads(p.read_text())
+        except Exception:
+            continue
+        if not isinstance(obj, dict):
+            continue
+
+        req_caps = obj.get("required_capabilities") or []
+        for c in req_caps:
+            required_capabilities.add(str(c))
+
+        if obj.get("actor_abilities"):
+            actor_abilities_present += 1
+
+        ycfg = obj.get("yield_config") or {}
+        modules = (ycfg.get("modules") or {}) if isinstance(ycfg, dict) else {}
+        if not isinstance(modules, dict):
+            modules = {}
+        if modules:
+            yield_enabled_scenarios += 1
+        else:
+            yield_disabled_scenarios += 1
+
+        for module_id, module_cfg in modules.items():
+            profiles.add(str(module_id))
+            if isinstance(module_cfg, dict):
+                module_statuses.add(str(module_cfg.get("module_status", "active")))
+                tokens = module_cfg.get("tokens") or {}
+                if not isinstance(tokens, dict):
+                    tokens = {}
+                for _, token_cfg in tokens.items():
+                    if not isinstance(token_cfg, dict):
+                        continue
+                    lm = str(token_cfg.get("liquidity_mode", "available"))
+                    liquidity_modes.add(lm)
+                    fms = [str(x) for x in (token_cfg.get("failure_modes") or [])]
+                    for fm in fms:
+                        failure_modes.add(str(fm))
+                    if lm == "shortfall" or "partial-liquidity" in fms:
+                        shortfall_related_scenarios += 1
+                    if "partial-liquidity" in fms:
+                        partial_liquidity_enabled_scenarios += 1
+
+        pp = obj.get("protocol_params") or {}
+        if not isinstance(pp, dict):
+            pp = {}
+        yid = pp.get("yield_generation_module")
+        if yid:
+            profiles.add(str(yid))
+            if str(yid) == "aave-v3":
+                archetypes.add("yield.provider/liquid-lending")
+
+    return {
+        "yield": {
+            "enabled": yield_enabled_scenarios > 0,
+            "profile_ids": sorted(profiles),
+            "archetypes": sorted(archetypes),
+            "module_statuses": sorted(module_statuses),
+            "liquidity_modes": sorted(liquidity_modes),
+            "failure_modes": sorted(failure_modes),
+            "enabled_scenarios": yield_enabled_scenarios,
+            "disabled_scenarios": yield_disabled_scenarios,
+            "shortfall_related_scenarios": shortfall_related_scenarios,
+            "partial_liquidity_enabled_scenarios": partial_liquidity_enabled_scenarios,
+        },
+        "required_capabilities_seen": sorted(required_capabilities),
+        "actor_abilities_scenarios": actor_abilities_present,
+    }
+
+caps = scenario_capabilities_summary(pathlib.Path("scenarios"))
+claimable_classification = {
+  "schema_version": "claimable-classification.v1",
+  "shortfall_policy": {
+    "mode": "partial-liquidity-supported",
+    "allocation": "fulfilled-plus-deferred",
+    "rounding_policy": "floor-to-asset-decimals.v1"
+  },
+  "classes": {
+    "escrow_principal": {
+      "delivery_model": "pull",
+      "source": "settlement",
+      "recipient_type": "party",
+      "risk_class": "user-withdrawable"
+    },
+    "escrow_yield": {
+      "delivery_model": "pull",
+      "source": "yield",
+      "recipient_type": "party-or-protocol",
+      "risk_class": "yield-derived",
+      "shortfall_outcome": "may-be-partially-deferred"
+    },
+    "resolver_payment": {
+      "delivery_model": "pull",
+      "source": "dispute-resolution",
+      "recipient_type": "resolver",
+      "risk_class": "service-compensation"
+    },
+    "bond_refund": {
+      "delivery_model": "pull",
+      "source": "appeal-bond",
+      "recipient_type": "disputant",
+      "risk_class": "bond-return"
+    },
+    "protocol_fee": {
+      "delivery_model": "pull-or-governance-withdrawal",
+      "source": "fee",
+      "recipient_type": "protocol",
+      "risk_class": "protocol-revenue"
+    }
+  }
+}
+run_manifest = {
+  "schema_version": "test-run.v1",
+  "contract_version": "evidence-contract.v1",
+  "produced_by": {
+    "name": "test-run-emitter",
+    "version": "v1"
+  },
+  "run_id": "$RUN_ID",
+  "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+  "framework": {
+    "name": "sew-simulation-test-runner",
+    "version": "0.1.0",
+    "git_commit": None
+  },
+  "model": {
+    "id": "sew",
+    "version": "sew-model.v1",
+    "git_commit": None
+  },
+  "suite": {
+    "id": "$MODE",
+    "version": "suite.v1"
+  },
+  "capabilities_resolved": {
+    "yield": caps["yield"],
+    "withdrawals": {"enabled": True, "delivery_model": "pull"},
+    "dispute_resolution": {"enabled": True},
+    "module_snapshotting": {"enabled": True},
+    "settlement_delivery": {"enabled": True, "mode": "pull-claimable"},
+    "invariants": {"enabled": True},
+    "projection": {"enabled": True}
+  },
+  "artifacts": {
+    "test_summary": "$ARTIFACT_FILE",
+    "test_artifacts": "$ARTIFACT_REGISTRY_FILE",
+    "claimable_classification": "$CLAIMABLE_CLASSIFICATION_FILE",
+    "coverage": "results/test-artifacts/coverage.json",
+    "findings": "results/test-artifacts/findings.json",
+    "issues": "results/test-artifacts/issues.json"
+  }
+}
+
+try:
+    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    run_manifest["framework"]["git_commit"] = git_sha
+    run_manifest["model"]["git_commit"] = git_sha
+except Exception:
+    pass
+
+out["run_manifest"] = {
+  "schema_version": run_manifest["schema_version"],
+  "path": "$RUN_MANIFEST_FILE",
+  "run_id": run_manifest["run_id"]
+}
+out["yield_context"] = caps["yield"]
+out["shortfall_exposure"] = {
+  "shortfall_related_scenarios": caps["yield"].get("shortfall_related_scenarios", 0),
+  "partial_liquidity_enabled_scenarios": caps["yield"].get("partial_liquidity_enabled_scenarios", 0),
+  "rounding_policy": "floor-to-asset-decimals.v1"
+}
+out["claimable_classification"] = {
+  "schema_version": claimable_classification["schema_version"],
+  "path": "$CLAIMABLE_CLASSIFICATION_FILE"
 }
 
 # Status-count block for quick dashboard/CLI consumption
@@ -1010,7 +1210,90 @@ if force_refund_trace.exists():
 out["force_refund_forward_only"] = force_refund_signal
 
 pathlib.Path("$ARTIFACT_FILE").write_text(json.dumps(out, indent=2))
+pathlib.Path("$RUN_MANIFEST_FILE").write_text(json.dumps(run_manifest, indent=2))
+pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
+
+def sha256_file(path: pathlib.Path):
+    if not path.exists():
+        return None
+    import hashlib
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def artifact_meta(path_s: str):
+    p = pathlib.Path(path_s)
+    if not p.exists():
+        return None
+    st = p.stat()
+    return {
+      "sha256": sha256_file(p),
+      "bytes": st.st_size,
+      "mtime_utc": datetime.datetime.fromtimestamp(st.st_mtime, datetime.timezone.utc).isoformat()
+    }
+
+def mk_artifact_entry(aid, kind, path_s, schema_version, producer, verifies_against, input_versions=None):
+    m = artifact_meta(path_s)
+    if not m:
+        return None
+    return {
+      "id": aid,
+      "kind": kind,
+      "path": path_s,
+      "schema_version": schema_version,
+      "contract_version": "evidence-contract.v1",
+      "producer": producer,
+      "verifies_against": verifies_against,
+      "input_versions": input_versions or {},
+      "sha256": m["sha256"],
+      "bytes": m["bytes"],
+      "mtime_utc": m["mtime_utc"]
+    }
+
+artifact_registry = {
+  "schema_version": "test-artifacts.v1",
+  "contract_version": "evidence-contract.v1",
+  "run_id": "$RUN_ID",
+  "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+  "generator": {"name": "artifact-registry-emitter", "version": "v1"},
+  "root_dir": "results/test-artifacts",
+  "run_manifest": {
+    "path": "$RUN_MANIFEST_FILE",
+    "schema_version": run_manifest["schema_version"],
+    "sha256": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("sha256"),
+    "bytes": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("bytes"),
+    "mtime_utc": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("mtime_utc")
+  },
+  "artifacts": []
+}
+
+entries = [
+  mk_artifact_entry("test-summary", "summary", "$ARTIFACT_FILE", out.get("schema_version"),
+                    "summary-emitter.v1", ["test-run.v1", "projection.v1"],
+                    {"test_run": "test-run.v1", "projection": "projection.v1", "scenario": "scenario.v1"}),
+  mk_artifact_entry("test-run", "run-manifest", "$RUN_MANIFEST_FILE", run_manifest.get("schema_version"),
+                    "test-run-emitter.v1", [], {}),
+  mk_artifact_entry("claimable-classification", "classification", "$CLAIMABLE_CLASSIFICATION_FILE", claimable_classification.get("schema_version"),
+                    "claimable-classification-emitter.v1", ["test-run.v1"],
+                    {"test_run": "test-run.v1"}),
+  mk_artifact_entry("coverage", "coverage", "results/test-artifacts/coverage.json", "coverage.v1",
+                    "coverage-emitter.v1", ["scenario.v1"],
+                    {"scenario": "scenario.v1"}),
+  mk_artifact_entry("findings", "findings", "results/test-artifacts/findings.json", "findings.v1",
+                    "findings-emitter.v1", ["test-summary.v2"],
+                    {"test_summary": "test-summary.v2"}),
+  mk_artifact_entry("issues", "issues", "results/test-artifacts/issues.json", "issues.v1",
+                    "issues-emitter.v1", ["test-summary.v2"],
+                    {"test_summary": "test-summary.v2"})
+]
+artifact_registry["artifacts"] = [e for e in entries if e is not None]
+pathlib.Path("$ARTIFACT_REGISTRY_FILE").write_text(json.dumps(artifact_registry, indent=2))
 print(f"Wrote machine-readable summary: $ARTIFACT_FILE")
+print(f"Wrote run manifest: $RUN_MANIFEST_FILE")
+print(f"Wrote artifact registry: $ARTIFACT_REGISTRY_FILE")
+print(f"Wrote claimable classification: $CLAIMABLE_CLASSIFICATION_FILE")
 PY
 fi
 

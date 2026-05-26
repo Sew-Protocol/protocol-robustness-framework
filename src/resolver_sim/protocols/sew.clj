@@ -37,8 +37,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-snapshot [pp]
-  (t/make-module-snapshot
-   {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
+  (let [yield-id (or (get pp :yield-generation-module nil)
+                     (get pp :yield-profile nil))
+        {:keys [profile-id archetype module-id]} (yield-reg/resolve-yield-profile yield-id)]
+    (t/make-module-snapshot
+     {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
     :resolution-module            (get pp :resolution-module nil)
     :appeal-window-duration       (get pp :appeal-window-duration 0)
     :max-dispute-duration         (get pp :max-dispute-duration 2592000)
@@ -54,12 +57,19 @@
     :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
     :default-auto-release-delay   (get pp :default-auto-release-delay 0)
     :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-    :yield-generation-module      (get pp :yield-generation-module nil)
+     :escrow-modules               {:resolution (get pp :resolution-module nil)
+                                    :yield      profile-id
+                                    :release    (get pp :release-strategy nil)
+                                    :cancel     (get pp :cancellation-strategy nil)}
+     :yield-module-id              :module/aave-yield
+     :yield-profile                profile-id
+     :yield-archetype              archetype
+     :yield-generation-module      module-id
     :yield-distribution-module    (get pp :yield-distribution-module nil)
     :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
     :cancellation-strategy        (get pp :cancellation-strategy nil)
     :release-strategy             (get pp :release-strategy nil)
-    :incentive-module             (get pp :incentive-module nil)}))
+     :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]
@@ -87,6 +97,21 @@
   [event]
   (let [p (:params event)]
     (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
+
+(defn- sew-temporal-rules
+  "Protocol-aware temporal guards executed before dispatch.
+   These rules are optional and run through replay's generic temporal rule engine."
+  []
+  [{:id :sew/appeal-window-open
+    :check (fn [{:keys [world event now]}]
+             (if (= "execute_pending_settlement" (:action event))
+               (let [wf-id   (compat/wf-id event)
+                     pending (t/get-pending world wf-id)]
+                 (if (and (:exists pending)
+                          (< now (:appeal-deadline pending)))
+                   {:ok? false :error :appeal-window-not-expired}
+                   {:ok? true}))
+               {:ok? true}))}])
 
 ;; ---------------------------------------------------------------------------
 ;; Dispatch
@@ -425,6 +450,15 @@
     :invalid-state-for-refund
     :resolution-without-settlement})
 
+(def ^:private sew-guard-error-codes
+  #{:no-resolution-to-appeal
+    :appeal-window-expired
+    :appeal-window-not-expired
+    :escalation-not-allowed
+    :resolution-already-pending
+    :not-participant
+    :not-authorized-resolver})
+
 ;; ---------------------------------------------------------------------------
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
@@ -466,7 +500,8 @@
        :snapshot             snapshot
        :escalation-fn        esc-fn
        :resolution-module-fn rm-fn
-       :resolution-level-map level-map}))
+        :resolution-level-map level-map
+        :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
     (apply-action context world event))
@@ -514,7 +549,9 @@
         (and accepted? (= action "execute_resolution"))      (conj :dispute-resolved)
         (and accepted? (= action "execute_pending_settlement")) (conj :settlement-executed)
         (and (= result-kw :rejected)
-             (contains? sew-state-error-codes error-kw))    (conj :invalid-state-transition))))
+             (contains? sew-state-error-codes error-kw))       (conj :invalid-state-transition)
+        (and (= result-kw :rejected)
+             (contains? sew-guard-error-codes error-kw))       (conj :invalid-guard-condition))))
 
   (metric-vocabulary [_]
     #{:total-escrows
@@ -524,6 +561,7 @@
       :pending-settlements-executed
       :double-settlements
       :invalid-state-transitions
+      :invalid-guard-conditions
       :negative-payoff-count
       :coalition-net-profit
       :funds-lost})
@@ -557,6 +595,9 @@
 
         (contains? event-tags :invalid-state-transition)
         (update :invalid-state-transitions inc)
+
+        (contains? event-tags :invalid-guard-condition)
+        (update :invalid-guard-conditions (fnil inc 0))
 
         (and funds-lost-delta (pos? funds-lost-delta))
         (update :funds-lost + funds-lost-delta))))

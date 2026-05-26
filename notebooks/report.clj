@@ -21,41 +21,18 @@
 ;; If an artifact is absent, the relevant panel shows amber (missing data),
 ;; not red. Missing data is not the same as a protocol problem.
 
+;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.report
   (:require [nextjournal.clerk :as clerk]
             [clojure.java.io :as io]
-            [clojure.edn :as edn]
             [clojure.data.json :as json]
             [clojure.string :as str]
-            [resolver-sim.notebooks.ui :as ui]))
+            [resolver-sim.notebooks.ui :as ui]
+            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebooks.speds.data :as speds-data]))
 
-(defn notebook-nav [current-label]
-  (if-let [v (ns-resolve 'resolver-sim.notebooks.ui 'notebook-navigation)]
-    (try
-      ((var-get v) current-label)
-      (catch Throwable _
-        [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
-                       :padding "10px 12px" :marginBottom "12px"}}
-         [:strong "Notebook navigation"]
-         [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
-          [:a {:href "/notebooks/dispute_resolution"} "Dispute Resolution Workbench"]
-          [:a {:href "/notebooks/report"} "Report Notebook"]
-          [:a {:href "/notebooks/invariant_failures"} "Invariant Failure Triage"]
-          [:a {:href "/notebooks/telemetry"} "Telemetry Trial Timeline"]
-          [:a {:href "/notebooks/xtdb_overview"} "XTDB Overview"]
-          [:span {:style {:color "#334155"}} (str "• current: " current-label)]]]))
-    [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
-                   :padding "10px 12px" :marginBottom "12px"}}
-     [:strong "Notebook navigation"]
-     [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
-      [:a {:href "/notebooks/dispute_resolution"} "Dispute Resolution Workbench"]
-      [:a {:href "/notebooks/report"} "Report Notebook"]
-      [:a {:href "/notebooks/invariant_failures"} "Invariant Failure Triage"]
-      [:a {:href "/notebooks/telemetry"} "Telemetry Trial Timeline"]
-      [:a {:href "/notebooks/xtdb_overview"} "XTDB Overview"]
-      [:span {:style {:color "#334155"}} (str "• current: " current-label)]]]))
-
-(clerk/html (notebook-nav "Report Notebook"))
+(clerk/html (ui/notebook-navigation "Report Notebook"))
 
 ;; ---
 ;; ## R/A/G Legend
@@ -79,106 +56,34 @@
 ;; ---
 ;; ## Utilities
 
-(defn- safe-slurp [path]
-  (try
-    (let [f (io/file path)]
-      (when (.exists f) (slurp f)))
-    (catch Exception e
-      (println "WARN: could not read" path "-" (.getMessage e))
-      nil)))
-
-(defn- read-json [path]
-  (when-let [s (safe-slurp path)]
-    (try
-      (json/read-str s {:key-fn keyword})
-      (catch Exception e
-        (println "WARN: JSON parse error in" path "-" (.getMessage e))
-        nil))))
-
-(defn- read-edn [path]
-  (when-let [s (safe-slurp path)]
-    (try
-      (edn/read-string s)
-      (catch Exception e
-        (println "WARN: EDN parse error in" path "-" (.getMessage e))
-        nil))))
-
-(defn- safe-render
-  "Wraps a panel render fn in try/catch. Returns a hiccup error callout on failure."
-  [label f]
-  (try
-    (f)
-    (catch Exception e
-      [:div {:style {:background "#fef2f2" :border "1px solid #dc2626"
-                     :borderRadius "4px" :padding "12px" :margin "8px 0"}}
-       [:strong (str "⚠ " label " render error: ")]
-       [:code (.getMessage e)]])))
-
 ;; ---
 ;; ## Artifact Loading
 
-^{::clerk/visibility {:result :hide}}
-(def test-summary
-  (read-json "results/test-artifacts/test-summary.json"))
+^{:nextjournal.clerk/visibility {:result :hide}}
+(def test-summary (speds-data/load-summary))
 
-^{::clerk/visibility {:result :hide}}
-(def coverage-data
-  (read-json "results/test-artifacts/coverage.json"))
+^{:nextjournal.clerk/visibility {:result :hide}}
+(def coverage-data (speds-data/load-coverage))
 
-^{::clerk/visibility {:result :hide}}
-(def equivalence-summary
-  (read-json "results/test-artifacts/equivalence-comparison-summary.json"))
+^{:nextjournal.clerk/visibility {:result :hide}}
+(def equivalence-summary (speds-data/load-equivalence))
 
-^{::clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:result :hide}}
 (def all-traces
-  (try
-    (let [dir (io/file "data/fixtures/traces")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".trace.json"))
-             (map (fn [f]
-                    (try
-                      (let [d (json/read-str (slurp f) {:key-fn keyword})]
-                        {:id          (or (:scenario-id d)
-                                         (str/replace (.getName f) ".trace.json" ""))
-                         :title       (or (:title d) "")
-                         :description (or (:description d) "")
-                         :purpose     (or (:purpose d) "")
-                         :threat-tags (or (:threat-tags d) [])
-                         :has-theory  (contains? d :theory)
-                         :theory      (:theory d)
-                         :trace-file  (.getName f)})
-                      (catch Exception e
-                        (println "WARN: skipping trace" (.getName f) "-" (.getMessage e))
-                        nil))))
-             (remove nil?)
-             (sort-by :id))))
-    (catch Exception e
-      (println "WARN: could not load traces -" (.getMessage e))
-      [])))
+  (map (fn [d]
+         {:id          (or (:scenario-id d)
+                           (str/replace (:_filename d) ".trace.json" ""))
+          :title       (or (:title d) "")
+          :description (or (:description d) "")
+          :purpose     (or (:purpose d) "")
+          :threat-tags (or (:threat-tags d) [])
+          :has-theory  (contains? d :theory)
+          :theory      (:theory d)
+          :trace-file  (:_filename d)})
+       (speds-data/load-all-traces)))
 
-^{::clerk/visibility {:result :hide}}
-(def golden-reports
-  (try
-    (let [dir (io/file "data/fixtures/golden")]
-      (when (.isDirectory dir)
-        (->> (.listFiles dir)
-             (filter #(str/ends-with? (.getName %) ".report.edn"))
-             (map (fn [f]
-                    (try
-                      (let [d (edn/read-string (slurp f))
-                            d (assoc d
-                                     :_source-file (.getAbsolutePath f)
-                                     :_source-mtime (.lastModified f))]
-                        [(str (:trace-id d)) d])
-                      (catch Exception e
-                        (println "WARN: skipping golden" (.getName f) "-" (.getMessage e))
-                        nil))))
-             (remove nil?)
-             (into {}))))
-    (catch Exception e
-      (println "WARN: could not load golden reports -" (.getMessage e))
-      {})))
+^{:nextjournal.clerk/visibility {:result :hide}}
+(def golden-reports (speds-data/load-all-golden-reports))
 
 ;; ---
 ;; ## R/A/G Status Helpers (pure, auditable)
@@ -342,9 +247,9 @@
 ;; ---
 ;; ## 1. Evidence Control Panel
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Evidence Control Panel"
   (fn []
     (let [summary    test-summary
@@ -455,9 +360,9 @@
 ;; ---
 ;; ## 2. Corpus Evidence Status
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Corpus Evidence Status"
   (fn []
     (let [traces (or all-traces [])
@@ -498,9 +403,9 @@
 ;; ---
 ;; ## 3. Validation Work Queue (Top 10)
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Validation Work Queue (Top 10)"
   (fn []
     (let [priority-ids #{{"s04" "s14" "s15" "s17" "s18" "s19" "s20" "s21" "s22" "s23"}}
@@ -554,9 +459,9 @@
 
 ;; Debug panel for notebook sync/path drift issues.
 ;; This makes the data source explicit so stale sessions / wrong working dir are obvious.
-^{::clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Queue Data Source Debug"
   (fn []
     (let [ids ["s04-dispute-timeout-autocancel"
@@ -604,9 +509,9 @@
 ;; Theory-falsification scenarios marked `:expected-negative` are red as
 ;; evidence of a known protocol boundary, not a build breakage.
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Scenario Matrix"
   (fn []
     (let [traces (or all-traces [])
@@ -801,9 +706,9 @@
     (= likely-class "escalation lifecycle mismatch") "Audit escalation lifecycle transitions and pending-state clearing"
     :else "Compare expected outcome contract vs replay artifact for mismatch source"))
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Validation Failures Triage"
   (fn []
     (let [traces (or all-traces [])
@@ -870,9 +775,9 @@
 ;; Helps distinguish: protocol invariant pass, research claim status,
 ;; adversarial success, and accounting metrics.
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Substatus Detail"
   (fn []
     (let [golds (or golden-reports {})
@@ -922,9 +827,9 @@
 ;;
 ;; This section explains the dual semantics of red in this workbook.
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Research Interpretation Layer"
   (fn []
     [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b"
@@ -955,9 +860,9 @@
 ;; invariant-violation counts, not live ledger entries.
 ;; Bucket interpretation is adapter-defined.
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Funds / Accounting Panel"
   (fn []
     (let [golds        (or golden-reports {})
@@ -1024,9 +929,9 @@
 ;; ---
 ;; ## 6. Coverage Summary
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Coverage Summary"
   (fn []
     (if (nil? coverage-data)
@@ -1089,7 +994,7 @@
 ;; - First divergence point between counterfactual pairs
 ;; - Invariant snapshots over time
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
  [:div {:style {:background "#f8fafc" :border "1px dashed #94a3b8"
                 :borderRadius "6px" :padding "16px 20px" :color "#475569"}}
@@ -1108,9 +1013,9 @@
 ;; ---
 ;; ## 8. Reproducibility / Provenance Panel
 
-^{::clerk/visibility {:code :fold}}
+^{:nextjournal.clerk/visibility {:code :hide}}
 (clerk/html
- (safe-render
+ (common/safe-render
   "Reproducibility / Provenance"
   (fn []
     (let [summary  test-summary

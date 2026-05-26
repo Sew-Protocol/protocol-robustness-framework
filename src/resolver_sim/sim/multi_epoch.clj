@@ -395,6 +395,15 @@
            :n-epochs               n-epochs
            :n-trials-per-epoch     n-trials-per-epoch
            :initial-resolver-count n-resolvers
+            :initial-strategy-mix   strategy-mix
+            :initial-composition
+            {:honest-count    (count (filter #(= :honest (:strategy (val %))) initial-histories))
+             :malice-count    (count (filter #(not= :honest (:strategy (val %))) initial-histories))
+             :total-count     (count initial-histories)
+             :honest-share    (let [n (double (max 1 (count initial-histories)))]
+                                (/ (count (filter #(= :honest (:strategy (val %))) initial-histories)) n))
+             :malice-share    (let [n (double (max 1 (count initial-histories)))]
+                                (/ (count (filter #(not= :honest (:strategy (val %))) initial-histories)) n))}
            :epoch-results          (or epoch-results [])
            :resolver-histories     final-histories
            :aggregated-stats       final-stats

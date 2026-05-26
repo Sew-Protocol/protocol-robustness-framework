@@ -1,9 +1,98 @@
 (ns resolver-sim.protocols.sew.yield.failure-test
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.modules.aave :as aave]
+            [resolver-sim.yield.providers.liquid-lending :as liquid]
+            [resolver-sim.yield.registry :as yield-reg]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.protocol :as proto]))
+
+(deftest test-liquid-lending-failure-modes-contract
+  (let [module {:module/id :yield.provider/liquid-lending}
+        base-world {:yield/indices {:yield.provider/liquid-lending {"USDC" 1.0}}
+                    :yield/rates {:yield.provider/liquid-lending {"USDC" 0.05}}
+                    :yield/risk {:yield.provider/liquid-lending {"USDC" {:liquidity-mode :available
+                                                                         :failure-modes #{}}}}
+                    :yield/positions {"user1" {:owner/id "user1" :module/id :yield.provider/liquid-lending :token "USDC"
+                                                :principal 1000 :shares 1000 :entry-index 1.0
+                                                :status :active :unrealized-yield 0 :realized-yield 0}}}]
+    (testing ":deposit-fails"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (liquid/deposit (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                             #{:deposit-fails})
+                                   module
+                                   {:owner/id "u2" :amount 100 :token "USDC"}))))
+    (testing ":withdraw-fails"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (liquid/withdraw (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                              #{:withdraw-fails})
+                                    module
+                                    {:owner/id "user1"}))))
+    (testing ":partial-liquidity"
+      (let [w' (liquid/withdraw (-> base-world
+                                    (assoc-in [:yield/indices :yield.provider/liquid-lending "USDC"] 2.0)
+                                    (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                              #{:partial-liquidity}))
+                                module
+                                {:owner/id "user1"})]
+        (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
+        (is (= 500 (get-in w' [:yield/positions "user1" :realized-yield])))
+        (is (= {:reason :liquidity-shortfall
+                :available-ratio 0.5
+                :fulfilled-amount 500
+                :deferred-amount 500
+                :haircut-amount 0
+                :as-of-index 2.0}
+               (get-in w' [:yield/positions "user1" :shortfall])))))
+    (testing ":partial-liquidity with custom shortfall ratio"
+      (let [w' (-> base-world
+                   (assoc-in [:yield/indices :yield.provider/liquid-lending "USDC"] 2.0)
+                   (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                             #{:partial-liquidity})
+                   (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :shortfall]
+                             {:available-ratio 0.25 :reason :market-dislocation})
+                   (liquid/withdraw module {:owner/id "user1"}))]
+        (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
+        (is (= 250 (get-in w' [:yield/positions "user1" :realized-yield])))
+        (is (= {:reason :market-dislocation
+                :available-ratio 0.25
+                :fulfilled-amount 250
+                :deferred-amount 750
+                :haircut-amount 0
+                :as-of-index 2.0}
+               (get-in w' [:yield/positions "user1" :shortfall])))))
+    (testing ":negative-yield"
+      (let [w' (liquid/accrue (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                        #{:negative-yield})
+                              module
+                              {:token "USDC" :dt 31536000})]
+        (is (< (get-in w' [:yield/indices :yield.provider/liquid-lending "USDC"]) 1.0))))
+    (testing ":provider-paused"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (liquid/deposit (assoc base-world :yield/module-status {:yield.provider/liquid-lending :paused})
+                                   module
+                                   {:owner/id "u3" :amount 100 :token "USDC"}))))
+    (testing ":emergency-unwind-fails"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (liquid/emergency-unwind (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                                     #{:emergency-unwind-fails})
+                                            module
+                                            {:token "USDC"}))))))
+
+(deftest test-yield-config-behavior-adapter
+  (let [world (-> (proto/init-world sew/protocol {:scenario-id "x"})
+                  (yield-reg/apply-yield-config
+                   {:modules {:aave-v3 {:behavior {:yield/provider-kind :immediate-withdrawal-lending}
+                                        :tokens {"USDC" {:initial-index 1.0
+                                                         :apy 0.05
+                                                         :failure-modes #{:withdraw-fails}}}}}}))]
+    (is (= :yield.provider/liquid-lending
+           (get-in world [:yield/module-aliases :aave-v3])))
+    (is (= :immediate-withdrawal-lending
+           (get-in world [:yield/behavior :aave-v3 :yield/provider-kind])))
+    (is (= #{:withdraw-fails}
+           (get-in world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes])))))
+  
 
 (deftest test-aave-deposit-blocked-under-liquidity-shortfall
   (testing "Aave deposit throws when liquidity-mode is shortfall"
@@ -73,10 +162,11 @@
                     :events [{:seq 0 :time 1000 :agent "sender" :action "create_escrow"
                               :params {:token "USDC" :to "recipient" :amount 10000}}]}
           result (replay/replay-with-protocol sew/protocol scenario)
-          world  (proto/init-world sew/protocol scenario)]
+          world  (-> (proto/init-world sew/protocol scenario)
+                     (yield-reg/apply-yield-config (:yield-config scenario)))]
       ;; create_escrow in replay path does not auto-deposit yield unless module is in snapshot,
       ;; and replay trace projection intentionally omits non-EVM world fields,
       ;; so validate status on init-world directly.
       (is (= :pass (:outcome result)))
       (is (= :disabled-for-new-deposits
-             (get-in world [:yield/module-status :aave-v3]))))))
+             (get-in world [:yield/module-status :yield.provider/liquid-lending]))))))

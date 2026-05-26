@@ -1,3 +1,5 @@
+;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.xtdb-overview
   (:require [nextjournal.clerk :as clerk]
             [resolver-sim.notebooks.ui :as ui]
@@ -18,7 +20,7 @@
 (defn recent-runs [ds]
   (ndb/query-on ds ["SELECT _id, scenario_id, suite_id, protocol_id, outcome, seed, git_sha, _valid_from FROM sim_temporal_runs ORDER BY _valid_from DESC LIMIT 20"]))
 
-^{::clerk/no-cache true}
+^{:nextjournal.clerk/no-cache true}
 (let [{:keys [ok? ds source error]} (ndb/ds-result)]
   (clerk/html
    [:div

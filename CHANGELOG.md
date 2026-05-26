@@ -5,6 +5,15 @@
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 
 ### Added
+- **Golden Evidence Artifacts:** Created a library of 6 technical validation artifacts mapping core protocol robustness (Reorgs, Timing, Collusion, Economic Stability, and Governance Hardening) using the **VENS** and **SPEDS** design systems.
+- **Production Evidence Workbench:** Implemented `notebooks/workbench-v2.clj` and `notebooks/evidence_explorer.clj`—a data-driven observability surface that bridges high-level simulation metrics with raw, signed cryptographic evidence bundles.
+- **Evidence-to-Share Workflow:** Integrated the `bb benchmark:publish-ipfs` pipeline to automatically generate an `evidence-manifest.json` for workbench consumption, cryptographically binding every visual artifact to an immutable IPFS bundle.
+
+### Fixed
+- **CLI Compilation:** Resolved the `load-index` symbol resolution error in `src/resolver_sim/benchmark/cli.clj`.
+- **JSON Serialization:** Corrected `publish-ipfs` to use `clojure.data.json/write-str` to properly generate IPFS manifests.
+- **Artifact Readability:** Finalized the high-contrast design for the Golden Artifacts, optimizing typography and color palettes for mobile readability and social sharing.
+- **Workbench Stability:** Resolved syntax errors and namespace-unresolved symbols in `workbench-v2.clj` for a seamless interactive experience.
 - **Data-Driven Yield Mechanism:** Refactored yield implementation into a modular, data-driven system (`resolver-sim.yield` namespaces).
   - Replaced `YieldModule` protocol with declarative module definitions.
   - Implemented Aave v3 (share-based), Fixed-rate (principal-based), and Adversarial yield modules.
@@ -12,9 +21,26 @@
   - Integrated yield-specific invariants into the main Sew invariant checker.
 - **Yield Validation (Phase Y):** Created `phase_y.clj` to validate yield efficiency. Confirmed that 10% APR effectively covers protocol fees over long-duration disputes.
 - **Protocol Solvency KPI:** Added a real-time solvency indicator to the Evidence Dashboard to monitor aggregate protocol health and value conservation.
-- **Reorg Resilience (S46):** Added stochastic reorg and fork-reconciliation validation to ensure state derivation is idempotent across non-linear histories.
+- **Governance Bandwidth Floor (Phase AD):** Hardened the governance protocol by implementing a mandatory floor (min 2 reviews/epoch for low-value disputes). This mitigates the vulnerability where low-value dispute flooding exceeded the 20% win-rate safety threshold under low-capacity conditions. Confirmed via Phase AD empirical sweep.
 
 ### Changed
+- **Forking Strategist Transition Classification:** Updated `src/resolver_sim/protocols/sew.clj` to split rejected transition telemetry into two explicit classes:
+  - `:invalid-state-transition` for escrow-state edge invalidity, and
+  - `:invalid-guard-condition` for timing/auth/pending/final-round guard failures.
+  Also added `:invalid-guard-conditions` to metric vocabulary and accumulation to keep guard failures separately auditable from state-graph failures.
+- **Forking Strategist Scenario Expectations:** Added explicit `:expected-errors` metadata in `src/resolver_sim/protocols/sew/invariant_scenarios.clj` for:
+  - `s28-forking-strategist-late-escalation-rejected` (`:appeal-window-expired`),
+  - `s31-forking-strategist-all-levels-confirm` (`:escalation-not-allowed`),
+  - `s32-forking-strategist-premature-settlement-rejected` (`:appeal-window-not-expired`).
+  This makes allowed-transition audits unambiguous and machine-checkable for these forking-strategist boundary cases.
+- **Simulator↔Solidity Invariant Parity Work:** Added `docs/testing/SIMULATOR_TO_SOLIDITY_INVARIANT_MAPPING.md` with canonical invariant-to-Solidity coverage mapping, corrected Halmos profile compatibility in `resources/symlink_to_smart_contracts/sew-protocol-smart-contracts-solidity/foundry.toml` (`[profile.halmos].via_ir = false`), and extended Solidity checks in `test/foundry/invariants/StateInvariants.t.sol` plus Halmos properties in `test/foundry/halmos/HalmosEscrowProperties.t.sol` for pending-settlement consistency and single-sided terminal claimable payout semantics.
+- **Validation Evidence Wording Alignment:** Updated `notebooks/dispute_resolution.clj` and `docs/ROBUSTNESS_FRAMEWORK.md` to reflect current verification reality: Foundry invariant suites already exist, while simulator↔contract parity mapping and Halmos CI-gated bounded checks remain incomplete.
+- **Dispute Deadline Safety (Clojure):** Updated escalation flow in `src/resolver_sim/protocols/sew/resolution.clj` to avoid participant appeal deadlocks caused by global per-caller cooldown blocking valid within-window second escalations. Also aligned adversarial timing expectations with superseded-pending fallback semantics in `test/resolver_sim/protocols/sew/adversarial_test.clj` (execution can succeed from eligible superseded pending after escalation clears active pending).
+- **Equilibrium Trust Integration (Slice 4):** Added combined trust-mode integration matrix coverage in `test/resolver_sim/scenario/equilibrium_test.clj` to validate relaxed behavior, independent strict gating (`:strict-valid-time`, `:strict-attestation`), and fully trusted-pass paths when provenance requirements are satisfied.
+- **Equilibrium Trust Mode (Slice 3):** Added `:strict-attestation` option for `:equilibrium-trust-mode` in `src/resolver_sim/scenario/equilibrium.clj`. In strict attestation mode, equilibrium concepts require attestation status `:verified`; otherwise results are downgraded to `:inconclusive` (`:absent-evidence`). Added coverage in `test/resolver_sim/scenario/equilibrium_test.clj`.
+- **Equilibrium Trust Mode (Slice 2):** Added `:equilibrium-trust-mode` support in `src/resolver_sim/scenario/equilibrium.clj` with `:strict-valid-time` gating for equilibrium concepts. In strict mode, missing explicit valid-time provenance now yields `:inconclusive` (`:absent-evidence`) instead of evaluating claims as if provenance were complete. Added coverage in `test/resolver_sim/scenario/equilibrium_test.clj`.
+- **Equilibrium Provenance (Slice 1):** `src/resolver_sim/scenario/equilibrium.clj` now emits `:provenance` metadata alongside game-theoretic results, including temporal query context (`valid-time` indicators) and local self-signed attestation status/details. Added unit coverage in `test/resolver_sim/scenario/equilibrium_test.clj`.
+- **Stochastic Equilibrium Rigor (Priority 2):** Added explicit initial composition output in `run-multi-epoch` (`:initial-composition`, `:initial-strategy-mix`) and updated stochastic equilibrium evaluators to use real initial cohort counts for `:honest-survival-rate` and `:collusion-resistance` (replacing approximate mix assumptions). Added sim test coverage in `test/resolver_sim/sim/multi_epoch_test.clj` and `test/resolver_sim/sim/audit_test.clj`.
 - **Equilibrium Evidence Policy (Priority 1):** Added `:equilibrium-claim-tier` handling in `src/resolver_sim/scenario/equilibrium.clj` with deviation-bundle gating for `:dominant-strategy-equilibrium` and `:nash-equilibrium` under `:deviation-tested` / `:population-tested` tiers. Added unit coverage in `test/resolver_sim/scenario/equilibrium_test.clj` and updated schema docs.
 - **Game-Theory Formalization Maintenance:** Aligned `docs/CDRS-v1.1-THEORY-SCHEMA.md` mechanism/equilibrium proxy descriptions with current runtime behavior in `src/resolver_sim/scenario/equilibrium.clj`, and added `:evidence-schema-version "1.0"` to equilibrium evaluation output for explicit evidence payload versioning.
 - **Cancellation Research Roadmap:** Added `docs/testing/CANCELLATION_GAME_THEORY_GAP_CHECKLIST.md` and linked it from `docs/testing/RUNNING_TESTS.md` to track concrete steps from proxy-level cancellation evidence toward stronger game-theoretic validation.
@@ -37,6 +63,7 @@
   - generic XTDB table names (`sim_trial_results`, `sim_entity_events`),
   - current gRPC session API naming (`StartSession`, `Step`, `DestroySession`).
 - **Docs Navigation/Status UX:** Updated `docs/README.md` with a task-oriented "Start here" section and explicit doc status conventions (canonical/companion/archived) to improve contributor onboarding and reduce doc drift.
+- **Docs Trust-Controls Indexing:** Updated `docs/README.md` to explicitly surface game-theoretic trust controls and point contributors to `docs/testing/ADDING_GAME_THEORETIC_VALIDATION.md` for `:relaxed`, `:strict-valid-time`, and `:strict-attestation` claim-trust modes.
 
 ### Fixed
 - **Dispute/Appeal Test Regression:** Updated `test/resolver_sim/protocols/sew/resolution_test.clj` to validate pending-clear-on-escalation via the public `escalate-dispute` API path, replacing a stale reference to removed internal helper `cancel-pending-on-escalation`.

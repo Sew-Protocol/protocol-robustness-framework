@@ -12,6 +12,7 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.sim.minimizer :as minimizer]
+            [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.expectations :as expectations]
             [clojure.pprint :as pp]))
@@ -246,47 +247,17 @@
                             :theory theory-res}))
                        traces)
          theory-ok? (fn [r]
-                      ;; Theory result is acceptable when:
-                      ;; - no theory block (:not-evaluated)
-                      ;; - claim was not falsified (:not-falsified)
-                      ;; - claim was falsified AND the scenario is explicitly a theory-falsification exercise
-                      ;; :inconclusive is treated as a soft warning, not a hard failure
-                      ;;
-                       ;; Mechanism-property and equilibrium-concept results (CDRS v1.1):
-                       ;; - hard :fail → hard failure UNLESS purpose = :theory-falsification
-                       ;; - soft :fail  → warning only (treated as inconclusive)
-                      ;; - :inconclusive / :not-applicable → soft warning (suite still passes)
-                      ;; - :not-checked → no properties declared; passes
-                      ;;
-                      ;; Negative test cases (purpose = :theory-falsification) are expected to
-                      ;; produce :fail — including mechanism and equilibrium :fail results.
-                       (let [status       (get-in r [:theory :status])
-                            purpose      (keyword (or (:purpose r) ""))
-                            neg-test?    (= purpose :theory-falsification)
-                            mech-status  (get-in r [:theory :mechanism-status] :not-checked)
-                            eq-status    (get-in r [:theory :equilibrium-status] :not-checked)
-                             mech-results (vals (get-in r [:theory :mechanism-results] {}))
-                             eq-results   (vals (get-in r [:theory :equilibrium-results] {}))
-                             strict?      (true? (get-in r [:theory-source :require-conclusive?]))
-                             hard-fail?   (fn [results]
-                                            (some #(and (= :fail (:status %))
-                                                        (= :hard (:severity %)))
-                                                  results))
-                             inconclusive? (fn [status-kw]
-                                             (contains? #{:inconclusive :not-applicable} status-kw))
-                            falsify-ok?  (case status
-                                           nil            true
-                                           :not-evaluated true
-                                           :not-falsified true
-                                           :falsified     neg-test?
-                                           :inconclusive  true
-                                           true)
-                             mech-ok?     (and
-                                           (or (not (hard-fail? mech-results)) neg-test?)
-                                           (or (not strict?) (not (inconclusive? mech-status))))
-                             eq-ok?       (and
-                                           (or (not (hard-fail? eq-results)) neg-test?)
-                                           (or (not strict?) (not (inconclusive? eq-status))))]
+                      (let [status        (get-in r [:theory :status])
+                            purpose       (:purpose r)
+                            mech-status   (get-in r [:theory :mechanism-status] :not-checked)
+                            eq-status     (get-in r [:theory :equilibrium-status] :not-checked)
+                            mech-results  (vals (get-in r [:theory :mechanism-results] {}))
+                            eq-results    (vals (get-in r [:theory :equilibrium-results] {}))
+                            strict?       (true? (get-in r [:theory-source :require-conclusive?]))
+                            opts          {:require-conclusive? strict?}
+                            falsify-ok?   (ose/theory-status-ok? status purpose opts)
+                            mech-ok?      (ose/domain-results-ok? purpose mech-status mech-results opts)
+                            eq-ok?        (ose/domain-results-ok? purpose eq-status eq-results opts)]
                         (and falsify-ok? mech-ok? eq-ok?)))
          all-ok? (every? (fn [r] (and (= :pass (:outcome r))
                                       (:ok? (:threshold-validation r))

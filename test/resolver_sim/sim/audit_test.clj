@@ -6,6 +6,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.sim.multi-epoch :as me]
             [resolver-sim.sim.audit       :as audit]
+            [resolver-sim.sim.stochastic-equilibrium :as stoch-eq]
             [resolver-sim.sim.trajectory  :as trajectory]
             [resolver-sim.stochastic.rng  :as rng]))
 
@@ -185,3 +186,25 @@
       (is (= 4 (:epochs manifest)))
       (is (string? (:completed-at manifest)))
       (is (= "abc123" (:git-commit manifest))))))
+
+(deftest stochastic-equilibrium-uses-explicit-initial-composition
+  (testing "honest-survival-rate and collusion-resistance use initial-composition fields"
+    (let [synthetic {:aggregated-stats {:honest-final-count 6
+                                        :malice-final-count 5
+                                        :honest-cumulative-profit 1000.0
+                                        :malice-cumulative-profit -10.0
+                                        :honest-avg-win-rate 0.70
+                                        :malice-avg-win-rate 0.40
+                                        :total-resolver-exits 1}
+                     :epoch-results [{:dominance-ratio 1.3 :honest-mean-profit 10 :malice-mean-profit 1}]
+                     :initial-resolver-count 10
+                     :initial-composition {:honest-count 7 :malice-count 3 :total-count 10
+                                           :honest-share 0.7 :malice-share 0.3}}
+          report (stoch-eq/evaluate-stochastic-equilibrium synthetic)
+          survival (some #(when (= :honest-survival-rate (:claim-id %)) %) (:claim-results report))
+          collusion (get-in report [:mechanism-proxy-results :collusion-resistance])]
+      (is (= :fail (:status survival))
+          "6/7 honest survival is lower than 5/3 malice survival; should fail")
+      (is (= :fail (:status collusion))
+          "malice final 5 vs initial 3 implies growth ratio > 1.1; should fail")
+      (is (= 3 (get-in collusion [:evidence :initial-malice-count]))))))

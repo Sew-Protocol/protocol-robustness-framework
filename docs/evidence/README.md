@@ -12,6 +12,7 @@ These are **not theoretical vulnerabilities**. Each scenario is a deterministic,
 |------|--------------|----------|-----------|
 | [summary.md](summary.md) | All three classes | Overview | — |
 | [RESEARCHER_EVIDENCE_PACK.md](RESEARCHER_EVIDENCE_PACK.md) | Reproducibility pack | Baseline-vs-scenario workflow | `results/trace-compare/*` |
+| [S80_MOSTLY_LIQUID_END_TO_END_DEMO.md](S80_MOSTLY_LIQUID_END_TO_END_DEMO.md) | Yield liquidity edge-case | `s80-yield-mostly-liquid-partial-liquidity` | `results/s80-mostly-liquid.result.json`, `results/trace-compare/s68-vs-s80/*` |
 | [detailed/F3-governance-sandwich.md](detailed/F3-governance-sandwich.md) | Governance | Resolver rotation mid-dispute | [f3-run.json](../../results/evidence/f3-run.json) |
 | [detailed/F7-profit-threshold-strike.md](detailed/F7-profit-threshold-strike.md) | Economic | Rational resolver withdrawal | [f7-run.json](../../results/evidence/f7-run.json) |
 | [detailed/F10-cascade-escalation.md](detailed/F10-cascade-escalation.md) | Liveness | Capacity-limited arbitrator flood | [f10-run.json](../../results/evidence/f10-run.json) |

@@ -109,3 +109,71 @@
       (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state])))
       ;; Rounding-sensitive run should not create negative/invalid fee states.
       (is (<= 0 (get-in p1 [:total-fees "USDC"]))))))
+
+(deftest test-snapshot-yield-module-identity-immutable
+  (testing "Escrow snapshot keeps yield module identity/profile/archetype even after world yield config changes"
+    (let [scenario {:initial-block-time 1000}
+          world0   (-> (proto/init-world sew/protocol scenario)
+                       (yield-reg/apply-yield-config
+                        {:modules {:aave-v3 {:tokens {"USDC" {:initial-index 1.0 :apy 0.05}}}}}))
+          snapshot (t/make-module-snapshot
+                    {:yield-module-id :module/aave-yield
+                     :yield-profile :aave-v3
+                     :yield-archetype :yield.provider/liquid-lending
+                     :yield-generation-module :yield.provider/liquid-lending})
+          created  (lc/create-escrow world0 "sender" "USDC" "recipient" 10000
+                                     (t/make-escrow-settings {:yield-preset :to-recipient})
+                                     snapshot)
+          world1   (:world created)
+          ;; mutate global/module config after creation
+          world2   (-> world1
+                       (assoc-in [:yield/module-aliases :aave-v3] :fixed-rate)
+                       (assoc-in [:yield/module-status :yield.provider/liquid-lending] :paused))
+          snap'    (t/get-snapshot world2 0)]
+      (is (:ok created))
+      (is (= :module/aave-yield (:yield-module-id snap')))
+      (is (= :aave-v3 (:yield-profile snap')))
+      (is (= :yield.provider/liquid-lending (:yield-archetype snap')))
+      (is (= :yield.provider/liquid-lending (:yield-generation-module snap'))))))
+
+(deftest test-yield-partial-liquidity-release-s78
+  (testing "Partial-liquidity yield profile still replays deterministically and settles release path"
+    (let [scenario (load-scenario "scenarios/S78_yield-aave-partial-liquidity-release.json")
+          r1       (replay/replay-with-protocol sew/protocol scenario)
+          r2       (replay/replay-with-protocol sew/protocol scenario)
+          p1       (-> r1 :trace last :projection)
+          p2       (-> r2 :trace last :projection)]
+      (is (= :pass (:outcome r1)))
+      (is (= :pass (:outcome r2)))
+      (is (= 0 (get-in r1 [:metrics :invariant-violations])))
+      (is (= p1 p2))
+      (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state])))
+      (is (pos? (get-in p1 [:total-fees "USDC"]))))))
+
+(deftest test-yield-partial-liquidity-dispute-resolution-s79
+  (testing "Partial-liquidity profile under dispute resolution remains deterministic and invariant-safe"
+    (let [scenario (load-scenario "scenarios/S79_yield-aave-partial-liquidity-dispute-resolution.json")
+          r1       (replay/replay-with-protocol sew/protocol scenario)
+          r2       (replay/replay-with-protocol sew/protocol scenario)
+          p1       (-> r1 :trace last :projection)
+          p2       (-> r2 :trace last :projection)]
+      (is (= :pass (:outcome r1)))
+      (is (= :pass (:outcome r2)))
+      (is (= 0 (get-in r1 [:metrics :invariant-violations])))
+      (is (= p1 p2))
+      (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state])))
+      (is (pos? (get-in p1 [:total-fees "USDC"]))))))
+
+(deftest test-yield-partial-liquidity-governance-disable-post-create-s80
+  (testing "Partial-liquidity + disabled-for-new-deposits remains deterministic and settled for existing escrow"
+    (let [scenario (load-scenario "scenarios/S80_yield-aave-partial-liquidity-governance-disable-post-create.json")
+          r1       (replay/replay-with-protocol sew/protocol scenario)
+          r2       (replay/replay-with-protocol sew/protocol scenario)
+          p1       (-> r1 :trace last :projection)
+          p2       (-> r2 :trace last :projection)]
+      (is (= :pass (:outcome r1)))
+      (is (= :pass (:outcome r2)))
+      (is (= 0 (get-in r1 [:metrics :invariant-violations])))
+      (is (= p1 p2))
+      (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state])))
+      (is (pos? (get-in p1 [:total-fees "USDC"]))))))
