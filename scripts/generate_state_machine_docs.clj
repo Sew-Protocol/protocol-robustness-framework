@@ -4,8 +4,30 @@
             [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]))
 
-(def state-machine-doc-path "docs/overview/STATE_MACHINE_GENERATED.md")
-(def transition-coverage-doc-path "docs/overview/TRANSITION_COVERAGE_GENERATED.md")
+(defn- protocol-state-machine-doc-path [protocol-id]
+  (str "docs/protocols/" protocol-id "/STATE_MACHINE_GENERATED.md"))
+
+(defn- protocol-coverage-doc-path [protocol-id]
+  (str "docs/protocols/" protocol-id "/TRANSITION_COVERAGE_GENERATED.md"))
+
+(defn- parse-args [args]
+  (loop [xs (seq args)
+         out {:check? false :protocol-id "sew"}]
+    (if (empty? xs)
+      out
+      (let [[x & more] xs]
+        (cond
+          (= x "--check")
+          (recur more (assoc out :check? true))
+
+          (= x "--protocol")
+          (let [p (first more)]
+            (if (and p (not (str/blank? p)))
+              (recur (rest more) (assoc out :protocol-id p))
+              (throw (ex-info "--protocol requires a non-empty value" {:args args}))))
+
+          :else
+          (throw (ex-info (str "Unknown arg: " x) {:args args})))))))
 
 (defn- normalize-action [a]
   (-> (if (keyword? a) (name a) (str a))
@@ -42,9 +64,10 @@
                      sort
                      vec)]))))
 
-(defn- state-machine-markdown []
+(defn- state-machine-markdown [protocol-id]
   (let [rows (sort-by key defs/transitions)]
     (str "# State Machine (Generated)\n\n"
+         "Protocol: `" protocol-id "`\n\n"
          "Source of truth: `src/resolver_sim/definitions/registry.clj` (`transitions`).\n\n"
          "| Transition ID | Label |\n"
          "|---|---|\n"
@@ -79,47 +102,52 @@
       (spit f content))
     {:path path :changed? (not= current content)}))
 
-(defn- generate! []
+(defn- generate! [{:keys [protocol-id]}]
   (let [scenarios (->> (scenario-files)
                        (map (fn [f]
                               (let [sc (load-scenario f)]
                                 {:id (or (:id sc) (:scenario-id sc) (scenario-id-from-file f))
                                  :actions (scenario-actions sc)}))))
         coverage (transition-coverage scenarios)
-        sm-doc (state-machine-markdown)
+        sm-doc (state-machine-markdown protocol-id)
         cov-doc (transition-coverage-markdown coverage)
-        r1 (write-if-changed! state-machine-doc-path sm-doc)
-        r2 (write-if-changed! transition-coverage-doc-path cov-doc)]
+        sm-path (protocol-state-machine-doc-path protocol-id)
+        coverage-path (protocol-coverage-doc-path protocol-id)
+        r1 (write-if-changed! sm-path sm-doc)
+        r2 (write-if-changed! coverage-path cov-doc)]
     (println "Generated state machine docs:")
     (println "-" (:path r1) "changed?" (:changed? r1))
     (println "-" (:path r2) "changed?" (:changed? r2))))
 
-(defn- check! []
+(defn- check! [{:keys [protocol-id]}]
   (let [scenarios (->> (scenario-files)
                        (map (fn [f]
                               (let [sc (load-scenario f)]
                                 {:id (or (:id sc) (:scenario-id sc) (scenario-id-from-file f))
                                  :actions (scenario-actions sc)}))))
         coverage (transition-coverage scenarios)
-        expected-sm (state-machine-markdown)
+        expected-sm (state-machine-markdown protocol-id)
         expected-cov (transition-coverage-markdown coverage)
-        current-sm (when (.exists (io/file state-machine-doc-path)) (slurp state-machine-doc-path))
-        current-cov (when (.exists (io/file transition-coverage-doc-path)) (slurp transition-coverage-doc-path))]
+        sm-path (protocol-state-machine-doc-path protocol-id)
+        coverage-path (protocol-coverage-doc-path protocol-id)
+        current-sm (when (.exists (io/file sm-path)) (slurp sm-path))
+        current-cov (when (.exists (io/file coverage-path)) (slurp coverage-path))]
     (when (not= expected-sm current-sm)
       (binding [*out* *err*]
-        (println "State machine generated doc is stale:" state-machine-doc-path)
+        (println "State machine generated doc is stale:" sm-path)
         (println "Run: clojure scripts/generate_state_machine_docs.clj"))
       (System/exit 1))
     (when (not= expected-cov current-cov)
       (binding [*out* *err*]
-        (println "Transition coverage generated doc is stale:" transition-coverage-doc-path)
+        (println "Transition coverage generated doc is stale:" coverage-path)
         (println "Run: clojure scripts/generate_state_machine_docs.clj"))
       (System/exit 1))
     (println "State machine docs are up to date.")))
 
 (defn -main [& args]
-  (if (= "--check" (first args))
-    (check!)
-    (generate!)))
+  (let [{:keys [check?] :as opts} (parse-args args)]
+    (if check?
+      (check! opts)
+      (generate! opts))))
 
 (apply -main *command-line-args*)

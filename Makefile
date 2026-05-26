@@ -39,16 +39,43 @@ semantic-phase3-check:
 
 .PHONY: state-machine-docs-generate
 state-machine-docs-generate:
-	clojure scripts/generate_state_machine_docs.clj
+	clojure scripts/generate_state_machine_docs.clj --protocol sew
 
 .PHONY: state-machine-docs-check
 state-machine-docs-check:
-	clojure scripts/generate_state_machine_docs.clj --check
+	clojure scripts/generate_state_machine_docs.clj --protocol sew --check
+
+.PHONY: protocol-sew-docs-generate
+protocol-sew-docs-generate:
+	clojure scripts/generate_state_machine_docs.clj --protocol sew
+
+.PHONY: protocol-sew-docs-check
+protocol-sew-docs-check:
+	clojure scripts/generate_state_machine_docs.clj --protocol sew --check
 
 .PHONY: docs-as-code-check
 docs-as-code-check:
 	$(MAKE) semantic-registry-check
+	$(MAKE) core-generated-docs-check
 	$(MAKE) state-machine-docs-check
+
+.PHONY: core-generated-docs-generate
+core-generated-docs-generate:
+	clojure scripts/generate_core_docs.clj
+
+.PHONY: core-generated-docs-check
+core-generated-docs-check:
+	clojure scripts/generate_core_docs.clj --check
+
+.PHONY: docs-as-code-check-framework
+docs-as-code-check-framework:
+	$(MAKE) semantic-registry-check
+	$(MAKE) core-generated-docs-check
+
+.PHONY: docs-as-code-check-sew
+docs-as-code-check-sew:
+	$(MAKE) semantic-registry-check
+	$(MAKE) protocol-sew-docs-check
 
 .PHONY: verify-reference-validation-v1
 verify-reference-validation-v1:
