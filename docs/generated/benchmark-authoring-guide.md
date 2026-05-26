@@ -2,7 +2,7 @@
 
 Source of truth: scenario contract schema, canonical transition registry, and repository scenario examples.
 
-Definitions hash: `1471206304`
+Definitions hash: `1082033428`
 
 ## 1) Required top-level fields
 
@@ -55,11 +55,11 @@ Definitions hash: `1471206304`
 
 | File | Scenario ID | Schema version | Actions present |
 |---|---|---|---|
+| `S79_yield-negative-yield-dispute-refund-path.json` | `unknown` | `unknown` | `create_escrow`, `execute_resolution`, `raise_dispute` |
 | `S68_yield-aave-long-horizon-10y-monthly-accrual.json` | `unknown` | `unknown` | `create_escrow`, `release` |
 | `S59_fot-rounding-multi-hop-conservation.json` | `s59-fot-rounding-multi-hop-conservation` | `1.0` | `create_escrow`, `execute_resolution`, `raise_dispute` |
 | `S14_dr3-module-authorized.json` | `s14-dr3-module-authorized` | `1.0` | `create_escrow`, `execute_resolution`, `raise_dispute` |
 | `S63_replay-idempotence-same-trace-double-run.json` | `s63-replay-idempotence-same-trace-double-run` | `1.0` | `challenge_resolution`, `create_escrow`, `execute_pending_settlement`, `execute_resolution`, `raise_dispute` |
-| `S01_baseline-happy-path.json` | `s01-baseline-happy-path` | `1.0` | `create_escrow`, `release` |
 
 ## 6) Authoring checklist
 

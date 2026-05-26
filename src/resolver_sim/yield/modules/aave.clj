@@ -66,7 +66,7 @@
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid) (= (:token pos) token) (= (:status pos) :active))
                 (let [old-yield (:unrealized-yield pos 0)
-                      new-pos   (acct/update-position-yield pos new-index)
+                      new-pos   (acct/update-position-yield world pos new-index)
                       yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
                   (-> w
                       (assoc-in [:yield/positions oid] new-pos)
@@ -93,7 +93,7 @@
                          :liquidity-mode mode
                          :owner/id oid}))
         (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              crystallized  (acct/realize-yield (acct/update-position-yield pos current-index))]
+              crystallized  (acct/realize-yield world (acct/update-position-yield world pos current-index))]
           (assoc-in world pos-key (assoc crystallized :status :withdrawn)))))))
 
 (defn aave-emergency-unwind [world module op]

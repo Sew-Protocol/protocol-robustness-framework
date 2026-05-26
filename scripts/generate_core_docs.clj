@@ -8,6 +8,7 @@
 (def evidence-semantics-path "docs/generated/evidence-semantics.md")
 (def scenario-contract-path "docs/generated/scenario-contract.md")
 (def invariant-catalog-path "docs/generated/invariant-catalog.md")
+(def claim-registry-path "docs/generated/claim-registry.md")
 (def transition-guard-catalog-path "docs/generated/transition-guard-catalog.md")
 (def evidence-artifact-contract-path "docs/generated/evidence-artifact-contract.md")
 (def benchmark-authoring-guide-path "docs/generated/benchmark-authoring-guide.md")
@@ -146,11 +147,12 @@
          "| Invariant ID | Label | Default Severity | Class | Related Transitions | Related Scenario Families | Artifact Field(s) |\n"
          "|---|---|---|---|---|---|---|\n"
          (apply str
-                (for [[inv meta] invs]
+                 (for [[inv meta] invs]
                   (let [imeta (defs/invariant-meta inv)
+                         inv-id (or (:invariant/id meta) inv)
                         rel-trans (or (:related-transitions imeta) [])
                         rel-fams (or (:related-scenario-families imeta) [])]
-                  (str "| `" (name inv) "` | "
+                  (str "| `" (name inv-id) "` | "
                        (:label meta) " | `" (name (:default-severity meta)) "` | `"
                        (name (:class meta)) "` | "
                        (if (seq rel-trans)
@@ -165,6 +167,32 @@
          "- **Failure meaning:** a failed invariant indicates a protocol property violation in simulation outputs.\n"
          "- **Related transitions/scenario families:** sourced from `definitions.registry/invariant-metadata`.\n"
          "- **Artifact fields:** current replay/test artifacts expose aggregate and per-invariant outcome fields under metrics.\n")))
+
+(defn- claim-registry-md []
+  (let [claims (sort-by key defs/claims)]
+    (str "# Claim Registry (Generated)\n\n"
+         "Source of truth: `src/resolver_sim/definitions/registry.clj` (`claims`, `claim-scenario-map`).\n\n"
+         "Definitions hash: `" (defs/definitions-hash) "`\n\n"
+         "| Claim ID | Title | Type | Evidence mode | Supporting scenarios | Falsifying scenarios | Related invariants |\n"
+         "|---|---|---|---|---|---|---|\n"
+         (apply str
+                (for [[cid cmeta] claims]
+                  (let [sc (defs/claim-scenarios cid)]
+                    (str "| `" (name (or (:claim/id cmeta) cid)) "` | "
+                         (:claim/title cmeta) " | `" (name (:claim/type cmeta)) "` | `"
+                         (name (:claim/evidence-mode cmeta)) "` | "
+                         (if (seq (:supporting sc))
+                           (str/join ", " (map #(str "`" % "`") (:supporting sc)))
+                           "_none_")
+                         " | "
+                         (if (seq (:falsifying sc))
+                           (str/join ", " (map #(str "`" % "`") (:falsifying sc)))
+                           "_none_")
+                         " | "
+                         (if (seq (:claim/related-invariants cmeta))
+                           (str/join ", " (map #(str "`" (name %) "`") (:claim/related-invariants cmeta)))
+                           "_none_")
+                         " |\n")))))))
 
 (defn- transition-guard-catalog-md []
   (let [coverage (load-coverage)
@@ -292,14 +320,16 @@
         r3 (write-if-changed! invariant-catalog-path (invariant-catalog-md))
         r4 (write-if-changed! transition-guard-catalog-path (transition-guard-catalog-md))
         r5 (write-if-changed! evidence-artifact-contract-path (evidence-artifact-contract-md))
-        r6 (write-if-changed! benchmark-authoring-guide-path (benchmark-authoring-guide-md))]
+        r6 (write-if-changed! benchmark-authoring-guide-path (benchmark-authoring-guide-md))
+        r7 (write-if-changed! claim-registry-path (claim-registry-md))]
     (println "Generated core docs:")
     (println "-" (:path r1) "changed?" (:changed? r1))
     (println "-" (:path r2) "changed?" (:changed? r2))
     (println "-" (:path r3) "changed?" (:changed? r3))
     (println "-" (:path r4) "changed?" (:changed? r4))
     (println "-" (:path r5) "changed?" (:changed? r5))
-    (println "-" (:path r6) "changed?" (:changed? r6))))
+    (println "-" (:path r6) "changed?" (:changed? r6))
+    (println "-" (:path r7) "changed?" (:changed? r7))))
 
 (defn- check! []
   (let [exp1 (evidence-semantics-md)
@@ -308,12 +338,14 @@
         exp4 (transition-guard-catalog-md)
         exp5 (evidence-artifact-contract-md)
         exp6 (benchmark-authoring-guide-md)
+        exp7 (claim-registry-md)
         cur1 (when (.exists (io/file evidence-semantics-path)) (slurp evidence-semantics-path))
         cur2 (when (.exists (io/file scenario-contract-path)) (slurp scenario-contract-path))
         cur3 (when (.exists (io/file invariant-catalog-path)) (slurp invariant-catalog-path))
         cur4 (when (.exists (io/file transition-guard-catalog-path)) (slurp transition-guard-catalog-path))
         cur5 (when (.exists (io/file evidence-artifact-contract-path)) (slurp evidence-artifact-contract-path))
-        cur6 (when (.exists (io/file benchmark-authoring-guide-path)) (slurp benchmark-authoring-guide-path))]
+        cur6 (when (.exists (io/file benchmark-authoring-guide-path)) (slurp benchmark-authoring-guide-path))
+        cur7 (when (.exists (io/file claim-registry-path)) (slurp claim-registry-path))]
     (when (not= exp1 cur1)
       (binding [*out* *err*]
         (println "Generated doc stale:" evidence-semantics-path)
@@ -342,6 +374,11 @@
     (when (not= exp6 cur6)
       (binding [*out* *err*]
         (println "Generated doc stale:" benchmark-authoring-guide-path)
+        (println "Run: clojure scripts/generate_core_docs.clj"))
+      (System/exit 1))
+    (when (not= exp7 cur7)
+      (binding [*out* *err*]
+        (println "Generated doc stale:" claim-registry-path)
         (println "Run: clojure scripts/generate_core_docs.clj"))
       (System/exit 1))
     (println "Core generated docs are up to date.")))

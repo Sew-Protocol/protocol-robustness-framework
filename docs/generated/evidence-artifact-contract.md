@@ -2,7 +2,7 @@
 
 Source of truth: current emitted artifacts under `results/test-artifacts`, CDRS schemas under `spec/`, and semantic registry hash.
 
-Definitions hash: `1471206304`
+Definitions hash: `1082033428`
 
 ## Canonical Artifact Set
 
@@ -23,6 +23,7 @@ Definitions hash: `1471206304`
 | Key |
 |---|
 | `acceptance_decision` |
+| `claimable_classification` |
 | `failure_count` |
 | `force_refund_forward_only` |
 | `mode` |
@@ -30,8 +31,12 @@ Definitions hash: `1471206304`
 | `phase_failures` |
 | `risk_digest` |
 | `run_id` |
+| `run_manifest` |
+| `schema_version` |
+| `shortfall_exposure` |
 | `status_counts` |
 | `targets` |
+| `yield_context` |
 
 ## Top-level Contract: coverage.json
 
@@ -40,6 +45,7 @@ Definitions hash: `1471206304`
 | `by-purpose` |
 | `by-threat-tag` |
 | `canonical-transitions` |
+| `enriched-version` |
 | `guard-by-purpose-hit-freq` |
 | `guard-by-threat-tag-hit-freq` |
 | `guard-hit-freq` |

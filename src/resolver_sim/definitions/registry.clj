@@ -148,9 +148,18 @@
                           :pause-effect :blocked-when-paused}})
 
 (def invariants
-  {:invariant/conservation {:label "Conservation" :default-severity :high :class :safety}
-   :invariant/solvency {:label "Solvency" :default-severity :high :class :safety}
-   :invariant/finality {:label "Finality" :default-severity :medium :class :liveness}})
+  {:invariant/conservation {:invariant/id :invariant/conservation
+                            :label "Conservation"
+                            :default-severity :high
+                            :class :safety}
+   :invariant/solvency {:invariant/id :invariant/solvency
+                        :label "Solvency"
+                        :default-severity :high
+                        :class :safety}
+   :invariant/finality {:invariant/id :invariant/finality
+                        :label "Finality"
+                        :default-severity :medium
+                        :class :liveness}})
 
 (def invariant-metadata
   {:invariant/conservation
@@ -162,6 +171,57 @@
    :invariant/finality
    {:related-transitions [:release :execute_resolution :execute_pending_settlement :automate_timed_actions]
     :related-scenario-families [:scenario-deep-dive :deadline-boundary]}})
+
+(def claims
+  {:claims/forking-l1-reversal
+   {:claim/id :claims/forking-l1-reversal
+    :claim/title "L1 reversal can overturn L0 decision under valid escalation"
+    :claim/type :dispute-resolution
+    :claim/statement "When challenged within the window, L1 resolver may legally reverse L0 outcome."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality :invariant/solvency]}
+
+   :claims/forking-l2-path
+   {:claim/id :claims/forking-l2-path
+    :claim/title "Escalation to L2 path remains valid and bounded"
+    :claim/type :dispute-resolution
+    :claim/statement "Escalation from L0→L1→L2 follows bounded levels and valid guards."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality :invariant/conservation]}
+
+   :claims/appeal-window-enforced
+   {:claim/id :claims/appeal-window-enforced
+    :claim/title "Appeal window enforces settlement timing"
+    :claim/type :time-safety
+    :claim/statement "Pending settlements execute only after appeal deadline."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/fork-isolation
+   {:claim/id :claims/fork-isolation
+    :claim/title "Forking outcomes remain escrow-isolated"
+    :claim/type :safety
+    :claim/statement "Escalation and settlement on one escrow do not leak state/balance to another escrow."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/conservation :invariant/solvency]}})
+
+(def claim-scenario-map
+  {:claims/forking-l1-reversal
+   {:supporting ["S26_forking-strategist-l1-reversal"]
+    :falsifying []}
+   :claims/forking-l2-path
+   {:supporting ["S27_forking-strategist-l2-fork"
+                 "S31_forking-strategist-all-levels-confirm"]
+    :falsifying []}
+   :claims/appeal-window-enforced
+   {:supporting ["S32_forking-strategist-premature-settlement-rejected"
+                 "S36_profit-maximizer-pre-window-execute-rejected"
+                 "S74_appeal-deadline-boundary"]
+    :falsifying []}
+   :claims/fork-isolation
+   {:supporting ["S33_forking-strategist-two-escrow-fork-isolation"
+                 "S62_cross-token-isolation-under-dispute-load"]
+    :falsifying []}})
 
 (defn purpose-def [k] (get purposes k))
 (defn status-def [k] (get statuses k))
@@ -177,6 +237,8 @@
 (defn transition-meta [k] (get transition-metadata k))
 (defn invariant-def [k] (get invariants k))
 (defn invariant-meta [k] (get invariant-metadata k))
+(defn claim-def [k] (get claims k))
+(defn claim-scenarios [k] (get claim-scenario-map k))
 (defn canonical-transition-ids [] (set (keys transitions)))
 
 (defn definitions-canonical-edn []
@@ -191,6 +253,8 @@
            :transition-metadata transition-metadata
            :invariants invariants
            :invariant-metadata invariant-metadata
+           :claims claims
+           :claim-scenario-map claim-scenario-map
            :status->story-family status->story-family}))
 
 (defn definitions-hash []

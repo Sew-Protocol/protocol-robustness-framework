@@ -4,6 +4,7 @@
 
 (def artifact-paths
   {:test-summary "results/test-artifacts/test-summary.json"
+   :test-run     "results/test-artifacts/test-run.json"
    :coverage     "results/test-artifacts/coverage.json"
    :equivalence  "results/test-artifacts/equivalence-comparison-summary.json"
    :findings     "results/test-artifacts/findings.json"

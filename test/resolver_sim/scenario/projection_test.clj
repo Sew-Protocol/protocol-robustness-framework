@@ -96,6 +96,9 @@
               (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-profile])))
        (is (= :yield.provider/liquid-lending
               (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-archetype])))
+       (is (= :aave-v3
+              (get-in p [:yield-evidence :routing-by-workflow 0 :yield-profile])))
+       (is (contains? (get-in p [:yield-evidence :supported-failure-modes]) :partial-liquidity))
        (is (= :module/decentralized-dispute-resolution
               (get-in p [:terminal-world :module-topology-by-workflow 0 :resolution-module]))))))
 

@@ -12,7 +12,8 @@
 
    This namespace is pure — no I/O, no DB, no side effects."
   (:require [resolver-sim.scenario.projection :as proj]
-            [resolver-sim.protocols.sew.invariants :as inv]))
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.yield.evidence :as ye]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
@@ -25,7 +26,144 @@
 (defn- terminal-state? [state]
   (contains? terminal-escrow-states (keyword (or state ""))))
 
+(defn- escalation-event? [action]
+  (boolean (re-find #"escalat" (str (or action "")))))
+
+(defn- withdrawal-event? [action]
+  (boolean (re-find #"withdraw" (str (or action "")))))
+
+(defn- slash-event? [action]
+  (boolean (re-find #"slash|auto_cancel_disputed" (str (or action "")))))
+
+(defn- strategic-action? [action]
+  (contains? #{"raise_dispute" "escalate_dispute" "execute_resolution"} action))
+
+(defn terminal-world-from-result
+  "Canonical terminal-world accessor for replay result payloads.
+   Returns the world snapshot from the final trace entry, or nil when absent."
+  [result]
+  (get-in result [:trace (dec (count (:trace result))) :world]))
+
+(defn- build-trace-context
+  [result]
+  (let [trace      (:trace result [])
+        world      (terminal-world-from-result result)]
+    (when world
+      {:trace trace
+       :world world
+       :metrics (:metrics result {})
+       :agents (:agents result [])
+       :halt-reason (:halt-reason result)})))
+
 (declare funds-ledger-view)
+
+(defn- build-module-snapshot-topology
+  [world]
+  (into {}
+        (for [[wf snap] (get world :module-snapshots {})]
+          [wf {:resolution-module         (:resolution-module snap)
+               :release-strategy          (:release-strategy snap)
+               :cancellation-strategy     (:cancellation-strategy snap)
+               :yield-generation-module   (:yield-generation-module snap)
+               :yield-distribution-module (:yield-distribution-module snap)
+               :incentive-module          (:incentive-module snap)}])))
+
+(defn- build-yield-routing-view
+  [world]
+  (into {}
+        (for [[wf snap] (get world :module-snapshots {})]
+          [wf {:escrow/modules           (:escrow/modules snap)
+               :yield-module-id          (:yield-module-id snap)
+               :yield-profile            (:yield-profile snap)
+               :yield-archetype          (:yield-archetype snap)
+               :yield-generation-module  (:yield-generation-module snap)}])))
+
+(defn- build-yield-evidence-summary
+  [world]
+  (ye/canonical-yield-evidence
+   {:routing-by-workflow (build-yield-routing-view world)}))
+
+(defn- build-evidence
+  [world]
+  {:funds-ledger-summary (funds-ledger-view world)
+   :yield-evidence       (build-yield-evidence-summary world)})
+
+(defn- initial-stake-flow
+  [trace world]
+  (let [first-stakes (get-in (first trace) [:world :resolver-stakes] {})
+        last-stakes  (get world :resolver-stakes {})
+        keys-all     (into #{} (concat (keys first-stakes) (keys last-stakes)))]
+    (reduce (fn [m r]
+              (assoc m r {:start     (long (get first-stakes r 0))
+                          :withdrawn 0
+                          :slashed   0
+                          :end       (long (get last-stakes r 0))}))
+            {}
+            keys-all)))
+
+(defn- accumulate-transition
+  [{:keys [token-deltas pending-lifecycle stake-flow] :as acc} [a b]]
+  (let [action (str (or (:action b) ""))
+        held-d (proj/map-delta (get-in a [:world :total-held] {}) (get-in b [:world :total-held] {}))
+        fee-d  (proj/map-delta (get-in a [:world :total-fees] {}) (get-in b [:world :total-fees] {}))
+        toks   (into #{} (concat (keys held-d) (keys fee-d)))
+        token-deltas'
+        (reduce (fn [m t]
+                  (-> m
+                      (update-in [t :held-delta] (fnil + 0) (long (get held-d t 0)))
+                      (update-in [t :fee-delta] (fnil + 0) (long (get fee-d t 0)))
+                      (update-in [t :claimable-delta] (fnil + 0) 0)))
+                token-deltas
+                toks)
+        p0 (long (get-in a [:world :pending-count] 0))
+        p1 (long (get-in b [:world :pending-count] 0))
+        pending-lifecycle'
+        (cond
+          (> p1 p0) (update pending-lifecycle :created + (- p1 p0))
+          (< p1 p0) (-> pending-lifecycle
+                        (update :cleared + (- p0 p1))
+                        (update :superseded + (if (escalation-event? action) (- p0 p1) 0)))
+          :else pending-lifecycle)
+        before (get-in a [:world :resolver-stakes] {})
+        after  (get-in b [:world :resolver-stakes] {})
+        deltas (proj/map-delta before after)
+        stake-flow'
+        (reduce (fn [m [resolver d]]
+                  (if (neg? d)
+                    (cond
+                      (withdrawal-event? action) (update-in m [resolver :withdrawn] + (- d))
+                      (slash-event? action) (update-in m [resolver :slashed] + (- d))
+                      :else m)
+                    m))
+                stake-flow
+                deltas)]
+    (assoc acc
+           :token-deltas token-deltas'
+           :pending-lifecycle pending-lifecycle'
+           :stake-flow stake-flow')))
+
+(defn- derive-transition-summaries
+  [trace world]
+  (let [transitions (map vector trace (rest trace))
+        init {:token-deltas {}
+              :pending-lifecycle {:created 0 :cleared 0 :superseded 0}
+              :stake-flow (initial-stake-flow trace world)}]
+    (assoc (reduce accumulate-transition init transitions)
+           :transitions transitions)))
+
+(defn- derive-shortfall-summary
+  [world]
+  (let [positions (vals (get world :yield/positions {}))
+        rows      (keep :shortfall positions)
+        reasons   (->> rows (keep :reason) (map str) set sort vec)]
+    {:entry-count (count rows)
+     :shortfall-explicit? true
+     :has-shortfall? (pos? (count rows))
+     :fulfilled-total (reduce + 0 (map #(long (get % :fulfilled-amount 0)) rows))
+     :deferred-total (reduce + 0 (map #(long (get % :deferred-amount 0)) rows))
+     :haircut-total (reduce + 0 (map #(long (get % :haircut-amount 0)) rows))
+     :reasons reasons
+     :rounding-policy "floor-to-asset-decimals.v1"}))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew trace-end projection
@@ -47,27 +185,22 @@
 
    Returns nil when result has no trace (e.g. :outcome :invalid with 0 events)."
   [result]
-  (let [trace       (:trace result [])
-        last-entry  (last trace)
-        world       (when last-entry (:world last-entry))]
-    (when world
+  (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
       (let [live-states  (get world :live-states {})
             escrows      (into {} (map (fn [[id s]] [id (keyword (or s ""))]) live-states))
             all-terminal (every? (fn [[_ s]] (terminal-state? s)) escrows)
-
-            metrics      (:metrics result {})
 
             agents-by-id (reduce (fn [m a]
                                    (let [id   (or (:id a) "")
                                          addr (or (:address a) id)]
                                      (assoc m id addr)))
                                  {}
-                                 (:agents result []))
+                                 agents)
 
             escalation-levels
             (into #{} (keep (fn [entry]
                               (let [action (get entry :action "")]
-                                (when (re-find #"escalat" action)
+                                (when (escalation-event? action)
                                   (get-in entry [:extra :level]))))
                             trace))
 
@@ -76,82 +209,23 @@
 
             ;; Strategic decision nodes — Sew-specific action vocabulary.
             decisions (vec (keep (fn [entry]
-                                   (when (contains? #{"raise_dispute" "escalate_dispute"
-                                                      "execute_resolution"}
-                                                    (:action entry))
+                                   (when (strategic-action? (:action entry))
                                      (let [agent-id (:agent entry)
                                            addr     (get agents-by-id agent-id agent-id)]
                                        (assoc (select-keys entry [:seq :time :agent :action :extra])
                                               :address addr))))
                                   trace))
 
-            transitions (map vector trace (rest trace))
+            {:keys [transitions token-deltas pending-lifecycle stake-flow]}
+            (derive-transition-summaries trace world)
+            shortfall-summary (derive-shortfall-summary world)
 
             coalition-addrs
             (into #{}
                   (keep (fn [a]
                           (when (proj/classify-coalition-actor? a)
                             (or (:address a) (:id a)))))
-                  (:agents result []))
-
-            token-deltas
-            (reduce (fn [acc [a b]]
-                      (let [held-d (proj/map-delta (get-in a [:world :total-held] {}) (get-in b [:world :total-held] {}))
-                            fee-d  (proj/map-delta (get-in a [:world :total-fees] {}) (get-in b [:world :total-fees] {}))
-                            toks   (into #{} (concat (keys held-d) (keys fee-d)))]
-                        (reduce (fn [m t]
-                                  (-> m
-                                      (update-in [t :held-delta] (fnil + 0) (long (get held-d t 0)))
-                                      (update-in [t :fee-delta] (fnil + 0) (long (get fee-d t 0)))
-                                      (update-in [t :claimable-delta] (fnil + 0) 0)))
-                                acc
-                                toks)))
-                    {}
-                    transitions)
-
-            pending-lifecycle
-            (reduce (fn [{:keys [created cleared superseded] :as acc} [a b]]
-                      (let [p0 (long (get-in a [:world :pending-count] 0))
-                            p1 (long (get-in b [:world :pending-count] 0))
-                            action (str (or (:action b) ""))]
-                        (cond
-                          (> p1 p0) (update acc :created + (- p1 p0))
-                          (< p1 p0) (-> acc
-                                        (update :cleared + (- p0 p1))
-                                        (update :superseded + (if (re-find #"escalat" action) (- p0 p1) 0)))
-                          :else acc)))
-                    {:created 0 :cleared 0 :superseded 0}
-                    transitions)
-
-            stake-flow
-            (let [first-stakes (get-in (first trace) [:world :resolver-stakes] {})
-                  last-stakes  (get world :resolver-stakes {})
-                  keys-all     (into #{} (concat (keys first-stakes) (keys last-stakes)))]
-              (reduce (fn [m r]
-                        (assoc m r {:start     (long (get first-stakes r 0))
-                                    :withdrawn 0
-                                    :slashed   0
-                                    :end       (long (get last-stakes r 0))}))
-                      {}
-                      keys-all))
-
-            stake-flow
-            (reduce (fn [acc [a b]]
-                      (let [before (get-in a [:world :resolver-stakes] {})
-                            after  (get-in b [:world :resolver-stakes] {})
-                            deltas (proj/map-delta before after)
-                            action (str (or (:action b) ""))]
-                        (reduce (fn [m [resolver d]]
-                                  (if (neg? d)
-                                    (cond
-                                      (re-find #"withdraw" action) (update-in m [resolver :withdrawn] + (- d))
-                                      (re-find #"slash|auto_cancel_disputed" action) (update-in m [resolver :slashed] + (- d))
-                                      :else m)
-                                    m))
-                                acc
-                                deltas)))
-                    stake-flow
-                    transitions)
+                  agents)
 
             payoff-ledger
             (reduce (fn [acc [a b]]
@@ -168,8 +242,7 @@
 
                             stakes-d    (proj/map-delta (get-in a [:world :resolver-stakes] {}) (get-in b [:world :resolver-stakes] {}))
                             stake-delta (long (get stakes-d addr 0))
-                            slash?      (or (re-find #"slash" action)
-                                             (and (re-find #"auto_cancel_disputed" action) (neg? stake-delta)))
+                            slash?      (and (slash-event? action) (neg? stake-delta))
 
                             bonds-a     (proj/nested-sum-by-actor (get-in a [:world :bond-balances] {}))
                             bonds-b     (proj/nested-sum-by-actor (get-in b [:world :bond-balances] {}))
@@ -232,24 +305,10 @@
                                       :non-terminal)}])
                        escrows))]
 
-        (let [snapshot-routing
-              (into {}
-                    (for [[wf snap] (get world :module-snapshots {})]
-                      [wf {:escrow/modules          (:escrow/modules snap)
-                           :yield-module-id         (:yield-module-id snap)
-                           :yield-profile           (:yield-profile snap)
-                           :yield-archetype         (:yield-archetype snap)
-                           :yield-generation-module (:yield-generation-module snap)}]))
-              snapshot-topology
-              (into {}
-                    (for [[wf snap] (get world :module-snapshots {})]
-                      [wf {:resolution-module        (:resolution-module snap)
-                           :release-strategy         (:release-strategy snap)
-                           :cancellation-strategy    (:cancellation-strategy snap)
-                           :yield-generation-module  (:yield-generation-module snap)
-                           :yield-distribution-module (:yield-distribution-module snap)
-                           :incentive-module         (:incentive-module snap)}]))
-              funds-ledger (funds-ledger-view world)]
+        (let [snapshot-routing (build-yield-routing-view world)
+              snapshot-topology (build-module-snapshot-topology world)
+              {:keys [funds-ledger-summary yield-evidence]} (build-evidence world)
+              funds-ledger funds-ledger-summary]
           {:terminal-world
          {:escrows             escrows
           :total-held-by-token (get world :total-held {})
@@ -289,7 +348,7 @@
           :dispute-count     (get metrics :disputes-triggered 0)
           :escalation-levels escalation-levels
           :terminal-time     (get world :block-time 0)
-          :halt-reason       (:halt-reason result nil)
+          :halt-reason       halt-reason
           :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
           :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
           :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
@@ -316,6 +375,8 @@
          {:workflow-outcomes workflow-outcomes
           :post-dispute-transfers {:unknown {:to-sender 0 :to-recipient 0 :fees 0}}
           :pending-lifecycle {:unknown pending-lifecycle}
+
+         :shortfall-summary shortfall-summary
           :token-deltas token-deltas}
 
          :payoff-ledger-summary
@@ -327,7 +388,8 @@
 
          :decisions decisions
          :raw-trace trace
-         :funds-ledger-summary funds-ledger})))))
+         :funds-ledger-summary funds-ledger
+         :yield-evidence yield-evidence}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection

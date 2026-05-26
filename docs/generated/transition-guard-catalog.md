@@ -2,7 +2,7 @@
 
 Source of truth: `definitions.registry/transitions`, `definitions.registry/transition-metadata`, `results/test-artifacts/coverage.json`.
 
-Definitions hash: `1471206304`
+Definitions hash: `1082033428`
 
 | Transition ID | Label | Allowed sources | Allowed targets | Guards | Actor permissions | Pause effect | Coverage status | Hit count |
 |---|---|---|---|---|---|---|---|---:|

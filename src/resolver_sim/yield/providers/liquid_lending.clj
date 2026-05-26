@@ -27,6 +27,11 @@
 (defn- fail-enabled? [world module-id token mode]
   (contains? (failure-modes world module-id token) mode))
 
+(defn- shortfall-config [world module-id token]
+  (let [cfg (get-in world [:yield/risk module-id token :shortfall] {})]
+    {:available-ratio (double (or (:available-ratio cfg) 0.5))
+     :reason (or (:reason cfg) :liquidity-shortfall)}))
+
 (defn deposit [world module op]
   (let [oid    (:owner/id op)
         amount (:amount op)
@@ -74,7 +79,7 @@
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid) (= (:token pos) token) (= (:status pos) :active))
                 (let [old-yield (:unrealized-yield pos 0)
-                      new-pos   (acct/update-position-yield pos new-index)
+                      new-pos   (acct/update-position-yield world pos new-index)
                       yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
                   (-> w
                       (assoc-in [:yield/positions oid] new-pos)
@@ -103,12 +108,23 @@
                          :liquidity-mode mode
                          :owner/id oid}))
         (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              crystallized  (acct/realize-yield (acct/update-position-yield pos current-index))]
+              crystallized  (acct/realize-yield world (acct/update-position-yield world pos current-index))]
           (if (fail-enabled? world mid token :partial-liquidity)
-            (assoc-in world pos-key
-                      (-> crystallized
-                          (update :realized-yield #(quot (long %) 2))
-                          (assoc :status :unwinding)))
+            (let [{:keys [available-ratio reason]} (shortfall-config world mid token)
+                  available-ratio (min 1.0 (max 0.0 available-ratio))
+                  gross-realized (long (:realized-yield crystallized 0))
+                  fulfilled      (long (Math/floor (* gross-realized available-ratio)))
+                  shortfall      (max 0 (- gross-realized fulfilled))]
+              (assoc-in world pos-key
+                        (-> crystallized
+                            (assoc :status :unwinding)
+                            (assoc :shortfall {:reason reason
+                                               :available-ratio available-ratio
+                                               :fulfilled-amount fulfilled
+                                               :deferred-amount shortfall
+                                               :haircut-amount 0
+                                               :as-of-index current-index})
+                            (assoc :realized-yield fulfilled))))
             (assoc-in world pos-key (assoc crystallized :status :withdrawn))))))))
 
 (defn emergency-unwind [world module op]

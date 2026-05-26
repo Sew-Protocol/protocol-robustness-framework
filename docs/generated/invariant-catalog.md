@@ -2,7 +2,7 @@
 
 Source of truth: `src/resolver_sim/definitions/registry.clj` (`invariants`).
 
-Definitions hash: `1471206304`
+Definitions hash: `1082033428`
 
 | Invariant ID | Label | Default Severity | Class | Related Transitions | Related Scenario Families | Artifact Field(s) |
 |---|---|---|---|---|---|---|

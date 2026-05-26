@@ -2,6 +2,7 @@
   (:require [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.benchmark.adapter :as adapter]
+             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.protocols.sew :as sew]
@@ -63,7 +64,10 @@
    (let [manifest (load-manifest manifest-path)
          repo-meta (repo/metadata)
          scenarios (adapter/load-scenarios adapter manifest)
-         _ (println "Executing" (count scenarios) "scenarios...")
+         _ (do
+             (println "Executing" (count scenarios) "scenarios...")
+             (log/info! "benchmark/execute" {:scenario-count (count scenarios)
+                                             :manifest manifest-path}))
          results (adapter/execute-benchmark adapter manifest scenarios)
          
          metrics (adapter/collect-metrics adapter results)
@@ -83,6 +87,7 @@
          final-evidence (assoc evidence :evidence/hash evidence-hash)]
      
      (when-not passed?
+        (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})
        (println "Benchmark FAILED:" (:passed metrics) "/" (:total metrics) "passed."))
      
      final-evidence)))
@@ -90,4 +95,5 @@
 (defn write-evidence [evidence output-path]
   (io/make-parents output-path)
   (spit output-path (pr-str evidence))
+  (log/info! "benchmark/evidence-written" {:output-path output-path})
   (println "Evidence bundle written to:" output-path))

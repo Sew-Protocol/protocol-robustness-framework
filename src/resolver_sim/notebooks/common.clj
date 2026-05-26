@@ -1,13 +1,15 @@
 (ns resolver-sim.notebooks.common
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
-            [clojure.data.json :as json]))
+            [clojure.data.json :as json]
+            [resolver-sim.logging :as log]))
 
 (defn safe-slurp [path]
   (try
     (let [f (io/file path)]
       (when (.exists f) (slurp f)))
     (catch Exception e
+      (log/warn! "notebook/safe-slurp-failed" {:path path :error (.getMessage e)})
       (println "WARN: could not read" path "-" (.getMessage e))
       nil)))
 
@@ -16,6 +18,7 @@
     (try
       (json/read-str s {:key-fn keyword})
       (catch Exception e
+        (log/warn! "notebook/read-json-failed" {:path path :error (.getMessage e)})
         (println "WARN: JSON parse error in" path "-" (.getMessage e))
         nil))))
 
@@ -24,6 +27,7 @@
     (try
       (edn/read-string s)
       (catch Exception e
+        (log/warn! "notebook/read-edn-failed" {:path path :error (.getMessage e)})
         (println "WARN: EDN parse error in" path "-" (.getMessage e))
         nil))))
 

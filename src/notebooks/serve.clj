@@ -1,12 +1,14 @@
 (ns notebooks.serve
   (:require [nextjournal.clerk :as clerk]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.logging :as log]))
 
 (defn- show-notebook! [path]
   (clerk/show! (str/trim (str path))))
 
 (defn -main [& args]
   (let [port 7777]
+    (log/info! "notebook/server-starting" {:port port})
     (println (str "Starting Clerk notebook server on http://localhost:" port "/notebooks/xtdb_overview"))
     (clerk/serve! {:watch-paths ["notebooks"]
                    :browse true

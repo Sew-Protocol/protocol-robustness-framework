@@ -25,6 +25,13 @@
   []
   (common/read-json (:equivalence config/artifact-paths)))
 
+(defn load-test-run
+  "Canonical loader for test-run manifest artifact (v1+)."
+  []
+  (try
+    (common/read-json (:test-run config/artifact-paths))
+    (catch Exception _ nil)))
+
 (defn load-all-traces
   "Loads all scenario traces from the configured directory."
   []
@@ -78,10 +85,12 @@
   "Loads the full set of artifacts for a validation run."
   []
   (let [summary  (load-summary)
+        test-run (load-test-run)
         coverage (load-coverage)
         equivalence (load-equivalence)
         manifest (try (common/read-json (:manifest config/artifact-paths)) (catch Exception _ nil))]
     {:summary  summary
+     :test-run test-run
      :summary-canonical (canonical-summary summary)
      :coverage coverage
      :equivalence equivalence

@@ -2,7 +2,7 @@
 
 Source of truth: `src/resolver_sim/definitions/registry.clj`, `src/resolver_sim/scenario/outcome_semantics.clj`.
 
-Definitions hash: `1471206304`
+Definitions hash: `1082033428`
 
 ## Statuses
 

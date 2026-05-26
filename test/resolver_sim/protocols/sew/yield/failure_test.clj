@@ -29,11 +29,38 @@
                                     module
                                     {:owner/id "user1"}))))
     (testing ":partial-liquidity"
-      (let [w' (liquid/withdraw (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
-                                          #{:partial-liquidity})
+      (let [w' (liquid/withdraw (-> base-world
+                                    (assoc-in [:yield/indices :yield.provider/liquid-lending "USDC"] 2.0)
+                                    (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                              #{:partial-liquidity}))
                                 module
                                 {:owner/id "user1"})]
-        (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))))
+        (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
+        (is (= 500 (get-in w' [:yield/positions "user1" :realized-yield])))
+        (is (= {:reason :liquidity-shortfall
+                :available-ratio 0.5
+                :fulfilled-amount 500
+                :deferred-amount 500
+                :haircut-amount 0
+                :as-of-index 2.0}
+               (get-in w' [:yield/positions "user1" :shortfall])))))
+    (testing ":partial-liquidity with custom shortfall ratio"
+      (let [w' (-> base-world
+                   (assoc-in [:yield/indices :yield.provider/liquid-lending "USDC"] 2.0)
+                   (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                             #{:partial-liquidity})
+                   (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC" :shortfall]
+                             {:available-ratio 0.25 :reason :market-dislocation})
+                   (liquid/withdraw module {:owner/id "user1"}))]
+        (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
+        (is (= 250 (get-in w' [:yield/positions "user1" :realized-yield])))
+        (is (= {:reason :market-dislocation
+                :available-ratio 0.25
+                :fulfilled-amount 250
+                :deferred-amount 750
+                :haircut-amount 0
+                :as-of-index 2.0}
+               (get-in w' [:yield/positions "user1" :shortfall])))))
     (testing ":negative-yield"
       (let [w' (liquid/accrue (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
                                         #{:negative-yield})

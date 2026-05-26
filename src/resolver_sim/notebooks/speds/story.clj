@@ -13,11 +13,11 @@
 ;; Internal Narrative Helpers
 
 (defn- render-story-frame [frame-idx total-frames header footer-left footer-right & content]
-  (speds/v-frame
-   {:header (str "[" (:protocol-label config/profile) "] FRAME: " frame-idx "/" total-frames " | " header)
-    :footer-left footer-left
-    :footer-right footer-right}
-   content))
+  (apply speds/v-frame
+         {:header (str "[" (:protocol-label config/profile) "] FRAME: " frame-idx "/" total-frames " | " header)
+          :footer-left footer-left
+          :footer-right footer-right}
+         content))
 
 (defn- render-frame-specs
   "Renders a vector of frame specs with keys:
@@ -70,7 +70,7 @@
     :footer-right "GUARD: ACTIVE"
     :claims [{:claim-id :intercept-guard :value "ACTIVE" :source-artifact "story-model" :source-path [:core :v-res]}]
     :content
-    [[(speds/v-res "Protocol Guard")]
+    [(speds/v-res "Protocol Guard")
      [:div {:style {:marginTop "20px"}}
       (speds/v-inv :solvency :ok)]
      [:h2 {:style {:fontSize "52px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "ATTACK" [:br] "DEFLECTED"]]}
@@ -185,7 +185,7 @@
     :footer-left "GUARD: ACTIVE"
     :footer-right "SLASHER: TRIGGERED"
     :content
-    [[(speds/v-res "Collusion Guard")]
+    [(speds/v-res "Collusion Guard")
      [:div {:style {:marginTop "20px"}} (speds/v-inv :solvency :ok)]
      [:h2 {:style {:fontSize "50px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "BRIBERY" [:br] "DEFLECTED"]]}
    {:header "STATUS: VERIFIED"

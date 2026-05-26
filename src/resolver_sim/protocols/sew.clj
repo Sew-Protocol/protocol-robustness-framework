@@ -98,6 +98,21 @@
   (let [p (:params event)]
     (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
 
+(defn- sew-temporal-rules
+  "Protocol-aware temporal guards executed before dispatch.
+   These rules are optional and run through replay's generic temporal rule engine."
+  []
+  [{:id :sew/appeal-window-open
+    :check (fn [{:keys [world event now]}]
+             (if (= "execute_pending_settlement" (:action event))
+               (let [wf-id   (compat/wf-id event)
+                     pending (t/get-pending world wf-id)]
+                 (if (and (:exists pending)
+                          (< now (:appeal-deadline pending)))
+                   {:ok? false :error :appeal-window-not-expired}
+                   {:ok? true}))
+               {:ok? true}))}])
+
 ;; ---------------------------------------------------------------------------
 ;; Dispatch
 ;; ---------------------------------------------------------------------------
@@ -485,7 +500,8 @@
        :snapshot             snapshot
        :escalation-fn        esc-fn
        :resolution-module-fn rm-fn
-       :resolution-level-map level-map}))
+        :resolution-level-map level-map
+        :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
     (apply-action context world event))

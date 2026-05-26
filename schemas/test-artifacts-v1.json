@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sew-protocol/schemas/test-artifacts-v1.json",
+  "title": "Test Artifacts Registry",
+  "type": "object",
+  "required": ["schema_version", "run_id", "run_manifest", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "test-artifacts.v1"},
+    "contract_version": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "generator": {"type": "object"},
+    "root_dir": {"type": "string"},
+    "run_id": {"type": "string"},
+    "run_manifest": {
+      "type": "object",
+      "required": ["path", "schema_version"],
+      "properties": {
+        "path": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "sha256": {"type": ["string", "null"]},
+        "bytes": {"type": ["integer", "null"]},
+        "mtime_utc": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "path", "schema_version"],
+        "properties": {
+          "id": {"type": "string"},
+          "kind": {"type": "string"},
+          "path": {"type": "string"},
+          "schema_version": {"type": "string"},
+          "contract_version": {"type": "string"},
+          "producer": {"type": "string"},
+          "verifies_against": {"type": "array", "items": {"type": "string"}},
+          "input_versions": {"type": "object"},
+          "sha256": {"type": "string"},
+          "bytes": {"type": "integer"},
+          "mtime_utc": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
