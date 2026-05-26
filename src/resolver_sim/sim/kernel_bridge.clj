@@ -1,9 +1,9 @@
 (ns resolver-sim.sim.kernel-bridge
   "Kernel validation bridge: validates batch simulation params against the
-   SEW protocol replay kernel.
+   Sew protocol replay kernel.
 
    The stochastic batch runner (sim.batch) models dispute outcomes as probability
-   distributions. This namespace validates that the underlying SEW protocol state
+   distributions. This namespace validates that the underlying Sew protocol state
    machine is consistent with those parameters by generating minimal dispute
    scenarios and running them through the full replay kernel.
 
@@ -14,7 +14,11 @@
 
    Layering: sim/* may import contract_model/* and protocols/* per project rules."
   (:require [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.registry       :as preg]
             [resolver-sim.stochastic.rng        :as rng]))
+
+(defn- default-protocol []
+  (preg/get-protocol preg/default-protocol-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario generation
@@ -116,7 +120,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-kernel-validation
-  "Run n-samples minimal dispute scenarios through the SEW replay kernel.
+  "Run n-samples minimal dispute scenarios through the Sew replay kernel.
 
    Each scenario is generated from the given params and validated against
    the full invariant suite. Violations are reported with scenario ID and
@@ -141,7 +145,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng) ; consume rng for determinism
                       sc (generate-honest-scenario params (str "h" i))
-                      r  (replay/replay-scenario sc)]
+                       r  (replay/replay-with-protocol (default-protocol) sc)]
                   {:scenario-id (:scenario-id sc)
                    :type        :honest
                    :outcome     (:outcome r)
@@ -154,7 +158,7 @@
            (vec (for [i (range n-samples)]
                   (let [_ (rng/next-long rng)
                         sc (generate-fraud-slash-scenario params (str "f" i))
-                        r  (replay/replay-scenario sc)]
+                        r  (replay/replay-with-protocol (default-protocol) sc)]
                     {:scenario-id (:scenario-id sc)
                      :type        :fraud-slash
                      :outcome     (:outcome r)
@@ -284,7 +288,7 @@
      :missing missing}))
 
 (defn run-full-kernel-validation
-  "Run all four scenario types through the SEW replay kernel.
+  "Run all four scenario types through the Sew replay kernel.
 
    Extends run-kernel-validation with Phase 5 pending-settlement and
    appeal-slash scenario types. All four paths must pass for :all-paths-pass? true.
@@ -310,7 +314,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-pending-settlement-scenario params (str "p" i))
-                      r  (replay/replay-scenario sc)
+                       r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed
                                                          :pending-settlements-executed])]
@@ -325,7 +329,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-appeal-slash-scenario params (str "a" i))
-                      r  (replay/replay-scenario sc)
+                       r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
                                                          :resolutions-executed])]
                   {:scenario-id (:scenario-id sc)

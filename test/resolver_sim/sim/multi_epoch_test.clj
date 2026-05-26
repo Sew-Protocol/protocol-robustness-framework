@@ -211,3 +211,19 @@
       (is (= {:honest 1.0}
               (:replacement-strategy-mix test-params-with-custom-mix))
           "custom replacement strategy mix should be in params"))))
+
+;; ---------------------------------------------------------------------------
+;; 7. Initial composition fields (Priority 2)
+;; ---------------------------------------------------------------------------
+
+(deftest run-multi-epoch-emits-initial-composition
+  (testing "result includes explicit initial composition counts and shares"
+    (let [result (me/run-multi-epoch (rng/make-rng 11) 2 20 test-params)
+          comp   (:initial-composition result)
+          n      (:initial-resolver-count result)]
+      (is (map? comp))
+      (is (= n (:total-count comp)))
+      (is (= n (+ (:honest-count comp) (:malice-count comp))))
+      (is (<= 0.0 (:honest-share comp) 1.0))
+      (is (<= 0.0 (:malice-share comp) 1.0))
+      (is (< (Math/abs (- 1.0 (+ (:honest-share comp) (:malice-share comp)))) 1.0e-9)))))

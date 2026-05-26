@@ -1,6 +1,7 @@
 (ns resolver-sim.generators.equilibrium
   "Phase 3: generator-driven equilibrium evaluation helpers."
   (:require [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.registry       :as preg]
             [resolver-sim.generators.scenario :as gsc]
             [resolver-sim.scenario.equilibrium :as eq]))
 
@@ -12,7 +13,7 @@
   [{:keys [outcome halt-reason metrics]}]
   (cond
     (= :fail outcome) :invariant-failed
-    (= :open-disputes-at-end halt-reason) :stuck
+    (#{:open-entities-at-end :open-disputes-at-end} halt-reason) :stuck
     (pos? (get metrics :attack-successes 0)) :attack-success
     (pos? (get metrics :invariant-violations 0)) :invariant-failed
     (nil? halt-reason) :terminal
@@ -36,10 +37,11 @@
 
 (defn evaluate-generated-scenario
   "Build one generated scenario, replay it, and evaluate trace-end equilibrium proxies."
-  [{:keys [seed max-steps profile theory]
+  [{:keys [seed max-steps profile theory protocol]
     :or {seed 42 max-steps 6 profile :phase1-lifecycle theory default-theory}}]
-  (let [scenario (gsc/build-scenario {:seed seed :max-steps max-steps :profile profile})
-        result   (replay/replay-scenario scenario)
+  (let [protocol (or protocol (preg/get-protocol preg/default-protocol-id))
+        scenario (gsc/build-scenario {:seed seed :max-steps max-steps :profile profile :protocol protocol})
+        result   (replay/replay-with-protocol protocol scenario)
         eqr      (eq/evaluate-equilibrium theory result)]
     {:seed seed
      :profile profile
@@ -56,10 +58,10 @@
 
 (defn evaluate-generated-batch
   "Evaluate a deterministic seed range and return aggregate status summary."
-  [{:keys [start-seed n max-steps profile theory]
+  [{:keys [start-seed n max-steps profile theory protocol]
     :or {start-seed 1 n 20 max-steps 6 profile :phase1-lifecycle theory default-theory}}]
   (let [seeds   (range start-seed (+ start-seed n))
-        runs    (mapv (fn [s] (evaluate-generated-scenario {:seed s :max-steps max-steps :profile profile :theory theory})) seeds)
+        runs    (mapv (fn [s] (evaluate-generated-scenario {:seed s :max-steps max-steps :profile profile :theory theory :protocol protocol})) seeds)
         counts  (fn [k] (frequencies (map k runs)))
         malicious-payoff-total (reduce + (map #(get-in % [:payoff :malicious] 0) runs))
         honest-payoff-total (reduce + (map #(get-in % [:payoff :honest] 0) runs))

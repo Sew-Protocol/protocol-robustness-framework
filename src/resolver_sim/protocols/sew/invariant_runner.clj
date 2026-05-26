@@ -2,7 +2,7 @@
   "In-process runner for the S01–S41 deterministic invariant scenarios.
 
    Runs every scenario in invariant-scenarios/all-scenarios against
-   replay/replay-scenario, reports pass/fail per entry, and returns a
+   sew/replay-with-sew-protocol, reports pass/fail per entry, and returns a
    summary map suitable for CLI consumption.
 
    S12 is a paired scenario (vector of two maps); it passes only when
@@ -12,7 +12,11 @@
    invariant-scenarios/scenario-type-registry (:scenario/type,
    :adversary/type, :adversary/traits) for queryable output."
   (:require [resolver-sim.contract-model.replay            :as replay]
-            [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
+            [resolver-sim.protocols.sew            :as sew]
+            [resolver-sim.protocols.sew.invariant-scenarios :as sc]
+            [resolver-sim.io.scenarios             :as io-sc]
+            [clojure.java.io                        :as io]
+            [clojure.data.json                      :as json]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers
@@ -24,7 +28,7 @@
    When :expected-fail? is true on the scenario, the test passes only when the
    replay outcome is :fail (the invariant is expected to fire)."
   [scenario]
-  (let [result        (replay/replay-scenario scenario)
+  (let [result        (sew/replay-with-sew-protocol scenario)
         expected-fail (boolean (:expected-fail? scenario false))
         outcome       (:outcome result)
         pass?         (if expected-fail
@@ -84,12 +88,31 @@
      :elapsed-ms elapsed
      :results   results}))
 
+(defn run-scenario-file
+  "Load a scenario from a file, run it, and optionally write the result to output-path.
+   Returns exit code (0 for pass, 1 for fail/error)."
+  [scenario-path output-path]
+  (try
+    (let [scenario (io-sc/load-scenario-file scenario-path)
+          result   (sew/replay-with-sew-protocol scenario)
+          pass?    (= :pass (:outcome result))]
+      (when (and output-path (not= output-path "-"))
+        (io/make-parents output-path)
+        (with-open [w (io/writer output-path)]
+          (json/write (dissoc result :protocol) w :indent true)))
+      (if pass?
+        (do (println (format "✓ Scenario %s passed." scenario-path)) 0)
+        (do (println (format "✗ Scenario %s failed: %s" scenario-path (:halt-reason result "unknown"))) 1)))
+    (catch Exception e
+      (println (format "Error running scenario %s: %s" scenario-path (.getMessage e)))
+      1)))
+
 (defn print-report
   "Print a human-readable report from run-all output.  Returns exit code (0/1)."
   [{:keys [passed total elapsed-ms results]}]
   (let [w 72]
     (println (apply str (repeat w "═")))
-    (println "  SEW Invariant Suite — Deterministic Scenarios (Clojure in-process)")
+    (println "  Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)")
     (println (apply str (repeat w "═")))
     (println (format "  %-47s %5s  %7s  %s" "Scenario" "steps" "reverts" "status"))
     (println (str "  " (apply str (repeat (- w 2) "─"))))
@@ -108,5 +131,9 @@
 
 (defn run-and-report
   "Convenience: run-all then print-report.  Returns exit code."
-  []
-  (print-report (run-all)))
+  ([] (run-and-report nil nil))
+  ([scenario-path output-path]
+   (if scenario-path
+     (run-scenario-file scenario-path output-path)
+     (print-report (run-all)))))
+

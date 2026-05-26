@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
-from sew_sim.grpc_client import SimulationClient, managed_session
+from sim_api.grpc_client import SimulationClient, managed_session
 
 
 class WithdrawalAttacker:

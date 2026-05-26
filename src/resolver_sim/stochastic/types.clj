@@ -1,5 +1,5 @@
 (ns resolver-sim.stochastic.types
-  "Parameter schemas and types for the SEW Protocol dispute resolution simulation.")
+  "Parameter schemas and types for the Sew Protocol dispute resolution simulation.")
 
 ;; Scenario configuration schema
 (def scenario-schema

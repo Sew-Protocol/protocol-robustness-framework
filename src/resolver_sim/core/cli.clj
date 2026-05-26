@@ -1,7 +1,8 @@
 (ns resolver-sim.core.cli
   "CLI option definitions and argument validation.
    Knows nothing about phases or simulation logic."
-  (:require [clojure.tools.cli :refer [parse-opts]]))
+  (:require [clojure.tools.cli :refer [parse-opts]]
+            [resolver-sim.protocols.registry :as preg]))
 
 (def cli-options
   [["-p" "--params PATH" "Path to params.edn file"
@@ -38,8 +39,16 @@
    ["-N" "--phase-w"           "Run Phase W: dispute type clustering (adversarial category targeting)"]
    ["-X" "--phase-x"           "Run Phase X: burst concurrency exploit"]
    ["-a" "--adversarial" "Run adversarial parameter search (falsification)"]
+   [nil "--phase-f-dr" "Run Phase F DR: Economic parameter validation sweep"]
+   [nil "--phase-c-dr" "Run Phase C DR: Corruption economics sweep"]
+   [nil "--phase-e-dr" "Run Phase E DR: Evidence integrity sweep"]
+   [nil "--phase-m-dr" "Run Phase M DR: Fairness analysis sweep"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
    [nil "--invariants" "Run S01-S41 deterministic invariant scenarios (in-process, no gRPC)"]
+   [nil "--scenario PATH" "Path to a single scenario JSON file to run (requires --invariants)"]
+   [nil "--output-file PATH" "Path to write the replay result JSON (requires --scenario)"]
+   [nil "--protocol ID" (str "Protocol to use for --invariants (default: " preg/default-protocol-id ")")
+    :default preg/default-protocol-id]
    [nil  "--port PORT" "gRPC server port (used with --serve, default: 7070)"
     :default 7070
     :parse-fn #(Integer/parseInt %)]

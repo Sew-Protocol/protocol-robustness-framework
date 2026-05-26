@@ -13,7 +13,9 @@
    pure and accept a seq of metadata maps, so they can be tested independently."
   (:require [clojure.java.io  :as io]
             [clojure.data.json :as json]
-            [clojure.string    :as str]))
+            [clojure.string    :as str]
+            [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.scenario.schema-profile :as schema-profile]))
 
 (declare coverage-report)
 
@@ -37,21 +39,8 @@
     (println (str "Unhit transitions: " (count (:unhit-transitions report))))))
 
 (def ^:private canonical-transitions
-  "Release-candidate transition catalog used to compute explicit unhit backlog.
-   Keep this aligned with supported protocol actions."
-  #{:create_escrow
-    :raise_dispute
-    :execute_resolution
-    :execute_pending_settlement
-    :automate_timed_actions
-    :release
-    :sender_cancel
-    :recipient_cancel
-    :auto_cancel_disputed
-    :advance_time
-    :escalate_dispute
-    :register_stake
-    :challenge_resolution})
+  "Canonical transition catalog from semantic registry."
+  (defs/canonical-transition-ids))
 
 ;; ---------------------------------------------------------------------------
 ;; Directory scan
@@ -149,7 +138,8 @@
 
    Returns:
      :total             — total scenario count
-     :schema-versions   — {version-str count}
+      :schema-versions   — {version-str count}
+      :enriched-version  — schema-profile/enriched-version marker
      :by-purpose        — {purpose [id ...]}  (:unclassified for nil purpose)
      :by-threat-tag     — {tag [id ...]}
      :threat-tag-freq   — {tag count} sorted by frequency desc
@@ -234,8 +224,9 @@
                                (remove seen-transitions)
                                sort
                                vec)]
-    {:total              (count scenarios)
+     {:total              (count scenarios)
      :schema-versions    by-version
+      :enriched-version   (schema-profile/enriched-version)
      :by-purpose         by-purpose
      :by-threat-tag      (group-ids-by identity
                            (for [s scenarios t (:threat-tags s)]

@@ -99,26 +99,26 @@ Optional extension grid (after quick pass):
 
 ```bash
 # Pair 1: security — adversarial state-machine gauntlet
-bb trace:compare \
-  --baseline ./data/fixtures/traces/s01-baseline-happy-path.trace.json \
-  --candidate ./data/fixtures/traces/s08-state-machine-attack-gauntlet.trace.json \
-  --out-dir results/trace-compare/s01-vs-s08
+bb trace:diff \
+  ./data/fixtures/traces/s01-baseline-happy-path.trace.json \
+  ./data/fixtures/traces/s08-state-machine-attack-gauntlet.trace.json \
+  results/trace-compare/s01-vs-s08
 ```
 
 ```bash
 # Pair 2: governance — attacker-as-resolver self-drain
-bb trace:compare \
-  --baseline ./data/fixtures/traces/s01-baseline-happy-path.trace.json \
-  --candidate ./data/fixtures/traces/governance-decay-exploit.trace.json \
-  --out-dir results/trace-compare/s01-vs-governance-decay
+bb trace:diff \
+  ./data/fixtures/traces/s01-baseline-happy-path.trace.json \
+  ./data/fixtures/traces/governance-decay-exploit.trace.json \
+  results/trace-compare/s01-vs-governance-decay
 ```
 
 ```bash
 # Pair 3: liveness — timeout fund-lock vs Kleros L0 fallback
-bb trace:compare \
-  --baseline ./data/fixtures/traces/s17-ieo-dispute-no-resolver-timeout.trace.json \
-  --candidate ./data/fixtures/traces/s18-dr3-kleros-l0-resolves.trace.json \
-  --out-dir results/trace-compare/s17-vs-s18
+bb trace:diff \
+  ./data/fixtures/traces/s17-ieo-dispute-no-resolver-timeout.trace.json \
+  ./data/fixtures/traces/s18-dr3-kleros-l0-resolves.trace.json \
+  results/trace-compare/s17-vs-s18
 ```
 
 ## 4.2 Validate core deterministic gate

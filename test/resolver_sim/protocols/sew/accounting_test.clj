@@ -73,7 +73,14 @@
     (is (= 20   (get-in w' [:bond-fees usdc] 0))        "protocol fee recorded")))
 
 (deftest slash-bond-happy
-  (let [w  (assoc-in (t/empty-world) [:bond-balances 0 alice] 980)
+  (let [w  (-> (t/empty-world)
+               (assoc-in [:escrow-transfers 0] {:token usdc
+                                                :escrow-state :disputed
+                                                :to bob
+                                                :from alice
+                                                :amount-after-fee 0})
+               (assoc-in [:bond-balances 0 alice] 980)
+               (assoc-in [:total-held usdc] 980))
         r  (ac/slash-bond w 0 alice)]
     (is (true? (:ok r)))
     (is (= 980 (:slashed r)))
@@ -86,11 +93,19 @@
     (is (= :no-bond-to-slash (:error r)))))
 
 (deftest return-bond-happy
-  (let [w (assoc-in (t/empty-world) [:bond-balances 0 alice] 980)
+  (let [w (-> (t/empty-world)
+              (assoc-in [:escrow-transfers 0] {:token usdc
+                                               :escrow-state :disputed
+                                               :to bob
+                                               :from alice
+                                               :amount-after-fee 0})
+              (assoc-in [:bond-balances 0 alice] 980)
+              (assoc-in [:total-held usdc] 980))
         r (ac/return-bond w 0 alice)]
     (is (true? (:ok r)))
     (is (= 980 (:returned r)))
-    (is (= 0 (get-in (:world r) [:bond-balances 0 alice] 0)))))
+    (is (= 0 (get-in (:world r) [:bond-balances 0 alice] 0)))
+    (is (= 980 (get-in (:world r) [:claimable 0 alice] 0)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariants
@@ -129,3 +144,31 @@
 (deftest check-all-healthy-world
   (let [result (inv/check-all (base-world))]
     (is (:all-hold? result))))
+
+(deftest single-resolution-payout-consistency-detects-dual-claimable
+  (let [w0 (base-world)
+        w1 (assoc-in w0 [:escrow-transfers 0 :escrow-state] :released)
+        w2 (assoc-in w1 [:claimable 0 bob] 995)
+        ;; corruption: both sides become claimable for same finalized workflow
+        bad (assoc-in w2 [:claimable 0 alice] 995)
+        r (inv/single-resolution-payout-consistent? bad)]
+    (is (false? (:holds? r)))
+    (is (= 0 (-> r :violations first :workflow-id)))))
+
+(deftest fraud-slash-executions-accounted-detects-missing-stake-debit
+  (let [resolver "0xResolver"
+        world (-> (t/empty-world 1000)
+                  (assoc-in [:pending-fraud-slashes "wf0"]
+                            {:resolver resolver
+                             :amount 200
+                             :reason :fraud
+                             :status :executed
+                             :proposed-at 1000
+                             :appeal-deadline 1100
+                             :appeal-bond-held 0
+                             :contest-deadline 0})
+                  ;; corruption: executed slash not reflected in slash totals
+                  (assoc-in [:resolver-slash-total resolver] 0))
+        r (inv/fraud-slash-executions-accounted? world)]
+    (is (false? (:holds? r)))
+    (is (= resolver (-> r :violations first :resolver)))))

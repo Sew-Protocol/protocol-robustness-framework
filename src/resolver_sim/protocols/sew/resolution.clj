@@ -14,11 +14,16 @@
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
-            [resolver-sim.economics.payoffs            :as payoffs]))
+            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.yield.ops                   :as yield-ops]
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
+
+(defn- escrow-yield-owner [escrow-id]
+  [:sew/escrow escrow-id])
 
 (defn- finalize-release [world workflow-id]
   (let [et      (t/get-transfer world workflow-id)
@@ -26,9 +31,16 @@
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
         net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)]
+        resolver (:dispute-resolver et)
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
-        (acct/distribute-yield workflow-id)
+        (lc/accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :released)
         (acct/sub-held token amt)
         (acct/record-released token net-amt)
         (acct/record-claimable workflow-id (:to et) net-amt)
@@ -42,9 +54,16 @@
         amt     (:amount-after-fee et)
         fot-bps (get-in world [:token-fot-bps token] 0)
         net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)]
+        resolver (:dispute-resolver et)
+        snap    (t/get-snapshot world workflow-id)
+        mid     (:yield-generation-module snap)]
     (-> world
-        (acct/distribute-yield workflow-id)
+        (lc/accrue-yield workflow-id)
+        (cond-> (and mid (contains? (:yield/modules world) mid))
+          (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                     :module/id mid
+                                     :owner/id (escrow-yield-owner workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id :refunded)
         (acct/sub-held token amt)
         (acct/record-refunded token net-amt)
         (acct/record-claimable workflow-id (:from et) net-amt)
@@ -172,6 +191,8 @@
           (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
       world'')))
 
+(declare pick-eligible-superseded-pending)
+
 ;; ---------------------------------------------------------------------------
 ;; execute-resolution
 ;;
@@ -268,36 +289,59 @@
 (defn execute-pending-settlement
   "Execute a deferred settlement after the appeal window has closed."
   [world workflow-id]
-  (cond
-    (not (t/valid-workflow-id? world workflow-id))
+  (if-not (t/valid-workflow-id? world workflow-id)
     (t/fail :invalid-workflow-id)
+    (let [active-pending (t/get-pending world workflow-id)
+          now-ts         (:block-time world)
+          pending        (if (:exists active-pending)
+                           active-pending
+                           (pick-eligible-superseded-pending world workflow-id now-ts))]
+      (cond
+        (not (:exists pending))
+        (t/fail :no-pending-settlement)
 
-    (not (:exists (t/get-pending world workflow-id)))
-    (t/fail :no-pending-settlement)
+        (not= :disputed (t/escrow-state world workflow-id))
+        (t/fail :transfer-not-in-dispute)
 
-    (not= :disputed (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-in-dispute)
+        (< now-ts (:appeal-deadline pending))
+        (t/fail :appeal-window-not-expired)
 
-    (< (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
-    (t/fail :appeal-window-not-expired)
-
-    :else
-    (let [pending (t/get-pending world workflow-id)]
-      (t/ok (if (:is-release pending)
-              (finalize-release world workflow-id)
-              (finalize-refund  world workflow-id))))))
+        :else
+        (t/ok (if (:is-release pending)
+                (finalize-release world workflow-id)
+                (finalize-refund  world workflow-id)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal building block: _validateAndPrepareEscalation deletes
 ;; pendingSettlements[workflowId] before escalation proceeds.
 ;; ---------------------------------------------------------------------------
 
-(defn cancel-pending-on-escalation
-  "Cancel pending-settlement when a dispute is being escalated.
-   Called as a side-effect of escalation before the new level is set.
-   Returns the updated world (not a result map)."
+(defn- archive-pending-on-escalation
+  "Archive the current pending settlement as superseded and clear active pending.
+   This preserves a fallback execution path for edge-cases where escalation/challenge
+   clears pending near the deadline but no replacement decision is produced in time."
   [world workflow-id]
-  (update world :pending-settlements dissoc workflow-id))
+  (let [pending (t/get-pending world workflow-id)]
+    (if (:exists pending)
+      (-> world
+          (update-in [:superseded-pending-settlements workflow-id]
+                     (fnil conj [])
+                     {:pending pending
+                      :superseded-at (:block-time world)
+                      :level (t/dispute-level world workflow-id)})
+          (update :pending-settlements dissoc workflow-id))
+      world)))
+
+(defn- pick-eligible-superseded-pending
+  "Select the latest superseded pending that is executable at now-ts.
+   Returns a pending-settlement map or nil."
+  [world workflow-id now-ts]
+  (->> (get-in world [:superseded-pending-settlements workflow-id] [])
+       (map :pending)
+       (filter :exists)
+       (filter #(<= (:appeal-deadline %) now-ts))
+       (sort-by :appeal-deadline)
+       last))
 
 ;; ---------------------------------------------------------------------------
 ;; challenge-resolution (Phase L)
@@ -332,12 +376,6 @@
     (nil? escalation-fn)
     (t/fail :escalation-not-configured)
 
-    ;; Sybil Mitigation Layer A: Mandatory Cooldown (1 day)
-    (let [last-esc (get-in world [:last-escalation-block-time-per-addr caller] 0)
-          cooldown 86400] ;; 1 day
-      (and (pos? last-esc) (< (- (:block-time world) last-esc) cooldown)))
-    (t/fail :escalation-cooldown-active)
-
     :else
     (let [current-level (t/dispute-level world workflow-id)
           esc-result    (escalation-fn world workflow-id caller current-level)]
@@ -359,11 +397,12 @@
               world'       (-> world
                                (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
                                (assoc-in [:challengers workflow-id current-level] caller)
-                               (cancel-pending-on-escalation workflow-id)
+                               (archive-pending-on-escalation workflow-id)
                                (assoc-in [:dispute-levels workflow-id] new-level)
                                (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                          new-resolver)
-                               ;; Track when this escalation occurred for this address (Layer A)
+                                ;; Track last escalation timestamp per address (used by
+                                ;; challenge-resolution cooldown for open challengers).
                                (assoc-in [:last-escalation-block-time-per-addr caller]
                                          (:block-time world))
                                ;; Increment escalation count for this address (Layer B)
@@ -484,12 +523,6 @@
     (nil? escalation-fn)
     (t/fail :escalation-not-configured)
 
-    ;; Sybil Mitigation Layer A: Mandatory Cooldown (1 day)
-    (let [last-esc (get-in world [:last-escalation-block-time-per-addr caller] 0)
-          cooldown 86400] ;; 1 day
-      (and (pos? last-esc) (< (- (:block-time world) last-esc) cooldown)))
-    (t/fail :escalation-cooldown-active)
-
     :else
     (let [current-level (t/dispute-level world workflow-id)
           esc-result    (escalation-fn world workflow-id caller current-level)]
@@ -516,7 +549,7 @@
               ;; post-appeal-bond adds to :total-held internally.
               world'       (-> world-prepared
                                (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
-                               (cancel-pending-on-escalation workflow-id)
+                               (archive-pending-on-escalation workflow-id)
                                (assoc-in [:dispute-levels workflow-id] new-level)
                                (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                          new-resolver)
@@ -571,19 +604,21 @@
    Mirrors: ResolverSlashingModuleV1.proposeSlash.
    Marks status as :pending to allow for appeal."
   [world workflow-id caller resolver-addr amount]
-  (if-not (t/valid-workflow-id? world workflow-id)
-    (t/fail :invalid-workflow-id)
-    (let [snap (t/get-snapshot world workflow-id)
-          gov-delay (or (:appeal-window-duration snap) 259200)] ; 3 days default
-      (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
-                      {:resolver         resolver-addr
-                       :amount           amount
-                        :reason           :fraud
-                       :status           :pending
-                       :proposed-at      (:block-time world)
-                       :appeal-deadline  (+ (:block-time world) gov-delay)
-                       :appeal-bond-held 0
-                       :contest-deadline 0})))))
+  (if (or (nil? caller) (= "" caller))
+    (t/fail :missing-caller-context)
+    (if-not (t/valid-workflow-id? world workflow-id)
+      (t/fail :invalid-workflow-id)
+      (let [snap (t/get-snapshot world workflow-id)
+            gov-delay (or (:appeal-window-duration snap) 259200)] ; 3 days default
+        (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
+                        {:resolver         resolver-addr
+                         :amount           amount
+                         :reason           :fraud
+                         :status           :pending
+                         :proposed-at      (:block-time world)
+                         :appeal-deadline  (+ (:block-time world) gov-delay)
+                         :appeal-bond-held 0
+                         :contest-deadline 0}))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
@@ -595,8 +630,12 @@
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id _caller appeal-upheld? slash-id]
-   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
+   (let [caller _caller
+         pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
+       (or (nil? caller) (= "" caller))
+       (t/fail :missing-caller-context)
+
        (nil? pending)
        (t/fail :no-pending-slash)
 

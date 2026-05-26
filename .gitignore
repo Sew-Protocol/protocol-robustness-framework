@@ -60,3 +60,12 @@ resources
 
 # Local sync safety backups
 .sync-backup/
+
+# logs
+notebook.log
+grpc-server.log
+clerk.log
+
+# jar
+sew-simulation.jar
+

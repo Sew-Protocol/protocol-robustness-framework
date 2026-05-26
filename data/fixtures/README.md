@@ -1,4 +1,4 @@
-# SEW Simulation Fixtures
+# Sew Simulation Fixtures
 
 This directory contains deterministic fixtures used for protocol validation and regression testing.
 

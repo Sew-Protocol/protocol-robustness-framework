@@ -1,5 +1,5 @@
 (ns resolver-sim.server.grpc
-  "Phase 2 gRPC server for the SEW Simulation Engine.
+  "gRPC server for the generic Simulation Engine.
 
    Uses io.grpc with a custom JSON Marshaller — no protoc compilation required.
    All method descriptors are built programmatically at server start.
@@ -8,7 +8,7 @@
      - Python → Clojure: snake_case keys  (parse: snake_case → kebab-case keywords)
      - Clojure → Python: snake_case keys  (stream: kebab-case keywords → snake_case)
 
-   Service: sew.simulation.SimulationEngine
+   Service: simulation.proto.SimulationEngine
      rpc StartSession   (StartRequest)   → StartResponse
      rpc Step           (StepRequest)    → StepResponse
      rpc DestroySession (DestroyRequest) → DestroyResponse
@@ -19,6 +19,8 @@
   (:require [clojure.data.json          :as json]
             [clojure.string             :as str]
             [clojure.stacktrace         :as st]
+             [resolver-sim.logging       :as log]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.server.session :as session])
   (:import [io.grpc ServerBuilder MethodDescriptor MethodDescriptor$MethodType
                     MethodDescriptor$Marshaller
@@ -66,11 +68,11 @@
 
 (defn- make-method
   "Build a unary MethodDescriptor<map,map> for the given RPC name."
-  [rpc-name]
+  [service-name rpc-name]
   (let [m (json-marshaller)]
     (-> (MethodDescriptor/newBuilder m m)
         (.setType MethodDescriptor$MethodType/UNARY)
-        (.setFullMethodName (str "sew.simulation.SimulationEngine/" rpc-name))
+        (.setFullMethodName (str "simulation.proto." service-name "/" rpc-name))
         (.build))))
 
 ;; ---------------------------------------------------------------------------
@@ -79,13 +81,14 @@
 
 (defn- handle-start
   "StartSession: allocate a new simulation session.
-   req: {:session-id :agents [{:id :address :type}] :protocol-params {:resolver-fee-bps ...} :initial-block-time}"
+   req: {:session-id :agents [{:id :address :role :strategy}] :protocol-params {:resolver-fee-bps ...} :initial-block-time :protocol-id}"
   [req]
   (let [sid        (:session-id req)
+        pid        (get req :protocol-id preg/default-protocol-id)
         agents     (:agents req [])
         params     (get req :protocol-params {})
         init-time  (get req :initial-block-time 1000)
-        result     (session/create-session! sid agents params init-time)]
+        result     (session/create-session! sid agents params init-time pid)]
     {:session-id sid
      :ok         (boolean (:ok result))
      :error      (some-> (:error result) name)}))
@@ -170,7 +173,8 @@
 
 (defn- unary-handler
   "Wrap a (req → resp) fn as a gRPC ServerCallHandler.
-   Catches exceptions and converts them to gRPC INTERNAL status."
+   Catches all Throwables and converts them to gRPC INTERNAL status with
+   a descriptive message and server-side stack trace."
   [f]
   (ServerCalls/asyncUnaryCall
    (reify io.grpc.stub.ServerCalls$UnaryMethod
@@ -179,43 +183,53 @@
          (let [resp (f req)]
            (.onNext observer resp)
            (.onCompleted observer))
-         (catch Exception e
-           (.onError observer
-                     (-> (Status/INTERNAL)
-                         (.withDescription (.getMessage e))
-                         (.asRuntimeException)))))))))
+         (catch Throwable t
+           (let [msg (str "Internal Simulation Error: " (.getMessage t))]
+              (log/error! "grpc/internal-error" {:error (.getMessage t)})
+             (println (str "[grpc] " msg))
+             (st/print-stack-trace t)
+             (.onError observer
+                       (-> (Status/INTERNAL)
+                           (.withDescription msg)
+                           (.asRuntimeException))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service definition
 ;; ---------------------------------------------------------------------------
 
-(defn- build-service []
-  (let [start-m   (make-method "StartSession")
-        step-m    (make-method "Step")
-        destroy-m (make-method "DestroySession")
-        state-m   (make-method "GetSessionState")
-        suggest-m (make-method "SuggestActions")
-        signals-m (make-method "SessionSignals")
-        payoff-m  (make-method "EvaluatePayoff")
-        objective-m (make-method "EvaluateAttackObjective")
-        svc-desc  (-> (ServiceDescriptor/newBuilder "sew.simulation.SimulationEngine")
+(defn- build-engine-service []
+  (let [start-m   (make-method "SimulationEngine" "StartSession")
+        step-m    (make-method "SimulationEngine" "Step")
+        destroy-m (make-method "SimulationEngine" "DestroySession")
+        state-m   (make-method "SimulationEngine" "GetSessionState")
+        svc-desc  (-> (ServiceDescriptor/newBuilder "simulation.proto.SimulationEngine")
                       (.addMethod start-m)
                       (.addMethod step-m)
                       (.addMethod destroy-m)
                       (.addMethod state-m)
-                      (.addMethod suggest-m)
-                      (.addMethod signals-m)
-                      (.addMethod payoff-m)
-                      (.addMethod objective-m)
                       (.build))]
     (-> (ServerServiceDefinition/builder svc-desc)
         (.addMethod start-m   (unary-handler handle-start))
         (.addMethod step-m    (unary-handler handle-step))
         (.addMethod destroy-m (unary-handler handle-destroy))
         (.addMethod state-m   (unary-handler handle-get-session-state))
-        (.addMethod suggest-m (unary-handler handle-suggest-actions))
-        (.addMethod signals-m (unary-handler handle-session-signals))
-        (.addMethod payoff-m  (unary-handler handle-evaluate-payoff))
+        (.build))))
+
+(defn- build-advisory-service []
+  (let [suggest-m   (make-method "AdvisoryService" "SuggestActions")
+        signals-m   (make-method "AdvisoryService" "SessionSignals")
+        payoff-m    (make-method "AdvisoryService" "EvaluatePayoff")
+        objective-m (make-method "AdvisoryService" "EvaluateAttackObjective")
+        svc-desc    (-> (ServiceDescriptor/newBuilder "simulation.proto.AdvisoryService")
+                        (.addMethod suggest-m)
+                        (.addMethod signals-m)
+                        (.addMethod payoff-m)
+                        (.addMethod objective-m)
+                        (.build))]
+    (-> (ServerServiceDefinition/builder svc-desc)
+        (.addMethod suggest-m   (unary-handler handle-suggest-actions))
+        (.addMethod signals-m   (unary-handler handle-session-signals))
+        (.addMethod payoff-m    (unary-handler handle-evaluate-payoff))
         (.addMethod objective-m (unary-handler handle-evaluate-attack-objective))
         (.build))))
 
@@ -230,16 +244,17 @@
   "Start the gRPC server on the given port (default 7070).
    Returns the started Server instance.
    Throws if a server is already running."
-  ([]     (start! 7070))
+  ([] (start! 7070))
   ([port]
    (when @server
      (throw (ex-info "gRPC server already running" {:port port})))
-   (let [svc (build-service)
-         srv (-> (ServerBuilder/forPort port)
-                 (.addService svc)
+   (let [srv (-> (ServerBuilder/forPort port)
+                 (.addService (build-engine-service))
+                 (.addService (build-advisory-service))
                  (.build)
                  (.start))]
      (reset! server srv)
+      (log/info! "grpc/listening" {:port port})
      (println (str "[grpc] SimulationEngine listening on port " port))
      srv)))
 

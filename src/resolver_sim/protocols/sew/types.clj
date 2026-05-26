@@ -112,6 +112,7 @@
    Numeric fee/timeout fields use integer (uint256 semantics)."
   [{:keys [resolution-module release-strategy cancellation-strategy
            yield-generation-module yield-distribution-module incentive-module
+            yield-module-id yield-profile yield-archetype escrow-modules
            yield-protocol-fee-bps appeal-bond-protocol-fee-bps escrow-fee-bps
            default-auto-release-delay default-auto-cancel-delay
            max-dispute-duration appeal-window-duration dispute-resolver
@@ -121,6 +122,10 @@
   {:resolution-module           resolution-module
    :release-strategy            release-strategy
    :cancellation-strategy       cancellation-strategy
+   :escrow/modules              escrow-modules
+   :yield-module-id             yield-module-id
+   :yield-profile               yield-profile
+   :yield-archetype             yield-archetype
    :yield-generation-module     yield-generation-module
    :yield-distribution-module   yield-distribution-module
    :incentive-module            incentive-module

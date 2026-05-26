@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.invariants
-  "Checkable invariant predicates for the SEW contract model.
+  "Checkable invariant predicates for the Sew contract model.
 
    These mirror the runtime guards in InvariantGuardInternal.sol and define
    the specification for future Foundry invariant tests and Halmos properties.
@@ -15,14 +15,54 @@
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [resolver-sim.protocols.sew.types         :as t]
-            [resolver-sim.protocols.sew.state-machine :as sm]))
+            [resolver-sim.protocols.sew.state-machine :as sm]
+            [resolver-sim.time.invariants :as time-inv]
+            [resolver-sim.yield.invariants :as generic-yield-inv]
+            [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
+
+(def canonical-ids
+  "The full set of canonical invariant IDs across Sew v1.
+   Used for standardized error mapping and validation gates."
+  #{:solvency
+    :fees-non-negative
+    :held-non-negative
+    :all-status-combinations-valid
+    :pending-settlement-consistent
+    :dispute-timestamp-consistent
+    :dispute-level-bounded
+    :slash-status-consistent
+    :appeal-bond-conserved
+    :appeal-bond-custody-consistent
+    :no-auto-fraud-execute
+    :bond-liquidity
+    :bond-slash-bounded
+    :fee-cap
+    :no-stale-automatable-escrows
+    :conservation-of-funds
+    :dispute-resolution-path
+    :slash-distribution-consistent
+    :resolver-bond-mix-valid
+    :senior-coverage-not-exceeded
+    :resolver-not-frozen-on-assign
+    :slash-epoch-cap-respected
+    :reversal-slash-disabled
+    :resolver-capacity
+    :yield-position-consistency
+    :yield-exposure
+    :terminal-states-unchanged
+    :time-non-decreasing
+    :time-no-action-after-finality
+    :finalization-accounting-correct
+    :escalation-level-monotonic
+    :no-withdrawal-during-dispute
+    :time-lock-integrity
+    :token-tax-reconciliation
+     :fees-monotone
+     :single-resolution-payout-consistent
+     :fraud-slash-executions-accounted})
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
-;;
-;; For every token: sum(amount-after-fee for :pending/:disputed escrows) <= total-held
-;;
-;; In the real contract this is enforced by InvariantGuardInternal._checkBalance.
 ;; ---------------------------------------------------------------------------
 
 (defn solvency-holds?
@@ -54,13 +94,25 @@
                                         0
                                         (:escrow-transfers world))
                      ;; Yield sum: yield accrued to live escrows is part of held.
-                     yield-sum  (reduce (fn [acc [_ et]]
-                                          (if (and (= (:token et) token)
-                                                   (contains? live-states (:escrow-state et)))
-                                            (+ acc (:accumulated-yield et 0))
-                                            acc))
+                     yield-sum  (reduce (fn [acc [oid pos]]
+                                          (let [[owner-type escrow-id] oid
+                                                et (get-in world [:escrow-transfers escrow-id])]
+                                            (if (and (= owner-type :sew/escrow)
+                                                     (= (:token pos) token)
+                                                     (contains? live-states (:escrow-state et))
+                                                     (= (:status pos) :active))
+                                              (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
+                                              acc)))
                                         0
-                                        (:escrow-transfers world))
+                                        (:yield/positions world {}))
+                     ;; legacy accumulated-yield (if any still exists)
+                     legacy-yield-sum (reduce (fn [acc [_ et]]
+                                                (if (and (= (:token et) token)
+                                                         (contains? live-states (:escrow-state et)))
+                                                  (+ acc (:accumulated-yield et 0))
+                                                  acc))
+                                              0
+                                              (:escrow-transfers world))
                      ;; Sum of all active appeal bonds for this token.
                      ;; These are part of :total-held.
                      bond-sum (reduce + 0 (for [[wf agents] (:bond-balances world)
@@ -68,7 +120,7 @@
                                                 :let [et (get-in world [:escrow-transfers wf])]
                                                 :when (= (:token et) token)]
                                             amt))
-                     live-sum (+ escrow-sum yield-sum bond-sum)
+                     live-sum (+ escrow-sum yield-sum legacy-yield-sum bond-sum)
                      ext-bal  (when token-balances (get token-balances token 0))
                      ;; Internal: total-held must EXACTLY match live (escrow + bond) sum
                      internal-ok? (= live-sum held)
@@ -195,7 +247,7 @@
 ;; Invariant 7: Valid status combinations
 ;;
 ;; Every escrow must have a (escrow-state × sender-status × recipient-status)
-;; combination that is permitted by the SEW protocol.
+;; combination that is permitted by the Sew protocol.
 ;; ---------------------------------------------------------------------------
 
 (defn all-status-combinations-valid?
@@ -705,17 +757,34 @@
 ;; ---------------------------------------------------------------------------
 
 (defn fees-monotone?
-  "True when total-fees for every token does not decrease across a transition.
-   Fee withdrawals are not modelled in the contract layer, so any decrease is
-   a bug or an unauthenticated drain."
+  "True when total-fees decreases are fully explained by withdraw-fees accounting.
+
+   Allowed transitions per token:
+   - fee-after >= fee-before (normal accumulation)
+   - fee-after < fee-before only if :total-withdrawn increased by exactly
+     (fee-before - fee-after)
+
+   This permits explicit fee withdrawals while still catching silent fee drains."
   [world-before world-after]
   (let [all-tokens (into #{} (concat (keys (:total-fees world-before))
                                      (keys (:total-fees world-after))))
         violations (for [token all-tokens
                          :let [fee-before (get (:total-fees world-before) token 0)
-                               fee-after  (get (:total-fees world-after)  token 0)]
-                         :when (< fee-after fee-before)]
-                     {:token token :fee-before fee-before :fee-after fee-after})]
+                               fee-after  (get (:total-fees world-after)  token 0)
+                               withdrawn-before (get (:total-withdrawn world-before) token 0)
+                               withdrawn-after  (get (:total-withdrawn world-after) token 0)
+                               fee-drop         (- fee-before fee-after)
+                               withdrawn-delta  (- withdrawn-after withdrawn-before)
+                               valid? (or (<= fee-before fee-after)
+                                          (= withdrawn-delta fee-drop))]
+                         :when (not valid?)]
+                     {:token token
+                      :fee-before fee-before
+                      :fee-after fee-after
+                      :withdrawn-before withdrawn-before
+                      :withdrawn-after withdrawn-after
+                      :fee-drop fee-drop
+                      :withdrawn-delta withdrawn-delta})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -774,7 +843,7 @@
 ;;
 ;; This is a necessary but not sufficient condition for eventual resolution.
 ;; Sufficiency is enforced at the scenario level by the end-of-scenario liveness
-;; check in replay/replay-scenario (scenarios without :allow-open-disputes? true
+;; check in sew/replay-with-sew-protocol (scenarios without :allow-open-disputes? true
 ;; must have all disputes resolved before the event list is exhausted).
 ;; ---------------------------------------------------------------------------
 
@@ -823,15 +892,15 @@
          :violations [{:dist-total dist-total :slash-total slash-total}]}))))
 
 ;; ---------------------------------------------------------------------------
-;; Invariant 25: Resolver bond mix valid (80/20 stable/SEW)
+;; Invariant 25: Resolver bond mix valid (80/20 stable/Sew)
 ;;
 ;; Every resolver with a registered bond must hold at least 80% stable and
-;; at most 20% SEW by value.  Uses integer BPS arithmetic (no floating point).
+;; at most 20% Sew by value.  Uses integer BPS arithmetic (no floating point).
 ;; ---------------------------------------------------------------------------
 
 (defn resolver-bond-mix-valid?
-  "True when every resolver's bond satisfies the 80/20 stable/SEW mix rule.
-   Mirrors StakingModuleInvariants: stable >= 80%, SEW <= 20%."
+  "True when every resolver's bond satisfies the 80/20 stable/Sew mix rule.
+   Mirrors StakingModuleInvariants: stable >= 80%, Sew <= 20%."
   [world]
   (let [violations
         (for [[addr bond] (:resolver-bonds world {})
@@ -972,6 +1041,86 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
+;; ---------------------------------------------------------------------------
+;; Invariant 31: Single-resolution payout consistency
+;;
+;; A workflow can only be finalized once. At world-level this implies:
+;;  - terminal escrows must not retain pending settlements
+;;  - terminal escrows must expose at most one positive claimable beneficiary
+;;  - released  => beneficiary may be :to, or none after withdraw_escrow
+;;  - refunded  => beneficiary may be :from, or none after withdraw_escrow
+;; ---------------------------------------------------------------------------
+
+(defn single-resolution-payout-consistent?
+  "True when terminal workflows have exactly one payout direction.
+
+   Detects double-resolution style corruption where both buyer and seller end up
+   with positive claimable balances for the same workflow."
+  [world]
+  (let [terminals #{:released :refunded :resolved}
+        violations
+        (for [[wf et] (:escrow-transfers world {})
+              :when (contains? terminals (:escrow-state et))
+              :let [state         (:escrow-state et)
+                    pending?      (:exists (t/get-pending world wf))
+                    claimable-map (get-in world [:claimable wf] {})
+                    positives     (->> claimable-map
+                                       (filter (fn [[_ amt]] (pos? (or amt 0))))
+                                       (map first)
+                                       vec)
+                    valid-direction?
+                    (case state
+                      :released (or (= positives [(:to et)])
+                                    (empty? positives))
+                      :refunded (or (= positives [(:from et)])
+                                    (empty? positives))
+                      ;; :resolved is legacy/terminal umbrella: allow either single side,
+                      ;; but never dual-positive payouts.
+                      :resolved (<= (count positives) 1)
+                      true)
+                    valid? (and (not pending?) valid-direction?)]
+              :when (not valid?)]
+          {:workflow-id wf
+           :state state
+           :pending? pending?
+           :positive-claimable-addrs positives
+           :to (:to et)
+           :from (:from et)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant 32: Executed fraud slashes are accounted in resolver slash totals
+;;
+;; For each resolver, cumulative :resolver-slash-total must be at least the sum
+;; of executed fraud slash amounts recorded in :pending-fraud-slashes.
+;; ---------------------------------------------------------------------------
+
+(defn fraud-slash-executions-accounted?
+  "True when executed fraud slashes are reflected in :resolver-slash-total.
+
+   This enforces that successful fraud challenges actually debit stake in
+   accounting terms, not just status terms."
+  [world]
+  (let [executed-by-resolver
+        (reduce (fn [acc [_ ev]]
+                  (if (and (= :executed (:status ev))
+                           (= :fraud (:reason ev))
+                           (some? (:resolver ev)))
+                    (update acc (:resolver ev) (fnil + 0) (or (:amount ev) 0))
+                    acc))
+                {}
+                (:pending-fraud-slashes world {}))
+        violations
+        (for [[resolver executed-total] executed-by-resolver
+              :let [accounted (get-in world [:resolver-slash-total resolver] 0)]
+              :when (< accounted executed-total)]
+          {:resolver resolver
+           :executed-fraud-total executed-total
+           :resolver-slash-total accounted})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
@@ -1007,8 +1156,14 @@
                   :resolver-not-frozen-on-assign  (resolver-not-frozen-on-assign? world)
                   :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
                   :reversal-slash-disabled        (reversal-slash-disabled? world)
-                   :resolver-capacity              (resolver-capacity-invariant? world)}
-         all?    (every? #(:holds? %) (vals results))]
+                  :resolver-capacity              (resolver-capacity-invariant? world)
+                   :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
+                   :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
+                  :yield-position-consistency     {:holds? (generic-yield-inv/check-position-consistency world) :violations nil}
+                  :yield-exposure                 {:holds? (sew-yield-inv/check-sew-yield-exposure world) :violations nil}}
+
+                  all?    (every? #(:holds? %) (vals results))]
+
      {:all-hold? all?
       :results   results})))
 
@@ -1021,6 +1176,15 @@
   [world-before world-after]
   (let [results {:terminal-states-unchanged
                  (terminal-states-unchanged? world-before world-after)
+                 :time-non-decreasing
+                 (time-inv/non-decreasing-time? world-before world-after)
+                 :time-no-action-after-finality
+                 (time-inv/no-action-after-finality?
+                   world-before world-after
+                   :entities-before-fn (fn [w] (:escrow-transfers w {}))
+                   :state-after-fn     (fn [w workflow-id]
+                                         (get-in w [:escrow-transfers workflow-id :escrow-state]))
+                   :terminal-states    #{:released :refunded :resolved})
                  :finalization-accounting-correct
                  (finalization-accounting-correct? world-before world-after)
                  :escalation-level-monotonic

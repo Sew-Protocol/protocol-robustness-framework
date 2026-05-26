@@ -1,14 +1,14 @@
 (ns resolver-sim.protocols.sew.replay-bridge-test
-  "Smoke tests for the legacy SEW bridge functions in contract-model.replay.
+  "Smoke tests for the legacy Sew bridge functions in contract-model.replay.
 
    These functions (build-context, sew-dispatch-action,
    sew-check-invariants-single, sew-check-invariants-transition) wrap
-   DisputeProtocol calls through the SEWProtocol singleton.  They exist to
+   DisputeProtocol calls through the SewProtocol singleton.  They exist to
    keep existing callers (server/session, io/trace-export, sim/minimizer, etc.)
    unchanged while the protocol abstraction layer matures.
 
    Tests here verify the wiring — that each function calls the correct
-   protocol method and returns the expected shape — not the SEW business logic
+   protocol method and returns the expected shape — not the Sew business logic
    itself (which is covered by protocols/sew/*_test.clj)."
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.contract-model.replay    :as replay]

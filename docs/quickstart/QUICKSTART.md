@@ -1,106 +1,124 @@
-# Quick Start: Dispute Resolver Simulation
+# Quick Start: Protocol Robustness Framework
 
-## 🚀 Running Your First Simulation
+## Requirements
 
-### Option 1: Canonical Validation Gate (Recommended)
+- **Java 11+** / **Clojure CLI** ([install guide](https://clojure.org/guides/install_clojure))
+- **Python 3.10+** (adversarial bridge only — not needed for in-process runs)
+
+---
+
+## Step 1: Run the canonical validation gate
+
+This is the authoritative single-command check. Run it first.
+
 ```bash
-# Quick validation check (canonical test gate)
 ./scripts/test.sh all
-
-# Run a specific scenario suite
-./run.sh -p data/params/baseline.edn
 ```
 
-### Option 2: Direct Clojure Command
+Runs five targets in sequence: unit tests, generator regression, contract checks,
+deterministic invariant suite (S01–S41), and fixture suites. See
+`docs/testing/RUNNING_TESTS.md` for the current known-baseline and any expected failures.
+
+---
+
+## Step 2: Run the deterministic invariant suite alone (fast)
+
+No server required. Runs in ~1 second.
+
 ```bash
-# Run in-process invariant validation (S01–S41)
 clojure -M:run -- --invariants
-
-# Run Monte Carlo simulation with strategy sweep
-clojure -M:run -- -p data/params/baseline.edn -s
 ```
 
-## Understanding Results
+Executes all S01–S41 in-process scenarios against the Sew state machine and checks
+invariants at every transition. Each scenario is pass/fail with explicit violation
+counts. Expect output like:
 
-The simulation outputs three files to `results/TIMESTAMP_scenario_id/`:
+```
+  Sew Invariant Suite — Deterministic Scenarios
+  ✓ PASS  S01  baseline-happy-path          steps=3   reverts=0
+  ✓ PASS  S02  dr3-dispute-release          steps=4   reverts=0
+  ...
+  41/41 passed  (0.9 s)
+```
 
-- **summary.edn**: Full statistics (means, stds, quantiles, dominance ratio)
-- **results.csv**: For plotting/analysis in Python/Excel
-- **metadata.edn**: Run reproducibility info (seed, git commit, params)
+---
 
-### Key Metrics
+## Step 3: Run the adversarial gRPC suite
 
-**Dominance Ratio**: `honest_mean_profit / malice_mean_profit`
-- \>1.0 means honest is more profitable ✅
-- >3.0 means malicious strategy is strongly dominated
-- Goal: **≥3.0** across all scenarios (proves incentive alignment)
+Requires the Clojure gRPC server.
 
-**Appeal Rate & Slash Rate**: How often disputes are appealed/slashed
-- Higher = safer (attacks are caught)
-- Lower = more efficient (fewer disputes)
-
-## Scenarios & Suites
-
-Scenarios are defined in `data/params/` (Monte Carlo) and `data/fixtures/` (Deterministic).
-
-### Main Scenarios
-- **baseline.edn**: Standard parameters (1.5% fee, 7% bond, 2.5× slashing).
-- **whale-attack.edn**: Large escrows + organized malice.
-- **cartel.edn**: Parameter sweep for fee/bond/slashing optimization.
-- **sybil-re-entry.edn**: Long-term reputation vs sybil identities (Phase J).
-
-### Deterministic Suites
 ```bash
-# Run all invariant scenarios
-clojure -M -e "(require '[resolver-sim.sim.fixtures :as f])(f/run-suite :suites/all-invariants)"
+# Start server in background
+nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
+sleep 8
+
+# Run all adversarial scenarios (Python)
+pip install -e python/
+cd python && python invariant_suite.py
 ```
 
-## Testing
+This runs 33 adversarial scenarios where Python agents interact with the live
+contract model. See `docs/usage.md` for scenario-by-scenario flags.
 
-All tests pass using the utility script:
+---
+
+## Step 4: Run a Monte Carlo statistical phase
+
+No server required. Results written to `results/`.
+
 ```bash
-./scripts/test.sh
+clojure -M:run -- -p data/params/baseline.edn
 ```
 
-Tests cover:
-- Fee & bond calculations
-- RNG determinism (reproducibility)
-- Honest vs malicious dominance
-- State machine invariants
+See `data/params/PHASES.md` for the full list of parameter files and what each
+phase hypothesis tests.
+
+---
 
 ## Architecture Overview
 
 ```
 src/resolver_sim/
-  contract_model/   - Protocol-agnostic replay kernel (replay.clj)
-  protocols/        - DisputeProtocol interface + SEW and Dummy implementations
-    sew/            - SEW state machine, lifecycle, invariants, accounting
-  stochastic/       - Statistical models (rng, difficulty, decision quality)
-  sim/              - Monte Carlo simulation phases and harness
-  io/               - Parameter loading and result serialisation
-  core.clj          - CLI entry point
+  contract_model/   — Protocol-agnostic deterministic replay kernel
+  protocols/        — SimulationAdapter interfaces + Sew and Dummy adapters
+    sew/            — Sew state machine, lifecycle, accounting, invariants
+  stochastic/       — Statistical models (rng, economics, decision quality)
+  sim/              — Monte Carlo simulation phases and harness
+  io/               — Parameter loading and result serialization
+  core.clj          — CLI entry point
 ```
 
-**Key principle**: All logic in `protocols/`, `contract_model/`, and `stochastic/` is pure (no side effects). RNG is explicitly passed as a parameter.
+All logic in `protocols/`, `contract_model/`, and `stochastic/` is pure (no side
+effects). RNG is an explicit parameter. See `docs/architecture/ARCHITECTURE.md`
+for the full namespace map and layering rules.
 
-## Reproducibility Guarantees
+---
 
-**Same seed + params = exact same results, byte-for-byte.**
+## Reproducibility
 
-This works because:
-1. RNG seeding is deterministic (SplittableRandom)
-2. Trial ordering doesn't affect aggregates (commutative)
-3. All params are snapshots (including git commit in metadata)
+**Same seed + params → identical output, byte-for-byte.**
+
+1. Deterministic replay: no randomness. Same scenario + same code = same trace.
+2. Monte Carlo: explicit SplittableRandom seed. Same seed + params = identical results.
+3. Every run captures git SHA, seed, JVM version, and timestamp in `metadata.edn`.
+
+---
 
 ## Troubleshooting
 
+**`./scripts/test.sh` fails with reader or namespace errors**
+Check `docs/testing/RUNNING_TESTS.md` for the current known-baseline. Some
+failures are tracked and documented; confirm whether yours is known before debugging.
+
 **"No such file or directory"**
-- Make sure you're in the project root when running scripts.
-- Check that paths start with `data/params/` or `data/fixtures/`.
+Run scripts from the repository root. Paths start with `data/params/` or `data/fixtures/`.
 
-**Results look wrong (e.g., honest_mean = 0)**
-- Check that the parameter file has required keys.
-- Ensure the gRPC server is NOT required for the command you are running (most commands are in-process).
+**gRPC server not starting**
+Check `grpc-server.log` for errors. Allow 10–15 seconds for JVM startup.
+Verify port 7070 is not already in use.
 
-**Permission denied on run.sh**
-- Make it executable: `chmod +x run.sh scripts/test.sh`
+**Permission denied on scripts**
+```bash
+chmod +x run.sh scripts/test.sh
+```
+

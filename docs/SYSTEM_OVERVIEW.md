@@ -1,4 +1,4 @@
-# SEW Simulation: State, Interpretation, and Roadmap
+# Sew Simulation: State, Interpretation, and Roadmap
 
 *A plain-language guide for protocol designers, researchers, and grant reviewers.*
 
@@ -6,7 +6,7 @@
 
 ## What this system is
 
-SEW is a dispute-resolution protocol for on-chain escrow. When a buyer and seller
+Sew is a dispute-resolution protocol for on-chain escrow. When a buyer and seller
 disagree, a resolver is called in to make a binding decision. The protocol must ensure
 that the resolver behaves honestly — and that an attacker cannot game the outcome,
 exhaust the resolver network, or drain the insurance pool.
@@ -259,13 +259,11 @@ as sensitivity analysis, not as security proofs.
 
 ### For researchers who want to challenge the results
 
-See `docs/challenge/BENCHMARK_CHALLENGE.md` for three specific tasks:
-- Find a profitable attack not covered by the 41 scenarios
-- Find an invariant violation in the deterministic suite
-- Beat the baseline dispute resolution cost/latency model
-
 The falsification checklist in the evidence pack lists the exact assumptions that
-would invalidate the headline claim if violated.
+would invalidate the headline claim if violated. Three specific challenge tasks
+(find a profitable attack not covered by the 41 scenarios, find an invariant violation,
+beat the baseline DR cost/latency model) are documented in
+`docs/archive/challenge/BENCHMARK_CHALLENGE.md`.
 
 ---
 
@@ -343,7 +341,7 @@ event sequence, and the protocol interface is pluggable.
 
 ### Target end state
 
-A complete security argument for the SEW protocol requires three layers that reinforce
+A complete security argument for the Sew protocol requires three layers that reinforce
 each other:
 
 ```
@@ -397,8 +395,81 @@ specification*.
 | Generate attack-outcome diagrams | `python python/attack_outcome_map.py` |
 
 Parameter files live in `data/params/`. Results are written to `results/`. The
-evidence pack and research note are in `docs/evidence/` and `docs/RESEARCH_NOTE_V0.md`.
+evidence pack is in `docs/evidence/`.
 
 ---
 
-*Document reflects repository state as of branch `monte-carlo-sync` (post mc-b series).*
+## Technical architecture
+
+> Merged from `docs/overview/SIMULATION_OVERVIEW.md`.
+
+`sew-simulation` is an adapter-oriented robustness framework with a **framework substrate**
+and a **protocol adapter layer**. The repository currently includes the Sew protocol model
+as the primary validation target.
+
+- The replay kernel (`contract_model/replay.clj`) is protocol-agnostic.
+- Protocol logic is provided via the `SimulationAdapter` interface (`protocols/protocol.clj`),
+  with optional `EconomicModel` and `AnalysisModule` extensions.
+- `SewProtocol` (`protocols/sew.clj`) is the adapter that connects Sew domain logic
+  (`protocols/sew/*`) to those interfaces.
+
+### Architecture in one view
+
+| Layer | Purpose | Key namespaces |
+|---|---|---|
+| Protocol-agnostic kernel | Deterministic replay of scenario actions | `contract_model/replay.clj` |
+| Protocol adapters | Plug-in interface + concrete implementation wiring | `protocols/protocol.clj`, `protocols/sew.clj`, `protocols/dummy.clj` |
+| Shared adapter flow-control | Reusable precondition wrappers (actor resolution, checks, role gates) | `protocols/common/action_context.clj` |
+| Sew domain implementation | State machine, lifecycle, accounting, resolution, invariants | `protocols/sew/*` |
+| Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*` |
+| Shell/integration | Persistence, file I/O, gRPC/session management, CLI | `db/*`, `io/*`, `server/*`, `core.clj` |
+
+### Namespace maturity
+
+**Stable core (framework-level):**
+`contract_model/*`, `protocols/protocol.clj`, `protocols/common/*`, `scenario/*`,
+`io/scenarios.clj`, `db/*`, `server/*`
+
+**Sew implementation (production-grade for this repo):**
+`protocols/sew/*`, `yield/modules/aave.clj` and Sew-integrated yield flows.
+Sew is the primary protocol model. Its semantics are not assumed to be universal.
+
+**Generic adapter façades (stable API; Sew default providers today):**
+`generators/actions.clj` → `generators/sew/actions.clj`,
+`generators/adversarial.clj` → `generators/sew/adversarial.clj`,
+`io/trace_score.clj` → `io/sew/trace_score.clj`
+
+**Experimental / research track (exclude from core capability claims):**
+`sim/adversarial/reorg_check.clj`, selected exploratory `sim/*` modules, `research/sew/*`
+
+For the complete namespace-to-layer mapping table see `docs/architecture/ARCHITECTURE.md` Appendix A.
+
+### Yield module status controls
+
+Yield behavior is configured through the scenario DSL and enforced at module-op execution time:
+
+- Scenario config supports `:yield-config` with per-module `:module-status`.
+- Module status semantics (Aave v3 currently):
+  - `:active` — deposits and withdrawals allowed (subject to liquidity mode)
+  - `:disabled-for-new-deposits` — deposits blocked, withdrawals allowed
+  - `:paused` — deposits and withdrawals blocked
+- Liquidity stress modes (`:shortfall`, `:frozen`, `:paused`) block both paths for affected token/module pairs.
+
+These controls are tested in focused yield failure tests and are replay/scenario-driven rather than ad-hoc fixture mutation.
+
+### How to navigate
+
+| Goal | Document |
+|---|---|
+| Deep architecture and layering rules | `docs/architecture/ARCHITECTURE.md` |
+| Adapter implementation and authoring | `docs/architecture/ADAPTER_AUTHORING_GUIDE.md` |
+| Framework / adapter / Sew / research boundaries | `docs/framework-boundaries.md` |
+| Reusable adapter design notes | `docs/overview/REUSABLE_COMPONENTS.md` |
+| Use-of-funds accounting contract | `docs/overview/USE_OF_FUNDS.md` |
+| End-user and CLI workflows | `docs/quickstart/QUICKSTART.md`, `docs/usage.md` |
+| Test suite reference | `docs/testing/TEST_SUITE.md`, `docs/testing/RUNNING_TESTS.md` |
+| Evidence and reproducibility | `docs/evidence/RESEARCHER_EVIDENCE_PACK.md` |
+
+---
+
+*Document reflects repository HEAD. Scope notes intentionally avoid hard-coding volatile counts (exact scenario totals, phase totals, benchmark percentages) so this file stays accurate as the simulation suite evolves.*

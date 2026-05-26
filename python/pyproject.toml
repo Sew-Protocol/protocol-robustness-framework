@@ -21,10 +21,10 @@ dev = [
 ]
 
 [project.scripts]
-sew-gen = "sew_sim.cli:main"
+sew-gen = "sim_api.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sew_sim"]
+packages = ["sim_api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

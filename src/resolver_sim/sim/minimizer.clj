@@ -1,9 +1,13 @@
 (ns resolver-sim.sim.minimizer
-  "Trace minimisation engine for SEW simulations.
+  "Trace minimisation proto.
    Reduces a failing event sequence to its 1-minimal subset that still
-   triggers a target invariant violation."
+   triggers a target invariant violation.
+
+   The core algorithm (fails?, minimize) is protocol-agnostic: pass any
+   DisputeProtocol implementation. The CLI entry point defaults to the
+   registry default protocol (resolver-sim.protocols.registry/default-protocol-id)."
   (:require [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.protocols.registry :as preg]
             [clojure.data.json :as json]
             [clojure.walk :as walk]
             [clojure.java.io :as io]
@@ -53,10 +57,14 @@
         (sort-by :time events)))
 
 (defn fails?
-  "True if the scenario fails with the target-invariant violation."
+  "True if the scenario fails with the target-invariant violation.
+   Accepts an optional protocol (defaults to registry default protocol)."
   ([scenario] (fails? scenario nil))
   ([scenario target-invariant]
-   (let [res (replay/replay-with-protocol sew/protocol scenario)
+   (fails? scenario target-invariant
+           (preg/get-protocol preg/default-protocol-id)))
+  ([scenario target-invariant protocol]
+   (let [res (replay/replay-with-protocol protocol scenario)
          last-entry (last (:trace res))
          violations (get-in last-entry [:violations])]
      (and (= :fail (:outcome res))
@@ -68,14 +76,14 @@
 (defn- try-remove
   "Attempt to remove event at index i and check if it still fails.
    Events with :minimize/pin true are never removed."
-  [scenario i target-invariant]
+  [scenario i target-invariant protocol]
   (let [events (:events scenario)
         event  (nth events i)]
     (if (:minimize/pin event)
       scenario
       (let [new-events   (vec (concat (subvec events 0 i) (subvec events (inc i))))
             new-scenario (assoc scenario :events (re-index-events new-events))]
-        (if (fails? new-scenario target-invariant)
+        (if (fails? new-scenario target-invariant protocol)
           new-scenario
           scenario)))))
 
@@ -91,17 +99,22 @@
   "Greedily minimize the scenario trace, then prune unreferenced agents.
 
    Events annotated with :minimize/pin true are never removed, preserving
-   causal pairs that are required to trigger a specific invariant violation."
-  [scenario target-invariant]
-  (println "Starting minimization of" (count (:events scenario)) "events...")
-  (let [minimized
-        (loop [current scenario
-               i       (dec (count (:events scenario)))]
-          (if (neg? i)
-            current
-            (recur (try-remove current i target-invariant) (dec i))))]
-    (println "Minimization complete:" (count (:events minimized)) "events remain.")
-    (prune-unreferenced-agents minimized)))
+   causal pairs that are required to trigger a specific invariant violation.
+
+   Accepts an optional protocol (defaults to registry default protocol)."
+  ([scenario target-invariant]
+   (minimize scenario target-invariant
+             (preg/get-protocol preg/default-protocol-id)))
+  ([scenario target-invariant protocol]
+   (println "Starting minimization of" (count (:events scenario)) "events...")
+   (let [minimized
+         (loop [current scenario
+                i       (dec (count (:events scenario)))]
+           (if (neg? i)
+             current
+             (recur (try-remove current i target-invariant protocol) (dec i))))]
+     (println "Minimization complete:" (count (:events minimized)) "events remain.")
+     (prune-unreferenced-agents minimized))))
 
 ;; ---------------------------------------------------------------------------
 ;; CLI Entry Point

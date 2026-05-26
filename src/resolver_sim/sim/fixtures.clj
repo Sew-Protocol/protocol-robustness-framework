@@ -10,22 +10,12 @@
             [clojure.walk :as walk]
             [clojure.data.json :as json]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.invariants :as inv]
-            [resolver-sim.protocols.sew.diff :as diff]
-            [resolver-sim.canonical.actions :as canon]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.sim.minimizer :as minimizer]
+            [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.expectations :as expectations]
             [clojure.pprint :as pp]))
-
-;; ---------------------------------------------------------------------------
-;; Canonical Action Mapping
-;; ---------------------------------------------------------------------------
-
-(def impl->canonical
-  "Reverse mapping for trace reporting."
-  (into {} (map (fn [[k v]] [v k]) resolver-sim.canonical.actions/action-map)))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixture Loading
@@ -198,10 +188,14 @@
       {:ok? false :expected golden :actual report})))
 
 (defn run-suite
-  "Execute a suite fixture: compose, replay traces, validate thresholds, and optionally save or verify golden reports."
-  ([suite-key] (run-suite suite-key nil))
-  ([suite-key mode]
-   (let [suite (compose-suite (load-fixture suite-key))
+  "Execute a suite fixture: compose, replay traces, validate thresholds, and optionally save or verify golden reports.
+   An optional protocol can be supplied; defaults to the registry default protocol."
+  ([suite-key] (run-suite suite-key nil nil))
+  ([suite-key mode] (run-suite suite-key mode nil))
+   ([suite-key mode protocol]
+   (let [effective-protocol (or protocol
+                                (preg/get-protocol preg/default-protocol-id))
+         suite (compose-suite (load-fixture suite-key))
          traces (:traces suite [])
          thresholds (:thresholds suite {})
          proto (:protocol suite)
@@ -210,11 +204,7 @@
          actors (:actors suite)
          token (:token suite)
          results (mapv (fn [trace]
-                         (let [;; Merge protocol-params: suite provides baseline defaults,
-                               ;; trace-level params take priority so per-trace overrides
-                               ;; (e.g. resolution-module, max-dispute-duration, escalation-resolvers)
-                               ;; are preserved rather than silently discarded.
-                               merged-proto (when proto
+                         (let [merged-proto (when proto
                                               (merge (dissoc proto :protocol/id)
                                                      (:protocol-params trace)))
                                effective-trace (cond-> trace
@@ -223,7 +213,7 @@
                                                  authority (assoc :authority-params authority)
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
-                               res (replay/replay-scenario effective-trace)
+                               res (replay/replay-with-protocol effective-protocol effective-trace)
                                report (generate-golden-report suite-key res)
                                comparison (when (= mode :verify) (compare-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
                                
@@ -257,47 +247,17 @@
                             :theory theory-res}))
                        traces)
          theory-ok? (fn [r]
-                      ;; Theory result is acceptable when:
-                      ;; - no theory block (:not-evaluated)
-                      ;; - claim was not falsified (:not-falsified)
-                      ;; - claim was falsified AND the scenario is explicitly a theory-falsification exercise
-                      ;; :inconclusive is treated as a soft warning, not a hard failure
-                      ;;
-                       ;; Mechanism-property and equilibrium-concept results (CDRS v1.1):
-                       ;; - hard :fail → hard failure UNLESS purpose = :theory-falsification
-                       ;; - soft :fail  → warning only (treated as inconclusive)
-                      ;; - :inconclusive / :not-applicable → soft warning (suite still passes)
-                      ;; - :not-checked → no properties declared; passes
-                      ;;
-                      ;; Negative test cases (purpose = :theory-falsification) are expected to
-                      ;; produce :fail — including mechanism and equilibrium :fail results.
-                       (let [status       (get-in r [:theory :status])
-                            purpose      (keyword (or (:purpose r) ""))
-                            neg-test?    (= purpose :theory-falsification)
-                            mech-status  (get-in r [:theory :mechanism-status] :not-checked)
-                            eq-status    (get-in r [:theory :equilibrium-status] :not-checked)
-                             mech-results (vals (get-in r [:theory :mechanism-results] {}))
-                             eq-results   (vals (get-in r [:theory :equilibrium-results] {}))
-                             strict?      (true? (get-in r [:theory-source :require-conclusive?]))
-                             hard-fail?   (fn [results]
-                                            (some #(and (= :fail (:status %))
-                                                        (= :hard (:severity %)))
-                                                  results))
-                             inconclusive? (fn [status-kw]
-                                             (contains? #{:inconclusive :not-applicable} status-kw))
-                            falsify-ok?  (case status
-                                           nil            true
-                                           :not-evaluated true
-                                           :not-falsified true
-                                           :falsified     neg-test?
-                                           :inconclusive  true
-                                           true)
-                             mech-ok?     (and
-                                           (or (not (hard-fail? mech-results)) neg-test?)
-                                           (or (not strict?) (not (inconclusive? mech-status))))
-                             eq-ok?       (and
-                                           (or (not (hard-fail? eq-results)) neg-test?)
-                                           (or (not strict?) (not (inconclusive? eq-status))))]
+                      (let [status        (get-in r [:theory :status])
+                            purpose       (:purpose r)
+                            mech-status   (get-in r [:theory :mechanism-status] :not-checked)
+                            eq-status     (get-in r [:theory :equilibrium-status] :not-checked)
+                            mech-results  (vals (get-in r [:theory :mechanism-results] {}))
+                            eq-results    (vals (get-in r [:theory :equilibrium-results] {}))
+                            strict?       (true? (get-in r [:theory-source :require-conclusive?]))
+                            opts          {:require-conclusive? strict?}
+                            falsify-ok?   (ose/theory-status-ok? status purpose opts)
+                            mech-ok?      (ose/domain-results-ok? purpose mech-status mech-results opts)
+                            eq-ok?        (ose/domain-results-ok? purpose eq-status eq-results opts)]
                         (and falsify-ok? mech-ok? eq-ok?)))
          all-ok? (every? (fn [r] (and (= :pass (:outcome r))
                                       (:ok? (:threshold-validation r))
@@ -319,39 +279,42 @@
    are minimized; passing traces and structural failures are skipped.
 
    Returns {:suite-id kw :target-invariant kw :minimized-count int :results [...]}"
-  [suite-key target-invariant]
-  (let [suite (compose-suite (load-fixture suite-key))
-        traces (:traces suite [])
-        proto (:protocol suite)
-        state (:state suite)
-        authority (:authority suite)
-        actors (:actors suite)
-        results (atom [])]
-    (doseq [trace traces]
-      (let [merged-proto (when proto
-                           (merge (dissoc proto :protocol/id)
-                                  (:protocol-params trace)))
-            effective-trace (cond-> trace
-                              merged-proto (assoc :protocol-params merged-proto)
-                              state (assoc :initial-block-time (:block-time state 1000))
+  ([suite-key target-invariant] (minimise-suite suite-key target-invariant nil))
+  ([suite-key target-invariant protocol]
+   (let [effective-protocol (or protocol
+                                (preg/get-protocol preg/default-protocol-id))
+         suite (compose-suite (load-fixture suite-key))
+         traces (:traces suite [])
+         proto (:protocol suite)
+         state (:state suite)
+         authority (:authority suite)
+         actors (:actors suite)
+         results (atom [])]
+     (doseq [trace traces]
+       (let [merged-proto (when proto
+                            (merge (dissoc proto :protocol/id)
+                                   (:protocol-params trace)))
+             effective-trace (cond-> trace
+                               merged-proto (assoc :protocol-params merged-proto)
+                               state (assoc :initial-block-time (:block-time state 1000))
                               authority (assoc :authority-params authority)
                               actors (assoc :agents (vec (concat (:agents trace []) actors))))
-            replay-result (replay/replay-scenario effective-trace)]
-        (when (and (= :fail (:outcome replay-result))
-                   (= :invariant-violation (:halt-reason replay-result)))
-          (let [minimized (minimizer/minimize effective-trace target-invariant)]
-            (swap! results conj
-                   {:trace-id             (:scenario-id effective-trace)
-                    :target-invariant     target-invariant
-                    :event-count          (count (:events minimized))
-                    :original-event-count (count (:events effective-trace))
-                    :reduction            (- (count (:events effective-trace))
-                                             (count (:events minimized)))
-                    :minimized-trace      minimized})))))
-    {:suite-id         suite-key
-     :target-invariant target-invariant
-     :minimized-count  (count @results)
-     :results          @results}))
+             replay-result (replay/replay-with-protocol effective-protocol effective-trace)]
+         (when (and (= :fail (:outcome replay-result))
+                    (= :invariant-violation (:halt-reason replay-result)))
+           (let [minimized (minimizer/minimize effective-trace target-invariant)]
+             (swap! results conj
+                    {:trace-id             (:scenario-id effective-trace)
+                     :target-invariant     target-invariant
+                     :event-count          (count (:events minimized))
+                     :original-event-count (count (:events effective-trace))
+                     :reduction            (- (count (:events effective-trace))
+                                              (count (:events minimized)))
+                     :minimized-trace      minimized})))))
+     {:suite-id         suite-key
+      :target-invariant target-invariant
+      :minimized-count  (count @results)
+      :results          @results})))
 
 ;; ---------------------------------------------------------------------------
 ;; Suite Discovery

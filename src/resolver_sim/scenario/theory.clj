@@ -1,5 +1,5 @@
 (ns resolver-sim.scenario.theory
-  "Theory evaluator for CDRS v1.1 scenarios.
+  "Theory evaluator for schema-profile-driven scenarios.
 
    Determines whether a theoretical claim is falsified by replay metrics.
    This namespace is pure — no I/O, no DB, no side effects.
@@ -90,7 +90,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Theory field consumption table
 ;;
-;; This function reads the :theory map from a CDRS v1.1 scenario.
+;; This function reads the :theory map from schema-profile-driven scenarios.
 ;; Not all schema fields drive evaluation — see the table below.
 ;;
 ;;   Field                   Status      Consumed by this fn?
@@ -163,20 +163,16 @@
                              :else            :not-falsified)
             eq-result (when (or (seq (:mechanism-properties theory))
                                 (seq (:equilibrium-concept theory)))
-                        (equilibrium/evaluate-equilibrium theory result))
-            spe-result (get-in eq-result [:equilibrium-results :subgame-perfect-equilibrium])]
+                        (equilibrium/evaluate-equilibrium theory result))]
         (merge
          {:status     falsify-status
           :falsified? (= falsify-status :falsified)
           :evidence   @falsified}
          (if eq-result
-           (cond-> {:mechanism-results  (:mechanism-results eq-result)
-                    :mechanism-status   (:mechanism-status eq-result)
-                    :equilibrium-results (:equilibrium-results eq-result)
-                    :equilibrium-status  (:equilibrium-status eq-result)}
-             spe-result (merge {:spe-status     (get-in spe-result [:observed :spe-status] :inconclusive)
-                                :spe-summary    (get-in spe-result [:observed :spe-summary])
-                                :spe-violations (get-in spe-result [:observed :spe-violations] [])}))
+           {:mechanism-results   (:mechanism-results eq-result)
+            :mechanism-status    (:mechanism-status eq-result)
+            :equilibrium-results (:equilibrium-results eq-result)
+            :equilibrium-status  (:equilibrium-status eq-result)}
            {:mechanism-results   {}
             :mechanism-status    :not-checked
             :equilibrium-results {}

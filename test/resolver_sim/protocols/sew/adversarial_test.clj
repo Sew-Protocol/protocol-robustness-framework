@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.adversarial-test
-  "Adversarial test suite for the SEW contract model.
+  "Adversarial test suite for the Sew contract model.
 
    Tests six attack categories:
      A. State machine attacks   — illegal transitions, double-finalize
@@ -421,8 +421,9 @@
     (is (transition-holds? w-at-dl (:world r)))))
 
 (deftest d3-execute-pending-after-cleared-by-escalation
-  "Execute-pending after escalation cleared the pending settlement.
-   Must fail with :no-pending-settlement."
+  "Execute-pending after escalation cleared active pending settlement.
+   With superseded-pending fallback enabled, execution may still succeed
+   using the latest eligible superseded pending at/after deadline."
   (let [{:keys [world wf-id]} (make-pending (t/empty-world 1000) 86400)
         ;; Escalate — clears pending
         er  (res/escalate-dispute world wf-id alice esc-fn)
@@ -434,9 +435,9 @@
         dl  (:appeal-deadline (t/get-pending world wf-id))
         w2  (assoc w1 :block-time (+ dl 1))
         r   (res/execute-pending-settlement w2 wf-id)]
-    (is (false? (:ok r)))
-    (is (= :no-pending-settlement (:error r)))
-    (is (invariants-hold? w2))))
+    (is (true? (:ok r)) "eligible superseded pending should execute")
+    (is (= :released (t/escrow-state (:world r) wf-id)))
+    (is (invariants-hold? (:world r)))))
 
 (deftest d4-dispute-timeout-before-exceeded
   "automate-timed-actions: dispute timeout check fires only after max-dispute-duration.

@@ -1,7 +1,7 @@
 (ns resolver-sim.io.trace-score
   "Scoring function for replay traces.
 
-   Assigns a numeric :trace-score to any replay-scenario result.  Higher
+   Assigns a numeric :trace-score to any replay-with-protocol result. Higher
    scores indicate traces that are more valuable for regression coverage:
 
      score = attacker-profit
@@ -26,6 +26,12 @@
      1 if any escrow in the final state is still :pending or :disputed at
      the last trace step (escrow never resolved).  Weighted ×5.
 
+   Adapter status
+   --------------
+   This namespace preserves a stable, generic call surface while delegating
+   protocol-specific score semantics to protocol-scoped providers.
+   Current default provider: Sew (`resolver-sim.io.sew.trace-score`).
+
    Categories
    ----------
    score-category classifies a scored result into one or more category
@@ -33,30 +39,15 @@
      :top-profitable  — attack-successes > 0
      :liveness-fail   — liveness-failure? = true
      :cascade         — disputes-triggered > 1
-     :abnormal-slash  — invariant-violations > 0 AND slashing-related violation"
-  (:require [resolver-sim.protocols.sew.diff :as diff]
-            [resolver-sim.protocols.sew.trace-metadata   :as meta]))
-
-;; ---------------------------------------------------------------------------
-;; Liveness check
-;; ---------------------------------------------------------------------------
-
-(defn- liveness-failure?
-  "Returns true if the final world state contains any escrow in a non-terminal
-   state (:pending or :disputed).  Reads the last trace entry's projection."
-  [trace]
-  (let [last-entry (last trace)
-        proj       (:projection last-entry)]
-    (when proj
-      (let [transfers (vals (:escrow-transfers proj {}))]
-        (boolean (some #(#{:pending :disputed} (:escrow-state %)) transfers))))))
+     :abnormal-slash  — invariant-violations > 0"
+  (:require [resolver-sim.io.sew.trace-score :as sew-ts]))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: score-result
 ;; ---------------------------------------------------------------------------
 
 (defn score-result
-  "Compute :trace-score for a replay-scenario result map.
+  "Compute :trace-score for a replay-with-protocol result map.
 
    Returns the result map augmented with:
      :trace-score       — numeric score (higher = more interesting)
@@ -65,23 +56,10 @@
    Formula:
      score = attacker-profit + (10 × invariant-violations) + (5 × liveness-failure?)
 
-   Works with any replay-scenario result regardless of :outcome."
+   Compatibility adapter: currently delegates to the Sew scorer.
+   Works with replay results regardless of :outcome."
   [result]
-  (let [metrics             (:metrics result {})
-        attack-successes    (:attack-successes metrics 0)
-        invariant-violations (:invariant-violations metrics 0)
-        trace               (:trace result [])
-        liveness?           (liveness-failure? trace)
-        liveness-penalty    (if liveness? 1 0)
-        score               (+ attack-successes
-                               (* 10 invariant-violations)
-                               (* 5  liveness-penalty))]
-    (assoc result
-           :trace-score      score
-           :issue/type       (meta/classify-issue (assoc result :score-components {:liveness-failure liveness-penalty}))
-           :score-components {:attacker-profit     attack-successes
-                              :invariant-violations invariant-violations
-                              :liveness-failure     liveness-penalty})))
+  (sew-ts/score-result result))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: score-category

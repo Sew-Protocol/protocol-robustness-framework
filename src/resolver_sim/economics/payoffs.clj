@@ -1,8 +1,12 @@
 (ns resolver-sim.economics.payoffs
-  "Economic logic for the SEW protocol.
-   Centralizes payoff, fee, and bounty calculations for the SEW protocol
-   to ensure consistency across the simulation and contract model."
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  "[REFERENCE-IMPLEMENTATION ALIGNED] Economic logic for dispute-protocol simulations.
+   Centralizes payoff, fee, and bounty calculations used by simulation and
+   contract-model flows.
+
+   Boundary note:
+   - This namespace is currently aligned with the active Sew accounting path.
+   - Treat constants and payout formulas here as reference defaults, not
+     universal cross-protocol economics." )
 
 ;; Fee denominator constant
 (def ^:private fee-denominator 10000)
@@ -30,7 +34,7 @@
   "Calculate the protocol fee deducted from an appeal bond.
    Returns {:fee amount :net amount}"
   [amount fee-bps]
-  (let [fee (t/compute-fee amount fee-bps)]
+  (let [fee (compute-fee amount fee-bps)]
     {:fee fee
      :net (- amount fee)}))
 
@@ -39,7 +43,7 @@
    If challenge-bond-bps is 0, falls back to appeal-bond-amount or default."
   [afa snap]
   (if (pos? (:challenge-bond-bps snap 0))
-    (t/compute-fee afa (:challenge-bond-bps snap))
+    (compute-fee afa (:challenge-bond-bps snap))
     (or (:appeal-bond-amount snap) 100)))
 
 (defn calculate-appeal-bond-amount
@@ -47,7 +51,7 @@
   [afa snap]
   (if (pos? (:appeal-bond-amount snap 0))
     (:appeal-bond-amount snap)
-    (t/compute-fee afa (:appeal-bond-bps snap 0))))
+    (compute-fee afa (:appeal-bond-bps snap 0))))
 
 ;; ---------------------------------------------------------------------------
 ;; Slashing & Bounties
@@ -70,13 +74,13 @@
   "Calculate the bounty amount for a successful challenge (Phase L)."
   [slash-amount bounty-bps]
   (if (pos? bounty-bps)
-    (t/compute-fee slash-amount bounty-bps)
+    (compute-fee slash-amount bounty-bps)
     0))
 
 (defn calculate-reversal-slash
   "Calculate the stake amount to be slashed on a decision reversal."
   [afa reversal-slash-bps]
-  (t/compute-fee afa reversal-slash-bps))
+  (compute-fee afa reversal-slash-bps))
 
 ;; ---------------------------------------------------------------------------
 ;; Economic Policies (Bands)

@@ -1,7 +1,7 @@
 (ns resolver-sim.protocols.sew.trace-metadata
   "Typed metadata for simulation traces.
 
-   Defines the canonical type vocabulary for the SEW simulation system.
+   Defines the canonical type vocabulary for the Sew simulation system.
    Every actor, adversary, transition, effect, invariant, scenario, outcome,
    and resolution has a stable keyword type drawn from one of the sets below.
 
@@ -434,7 +434,7 @@
       (and expected (= :fail outcome))   :expected-violation
       (and (= :pass outcome) (zero? violations)) :normal-completion
       (= halt :invariant-violation)      :invariant-failure
-      (= halt :open-disputes-at-end)     :liveness-failure
+      (#{:open-entities-at-end :open-disputes-at-end} halt) :liveness-failure
       (= outcome :fail)                  :invariant-failure
       :else                              :normal-completion)))
 

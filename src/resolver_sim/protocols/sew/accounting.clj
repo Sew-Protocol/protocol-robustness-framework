@@ -16,49 +16,7 @@
 (declare sub-held record-fee record-claimable)
 
 ;; ---------------------------------------------------------------------------
-;; Yield Distribution
-;; ---------------------------------------------------------------------------
-
-(defn distribute-yield
-  "Distribute accrued yield for an escrow.
-   Protocol takes yield-protocol-fee-bps.
-   Remainder is split based on yield-preset in EscrowSettings:
-     :off         -> No yield distributed (retained by protocol or burned)
-     :to-sender   -> All remainder to (:from et)
-     :to-recipient -> All remainder to (:to et)
-     :split-50-50 -> 50% to sender, 50% to recipient"
-  [world workflow-id]
-  (let [et      (get-in world [:escrow-transfers workflow-id])
-        yield   (:accumulated-yield et 0)
-        snap    (get-in world [:module-snapshots workflow-id])
-        settings (get-in world [:escrow-settings workflow-id])
-        token   (:token et)]
-    (if (zero? yield)
-      world
-      (let [fee-bps (or (:yield-protocol-fee-bps snap) 0)
-            fee     (payoffs/calculate-escrow-fee yield fee-bps)
-            net     (- yield fee)
-            preset  (:yield-preset settings :off)
-            
-            [sender-amt recipient-amt]
-            (case preset
-              :to-sender    [net 0]
-              :to-recipient [0 net]
-              :split-50-50  [(quot net 2) (- net (quot net 2))]
-              [0 0])]
-        (-> world
-            ;; Protocol fee
-            (record-fee token fee)
-            ;; Sender share
-            (cond-> (pos? sender-amt)
-              (record-claimable workflow-id (:from et) sender-amt))
-            ;; Recipient share
-            (cond-> (pos? recipient-amt)
-              (record-claimable workflow-id (:to et) recipient-amt))
-            ;; Live pool reduction
-            (sub-held token yield)
-            ;; Clear yield from escrow
-            (assoc-in [:escrow-transfers workflow-id :accumulated-yield] 0))))))
+;; total-held tracking
 ;; ---------------------------------------------------------------------------
 
 (defn add-held

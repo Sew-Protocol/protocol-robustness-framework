@@ -36,6 +36,14 @@
   trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
                  :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
 
+  trace:diff {:doc "Run two scenarios and compare their results. Usage: bb trace:diff <scenario-1> <scenario-2> <out-dir>"
+              :task (let [s1 (first *command-line-args*)
+                          s2 (second *command-line-args*)
+                          od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
+                      (shell "clojure -M:run -- --invariants --scenario" s1 "--output-file" "results/diff-1.json")
+                      (shell "clojure -M:run -- --invariants --scenario" s2 "--output-file" "results/diff-2.json")
+                      (shell "python3 python/trace_compare.py --baseline results/diff-1.json --candidate results/diff-2.json --out-dir" od))}
+
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
 
@@ -86,7 +94,7 @@
 
   help:first {:doc "First-time visitor quick commands"
               :task (do
-                      (println "SEW first-time quickstart")
+                      (println "Sew first-time quickstart")
                       (println "")
                       (println "1) Evidence dashboard (read-only):")
                       (println "   bb notebook")
@@ -114,4 +122,40 @@
                                     bond
                                     " "
                                     bps
-                                    "))")))}}}
+                                    "))")))}
+
+  benchmark:run {:doc "Run a benchmark manifest and generate evidence bundle. Usage: bb benchmark:run [manifest-path|id] [-o output-path]"
+                 :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" *command-line-args*)}
+
+  benchmark:reproduce {:doc "Reproduce a benchmark run from evidence bundle. Usage: bb benchmark:reproduce <evidence-path>"
+                       :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--reproduce" *command-line-args*)}
+
+  benchmark:share-summary {:doc "Generate share summary for an evidence bundle. Usage: bb benchmark:share-summary <evidence-path>"
+                           :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--share-summary" *command-line-args*)}
+
+  benchmark:export {:doc "Export portable bundle (tar.gz) from evidence bundle. Usage: bb benchmark:export <evidence-path>"
+                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--export" *command-line-args*)}
+
+  benchmark:publish-ipfs {:doc "Publish exported bundle to IPFS. Usage: bb benchmark:publish-ipfs <evidence-path>"
+                          :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--publish-ipfs" *command-line-args*)}
+
+  benchmark:attest {:doc "Generate an independent attestation for an evidence bundle. Usage: bb benchmark:attest <evidence-path> -k <private-key>"
+                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--attest" *command-line-args*)}
+
+  benchmark:verify-attestation {:doc "Verify an independent attestation. Usage: bb benchmark:verify-attestation <attestation-path>"
+                                :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify-attestation" *command-line-args*)}
+
+  benchmark:history {:doc "Display local evidence run history"
+                     :task (clojure "-M" "-m" "resolver-sim.benchmark.cli" "--history")}
+
+  benchmark:list {:doc "List available benchmarks in BENCHMARKS.edn"
+                  :task (clojure "-M" "-m" "resolver-sim.benchmark.cli" "--list")}
+
+  benchmark:verify {:doc "Verify evidence bundle integrity and signature. Usage: bb benchmark:verify [bundle-path]"
+                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
+
+  benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
+                  :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+
+  evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
+                     :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}}}

@@ -1,6 +1,9 @@
 (ns resolver-sim.sim.reporter
-  "Result reporting for CDRS v1.1 suite execution."
-  (:require [clojure.string :as str]))
+  "Result reporting for schema-profile-driven suite execution."
+  (:require [clojure.string :as str]
+            [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.scenario.schema-profile :as schema-profile]
+            [resolver-sim.scenario.outcome-semantics :as ose]))
 
 (defn print-expectations [expectations]
   (if (nil? expectations)
@@ -16,27 +19,10 @@
             :invariant-failed  (println "      - Invariant failed:" (:invariant v) (when (:note v) (str "(" (:note v) ")")))
             (println "      - Unknown violation:" v)))))))
 
-(defn- theory-label [status]
-  (case status
-    :not-evaluated "Not evaluated"
-    :not-falsified "Claim not falsified"
-    :falsified     "Claim falsified"
-    :inconclusive  "Inconclusive"
-    "Not evaluated"))
-
-(defn- theory-expected? [status purpose]
-  ;; A falsified claim is the expected outcome for theory-falsification scenarios
-  (case status
-    :not-evaluated true
-    :not-falsified true
-    :falsified     (= (keyword (or purpose "")) :theory-falsification)
-    :inconclusive  false
-    true))
-
 (defn print-theory [theory purpose]
   (let [status (or (:status theory) :not-evaluated)
-        label  (theory-label status)
-        ok?    (theory-expected? status purpose)
+        label  (ose/theory-label status)
+        ok?    (ose/theory-expected? status purpose)
         marker (case status
                  :inconclusive  "?"
                  :not-evaluated "-"
@@ -57,16 +43,8 @@
                              :fail "✗"
                              "?") " Equilibrium: " (name status)))
       (doseq [[k v] results]
-        (if (= k :subgame-perfect-equilibrium)
-          (let [obs (:observed v)]
-            (println (str "      - " (name k) ": " (name (:status v))))
-            (when (:spe-summary obs)
-              (println (str "        Summary: " (:spe-summary obs))))
-            (doseq [violation (:spe-violations obs)]
-              (println (str "        ✗ " (:summary violation)))))
-          (do
-            (println (str "      - " (name k) ": " (name (:status v))))
-            (when (:note v) (println "        Note:" (:note v)))))))))
+        (println (str "      - " (name k) ": " (name (:status v))))
+        (when (:note v) (println "        Note:" (:note v)))))))
 
 (defn print-suite-results [suite-result]
   (println (str "\nSuite: " (:suite-id suite-result)))
@@ -83,12 +61,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- purpose-label [p]
-  (case p
-    :regression              "Regression"
-    :adversarial-robustness  "Adversarial Robustness"
-    :theory-falsification    "Theory Falsification"
-    :unclassified            "Unclassified (v1.0)"
-    (if p (name p) "Unclassified (v1.0)")))
+  (ose/purpose-label p))
+
+(defn- transition-label [tr]
+  (or (get-in (defs/transition-def tr) [:label])
+      (name tr)))
 
 (defn print-coverage
   "Print a human-readable coverage report from a map returned by
@@ -104,7 +81,8 @@
         guard-by-purpose (:guard-by-purpose-hit-freq report {})
         unhit-transitions (:unhit-transitions report [])
         uncl      (:unclassified-count report 0)
-        v11-count (get versions "1.1" 0)]
+        enriched-version (or (:enriched-version report) (schema-profile/enriched-version))
+        enriched-count (get versions enriched-version 0)]
     (println "\n╔══════════════════════════════════════════════════════════════════╗")
     (println "║  Scenario Coverage Report                                        ║")
     (println "╚══════════════════════════════════════════════════════════════════╝")
@@ -145,7 +123,7 @@
       (do
         (println "  Transition hits (all scenarios):")
         (doseq [[tr cnt] (sort-by (comp - val) transition-freq)]
-          (println (str "    " (format "%-32s" (name tr)) cnt " hit(s)"))))
+          (println (str "    " (format "%-32s" (transition-label tr)) cnt " hit(s)"))))
       (println "  Transition hits: none"))
     (println)
 
@@ -156,7 +134,7 @@
               :when (seq tf)]
         (println (str "    " (format "%-28s" (purpose-label p))))
         (doseq [[tr cnt] (sort-by (comp - val) tf)]
-          (println (str "      · " (format "%-28s" (name tr)) cnt)))))
+          (println (str "      · " (format "%-28s" (transition-label tr)) cnt)))))
     (println)
 
     ;; Guard coverage
@@ -181,13 +159,13 @@
     (println "  Unhit transitions backlog (release gate):")
     (if (seq unhit-transitions)
       (doseq [tr unhit-transitions]
-        (println (str "    · " (name tr))))
+        (println (str "    · " (transition-label tr))))
       (println "    none (all canonical transitions covered)"))
     (println)
 
     ;; Summary
-    (println (str "  v1.1 enriched:      " v11-count " / " total " scenarios"))
-    (println (str "  Unclassified (v1.0): " uncl " scenarios without :purpose or :threat-tags"))
+    (println (str "  v" enriched-version " enriched:      " enriched-count " / " total " scenarios"))
+    (println (str "  Unclassified (pre-v" enriched-version "): " uncl " scenarios without :purpose or :threat-tags"))
     (when (pos? uncl)
       (println (str "  → " uncl " scenarios could be enriched with :id, :title, :purpose, :threat-tags")))
     (println)))

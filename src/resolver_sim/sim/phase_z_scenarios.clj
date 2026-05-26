@@ -12,7 +12,8 @@
 
    This namespace translates those macro-level risks into concrete EVM
    action sequences that stress the contract layer.  Each scenario is a
-   valid input to replay-scenario and produces a scored, persistable trace.
+   valid input to replay-with-protocol (via protocol registry default) and
+   produces a scored, persistable trace.
 
    Mapping:
      TEST 2/4 → resolver absent: dispute raised, nobody resolves → auto-cancel after 90 days
@@ -23,8 +24,12 @@
      (persist-top-n! n) runs all Phase Z scenarios, scores them, persists top-n.
      (persist-top-percent! p) keeps the top p fraction (0.01 = 1%)."
   (:require [resolver-sim.contract-model.replay      :as replay]
+            [resolver-sim.protocols.registry        :as preg]
             [resolver-sim.io.trace-score             :as ts]
             [resolver-sim.io.trace-store             :as store]))
+
+(defn- default-protocol []
+  (preg/get-protocol preg/default-protocol-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared protocol params (maps to vault's 90-day maxDisputeDuration)
@@ -178,10 +183,10 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-and-score
-  "Run a Phase Z scenario through replay-scenario and score the result.
+  "Run a Phase Z scenario through replay-with-protocol and score the result.
    Returns a map with :scenario, :result, :scored-result."
   [scenario]
-  (let [result        (replay/replay-scenario scenario)
+  (let [result        (replay/replay-with-protocol (default-protocol) scenario)
         scored-result (ts/score-result result)]
     {:scenario      scenario
      :result        result

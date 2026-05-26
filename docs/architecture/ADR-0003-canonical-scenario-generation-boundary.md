@@ -2,8 +2,8 @@
 
 - Status: **Accepted**
 - Date: 2026-05-02
-- Deciders: SEW simulation maintainers
-- Related: `docs/interface-contract.md`, `docs/architecture.md`
+- Deciders: Sew simulation maintainers
+- Related: `docs/interface-contract.md`, `docs/architecture.md` *(note: `docs/architecture.md` was removed in the 2026-05-21 consolidation; the system diagram it contained is now in `docs/interface-contract.md` §System Diagram)*
 
 ---
 

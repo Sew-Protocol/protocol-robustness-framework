@@ -2,7 +2,7 @@
   "Cross-engine calibration tests.
 
    The Monte Carlo engine (stochastic/) and the Replay engine (protocols/sew/) are
-   two independent implementations of the SEW economic model. They must agree on
+   two independent implementations of the Sew economic model. They must agree on
    the numeric formulas for fees, bonds, and slashing — otherwise MC results and
    replay results are incommensurable.
 

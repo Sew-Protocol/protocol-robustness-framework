@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.replay-test
-  "Unit tests for the open-world scenario replay engine.
+  "Unit tests for the open-world scenario replay proto.
 
    Covers:
      - Structural validation (schema-version, seq, time)
@@ -10,7 +10,8 @@
      - Escalation flows: full chain (0→1→2), mid-pending escalation, adversarial rejections"
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.contract-model.replay    :as replay]
-            [resolver-sim.protocols.protocol       :as engine]
+            [resolver-sim.db.temporal              :as temporal]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew            :as sew]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.types     :as t]
@@ -47,7 +48,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-validation-wrong-schema-version
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :schema-version "2.0"
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -55,14 +56,14 @@
     (is (= :unsupported-schema-version (:halt-reason r)))))
 
 (deftest test-validation-missing-schema-version
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (assoc (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                                 :params {:token "0xUSDC" :to "0xBob" :amount 5000}}])
                   :schema-version nil))]
     (is (= :invalid (:outcome r)))))
 
 (deftest test-validation-non-contiguous-seq
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 2 :time 1001 :agent "alice" :action "release"  ; gap at 1
@@ -71,7 +72,7 @@
     (is (= :non-contiguous-event-seq (:halt-reason r)))))
 
 (deftest test-validation-duplicate-seq
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 0 :time 1001 :agent "alice" :action "release"  ; dup
@@ -79,7 +80,7 @@
     (is (= :invalid (:outcome r)))))
 
 (deftest test-validation-non-monotonic-time
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1005 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                         {:seq 1 :time 1000 :agent "alice" :action "release"  ; backward
@@ -88,7 +89,7 @@
     (is (= :non-monotonic-event-time (:halt-reason r)))))
 
 (deftest test-validation-event-time-before-initial
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :init-time 2000
                :events [{:seq 0 :time 999 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -96,7 +97,7 @@
     (is (= :event-time-before-initial (:halt-reason r)))))
 
 (deftest test-validation-unknown-agent-in-event
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events [{:seq 0 :time 1000 :agent "nobody" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
     (is (= :invalid (:outcome r)))
@@ -104,7 +105,7 @@
 
 (deftest test-validation-duplicate-agent-ids
   (let [alice2 {:id "alice" :type "attacker" :address "0xEvil"}  ; same id, different address
-        r (replay/replay-scenario
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice alice2 bob resolver]
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -113,7 +114,7 @@
 
 (deftest test-validation-duplicate-agent-addresses
   (let [alice2 {:id "alice2" :type "attacker" :address "0xAlice"}  ; same address, different id
-        r (replay/replay-scenario
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice alice2 bob resolver]
                :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
@@ -144,7 +145,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-happy-path-release
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 10000
@@ -160,12 +161,83 @@
     (is (= :ok (get-in r [:trace 1 :result])))
     (is (= 0 (get-in r [:trace 0 :extra :workflow-id])))))
 
+(deftest test-compat-action-alias-underscore-vs-hyphen
+  (let [base-events
+        [{:seq 0 :time 1000 :agent "alice"
+          :params {:token "0xUSDC" :to "0xBob" :amount 10000 :custom-resolver "0xResolver"}}
+         {:seq 1 :time 1001 :agent "alice" :params {:workflow-id 0}}]
+        r-underscore
+        (sew/replay-with-sew-protocol
+          (sc :events [(assoc (nth base-events 0) :action "create_escrow")
+                       (assoc (nth base-events 1) :action "release")]))
+        r-hyphen
+        (sew/replay-with-sew-protocol
+          (sc :events [(assoc (nth base-events 0) :action "create-escrow")
+                       (assoc (nth base-events 1) :action "release")]))]
+    (is (= :pass (:outcome r-underscore)))
+    (is (= :pass (:outcome r-hyphen)))
+    (is (= (mapv :result (:trace r-underscore))
+           (mapv :result (:trace r-hyphen))))
+    (is (= (get-in r-underscore [:trace 0 :transition/id])
+           (get-in r-hyphen [:trace 0 :transition/id])))
+    (is (= :scenario.transition/create_escrow
+           (get-in r-underscore [:trace 0 :transition/id])))
+    (is (= (get-in r-underscore [:trace 0 :extra :workflow-id])
+           (get-in r-hyphen [:trace 0 :extra :workflow-id])))))
+
+(deftest test-compat-workflow-id-alias-id-vs-workflow-id
+  (let [create {:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                :params {:token "0xUSDC" :to "0xBob" :amount 10000 :custom-resolver "0xResolver"}}
+        release-workflow-id {:seq 1 :time 1001 :agent "alice" :action "release"
+                             :params {:workflow-id 0}}
+        release-id          {:seq 1 :time 1001 :agent "alice" :action "release"
+                             :params {:id 0}}
+        r-workflow-id (sew/replay-with-sew-protocol (sc :events [create release-workflow-id]))
+        r-id          (sew/replay-with-sew-protocol (sc :events [create release-id]))]
+    (is (= :pass (:outcome r-workflow-id)))
+    (is (= :pass (:outcome r-id)))
+    (is (= (mapv :result (:trace r-workflow-id))
+           (mapv :result (:trace r-id))))
+    (is (= (get-in r-workflow-id [:trace 1 :error])
+           (get-in r-id [:trace 1 :error])))))
+
+(deftest test-temporal-evidence-wiring-opt-in
+  (testing "temporal evidence is emitted only when :temporal-evidence {:enabled? true}"
+    (let [calls (atom [])
+          scenario-base
+          (sc :events
+              [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                :params {:token "0xUSDC" :to "0xBob" :amount 10000
+                         :custom-resolver "0xResolver"}}
+               {:seq 1 :time 1001 :agent "alice" :action "release"
+                :params {:workflow-id 0}}])]
+      (with-redefs [temporal/record-temporal-run!
+                    (fn [ds payload]
+                      (swap! calls conj {:ds ds :payload payload})
+                      {:ok true})]
+        ;; disabled / absent => no call
+        (sew/replay-with-sew-protocol scenario-base)
+        (is (= 0 (count @calls)))
+
+        ;; enabled => exactly one terminal emission
+        (sew/replay-with-sew-protocol
+         (assoc scenario-base
+                :temporal-evidence {:enabled? true
+                                    :datasource nil
+                                    :run-id "wire-test-run"
+                                    :batch-id :wire-batch
+                                    :suite-id :wire-suite
+                                    :git-sha "abc123"}))
+        (is (= 1 (count @calls)))
+        (is (= "wire-test-run" (get-in @calls [0 :payload :run :run-id])))
+        (is (= :pass (get-in @calls [0 :payload :run :outcome])))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 4: Dispute + resolution
 ;; ---------------------------------------------------------------------------
 
 (deftest test-dispute-and-resolution
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 10000
@@ -180,12 +252,26 @@
     (is (= 0 (get-in r [:metrics :invariant-violations])))
     (is (every? #(= :ok (:result %)) (:trace r)))))
 
+(deftest test-trace-projection-includes-funds-ledger-summary
+  (let [r (sew/replay-with-sew-protocol
+           (sc :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 10000
+                          :custom-resolver "0xResolver"}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}]))
+        p (proto/trace-projection sew/protocol r)]
+    (is (map? (:funds-ledger-summary p)))
+    (is (contains? (:trace-summary p) :funds-conservation-holds?))
+    (is (contains? (:trace-summary p) :funds-drift-total))
+    (is (contains? (:trace-summary p) :funds-drift-by-token))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 5: Adversarial rejections — non-fatal
 ;; ---------------------------------------------------------------------------
 
 (deftest test-attacker-unauthorized-resolution-is-revert
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :agents [alice bob mallory resolver]
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -207,7 +293,7 @@
     (is (= 0 (get-in r [:metrics :attack-successes])))))
 
 (deftest test-dispute-after-release-rejected
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :agents [alice bob mallory]
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -238,7 +324,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-amount-overflow-guard
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                ;; amount > max-safe-amount = 922337203685477
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -252,7 +338,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-mutual-cancel
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -269,7 +355,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-auto-cancel-after-timeout
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :max-dispute-duration 500)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -287,7 +373,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-appeal-window-deferred-settlement
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :appeal-window-duration 100)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -313,7 +399,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-multiple-escrows-isolated
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000
@@ -394,7 +480,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-json-serialization
-  (let [r    (replay/replay-scenario
+  (let [r    (sew/replay-with-sew-protocol
               (sc :events
                   [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                      :params {:token "0xUSDC" :to "0xBob" :amount 500}}]))
@@ -407,7 +493,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-advance-time-event
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 1000}}
@@ -435,7 +521,9 @@
 (def ^:private res-level-2 "0xResolver2")
 
 (def ^:private appeal-params
-  {:resolver-fee-bps 50 :appeal-window-duration 500
+  ;; Keep appeal window longer than the 1-day escalation cooldown so
+  ;; multi-round escalation tests can validly appeal after cooldown.
+  {:resolver-fee-bps 50 :appeal-window-duration 200000
    :max-dispute-duration 2592000 :appeal-bond-protocol-fee-bps 0})
 
 (defn- make-step-context
@@ -446,7 +534,7 @@
                 {:id "resolver0" :address res-level-0  :type "resolver"}
                 {:id "resolver1" :address res-level-1  :type "resolver"}
                 {:id "resolver2" :address res-level-2  :type "resolver"}]]
-    (engine/build-execution-context sew/protocol agents
+    (proto/build-execution-context sew/protocol agents
                           (assoc appeal-params :escalation-resolvers {:1 res-level-1 :2 res-level-2}))))
 
 (defn- initial-disputed-world
@@ -566,7 +654,7 @@
                       {:id "mallory"  :address "0xMallory"  :type "attacker"}
                       {:id "resolver0" :address res-level-0 :type "resolver"}
                       {:id "resolver1" :address res-level-1 :type "resolver"}]]
-          (engine/build-execution-context sew/protocol agents
+          (proto/build-execution-context sew/protocol agents
                                 (assoc appeal-params :escalation-resolvers {:1 res-level-1})))
         w   (initial-disputed-world ctx-with-mallory)
         ;; Submit verdict → deferred
@@ -631,7 +719,7 @@
 
 (deftest test-wf-alias-save-and-resolve
   ":save-id-as captures the assigned workflow-id; subsequent events resolve the alias."
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000
@@ -646,7 +734,7 @@
 
 (deftest test-wf-alias-multi-escrow
   "Multiple aliases can be saved and resolved independently."
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 3000}
@@ -666,7 +754,7 @@
 
 (deftest test-wf-alias-unresolved-returns-invalid
   "A string alias with no prior :save-id-as returns :invalid outcome."
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -677,7 +765,7 @@
 
 (deftest test-wf-alias-integer-passes-through
   "Integer workflow-ids bypass the alias layer unchanged."
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
@@ -691,7 +779,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-withdraw-stake-blocked-during-active-dispute
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (assoc (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -708,7 +796,7 @@
     (is (= :active-disputes-block-withdrawal (get-in r [:trace 3 :error])))))
 
 (deftest test-withdraw-stake-succeeds-after-dispute-resolution
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :appeal-window-duration 0)
                :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
@@ -726,7 +814,7 @@
     (is (= :ok (get-in r [:trace 4 :result])))))
 
 (deftest test-withdraw-stake-invalid-amount-nil-rejected
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -737,7 +825,7 @@
     (is (= :invalid-amount (get-in r [:trace 1 :error])))))
 
 (deftest test-withdraw-stake-invalid-amount-zero-rejected
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -748,7 +836,7 @@
     (is (= :invalid-amount (get-in r [:trace 1 :error])))))
 
 (deftest test-withdraw-stake-invalid-amount-negative-rejected
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 5000}}
@@ -760,7 +848,7 @@
 
 (deftest test-withdraw-stake-pending-slash-boundary-allows-withdraw
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        r (replay/replay-scenario
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice bob resolver gov]
                :params (assoc default-params
                               :appeal-window-duration 100
@@ -780,7 +868,7 @@
 
 (deftest test-withdraw-stake-pending-slash-boundary-blocks-withdraw
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        r (replay/replay-scenario
+        r (sew/replay-with-sew-protocol
            (sc :agents [alice bob resolver gov]
                :params (assoc default-params
                               :appeal-window-duration 100
@@ -798,6 +886,189 @@
     (is (= :pass (:outcome r)))
     (is (= :rejected (get-in r [:trace 3 :result])))
     (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 3 :error])))))
+
+(deftest test-withdraw-stake-blocked-while-resolver-frozen
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params :appeal-window-duration 100)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                ;; appeal window expired (1001 + 100)
+                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                 :params {:workflow-id 0}}
+                ;; still within freeze window: withdraw must be blocked
+                {:seq 4 :time 2000 :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 100}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 3 :result])))
+    (is (= :rejected (get-in r [:trace 4 :result])))
+    (is (= :resolver-frozen (get-in r [:trace 4 :error])))))
+
+(deftest test-withdraw-stake-allows-at-unfreeze-boundary
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        freeze-until (+ 1101 259200)
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :params (assoc default-params :appeal-window-duration 100)
+               :events
+               [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                 :params {:amount 5000}}
+                {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                 :params {:workflow-id 0}}
+                ;; exactly at freeze boundary: should be allowed
+                {:seq 4 :time freeze-until :agent "resolver" :action "withdraw_stake"
+                 :params {:amount 100}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 3 :result])))
+    (is (= :ok (get-in r [:trace 4 :result])))))
+
+(deftest test-withdraw-escrow-liquidity-crunch-ordering-toggle-then-withdraw
+  "Same timestamp ordering: if liquidity crunch is enabled first,
+   withdraw_escrow should be rejected as liquidity-insufficient."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}
+                {:seq 3 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :rejected (get-in r [:trace 3 :result])))
+    (is (= :liquidity-insufficient (get-in r [:trace 3 :error])))))
+
+(deftest test-withdraw-escrow-liquidity-crunch-ordering-withdraw-then-toggle
+  "Same timestamp ordering: if withdraw_escrow executes before liquidity crunch
+   is enabled, withdrawal should succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1002 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
+(deftest test-withdraw-fees-liquidity-crunch-ordering-toggle-then-withdraw
+  "Same timestamp ordering: if liquidity crunch is enabled first,
+   withdraw_fees should be rejected as liquidity-insufficient."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}
+                {:seq 2 :time 1001 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :rejected (get-in r [:trace 2 :result])))
+    (is (= :liquidity-insufficient (get-in r [:trace 2 :error])))))
+
+(deftest test-withdraw-fees-liquidity-crunch-ordering-withdraw-then-toggle
+  "Same timestamp ordering: if withdraw_fees executes before liquidity crunch
+   is enabled, fee withdrawal should succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                {:seq 2 :time 1001 :agent "gov" :action "set_token_liquidity_crunch"
+                 :params {:token "0xUSDC" :active? true}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))))
+
+(deftest test-withdraw-fees-non-governance-rejected
+  "Security: only governance may withdraw protocol fees."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                ;; alice is not governance; fee withdrawal must be rejected
+                {:seq 1 :time 1001 :agent "alice" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                ;; governance path remains valid
+                {:seq 2 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :not-governance (get-in r [:trace 1 :error])))
+    (is (= :ok (get-in r [:trace 2 :result])))))
+
+(deftest test-mixed-withdraw-ordering-same-timestamp-escrow-then-fees
+  "With both withdrawals in same block/time after release:
+   withdraw_escrow first then withdraw_fees should both succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
+
+(deftest test-mixed-withdraw-ordering-same-timestamp-fees-then-escrow
+  "With both withdrawals in same block/time after release:
+   withdraw_fees first then withdraw_escrow should both succeed."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r (sew/replay-with-sew-protocol
+           (sc :agents [alice bob resolver gov]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                 :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                 :params {:workflow-id 0}}
+                {:seq 2 :time 1002 :agent "gov" :action "withdraw_fees"
+                 :params {:token "0xUSDC"}}
+                {:seq 3 :time 1002 :agent "bob" :action "withdraw_escrow"
+                 :params {:workflow-id 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 1 :result])))
+    (is (= :ok (get-in r [:trace 2 :result])))
+    (is (= :ok (get-in r [:trace 3 :result])))))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 20: Invariant-violation metric tracking
@@ -827,7 +1098,7 @@
         agent-index {}
         world-before {:total-held {} :block-time 1000}]
     (testing "violations map triggers increment"
-      (let [m (accum-fn base-metrics event trace-entry agent-index world-before)]
+      (let [m (accum-fn sew/protocol base-metrics event trace-entry agent-index world-before)]
         (is (= 1 (:invariant-violations m)))
         (is (= {:conservation-of-funds :fail} (:invariant-results m)))
         (is (not (contains? (:invariant-results m) :solvency))
@@ -847,7 +1118,7 @@
                      :violations {:conservation-of-funds {:holds? false :violations ["mismatch"]}
                                   :no-negative-balances  {:holds? false :violations ["negative"]}
                                   :solvency              {:holds? true  :violations []}}}
-        m (accum-fn base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
     (is (= 1 (:invariant-violations m))
         "aggregate counter increments once per step regardless of violation count")
     (is (= {:conservation-of-funds :fail :no-negative-balances :fail}
@@ -865,13 +1136,13 @@
         event       {:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                      :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
         trace-entry {:result :ok :world {:total-held {} :block-time 1000} :violations nil}
-        m (accum-fn base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
     (is (= 0 (:invariant-violations m)))
     (is (= {} (:invariant-results m)))))
 
 (deftest test-auto-cancel-after-timeout
   "auto_cancel_disputed succeeds when block-time > dispute-timestamp + max-dispute-duration."
-  (let [r (replay/replay-scenario
+  (let [r (sew/replay-with-sew-protocol
            (sc :params (assoc default-params :max-dispute-duration 500)
                :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -892,7 +1163,7 @@
    - rejected appeal forfeits bond to insurance accounting"
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
         r-upheld
-        (replay/replay-scenario
+        (sew/replay-with-sew-protocol
          (sc :agents [alice bob resolver gov]
              :params (assoc default-params
                             :appeal-window-duration 100
@@ -909,7 +1180,7 @@
               {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? true}}]))
         r-rejected
-        (replay/replay-scenario
+        (sew/replay-with-sew-protocol
          (sc :agents [alice bob resolver gov]
              :params (assoc default-params
                             :appeal-window-duration 100
@@ -926,10 +1197,61 @@
               {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? false}}]))
         w-upheld   (get-in r-upheld [:trace 4 :world])
-        w-rejected (get-in r-rejected [:trace 4 :world])]
+        w-rejected (get-in r-rejected [:trace 4 :world])
+        assert-appeal-resolution-semantics
+        (fn [world upheld?]
+          ;; Helper to remove ambiguity around `upheld?` semantics using
+          ;; snapshot-visible effects (world snapshot omits pending-fraud-slashes).
+          ;; true  => APPEAL upheld  => bond refunded to resolver claimable
+          ;; false => APPEAL rejected => bond forfeited to insurance
+          (if upheld?
+            (is (pos? (get-in world [:claimable 0 "0xResolver"] 0))
+                "upheld?=true should refund appeal bond to resolver claimable")
+            (is (pos? (get-in world [:bond-distribution :insurance] 0))
+                "upheld?=false should forfeit appeal bond to insurance")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
+    (assert-appeal-resolution-semantics w-upheld true)
+    (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
-    (is (= 0 (get-in w-upheld [:pending-fraud-slashes 0 :appeal-bond-held] 0)))
     (is (= 80 (get-in w-rejected [:bond-distribution :insurance] 0)))
-    (is (= 0 (get-in w-rejected [:pending-fraud-slashes 0 :appeal-bond-held] 0)))))
+    (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
+
+(deftest test-replay-s35-profit-maximizer-governance-wins-appeal
+  "Dedicated replay test mirroring invariant scenario S35 exactly.
+   Path: pending -> appealed -> pending (upheld? false) -> executed after deadline."
+  (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        r   (sew/replay-with-sew-protocol
+             (sc :agents [alice bob resolver gov]
+                 :params (assoc default-params :appeal-window-duration 120)
+                 :events
+                 [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+                   :params {:amount 10000}}
+                  {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
+                   :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                  {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                   :params {:workflow-id 0}}
+                  {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                   :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                  {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+                   :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                  {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
+                   :params {:workflow-id 0}}
+                  {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
+                   :params {:workflow-id 0 :upheld? false}}
+                  {:seq 7 :time 1241 :agent "alice" :action "execute_pending_settlement"
+                   :params {:workflow-id 0}}
+                  {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
+                   :params {:workflow-id 0}}]))
+        w-appealed (get-in r [:trace 5 :world])
+        w-resolved (get-in r [:trace 6 :world])
+        w-final    (get-in r [:trace 8 :world])]
+    (is (= :pass (:outcome r)))
+    ;; Snapshot-level proxy checks for appealed->rejected path.
+    ;; In this S35 mirror, appeal-bond-amount is default 0, so no insurance
+    ;; movement occurs at resolve_appeal; slash remains live until execution.
+    (is (= 0 (get-in w-appealed [:claimable 0 "0xResolver"] 0)))
+    (is (= 0 (get-in w-resolved [:claimable 0 "0xResolver"] 0)))
+    (is (= :released (get-in w-final [:live-states 0])))
+    (is (= 9500 (get-in w-final [:resolver-stakes "0xResolver"])))
+    (is (= 500 (get-in w-final [:resolver-slash-total "0xResolver"])))))
