@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def fail(msg: str) -> None:
@@ -34,13 +35,20 @@ def load_registry_json() -> dict:
             " :invariants (into #{} (map (comp name key)) defs/invariants)}))"
         ),
     ]
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    if proc.returncode != 0:
-        fail(f"could not load Clojure registry data: {proc.stderr.strip()}")
+    try:
+        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        fail(f"could not load Clojure registry data: {(exc.stderr or '').strip()}")
+    except OSError as exc:
+        fail(f"failed to execute clojure command: {exc}")
     txt = proc.stdout.strip().splitlines()
     if not txt:
         fail("empty registry payload from Clojure")
-    return json.loads(txt[-1])
+    try:
+        payload: dict[str, Any] = json.loads(txt[-1])
+    except json.JSONDecodeError as exc:
+        fail(f"invalid JSON payload from Clojure registry export: {exc}")
+    return payload
 
 
 def normalize_claim_id(raw: str) -> str:
@@ -52,10 +60,16 @@ def normalize_claim_id(raw: str) -> str:
 
 def collect_theory_claim_ids(scenarios_dir: Path) -> set[str]:
     found: set[str] = set()
+    parse_errors: list[str] = []
     for p in sorted(scenarios_dir.glob("*.json")):
+        obj: Any | None = None
         try:
             obj = json.loads(p.read_text())
-        except Exception:
+        except json.JSONDecodeError as exc:
+            parse_errors.append(f"{p.name}: invalid JSON ({exc})")
+        except OSError as exc:
+            parse_errors.append(f"{p.name}: unreadable file ({exc})")
+        if obj is None:
             continue
         if not isinstance(obj, dict):
             continue
@@ -63,6 +77,8 @@ def collect_theory_claim_ids(scenarios_dir: Path) -> set[str]:
         cid = theory.get("claim-id")
         if cid:
             found.add(normalize_claim_id(cid))
+    if parse_errors:
+        warn(f"skipped {len(parse_errors)} scenario files due to read/parse errors")
     return found
 
 

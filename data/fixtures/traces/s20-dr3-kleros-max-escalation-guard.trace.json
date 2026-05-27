@@ -6,6 +6,15 @@
   "threat-tags": [
     "escalation-abuse"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s20-dr3-kleros-max-escalation-guard",
   "initial-block-time": 1000,
   "agents": [

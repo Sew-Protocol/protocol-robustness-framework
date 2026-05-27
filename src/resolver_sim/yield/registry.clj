@@ -39,10 +39,8 @@
    Falls back to the provided id when no explicit profile mapping is known."
   [profile-or-module-id]
   (let [profile-id (normalize-module-id profile-or-module-id)
-        archetype  (or (profile->archetype profile-id)
-                       (when (= profile-id :yield.provider/liquid-lending)
-                         :yield.provider/liquid-lending))
-        module-id  (or (archetype->module-id archetype) profile-id)]
+        archetype  (profile->archetype profile-id)
+        module-id  (or profile-id (archetype->module-id archetype))]
     {:profile-id profile-id
      :archetype  archetype
      :module-id  module-id}))
@@ -62,7 +60,7 @@
 
 (defn- normalize-token-config [{:keys [initial-index initial-index-ray apy apy-bps
                                        liquidity-mode loss-mode rate-mode
-                                       failure-modes]
+                                       failure-modes shortfall]
                                 :as cfg}]
   {:initial-index     (or initial-index
                           (when initial-index-ray
@@ -70,13 +68,13 @@
                                1000000000000000000000000000M))
                           1.0)
    :apy               (or apy
-                          (when apy-bps (/ apy-bps 10000.0))
+                          (when apy-bps (/ (double apy-bps) 10000.0))
                           0.0)
    :liquidity-mode    (or liquidity-mode :available)
    :loss-mode         (or loss-mode :none)
-   :rate-mode         (or rate-mode :scenario)
-   :failure-modes     (set (or failure-modes #{}))
-   :raw/config        cfg})
+   :rate-mode         (or rate-mode :deterministic)
+   :failure-modes     (or failure-modes #{})
+   :shortfall         shortfall})
 
 (defn- normalize-behavior-descriptor [desc]
   (merge default-behavior-descriptor (or desc {})))
@@ -108,23 +106,23 @@
    world paths rather than introducing a second test-only API."
   [world yield-config]
   (reduce-kv
-   (fn [w raw-module-id module-config]
-     (let [{normalized-module-id :module-id
-            resolved-module-id   :resolved-module-id
-            behavior             :behavior
-            module-status        :module-status
-            tokens               :tokens}
-           (normalize-module-entry raw-module-id module-config)
-           w* (-> w
-                  (assoc-in [:yield/behavior normalized-module-id] behavior)
-                  (assoc-in [:yield/module-aliases normalized-module-id] resolved-module-id)
-                  (assoc-in [:yield/module-aliases resolved-module-id] resolved-module-id))
-           w* (if-let [status module-status]
-                (assoc-in w* [:yield/module-status resolved-module-id] status)
-                w*)]
-         (reduce-kv
+    (fn [w raw-module-id module-config]
+      (let [{normalized-module-id :module-id
+             resolved-module-id   :resolved-module-id
+             behavior             :behavior
+             module-status        :module-status
+             tokens               :tokens}
+            (normalize-module-entry raw-module-id module-config)
+            w* (-> w
+                   (assoc-in [:yield/behavior normalized-module-id] behavior)
+                   (assoc-in [:yield/module-aliases normalized-module-id] resolved-module-id)
+                   (assoc-in [:yield/module-aliases resolved-module-id] resolved-module-id))
+            w* (if-let [status module-status]
+                 (assoc-in w* [:yield/module-status resolved-module-id] status)
+                 w*)]
+        (reduce-kv
           (fn [w' token token-config]
-            (let [{:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes]}
+            (let [{:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall]}
                   (normalize-token-config token-config)]
               (-> w'
                   (assoc-in [:yield/indices resolved-module-id token] initial-index)
@@ -133,8 +131,9 @@
                             {:liquidity-mode liquidity-mode
                              :loss-mode      loss-mode
                              :rate-mode      rate-mode
-                             :failure-modes  failure-modes}))))
+                             :failure-modes  failure-modes
+                             :shortfall      shortfall}))))
           w*
           tokens)))
-   world
-   (:modules yield-config {})))
+    world
+    (:modules yield-config {})))

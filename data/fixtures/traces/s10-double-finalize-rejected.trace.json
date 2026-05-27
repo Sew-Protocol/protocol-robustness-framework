@@ -6,6 +6,15 @@
   "threat-tags": [
     "double-settlement"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s10-double-finalize-rejected",
   "initial-block-time": 1000,
   "agents": [

@@ -16,9 +16,9 @@ def snapshot_scenario(scenario_id, output_path="evidence/snapshot.png"):
     # Standard 1:1 Aspect Ratio for Social (Farcaster/X)
     viewport = {"width": 1200, "height": 1200}
     
-    clerk_url = f"http://localhost:7777/notebooks/workbench_production"
+    clerk_url = "http://localhost:7777/notebooks/workbench_production"
     
-    print(f"📸 Initializing Snapshot Engine")
+    print("📸 Initializing Snapshot Engine")
     print(f"🔗 Accessing URL: {clerk_url}")
     
     with sync_playwright() as p:

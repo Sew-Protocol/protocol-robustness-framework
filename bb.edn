@@ -1,7 +1,64 @@
-{:override-builtin true
- :tasks
- {run {:doc "Run a simulation with EDN params"
-       :task (clojure {:dir "." :extra-deps {}} "-M:run" *args*)}
+{:tasks
+ {sim:run {:doc "Run a simulation with EDN params"
+           :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
+
+  scenario:run
+  {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path>"
+   :task (let [arg (first *command-line-args*)
+               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario (or (get scenario-map arg) arg)]
+           (when-not scenario
+             (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
+           (clojure {:dir "." :extra-deps {}}
+                    "-M:run" "--" "--invariants" "--scenario" scenario))}
+
+  scenario:run:family
+  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
+   :task (let [selector (first *command-line-args*)]
+           (when-not (seq selector)
+             (throw (ex-info "Missing selector. Usage: bb run:family <selector>" {})))
+           (let [selector-lc (clojure.string/lower-case selector)
+                 scenarios (->> (file-seq (clojure.java.io/file "scenarios"))
+                                (filter (fn [f] (.isFile f)))
+                                (map (fn [f] (.getPath f)))
+                                (filter (fn [p] (clojure.string/ends-with? p ".json")))
+                                (filter (fn [p]
+                                          (let [hay (str (clojure.string/lower-case p)
+                                                         "\n"
+                                                         (clojure.string/lower-case (slurp p)))]
+                                            (clojure.string/includes? hay selector-lc))))
+                                sort
+                                vec)]
+             (when (empty? scenarios)
+               (throw (ex-info (str "No scenarios matched selector: " selector) {})))
+             (println (str "Matched " (count scenarios) " scenario(s) for selector '" selector "'"))
+             (doseq [scenario scenarios]
+               (println (str "Running " scenario))
+               (clojure {:dir "." :extra-deps {}}
+                        "-M:run" "--" "--invariants" "--scenario" scenario))))}
+
+
+  artifacts:refresh
+  {:doc "Explicitly refresh results/test-artifacts via canonical suites target"
+   :task (shell "./scripts/test.sh suites")}
+
+  evidence:build
+  {:doc "Build evidence output for a named scenario alias. Usage: bb evidence:build --scenario <alias|scenario-path> [--output-file <path>]"
+   :task (let [args (vec *command-line-args*)
+               scenario-idx (.indexOf args "--scenario")
+               output-idx (.indexOf args "--output-file")
+               raw-scenario (when (<= 0 scenario-idx)
+                              (nth args (inc scenario-idx) nil))
+               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario (or (get scenario-map raw-scenario) raw-scenario)
+               output-file (or (when (<= 0 output-idx)
+                                 (nth args (inc output-idx) nil))
+                               "results/evidence/kleros-escalation-race.result.json")]
+           (when-not scenario
+             (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
+           (shell "mkdir -p results/evidence")
+           (clojure {:dir "." :extra-deps {}}
+                    "-M:run" "--" "--invariants" "--scenario" scenario "--output-file" output-file))}
 
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
@@ -76,7 +133,7 @@
                              *args*)}
 
   adv:broad {:doc "Run adversarial agent broad discovery preset"
-             :task (shell "python3 python/adversarial_agent.py --target-effective-steps 40 --max-attempts 300 --guided-ratio 0.65 --rejected-step-weight 0.10" )}
+             :task (shell "python3 python/adversarial_agent.py --target-effective-steps 40 --max-attempts 300 --guided-ratio 0.65 --rejected-step-weight 0.10")}
 
   adv:deep {:doc "Run adversarial agent deeper exploit-chain preset"
             :task (shell "python3 python/adversarial_agent.py --target-effective-steps 80 --max-attempts 800 --guided-ratio 0.80 --rejected-step-weight 0.05")}
@@ -158,4 +215,20 @@
                   :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
 
   evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
-                     :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}}}
+                     :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}
+
+
+  clerk-build {:doc "Build static Clerk notebooks"
+               :task (clojure "-M:build-clerk")}
+  clerk-watch {:doc "Watch notebooks and rebuild"
+               :task (shell "find src notebooks -name '*.clj' | entr -r bb clerk-build")}
+
+
+  eastwood {:doc "eastwood"
+            :task (shell "clj -M:eastwood")}
+
+
+  check {:doc "check"
+         :task (do
+                 (shell "clj -M:lint")
+                 (shell "clj -M:eastwood"))}}}

@@ -45,5 +45,10 @@
               (acct/record-claimable escrow-id (:to et) recipient-amt))
             ;; Yield pool reduction: funds move from "held" to "claimable"
             (acct/sub-held token yield)
-            ;; Clear the position or mark as settled
-            (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0))))))
+            ;; If there's a shortfall, keep the position active for later recovery
+            (cond->
+              (:shortfall position)
+              (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
+
+              (not (:shortfall position))
+              (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0)))))))

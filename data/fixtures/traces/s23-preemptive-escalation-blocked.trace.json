@@ -6,6 +6,15 @@
   "threat-tags": [
     "escalation-abuse"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s23-preemptive-escalation-blocked",
   "initial-block-time": 1000,
   "agents": [

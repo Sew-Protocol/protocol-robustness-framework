@@ -6,6 +6,15 @@
   "threat-tags": [
     "authorization-bypass"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s15-dr3-module-unauthorized-rejected",
   "initial-block-time": 1000,
   "agents": [

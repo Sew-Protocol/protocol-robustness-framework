@@ -27,6 +27,7 @@ CLAIMABLE_CLASSIFICATION_FILE="$ARTIFACT_DIR/claimable-classification.json"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 MAX_UNHIT_TRANSITIONS="${MAX_UNHIT_TRANSITIONS:-4}"
 MAX_UNSAFE_REGION_DELTA_PCT="${MAX_UNSAFE_REGION_DELTA_PCT:-10}"
+STRICT_CLAIM_REGISTRY="${STRICT_CLAIM_REGISTRY:-0}"
 
 mkdir -p "$ARTIFACT_DIR"
 
@@ -243,7 +244,11 @@ PY
   python scripts/validate_artifact_registry.py
 
   # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
-  python scripts/validate_claim_registry.py
+  if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
+    python scripts/validate_claim_registry.py --strict-theory-claims
+  else
+    python scripts/validate_claim_registry.py
+  fi
 
   return $?
 }

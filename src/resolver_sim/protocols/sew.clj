@@ -21,8 +21,10 @@
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
             [resolver-sim.protocols.sew.db               :as sew-db]
+            [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.yield.registry                 :as yield-reg]
+            [resolver-sim.yield.ops                      :as yield-ops]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
 
@@ -103,12 +105,12 @@
    These rules are optional and run through replay's generic temporal rule engine."
   []
   [{:id :sew/appeal-window-open
-    :check (fn [{:keys [world event now]}]
+    :check (fn [{:keys [world advanced-world event]}]
              (if (= "execute_pending_settlement" (:action event))
                (let [wf-id   (compat/wf-id event)
-                     pending (t/get-pending world wf-id)]
+                     pending (t/get-pending advanced-world wf-id)]
                  (if (and (:exists pending)
-                          (< now (:appeal-deadline pending)))
+                           (< (:block-time advanced-world) (:appeal-deadline pending)))
                    {:ok? false :error :appeal-window-not-expired}
                    {:ok? true}))
                {:ok? true}))}])
@@ -234,16 +236,27 @@
   (actx/with-resolved-actor
     agent-index event
     (fn [addr]
-      (let [amount (get-in event [:params :amount] 0)]
-        (t/ok (reg/register-stake world addr amount))))))
+      (let [amount           (get-in event [:params :amount] 0)
+            yield-profile-id (get-in event [:params :yield-profile-id])
+            world            (reg/register-stake world addr amount yield-profile-id)]
+        (if yield-profile-id
+          (let [{:keys [module-id]} (yield-reg/resolve-yield-profile yield-profile-id)
+                world' (yield-ops/apply-yield-op world {:op/type :yield/deposit
+                                                        :owner/id (str "resolver:" addr)
+                                                        :module/id module-id
+                                                        :amount amount
+                                                        :token "USDC"})] ; Assuming USDC for now, should be parameterized
+            (t/ok world'))
+          (t/ok world))))))
 
 (defmethod apply-action "withdraw-stake"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
     agent-index event
     (fn [resolver-addr]
-      (let [amount       (get-in event [:params :amount])
-            current      (reg/get-stake world resolver-addr)
+      (let [amount               (get-in event [:params :amount])
+            current              (reg/get-stake world resolver-addr)
+            yield-profile-id     (reg/get-resolver-yield-profile world resolver-addr)
             pending-slash-amount (reduce + 0
                                   (for [[_ slash] (:pending-fraud-slashes world)
                                         :when (and (= (:resolver slash) resolver-addr)
@@ -263,7 +276,46 @@
           (t/fail :resolver-frozen)
 
           :else
-          (reg/withdraw-stake world resolver-addr amount))))))
+          (let [res (reg/withdraw-stake world resolver-addr amount)]
+            (if (and (:ok res) yield-profile-id)
+              (let [{:keys [module-id]} (yield-reg/resolve-yield-profile yield-profile-id)
+                    world' (yield-ops/apply-yield-op (:world res)
+                                                     {:op/type :yield/withdraw
+                                                      :owner/id (str "resolver:" resolver-addr)
+                                                      :module/id module-id})]
+                (t/ok world'))
+              res)))))))
+
+(defmethod apply-action "claim-deferred-yield"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [yield-id  (or (get-in event [:params :yield-profile-id])
+                          (get-in world [:params :yield-generation-module]))
+            module-id (:module-id (yield-reg/resolve-yield-profile yield-id))
+            raw-owner (get-in event [:params :owner-id])
+            owner-id  (cond
+                        (nil? raw-owner) (str "resolver:" addr)
+                        (and (string? raw-owner) (.startsWith raw-owner "escrow:"))
+                        [:sew/escrow (Long/parseLong (subs raw-owner 7))]
+                        :else raw-owner)
+            pos-key  [:yield/positions owner-id]
+            old-pos  (get-in world pos-key)
+            world'   (yield-ops/apply-yield-op world {:op/type :yield/claim-deferred
+                                                      :owner/id owner-id
+                                                      :module/id module-id})
+            new-pos  (get-in world' pos-key)
+            reclaimed (:reclaimed-amount new-pos 0)]
+        (if (pos? reclaimed)
+          (let [escrow-id (when (vector? owner-id) (second owner-id))
+                world''   (if escrow-id
+                            ;; If it was an escrow yield, re-apply policy to distribute reclaimed funds
+                            (yield-policy/apply-yield-policy world' escrow-id (t/escrow-state world' escrow-id))
+                            ;; If it was a resolver stake, just credit the resolver's stake
+                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
+            (t/ok world''))
+          (t/ok world'))))))
 
 (defmethod apply-action "withdraw-escrow"
   [{:keys [agent-index]} world event]
@@ -471,9 +523,11 @@
   (init-world [_ scenario]
     (let [init-time    (get scenario :initial-block-time 1000)
           tp           (:token-params scenario)
+          pp           (:protocol-params scenario {})
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)
+                           (assoc :params pp)
                            yield-reg/init-yield-modules
                            (yield-reg/apply-yield-config (:yield-config scenario)))]
       (if (and fot-bps (pos? fot-bps) (seq s-tokens))

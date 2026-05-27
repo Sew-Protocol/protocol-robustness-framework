@@ -10,7 +10,7 @@
   (let [port 7777]
     (log/info! "notebook/server-starting" {:port port})
     (println (str "Starting Clerk notebook server on http://localhost:" port "/notebooks/xtdb_overview"))
-    (clerk/serve! {:watch-paths ["notebooks"]
+    (clerk/serve! {:watch-paths ["src" "notebooks"]
                    :browse true
                    :port port})
     ;; Pre-evaluate all notebooks so they are reachable by URL without a file-change trigger.
@@ -19,6 +19,7 @@
     (show-notebook! "notebooks/invariant_failures.clj")
     (show-notebook! "notebooks/telemetry.clj")
     (show-notebook! "notebooks/report.clj")
+    (show-notebook! "notebooks/workbench_v2.clj")
     (show-notebook! "notebooks/workbench_production.clj")
     (show-notebook! "notebooks/golden_artifact.clj")
     (show-notebook! "notebooks/atlas_artifact.clj")

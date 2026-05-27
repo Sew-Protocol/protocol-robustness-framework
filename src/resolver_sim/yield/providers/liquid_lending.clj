@@ -108,24 +108,24 @@
                          :liquidity-mode mode
                          :owner/id oid}))
         (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              crystallized  (acct/realize-yield world (acct/update-position-yield world pos current-index))]
-          (if (fail-enabled? world mid token :partial-liquidity)
-            (let [{:keys [available-ratio reason]} (shortfall-config world mid token)
-                  available-ratio (min 1.0 (max 0.0 available-ratio))
-                  gross-realized (long (:realized-yield crystallized 0))
-                  fulfilled      (long (Math/floor (* gross-realized available-ratio)))
-                  shortfall      (max 0 (- gross-realized fulfilled))]
-              (assoc-in world pos-key
-                        (-> crystallized
-                            (assoc :status :unwinding)
-                            (assoc :shortfall {:reason reason
-                                               :available-ratio available-ratio
-                                               :fulfilled-amount fulfilled
-                                               :deferred-amount shortfall
-                                               :haircut-amount 0
-                                               :as-of-index current-index})
-                            (assoc :realized-yield fulfilled))))
-            (assoc-in world pos-key (assoc crystallized :status :withdrawn))))))))
+              updated-pos   (acct/update-position-yield world pos current-index)
+              gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
+              {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
+              crystallized  (-> updated-pos
+                                (assoc :status (if shortfall :unwinding :withdrawn))
+                                (assoc :realized-yield fulfilled)
+                                (assoc :unrealized-yield 0)
+                                (assoc :shortfall shortfall))]
+          (assoc-in world pos-key crystallized))))))
+
+(defn claim-deferred [world module op]
+  (let [oid     (:owner/id op)
+        pos-key [:yield/positions oid]
+        pos     (get-in world pos-key)
+        mid     (:module/id module)]
+    (if (and pos (= (:status pos) :unwinding))
+      (assoc-in world pos-key (acct/claim-deferred world mid pos))
+      world)))
 
 (defn emergency-unwind [world module op]
   (let [mid   (:module/id module)
@@ -145,16 +145,19 @@
   ([module-id module-type]
    {:module/id module-id
     :module/type module-type
-    :module/capabilities #{:deposit :withdraw :accrue :emergency-unwind}
+    :module/capabilities #{:deposit :withdraw :accrue :emergency-unwind :claim-deferred}
     :accounting/type :shares
     :ops {:yield/deposit deposit
           :yield/withdraw withdraw
           :yield/accrue accrue
-          :yield/emergency-unwind emergency-unwind}
+          :yield/emergency-unwind emergency-unwind
+          :yield/claim-deferred claim-deferred}
     :risk/defaults {:liquidity-mode :available
                     :loss-mode :none
                     :rate-mode :deterministic
                     :failure-modes #{}}}))
 
-(def liquid-lending-module
-  (make-module :yield.provider/liquid-lending))
+    (def liquid-lending-module
+    (make-module :yield.provider/liquid-lending))
+
+

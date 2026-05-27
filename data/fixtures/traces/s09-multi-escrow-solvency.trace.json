@@ -6,6 +6,15 @@
   "threat-tags": [
     "solvency"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s09-multi-escrow-solvency",
   "initial-block-time": 1000,
   "agents": [

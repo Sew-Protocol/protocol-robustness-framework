@@ -307,7 +307,8 @@
   ([artifacts]
    (let [bundle (generate-findings-bundle artifacts)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
-     (spit findings-path (json/write-str bundle))
+     (with-open [w (clojure.java.io/writer findings-path)]
+       (json/write bundle w :indent true))
      bundle)))
 
 (defn load-findings []

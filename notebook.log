@@ -102,3 +102,18 @@ Clerk evaluated 'notebooks/workbench_production.clj' in 174.169186ms.
 Clerk evaluated 'notebooks/workbench_production.clj' in 130.087832ms.
 Clerk evaluated 'notebooks/workbench_production.clj' in 140.854214ms.
 Clerk evaluated 'notebooks/workbench_production.clj' in 121.091739ms.
+Clerk evaluated 'notebooks/1779832172299-telemetry.clj' in 1590.186429ms.
+Clerk evaluated 'notebooks/telemetry.clj' in 691.268538ms.
+Clerk encountered an error evaluating 'notebooks/1779866459315-workbench-v2.clj' after 177.222787ms.
+Clerk encountered an error evaluating 'notebooks/workbench-v2.clj' after 90.402784ms.
+Clerk encountered an error evaluating 'notebooks/workbench-v2.clj' after 66.851496ms.
+Clerk encountered an error evaluating 'notebooks/workbench-v2.clj' after 65.329605ms.
+Clerk encountered an error evaluating 'notebooks/workbench-v2.clj' after 68.003608ms.
+Clerk encountered an error evaluating 'notebooks/workbench-v2.clj' after 245.843532ms.
+Clerk encountered an error evaluating 'notebooks/workbench_v2.clj' after 190.706551ms.
+Clerk evaluated 'notebooks/1779870268733-workbench_v2.clj' in 143.104288ms.
+Clerk evaluated 'notebooks/workbench_v2.clj' in 77.883136ms.
+Clerk evaluated 'notebooks/workbench_v2.clj' in 59.110228ms.
+Clerk evaluated 'notebooks/workbench_v2.clj' in 60.193552ms.
+Clerk evaluated 'notebooks/1779870858917-workbench_v2.clj' in 94.895587ms.
+Clerk evaluated 'notebooks/workbench_v2.clj' in 85.833824ms.

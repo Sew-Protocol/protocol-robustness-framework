@@ -6,6 +6,15 @@
   "threat-tags": [
     "state-leakage"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s22-status-leak-agree-cancel-over-dispute",
   "initial-block-time": 1000,
   "agents": [

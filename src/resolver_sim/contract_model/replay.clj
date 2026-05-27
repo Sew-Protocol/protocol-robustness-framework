@@ -154,14 +154,17 @@
            (not (:purpose scenario)))
       {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
 
-      ;; :theory-falsification scenarios must include a :theory block
-      (and (schema-profile/requires-theory? (:purpose scenario))
+      ;; Purpose-based requirements are enforced for enriched schemas only
+      ;; (v1.1+). Legacy v1.0 scenario packs are intentionally tolerated.
+      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+           (schema-profile/requires-theory? (:purpose scenario))
            (not (:theory scenario)))
       {:ok false :error :theory-required
        :detail "purpose :theory-falsification requires a :theory block"}
 
       ;; :adversarial-robustness scenarios must include :theory or meaningful :expectations
-      (and (schema-profile/requires-theory-or-expectations? (:purpose scenario))
+      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+           (schema-profile/requires-theory-or-expectations? (:purpose scenario))
            (not (:theory scenario))
            (empty? (get-in scenario [:expectations :metrics]))
            (empty? (get-in scenario [:expectations :terminal]))
@@ -334,12 +337,14 @@
   (let [event-time (:time event)
         now        (:block-time world)
         rules      (effective-temporal-rules context)
-        temporal-failure (evaluate-temporal-rules rules {:event-time event-time
-                                                         :now now
-                                                         :world world
-                                                         :event event
-                                                         :context context
-                                                         :protocol protocol})]
+        temporal-failure (evaluate-temporal-rules rules
+                                                  {:event-time event-time
+                                                   :now now
+                                                   :world world
+                                                   :advanced-world (:world (advance-world-time world event-time))
+                                                   :event event
+                                                   :context context
+                                                   :protocol protocol})]
     (if temporal-failure
       (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
                         (proto/compute-projection protocol world)

@@ -84,3 +84,56 @@ The facade is intentionally small so we can later add:
 - scenario correlation IDs
 
 without changing call sites.
+
+## Telemetry grounding contract (notebook)
+
+The telemetry notebook (`notebooks/telemetry.clj`) is intentionally treated as a
+**read-only observability view**, not a source of simulation truth.
+
+### Canonical grounding
+
+- Datasource anchor: `evaluation.xtdb/->datasource`
+- Canonical simulation/projection truth is produced in replay/projection paths,
+  not reconstructed from notebook UI state.
+- Notebook rendering is expected to align with these schema contracts:
+  - `test-run.v1`
+  - `test-artifacts.v1`
+  - `trace-end-projection.v1`
+  - `claimable-classification.v1`
+
+### Preflight schema checks (fail-closed)
+
+Before rendering trial/event detail views, the notebook performs preflight
+column checks against `information_schema.columns` and blocks rendering when
+required columns are missing.
+
+Required columns:
+
+- `sim_trial_results`
+  - `_id`
+  - `batch_id`
+  - `protocol_id`
+  - `outcome`
+  - `invariants_ok`
+  - `divergence`
+
+- `sim_entity_events`
+  - `trial_id`
+  - `block_time`
+  - `entity_id`
+  - `event_type`
+  - `entity_state`
+
+When any required column is missing (or metadata queries fail), the notebook
+shows explicit red callouts and prevents Trial Results / Event Trace Viewer
+rendering. This avoids ungrounded interpretation under schema drift.
+
+### Migration note
+
+If DB schema changes, update all of the following together:
+
+1. DB migration
+2. `notebooks/telemetry.clj` required-column contract
+3. Any downstream docs or artifact schema references
+
+Treat partial updates as a contract violation.
