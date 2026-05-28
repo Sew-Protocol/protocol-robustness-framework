@@ -31,6 +31,59 @@ Use this for report generation workflows; use `scripts/test.sh` as the canonical
 ./scripts/test.sh triage
 ```
 
+
+### Equivalence suites: per-trace expected outcomes
+
+Fixture suites can now declare mixed `:traces` entry shapes:
+
+1. **Keyword trace ref** (default behavior, expected `:pass`):
+
+```clojure
+:traces [:traces/s48-max-escalation-exact-boundary]
+```
+
+2. **Map entry with explicit expected outcome/halt reason**:
+
+```clojure
+:traces [{:trace :traces/s49-max-escalation-plus-one-rejected
+          :expected-outcome :invalid
+          :expected-halt-reason :adversarial-requires-analysis}]
+```
+
+This avoids false failures for intentional rejection/negative-path traces in equivalence gates.
+
+## 🔴 Required: End-to-End Trace Equivalence Verification (Model + Solidity)
+
+This is a **mandatory release check** for equivalence claims.
+
+Run **both** layers:
+
+1) **Model-side equivalence gate (Clojure)**
+
+```bash
+./scripts/test.sh equivalence-new
+```
+
+2) **On-chain trace replay + projection comparison (Forge Solidity)**
+
+```bash
+cd resources/symlink_to_smart_contracts/sew-protocol-smart-contracts-solidity
+forge test --match-contract TraceEquivalenceTest -vvv
+```
+
+Optional focused probe (single canonical trace):
+
+```bash
+forge test --match-contract TraceEquivalenceTest --match-test test_trace_create_release -vvv
+```
+
+### Why this is required
+
+- Clojure equivalence suites validate simulator/model semantics and gate fixture quality.
+- `TraceEquivalenceTest` replays fixture traces on live EVM contracts and asserts per-step projection equivalence.
+
+You should not claim full trace equivalence unless **both commands pass**.
+
 ### Machine-readable CI artifacts
 
 When running `./scripts/test.sh all`, the script writes a JSON summary:

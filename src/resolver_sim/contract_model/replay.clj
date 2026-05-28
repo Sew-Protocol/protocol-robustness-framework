@@ -10,6 +10,7 @@
      1. protocol/check-invariants-single
      2. protocol/check-invariants-transition"
    (:require [clojure.data.json              :as json]
+             [clojure.set                    :as set]
              [clojure.stacktrace             :as st]
              [clojure.string                :as str]
               [resolver-sim.logging          :as log]
@@ -120,6 +121,38 @@
     (if (defs/transition-def k)
       (keyword "scenario.transition" s)
       (keyword "scenario.transition" "unknown"))))
+
+(defn- expected-error-key
+  [{:keys [seq action error]}]
+  [seq action error])
+
+(defn- rejected-entry-key
+  [{:keys [seq action error]}]
+  [seq action error])
+
+(defn- analyze-expected-errors
+  "Compare rejected trace entries against scenario :expected-errors.
+
+   Returns {:ok? bool :matched [...] :missing [...] :unexpected [...]}.
+   Matching is exact on [:seq :action :error]."
+  [scenario trace]
+  (let [expected        (vec (:expected-errors scenario []))
+        expected-set    (set (map expected-error-key expected))
+        rejected        (->> trace
+                             (filter #(= :rejected (:result %)))
+                             (map #(select-keys % [:seq :action :error]))
+                             vec)
+        rejected-set    (set (map rejected-entry-key rejected))
+        matched-set     (set/intersection expected-set rejected-set)
+        missing-set     (set/difference expected-set rejected-set)
+        unexpected-set  (set/difference rejected-set expected-set)]
+    {:ok?        (and (empty? missing-set) (empty? unexpected-set))
+     :matched    (vec (sort-by (juxt :seq :action)
+                               (filter #(contains? matched-set (expected-error-key %)) expected)))
+     :missing    (vec (sort-by (juxt :seq :action)
+                               (filter #(contains? missing-set (expected-error-key %)) expected)))
+     :unexpected (vec (sort-by (juxt :seq :action)
+                               (filter #(contains? unexpected-set (rejected-entry-key %)) rejected)))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
@@ -448,7 +481,9 @@
             agent-index (:agent-index context)
             world0  (proto/init-world protocol scenario)
             events  (sort-by :seq (:events scenario))
-            scenario-id (:scenario-id scenario)]
+            scenario-id (:scenario-id scenario)
+            expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
+            strict-expected-errors? (boolean (:strict-expected-errors? scenario false))]
         (log/info! "scenario/start" {:id scenario-id})
         (loop [world world0 events events trace [] metrics (zero-metrics protocol) id-alias-map {}]
           (if (empty? events)
@@ -493,15 +528,38 @@
                                           (range)
                                           trace)
                       :coverage (:coverage temporal-cfg)}))
-                  (log/info! "scenario/end" {:id scenario-id :outcome :pass})
-                  {:outcome :pass :scenario-id scenario-id :events-processed (count trace) :trace trace :metrics metrics :agents agents :protocol protocol})))
+                  (let [expected-error-analysis (analyze-expected-errors scenario trace)
+                        expected-errors-mismatch? (and strict-expected-errors?
+                                                       (not (:ok? expected-error-analysis)))
+                        outcome (if expected-errors-mismatch? :fail :pass)
+                        halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
+                    (log/info! "scenario/end" {:id scenario-id :outcome outcome})
+                    {:outcome outcome
+                     :scenario-id scenario-id
+                     :events-processed (count trace)
+                     :halt-reason halt-reason
+                     :trace trace
+                     :metrics metrics
+                     :agents agents
+                     :expected-error-analysis expected-error-analysis
+                     :protocol protocol}))))
             (let [raw-event  (first events)
                   alias-res  (proto/resolve-id-alias protocol raw-event id-alias-map)]
               (if-not (:ok alias-res)
                 {:outcome :invalid :scenario-id scenario-id :events-processed (count trace) :halted-at-seq (:seq raw-event) :halt-reason :unresolved-alias :detail (dissoc alias-res :ok) :trace trace :metrics metrics :protocol protocol}
                 (let [event    (:event alias-res)
                       step     (process-step protocol context world event)
-                      entry    (:trace-entry step)
+                      entry0   (:trace-entry step)
+                      expected-failure? (and (= :rejected (:result entry0))
+                                             (contains? expected-errors-set
+                                                        [(:seq entry0) (:action entry0) (:error entry0)]))
+                      reject-phase (when (= :rejected (:result entry0))
+                                     (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
+                      entry    (cond-> entry0
+                                 (= :rejected (:result entry0))
+                                 (assoc :reject-class (:error entry0)
+                                        :reject-phase reject-phase
+                                        :expected-failure? expected-failure?))
                       new-trace   (conj trace entry)
                       new-metrics (accum-metrics protocol metrics event entry agent-index world)
                       created     (when (and (= :ok (:result entry)) (:save-id-as raw-event))

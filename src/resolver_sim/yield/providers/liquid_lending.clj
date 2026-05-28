@@ -83,6 +83,7 @@
                       yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
                   (-> w
                       (assoc-in [:yield/positions oid] new-pos)
+                      (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
                       (update-in [:total-held token] (fnil + 0) yield-delta)))
                 w))
             world'
@@ -111,9 +112,11 @@
               updated-pos   (acct/update-position-yield world pos current-index)
               gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
               {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
+              realized-yield (max 0 (min (:unrealized-yield updated-pos 0)
+                                          (- fulfilled (:principal updated-pos 0))))
               crystallized  (-> updated-pos
                                 (assoc :status (if shortfall :unwinding :withdrawn))
-                                (assoc :realized-yield fulfilled)
+                                (assoc :realized-yield realized-yield)
                                 (assoc :unrealized-yield 0)
                                 (assoc :shortfall shortfall))]
           (assoc-in world pos-key crystallized))))))

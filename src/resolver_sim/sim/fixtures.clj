@@ -196,14 +196,27 @@
    (let [effective-protocol (or protocol
                                 (preg/get-protocol preg/default-protocol-id))
          suite (compose-suite (load-fixture suite-key))
-         traces (:traces suite [])
+         trace-entries (:traces suite [])
+         traces (mapv (fn [entry]
+                        (if (and (map? entry) (contains? entry :trace))
+                          (let [trace-ref (:trace entry)
+                                trace (if (fixture-ref? trace-ref)
+                                        (compose-suite trace-ref)
+                                        trace-ref)]
+                            {:trace trace
+                             :expected-outcome (:expected-outcome entry)
+                             :expected-halt-reason (:expected-halt-reason entry)})
+                          {:trace (if (fixture-ref? entry)
+                                    (compose-suite entry)
+                                    entry)}))
+                      trace-entries)
          thresholds (:thresholds suite {})
          proto (:protocol suite)
          state (:state suite)
          authority (:authority suite)
          actors (:actors suite)
          token (:token suite)
-         results (mapv (fn [trace]
+         results (mapv (fn [{:keys [trace expected-outcome expected-halt-reason]}]
                          (let [merged-proto (when proto
                                               (merge (dissoc proto :protocol/id)
                                                      (:protocol-params trace)))
@@ -239,6 +252,9 @@
                             :purpose  (:purpose trace)
                              :theory-source (:theory trace)
                             :outcome (:outcome res)
+                             :halt-reason (:halt-reason res)
+                             :expected-outcome expected-outcome
+                             :expected-halt-reason expected-halt-reason
                             :metrics (:metrics res)
                             :threshold-validation (validate-thresholds res thresholds)
                             :golden-report report
@@ -259,7 +275,9 @@
                             mech-ok?      (ose/domain-results-ok? purpose mech-status mech-results opts)
                             eq-ok?        (ose/domain-results-ok? purpose eq-status eq-results opts)]
                         (and falsify-ok? mech-ok? eq-ok?)))
-         all-ok? (every? (fn [r] (and (= :pass (:outcome r))
+         all-ok? (every? (fn [r] (and (= (or (:expected-outcome r) :pass) (:outcome r))
+                                      (or (nil? (:expected-halt-reason r))
+                                          (= (:expected-halt-reason r) (:halt-reason r)))
                                       (:ok? (:threshold-validation r))
                                       (or (nil? (:expectations r)) (:ok? (:expectations r)))
                                       (theory-ok? r)

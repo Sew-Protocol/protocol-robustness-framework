@@ -39,10 +39,10 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 100000,
-        "custom_resolver": "0xresolver",
+        "custom-resolver": "0xresolver",
         "yield_preset": "to-recipient"
       },
-      "save_id_as": "wf0"
+      "save-id-as": "wf0"
     },
     {
       "seq": 1,
@@ -50,7 +50,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow_id": "wf0"
+        "workflow-id": "wf0"
       }
     },
     {
@@ -59,9 +59,9 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow_id": "wf0",
-        "is_release": true,
-        "resolution_hash": "0xbranchA"
+        "workflow-id": "wf0",
+        "is-release": true,
+        "resolution-hash": "0xbranchA"
       }
     },
     {
@@ -70,9 +70,9 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow_id": "wf0",
-        "is_release": true,
-        "resolution_hash": "0xbranchB"
+        "workflow-id": "wf0",
+        "is-release": false,
+        "resolution-hash": "0xbranchB"
       }
     },
     {
@@ -81,7 +81,7 @@
       "agent": "buyer",
       "action": "challenge_resolution",
       "params": {
-        "workflow_id": "wf0"
+        "workflow-id": "wf0"
       }
     },
     {
@@ -90,7 +90,7 @@
       "agent": "keeper",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow_id": "wf0"
+        "workflow-id": "wf0"
       }
     },
     {
@@ -99,7 +99,7 @@
       "agent": "keeper",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow_id": "wf0"
+        "workflow-id": "wf0"
       }
     }
   ]

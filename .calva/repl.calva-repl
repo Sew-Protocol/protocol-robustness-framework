@@ -51,3 +51,5 @@ clj꞉user꞉> 
    (println "Done. "))
 
 clj꞉user꞉> 
+(when-let [requires (resolve 'clojure.main/repl-requires)] (clojure.core/apply clojure.core/require @requires))
+clj꞉user꞉> 

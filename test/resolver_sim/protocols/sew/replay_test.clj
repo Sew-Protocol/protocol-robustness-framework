@@ -121,6 +121,29 @@
     (is (= :invalid (:outcome r)))
     (is (= :duplicate-agent-addresses (:halt-reason r)))))
 
+(deftest test-strict-expected-errors-enforced-and-trace-annotated
+  (let [r (sew/replay-with-sew-protocol
+           (assoc
+            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                          :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
+                         ;; invalid workflow-id -> deterministic reject, then valid close path
+                         {:seq 1 :time 1001 :agent "alice" :action "release"
+                          :params {:workflow-id 999}}
+                         {:seq 2 :time 1002 :agent "alice" :action "release"
+                          :params {:workflow-id 0}}])
+            :strict-expected-errors? true
+            :expected-errors [{:seq 1 :action "release" :error :invalid-workflow-id}]))]
+    (is (= :pass (:outcome r)))
+    (is (= {:ok? true
+            :matched [{:seq 1 :action "release" :error :invalid-workflow-id}]
+            :missing []
+            :unexpected []}
+           (:expected-error-analysis r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :invalid-workflow-id (get-in r [:trace 1 :reject-class])))
+    (is (= :dispatch (get-in r [:trace 1 :reject-phase])))
+    (is (true? (get-in r [:trace 1 :expected-failure?])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 2: Time regression in process-step
 ;; ---------------------------------------------------------------------------

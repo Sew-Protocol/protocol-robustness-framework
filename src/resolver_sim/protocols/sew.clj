@@ -462,7 +462,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- run-single-invariants [world]
-  (let [r (inv/check-all world)]
+  (let [scenario-id (get-in world [:params :scenario-id])
+        r (inv/check-all world scenario-id)]
     {:ok?        (:all-hold? r)
      :violations (when-not (:all-hold? r) (:results r))}))
 
@@ -489,6 +490,7 @@
    :resolver-rotations (into {} (:resolver-rotations world))
    :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
                                      (:escrow-transfers world)))
+   :escrow-transfers    (:escrow-transfers world {})
    :resolver-stakes     (:resolver-stakes world)
    :resolver-slash-total (:resolver-slash-total world)
    :bond-distribution   (:bond-distribution world)
@@ -523,7 +525,7 @@
   (init-world [_ scenario]
     (let [init-time    (get scenario :initial-block-time 1000)
           tp           (:token-params scenario)
-          pp           (:protocol-params scenario {})
+          pp           (assoc (:protocol-params scenario {}) :scenario-id (:scenario-id scenario))
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)

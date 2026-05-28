@@ -214,6 +214,20 @@
 ;;   This function models the normal case (no concurrent escalation).
 ;; ---------------------------------------------------------------------------
 
+(defn- clear-pending-settlement [world workflow-id]
+  (let [pending (t/get-pending world workflow-id)
+        et      (t/get-transfer world workflow-id)
+        token   (:token et)
+        existing-claimable (reduce + 0 (vals (get-in world [:claimable workflow-id] {})))
+        ;; Identify who has claimable balance
+        claimant (first (keys (get-in world [:claimable workflow-id])))]
+    (if (:exists pending)
+      (-> world
+          (assoc-in [:pending-settlements workflow-id] t/empty-pending-settlement)
+          (acct/record-claimable workflow-id claimant (- existing-claimable)))
+      world)))
+
+
 (defn execute-resolution
   "Submit a resolution decision for a :disputed escrow.
 
@@ -232,12 +246,11 @@
     (not= :disputed (t/escrow-state world workflow-id))
     (t/fail :transfer-not-in-dispute)
 
-    ;; Prevent resolution flip: reject if a pending settlement already exists
-    (:exists (t/get-pending world workflow-id))
-    (t/fail :resolution-already-pending)
-
     :else
-    (let [world          (lc/accrue-yield world workflow-id)
+    (let [world (do (println "DEBUG: Pre-reconciliation claimable=" (get-in world [:claimable workflow-id]))
+                    (clear-pending-settlement world workflow-id))
+          world (do (println "DEBUG: Post-reconciliation claimable=" (get-in world [:claimable workflow-id]))
+                    (lc/accrue-yield world workflow-id))
           snap           (t/get-snapshot world workflow-id)
           ;; Phase L extension: window is the MAX of appeal-window and challenge-window
           window-dur     (max (:appeal-window-duration snap 0)

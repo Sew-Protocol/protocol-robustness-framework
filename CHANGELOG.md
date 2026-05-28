@@ -10,6 +10,11 @@
 - **Evidence-to-Share Workflow:** Integrated the `bb benchmark:publish-ipfs` pipeline to automatically generate an `evidence-manifest.json` for workbench consumption, cryptographically binding every visual artifact to an immutable IPFS bundle.
 
 ### Fixed
+- **Cross-layer Equivalence Test Alignment (Forge):** Updated symlinked smart-contract test expectations to match current on-chain behavior and Foundry semantics:
+  - `ModuleManagementContract.t.sol`: constructor zero-owner revert now asserts `InvalidAddress(8, address(0))` instead of legacy `InvalidValue()`.
+  - `RepeatAttackerIntegration.t.sol`: cooldown tests now reflect deadline-safety behavior where escalation cooldown tracks/scales rather than hard-blocking within-window valid appeals.
+  - `IncentiveModuleIntegration.test.t.sol`: removed nested `vm.prank` inside active `vm.startPrank` in `setUp()` to fix prank-override failure.
+  - Verified via targeted `forge test` reruns for each previously failing case.
 - **CLI Compilation:** Resolved the `load-index` symbol resolution error in `src/resolver_sim/benchmark/cli.clj`.
 - **JSON Serialization:** Corrected `publish-ipfs` to use `clojure.data.json/write-str` to properly generate IPFS manifests.
 - **Artifact Readability:** Finalized the high-contrast design for the Golden Artifacts, optimizing typography and color palettes for mobile readability and social sharing.

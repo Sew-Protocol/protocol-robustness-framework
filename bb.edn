@@ -4,13 +4,24 @@
 
   scenario:run
   {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path>"
-   :task (let [arg (first *command-line-args*)
+   :task (let [arg          (first *command-line-args*)
                scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-               scenario (or (get scenario-map arg) arg)]
+               scenario     (or (get scenario-map arg) arg)]
            (when-not scenario
              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
-           (clojure {:dir "." :extra-deps {}}
-                    "-M:run" "--" "--invariants" "--scenario" scenario))}
+           (let [t0   (System/currentTimeMillis)
+                 exit (try
+                        (clojure {:dir "." :extra-deps {}}
+                                 "-M:run" "--" "--invariants" "--scenario" scenario)
+                        0
+                        (catch clojure.lang.ExceptionInfo e
+                          (or (:exit (ex-data e)) 1)))
+                 dur  (- (System/currentTimeMillis) t0)]
+             (shell "python3" "scripts/write_scenario_run_manifest.py"
+                    "--scenario"    scenario
+                    "--status"      (if (zero? exit) "pass" "fail")
+                    "--duration-ms" (str dur))
+             (when-not (zero? exit) (System/exit exit))))}
 
   scenario:run:family
   {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
@@ -32,33 +43,64 @@
              (when (empty? scenarios)
                (throw (ex-info (str "No scenarios matched selector: " selector) {})))
              (println (str "Matched " (count scenarios) " scenario(s) for selector '" selector "'"))
-             (doseq [scenario scenarios]
-               (println (str "Running " scenario))
-               (clojure {:dir "." :extra-deps {}}
-                        "-M:run" "--" "--invariants" "--scenario" scenario))))}
-
+             (let [t0      (System/currentTimeMillis)
+                   results (mapv (fn [scenario]
+                                   (println (str "Running " scenario))
+                                   (try
+                                     (clojure {:dir "." :extra-deps {}}
+                                              "-M:run" "--" "--invariants" "--scenario" scenario)
+                                     {:scenario scenario :exit 0}
+                                     (catch clojure.lang.ExceptionInfo e
+                                       {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
+                                 scenarios)
+                   dur     (- (System/currentTimeMillis) t0)
+                   failed  (filterv (fn [r] (not (zero? (:exit r)))) results)
+                   status  (if (empty? failed) "pass" "fail")]
+               (shell "python3" "scripts/write_scenario_run_manifest.py"
+                      "--suite"           "scenario-family"
+                      "--scenario"        selector
+                      "--scenario-count"  (str (count scenarios))
+                      "--status"          status
+                      "--duration-ms"     (str dur))
+               (when-not (empty? failed)
+                 (println (str (count failed) " scenario(s) failed: "
+                               (mapv :scenario failed)))
+                 (System/exit 1)))))}
 
   artifacts:refresh
   {:doc "Explicitly refresh results/test-artifacts via canonical suites target"
-   :task (shell "./scripts/test.sh suites")}
+  :task (shell "./scripts/test.sh suites")}
 
   evidence:build
   {:doc "Build evidence output for a named scenario alias. Usage: bb evidence:build --scenario <alias|scenario-path> [--output-file <path>]"
-   :task (let [args (vec *command-line-args*)
+   :task (let [args         (vec *command-line-args*)
                scenario-idx (.indexOf args "--scenario")
-               output-idx (.indexOf args "--output-file")
+               output-idx   (.indexOf args "--output-file")
                raw-scenario (when (<= 0 scenario-idx)
                               (nth args (inc scenario-idx) nil))
                scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-               scenario (or (get scenario-map raw-scenario) raw-scenario)
-               output-file (or (when (<= 0 output-idx)
+               scenario     (or (get scenario-map raw-scenario) raw-scenario)
+               output-file  (or (when (<= 0 output-idx)
                                  (nth args (inc output-idx) nil))
                                "results/evidence/kleros-escalation-race.result.json")]
            (when-not scenario
              (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
            (shell "mkdir -p results/evidence")
-           (clojure {:dir "." :extra-deps {}}
-                    "-M:run" "--" "--invariants" "--scenario" scenario "--output-file" output-file))}
+           (let [t0   (System/currentTimeMillis)
+                 exit (try
+                        (clojure {:dir "." :extra-deps {}}
+                                "-M:run" "--" "--invariants" "--scenario" scenario "--output-file" output-file)
+                        0
+                        (catch clojure.lang.ExceptionInfo e
+                          (or (:exit (ex-data e)) 1)))
+                 dur  (- (System/currentTimeMillis) t0)]
+             (shell "python3" "scripts/write_scenario_run_manifest.py"
+                    "--suite"        "evidence"
+                    "--scenario"     scenario
+                    "--output-file"  output-file
+                    "--status"       (if (zero? exit) "pass" "fail")
+                    "--duration-ms"  (str dur))
+             (when-not (zero? exit) (System/exit exit))))}
 
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
@@ -231,4 +273,35 @@
   check {:doc "check"
          :task (do
                  (shell "clj -M:lint")
-                 (shell "clj -M:eastwood"))}}}
+                 (shell "clj -M:eastwood"))}
+
+  notebook:focus
+  {:doc "Focus the provenance notebook on a specific run-id. Usage: bb notebook:focus <run-id>"
+   :task (let [run-id (first *command-line-args*)]
+           (when-not (seq run-id)
+             (throw (ex-info "Usage: bb notebook:focus <run-id>" {})))
+           (clojure.java.io/make-parents "results/.notebook-focus")
+           (spit "results/.notebook-focus" run-id)
+           (println "Notebook focused on run:" run-id)
+           (println "Reload the Clerk notebook to see this run."))}
+
+  notebook:latest
+  {:doc "Reset the provenance notebook to always show the latest run."
+   :task (let [f (java.io.File. "results/.notebook-focus")]
+           (if (.delete f)
+             (println "Notebook reset to latest run.")
+             (println "Already showing latest run (no focus file found).")))}
+
+  notebook:runs
+  {:doc "List all available run-ids for use with notebook:focus."
+   :task (let [root (java.io.File. "results/runs")]
+           (if (.exists root)
+             (doseq [d (sort (.listFiles root))]
+               (when (.isDirectory d)
+                 (println (.getName d))))
+             (println "No runs found. Run bb scenario:run <scenario> first.")))}
+
+  manifest:sign
+  {:doc "Sign the focused (or latest) run manifest with Ed25519. Usage: bb manifest:sign [key-path]"
+   :task (let [key-path (or (first *command-line-args*) "test_key")]
+           (clojure {:dir "." :extra-deps {}} "-M:sign-manifest" key-path))}}}
