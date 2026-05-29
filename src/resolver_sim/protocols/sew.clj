@@ -582,15 +582,15 @@
 
   (available-actions [_ world actor]
     (let [wfs (keys (:escrow-transfers world))]
-      (flatten
-       (for [wf wfs]
+      (mapcat identity
+              (for [wf wfs]
          (let [et (t/get-transfer world wf)]
            (cond-> []
              ;; Pending actions
              (= :pending (:escrow-state et))
              (into (cond-> []
                      (or (= actor (:from et)) (= actor (:to et)))
-                     (conj {:action "raise_dispute" :params {:workflow-id wf}})
+                     (conj {:action "raise-dispute" :params {:workflow-id wf}})
 
                      (= actor (:from et))
                      (into [{:action "release" :params {:workflow-id wf}}
@@ -606,17 +606,17 @@
                      (cond-> []
                        ;; Resolver verdict
                        (and (not (:exists pending)) (= actor resolver))
-                       (into [{:action "execute_resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
-                              {:action "execute_resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
+                       (into [{:action "execute-resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
+                              {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
 
                        ;; Escalation/Challenge (if pending exists and not expired)
                        (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
                        (into (cond-> []
                                (or (= actor (:from et)) (= actor (:to et)))
-                               (conj {:action "escalate_dispute" :params {:workflow-id wf}})
+                               (conj {:action "escalate-dispute" :params {:workflow-id wf}})
 
                                ;; Anyone can challenge (Phase L)
-                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
+                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}})))))))))))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
@@ -713,8 +713,8 @@
     {:transition/type (meta/transition-type action)
      :resolution/path (meta/resolution-path action)})
 
-  (trace-projection [_ result]
-    (sew-proj/trace-end-projection result))
+  (trace-projection [this result]
+    (sew-proj/trace-end-projection this result))
 
   (io-projection [_ data target-type]
     (case target-type
@@ -772,7 +772,7 @@
     sew-eq/equilibrium-concept-validators)
 
   (reference-model [_ scenario]
-    nil))
+    nil)))
 
 (def protocol (SewProtocol.))
 

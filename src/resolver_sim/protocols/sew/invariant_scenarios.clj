@@ -4,14 +4,8 @@
    Each entry in `all-scenarios` is a scenario map accepted by
    resolver-sim.protocols.sew/replay-with-sew-protocol.
 
-   Events use direct integer workflow-ids on create_escrow steps.
-   :workflow-id aliases (e.g. \"wf0\") on subsequent steps.  The replay
-   engine resolves aliases lazily in the event loop.
-
-   Scenarios marked :expected-fail? true are expected to halt on an
-   invariant violation — they document known-fixed bugs and regression
-   tests.  The invariant runner treats them as passing when the outcome
-   is :fail (i.e. the violation fires as expected).")
+   Events use direct integer workflow-ids throughout. The Nth create_escrow
+   event produces workflow-id N-1 (zero-indexed by creation order).")
 
 ;; ---------------------------------------------------------------------------
 ;; Shared protocol-param sets

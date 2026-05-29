@@ -26,7 +26,7 @@
 
 ;; ============ PHASE I ORACLE (Multi-mechanism detection) ============
 
-(deftype PhaseIOracl []
+(deftype PhaseIOracle []
   "Detects fraud, reversal, and timeout violations.
    
    Mechanisms:
@@ -95,25 +95,29 @@
 
 (defn detect-fraud
   "Detect fraud based on multiple mechanisms.
-   
+
    Mechanisms (can co-occur):
    - fraud-detection-prob: Catches attacker forcing wrong outcome
    - reversal-detection-prob: Catches appeal reversal (honest outcome restored)
    - timeout-detection-prob: Catches missed deadlines
-   
+
+   Pass :rng (a java.util.Random) in params for deterministic replay;
+   falls back to Math/random when absent.
+
    Returns:
    {:fraud-detected? bool
     :reversal-detected? bool
     :timeout-detected? bool}"
   [params]
-  
-  (let [fraud-det (:fraud-detection-probability params 0.0)
+  (let [fraud-det    (:fraud-detection-probability params 0.0)
         reversal-det (:reversal-detection-probability params 0.0)
-        timeout-det (:timeout-detection-probability params 0.0)]
-    
-    {:fraud-detected? (< (rand) fraud-det)
-     :reversal-detected? (< (rand) reversal-det)
-     :timeout-detected? (< (rand) timeout-det)}))
+        timeout-det  (:timeout-detection-probability params 0.0)
+        rng          (:rng params)
+        roll         (fn [] (if rng (.nextDouble ^java.util.Random rng) (Math/random)))]
+
+    {:fraud-detected?    (< (roll) fraud-det)
+     :reversal-detected? (< (roll) reversal-det)
+     :timeout-detected?  (< (roll) timeout-det)}))
 
 (defn apply-slashing
   "Calculate penalty amount from slash basis points.

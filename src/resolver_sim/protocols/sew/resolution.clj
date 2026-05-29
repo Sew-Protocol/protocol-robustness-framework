@@ -80,11 +80,15 @@
                 ;; Evidence Check (Phase M Practicality)
                 ;; In a real system, the resolver signs an evidence hash.
                 ;; Here we check if the world state indicates "new information".
+                ;; NOTE: :evidence-updated? is not yet set by any action; Track 2 is
+                ;; a forward-placeholder for when evidence-submission is modelled.
                 new-evidence? (get-in world [:evidence-updated? workflow-id] false)
                 
                 slash-bps     (:reversal-slash-bps snap 0)
                 slash-amt     (payoffs/calculate-reversal-slash afa slash-bps)
-                slash-id      (str workflow-id "-reversal")
+                ;; Level-scoped slash-id prevents collision when multiple reversals
+                ;; occur on the same workflow across different escalation levels.
+                slash-id      (str workflow-id "-reversal-" (dec level))
                 now           (:block-time world)]
             
             (if (not new-evidence?)
@@ -559,8 +563,8 @@
 
 (defn appeal-slash
   "Resolver appeals a PENDING manual slash (Phase M).
-   slash-id defaults to workflow-id; pass the string slash-id for reversal slashes
-   (e.g. \"0-reversal\").
+   slash-id defaults to workflow-id; pass the level-scoped string slash-id for
+   reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
    Mirrors: ResolverSlashingModuleV1.appealSlash"
   ([world workflow-id caller] (appeal-slash world workflow-id caller workflow-id))
   ([world workflow-id caller slash-id]
@@ -624,9 +628,8 @@
    Mirrors: ResolverSlashingModuleV1.resolveAppeal"
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
-  ([world _workflow-id _caller appeal-upheld? slash-id]
-   (let [caller _caller
-         pending (get-in world [:pending-fraud-slashes slash-id])]
+  ([world _workflow-id caller appeal-upheld? slash-id]
+   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
      (cond
        (or (nil? caller) (= "" caller))
        (t/fail :missing-caller-context)
@@ -643,7 +646,9 @@
        (let [bond-held   (get-in world [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
              custody     (get-in world [:appeal-bond-custody slash-id])
              resolver    (or (:resolver custody) (:resolver pending))
-             workflow-id (:workflow-id custody slash-id)
+             ;; Prefer custody workflow-id (an integer); fall back to pending's resolver context.
+             ;; Do NOT fall back to slash-id which may be a string like "0-reversal-0".
+             wf-id       (or (:workflow-id custody) (:workflow-id pending))
              world'      (-> world
                              (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
                              (update :appeal-bond-custody dissoc slash-id)
@@ -653,7 +658,7 @@
                            (if (pos? bond-held)
                              (-> world'
                                  (assoc-in [:pending-fraud-slashes slash-id :status] :reversed)
-                                 (acct/record-claimable workflow-id resolver bond-held))
+                                 (acct/record-claimable wf-id resolver bond-held))
                              (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed))
                            (if (pos? bond-held)
                              (-> world'
@@ -665,8 +670,8 @@
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
-   slash-id defaults to workflow-id; pass the string slash-id for reversal slashes
-   (e.g. \"0-reversal\").
+   slash-id defaults to workflow-id; pass the level-scoped string slash-id for
+   reversal slashes (e.g. \"0-reversal-0\" for the reversal at level 1 on workflow 0).
    Mirrors: ResolverSlashingModuleV1.executeSlash"
   ([world workflow-id] (execute-fraud-slash world workflow-id workflow-id))
   ([world workflow-id slash-id]

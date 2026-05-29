@@ -57,38 +57,43 @@
         (update-in [:bond-pool resolver-id] (fn [x] (- (or x 0) appeal-bond))))))
 
 (defn resolve-appeal-with-outcome
-  "Resolve an appeal with probabilistic outcome
-  
+  "Resolve an appeal with probabilistic outcome.
+
   Appeal success rate varies by appeal type:
   - Timeout appeal: 15% success (clear error case)
   - Fraud appeal: 30% success (subjective, harder to overturn)
   - Reversal appeal: 50% success (depends on final verdict)
-  
+
+  Pass :rng (a java.util.Random) in params for deterministic replay;
+  falls back to Math/random when absent.
+
   Returns: {:appeal updated, :slash-status (overturned/upheld), :bonds-returned/burned}"
-  [appeal appeal-success-rate]
-  (let [random-outcome (rand)
-        appeal-succeeds (< random-outcome appeal-success-rate)
-        outcome (if appeal-succeeds :overturned :upheld)
-        
-        resolver-id (:resolver-id appeal)
-        slash-amount (:slash-amount appeal)
-        appeal-bond (:appeal-bond appeal)]
-    
-    {:appeal (assoc appeal :outcome outcome)
-     :slash-reversed appeal-succeeds
-     :bonds-returned (if appeal-succeeds
-                      {:winner resolver-id :amount (+ slash-amount appeal-bond)}
-                      {:loser resolver-id :amount appeal-bond})
-     :distribution (if appeal-succeeds
-                    {:type :appeal-success
-                     :resolver-id resolver-id
-                     :slash-reversed slash-amount
-                     :bond-returned appeal-bond
-                     :total-returned (+ slash-amount appeal-bond)}
+  ([appeal appeal-success-rate] (resolve-appeal-with-outcome appeal appeal-success-rate {}))
+  ([appeal appeal-success-rate params]
+   (let [rng            (:rng params)
+         random-outcome (if rng (.nextDouble ^java.util.Random rng) (Math/random))
+         appeal-succeeds (< random-outcome appeal-success-rate)
+         outcome (if appeal-succeeds :overturned :upheld)
+
+         resolver-id (:resolver-id appeal)
+         slash-amount (:slash-amount appeal)
+         appeal-bond (:appeal-bond appeal)]
+
+     {:appeal (assoc appeal :outcome outcome)
+      :slash-reversed appeal-succeeds
+      :bonds-returned (if appeal-succeeds
+                       {:winner resolver-id :amount (+ slash-amount appeal-bond)}
+                       {:loser resolver-id :amount appeal-bond})
+      :distribution (if appeal-succeeds
+                     {:type :appeal-success
+                      :resolver-id resolver-id
+                      :slash-reversed slash-amount
+                      :bond-returned appeal-bond
+                      :total-returned (+ slash-amount appeal-bond)}
                     {:type :appeal-failed
                      :resolver-id resolver-id
                      :slash-upheld slash-amount
-                     :bond-burned appeal-bond})}))
+                     :bond-burned appeal-bond})})))
 
 (defn process-appeal-resolutions
   "Process all appeals that have reached resolution epoch
@@ -162,42 +167,48 @@
      :appeal-success-rate appeal-success-rate}))
 
 (defn adjust-waterfall-for-appeals
-  "Adjust waterfall capital requirements based on appeal success rate
-  
+  "Adjust waterfall capital requirements based on appeal success rate.
+
   With 0% appeal success:
     - Phase L results are unchanged
-  
+
   With 20% appeal success:
-    - Capital requirements drop 20% (fewer slashes need to be paid)
-    - Waterfall adequacy margin increases
-  
+    - Fewer slashes execute → capital requirements drop
+    - Waterfall adequacy margin increases (~1.25×: 6600% → 8250%)
+
   With 50% appeal success:
-    - Capital requirements drop 50% (many slashes reversed)
-    - May change from 66× surplus to 33× surplus"
+    - Half of all slashes reversed → adequacy doubles (~6600% → 13200%)
+
+  Coverage adequacy = available-capital / required-capital.
+  When appeal-success-rate increases, required-capital decreases, so
+  adequacy rises. The adjustment factor is 1 / (1 - appeal-success-rate)."
   [waterfall-metrics appeal-success-rate]
-  (let [adjustment-factor (- 1.0 appeal-success-rate)
+  (let [effective-slash-rate (- 1.0 appeal-success-rate)
+        ;; Avoid division by zero when all slashes are reversed
+        adjustment-factor (if (pos? effective-slash-rate)
+                            (/ 1.0 effective-slash-rate)
+                            Double/MAX_VALUE)
         original-slashes (:total-slashes waterfall-metrics 0)
-        expected-upheld-slashes (* original-slashes adjustment-factor)
-        expected-reversed-slashes (* original-slashes appeal-success-rate)
-        
-        ;; Adjust metrics based on appeals
+        expected-upheld-slashes (long (* original-slashes effective-slash-rate))
+        expected-reversed-slashes (long (* original-slashes appeal-success-rate))
+
         adjusted-juniors-exhausted (update waterfall-metrics
                                           :juniors-exhausted-pct
-                                          (fn [pct] (* pct adjustment-factor)))
-        
+                                          (fn [pct] (* pct effective-slash-rate)))
+
         adjusted-seniors-used (update adjusted-juniors-exhausted
                                       :seniors-coverage-used-avg-pct
-                                      (fn [pct] (* pct adjustment-factor)))
-        
+                                      (fn [pct] (* pct effective-slash-rate)))
+
         adjusted-adequacy (update adjusted-seniors-used
                                   :coverage-adequacy-score
                                   (fn [score] (* score adjustment-factor)))]
-    
+
     (assoc adjusted-adequacy
            :appeal-success-rate appeal-success-rate
            :adjustment-factor adjustment-factor
-           :expected-upheld-slashes (long expected-upheld-slashes)
-           :expected-reversed-slashes (long expected-reversed-slashes)
+           :expected-upheld-slashes expected-upheld-slashes
+           :expected-reversed-slashes expected-reversed-slashes
            :note "Metrics adjusted for appeal reversal impact")))
 
 ;;;; ============================================================================
