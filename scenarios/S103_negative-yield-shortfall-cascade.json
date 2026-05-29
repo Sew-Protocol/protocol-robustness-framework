@@ -66,23 +66,31 @@
     {
       "seq": 3,
       "time": 20737000,
-      "label": "seller cancels 2 months into the stress period — triggers final accrue under negative yield, then shortfall withdrawal",
+      "label": "seller agrees to cancel (sets recipient agree-to-cancel flag)",
       "agent": "seller",
-      "action": "seller_cancel",
+      "action": "recipient-cancel",
       "params": { "workflow-id": 0 }
     },
     {
       "seq": 4,
+      "time": 20737000,
+      "label": "buyer agrees to cancel — both parties agree; escrow finalises, triggering final accrue under negative yield then shortfall withdrawal",
+      "agent": "buyer",
+      "action": "sender-cancel",
+      "params": { "workflow-id": 0 }
+    },
+    {
+      "seq": 5,
       "time": 20737001,
-      "label": "buyer withdraws — receives 80% of gross immediately; 20% deferred",
+      "label": "buyer withdraws — receives fulfilled portion (80% of gross) immediately; 20% deferred in Aave",
       "agent": "buyer",
       "action": "withdraw-escrow",
       "params": { "workflow-id": 0 }
     },
     {
-      "seq": 5,
+      "seq": 6,
       "time": 25921000,
-      "label": "5 months later: Aave liquidity recovers — buyer claims deferred funds",
+      "label": "5 months later: Aave liquidity recovers — buyer can now claim deferred funds",
       "agent": "buyer",
       "action": "set-yield-risk",
       "params": {
@@ -93,7 +101,7 @@
       }
     },
     {
-      "seq": 6,
+      "seq": 7,
       "time": 25921001,
       "label": "buyer claims deferred yield position",
       "agent": "buyer",
@@ -114,21 +122,26 @@
     },
     {
       "seq": 3,
-      "action": "seller_cancel",
+      "action": "recipient-cancel",
       "expect": "ok"
     },
     {
       "seq": 4,
-      "action": "withdraw-escrow",
+      "action": "sender-cancel",
       "expect": "ok"
     },
     {
       "seq": 5,
-      "action": "set-yield-risk",
+      "action": "withdraw-escrow",
       "expect": "ok"
     },
     {
       "seq": 6,
+      "action": "set-yield-risk",
+      "expect": "ok"
+    },
+    {
+      "seq": 7,
       "action": "claim-deferred-yield",
       "expect": "ok"
     }

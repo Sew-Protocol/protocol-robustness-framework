@@ -40,7 +40,7 @@
   [profile-or-module-id]
   (let [profile-id (normalize-module-id profile-or-module-id)
         archetype  (profile->archetype profile-id)
-        module-id  (or profile-id (archetype->module-id archetype))]
+        module-id  (or (archetype->module-id archetype) profile-id)]
     {:profile-id profile-id
      :archetype  archetype
      :module-id  module-id}))

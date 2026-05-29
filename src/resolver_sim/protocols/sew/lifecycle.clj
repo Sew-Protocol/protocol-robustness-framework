@@ -75,7 +75,12 @@
 
 (defn- finalize
   "Internal: transition escrow to terminal state, release accounting.
-   direction — :released (to recipient) or :refunded (to sender)."
+   direction — :released (to recipient) or :refunded (to sender).
+
+   Yield shortfall handling: when the yield module can only fulfil a fraction of
+   the gross (principal + unrealized yield), only that fulfilled amount is moved
+   from :total-held to :claimable.  The deferred remainder stays in :total-held
+   as an outstanding obligation until claim-deferred-yield closes it out."
   [world workflow-id direction]
   (let [et        (t/get-transfer world workflow-id)
         token     (:token et)
@@ -84,21 +89,34 @@
         net-amt   (- amt (t/compute-fee amt fot-bps))
         snap      (t/get-snapshot world workflow-id)
         mid       (:yield-generation-module snap)
+        owner-id  (t/escrow-yield-owner-id workflow-id)
         recipient (if (= direction :released) (:to et) (:from et))
-        record-fn (if (= direction :released) acct/record-released acct/record-refunded)]
-    (-> world
-        (accrue-yield workflow-id)
-        (cond-> (and mid (contains? (:yield/modules world) mid))
-          (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                     :module/id mid
-                                     :owner/id (t/escrow-yield-owner-id workflow-id)}))
+        record-fn (if (= direction :released) acct/record-released acct/record-refunded)
+        ;; Run accrue + withdraw first so we can inspect the shortfall result
+        world-after-yield
+        (-> world
+            (accrue-yield workflow-id)
+            (cond-> (and mid (contains? (:yield/modules world) mid))
+              (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                        :module/id mid
+                                        :owner/id owner-id})))
+        ;; Under a liquidity shortfall, only fulfilled-amount is immediately settleable.
+        ;; Use net-amt when no yield module is involved or no shortfall occurred.
+        pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
+        pos-shortfall (:shortfall pos)
+        settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
+        ;; Sub-held: remove gross afa (amt) for no-shortfall so FoT accounting holds.
+        ;; Under shortfall, only remove the fulfilled portion — deferred stays in held.
+        sub-held-amt  (if pos-shortfall settled-amt amt)]
+    (-> world-after-yield
         (yield-policy/apply-yield-policy workflow-id direction)
-        (acct/sub-held token amt)
-        (record-fn token net-amt)
+        ;; Sub-held — see sub-held-amt above
+        (acct/sub-held token sub-held-amt)
+        (record-fn token settled-amt)
         ;; Track outbound FoT fee (difference between gross held and net claimable)
         (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
-        ;; Claimable is net of FoT deduction
-        (acct/record-claimable workflow-id recipient net-amt)
+        ;; Claimable is the immediately-settled portion (net of any shortfall)
+        (acct/record-claimable workflow-id recipient settled-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id direction)
         ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)

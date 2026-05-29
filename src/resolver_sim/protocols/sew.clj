@@ -132,7 +132,7 @@
     (actx/with-resolved-actor-and-unpaused
       agent-index world event
       (fn [caller]
-        (let [token  (:token p)
+        (let [token  (keyword (:token p))
               to     (:to p)
               amount (:amount p)]
           (if (or (nil? amount) (<= amount 0) (> amount max-safe-amount))
@@ -241,7 +241,7 @@
     (fn [addr]
       (let [p                (:params event)
             amount           (:amount p 0)
-            token            (:token p "USDC")
+            token            (keyword (:token p "USDC"))
             yield-profile-id (:yield-profile-id p)
             world            (reg/register-stake world addr amount yield-profile-id)
             world            (acct/add-held world token amount)
@@ -263,7 +263,7 @@
     (fn [resolver-addr]
       (let [p                    (:params event)
             amount               (:amount p)
-            token                (:token p "USDC")
+            token                (keyword (:token p "USDC"))
             current              (reg/get-stake world resolver-addr)
             yield-profile-id     (reg/get-resolver-yield-profile world resolver-addr)
             pending-slash-amount (reduce + 0
@@ -355,7 +355,8 @@
     governance-actor?
     (fn [_addr _agent]
       (let [p     (:params event)
-            token (:token p)]
+            token (:token p)
+            token (when token (keyword token))]
         (acct/withdraw-fees world token)))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
@@ -365,7 +366,7 @@
     (fn [_addr]
       (let [agent (get agent-index (:agent event))]
         (let [p       (:params event)
-              token   (:token p)
+              token   (keyword (:token p))
               active? (get p :active? true)]
           (t/ok (update world :token-liquidity-crunch
                         (if active?
@@ -474,7 +475,7 @@
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
   ;; Params:
-  ;;   :module-id      — yield module id (string, will be keywordised)
+  ;;   :module-id      — yield module id (string, will be keywordised and alias-resolved)
   ;;   :token          — token symbol (string, will be keywordised)
   ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
   ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
@@ -482,7 +483,9 @@
   ;;   :shortfall      — map e.g. {:available-ratio 0.8}
   [_ctx world event]
   (let [{:keys [module-id token liquidity-mode failure-modes apy shortfall]} (:params event)
-        mid (keyword module-id)
+        raw-mid (keyword module-id)
+        ;; Resolve through module aliases so "aave-v3" → :yield.provider/liquid-lending
+        mid (get-in world [:yield/module-aliases raw-mid] raw-mid)
         tok (keyword token)]
     (t/ok (cond-> world
             liquidity-mode
@@ -536,7 +539,14 @@
    :resolver-slash-total (:resolver-slash-total world)
    :bond-distribution   (:bond-distribution world)
    :claimable           (:claimable world {})
-   :bond-balances       (:bond-balances world {})})
+   :bond-balances       (:bond-balances world {})
+   :yield-positions     (when-let [pos (:yield/positions world)]
+                          (into {} (map (fn [[oid p]]
+                                          [oid (select-keys p [:status :principal :shares
+                                                               :unrealized-yield :realized-yield
+                                                               :shortfall :reclaimed-amount
+                                                               :token :module/id])])
+                                        pos)))})
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending

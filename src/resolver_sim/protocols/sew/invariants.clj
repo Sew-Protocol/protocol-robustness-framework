@@ -88,7 +88,7 @@
   (let [bd          (:bond-distribution world {:insurance 0 :protocol 0})
         retained    (:retained-slash-reserves world 0)
         bond-fees   (get (:bond-fees world) token 0)]
-    (if (= token "USDC")
+    (if (= token :USDC)
       (+ (:insurance bd 0) (:protocol bd 0) retained bond-fees)
       bond-fees)))
 
@@ -122,12 +122,19 @@
 (defn- get-yield-held-sum [world token live-states]
   (reduce (fn [acc [oid pos]]
             (let [et (when (vector? oid) (get-in world [:escrow-transfers (second oid)]))]
-              (if (and (= (:token pos) token)
-                       (= (:status pos) :active)
-                       (or (and et (contains? live-states (:escrow-state et)))
-                           (t/resolver-yield-owner-id? oid)))
+              (cond
+                ;; Active yield position in a live escrow or a resolver-owned position
+                (and (= (:token pos) token)
+                     (= (:status pos) :active)
+                     (or (and et (contains? live-states (:escrow-state et)))
+                         (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
-                acc)))
+                ;; Unwinding (shortfall-deferred) position — deferred amount remains in :total-held
+                ;; until claim-deferred-yield closes it out, regardless of escrow state
+                (and (= (:token pos) token)
+                     (= (:status pos) :unwinding))
+                (+ acc (get-in pos [:shortfall :deferred-amount] 0))
+                :else acc)))
           0
           (:yield/positions world {})))
 
@@ -148,7 +155,7 @@
                      bond-sum   (get-bond-held-sum world token)
                      slash-bond-sum (get-slash-appeal-bond-sum world token)
                      yield-sum  (get-yield-held-sum world token live-states)
-                     stake-sum  (if (= token "USDC") (reduce + 0 (vals (:resolver-stakes world {}))) 0)
+                     stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
                      
                      liabilities (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum)
                      
@@ -374,7 +381,15 @@
 
 (defn finalization-accounting-correct?
   "True when every escrow that became terminal between world-before and
-   world-after had its principal correctly moved from held to claimable."
+   world-after had its principal correctly moved from held to claimable.
+
+   For non-yield escrows (no yield module): checks both delta-held = -afa
+   and delta-claimable = +net-afa (strict principal accounting).
+
+   For yield-backed escrows: only checks delta-claimable, since delta-held
+   also absorbs yield accrual deltas (which are tracked by held-delta-accounted).
+   - No shortfall: delta-claimable >= net-afa (principal + yield both flow to claimable)
+   - Shortfall (position :unwinding): delta-claimable = fulfilled-amount"
   [world-before world-after]
   (let [terminals #{:released :refunded :resolved}
         violations
@@ -388,22 +403,54 @@
                      afa        (:amount-after-fee et-after)
                      fot-bps    (get-in world-after [:token-fot-bps token] 0)
                      net-afa    (- afa (t/compute-fee afa fot-bps))
-                     
+                     snap       (t/get-snapshot world-after wf)
+                     yield-mid  (:yield-generation-module snap)
+                     owner-id   (t/escrow-yield-owner-id wf)
+                     pos-after  (get-in world-after [:yield/positions owner-id])
+                     shortfall  (:shortfall pos-after)
+
                      held-before (get-in world-before [:total-held token] 0)
                      held-after  (get-in world-after  [:total-held token] 0)
                      delta-held  (- held-after held-before)
-                     
+
                      claimable-before (get-token-claimable-sum world-before token)
                      claimable-after  (get-token-claimable-sum world-after token)
-                     delta-claimable  (- claimable-after claimable-before)]
-              ;; In a pure finalization, delta-held should be -afa and delta-claimable should be +net-afa.
-              :when (not (and (= delta-held (- afa))
-                              (= delta-claimable net-afa)))]
-          {:workflow-id  wf
-           :token        token
-           :afa          afa
-           :delta-held   delta-held
-           :delta-claimable delta-claimable})]
+                     delta-claimable  (- claimable-after claimable-before)
+
+                     ;; Expected immediately-claimable amount:
+                     ;;   shortfall → fulfilled-amount (deferred remainder stays in held)
+                     ;;   no yield  → net-afa exactly
+                     ;;   yield but no shortfall → >= net-afa (yield also flows to claimable)
+                     expected-claimable
+                     (cond
+                       shortfall (get shortfall :fulfilled-amount net-afa)
+                       (nil? yield-mid) net-afa
+                       :else net-afa)  ;; minimum — for yield-no-shortfall we check >=
+
+                     ;; Validation predicate
+                     ok?
+                     (cond
+                       ;; No yield module: strict principal accounting
+                       (nil? yield-mid)
+                       (and (= delta-held (- afa))
+                            (= delta-claimable net-afa))
+
+                       ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately
+                       shortfall
+                       (= delta-claimable expected-claimable)
+
+                       ;; Yield without shortfall: at least principal in claimable (yield adds more)
+                       :else
+                       (>= delta-claimable net-afa))]
+              :when (not ok?)]
+          {:workflow-id     wf
+           :token           token
+           :afa             afa
+           :yield-mid       yield-mid
+           :shortfall       shortfall
+           :delta-held      delta-held
+           :delta-claimable delta-claimable
+           :expected-claimable expected-claimable})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -926,27 +973,33 @@
                                                    :when (= (:token et) token)
                                                    [_ amt] cmap]
                                                (or amt 0)))
-                    stake-before (if (= token "USDC")
+                    stake-before (if (= token :USDC)
                                    (reduce + 0 (vals (:resolver-stakes world-before {})))
                                    0)
-                    stake-after  (if (= token "USDC")
+                    stake-after  (if (= token :USDC)
                                    (reduce + 0 (vals (:resolver-stakes world-after {})))
                                    0)
+                    withdrawn-before (get (:total-withdrawn world-before) token 0)
+                    withdrawn-after  (get (:total-withdrawn world-after) token 0)
                     delta-held      (- held-after held-before)
                     delta-released  (- released-after released-before)
                     delta-refunded  (- refunded-after refunded-before)
                     delta-claimable (- claimable-after claimable-before)
+                    delta-withdrawn (- withdrawn-after withdrawn-before)
                     delta-stake     (- stake-after stake-before)
-                    ;; Positive = funds left the protocol without being accounted for
-                    ;; A drop in held (-delta-held) should be matched by increases in released/refunded/claimable
-                    ;; OR a drop in stake liability (-delta-stake).
-                    unexplained-leak (+ delta-held delta-released delta-refunded delta-claimable (- delta-stake))]
+                    ;; Positive = funds left the protocol without being accounted for.
+                    ;; A drop in held should be matched by increases in released/refunded/claimable.
+                    ;; A drop in claimable (withdraw-escrow) is matched by delta-withdrawn.
+                    ;; A drop in stake liability (-delta-stake) also offsets.
+                    unexplained-leak (+ delta-held delta-released delta-refunded
+                                        delta-claimable delta-withdrawn (- delta-stake))]
               :when (neg? unexplained-leak)]
           {:token token
            :delta-held delta-held
            :delta-released delta-released
            :delta-refunded delta-refunded
            :delta-claimable delta-claimable
+           :delta-withdrawn delta-withdrawn
            :unexplained-leak (- unexplained-leak)})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))

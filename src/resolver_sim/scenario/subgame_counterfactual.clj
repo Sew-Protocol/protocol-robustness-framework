@@ -97,30 +97,18 @@
        :spe/checkability :not-spe-checkable
        :checkability-reason "action is not a recognized strategic decision type"}
 
-      ;; Buyer/claimant raise_dispute or escalate_dispute depend on private
+      ;; Buyer/claimant raise-dispute or escalate-dispute depend on private
       ;; evidence quality — these are information-set nodes.
       (and (contains? private-evidence-roles agent)
-           (contains? #{"raise_dispute" "escalate_dispute"} action))
+           (contains? #{"raise-dispute" "escalate-dispute"} action))
       {:checkability :information-set-node
        :spe/checkability :information-set-node
        :checkability-reason "buyer private evidence quality not modeled; decision is information-set node"}
 
-      ;; Resolver execute_resolution from a public dispute state is a proper subgame:
-      ;; all protocol state (dispute-levels, live-states, available actions) is public.
-      (= action "execute_resolution")
-      {:checkability :proper-subgame
-       :spe/checkability :proper-subgame
-       :checkability-reason "all protocol state public; resolver verdict from known public dispute state"}
-
-      ;; Seller escalation from a known dispute state is treated as a proper subgame.
-      ;; Assumption: seller delivery state is publicly observable by the time of escalation
-      ;; (the dispute was already raised and protocol state is on-chain). This is a modeling
-      ;; assumption — if seller private evidence quality were material, this would be an
-      ;; information-set node. Mark as :proper-subgame under the public-state assumption.
       :else
       {:checkability :proper-subgame
        :spe/checkability :proper-subgame
-       :checkability-reason "protocol dispute state is public; escalation from known dispute state (assumes seller delivery status observable)"})))
+       :checkability-reason "protocol state public; strategic action from public state"})))
 
 ;; ---------------------------------------------------------------------------
 ;; Phase G — Strategy profile definition

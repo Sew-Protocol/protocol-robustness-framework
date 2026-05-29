@@ -21,8 +21,13 @@
   (set (or (get-in world [:yield/risk module-id token :failure-modes])
            #{})))
 
-(defn- blocked-mode? [m]
+;; :shortfall blocks new deposits (pool under stress) but NOT withdrawals —
+;; withdrawals apply a haircut via apply-liquidity-stress instead.
+(defn- deposit-blocked? [m]
   (contains? #{:shortfall :frozen :paused} m))
+
+(defn- withdraw-blocked? [m]
+  (contains? #{:frozen :paused} m))
 
 (defn- fail-enabled? [world module-id token mode]
   (contains? (failure-modes world module-id token) mode))
@@ -51,7 +56,7 @@
       (throw (ex-info "Liquid-lending provider is disabled for new deposits"
                       {:module/id mid :token token :module-status status}))
 
-      (or (blocked-mode? mode)
+      (or (deposit-blocked? mode)
           (fail-enabled? world mid token :deposit-fails))
       (throw (ex-info "Liquid-lending deposit unavailable"
                       {:module/id mid :token token :liquidity-mode mode}))
@@ -100,7 +105,7 @@
     (if (nil? pos)
       world
       (if (or (= status :paused)
-              (blocked-mode? mode)
+              (withdraw-blocked? mode)
               (fail-enabled? world mid token :withdraw-fails))
         (throw (ex-info "Liquid-lending withdraw unavailable"
                         {:module/id mid
