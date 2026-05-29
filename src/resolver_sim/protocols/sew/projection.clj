@@ -36,7 +36,7 @@
   (boolean (re-find #"slash|auto_cancel_disputed" (str (or action "")))))
 
 (defn- strategic-action? [action]
-  (contains? #{"create_escrow" "raise_dispute" "escalate_dispute" "execute_resolution"} action))
+  (contains? #{"create_escrow" "raise-dispute" "escalate-dispute" "execute-resolution"} action))
 
 (defn terminal-world-from-result
   "Canonical terminal-world accessor for replay result payloads.
@@ -51,6 +51,7 @@
     (when world
       {:trace trace
        :world world
+       :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
        :halt-reason (:halt-reason result)})))
@@ -189,6 +190,7 @@
 
    Returns nil when result has no trace (e.g. :outcome :invalid with 0 events)."
   [protocol result]
+  (println (format "Trace projection result keys: %s" (keys result)))
   (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
       (let [live-states  (get world :live-states {})
             scenario-id  (get-in world [:params :scenario-id] "unknown")
@@ -215,12 +217,14 @@
 
             ;; Strategic decision nodes — Sew-specific action vocabulary.
             decisions (vec (keep (fn [entry]
+                                   (println (format "Checking action: %s" (:action entry)))
                                    (when (strategic-action? (:action entry))
                                      (let [agent-id (:agent entry)
                                            addr     (get agents-by-id agent-id agent-id)]
                                        (assoc (select-keys entry [:seq :time :agent :action :extra])
                                               :address addr))))
                                   trace))
+            _ (println (format "Decisions: %s" decisions))
 
             {:keys [transitions token-deltas pending-lifecycle stake-flow]}
             (derive-transition-summaries trace world)

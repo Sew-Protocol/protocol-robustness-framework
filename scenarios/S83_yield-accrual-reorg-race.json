@@ -6,10 +6,10 @@
   "threat-tags": ["reorg", "timing-boundary", "finality"],
   "initial-block-time": 1000,
   "agents": [
-    {"id": "buyer", "address": "0xbuyer", "strategy": "honest"},
-    {"id": "seller", "address": "0xseller", "strategy": "honest"},
-    {"id": "resolver", "address": "0xresolver", "role": "resolver"},
-    {"id": "keeper", "address": "0xkeeper", "role": "keeper"}
+    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
+    { "id": "seller", "address": "0xseller", "strategy": "honest" },
+    { "id": "resolver", "address": "0xresolver", "role": "resolver" },
+    { "id": "keeper", "address": "0xkeeper", "role": "keeper" }
   ],
   "protocol-params": {
     "yield-generation-module": "aave-v3",
@@ -41,7 +41,8 @@
         "amount": 100000,
         "custom-resolver": "0xresolver",
         "yield_preset": "to-recipient"
-      }},
+      }
+    },
     {
       "seq": 1,
       "time": 1060,

@@ -467,6 +467,33 @@
   [_ctx world _event]
   (t/ok world))
 
+(defmethod apply-action "trigger-accrue"
+  [_ctx world event]
+  (t/ok (lc/accrue-yield world (event-workflow-id event))))
+
+(defmethod apply-action "set-yield-risk"
+  ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
+  ;; Params:
+  ;;   :module-id      — yield module id (string, will be keywordised)
+  ;;   :token          — token symbol (string, will be keywordised)
+  ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
+  ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
+  ;;   :apy            — new APY (double), optional
+  ;;   :shortfall      — map e.g. {:available-ratio 0.8}
+  [_ctx world event]
+  (let [{:keys [module-id token liquidity-mode failure-modes apy shortfall]} (:params event)
+        mid (keyword module-id)
+        tok (keyword token)]
+    (t/ok (cond-> world
+            liquidity-mode
+            (assoc-in [:yield/risk mid tok :liquidity-mode] (keyword liquidity-mode))
+            failure-modes
+            (assoc-in [:yield/risk mid tok :failure-modes] (into #{} (map keyword failure-modes)))
+            apy
+            (assoc-in [:yield/rates mid tok] (double apy))
+            shortfall
+            (assoc-in [:yield/risk mid tok :shortfall] shortfall)))))
+
 (defmethod apply-action :default
   [_ctx _world event]
   {:ok false :error :unknown-action :detail {:action (:action event)}})

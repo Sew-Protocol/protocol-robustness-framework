@@ -57,7 +57,8 @@
    :resolver-verdict ["verdict_for_buyer" "verdict_for_seller" "defer_verdict"]})
 
 (def ^:private node-type-by-action
-  {"raise_dispute" :challenge-timing
+  {"create_escrow" :escrow-creation
+   "raise_dispute" :challenge-timing
    "escalate_dispute" :escalation-timing
    "execute_resolution" :resolver-verdict})
 

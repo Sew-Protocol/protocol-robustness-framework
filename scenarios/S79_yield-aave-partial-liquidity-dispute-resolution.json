@@ -28,13 +28,40 @@
     "dispute_resolver": "resolver"
   },
   "agents": [
-    {"id": "sender", "type": "honest", "address": "sender"},
-    {"id": "recipient", "type": "honest", "address": "recipient"},
-    {"id": "resolver", "type": "honest", "address": "resolver"}
+    { "id": "sender", "type": "honest", "address": "sender" },
+    { "id": "recipient", "type": "honest", "address": "recipient" },
+    { "id": "resolver", "type": "honest", "address": "resolver" }
   ],
   "events": [
-    {"seq": 0, "time": 1000, "agent": "sender", "action": "create_escrow", "params": {"token": "USDC", "to": "recipient", "amount": 100000, "yield_preset": "to-recipient"}},
-    {"seq": 1, "time": 2000, "agent": "sender", "action": "raise_dispute", "params": {"workflow_id": 0}},
-    {"seq": 2, "time": 315361000, "agent": "resolver", "action": "execute_resolution", "params": {"workflow_id": 0, "is_release": true, "resolution_hash": "0x79"}}
+    {
+      "seq": 0,
+      "time": 1000,
+      "agent": "sender",
+      "action": "create_escrow",
+      "params": {
+        "token": "USDC",
+        "to": "recipient",
+        "amount": 100000,
+        "yield_preset": "to-recipient"
+      }
+    },
+    {
+      "seq": 1,
+      "time": 2000,
+      "agent": "sender",
+      "action": "raise_dispute",
+      "params": { "workflow_id": 0 }
+    },
+    {
+      "seq": 2,
+      "time": 315361000,
+      "agent": "resolver",
+      "action": "execute_resolution",
+      "params": {
+        "workflow_id": 0,
+        "is_release": true,
+        "resolution_hash": "0x79"
+      }
+    }
   ]
 }
