@@ -2418,6 +2418,113 @@
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
     :params {:workflow-id "wf0"}}]})
 
+;; Additional under-dispute-load scenarios to explicitly cover cross-token isolation and stress conditions.
+(def s62-cross-token-isolation-under-dispute-load
+  {:scenario-id "s62-cross-token-isolation-under-dispute-load"
+   :schema-version "1.0"
+   :initial-block-time 1000
+   :agents [{:id "buyer1" :address "0xbuyer1" :strategy "honest"}
+            {:id "seller1" :address "0xseller1" :strategy "honest"}
+            {:id "buyer2" :address "0xbuyer2" :strategy "honest"}
+            {:id "seller2" :address "0xseller2" :strategy "honest"}
+            {:id "buyer3" :address "0xbuyer3" :strategy "honest"}
+            {:id "seller3" :address "0xseller3" :strategy "honest"}
+            {:id "resolver" :address "0xresolver" :role "resolver"}
+            {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
+            {:id "keeper" :address "0xkeeper" :role "keeper"}]
+   :protocol-params kleros
+   :notes "Stress test: concurrent disputes across multiple tokens ensure no balance or state leakage between escrows under high dispute activity. Developers: check ledger isolation, accounting, and resolver routing under concurrent appeals."
+   :events
+   [;; create three escrows on different tokens
+    {:seq 0 :time 1000 :agent "buyer1" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller1" :amount 2000 :custom-resolver "0xresolver"}
+     :save-id-as "wf0"}
+    {:seq 1 :time 1002 :agent "buyer2" :action "create_escrow"
+     :params {:token "DAI" :to "0xseller2" :amount 3000 :custom-resolver "0xresolver"}
+     :save-id-as "wf1"}
+    {:seq 2 :time 1004 :agent "buyer3" :action "create_escrow"
+     :params {:token "USDT_FEE" :to "0xseller3" :amount 2500 :custom-resolver "0xresolver"}
+     :save-id-as "wf2"}
+
+    ;; raise disputes concurrently
+    {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute" :params {:workflow-id "wf0"}}
+    {:seq 4 :time 1061 :agent "buyer2" :action "raise_dispute" :params {:workflow-id "wf1"}}
+    {:seq 5 :time 1062 :agent "buyer3" :action "raise_dispute" :params {:workflow-id "wf2"}}
+
+    ;; resolver processes resolutions in interleaved order
+    {:seq 6 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xhash1"}}
+    {:seq 7 :time 1122 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash0"}}
+
+    ;; watchdog challenges one, buyer escalates another, keeper settles others
+    {:seq 8 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id "wf0" :evidence-hash "0xchall_e0"}}
+    {:seq 9 :time 1140 :agent "buyer3" :action "escalate_dispute" :params {:workflow-id "wf2"}}
+    {:seq 10 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf1"}}
+    {:seq 11 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf0"}}
+    {:seq 12 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf2"}}]})
+
+(def s62-cross-token-fee-on-transfer-under-dispute-load
+  {:scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load"
+   :schema-version "1.0"
+   :initial-block-time 1000
+   :agents [{:id "buyerA" :address "0xbuyerA" :strategy "honest"}
+            {:id "sellerA" :address "0xsellerA" :strategy "honest"}
+            {:id "buyerB" :address "0xbuyerB" :strategy "honest"}
+            {:id "sellerB" :address "0xsellerB" :strategy "honest"}
+            {:id "resolver" :address "0xresolver" :role "resolver"}
+            {:id "keeper" :address "0xkeeper" :role "keeper"}]
+   :protocol-params kleros
+   :notes "Under-dispute-load variant that mixes fee-on-transfer tokens (e.g., USDT_FEE) with normal tokens to verify ledger accounting under concurrent appeal activity. Developers: verify fee deductions, net recipient balances, and that fee logic is escrow-local."
+   :events
+   [;; create two escrows, one fee-on-transfer token and one normal token
+    {:seq 0 :time 1000 :agent "buyerA" :action "create_escrow"
+     :params {:token "USDT_FEE" :to "0xsellerA" :amount 5000 :custom-resolver "0xresolver"}
+     :save-id-as "wfA"}
+    {:seq 1 :time 1005 :agent "buyerB" :action "create_escrow"
+     :params {:token "USDC" :to "0xsellerB" :amount 4000 :custom-resolver "0xresolver"}
+     :save-id-as "wfB"}
+
+    ;; both raise disputes in quick succession
+    {:seq 2 :time 1060 :agent "buyerA" :action "raise_dispute" :params {:workflow-id "wfA"}}
+    {:seq 3 :time 1061 :agent "buyerB" :action "raise_dispute" :params {:workflow-id "wfB"}}
+
+    ;; resolver resolves wfB immediately, wfA goes through challenge and appeal
+    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution" :params {:workflow-id "wfB" :is-release true :resolution-hash "0xhashB"}}
+    {:seq 5 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id "wfA" :evidence-hash "0xchallA"}}
+    {:seq 6 :time 1140 :agent "buyerA" :action "escalate_dispute" :params {:workflow-id "wfA"}}
+    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfB"}}
+    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfA"}}]})
+
+(def s62-cross-token-parallel-appeal-depths-under-dispute-load
+  {:scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load"
+   :schema-version "1.0"
+   :initial-block-time 1000
+   :agents [{:id "buyerX" :address "0xbuyerX" :strategy "honest"}
+            {:id "sellerX" :address "0xsellerX" :strategy "honest"}
+            {:id "buyerY" :address "0xbuyerY" :strategy "honest"}
+            {:id "sellerY" :address "0xsellerY" :strategy "honest"}
+            {:id "resolver-l1" :address "0xresolverL1" :role "resolver"}
+            {:id "resolver-l2" :address "0xresolverL2" :role "resolver"}
+            {:id "keeper" :address "0xkeeper" :role "keeper"}]
+   :protocol-params kleros
+   :notes "Simultaneous disputes with differing appeal depths to ensure escalation paths remain escrow-local and do not interfere when several appeal-chains are active. Developers: verify jurisdiction/state transitions remain scoped to the escrow."
+   :events
+   [;; create two escrows
+    {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xresolverL1"} :save-id-as "wfx"}
+    {:seq 1 :time 1002 :agent "buyerY" :action "create_escrow" :params {:token "DAI" :to "0xsellerY" :amount 3500 :custom-resolver "0xresolverL1"} :save-id-as "wfy"}
+
+    ;; both raise disputes
+    {:seq 2 :time 1060 :agent "buyerX" :action "raise_dispute" :params {:workflow-id "wfx"}}
+    {:seq 3 :time 1061 :agent "buyerY" :action "raise_dispute" :params {:workflow-id "wfy"}}
+
+    ;; wfx goes through multiple appeals (deeper chain), wfy resolves quickly
+    {:seq 4 :time 1120 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id "wfy" :is-release true :resolution-hash "0xhashY"}}
+    {:seq 5 :time 1130 :agent "buyerX" :action "escalate_dispute" :params {:workflow-id "wfx"}}
+    {:seq 6 :time 1200 :agent "resolver-l2" :action "execute_resolution" :params {:workflow-id "wfx" :is-release false :resolution-hash "0xhashX"}}
+    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfy"}}
+    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfx"}}]})
+
 (def s63
   {:scenario-id     "s63-frivolous-appeal-slashing"
    :schema-version  "1.0"
@@ -3383,6 +3490,9 @@
     ["S60  resolver-abstention-timeout-griefing"        s60]
     ["S61  fee-on-transfer-token-handling"              s61]
     ["S62  multi-appeal-escalation-chain"               s62]
+    ["S62_cross-token-isolation-under-dispute-load"     s62-cross-token-isolation-under-dispute-load]
+    ["S62_cross-token-fee-on-transfer-under-dispute-load" s62-cross-token-fee-on-transfer-under-dispute-load]
+    ["S62_cross-token-parallel-appeal-depths-under-dispute-load" s62-cross-token-parallel-appeal-depths-under-dispute-load]
     ["S63  frivolous-appeal-slashing"                   s63]
     ["S64  minimal-bond-edge-case"                      s64]
     ["S65  appeal-after-settlement-rejected"            s65]

@@ -220,7 +220,9 @@
     :falsifying []}
    :claims/fork-isolation
    {:supporting ["S33_forking-strategist-two-escrow-fork-isolation"
-                 "S62_cross-token-isolation-under-dispute-load"]
+                 "S62_cross-token-isolation-under-dispute-load"
+                 "S62_cross-token-fee-on-transfer-under-dispute-load"
+                 "S62_cross-token-parallel-appeal-depths-under-dispute-load"]
     :falsifying []}})
 
 (defn purpose-def [k] (get purposes k))
