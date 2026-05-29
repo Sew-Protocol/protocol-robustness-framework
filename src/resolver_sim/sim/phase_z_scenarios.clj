@@ -61,14 +61,13 @@
    :protocol-params params-dr3
    :events
    [{:seq 0 :time 1001 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}}
     {:seq 1 :time 2000 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver absent — no execute_resolution step.
     ;; After max-dispute-duration the dispute auto-cancels.
     {:seq 2 :time 7778001 :agent "buyer" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 (def scenario-z3-false-positive-slash
   "TEST 3: Scam wave / false positive.
@@ -86,15 +85,14 @@
    :protocol-params params-dr3
    :events
    [{:seq 0 :time 1001 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}}
     {:seq 1 :time 2000 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver cancels (false positive: should have released)
     {:seq 2 :time 3000 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false}}
+     :params {:workflow-id 0 :is-release false}}
     {:seq 3 :time 175801 :agent "buyer" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 (def scenario-z4-combined-shock
   "TEST 4: Combined shock — two escrows dispute, resolver resolves one wrong,
@@ -113,24 +111,22 @@
    :events
    ;; Escrow A
    [{:seq 0 :time 1001 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}}
     {:seq 1 :time 2000 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver acts on escrow A (false positive cancel)
     {:seq 2 :time 3000 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false}}
+     :params {:workflow-id 0 :is-release false}}
     {:seq 3 :time 175801 :agent "buyer" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Escrow B — resolver exits; times out
     {:seq 4 :time 175900 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 80000}
-     :save-id-as "wf1"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 80000}}
     {:seq 5 :time 176000 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; Resolver absent for wf1; auto-cancel after 90 days from dispute raise
     {:seq 6 :time 7954001 :agent "buyer" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf1"}}]})
+     :params {:workflow-id 1}}]})
 
 (def scenario-z5-cascade-liveness
   "TEST 5: Cascading failures — three concurrent disputes, resolver resolves none.
@@ -147,29 +143,26 @@
    :events
    ;; All three escrows created
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 100000}}
     {:seq 1 :time 1010 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 50000}
-     :save-id-as "wf1"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 50000}}
     {:seq 2 :time 1020 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 75000}
-     :save-id-as "wf2"}
+     :params {:token "USDC" :to "0x0000000000000000000000000000000000001002" :amount 75000}}
     ;; All three disputed
     {:seq 3 :time 2000 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 4 :time 2010 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     {:seq 5 :time 2020 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf2"}}
+     :params {:workflow-id 2}}
     ;; Resolver exits — no resolutions. Auto-cancel all three.
     ;; Earliest disputed = wf0 at t=2000; eligible at t=2000+7776000=7778000
     {:seq 6 :time 7778001 :agent "buyer" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 7 :time 7778002 :agent "buyer" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     {:seq 8 :time 7778003 :agent "buyer" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf2"}}]})
+     :params {:workflow-id 2}}]})
 
 (def all-scenarios
   "All Phase Z adversarial scenarios, in ascending severity order."

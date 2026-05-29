@@ -516,6 +516,62 @@
                           trace)
       :coverage (:coverage temporal-cfg)})))
 
+(defn- run-simulation-loop
+  "Execute the core simulation loop from a given world state and event sequence."
+  [protocol context scenario-id events world trace metrics options]
+  (let [{:keys [expected-errors-set strict-expected-errors?
+                allow-open-entities? allow-open-disputes?
+                agents temporal-cfg temporal-enabled? agent-index
+                scenario]} options]
+    (loop [world world events events trace trace metrics metrics]
+      (if (empty? events)
+        (let [open (when-not (or allow-open-entities? allow-open-disputes?)
+                     (seq (proto/open-entities protocol world)))]
+          (if open
+            {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
+            (do
+              (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :pass world metrics trace)
+              (let [expected-error-analysis (analyze-expected-errors scenario trace)
+                    expected-errors-mismatch? (and strict-expected-errors?
+                                                   (not (:ok? expected-error-analysis)))
+                    outcome (if expected-errors-mismatch? :fail :pass)
+                    halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
+                (log/info! "scenario/end" {:id scenario-id :outcome outcome})
+                {:outcome outcome
+                 :scenario-id scenario-id
+                 :events-processed (count trace)
+                 :halt-reason halt-reason
+                 :trace trace
+                 :metrics metrics
+                 :agents agents
+                 :expected-error-analysis expected-error-analysis
+                 :protocol protocol}))))
+        (let [event    (first events)
+              step     (process-step protocol context world event)
+              entry0   (:trace-entry step)
+              expected-failure? (and (= :rejected (:result entry0))
+                                     (contains? expected-errors-set
+                                                [(:seq entry0) (:action entry0) (:error entry0)]))
+              reject-phase (when (= :rejected (:result entry0))
+                             (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
+              entry    (cond-> entry0
+                         (= :rejected (:result entry0))
+                         (assoc :reject-class (:error entry0)
+                                :reject-phase reject-phase
+                                :expected-failure? expected-failure?))
+              new-trace   (conj trace entry)
+              new-metrics (accum-metrics protocol metrics event entry agent-index world)]
+
+          (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
+          (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
+
+          (if (:halted? step)
+            (do
+              (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
+              (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
+              {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
+            (recur (:world step) (rest events) new-trace new-metrics)))))))
+
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations."
   [protocol scenario]
@@ -538,55 +594,36 @@
             expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
             strict-expected-errors? (boolean (:strict-expected-errors? scenario false))]
         (log/info! "scenario/start" {:id scenario-id})
-        (loop [world world0 events events trace [] metrics (zero-metrics protocol)]
-          (if (empty? events)
-            (let [open (when-not (or (:allow-open-entities? scenario)
-                                     (:allow-open-disputes? scenario))
-                         (seq (proto/open-entities protocol world)))]
-              (if open
-                {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
-                (do
-                  (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :pass world metrics trace)
-                  (let [expected-error-analysis (analyze-expected-errors scenario trace)
-                        expected-errors-mismatch? (and strict-expected-errors?
-                                                       (not (:ok? expected-error-analysis)))
-                        outcome (if expected-errors-mismatch? :fail :pass)
-                        halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
-                    (log/info! "scenario/end" {:id scenario-id :outcome outcome})
-                    {:outcome outcome
-                     :scenario-id scenario-id
-                     :events-processed (count trace)
-                     :halt-reason halt-reason
-                     :trace trace
-                     :metrics metrics
-                     :agents agents
-                     :expected-error-analysis expected-error-analysis
-                     :protocol protocol}))))
-            (let [event    (first events)
-                      step     (process-step protocol context world event)
-                      entry0   (:trace-entry step)
-                      expected-failure? (and (= :rejected (:result entry0))
-                                             (contains? expected-errors-set
-                                                        [(:seq entry0) (:action entry0) (:error entry0)]))
-                      reject-phase (when (= :rejected (:result entry0))
-                                     (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
-                      entry    (cond-> entry0
-                                 (= :rejected (:result entry0))
-                                 (assoc :reject-class (:error entry0)
-                                        :reject-phase reject-phase
-                                        :expected-failure? expected-failure?))
-                      new-trace   (conj trace entry)
-                      new-metrics (accum-metrics protocol metrics event entry agent-index world)]
-                  
-                  (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
-                  (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
-
-                  (if (:halted? step)
-                    (do
-                      (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
-                      (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
-                      {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
-                    (recur (:world step) (rest events) new-trace new-metrics)))))))))
+        (run-simulation-loop protocol context scenario-id events world0 [] (zero-metrics protocol)
+                             {:expected-errors-set expected-errors-set
+                              :strict-expected-errors? strict-expected-errors?
+                              :allow-open-entities? (:allow-open-entities? scenario)
+                              :allow-open-disputes? (:allow-open-disputes? scenario)
+                              :agents agents
+                              :temporal-cfg temporal-cfg
+                              :temporal-enabled? temporal-enabled?
+                              :agent-index agent-index
+                              :scenario scenario})))))
+(defn resume-from-snapshot
+  "Resume a simulation from a world snapshot and a sequence of events.
+   Useful for exploring counterfactual subgames."
+  [protocol agents p-params scenario-id world events trace metrics options]
+  (let [context  (proto/build-execution-context protocol agents p-params)
+        agent-index (:agent-index context)
+        expected-errors-set (set (map expected-error-key (:expected-errors (:scenario options) [])))
+        strict-expected-errors? (boolean (:strict-expected-errors? (:scenario options) false))
+        temporal-cfg (:temporal-evidence (:scenario options))
+        temporal-enabled? (boolean (:enabled? temporal-cfg))]
+    (run-simulation-loop protocol context scenario-id events world trace metrics
+                         (merge {:expected-errors-set expected-errors-set
+                                 :strict-expected-errors? strict-expected-errors?
+                                 :allow-open-entities? true
+                                 :allow-open-disputes? true
+                                 :agents agents
+                                 :temporal-cfg temporal-cfg
+                                 :temporal-enabled? temporal-enabled?
+                                 :agent-index agent-index}
+                                options))))
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

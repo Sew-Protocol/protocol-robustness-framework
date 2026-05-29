@@ -275,11 +275,9 @@
 
         wf-id    (cond
                    (= action "create_escrow") (get-in entry [:extra :workflow-id])
-                   :else (let [raw-wf-id (or (get-in raw-evt [:params :workflow-id])
-                                            (get-in raw-evt [:params :workflow_id]))]
-                           (if (string? raw-wf-id) (get id-alias-map raw-wf-id) raw-wf-id)))
+                   :else (or (get-in raw-evt [:params :workflow-id])
+                             (get-in raw-evt [:params :workflow_id])))
 
-        _save-id-as (:save-id-as raw-evt)
         wf-alias   (or (some (fn [[k v]] (when (= v wf-id) k)) id-alias-map)
                        (when wf-id (str "wf" wf-id)))
 

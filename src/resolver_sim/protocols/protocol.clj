@@ -38,6 +38,9 @@
   (world-snapshot [adapter world]
     "Create a lean, serializable map of the world state for trace output.")
 
+  (available-actions [adapter world actor]
+    "Return a seq of all valid action maps {:action str :params map} for the actor in the given world state.")
+
   (open-entities [adapter world]
     "Return a seq of entity IDs still open/unresolved at end of scenario."))
 

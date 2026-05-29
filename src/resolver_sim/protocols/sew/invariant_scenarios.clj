@@ -4,7 +4,7 @@
    Each entry in `all-scenarios` is a scenario map accepted by
    resolver-sim.protocols.sew/replay-with-sew-protocol.
 
-   Events use :save-id-as annotations on create_escrow steps and string
+   Events use direct integer workflow-ids on create_escrow steps.
    :workflow-id aliases (e.g. \"wf0\") on subsequent steps.  The replay
    engine resolves aliases lazily in the event loop.
 
@@ -70,10 +70,9 @@
    :protocol-params dr3
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S02 — DR3 dispute → release
@@ -90,12 +89,11 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 4000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S03 — DR3 dispute → refund
@@ -112,12 +110,11 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 4000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}]})
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S04 — dispute timeout → auto-cancel
@@ -134,16 +131,15 @@
    :protocol-params timeout
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 2000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 2000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Early attempt → rejected (240 s elapsed, need 300)
     {:seq 2 :time 1300 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; After timeout (1360 − 1060 = 300 ≥ 300) → ok
     {:seq 3 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S05 — pending settlement → execute
@@ -162,19 +158,18 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 6000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver votes; creates pending-settlement (deadline = 1120+120 = 1240)
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Early → rejected (appeal window still open)
     {:seq 3 :time 1180 :agent "executor" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; At deadline → ok
     {:seq 4 :time 1240 :agent "executor" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S06 — mutual cancel
@@ -189,12 +184,11 @@
    :protocol-params dr3
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 1500}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 1500}}
     {:seq 1 :time 1060 :agent "buyer" :action "sender_cancel"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "seller" :action "recipient_cancel"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S07 — unauthorised resolver rejected; authorised resolver succeeds
@@ -212,16 +206,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Wrong resolver → rejected
     {:seq 2 :time 1120 :agent "badresolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xfake"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xfake"}}
     ;; Authorised resolver → ok
     {:seq 3 :time 1180 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xauth"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xauth"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S08 — state machine attack gauntlet
@@ -239,32 +232,31 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 2000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     ;; Execute-resolution before dispute → rejected
     {:seq 1 :time 1060 :agent "buyer" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xh"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xh"}}
     ;; Raise dispute → ok
     {:seq 2 :time 1120 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Release while disputed → rejected
     {:seq 3 :time 1180 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Double-dispute → rejected
     {:seq 4 :time 1240 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Authorised resolver resolves → ok (no appeal window → finalized immediately)
     {:seq 5 :time 1300 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xauth"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xauth"}}
     ;; Resolve on terminal state → rejected
     {:seq 6 :time 1360 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xdup"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xdup"}}
     ;; Dispute on terminal state → rejected
     {:seq 7 :time 1420 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Release on terminal state → rejected
     {:seq 8 :time 1480 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S09 — multi-escrow solvency (3 concurrent escrows, mixed outcomes)
@@ -283,26 +275,23 @@
    :protocol-params dr3
    :events
    [{:seq 0 :time 1000 :agent "buyer0" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 1000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 1000}}
     {:seq 1 :time 1000 :agent "buyer1" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 2000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf1"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1000 :agent "buyer2" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf2"}
+              :custom-resolver "0xresolver"}}
     {:seq 3 :time 1060 :agent "buyer0" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 4 :time 1060 :agent "buyer1" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     {:seq 5 :time 1060 :agent "buyer2" :action "raise_dispute"
-     :params {:workflow-id "wf2"}}
+     :params {:workflow-id 2}}
     {:seq 6 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xh1"}}
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xh1"}}
     {:seq 7 :time 1180 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf2" :is-release true :resolution-hash "0xh2"}}]})
+     :params {:workflow-id 2 :is-release true :resolution-hash "0xh2"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S10 — double-finalize rejected
@@ -320,27 +309,25 @@
    :protocol-params dr3
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 500}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 500}}
     ;; resolver acts as buyer for wf1 (creates to seller2, sets itself as resolver)
     {:seq 1 :time 1000 :agent "resolver" :action "create_escrow"
      :params {:token "USDC" :to "0xseller2" :amount 500
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf1"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 3 :time 1060 :agent "resolver" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xok"}}
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xok"}}
     ;; Double-release → rejected (wf0 is :released terminal)
     {:seq 5 :time 1180 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 6 :time 1240 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Double-resolve → rejected (wf1 is :released terminal)
     {:seq 7 :time 1300 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xdup"}}]})
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xdup"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S11 — zero fee edge case
@@ -358,12 +345,11 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 1
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S12 — governance snapshot isolation
@@ -380,10 +366,9 @@
    :protocol-params {:resolver-fee-bps 0}
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 10000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 10000}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 (def s12b
   {:scenario-id     "s12b-snapshot-isolation-fee-500"
@@ -394,10 +379,9 @@
    :protocol-params {:resolver-fee-bps 500}
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 10000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 10000}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S13 — pending settlement → refund
@@ -416,19 +400,18 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 6000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Refund vote; creates pending-settlement (deadline = 1120+120 = 1240)
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhash"}}
     ;; Early → rejected
     {:seq 3 :time 1180 :agent "executor" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; At deadline → ok (finalizes as :refunded)
     {:seq 4 :time 1240 :agent "executor" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S14 — DR3 module (Priority 2): authorised resolver succeeds
@@ -445,12 +428,11 @@
    :protocol-params dr3-module
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S15 — DR3 module: unauthorised resolver rejected; authorised succeeds
@@ -467,16 +449,15 @@
    :protocol-params dr3-module
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Module rejects 0xbadresolver → revert
     {:seq 2 :time 1120 :agent "badresolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xfake"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xfake"}}
     ;; Module authorizes 0xresolver → ok
     {:seq 3 :time 1180 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xauth"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xauth"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S16 — IEO base: create + release (no resolver, zero fee)
@@ -491,10 +472,9 @@
    :protocol-params ieo
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 2000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 2000}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S17 — IEO: dispute with no resolver → auto-cancel on timeout
@@ -511,16 +491,15 @@
    :protocol-params ieo-timeout
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 1000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 1000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Early → rejected
     {:seq 2 :time 1300 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Timeout elapsed → ok
     {:seq 3 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S18 — DR3 Kleros: L0 resolver resolves at level 0
@@ -536,13 +515,12 @@
    :protocol-params kleros
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Kleros module authorizes 0xl0 at level 0 → finalized immediately
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S19 — DR3 Kleros: preemptive escalation rejected; L0 resolves
@@ -561,19 +539,18 @@
    :protocol-params kleros
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Escalation before any resolution → rejected (:no-resolution-to-appeal)
     {:seq 2 :time 1060 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 resolver resolves immediately (no appeal window)
     {:seq 3 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; L1 tries on terminal state → rejected
     {:seq 4 :time 1180 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S20 — DR3 Kleros: max-escalation guard
@@ -593,20 +570,19 @@
    :protocol-params kleros
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Three escalation attempts, all rejected (:no-resolution-to-appeal)
     {:seq 2 :time 1060 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 3 :time 1120 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 4 :time 1180 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L2 tries to resolve at level 0 → rejected (module authorizes 0xl0 not 0xl2)
     {:seq 5 :time 1240 :agent "l2resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl2hash"}}]})
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl2hash"}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S21 — DR3 Kleros: pending settlement cleared on escalation
@@ -627,22 +603,21 @@
    :protocol-params kleros-appeal
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 resolves → creates pending (deadline = 1120+60 = 1180)
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates before deadline → clears pending, level→1, new-resolver=0xl1
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 resolves → new pending (deadline = 1190+60 = 1250)
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Keeper executes after deadline → ok
     {:seq 5 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S22 — REGRESSION: transition-to-disputed clears counterparty agree-to-cancel
@@ -661,14 +636,13 @@
    :protocol-params dr3
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     ;; Seller agrees to cancel (sets recipient :agree-to-cancel, state stays :pending)
     {:seq 1 :time 1000 :agent "seller" :action "recipient_cancel"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Buyer raises dispute — must clear seller's :agree-to-cancel status
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S23 — REGRESSION: preemptive escalation rejected (no pending settlement)
@@ -689,19 +663,18 @@
    :protocol-params kleros
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Seller attempts preemptive escalation → rejected (:no-resolution-to-appeal)
     {:seq 2 :time 1060 :agent "seller" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 resolver resolves immediately (no appeal window)
     {:seq 3 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Seller tries again on terminal state → rejected (:transfer-not-in-dispute)
     {:seq 4 :time 1180 :agent "seller" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S24 — resolver stake depletion cascade
@@ -736,32 +709,29 @@
     {:seq 0 :time 1000 :agent "resolver" :action "register_stake"
      :params {:amount 3000}}
     {:seq 1 :time 1000 :agent "buyer0" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 2000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 2000}}
     {:seq 2 :time 1000 :agent "buyer1" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 2000}
-     :save-id-as "wf1"}
+     :params {:token "USDC" :to "0xseller" :amount 2000}}
     {:seq 3 :time 1000 :agent "buyer2" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 2000}
-     :save-id-as "wf2"}
+     :params {:token "USDC" :to "0xseller" :amount 2000}}
     {:seq 4 :time 1060 :agent "buyer0" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 5 :time 1060 :agent "buyer1" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     {:seq 6 :time 1060 :agent "buyer2" :action "raise_dispute"
-     :params {:workflow-id "wf2"}}
+     :params {:workflow-id 2}}
     ;; Early attempt: 240 s elapsed, need 300 → rejected
     {:seq 7 :time 1300 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Timeout reached — full slash: resolver stake 3000 → 1000
     {:seq 8 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Partial slash: only 1000 remains; actual_slashed=1000, stake 1000 → 0
     {:seq 9 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; Zero-stake slash: resolver exhausted; actual_slashed=0, stake stays 0
     {:seq 10 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf2"}}]})
+     :params {:workflow-id 2}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S25 — Profit-Maximizer: fraud-slash lifecycle
@@ -808,29 +778,28 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes a fraud slash (profit-maximizer trying to penalise resolver)
     ;; slash appeal-deadline = 1130 + 120 (appeal-window-duration from snapshot) = 1250
     {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver" :amount 500}}
     ;; Resolver appeals the slash within the window
     {:seq 4 :time 1140 :agent "resolver" :action "appeal_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance resolves the appeal: resolver wins (upheld?=true → slash :reversed)
     {:seq 5 :time 1160 :agent "governance" :action "resolve_appeal"
-     :params {:workflow-id "wf0" :upheld? true}}
+     :params {:workflow-id 0 :upheld? true}}
     ;; Governance tries to execute the reversed slash → rejected (:slash-already-reversed)
     {:seq 6 :time 1200 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Keeper executes the pending settlement after its deadline (1240)
     {:seq 7 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S26 — Forking-Strategist: L0→L1 decision reversal
@@ -873,22 +842,21 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60s, kleros escalation-resolvers
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules in favour of seller (release). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates before deadline (the fork attempt) → challenge bond posted, level 0→1
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 rules opposite (refund = the adversarial fork). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
     ;; Keeper executes after L1 deadline → :refunded
     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S27 — Forking-Strategist: full 3-level ladder, fork at L2
@@ -930,28 +898,27 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s, resolvers {0→xl0,1→xl1,2→xl2}
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules release (buyer loses). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates (first attempt). Level 0→1, new-resolver=0xl1.
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 also rules release (still no fork). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Buyer escalates again (second attempt). Level 1→2, new-resolver=0xl2.
     {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L2 finally forks — rules refund. Pending deadline = 1260+60 = 1320.
     {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xl2hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xl2hash"}}
     ;; Keeper executes after L2 deadline → :refunded
     {:seq 7 :time 1325 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S28 — Forking-Strategist: late escalation rejected, L0 decision stands
@@ -990,19 +957,18 @@
    :protocol-params kleros-appeal ; appeal-window=60 s
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules release. Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer attempts escalation 5 s after the window closed → rejected
     {:seq 3 :time 1185 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Keeper executes the L0 pending settlement (still valid, past deadline)
     {:seq 4 :time 1190 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S29 — Forking-Strategist: seller escalates after losing L0 refund
@@ -1043,22 +1009,21 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules refund (buyer wins). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xl0hash"}}
     ;; Seller escalates before deadline (the fork attempt) → level 0→1, new-resolver=0xl1
     {:seq 3 :time 1130 :agent "seller" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 forks to release (seller wins). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Keeper executes after L1 deadline → :released
     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S30 — Forking-Strategist: double-loss, fork never materialises
@@ -1102,22 +1067,21 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules release (buyer loses). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates (expensive gamble). Level 0→1, bond posted, new-resolver=0xl1.
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 confirms L0 — also rules release (no fork). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Buyer does not escalate further. Keeper executes after L1 deadline → :released.
     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; ---------------------------------------------------------------------------
@@ -1166,31 +1130,30 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s, resolvers {0→xl0,1→xl1,2→xl2}
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules release (buyer loses). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates (first bond). Level 0→1, new-resolver=0xl1.
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 confirms L0 (no fork). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Buyer escalates again (second bond). Level 1→2, new-resolver=0xl2.
     {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L2 confirms again (still no fork). Pending deadline = 1260+60 = 1320.
     {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl2hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl2hash"}}
     ;; Buyer tries a third escalation → rejected (:escalation-not-allowed: final round)
     {:seq 7 :time 1270 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Keeper executes after L2 deadline → :released
     {:seq 8 :time 1325 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S32 — Forking-Strategist: fork lands at L1; keeper attempts settlement too
@@ -1237,27 +1200,26 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules release (buyer loses). Pending deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates within the window. Level 0→1, new-resolver=0xl1.
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 forks to refund (buyer wins). Pending deadline = 1190+60 = 1250.
     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
     ;; Keeper attempts early settlement while L1 appeal window still open
     ;; (t=1200 < deadline=1250) → rejected (:appeal-window-not-expired)
     {:seq 5 :time 1200 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Buyer does not escalate to L2. Appeal window expires.
     ;; Keeper retries after deadline → :refunded
     {:seq 6 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S33 — Forking-Strategist: two concurrent disputes — fork on wf0, no
@@ -1306,33 +1268,31 @@
    :protocol-params kleros-appeal ; fee-bps=150, appeal-window=60 s
    :events
    [{:seq 0 :time 1000 :agent "buyer0" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 6000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 6000}}
     {:seq 1 :time 1000 :agent "buyer1" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 4000}
-     :save-id-as "wf1"}
+     :params {:token "USDC" :to "0xseller" :amount 4000}}
     {:seq 2 :time 1060 :agent "buyer0" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; L0 rules release on both. Each pending deadline = 1120+60 = 1180.
     {:seq 4 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0-wf0-hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0-wf0-hash"}}
     {:seq 5 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xl0-wf1-hash"}}
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xl0-wf1-hash"}}
     ;; buyer0 escalates wf0 (forking strategist). Level 0→1, new-resolver=0xl1.
     ;; wf1 stays at its L0 pending (not escalated).
     {:seq 6 :time 1130 :agent "buyer0" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Keeper executes wf1 after its L0 deadline (wf0 appeal window is unrelated).
     {:seq 7 :time 1185 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; L1 forks on wf0 (refund). wf0 pending deadline = 1190+60 = 1250.
     {:seq 8 :time 1190 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xl1-wf0-hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xl1-wf0-hash"}}
     ;; Keeper executes wf0 after its L1 deadline → wf0 :refunded
     {:seq 9 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S34 — Profit-Maximizer: unchallenged slash (resolver forfeits)
@@ -1377,23 +1337,22 @@
      :params {:amount 10000}}
     {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
     {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver" :amount 500}}
     ;; [Resolver does not appeal — forfeits.]
     ;; Settle escrow first (deadline 1240 has passed)
     {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance executes after appeal-deadline → slash :executed
     {:seq 6 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S35 — Profit-Maximizer: governance wins the appeal
@@ -1439,28 +1398,27 @@
      :params {:amount 10000}}
     {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
     {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver" :amount 500}}
     ;; Resolver contests the slash within the window → :appealed
     {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance rejects the appeal (upheld?=false) → slash returns to :pending
     {:seq 6 :time 1160 :agent "governance" :action "resolve_appeal"
-     :params {:workflow-id "wf0" :upheld? false}}
+     :params {:workflow-id 0 :upheld? false}}
     ;; Keeper settles the escrow first (pending deadline 1240 has passed)
     {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance executes after original appeal-deadline (1255 > 1250) → :executed
     {:seq 8 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S36 — Profit-Maximizer: pre-window execute rejected; retry succeeds
@@ -1506,26 +1464,25 @@
      :params {:amount 10000}}
     {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver submits decision → pending (deadline = 1120+120 = 1240)
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
     {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver" :amount 500}}
     ;; Governance attempts early execution (1135 < 1250) → rejected :timelock-not-expired
     {:seq 5 :time 1135 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; [Resolver does not appeal.  Appeal window passes.]
     ;; Keeper settles escrow first (pending deadline 1240 has passed)
     {:seq 6 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance retries after deadline → slash :executed
     {:seq 7 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S37 — Profit-Maximizer: two resolvers slashed simultaneously, split outcomes
@@ -1581,49 +1538,47 @@
      :params {:amount 10000}}
     {:seq 2 :time 1000 :agent "buyer0" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 8000
-              :custom-resolver "0xresolver0"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver0"}}
     {:seq 3 :time 1000 :agent "buyer1" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 6000
-              :custom-resolver "0xresolver1"}
-     :save-id-as "wf1"}
+              :custom-resolver "0xresolver1"}}
     {:seq 4 :time 1060 :agent "buyer0" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 5 :time 1060 :agent "buyer1" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; wf0: resolver0 submits at t=1120 → pending deadline = 1120+120 = 1240.
     ;; wf1: resolver1 submits at t=1125 → pending deadline = 1125+120 = 1245.
     ;; Staggering the deadlines prevents both from being simultaneously stale
     ;; when the keeper runs, satisfying the no-stale-automatable-escrows invariant.
     {:seq 6 :time 1120 :agent "resolver0" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xr0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xr0hash"}}
     {:seq 7 :time 1125 :agent "resolver1" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xr1hash"}}
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xr1hash"}}
     ;; Governance proposes slashes on both. Slash deadlines = 1130+120 = 1250.
     {:seq 8 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver0" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver0" :amount 500}}
     {:seq 9 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf1" :resolver-addr "0xresolver1" :amount 300}}
+     :params {:workflow-id 1 :resolver-addr "0xresolver1" :amount 300}}
     ;; Resolver-0 appeals within the window → wf0 slash :appealed
     {:seq 10 :time 1140 :agent "resolver0" :action "appeal_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; [Resolver-1 does NOT appeal (forfeits).]
     ;; Governance resolves wf0 appeal in resolver-0's favour → wf0 slash :reversed
     {:seq 11 :time 1160 :agent "governance" :action "resolve_appeal"
-     :params {:workflow-id "wf0" :upheld? true}}
+     :params {:workflow-id 0 :upheld? true}}
     ;; Settle wf0 once its pending deadline has passed.
     {:seq 12 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Settle wf1 after its own pending deadline has passed.
     {:seq 13 :time 1246 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
     ;; After slash deadlines have passed:
     ;; Governance tries to execute wf0 slash → rejected (:slash-already-reversed)
     {:seq 14 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Governance executes wf1 slash (forfeited, status :pending) → :executed
     {:seq 15 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf1"}}]})
+     :params {:workflow-id 1}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S38 — DR3 resolver bond 80/20 mix invariant holds
@@ -1654,14 +1609,13 @@
      :params {:stable 8000 :sew 2000}}
     {:seq 2 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S39 — DR3 senior coverage delegation at capacity
@@ -1721,24 +1675,23 @@
      :params {:amount 10000}}
     {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Governance proposes slash. Slash appeal-deadline = 1130+120 = 1250.
     {:seq 4 :time 1130 :agent "governance" :action "propose_fraud_slash"
-     :params {:workflow-id "wf0" :resolver-addr "0xresolver" :amount 500}}
+     :params {:workflow-id 0 :resolver-addr "0xresolver" :amount 500}}
     ;; Settle the escrow first (pending deadline = 1120+120 = 1240 ≤ 1241).
     ;; Once settled, the escrow is no longer :disputed, so executing the slash
     ;; and freezing the resolver does NOT trigger resolver-not-frozen-on-assign?.
     {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; After appeal window (1250): execute slash → resolver frozen until 1255+259200.
     ;; No :disputed escrows remain, so resolver-not-frozen-on-assign? holds.
     {:seq 6 :time 1255 :agent "governance" :action "execute_fraud_slash"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S41 — DR3 reversal slash disabled (reversal-slash-bps = 0)
@@ -1767,22 +1720,21 @@
    :protocol-params kleros-appeal
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 resolves with release → pending settlement, deadline = 1120+60 = 1180
     {:seq 2 :time 1120 :agent "l0" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash-l0"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash-l0"}}
     ;; Challenger disputes within the window (1130 < 1180) → level 0→1, new resolver = 0xl1
     {:seq 3 :time 1130 :agent "challenger" :action "challenge_resolution"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 resolves with refund (opposite of L0) → reversal path fires with slash-bps=0
     {:seq 4 :time 1200 :agent "l1" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash-l1"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhash-l1"}}
     ;; Keeper settles after L1 pending deadline (1200+60=1260)
     {:seq 5 :time 1261 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S42 — Resolver-Buyer Bribery Loop (Economic Collusion Stress)
@@ -1824,22 +1776,21 @@
    :protocol-params kleros-appeal
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 10000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 10000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 rules refund (biased, part of bribe loop). Deadline = 1120+60 = 1180.
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xbribe-hash" :adversarial? true}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xbribe-hash" :adversarial? true}}
     ;; Seller challenges the bias. Level 0→1, new-resolver=0xl1.
     {:seq 3 :time 1150 :agent "seller" :action "challenge_resolution"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 rules release (honest reversal). Deadline = 1200+60 = 1260.
     {:seq 4 :time 1200 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhonest-hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhonest-hash"}}
     ;; Keeper executes after L1 deadline → :released
     {:seq 5 :time 1265 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S45 — Flash-Loan Stake Inflation
@@ -1878,14 +1829,13 @@
      :params {:amount 100000}}
     {:seq 1 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 50000
-              :custom-resolver "0xadv"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xadv"}}
     ;; Adversary withdraws stake immediately after assignment
     {:seq 2 :time 1001 :agent "resolver" :action "withdraw_stake"
      :params {:amount 100000}}
     ;; Escrow is now live but resolver has 0 stake
     {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
     ;; ---------------------------------------------------------------------------
     ;; S46 — Reorg Idempotence
@@ -1904,18 +1854,17 @@
     :protocol-params dr3
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xbranchA"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xbranchA"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
     {:seq 4 :time 1180 :agent "buyer" :action "challenge_resolution"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 5 :time 1181 :agent "buyer" :action "challenge_resolution"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
     ;; ---------------------------------------------------------------------------
     ;; S66 — Cooldown Boundary Reorg
@@ -1934,21 +1883,20 @@
     :protocol-params dr3
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; First escalation (0→1) at T=1130
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     ;; Second escalation attempt at T=80000 (rejected: < 86400 cooldown)
     {:seq 4 :time 80000 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     ;; Third escalation attempt at T=90000 (succeeds: > 86400 cooldown since T=1130)
     {:seq 5 :time 90000 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
     ;; ---------------------------------------------------------------------------
     ;; S67 — Reentrancy Callback
@@ -1975,13 +1923,12 @@
     :expected-revert? true
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xattacker" :amount 10000 :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xattacker" :amount 10000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
-      :params {:workflow-id "wf0"
-               :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id "wf0"}}}}]})
+      :params {:workflow-id 0
+               :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id 0}}}}]})
 
      ;; ---------------------------------------------------------------------------
      ;; S68 — Yield Pool Insolvency
@@ -2003,16 +1950,15 @@
      :protocol-params dr3
      :events
      [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-      :params {:token "USDC" :to "0xseller" :amount 5000}
-      :save-id-as "wf0"}
+      :params {:token "USDC" :to "0xseller" :amount 5000}}
      {:seq 1 :time 1060 :agent "buyer" :action "release"
-      :params {:workflow-id "wf0"}}
+      :params {:workflow-id 0}}
      ;; Trigger liquidity crunch for USDC
      {:seq 2 :time 1100 :agent "governance" :action "set_token_liquidity_crunch"
       :params {:token "USDC" :active? true}}
      ;; Attempt withdrawal while crunch is active
      {:seq 3 :time 1120 :agent "seller" :action "withdraw_escrow"
-      :params {:workflow-id "wf0"}}]})
+      :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S49 — B2 Appeal window persistence
@@ -2034,22 +1980,21 @@
    :notes "Validate appeal window boundary enforcement. L0 resolves at t=1120 (deadline=1180), buyer escalates at t=1150 (within 60s window) successfully. L1 then resolves, and settlement executes after deadline."
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L0 resolves → creates pending (deadline = 1120+60 = 1180)
     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
     ;; Buyer escalates at t=1150 (within 60s appeal window) → accepted
     {:seq 3 :time 1150 :agent "buyer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; L1 resolves → new pending (deadline = 1210+60 = 1270)
     {:seq 4 :time 1210 :agent "l1resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl1hash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
     ;; Keeper executes settlement after deadline
     {:seq 5 :time 1270 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S50 — D1 False assertion unchallenged (monitoring assumption validation)
@@ -2071,19 +2016,18 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 4000
-             :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Buyer then raises dispute claiming refund (lies)
     {:seq 2 :time 1080 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Malicious resolver sides with buyer (refund), even though release already occurred
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhash"}}
     ;; Appeal window closes; no one escalates
     {:seq 4 :time 1240 :agent "buyer" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S51 — D7 Same-block challenge/finalize race
@@ -2105,20 +2049,19 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000
-             :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Resolver decides at t=1120 → appeal deadline = 1240
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; At t=1240, two transactions in same block:
     ;; First: finalize (succeeds, locks settlement)
     {:seq 3 :time 1240 :agent "executor" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Second: escalate (fails, appeal window closed and finalized)
     {:seq 4 :time 1240 :agent "appealer" :action "escalate_dispute"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S52 — I4 Yield accrued during dispute
@@ -2138,20 +2081,19 @@
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
              :custom-resolver "0xresolver"
-             :yield-rate 0.001}
-     :save-id-as "wf0"}
+             :yield-rate 0.001}}
     ;; Yield accrues from t=1000 → t=1060 (60 blocks, 0.06% yield → ~3 USDC)
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; More yield accrues during dispute (t=1060 → t=1120)
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Execute settlement
     {:seq 3 :time 1240 :agent "buyer" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     ;; Seller withdraws: principal (5000) + yield (≥3)
     {:seq 4 :time 1250 :agent "seller" :action "withdraw_escrow"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S53 — I2 Reentrant withdrawal guard
@@ -2173,22 +2115,21 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     ;; Resolver decides → pending (deadline = 1120+120 = 1240)
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; Keeper executes settlement after deadline
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     ;; Buyer withdraws (succeeds)
     {:seq 4 :time 1250 :agent "buyer" :action "withdraw_escrow"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     ;; Seller attempts withdrawal at same time (rejected—already withdrawn)
     {:seq 5 :time 1250 :agent "seller" :action "withdraw_escrow"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S54 — I6 Multi-claim ledger isolation
@@ -2211,20 +2152,18 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer1" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1000 :agent "buyer2" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 3000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf1"}
+             :custom-resolver "0xresolver"}}
     {:seq 2 :time 1020 :agent "buyer2" :action "release"
-    :params {:workflow-id "wf1"}}
+    :params {:workflow-id 1}}
     {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 5 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s55
   {:scenario-id     "s55-resolver-unavailable-timeout-fallback"
@@ -2239,14 +2178,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1100 :agent "keeper" :action "set_paused"
     :params {:paused? true}}
     {:seq 3 :time 2100 :agent "keeper" :action "auto_cancel_disputed"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s56
   {:scenario-id     "s56-resolver-diversity"
@@ -2261,14 +2199,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver1"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver1"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver1" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s57
   {:scenario-id     "s57-corruption-cost-vs-profit"
@@ -2284,16 +2221,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xattacker" :amount 10000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1250 :agent "attacker" :action "withdraw_escrow"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s58
   {:scenario-id     "s58-watchdog-valid-challenge"
@@ -2309,18 +2245,17 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xbad_hash"}}
+    :params {:workflow-id 0 :is-release false :resolution-hash "0xbad_hash"}}
     {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xchallenging_evidence"}}
     {:seq 4 :time 1200 :agent "keeper" :action "resolve_appeal"
-    :params {:workflow-id "wf0" :appeal-winner "watchdog"}}
+    :params {:workflow-id 0 :appeal-winner "watchdog"}}
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s59
   {:scenario-id     "s59-watchdog-false-challenge-loss"
@@ -2336,18 +2271,17 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xcorrect_hash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xcorrect_hash"}}
     {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xfalse_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xfalse_evidence"}}
     {:seq 4 :time 1200 :agent "keeper" :action "resolve_appeal"
-    :params {:workflow-id "wf0" :appeal-winner "resolver"}}
+    :params {:workflow-id 0 :appeal-winner "resolver"}}
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s60
   {:scenario-id     "s60-resolver-abstention-timeout-griefing"
@@ -2362,12 +2296,11 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 2100 :agent "keeper" :action "auto_cancel_disputed"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s61
   {:scenario-id     "s61-fee-on-transfer-token-handling"
@@ -2382,14 +2315,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDT_FEE" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s62
   {:scenario-id     "s62-multi-appeal-escalation-chain"
@@ -2405,18 +2337,17 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release false :resolution-hash "0xhash"}}
     {:seq 3 :time 1130 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xchallenging_evidence"}}
     {:seq 4 :time 1140 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 ;; Additional under-dispute-load scenarios to explicitly cover cross-token isolation and stress conditions.
 (def s62-cross-token-isolation-under-dispute-load
@@ -2437,32 +2368,29 @@
    :events
    [;; create three escrows on different tokens
     {:seq 0 :time 1000 :agent "buyer1" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller1" :amount 2000 :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller1" :amount 2000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1002 :agent "buyer2" :action "create_escrow"
-     :params {:token "DAI" :to "0xseller2" :amount 3000 :custom-resolver "0xresolver"}
-     :save-id-as "wf1"}
+     :params {:token "DAI" :to "0xseller2" :amount 3000 :custom-resolver "0xresolver"}}
     {:seq 2 :time 1004 :agent "buyer3" :action "create_escrow"
-     :params {:token "USDT_FEE" :to "0xseller3" :amount 2500 :custom-resolver "0xresolver"}
-     :save-id-as "wf2"}
+     :params {:token "USDT_FEE" :to "0xseller3" :amount 2500 :custom-resolver "0xresolver"}}
 
     ;; raise disputes concurrently
-    {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute" :params {:workflow-id "wf0"}}
-    {:seq 4 :time 1061 :agent "buyer2" :action "raise_dispute" :params {:workflow-id "wf1"}}
-    {:seq 5 :time 1062 :agent "buyer3" :action "raise_dispute" :params {:workflow-id "wf2"}}
+    {:seq 3 :time 1060 :agent "buyer1" :action "raise_dispute" :params {:workflow-id 0}}
+    {:seq 4 :time 1061 :agent "buyer2" :action "raise_dispute" :params {:workflow-id 1}}
+    {:seq 5 :time 1062 :agent "buyer3" :action "raise_dispute" :params {:workflow-id 2}}
 
     ;; resolver processes resolutions in interleaved order
     {:seq 6 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release true :resolution-hash "0xhash1"}}
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xhash1"}}
     {:seq 7 :time 1122 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash0"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhash0"}}
 
     ;; watchdog challenges one, buyer escalates another, keeper settles others
-    {:seq 8 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id "wf0" :evidence-hash "0xchall_e0"}}
-    {:seq 9 :time 1140 :agent "buyer3" :action "escalate_dispute" :params {:workflow-id "wf2"}}
-    {:seq 10 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf1"}}
-    {:seq 11 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf0"}}
-    {:seq 12 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wf2"}}]})
+    {:seq 8 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id 0 :evidence-hash "0xchall_e0"}}
+    {:seq 9 :time 1140 :agent "buyer3" :action "escalate_dispute" :params {:workflow-id 2}}
+    {:seq 10 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 11 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}
+    {:seq 12 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
 
 (def s62-cross-token-fee-on-transfer-under-dispute-load
   {:scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load"
@@ -2479,22 +2407,20 @@
    :events
    [;; create two escrows, one fee-on-transfer token and one normal token
     {:seq 0 :time 1000 :agent "buyerA" :action "create_escrow"
-     :params {:token "USDT_FEE" :to "0xsellerA" :amount 5000 :custom-resolver "0xresolver"}
-     :save-id-as "wfA"}
+     :params {:token "USDT_FEE" :to "0xsellerA" :amount 5000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1005 :agent "buyerB" :action "create_escrow"
-     :params {:token "USDC" :to "0xsellerB" :amount 4000 :custom-resolver "0xresolver"}
-     :save-id-as "wfB"}
+     :params {:token "USDC" :to "0xsellerB" :amount 4000 :custom-resolver "0xresolver"}}
 
     ;; both raise disputes in quick succession
-    {:seq 2 :time 1060 :agent "buyerA" :action "raise_dispute" :params {:workflow-id "wfA"}}
-    {:seq 3 :time 1061 :agent "buyerB" :action "raise_dispute" :params {:workflow-id "wfB"}}
+    {:seq 2 :time 1060 :agent "buyerA" :action "raise_dispute" :params {:workflow-id 0}}
+    {:seq 3 :time 1061 :agent "buyerB" :action "raise_dispute" :params {:workflow-id 1}}
 
     ;; resolver resolves wfB immediately, wfA goes through challenge and appeal
-    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution" :params {:workflow-id "wfB" :is-release true :resolution-hash "0xhashB"}}
-    {:seq 5 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id "wfA" :evidence-hash "0xchallA"}}
-    {:seq 6 :time 1140 :agent "buyerA" :action "escalate_dispute" :params {:workflow-id "wfA"}}
-    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfB"}}
-    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfA"}}]})
+    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution" :params {:workflow-id 1 :is-release true :resolution-hash "0xhashB"}}
+    {:seq 5 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id 0 :evidence-hash "0xchallA"}}
+    {:seq 6 :time 1140 :agent "buyerA" :action "escalate_dispute" :params {:workflow-id 0}}
+    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
 
 (def s62-cross-token-parallel-appeal-depths-under-dispute-load
   {:scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load"
@@ -2511,19 +2437,19 @@
    :notes "Simultaneous disputes with differing appeal depths to ensure escalation paths remain escrow-local and do not interfere when several appeal-chains are active. Developers: verify jurisdiction/state transitions remain scoped to the escrow."
    :events
    [;; create two escrows
-    {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xresolverL1"} :save-id-as "wfx"}
-    {:seq 1 :time 1002 :agent "buyerY" :action "create_escrow" :params {:token "DAI" :to "0xsellerY" :amount 3500 :custom-resolver "0xresolverL1"} :save-id-as "wfy"}
+    {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xresolverL1"}}
+    {:seq 1 :time 1002 :agent "buyerY" :action "create_escrow" :params {:token "DAI" :to "0xsellerY" :amount 3500 :custom-resolver "0xresolverL1"}}
 
     ;; both raise disputes
-    {:seq 2 :time 1060 :agent "buyerX" :action "raise_dispute" :params {:workflow-id "wfx"}}
-    {:seq 3 :time 1061 :agent "buyerY" :action "raise_dispute" :params {:workflow-id "wfy"}}
+    {:seq 2 :time 1060 :agent "buyerX" :action "raise_dispute" :params {:workflow-id 0}}
+    {:seq 3 :time 1061 :agent "buyerY" :action "raise_dispute" :params {:workflow-id 1}}
 
     ;; wfx goes through multiple appeals (deeper chain), wfy resolves quickly
-    {:seq 4 :time 1120 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id "wfy" :is-release true :resolution-hash "0xhashY"}}
-    {:seq 5 :time 1130 :agent "buyerX" :action "escalate_dispute" :params {:workflow-id "wfx"}}
-    {:seq 6 :time 1200 :agent "resolver-l2" :action "execute_resolution" :params {:workflow-id "wfx" :is-release false :resolution-hash "0xhashX"}}
-    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfy"}}
-    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id "wfx"}}]})
+    {:seq 4 :time 1120 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id 1 :is-release true :resolution-hash "0xhashY"}}
+    {:seq 5 :time 1130 :agent "buyerX" :action "escalate_dispute" :params {:workflow-id 0}}
+    {:seq 6 :time 1200 :agent "resolver-l2" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xhashX"}}
+    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
 
 (def s63
   {:scenario-id     "s63-frivolous-appeal-slashing"
@@ -2538,16 +2464,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xcorrect_hash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xcorrect_hash"}}
     {:seq 3 :time 1130 :agent "buyer" :action "appeal_slash"
-    :params {:workflow-id "wf0" :appeal-reason "frivolous"}}
+    :params {:workflow-id 0 :appeal-reason "frivolous"}}
     {:seq 4 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s64
   {:scenario-id     "s64-minimal-bond-edge-case"
@@ -2562,14 +2487,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 100
-             :custom-resolver "0xresolver" :bond-amount 10}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver" :bond-amount 10}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s65
   {:scenario-id     "s65-appeal-after-settlement-rejected"
@@ -2584,16 +2508,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1250 :agent "buyer" :action "appeal_slash"
-    :params {:workflow-id "wf0" :appeal-reason "late"}}]})
+    :params {:workflow-id 0 :appeal-reason "late"}}]})
 
 (def s68
   {:scenario-id     "s68-double-settlement-guard"
@@ -2608,16 +2531,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s69
   {:scenario-id     "s69-stale-dispute-cleanup"
@@ -2632,14 +2554,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 2000 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s70
   {:scenario-id     "s70-large-escrow-resolution"
@@ -2654,14 +2575,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 1000000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s71
   {:scenario-id     "s71-zero-fee-settlement"
@@ -2676,14 +2596,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver" :fee-amount 0}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver" :fee-amount 0}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s72
   {:scenario-id     "s72-challenge-during-appeal-window"
@@ -2699,18 +2618,17 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release false :resolution-hash "0xhash"}}
     {:seq 3 :time 1200 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xchallenging_evidence"}}
     {:seq 4 :time 1250 :agent "keeper" :action "resolve_appeal"
-    :params {:workflow-id "wf0" :appeal-winner "watchdog"}}
+    :params {:workflow-id 0 :appeal-winner "watchdog"}}
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s73
   {:scenario-id     "s73-challenge-after-appeal-window-closed"
@@ -2726,16 +2644,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1260 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xchallenging_evidence"}}]})
+    :params {:workflow-id 0 :evidence-hash "0xchallenging_evidence"}}]})
 
 (def s74
   {:scenario-id     "s74-multi-escrow-parallel-disputes"
@@ -2751,24 +2668,22 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller1" :amount 2000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash0"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash0"}}
     {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1300 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller2" :amount 3000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf1"}
+             :custom-resolver "0xresolver"}}
     {:seq 5 :time 1360 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf1"}}
+    :params {:workflow-id 1}}
     {:seq 6 :time 1420 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf1" :is-release true :resolution-hash "0xhash1"}}
+    :params {:workflow-id 1 :is-release true :resolution-hash "0xhash1"}}
     {:seq 7 :time 1560 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf1"}}]})
+    :params {:workflow-id 1}}]})
 
 (def s75
   {:scenario-id     "s75-receiver-cancels-after-dispute"
@@ -2783,16 +2698,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1080 :agent "seller" :action "recipient_cancel"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 4 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s76
   {:scenario-id     "s76-sender-cancel-during-appeal"
@@ -2807,16 +2721,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1200 :agent "buyer" :action "sender_cancel"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s77
   {:scenario-id     "s77-escalation-rejected-wrong-layer"
@@ -2831,16 +2744,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s78
   {:scenario-id     "s78-many-appeals-eventually-rejects"
@@ -2855,18 +2767,17 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1140 :agent "buyer" :action "appeal_slash"
-    :params {:workflow-id "wf0" :appeal-reason "wrong-outcome"}}
+    :params {:workflow-id 0 :appeal-reason "wrong-outcome"}}
     {:seq 4 :time 1250 :agent "buyer" :action "appeal_slash"
-    :params {:workflow-id "wf0" :appeal-reason "unfair"}}
+    :params {:workflow-id 0 :appeal-reason "unfair"}}
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s79
   {:scenario-id     "s79-partial-resolution-release"
@@ -2881,14 +2792,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 10000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xpartial" :amount-released 5000}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xpartial" :amount-released 5000}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s80
   {:scenario-id     "s80-disputed-escrow-expiry-settlement"
@@ -2903,14 +2813,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver" :expiry-time 2000}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver" :expiry-time 2000}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1500 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s81
   {:scenario-id     "s81-appeal-deadline-boundary-before"
@@ -2926,14 +2835,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1239 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s82
   {:scenario-id     "s82-appeal-deadline-boundary-exact"
@@ -2948,14 +2856,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1240 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s83
   {:scenario-id     "s83-appeal-deadline-boundary-after"
@@ -2970,14 +2877,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1241 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s84
   {:scenario-id     "s84-false-assertion-unchallenged"
@@ -2992,14 +2898,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash_accepted"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash_accepted"}}
     {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s85
   {:scenario-id     "s85-watchdog-challenges-resolution"
@@ -3015,16 +2920,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xwrong_call"}}
+    :params {:workflow-id 0 :is-release false :resolution-hash "0xwrong_call"}}
     {:seq 3 :time 1150 :agent "watchdog" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xcorrect_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xcorrect_evidence"}}
     {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s86
   {:scenario-id     "s86-reentrant-withdrawal-guard"
@@ -3039,16 +2943,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1260 :agent "seller" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s87
   {:scenario-id     "s87-cross-escrow-isolation"
@@ -3064,20 +2967,18 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller1" :amount 3000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1020 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller2" :amount 2000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf1"}
+             :custom-resolver "0xresolver"}}
     {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 3 :time 1100 :agent "seller2" :action "recipient_release"
-    :params {:workflow-id "wf1"}}
+    :params {:workflow-id 1}}
     {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 5 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s88
   {:scenario-id     "s88-resolution-with-conflicting-evidence"
@@ -3092,16 +2993,15 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1090 :agent "seller" :action "challenge_resolution"
-    :params {:workflow-id "wf0" :evidence-hash "0xseller_evidence"}}
+    :params {:workflow-id 0 :evidence-hash "0xseller_evidence"}}
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release false :resolution-hash "0xresolver_finds_buyer_right"}}
+    :params {:workflow-id 0 :is-release false :resolution-hash "0xresolver_finds_buyer_right"}}
     {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s89
   {:scenario-id     "s89-dispute-resolution-with-zero-appeal-window"
@@ -3116,14 +3016,13 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller" :amount 5000
-             :custom-resolver "0xresolver" :resolution-module "0xkleros-proxy"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver" :resolution-module "0xkleros-proxy"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     {:seq 3 :time 1121 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}]})
+    :params {:workflow-id 0}}]})
 
 (def s90
   {:scenario-id     "s90-resolver-capacity-stress"
@@ -3140,34 +3039,31 @@
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller1" :amount 50000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf0"}
+             :custom-resolver "0xresolver"}}
     {:seq 1 :time 1010 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller2" :amount 40000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf1"}
+             :custom-resolver "0xresolver"}}
     {:seq 2 :time 1020 :agent "buyer" :action "create_escrow"
     :params {:token "USDC" :to "0xseller3" :amount 30000
-             :custom-resolver "0xresolver"}
-    :save-id-as "wf2"}
+             :custom-resolver "0xresolver"}}
     {:seq 3 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 4 :time 1070 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf1"}}
+    :params {:workflow-id 1}}
     {:seq 5 :time 1080 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id "wf2"}}
+    :params {:workflow-id 2}}
     {:seq 6 :time 1140 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash0"}}
+    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash0"}}
     {:seq 7 :time 1145 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf1" :is-release true :resolution-hash "0xhash1"}}
+    :params {:workflow-id 1 :is-release true :resolution-hash "0xhash1"}}
     {:seq 8 :time 1150 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id "wf2" :is-release true :resolution-hash "0xhash2"}}
+    :params {:workflow-id 2 :is-release true :resolution-hash "0xhash2"}}
     {:seq 9 :time 1260 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf0"}}
+    :params {:workflow-id 0}}
     {:seq 10 :time 1265 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf1"}}
+    :params {:workflow-id 1}}
     {:seq 11 :time 1270 :agent "keeper" :action "execute_pending_settlement"
-    :params {:workflow-id "wf2"}}]})
+    :params {:workflow-id 2}}]})
 
 (def s91
    {:scenario-id     "s91-governance-snapshot-dispute-state"
@@ -3183,16 +3079,15 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1080 :agent "gov" :action "set-fee-bps"
      :params {:new-fee-bps 500}}
      {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
      {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S92: Settlement with zero-amount escrow
@@ -3209,14 +3104,13 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 1
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
      {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S93: Multiple appeals with refund resolution
@@ -3233,18 +3127,17 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release false :resolution-hash "0xrefund_hash"}}
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xrefund_hash"}}
      {:seq 3 :time 1150 :agent "seller" :action "resolve_appeal"
-     :params {:workflow-id "wf0" :appeal-winner "resolver"}}
+     :params {:workflow-id 0 :appeal-winner "resolver"}}
      {:seq 4 :time 1200 :agent "buyer" :action "appeal_slash"
-     :params {:workflow-id "wf0" :appeal-reason "wrong"}}
+     :params {:workflow-id 0 :appeal-reason "wrong"}}
      {:seq 5 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S94: Dispute with automatic timeout (no resolver action)
@@ -3259,12 +3152,11 @@
     :notes "Dispute raised but resolver never acts. Dispute timeout passes (300s). Auto-cancel at t=1360 succeeds. Tests resolver inaction fallback."
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}
-     :save-id-as "wf0"}
+     :params {:token "USDC" :to "0xseller" :amount 5000}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1360 :agent "keeper" :action "auto_cancel_disputed"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S95: Dispute with conflicting resolution challenge
@@ -3283,16 +3175,15 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xresolver_decision"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xresolver_decision"}}
      {:seq 3 :time 1150 :agent "seller" :action "challenge_resolution"
-     :params {:workflow-id "wf0" :evidence-hash "0xseller_contra_evidence_1"}}
+     :params {:workflow-id 0 :evidence-hash "0xseller_contra_evidence_1"}}
      {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S96: Multi-token escrow scenario
@@ -3310,24 +3201,22 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1010 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf1"}
+              :custom-resolver "0xresolver"}}
      {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 3 :time 1070 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf1"}}
+     :params {:workflow-id 1}}
      {:seq 4 :time 1130 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash0"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash0"}}
      {:seq 5 :time 1140 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf1" :is-release false :resolution-hash "0xhash1"}}
+     :params {:workflow-id 1 :is-release false :resolution-hash "0xhash1"}}
      {:seq 6 :time 1270 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 7 :time 1280 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf1"}}]})
+     :params {:workflow-id 1}}]})
 
 
 ;; S97: Appeal after settlement boundary
@@ -3344,14 +3233,13 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
      {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S98: Receiver initiates cancel after auto-cancel deadline
@@ -3368,10 +3256,9 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1200 :agent "seller" :action "recipient_cancel"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S99: Large escrow with multiple fee tiers
@@ -3388,14 +3275,13 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 1000000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
      {:seq 3 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 ;; S100: Receiver denies, then dispute is resolved as release
@@ -3412,16 +3298,15 @@
     :events
     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
      {:seq 1 :time 1050 :agent "seller" :action "recipient_deny"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 2 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
      {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id "wf0" :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
      {:seq 4 :time 1250 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 
 

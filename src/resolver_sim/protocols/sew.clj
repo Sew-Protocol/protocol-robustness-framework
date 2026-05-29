@@ -580,6 +580,44 @@
   (world-snapshot [_ world]
     (world-snapshot world))
 
+  (available-actions [_ world actor]
+    (let [wfs (keys (:escrow-transfers world))]
+      (flatten
+       (for [wf wfs]
+         (let [et (t/get-transfer world wf)]
+           (cond-> []
+             ;; Pending actions
+             (= :pending (:escrow-state et))
+             (into (cond-> []
+                     (or (= actor (:from et)) (= actor (:to et)))
+                     (conj {:action "raise_dispute" :params {:workflow-id wf}})
+
+                     (= actor (:from et))
+                     (into [{:action "release" :params {:workflow-id wf}}
+                            {:action "sender-cancel" :params {:workflow-id wf}}])
+
+                     (= actor (:to et))
+                     (conj {:action "recipient-cancel" :params {:workflow-id wf}})))
+
+             ;; Disputed actions
+             (= :disputed (:escrow-state et))
+             (into (let [pending (t/get-pending world wf)
+                         resolver (:dispute-resolver et)]
+                     (cond-> []
+                       ;; Resolver verdict
+                       (and (not (:exists pending)) (= actor resolver))
+                       (into [{:action "execute_resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
+                              {:action "execute_resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
+
+                       ;; Escalation/Challenge (if pending exists and not expired)
+                       (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
+                       (into (cond-> []
+                               (or (= actor (:from et)) (= actor (:to et)))
+                               (conj {:action "escalate_dispute" :params {:workflow-id wf}})
+
+                               ;; Anyone can challenge (Phase L)
+                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
+
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
                :when (= :disputed (:escrow-state et))]
