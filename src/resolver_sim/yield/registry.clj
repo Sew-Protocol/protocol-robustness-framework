@@ -122,12 +122,15 @@
                  w*)]
         (reduce-kv
           (fn [w' token token-config]
-            (let [{:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall]}
+            ;; Keywordize token so indices/rates/risk all use consistent keyword keys.
+            ;; JSON config sources produce string token names; runtime uses keywords.
+            (let [kw-token (if (string? token) (keyword token) token)
+                  {:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall]}
                   (normalize-token-config token-config)]
               (-> w'
-                  (assoc-in [:yield/indices resolved-module-id token] initial-index)
-                  (assoc-in [:yield/rates resolved-module-id token] apy)
-                  (assoc-in [:yield/risk resolved-module-id token]
+                  (assoc-in [:yield/indices resolved-module-id kw-token] initial-index)
+                  (assoc-in [:yield/rates resolved-module-id kw-token] apy)
+                  (assoc-in [:yield/risk resolved-module-id kw-token]
                             {:liquidity-mode liquidity-mode
                              :loss-mode      loss-mode
                              :rate-mode      rate-mode

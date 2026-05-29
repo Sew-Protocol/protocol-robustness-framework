@@ -321,13 +321,22 @@
                                                    :module/id module-id})
             new-pos  (get-in world' pos-key)
             reclaimed (:reclaimed-amount new-pos 0)]
+        (println "DEBUG claim-deferred: owner-id=" owner-id " reclaimed=" reclaimed " old-pos=" old-pos " new-pos=" new-pos)
         (if (pos? reclaimed)
           (let [escrow-id (when (vector? owner-id) (second owner-id))
                 world''   (if escrow-id
-                            ;; If it was an escrow yield, re-apply policy to distribute reclaimed funds
-                            (yield-policy/apply-yield-policy world' escrow-id (t/escrow-state world' escrow-id))
-                            ;; If it was a resolver stake, just credit the resolver's stake
-                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
+                            ;; For escrow yield: recover principal and credit recipient
+                            (let [et        (t/get-transfer world' escrow-id)
+                                  state     (t/escrow-state world' escrow-id)
+                                  token     (:token et)
+                                  recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
+                              (println "DEBUG claim-deferred -> escrow" {:escrow-id escrow-id :token token :recipient recipient})
+                              (-> world'
+                                  (acct/sub-held token reclaimed)
+                                  (acct/record-claimable escrow-id recipient reclaimed)))
+                            ;; For resolver stake yield: credit the resolver's stake balance
+                            (do (println "DEBUG claim-deferred -> resolver" {:addr addr :reclaimed reclaimed})
+                                (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed)))]
             (t/ok world''))
           (t/ok world'))))))
 
@@ -663,6 +672,18 @@
     (vec (for [[wf et] (:escrow-transfers world)
                :when (= :disputed (:escrow-state et))]
            wf)))
+
+  (project-state [_ world query]
+    (case (first query)
+      :party/net-position
+      (let [params (second query)
+            actor  (:party params)
+            hold   (get-in world [:total-held (get params :token "USDC")] 0)
+            claim  (reduce + 0 (for [[_ wf] (:claimable world {})
+                                     :when (contains? wf actor)]
+                                 (get wf actor 0)))]
+        (+ hold claim))
+      nil))
 
   proto/EconomicModel
 

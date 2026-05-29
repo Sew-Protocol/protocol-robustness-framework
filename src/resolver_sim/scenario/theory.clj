@@ -34,6 +34,7 @@
    See: docs/CDRS-v1.1-THEORY-SCHEMA.md for comprehensive field inventory,
    validation rules, examples by purpose, and future extensions."
   (:require [clojure.string :as str]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.scenario.equilibrium :as equilibrium]))
 
 ;; ---------------------------------------------------------------------------
@@ -119,61 +120,110 @@
 ;; See: docs/CDRS-v1.1-THEORY-SCHEMA.md for the full schema reference.
 ;; ---------------------------------------------------------------------------
 
+(defn- extract-metrics-at-entry [entry]
+  (:metrics entry))
+
+(defn- eval-predicate
+  "Recursively evaluate a predicate map against the trace, metrics, and world state."
+  [protocol world trace metrics predicate]
+  (cond
+    (:and predicate) (let [results (map #(eval-predicate protocol world trace metrics %) (:and predicate))]
+                       {:holds? (every? :holds? results) :children results})
+    (:or predicate)  (let [results (map #(eval-predicate protocol world trace metrics %) (:or predicate))]
+                       {:holds? (some :holds? results) :children results})
+    (:not predicate) (let [result (eval-predicate protocol world trace metrics (:not predicate))]
+                       {:holds? (not (:holds? result)) :children [result]})
+    (:implies predicate)
+    (let [if-result (eval-predicate protocol world trace metrics (:if predicate))
+          then-result (eval-predicate protocol world trace metrics (:then predicate))]
+      {:holds? (or (not (:holds? if-result)) (:holds? then-result))
+       :children [if-result then-result]})
+
+    ;; Temporal Operators
+    (:always predicate)
+    (let [results (map #(eval-predicate protocol world trace (extract-metrics-at-entry %) (:always predicate)) trace)]
+      {:holds? (every? :holds? results) :children results})
+
+    (:eventually predicate)
+    (let [results (map #(eval-predicate protocol world trace (extract-metrics-at-entry %) (:eventually predicate)) trace)]
+      {:holds? (some :holds? results) :children results})
+
+    (:after predicate)
+    (let [{:keys [event predicate]} (:after predicate)
+          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace))
+          sub-trace (if idx (drop (inc idx) trace) [])]
+      (if (empty? sub-trace)
+        {:holds? false :reason :event-not-found :event event}
+        (let [results (map #(eval-predicate protocol world trace (extract-metrics-at-entry %) predicate) sub-trace)]
+          {:holds? (every? :holds? results) :children results})))
+
+    (:before predicate)
+    (let [{:keys [event predicate]} (:before predicate)
+          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace))
+          sub-trace (if idx (take idx trace) [])]
+      (if (empty? sub-trace)
+        {:holds? false :reason :event-not-found :event event}
+        (let [results (map #(eval-predicate protocol world trace (extract-metrics-at-entry %) predicate) sub-trace)]
+          {:holds? (every? :holds? results) :children results})))
+
+    (:state predicate)
+    (let [proj-val (proto/project-state protocol world (:query predicate))
+          holds?   (evaluate-metric-op (:op predicate) proj-val (:value predicate))]
+      {:holds? holds? :state (:query predicate) :op (:op predicate) :value (:value predicate) :actual proj-val})
+
+    :else
+    ;; Leaf (flat condition map)
+    (let [metric-kw (to-kw (:metric predicate))
+          actual    (get metrics metric-kw)
+          holds?    (evaluate-metric-op (:op predicate) actual (:value predicate))]
+      {:holds? holds? :metric (:metric predicate) :op (:op predicate) :value (:value predicate) :actual actual})))
+
 (defn evaluate-theory
-  "Determine if a theoretical claim is falsified by observed metrics, and
-   whether the terminal trace is consistent with declared mechanism properties
-   and equilibrium concepts.
-
-   Returns:
-   {:status kw :falsified? bool :evidence [v-map]
-    :mechanism-results  {property-kw → result-map}    ; when declared
-    :mechanism-status   :pass|:fail|:inconclusive|:not-checked
-    :equilibrium-results {concept-kw → result-map}   ; when declared
-    :equilibrium-status  :pass|:fail|:inconclusive|:not-checked}
-
-   Fields consumed from the theory map: :claim-id, :falsifies-if,
-   :mechanism-properties, :equilibrium-concept.
-
-   :status is one of:
-     :not-evaluated  — no theory block provided
-     :not-falsified  — claim held; no falsification condition triggered
-     :falsified      — at least one falsifies-if condition was met
-     :inconclusive   — none of the tracked metrics were present in the result"
   [result theory]
   (if (nil? theory)
     {:status              :not-evaluated
+     :reason              :theory-missing
      :falsified?          false
      :evidence            []
      :mechanism-results   {}
      :mechanism-status    :not-checked
      :equilibrium-results {}
      :equilibrium-status  :not-checked}
-    (let [metrics  (:metrics result)
+    (let [protocol (:protocol result)
+          world    (:terminal-world result)
+          trace    (:trace result [])
+          metrics  (:metrics result)
           conds    (:falsifies-if theory [])
-          all-nil? (and (seq conds)
-                        (every? #(nil? (get metrics (to-kw (:metric %)))) conds))
-          falsified (atom [])]
-      (doseq [f conds]
-        (let [actual (get metrics (to-kw (:metric f)))]
-          (when (evaluate-metric-op (:op f) actual (:value f))
-            (swap! falsified conj {:metric (:metric f) :op (:op f) :value (:value f) :actual actual}))))
-      (let [falsify-status (cond
-                             (seq @falsified) :falsified
-                             all-nil?         :inconclusive
-                             :else            :not-falsified)
-            eq-result (when (or (seq (:mechanism-properties theory))
-                                (seq (:equilibrium-concept theory)))
-                        (equilibrium/evaluate-equilibrium theory result))]
-        (merge
-         {:status     falsify-status
-          :falsified? (= falsify-status :falsified)
-          :evidence   @falsified}
-         (if eq-result
-           {:mechanism-results   (:mechanism-results eq-result)
-            :mechanism-status    (:mechanism-status eq-result)
-            :equilibrium-results (:equilibrium-results eq-result)
-            :equilibrium-status  (:equilibrium-status eq-result)}
-           {:mechanism-results   {}
-            :mechanism-status    :not-checked
-            :equilibrium-results {}
-            :equilibrium-status  :not-checked}))))))
+          ;; Backward compatibility: handle legacy vector of maps
+          predicate (if (and (vector? conds) (map? (first conds)))
+                      {:and conds}
+                      conds)
+          eval-res (eval-predicate protocol world trace metrics predicate)
+          _        (println (format "Eval result: %s" eval-res))
+          falsified? (not (:holds? eval-res))
+
+          falsify-status (cond
+                           falsified?       :falsified
+                           (and (empty? conds) (seq (:falsifies-if theory))) :inconclusive
+                           :else            :not-falsified)
+          falsify-reason (cond
+                           falsified?       :falsification-triggered
+                           (and (empty? conds) (seq (:falsifies-if theory))) :metrics-missing-in-trace
+                           :else            :none)
+          eq-result (when (or (seq (:mechanism-properties theory))
+                              (seq (:equilibrium-concept theory)))
+                      (equilibrium/evaluate-equilibrium theory result))]
+      (merge
+       {:status     falsify-status
+        :reason     falsify-reason
+        :falsified? falsified?
+        :evidence   [eval-res]}
+       (if eq-result
+         {:mechanism-results   (:mechanism-results eq-result)
+          :mechanism-status    (:mechanism-status eq-result)
+          :equilibrium-results (:equilibrium-results eq-result)
+          :equilibrium-status  (:equilibrium-status eq-result)}
+         {:mechanism-results   {}
+          :mechanism-status    :not-checked
+          :equilibrium-results {}
+          :equilibrium-status  :not-checked})))))
