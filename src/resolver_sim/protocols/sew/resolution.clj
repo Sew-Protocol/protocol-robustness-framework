@@ -309,6 +309,7 @@
           pending        (if (:exists active-pending)
                            active-pending
                            (pick-eligible-superseded-pending world workflow-id now-ts))]
+      (do (println "DEBUG: Executing pending settlement. Pending=" pending)
       (cond
         (not (:exists pending))
         (t/fail :no-pending-settlement)
@@ -322,7 +323,7 @@
         :else
         (t/ok (if (:is-release pending)
                 (finalize-release world workflow-id)
-                (finalize-refund  world workflow-id)))))))
+                (finalize-refund  world workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal building block: _validateAndPrepareEscalation deletes
@@ -608,7 +609,10 @@
                            (-> world
                                (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
                                (assoc-in [:appeal-bond-custody slash-id]
-                                         {:resolver caller :workflow-id workflow-id :amount bond-amount :token token}))
+                                         {:resolver caller :workflow-id workflow-id :amount bond-amount :token token})
+                               (acct/add-held token bond-amount)
+                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount)
+                               (update-in [:total-principal-deposited token] (fnil + 0) bond-amount))
                            world)]
          (t/ok (assoc-in world' [:pending-fraud-slashes slash-id :status] :appealed)))))))
 
@@ -664,7 +668,9 @@
              workflow-id (:workflow-id custody slash-id)
              world'      (-> world
                              (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
-                             (update :appeal-bond-custody dissoc slash-id))
+                             (update :appeal-bond-custody dissoc slash-id)
+                             (cond-> (pos? bond-held)
+                               (acct/sub-held (or (:token custody) "USDC") bond-held)))
              world''     (if appeal-upheld?
                            (if (pos? bond-held)
                              (-> world'

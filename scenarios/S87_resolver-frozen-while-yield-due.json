@@ -1,0 +1,26 @@
+{
+  "scenario-id": "s87-resolver-frozen-while-yield-due",
+  "schema-version": "1.0",
+  "initial-block-time": 1000,
+  "agents": [{"id": "resolver", "address": "0xresolver"}],
+  "protocol-params": {"resolver-fee-bps": 150},
+  "yield-config": {
+    "modules": {
+      "aave-yield": {
+        "module/id": "aave-yield",
+        "module/type": "aave-v3",
+        "module/capabilities": ["deposit", "withdraw", "accrue"],
+        "accounting/type": "principal"
+      }
+    }
+  },
+  "events": [
+    {"seq": 0, "time": 1000, "agent": "resolver", "action": "register-resolver-bond", "params": {"stable": 8000, "sew": 2000}},
+    {"seq": 1, "time": 1010, "agent": "resolver", "action": "register-stake", "params": {"amount": 5000, "yield-profile-id": "aave-yield"}},
+    {"seq": 2, "time": 1060, "agent": "resolver", "action": "time_advance", "params": {"dt": 86400}},
+    {"seq": 3, "time": 100000, "agent": "resolver", "action": "propose-fraud-slash", "params": {"workflow-id": 0, "amount": 1000}},
+    {"seq": 4, "time": 100100, "agent": "resolver", "action": "time_advance", "params": {"dt": 100}},
+    {"seq": 5, "time": 100200, "agent": "resolver", "action": "execute-fraud-slash", "params": {"workflow-id": 0}},
+    {"seq": 6, "time": 100300, "agent": "resolver", "action": "claim-deferred-yield", "params": {"owner-id": "resolver:0xresolver"}}
+  ]
+}

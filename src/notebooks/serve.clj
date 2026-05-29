@@ -10,7 +10,7 @@
   (let [port 7777]
     (log/info! "notebook/server-starting" {:port port})
     (println (str "Starting Clerk notebook server on http://localhost:" port "/notebooks/xtdb_overview"))
-    (clerk/serve! {:watch-paths ["src" "notebooks"]
+    (clerk/serve! {:watch-paths ["src" "notebooks" "data"]
                    :browse true
                    :port port})
     ;; Pre-evaluate all notebooks so they are reachable by URL without a file-change trigger.
@@ -31,5 +31,10 @@
     (show-notebook! "notebooks/evidence_drawer.clj")
     (show-notebook! "notebooks/evidence_explorer.clj")
     (show-notebook! "notebooks/challenge_drilldown.clj")
+    (show-notebook! "notebooks/protocol_provenance.clj")
+    ;; Index is shown last — it becomes the default landing page.
+    (show-notebook! "notebooks/security_validation.clj")
+
+    (show-notebook! "notebooks/index.clj")
     ;; Block the main thread so the JVM stays alive (HTTP-kit uses daemon threads).
     @(promise)))

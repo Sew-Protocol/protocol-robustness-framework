@@ -23,8 +23,7 @@
             [resolver-sim.protocols.sew.db               :as sew-db]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
-            [resolver-sim.yield.registry                 :as yield-reg]
-            [resolver-sim.yield.ops                      :as yield-ops]
+            [resolver-sim.yield.protocols                :as yield-proto]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
 
@@ -41,7 +40,7 @@
 (defn- build-snapshot [pp]
   (let [yield-id (or (get pp :yield-generation-module nil)
                      (get pp :yield-profile nil))
-        {:keys [profile-id archetype module-id]} (yield-reg/resolve-yield-profile yield-id)]
+        {:keys [profile-id archetype module-id]} (yield-proto/resolve-yield-profile yield-id)]
     (t/make-module-snapshot
      {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
     :resolution-module            (get pp :resolution-module nil)
@@ -236,16 +235,20 @@
   (actx/with-resolved-actor
     agent-index event
     (fn [addr]
-      (let [amount           (get-in event [:params :amount] 0)
-            yield-profile-id (get-in event [:params :yield-profile-id])
-            world            (reg/register-stake world addr amount yield-profile-id)]
+      (let [p                (:params event)
+            amount           (:amount p 0)
+            token            (:token p "USDC")
+            yield-profile-id (:yield-profile-id p)
+            world            (reg/register-stake world addr amount yield-profile-id)
+            world            (acct/add-held world token amount)
+            world            (update-in world [:total-principal-deposited token] (fnil + 0) amount)]
         (if yield-profile-id
-          (let [{:keys [module-id]} (yield-reg/resolve-yield-profile yield-profile-id)
-                world' (yield-ops/apply-yield-op world {:op/type :yield/deposit
-                                                        :owner/id (str "resolver:" addr)
-                                                        :module/id module-id
-                                                        :amount amount
-                                                        :token "USDC"})] ; Assuming USDC for now, should be parameterized
+          (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
+                world' (yield-proto/apply-op world {:op/type :yield/deposit
+                                                     :owner/id (str "resolver:" addr)
+                                                     :module/id module-id
+                                                     :amount amount
+                                                     :token token})]
             (t/ok world'))
           (t/ok world))))))
 
@@ -254,7 +257,9 @@
   (actx/with-resolved-actor
     agent-index event
     (fn [resolver-addr]
-      (let [amount               (get-in event [:params :amount])
+      (let [p                    (:params event)
+            amount               (:amount p)
+            token                (:token p "USDC")
             current              (reg/get-stake world resolver-addr)
             yield-profile-id     (reg/get-resolver-yield-profile world resolver-addr)
             pending-slash-amount (reduce + 0
@@ -277,13 +282,18 @@
 
           :else
           (let [res (reg/withdraw-stake world resolver-addr amount)]
-            (if (and (:ok res) yield-profile-id)
-              (let [{:keys [module-id]} (yield-reg/resolve-yield-profile yield-profile-id)
-                    world' (yield-ops/apply-yield-op (:world res)
-                                                     {:op/type :yield/withdraw
-                                                      :owner/id (str "resolver:" resolver-addr)
-                                                      :module/id module-id})]
-                (t/ok world'))
+            (if (:ok res)
+              (let [world' (-> (:world res)
+                               (acct/sub-held token amount)
+                               (update-in [:total-withdrawn token] (fnil + 0) amount))]
+                (if yield-profile-id
+                  (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
+                        world'' (yield-proto/apply-op world'
+                                                      {:op/type :yield/withdraw
+                                                       :owner/id (str "resolver:" resolver-addr)
+                                                       :module/id module-id})]
+                    (t/ok world''))
+                  (t/ok world')))
               res)))))))
 
 (defmethod apply-action "claim-deferred-yield"
@@ -293,7 +303,7 @@
     (fn [addr]
       (let [yield-id  (or (get-in event [:params :yield-profile-id])
                           (get-in world [:params :yield-generation-module]))
-            module-id (:module-id (yield-reg/resolve-yield-profile yield-id))
+            module-id (:module-id (yield-proto/resolve-yield-profile yield-id))
             raw-owner (get-in event [:params :owner-id])
             owner-id  (cond
                         (nil? raw-owner) (str "resolver:" addr)
@@ -302,9 +312,9 @@
                         :else raw-owner)
             pos-key  [:yield/positions owner-id]
             old-pos  (get-in world pos-key)
-            world'   (yield-ops/apply-yield-op world {:op/type :yield/claim-deferred
-                                                      :owner/id owner-id
-                                                      :module/id module-id})
+            world'   (yield-proto/apply-op world {:op/type :yield/claim-deferred
+                                                   :owner/id owner-id
+                                                   :module/id module-id})
             new-pos  (get-in world' pos-key)
             reclaimed (:reclaimed-amount new-pos 0)]
         (if (pos? reclaimed)
@@ -530,8 +540,7 @@
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)
                            (assoc :params pp)
-                           yield-reg/init-yield-modules
-                           (yield-reg/apply-yield-config (:yield-config scenario)))]
+                           (yield-proto/init-world pp (:yield-config scenario)))]
       (if (and fot-bps (pos? fot-bps) (seq s-tokens))
         (reduce (fn [w tok] (assoc-in w [:token-fot-bps tok] fot-bps)) base s-tokens)
         base)))

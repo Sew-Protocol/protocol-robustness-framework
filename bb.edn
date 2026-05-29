@@ -304,4 +304,16 @@
   manifest:sign
   {:doc "Sign the focused (or latest) run manifest with Ed25519. Usage: bb manifest:sign [key-path]"
    :task (let [key-path (or (first *command-line-args*) "test_key")]
-           (clojure {:dir "." :extra-deps {}} "-M:sign-manifest" key-path))}}}
+           (clojure {:dir "." :extra-deps {}} "-M:sign-manifest" key-path))}
+
+  notebook:index
+  {:doc "Open the notebook navigation hub in the browser."
+   :task (do
+           (println "Opening: http://localhost:7777/notebooks/index")
+           (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/index 2>/dev/null || open http://localhost:7777/notebooks/index 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/index'"))}
+
+  notebook:security
+  {:doc "Open the security validation notebook in the browser."
+   :task (do
+           (println "Opening: http://localhost:7777/notebooks/security_validation")
+           (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/security_validation 2>/dev/null || open http://localhost:7777/notebooks/security_validation 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/security_validation'"))}}}

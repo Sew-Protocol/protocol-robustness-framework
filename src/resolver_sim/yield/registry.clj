@@ -1,8 +1,9 @@
 (ns resolver-sim.yield.registry
-  "[Sew-INTEGRATED] Yield module registry and dispatch.
+  "Generic yield module registry and dispatch system.
 
-   Registry mechanics are reusable, but current policy/module assumptions are
-   integrated with Sew world/accounting semantics."
+   This registry manages yield providers and their configurations within the
+   simulation world state. It is designed to be protocol-agnostic, provided
+   the simulation state follows the standard yield engine keys (e.g., :yield/*)."
   (:require [resolver-sim.yield.modules.aave :as aave]
             [resolver-sim.yield.modules.fixed :as fixed]
             [resolver-sim.yield.modules.none :as none]

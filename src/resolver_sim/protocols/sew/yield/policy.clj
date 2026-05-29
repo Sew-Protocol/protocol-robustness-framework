@@ -37,18 +37,22 @@
 
               ;; Defaults for :off or other combinations
               [0 0])]
-        (-> world
-            (acct/record-fee token fee)
-            (cond-> (pos? sender-amt)
-              (acct/record-claimable escrow-id (:from et) sender-amt))
-            (cond-> (pos? recipient-amt)
-              (acct/record-claimable escrow-id (:to et) recipient-amt))
-            ;; Yield pool reduction: funds move from "held" to "claimable"
-            (acct/sub-held token yield)
-            ;; If there's a shortfall, keep the position active for later recovery
-            (cond->
-              (:shortfall position)
-              (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
+        (let [world' (-> world
+                        (acct/record-fee token fee)
+                        (cond-> (pos? sender-amt)
+                          (acct/record-claimable escrow-id (:from et) sender-amt))
+                        (cond-> (pos? recipient-amt)
+                          (acct/record-claimable escrow-id (:to et) recipient-amt))
+                        ;; Yield pool reduction: funds move from "held" to "claimable/fees"
+                        (acct/sub-held token yield)
+                        ;; Capture any remaining yield (not allocated to participants) as additional protocol fees
+                        (cond-> (> net (+ sender-amt recipient-amt))
+                          (acct/record-fee token (- net (+ sender-amt recipient-amt)))))]
+          (-> world'
+              ;; If there's a shortfall, keep the position active for later recovery
+              (cond->
+                (:shortfall position)
+                (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
 
-              (not (:shortfall position))
-              (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0)))))))
+                (not (:shortfall position))
+                (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0))))))))

@@ -95,6 +95,7 @@
         (yield-policy/apply-yield-policy workflow-id :released)
         (acct/sub-held token amt)
         (acct/record-released token net-amt)
+        ;; Claimable is net of FoT deduction
         (acct/record-claimable workflow-id (:to et) net-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id :released))))
@@ -118,6 +119,7 @@
         (yield-policy/apply-yield-policy workflow-id :refunded)
         (acct/sub-held token amt)
         (acct/record-refunded token net-amt)
+        ;; Claimable is net of FoT deduction
         (acct/record-claimable workflow-id (:from et) net-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id :refunded))))
@@ -216,7 +218,8 @@
                                 (assoc-in [:module-snapshots workflow-id] snapshot)
                                 (update-in [:total-principal-deposited token] (fnil + 0) amount)
                                 (add-held token afa)
-                                (add-fee token fee))
+                                (add-fee token fee)
+                                (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
               ;; Trigger yield deposit if module is configured
               ymid          (:yield-generation-module snapshot)
               world''       (if (and ymid (contains? (:yield/modules world') ymid))

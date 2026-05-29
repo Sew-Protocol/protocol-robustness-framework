@@ -1,12 +1,10 @@
 (ns resolver-sim.yield.accounting
-  "[Sew-INTEGRATED ACCOUNTING SUBSTRATE]
+  "Standardized accounting substrate for yield-bearing assets.
 
-   Provides reusable arithmetic/reconciliation mechanics for yield-related
+   Provides reusable arithmetic and reconciliation mechanics for yield-related
    balances and accrual transformations.
 
-   Boundary note:
-   - operation semantics and interpretation remain adapter-owned,
-   - current integration and field assumptions are aligned to Sew world shape.")
+   This substrate is designed to be portable across different protocol simulations.")
 
 (def ^:private default-asset-decimals 18)
 

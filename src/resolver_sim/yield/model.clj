@@ -3,7 +3,7 @@
 
 ;; Position accounting shape
 ;; {:position/id [:yield/position owner-id module-id token]
-;;  :owner/id owner-id ; e.g., [:sew/escrow escrow-id]
+;;  :owner/id owner-id ; e.g., [:escrow 123] or "user:0xabc"
 ;;  :module/id module-id
 ;;  :token token
 ;;  :principal 0

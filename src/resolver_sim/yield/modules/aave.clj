@@ -1,9 +1,9 @@
 (ns resolver-sim.yield.modules.aave
-  "[REFERENCE MODULE / Sew-INTEGRATED]
+  "Aave-v3 yield module implementation.
 
-   Aave-inspired yield module used as the current reference module.
-   The interface pattern is reusable; concrete world-field coupling and
-   policy assumptions are currently tuned to Sew integration."
+   Models a share-based lending protocol where interest is accrued via a 
+   liquidity index. The behavior and interface are standardized for 
+   simulation portability."
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]))
 
