@@ -616,7 +616,7 @@
                                (conj {:action "escalate-dispute" :params {:workflow-id wf}})
 
                                ;; Anyone can challenge (Phase L)
-                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}})))))))))))
+                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
@@ -772,7 +772,7 @@
     sew-eq/equilibrium-concept-validators)
 
   (reference-model [_ scenario]
-    nil)))
+    nil))
 
 (def protocol (SewProtocol.))
 
