@@ -72,8 +72,7 @@
         "to": "0xseller",
         "amount": 5000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -81,7 +80,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ]

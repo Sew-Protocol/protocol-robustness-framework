@@ -41,8 +41,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 3000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -53,8 +52,7 @@
         "token": "USDC",
         "to": "0xseller2",
         "amount": 2500
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 2,
@@ -62,7 +60,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 1
       }
     }
   ]

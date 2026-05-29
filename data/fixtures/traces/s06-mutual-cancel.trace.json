@@ -33,8 +33,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 1500
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -42,7 +41,7 @@
       "agent": "buyer",
       "action": "sender_cancel",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -51,7 +50,7 @@
       "agent": "seller",
       "action": "recipient_cancel",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ]

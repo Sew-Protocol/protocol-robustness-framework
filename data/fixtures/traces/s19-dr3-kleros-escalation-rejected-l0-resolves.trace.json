@@ -51,8 +51,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 5000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -60,7 +59,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -69,7 +68,7 @@
       "agent": "buyer",
       "action": "escalate_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -78,7 +77,7 @@
       "agent": "l0resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xhash"
       }
@@ -89,7 +88,7 @@
       "agent": "l1resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xl1hash"
       }

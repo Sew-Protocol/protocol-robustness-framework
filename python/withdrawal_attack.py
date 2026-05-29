@@ -169,7 +169,7 @@ class WithdrawalAttacker:
         results = []
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}},
             {"seq": 1, "time": 1060, "agent": "buyer", "action": "raise_dispute",
              "params": {"workflow_id": 0}},
             {"seq": 2, "time": 1120, "agent": "resolver", "action": "execute_resolution",
@@ -272,7 +272,7 @@ class WithdrawalAttacker:
         results = []
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}},
         ]
         self._run_trace(client, session_id, events)
 
@@ -328,7 +328,7 @@ class WithdrawalAttacker:
         results = []
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}},
             {"seq": 1, "time": 1040, "agent": "buyer", "action": "release",
              "params": {"workflow_id": 0}},
             {"seq": 2, "time": 1100, "agent": "buyer", "action": "execute_pending_settlement",
@@ -372,7 +372,7 @@ class WithdrawalAttacker:
         # and funds end up in claimable
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 1000}},
             {"seq": 1, "time": 1040, "agent": "buyer", "action": "release",
              "params": {"workflow_id": 0}},
             {"seq": 2, "time": 1100, "agent": "buyer", "action": "execute_pending_settlement",
@@ -477,7 +477,7 @@ class WithdrawalAttacker:
             {"seq": 0, "time": 1000, "agent": "resolver", "action": "register_stake",
              "params": {"amount": 5000}},
             {"seq": 1, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}},
             {"seq": 2, "time": 1000, "agent": "buyer", "action": "raise_dispute",
              "params": {"workflow_id": 0}},
         ]
@@ -511,7 +511,7 @@ class WithdrawalAttacker:
         # Create tiny escrow (dust)
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 1}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 1}},
             {"seq": 1, "time": 1040, "agent": "buyer", "action": "release",
              "params": {"workflow_id": 0}},
             {"seq": 2, "time": 1100, "agent": "buyer", "action": "execute_pending_settlement",
@@ -550,7 +550,7 @@ class WithdrawalAttacker:
 
         events = [
             {"seq": 0, "time": 1000, "agent": "buyer", "action": "create_escrow",
-             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}, "save_id_as": "wf0"},
+             "params": {"token": "USDC", "to": "0xseller", "amount": 5000}},
             {"seq": 1, "time": 1060, "agent": "buyer", "action": "raise_dispute",
              "params": {"workflow_id": 0}},
             {"seq": 2, "time": 1120, "agent": "resolver", "action": "execute_resolution",

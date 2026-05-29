@@ -44,8 +44,7 @@
         "to": "0xseller",
         "amount": 6000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -53,7 +52,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -62,7 +61,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": false,
         "resolution-hash": "0xhash"
       }
@@ -73,7 +72,7 @@
       "agent": "executor",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -82,7 +81,7 @@
       "agent": "executor",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ]

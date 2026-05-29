@@ -61,24 +61,13 @@ Event core fields:
 
 ---
 
-## Alias Semantics (Core)
+## Workflow IDs
 
-Generic alias key:
-- `:save-id-as` on a successful create event stores created integer ID into replay alias map.
+Workflow IDs are sequential integers assigned by creation order:
+- First `create_escrow` → ID `0`
+- Second `create_escrow` → ID `1`, etc.
 
-Resolution:
-- Protocol `resolve-id-alias` receives each event before dispatch.
-- If `:params/:workflow-id` is string alias, protocol resolves to integer ID.
-- Unresolved alias returns `:unresolved-alias` and replay outcome is `:invalid`.
-
-### Legacy compatibility note
-
-Historically, some Python fixtures used `save-wf-as` and kebab-case keys.
-For Python adversarial bridge compatibility, scenario ingestion may normalize:
-- `save-wf-as -> save_id_as`
-- kebab-case keys -> snake_case
-
-Core canonical naming remains generic (`save-id-as`).
+Use integers directly in `:params/:workflow-id`. There is no alias resolution.
 
 ---
 

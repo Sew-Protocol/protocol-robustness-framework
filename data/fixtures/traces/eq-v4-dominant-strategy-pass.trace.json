@@ -88,8 +88,7 @@
         "to": "0xseller",
         "amount": 4000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -98,7 +97,7 @@
       "action": "execute_resolution",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xhack"
       }
@@ -109,7 +108,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -119,7 +118,7 @@
       "action": "release",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ]

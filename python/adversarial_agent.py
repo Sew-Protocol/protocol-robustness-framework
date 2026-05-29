@@ -174,13 +174,10 @@ def _load_trace_events(trace_path):
     return data
 
 
-def _normalise_event_params_for_grpc(params, alias_map):
+def _normalise_event_params_for_grpc(params):
     p = dict(params or {})
-    for k in ("workflow-id", "workflow_id", "id"):
-        if k in p and isinstance(p[k], str) and p[k] in alias_map:
-            p[k] = alias_map[p[k]]
     # gRPC server accepts either workflow-id or id depending on action handlers;
-    # keep original keys but mirror id for compatibility when applicable.
+    # mirror id for compatibility when applicable.
     if "workflow-id" in p and "id" not in p:
         p["id"] = p["workflow-id"]
     if "workflow_id" in p and "id" not in p:
@@ -191,13 +188,12 @@ def _normalise_event_params_for_grpc(params, alias_map):
 def _replay_trace_prefix(step_session, session_id, trace_doc, prefix_steps=None):
     events = trace_doc.get("events", [])
     n = len(events) if prefix_steps is None else max(0, min(prefix_steps, len(events)))
-    alias_map = {}
     accepted = 0
     rejected = 0
     active_ids = []
 
     for i, ev in enumerate(events[:n]):
-        params = _normalise_event_params_for_grpc(ev.get("params", {}), alias_map)
+        params = _normalise_event_params_for_grpc(ev.get("params", {}))
         req = {
             "session_id": session_id,
             "event": {
@@ -212,21 +208,17 @@ def _replay_trace_prefix(step_session, session_id, trace_doc, prefix_steps=None)
         result = resp.get("result")
         if result == "ok":
             accepted += 1
+            if ev.get("action") == "create_escrow":
+                new_id = _extract_candidate_id(resp, active_ids)
+                if new_id not in active_ids:
+                    active_ids.append(new_id)
         else:
             rejected += 1
-
-        save_alias = ev.get("save-id-as")
-        if save_alias and result == "ok":
-            real_id = _extract_candidate_id(resp, active_ids)
-            alias_map[save_alias] = real_id
-            if real_id not in active_ids:
-                active_ids.append(real_id)
 
     return {
         "replayed_steps": n,
         "accepted": accepted,
         "rejected": rejected,
-        "alias_map": alias_map,
         "active_ids": active_ids,
     }
 

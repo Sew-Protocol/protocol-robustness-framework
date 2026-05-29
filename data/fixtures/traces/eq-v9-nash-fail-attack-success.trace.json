@@ -76,8 +76,7 @@
         "to": "0xseller",
         "amount": 4000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -87,7 +86,7 @@
       "adversarial?": true,
       "_note": "raise_dispute is a valid buyer action and succeeds. adversarial?:true means this is classified as attack-attempt AND attack-success when accepted.",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ]
