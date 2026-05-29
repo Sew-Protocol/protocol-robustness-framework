@@ -48,9 +48,6 @@
 
 (def ^:const seconds-per-year 31536000)
 
-(defn- escrow-yield-owner [escrow-id]
-  [:sew/escrow escrow-id])
-
 (defn accrue-yield
   "Calculate and update accrued yield for an escrow based on time delta."
   [world workflow-id]
@@ -64,7 +61,7 @@
         (if (pos? dt)
           (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
                                                         :module/id mid
-                                                        :owner/id (escrow-yield-owner workflow-id)
+                                                        :owner/id (t/escrow-yield-owner-id workflow-id)
                                                         :token (:token et)
                                                         :dt dt})]
             ;; Update last-accrual-time to now
@@ -76,53 +73,36 @@
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
 
-(defn- finalize-release
-  "Internal: transition to :released, update accounting."
-  [world workflow-id]
-  (let [et      (t/get-transfer world workflow-id)
-        token   (:token et)
-        amt     (:amount-after-fee et)
-        fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))
-        snap    (t/get-snapshot world workflow-id)
-        mid     (:yield-generation-module snap)]
+(defn- finalize
+  "Internal: transition escrow to terminal state, release accounting.
+   direction — :released (to recipient) or :refunded (to sender)."
+  [world workflow-id direction]
+  (let [et        (t/get-transfer world workflow-id)
+        token     (:token et)
+        amt       (:amount-after-fee et)
+        fot-bps   (get-in world [:token-fot-bps token] 0)
+        net-amt   (- amt (t/compute-fee amt fot-bps))
+        snap      (t/get-snapshot world workflow-id)
+        mid       (:yield-generation-module snap)
+        recipient (if (= direction :released) (:to et) (:from et))
+        record-fn (if (= direction :released) acct/record-released acct/record-refunded)]
     (-> world
         (accrue-yield workflow-id)
         (cond-> (and mid (contains? (:yield/modules world) mid))
           (yield-ops/apply-yield-op {:op/type :yield/withdraw
                                      :module/id mid
-                                     :owner/id (escrow-yield-owner workflow-id)}))
-        (yield-policy/apply-yield-policy workflow-id :released)
+                                     :owner/id (t/escrow-yield-owner-id workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id direction)
         (acct/sub-held token amt)
-        (acct/record-released token net-amt)
+        (record-fn token net-amt)
+        ;; Track outbound FoT fee (difference between gross held and net claimable)
+        (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
         ;; Claimable is net of FoT deduction
-        (acct/record-claimable workflow-id (:to et) net-amt)
+        (acct/record-claimable workflow-id recipient net-amt)
         (update :pending-settlements dissoc workflow-id)
-        (sm/apply-transition! workflow-id :released))))
-
-(defn- finalize-refund
-  "Internal: transition to :refunded, update accounting."
-  [world workflow-id]
-  (let [et      (t/get-transfer world workflow-id)
-        token   (:token et)
-        amt     (:amount-after-fee et)
-        fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))
-        snap    (t/get-snapshot world workflow-id)
-        mid     (:yield-generation-module snap)]
-    (-> world
-        (accrue-yield workflow-id)
-        (cond-> (and mid (contains? (:yield/modules world) mid))
-          (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                     :module/id mid
-                                     :owner/id (escrow-yield-owner workflow-id)}))
-        (yield-policy/apply-yield-policy workflow-id :refunded)
-        (acct/sub-held token amt)
-        (acct/record-refunded token net-amt)
-        ;; Claimable is net of FoT deduction
-        (acct/record-claimable workflow-id (:from et) net-amt)
-        (update :pending-settlements dissoc workflow-id)
-        (sm/apply-transition! workflow-id :refunded))))
+        (sm/apply-transition! workflow-id direction)
+        ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
+        (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))))
 
 ;;
 ;; Mirrors: BaseEscrow.createEscrow
@@ -225,7 +205,7 @@
               world''       (if (and ymid (contains? (:yield/modules world') ymid))
                               (yield-ops/apply-yield-op world' {:op/type :yield/deposit
                                                                 :module/id ymid
-                                                                :owner/id (escrow-yield-owner workflow-id)
+                                                                :owner/id (t/escrow-yield-owner-id workflow-id)
                                                                 :amount afa
                                                                 :token token})
                               world')]
@@ -292,7 +272,7 @@
     (let [{:keys [allowed? reason-code]} (release-strategy-fn world workflow-id caller)]
       (if-not allowed?
         (t/fail (if (= 1 reason-code) :not-sender :release-not-allowed))
-        (t/ok (finalize-release world workflow-id))))))
+        (t/ok (finalize world workflow-id :released))))))
 
 ;; ---------------------------------------------------------------------------
 ;; sender-cancel
@@ -333,7 +313,7 @@
 
     ;; Strategy permits unilateral cancel
     (and (some? cancel-strategy) (:unilateral-cancel? cancel-strategy))
-    (t/ok (finalize-refund world workflow-id))
+    (t/ok (finalize world workflow-id :refunded))
 
     :else
     ;; Mutual-consent path: set sender status
@@ -341,7 +321,7 @@
       (if-not (:ok r)
         r
         (if (sm/both-agreed-to-cancel? (:world r) workflow-id)
-          (t/ok (finalize-refund (:world r) workflow-id))
+          (t/ok (finalize (:world r) workflow-id :refunded))
           r)))))
 
 ;; ---------------------------------------------------------------------------
@@ -370,14 +350,14 @@
     (t/fail :not-authorized-to-cancel-yet)
 
     (and (some? cancel-strategy) (:unilateral-cancel? cancel-strategy))
-    (t/ok (finalize-refund world workflow-id))
+    (t/ok (finalize world workflow-id :refunded))
 
     :else
     (let [r (sm/set-recipient-agree-to-cancel world workflow-id caller)]
       (if-not (:ok r)
         r
         (if (sm/both-agreed-to-cancel? (:world r) workflow-id)
-          (t/ok (finalize-refund (:world r) workflow-id))
+          (t/ok (finalize (:world r) workflow-id :refunded))
           r)))))
 
 ;; ---------------------------------------------------------------------------
@@ -415,13 +395,15 @@
           slash-amt       (:amount-after-fee et)
           has-resolver?   (and resolver
                                (not= resolver "0x0000000000000000000000000000000000000000"))
-          ;; slash-resolver-stake returns {:ok bool :world world'} — unwrap before threading
+          
+          ;; Ensure finalize, slash, and distribution are handled 
+          ;; as a single, atomic state transition to satisfy invariants.
+          world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?
-                            (:world (reg/slash-resolver-stake world resolver slash-amt))
-                            world)
-          world'          (-> world-slashed
-                              (acct/distribute-slashed-funds slash-amt)
-                              (finalize-refund workflow-id)
+                            (:world (reg/slash-resolver-stake world-finalized resolver slash-amt))
+                            world-finalized)
+          world-dist      (acct/distribute-slashed-funds world-slashed slash-amt)
+          world-result    (-> world-dist
                               (t/decrement-resolver-capacity resolver)
                               (update :dispute-timestamps dissoc workflow-id))]
-      (t/ok world'))))
+      (t/ok world-result))))

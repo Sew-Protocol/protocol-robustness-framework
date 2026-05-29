@@ -24,10 +24,10 @@
              (when-not (zero? exit) (System/exit exit))))}
 
   scenario:run:family
-  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
+  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb scenario:run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
    :task (let [selector (first *command-line-args*)]
            (when-not (seq selector)
-             (throw (ex-info "Missing selector. Usage: bb run:family <selector>" {})))
+             (throw (ex-info "Missing selector. Usage: bb scenario:run:family <selector>" {})))
            (let [selector-lc (clojure.string/lower-case selector)
                  scenarios (->> (file-seq (clojure.java.io/file "scenarios"))
                                 (filter (fn [f] (.isFile f)))
@@ -193,19 +193,31 @@
 
   help:first {:doc "First-time visitor quick commands"
               :task (do
-                      (println "Sew first-time quickstart")
+                      (println "╔══════════════════════════════════════════════╗")
+                      (println "║       Sew Simulation — First-Time Guide      ║")
+                      (println "╚══════════════════════════════════════════════╝")
                       (println "")
-                      (println "1) Evidence dashboard (read-only):")
-                      (println "   bb notebook")
-                      (println "   http://localhost:7777/notebooks/report")
+                      (println "1) Explore the notebook navigation hub:")
+                      (println "   bb notebook:index")
+                      (println "   http://localhost:7777/notebooks/index")
                       (println "")
-                      (println "2) Canonical validation (deterministic):")
+                      (println "2) Run the canonical validation gate (all targets):")
+                      (println "   ./scripts/test.sh all")
+                      (println "   — or fast invariant check only:")
+                      (println "   bb test:invariants")
+                      (println "")
+                      (println "3) Run a specific scenario:")
+                      (println "   bb scenario:run S01_baseline-happy-path.json")
+                      (println "   bb scenario:run:family escalation-abuse")
+                      (println "")
+                      (println "4) Reference validation suite:")
                       (println "   make reference-validation-v1")
                       (println "   make verify-reference-validation-v1")
                       (println "")
-                      (println "3) Useful helpers:")
-                      (println "   bb slash:calc 500 50")
-                      (println "   ./scripts/test.sh all"))}
+                      (println "5) See all available tasks:")
+                      (println "   bb tasks")
+                      (println "")
+                      (println "Docs: docs/README.md  |  docs/quickstart/QUICKSTART.md"))}
 
   notebook {:doc "Start Clerk notebook server (or reuse existing) at http://localhost:7777/notebooks/report"
             :task (shell "bash" "-lc" "if ss -ltn '( sport = :7777 )' | grep -q 7777; then echo 'Notebook server already running at http://localhost:7777/notebooks/report'; else clojure -M -m notebooks.serve; fi")}

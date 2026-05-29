@@ -16,7 +16,7 @@ This is the authoritative single-command check. Run it first.
 ```
 
 Runs five targets in sequence: unit tests, generator regression, contract checks,
-deterministic invariant suite (S01–S41), and fixture suites. See
+deterministic invariant suite (S01–S100), and fixture suites. See
 `docs/testing/RUNNING_TESTS.md` for the current known-baseline and any expected failures.
 
 ---
@@ -29,7 +29,7 @@ No server required. Runs in ~1 second.
 clojure -M:run -- --invariants
 ```
 
-Executes all S01–S41 in-process scenarios against the Sew state machine and checks
+Executes all S01–S100 in-process scenarios against the Sew state machine and checks
 invariants at every transition. Each scenario is pass/fail with explicit violation
 counts. Expect output like:
 
@@ -38,7 +38,7 @@ counts. Expect output like:
   ✓ PASS  S01  baseline-happy-path          steps=3   reverts=0
   ✓ PASS  S02  dr3-dispute-release          steps=4   reverts=0
   ...
-  41/41 passed  (0.9 s)
+  82/99 passed  (0.8 s)
 ```
 
 ---

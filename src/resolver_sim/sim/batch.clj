@@ -5,6 +5,33 @@
             [resolver-sim.stochastic.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]))
 
+(defn- common-kwargs
+  "Shared keyword-argument vector for dispute/resolve-dispute calls.
+   Avoids duplicating the ~20 param extractions across run-batch and run-batch-with-trials."
+  [params]
+  [:l2-detection-prob                  (:l2-detection-prob params 0)
+   :slashing-detection-delay-weeks     (:slashing-detection-delay-weeks params 0)
+   :allow-slashing?                    (:allow-slashing? params true)
+   :resolver-bond-bps                  (:resolver-bond-bps params 0)
+   :fraud-detection-probability        (:fraud-detection-probability params 0.0)
+   :fraud-slash-bps                    (:fraud-slash-bps params 0)
+   :reversal-detection-probability     (:reversal-detection-probability params 0.0)
+   :reversal-slash-bps                 (:reversal-slash-bps params 0)
+   :timeout-slash-bps                  (:timeout-slash-bps params 200)
+   :unstaking-delay-days               (:unstaking-delay-days params 14)
+   :freeze-on-detection?               (:freeze-on-detection? params true)
+   :freeze-duration-days               (:freeze-duration-days params 3)
+   :appeal-window-days                 (:appeal-window-days params 7)
+   :fraud-model                        (:fraud-model params :single-stage-ev)
+   :escalation-assumptions             (:escalation-assumptions params)
+   :escalation-assumption-band         (:escalation-assumption-band params :base)
+   :p-appeal-wrong                     (:p-appeal-wrong params)
+   :p-l1-reversal                      (:p-l1-reversal params)
+   :p-l2-escalation                    (:p-l2-escalation params)
+   :p-l2-reversal                      (:p-l2-reversal params)
+   :has-kleros?                        (:has-kleros? params)
+   :fraud-success-rate                 (:fraud-success-rate params 0.0)])
+
 (defn mean [vals]
   (if (empty? vals) 0 (double (/ (reduce + vals) (count vals)))))
 
@@ -42,37 +69,16 @@
         strategy (integration/adjust-strategy-for-bribery base-strategy params)
         results
         (repeatedly n-trials
-          #(dispute/resolve-dispute
-            rng (:escrow-size params 10000)
-            (:resolver-fee-bps params)
-            (:appeal-bond-bps params)
-            (:slash-multiplier params)
-            strategy
-            (:appeal-probability-if-correct params)
-            (:appeal-probability-if-wrong params)
-            (:slashing-detection-probability params)
-            :l2-detection-prob (:l2-detection-prob params 0)
-            :slashing-detection-delay-weeks (:slashing-detection-delay-weeks params 0)
-            :allow-slashing? (:allow-slashing? params true)
-            :resolver-bond-bps (:resolver-bond-bps params 0)
-            :fraud-detection-probability (:fraud-detection-probability params 0.0)
-            :fraud-slash-bps (:fraud-slash-bps params 0)
-            :reversal-detection-probability (:reversal-detection-probability params 0.0)
-            :reversal-slash-bps (:reversal-slash-bps params 0)
-            :timeout-slash-bps (:timeout-slash-bps params 200)
-            :unstaking-delay-days (:unstaking-delay-days params 14)
-            :freeze-on-detection? (:freeze-on-detection? params true)
-            :freeze-duration-days (:freeze-duration-days params 3)
-            :appeal-window-days (:appeal-window-days params 7)
-             :fraud-model (:fraud-model params :single-stage-ev)
-             :escalation-assumptions (:escalation-assumptions params)
-             :escalation-assumption-band (:escalation-assumption-band params :base)
-             :p-appeal-wrong (:p-appeal-wrong params)
-             :p-l1-reversal (:p-l1-reversal params)
-             :p-l2-escalation (:p-l2-escalation params)
-             :p-l2-reversal (:p-l2-reversal params)
-             :has-kleros? (:has-kleros? params)
-            :fraud-success-rate (:fraud-success-rate params 0.0)))
+          #(apply dispute/resolve-dispute
+             rng (:escrow-size params 10000)
+             (:resolver-fee-bps params)
+             (:appeal-bond-bps params)
+             (:slash-multiplier params)
+             strategy
+             (:appeal-probability-if-correct params)
+             (:appeal-probability-if-wrong params)
+             (:slashing-detection-probability params)
+             (common-kwargs params)))
         
         profits-honest (map :profit-honest results)
         profits-malice (map :profit-malice results)
@@ -180,7 +186,7 @@
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         trials
         (vec (repeatedly n-trials
-               #(dispute/resolve-dispute
+               #(apply dispute/resolve-dispute
                   rng (:escrow-size params 10000)
                   (:resolver-fee-bps params)
                   (:appeal-bond-bps params)
@@ -189,28 +195,7 @@
                   (:appeal-probability-if-correct params)
                   (:appeal-probability-if-wrong params)
                   (:slashing-detection-probability params)
-                  :l2-detection-prob (:l2-detection-prob params 0)
-                  :slashing-detection-delay-weeks (:slashing-detection-delay-weeks params 0)
-                  :allow-slashing? (:allow-slashing? params true)
-                  :resolver-bond-bps (:resolver-bond-bps params 0)
-                  :fraud-detection-probability (:fraud-detection-probability params 0.0)
-                  :fraud-slash-bps (:fraud-slash-bps params 0)
-                  :reversal-detection-probability (:reversal-detection-probability params 0.0)
-                  :reversal-slash-bps (:reversal-slash-bps params 0)
-                  :timeout-slash-bps (:timeout-slash-bps params 200)
-                  :unstaking-delay-days (:unstaking-delay-days params 14)
-                  :freeze-on-detection? (:freeze-on-detection? params true)
-                  :freeze-duration-days (:freeze-duration-days params 3)
-                  :appeal-window-days (:appeal-window-days params 7)
-                   :fraud-model (:fraud-model params :single-stage-ev)
-                   :escalation-assumptions (:escalation-assumptions params)
-                   :escalation-assumption-band (:escalation-assumption-band params :base)
-                   :p-appeal-wrong (:p-appeal-wrong params)
-                   :p-l1-reversal (:p-l1-reversal params)
-                   :p-l2-escalation (:p-l2-escalation params)
-                   :p-l2-reversal (:p-l2-reversal params)
-                   :has-kleros? (:has-kleros? params)
-                  :fraud-success-rate (:fraud-success-rate params 0.0))))
+                  (common-kwargs params))))
 
         profits-honest (map :profit-honest trials)
         profits-malice (map :profit-malice trials)

@@ -22,54 +22,35 @@
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
 
-(defn- escrow-yield-owner [escrow-id]
-  [:sew/escrow escrow-id])
-
-(defn- finalize-release [world workflow-id]
-  (let [et      (t/get-transfer world workflow-id)
-        token   (:token et)
-        amt     (:amount-after-fee et)
-        fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)
-        snap    (t/get-snapshot world workflow-id)
-        mid     (:yield-generation-module snap)]
+(defn- finalize
+  "Internal: transition escrow to terminal state, release accounting.
+   direction — :released (to recipient) or :refunded (to sender)."
+  [world workflow-id direction]
+  (let [et        (t/get-transfer world workflow-id)
+        token     (:token et)
+        amt       (:amount-after-fee et)
+        fot-bps   (get-in world [:token-fot-bps token] 0)
+        net-amt   (- amt (t/compute-fee amt fot-bps))
+        resolver  (:dispute-resolver et)
+        snap      (t/get-snapshot world workflow-id)
+        mid       (:yield-generation-module snap)
+        recipient (if (= direction :released) (:to et) (:from et))
+        record-fn (if (= direction :released) acct/record-released acct/record-refunded)]
     (-> world
         (lc/accrue-yield workflow-id)
         (cond-> (and mid (contains? (:yield/modules world) mid))
           (yield-ops/apply-yield-op {:op/type :yield/withdraw
                                      :module/id mid
-                                     :owner/id (escrow-yield-owner workflow-id)}))
-        (yield-policy/apply-yield-policy workflow-id :released)
+                                     :owner/id (t/escrow-yield-owner-id workflow-id)}))
+        (yield-policy/apply-yield-policy workflow-id direction)
         (acct/sub-held token amt)
-        (acct/record-released token net-amt)
-        (acct/record-claimable workflow-id (:to et) net-amt)
+        (record-fn token net-amt)
+        (acct/record-claimable workflow-id recipient net-amt)
         (t/decrement-resolver-capacity resolver)
         (update :pending-settlements dissoc workflow-id)
-        (sm/apply-transition! workflow-id :released))))
-
-(defn- finalize-refund [world workflow-id]
-  (let [et      (t/get-transfer world workflow-id)
-        token   (:token et)
-        amt     (:amount-after-fee et)
-        fot-bps (get-in world [:token-fot-bps token] 0)
-        net-amt (- amt (t/compute-fee amt fot-bps))
-        resolver (:dispute-resolver et)
-        snap    (t/get-snapshot world workflow-id)
-        mid     (:yield-generation-module snap)]
-    (-> world
-        (lc/accrue-yield workflow-id)
-        (cond-> (and mid (contains? (:yield/modules world) mid))
-          (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                     :module/id mid
-                                     :owner/id (escrow-yield-owner workflow-id)}))
-        (yield-policy/apply-yield-policy workflow-id :refunded)
-        (acct/sub-held token amt)
-        (acct/record-refunded token net-amt)
-        (acct/record-claimable workflow-id (:from et) net-amt)
-        (t/decrement-resolver-capacity resolver)
-        (update :pending-settlements dissoc workflow-id)
-        (sm/apply-transition! workflow-id :refunded))))
+        (sm/apply-transition! workflow-id direction)
+        ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
+        (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: slashing helpers
@@ -247,10 +228,8 @@
     (t/fail :transfer-not-in-dispute)
 
     :else
-    (let [world (do (println "DEBUG: Pre-reconciliation claimable=" (get-in world [:claimable workflow-id]))
-                    (clear-pending-settlement world workflow-id))
-          world (do (println "DEBUG: Post-reconciliation claimable=" (get-in world [:claimable workflow-id]))
-                    (lc/accrue-yield world workflow-id))
+    (let [world          (clear-pending-settlement world workflow-id)
+          world          (lc/accrue-yield world workflow-id)
           snap           (t/get-snapshot world workflow-id)
           ;; Phase L extension: window is the MAX of appeal-window and challenge-window
           window-dur     (max (:appeal-window-duration snap 0)
@@ -275,8 +254,8 @@
       (if (or final-round? (not (pos? window-dur)))
         ;; Final round or no windows: execute immediately
         (t/ok (if is-release
-                (finalize-release world'' workflow-id)
-                (finalize-refund  world'' workflow-id)))
+                (finalize world'' workflow-id :released)
+                (finalize world'' workflow-id :refunded)))
 
         ;; Window active: defer settlement
         (let [pending (t/make-pending-settlement
@@ -309,7 +288,6 @@
           pending        (if (:exists active-pending)
                            active-pending
                            (pick-eligible-superseded-pending world workflow-id now-ts))]
-      (do (println "DEBUG: Executing pending settlement. Pending=" pending)
       (cond
         (not (:exists pending))
         (t/fail :no-pending-settlement)
@@ -322,8 +300,8 @@
 
         :else
         (t/ok (if (:is-release pending)
-                (finalize-release world workflow-id)
-                (finalize-refund  world workflow-id))))))))
+                (finalize world workflow-id :released)
+                (finalize world workflow-id :refunded)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal building block: _validateAndPrepareEscalation deletes
@@ -461,12 +439,12 @@
 
         ;; Priority 2: auto-release
         (sm/auto-release-due? world workflow-id)
-        (let [r (t/ok (finalize-release world workflow-id))]
+        (let [r (t/ok (finalize world workflow-id :released))]
           (assoc r :action :auto-release))
 
         ;; Priority 3: auto-cancel
         (sm/auto-cancel-due? world workflow-id)
-        (let [r (t/ok (finalize-refund world workflow-id))]
+        (let [r (t/ok (finalize world workflow-id :refunded))]
           (assoc r :action :auto-cancel))
 
         :else

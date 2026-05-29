@@ -17,6 +17,7 @@
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.protocols.protocol :as proto]
+             [resolver-sim.time.model        :as time-model]
              [resolver-sim.db.temporal       :as temporal]))
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -317,17 +318,23 @@
       base)))
 
 (defn- advance-world-time
-  "Canonical simulation-time transition helper.
-   Returns {:world w' :delta-ms n :advanced? bool}."
+  "Advance :block-time and scenario-step counter atomically.
+   Returns {:world w' :delta-ms n :advanced? bool}.
+
+   Same-timestamp events (event-time == block-time) are a no-op:
+   world is unchanged and scenario-step is NOT incremented.
+   This models same-block semantics — multiple actions at the same
+   timestamp share a single time context without stepping the counter."
   [world event-time]
   (let [now (:block-time world)
         delta (- event-time now)]
     (if (pos? delta)
-      {:world (assoc world :block-time event-time)
-       :delta-ms delta
-       :advanced? true}
-      {:world world
-       :delta-ms 0
+      (let [step (inc (get-in world [:time :scenario-step] 0))]
+        {:world     (time-model/with-time world {:block-ts event-time :scenario-step step})
+         :delta-ms  delta
+         :advanced? true})
+      {:world     world
+       :delta-ms  0
        :advanced? false})))
 
 (def ^:private temporal-rules
@@ -367,14 +374,14 @@
 (defn process-step
   "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
-  (let [event-time (:time event)
-        now        (:block-time world)
-        rules      (effective-temporal-rules context)
+  (let [event-time   (:time event)
+        now          (:block-time world)
+        time-before  {:block-ts now}
+        rules        (effective-temporal-rules context)
         temporal-failure (evaluate-temporal-rules rules
                                                   {:event-time event-time
                                                    :now now
                                                    :world world
-                                                   :advanced-world (:world (advance-world-time world event-time))
                                                    :event event
                                                    :context context
                                                    :protocol protocol})]
@@ -389,6 +396,8 @@
          :world  world
          :trace-entry {:seq             (:seq event)
                        :time            event-time
+                       :time-before     time-before
+                       :time-after      {:block-ts event-time}
                        :agent           (:agent event)
                        :action          (:action event)
                        :transition/id   (action->transition-id (:action event))
@@ -405,6 +414,7 @@
          :halted? false})
 
       (let [{world-t :world} (advance-world-time world event-time)
+            time-after       {:block-ts event-time}
             result     (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
@@ -443,6 +453,8 @@
            :trace-entry
            {:seq             (:seq event)
             :time            event-time
+            :time-before     time-before
+            :time-after      time-after
             :agent           (:agent event)
             :action          (:action event)
              :transition/id   (action->transition-id (:action event))
@@ -462,6 +474,47 @@
 ;; ---------------------------------------------------------------------------
 ;; Public API (Generic)
 ;; ---------------------------------------------------------------------------
+
+(defn- maybe-record-temporal!
+  "Write a temporal run record if temporal evidence collection is enabled.
+   outcome — :pass or :fail
+   world   — the world-state at time of recording (for block-time)"
+  [temporal-cfg temporal-enabled? scenario-id outcome world metrics trace]
+  (when temporal-enabled?
+    (temporal/record-temporal-run!
+     (:datasource temporal-cfg)
+     {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
+            :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
+            :protocol    (:protocol temporal-cfg)
+            :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
+            :scenario-id scenario-id
+            :seed        (:seed temporal-cfg)
+            :git-sha     (or (:git-sha temporal-cfg) "unknown")
+            :outcome     outcome
+            :metrics     metrics
+            :block-time  (:block-time world)}
+      :steps (map-indexed (fn [i e]
+                            {:step-index i
+                             :action (:action e)
+                             :result (:result e)
+                             :time-before (:time-before e {})
+                             :time-advance {}
+                             :time-after (or (:time-after e) {:block-ts (:time e)})
+                             :projection-hash (:projection-hash e)
+                             :block-time (:time e)})
+                          trace)
+      :invariants (mapcat (fn [i e]
+                            (for [[k r] (:violations e)
+                                  :when (map? r)]
+                              {:step-index i
+                               :invariant k
+                               :holds? (:holds? r)
+                               :severity :time
+                               :violations (:violations r)
+                               :block-time (:time e)}))
+                          (range)
+                          trace)
+      :coverage (:coverage temporal-cfg)})))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations."
@@ -485,7 +538,7 @@
             expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
             strict-expected-errors? (boolean (:strict-expected-errors? scenario false))]
         (log/info! "scenario/start" {:id scenario-id})
-        (loop [world world0 events events trace [] metrics (zero-metrics protocol) id-alias-map {}]
+        (loop [world world0 events events trace [] metrics (zero-metrics protocol)]
           (if (empty? events)
             (let [open (when-not (or (:allow-open-entities? scenario)
                                      (:allow-open-disputes? scenario))
@@ -493,41 +546,7 @@
               (if open
                 {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
                 (do
-                  (when temporal-enabled?
-                    (temporal/record-temporal-run!
-                     (:datasource temporal-cfg)
-                     {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
-                            :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
-                            :protocol    protocol
-                            :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
-                            :scenario-id scenario-id
-                            :seed        (:seed scenario)
-                            :git-sha     (or (:git-sha temporal-cfg) "unknown")
-                            :outcome     :pass
-                            :metrics     metrics
-                            :block-time  (:block-time world)}
-                      :steps (map-indexed (fn [i e]
-                                            {:step-index i
-                                             :action (:action e)
-                                             :result (:result e)
-                                             :time-before {}
-                                             :time-advance {}
-                                             :time-after {:time/block-ts (:time e)}
-                                             :projection-hash (:projection-hash e)
-                                             :block-time (:time e)})
-                                          trace)
-                      :invariants (mapcat (fn [i e]
-                                            (for [[k r] (:violations e)
-                                                  :when (map? r)]
-                                              {:step-index i
-                                               :invariant k
-                                               :holds? (:holds? r)
-                                               :severity :time
-                                               :violations (:violations r)
-                                               :block-time (:time e)}))
-                                          (range)
-                                          trace)
-                      :coverage (:coverage temporal-cfg)}))
+                  (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :pass world metrics trace)
                   (let [expected-error-analysis (analyze-expected-errors scenario trace)
                         expected-errors-mismatch? (and strict-expected-errors?
                                                        (not (:ok? expected-error-analysis)))
@@ -543,11 +562,7 @@
                      :agents agents
                      :expected-error-analysis expected-error-analysis
                      :protocol protocol}))))
-            (let [raw-event  (first events)
-                  alias-res  (proto/resolve-id-alias protocol raw-event id-alias-map)]
-              (if-not (:ok alias-res)
-                {:outcome :invalid :scenario-id scenario-id :events-processed (count trace) :halted-at-seq (:seq raw-event) :halt-reason :unresolved-alias :detail (dissoc alias-res :ok) :trace trace :metrics metrics :protocol protocol}
-                (let [event    (:event alias-res)
+            (let [event    (first events)
                       step     (process-step protocol context world event)
                       entry0   (:trace-entry step)
                       expected-failure? (and (= :rejected (:result entry0))
@@ -561,56 +576,17 @@
                                         :reject-phase reject-phase
                                         :expected-failure? expected-failure?))
                       new-trace   (conj trace entry)
-                      new-metrics (accum-metrics protocol metrics event entry agent-index world)
-                      created     (when (and (= :ok (:result entry)) (:save-id-as raw-event))
-                                    (proto/created-id protocol (:action event) (:extra entry)))
-                      new-alias-map (if created
-                                      (assoc id-alias-map (:save-id-as raw-event) created)
-                                      id-alias-map)]
+                      new-metrics (accum-metrics protocol metrics event entry agent-index world)]
                   
                   (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
                   (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
 
                   (if (:halted? step)
                     (do
-                      (when temporal-enabled?
-                        (temporal/record-temporal-run!
-                         (:datasource temporal-cfg)
-                         {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
-                                :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
-                                :protocol    protocol
-                                :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
-                                :scenario-id scenario-id
-                                :seed        (:seed scenario)
-                                :git-sha     (or (:git-sha temporal-cfg) "unknown")
-                                :outcome     :fail
-                                :metrics     new-metrics
-                                :block-time  (:block-time (:world step))}
-                          :steps (map-indexed (fn [i e]
-                                                {:step-index i
-                                                 :action (:action e)
-                                                 :result (:result e)
-                                                 :time-before {}
-                                                 :time-advance {}
-                                                 :time-after {:time/block-ts (:time e)}
-                                                 :projection-hash (:projection-hash e)
-                                                 :block-time (:time e)})
-                                              new-trace)
-                          :invariants (mapcat (fn [i e]
-                                                (for [[k r] (:violations e)
-                                                      :when (map? r)]
-                                                  {:step-index i
-                                                   :invariant k
-                                                   :holds? (:holds? r)
-                                                   :severity :time
-                                                   :violations (:violations r)
-                                                   :block-time (:time e)}))
-                                              (range)
-                                              new-trace)
-                          :coverage (:coverage temporal-cfg)}))
+                      (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
                       (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
                       {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
-                    (recur (:world step) (rest events) new-trace new-metrics new-alias-map)))))))))))
+                    (recur (:world step) (rest events) new-trace new-metrics)))))))))
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

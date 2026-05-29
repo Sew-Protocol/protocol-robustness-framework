@@ -288,6 +288,21 @@
     workflow-id))
 
 ;; ---------------------------------------------------------------------------
+;; Yield owner-id constructors
+;; ---------------------------------------------------------------------------
+
+(defn escrow-yield-owner-id
+  "Canonical owner-id for an escrow's yield position.
+   Used as the :owner/id key when registering or withdrawing yield positions."
+  [escrow-id]
+  [:sew/escrow escrow-id])
+
+(defn resolver-yield-owner-id?
+  "True when owner-id denotes a resolver staking position (string prefixed 'resolver:')."
+  [oid]
+  (and (string? oid) (.startsWith ^String oid "resolver:")))
+
+;; ---------------------------------------------------------------------------
 ;; World-state accessors
 ;; ---------------------------------------------------------------------------
 

@@ -125,7 +125,7 @@
               (if (and (= (:token pos) token)
                        (= (:status pos) :active)
                        (or (and et (contains? live-states (:escrow-state et)))
-                           (.startsWith (str oid) "resolver:")))
+                           (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
                 acc)))
           0
@@ -878,8 +878,12 @@
                     fees-after       (get (:total-fees world-after) token 0)
                     delta-fees       (- fees-after fees-before)
                     
-                    ;; Change in held must equal (Inflow - Net_Outflow_to_claimable - Physical_Withdrawals - Distributed - Accum_Fees)
-                    expected-delta   (- delta-inflow delta-claimable delta-withdrawn delta-dist delta-fees)]
+                    fot-fees-before  (get (:total-fot-fees world-before) token 0)
+                    fot-fees-after   (get (:total-fot-fees world-after) token 0)
+                    delta-fot-fees   (- fot-fees-after fot-fees-before)
+                    
+                    ;; Change in held must equal (Inflow - Net_Outflow_to_claimable - Physical_Withdrawals - Distributed - Accum_Fees - FoT_Fees)
+                    expected-delta   (- delta-inflow delta-claimable delta-withdrawn delta-dist delta-fees delta-fot-fees)]
               :when (not= delta-held expected-delta)]
           {:token token :delta-held delta-held :expected expected-delta})]
     {:holds? (empty? violations) :violations (vec violations)}))

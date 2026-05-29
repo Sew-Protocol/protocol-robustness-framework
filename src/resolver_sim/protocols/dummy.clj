@@ -2,12 +2,11 @@
   "DummyProtocol — minimal always-pass tiered protocol implementation.
 
    A protocol test double used to verify that the tiered protocol interfaces
-   work and that the generic replay engine machinery (alias resolution, metrics,
-   trace shape) does not crash when optional protocols are missing or no-op.
+   work and that the generic replay engine machinery (metrics, trace shape)
+   does not crash when optional protocols are missing or no-op.
 
    Behaviour:
    - All actions: succeed without modifying world state.
-   - resolve-id-alias: always passes.
    - Invariant checks: always pass.
 
    This is a test double, not a useful protocol.
@@ -42,12 +41,6 @@
 
   (world-snapshot [_ world]
     {:block-time (:block-time world)})
-
-  (resolve-id-alias [_ event _id-alias-map]
-    {:ok true :event event})
-
-  (created-id [_ _action _extra]
-    nil)
 
   (open-entities [_ _world]
     [])

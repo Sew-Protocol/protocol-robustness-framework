@@ -5,7 +5,7 @@
 #   ./scripts/test.sh            # run all suites (unit + invariants + fixtures + triage)
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
-#   ./scripts/test.sh invariants # S01–S41 deterministic invariant scenarios only
+#   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
@@ -96,7 +96,7 @@ run_unit() {
 
 run_invariants() {
   require_clojure || return $?
-  echo "Running S01–S41 deterministic invariant scenarios..."
+  echo "Running deterministic invariant scenarios (S01–S100)..."
   clojure -M:run -- --invariants
   return $?
 }

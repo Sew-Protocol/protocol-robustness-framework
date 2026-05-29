@@ -38,12 +38,6 @@
   (world-snapshot [adapter world]
     "Create a lean, serializable map of the world state for trace output.")
 
-  (resolve-id-alias [adapter event id-alias-map]
-    "Resolve ID aliases in event params to entity IDs.")
-
-  (created-id [adapter action extra]
-    "Return entity ID of a newly created entity, or nil.")
-
   (open-entities [adapter world]
     "Return a seq of entity IDs still open/unresolved at end of scenario."))
 

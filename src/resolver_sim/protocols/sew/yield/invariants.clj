@@ -11,7 +11,7 @@
         (and (= owner-type :sew/escrow)
              (contains? live-states (:escrow-state (t/get-transfer world escrow-id)))))
       ;; For resolver stakes, we consider them always live if the status is active
-      (.startsWith (str oid) "resolver:"))))
+      (t/resolver-yield-owner-id? oid))))
 
 (defn check-sew-yield-exposure
   "Check that the protocol has enough funds in held to cover all escrow principal and realized yield."

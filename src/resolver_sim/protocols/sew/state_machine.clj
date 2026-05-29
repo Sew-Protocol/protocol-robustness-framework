@@ -23,7 +23,8 @@
    Disputes always terminate in :released or :refunded.  :resolved is retained
    in the graph for enum completeness and Foundry/halmos compatibility, and is
    reachable only after terminal-transfer-done? confirms accounting is settled."
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.time.deadlines      :as dl]))
 
 ;; ---------------------------------------------------------------------------
 ;; Declarative transition graph
@@ -350,7 +351,7 @@
         t-rel (:auto-release-time et)]
     (and (= :pending (:escrow-state et))
          (pos? t-rel)
-         (>= (:block-time world) t-rel))))
+         (dl/deadline-expired? (:block-time world) t-rel))))
 
 (defn auto-cancel-due?
   "True when auto-cancel-time has passed and escrow is still :pending."
@@ -359,7 +360,7 @@
         t-can (:auto-cancel-time et)]
     (and (= :pending (:escrow-state et))
          (pos? t-can)
-         (>= (:block-time world) t-can))))
+         (dl/deadline-expired? (:block-time world) t-can))))
 
 (defn dispute-timeout-exceeded?
   "True when max-dispute-duration has elapsed since raiseDispute and
@@ -374,7 +375,7 @@
          (not (:exists pending))
          (pos? ts)
          (pos? max-dur)
-         (>= (:block-time world) (+ ts max-dur)))))
+         (dl/deadline-expired? (:block-time world) (dl/deadline ts max-dur)))))
 
 (defn pending-settlement-executable?
   "True when pending-settlement exists, state is :disputed, and
@@ -384,4 +385,4 @@
         state   (t/escrow-state world workflow-id)]
     (and (:exists pending)
          (= :disputed state)
-         (>= (:block-time world) (:appeal-deadline pending)))))
+         (dl/deadline-expired? (:block-time world) (:appeal-deadline pending)))))

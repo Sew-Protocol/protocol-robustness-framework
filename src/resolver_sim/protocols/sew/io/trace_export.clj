@@ -345,16 +345,12 @@
         addr->agent-id
         (into {} (map (fn [a] [(:address a) (:id a)]) (:agents scenario [])))
         ;; Build an id-alias-map by scanning trace for entity-create :ok entries.
-        ;; Uses :event-tags rather than hardcoding "create_escrow".
+        ;; Assigns stable labels "wf0", "wf1", ... in creation order.
         id-alias-map
-        (reduce (fn [m entry]
-                  (let [raw (->> events (filter #(= (:seq %) (:seq entry))) first)]
-                    (if (and (contains? (:event-tags entry) :entity-created)
-                             (:save-id-as raw))
-                      (assoc m (:save-id-as raw) (get-in entry [:extra :workflow-id]))
-                      m)))
-                {}
-                trace)
+        (let [created-entries (filter #(contains? (:event-tags %) :entity-created) trace)]
+          (into {} (map-indexed (fn [i entry]
+                                  [(str "wf" i) (get-in entry [:extra :workflow-id])])
+                                created-entries)))
 
         steps (loop [entries   trace
                       prev-proj nil

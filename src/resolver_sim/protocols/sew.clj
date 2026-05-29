@@ -104,12 +104,12 @@
    These rules are optional and run through replay's generic temporal rule engine."
   []
   [{:id :sew/appeal-window-open
-    :check (fn [{:keys [world advanced-world event]}]
+    :check (fn [{:keys [world event event-time]}]
              (if (= "execute_pending_settlement" (:action event))
                (let [wf-id   (compat/wf-id event)
-                     pending (t/get-pending advanced-world wf-id)]
+                     pending (t/get-pending world wf-id)]
                  (if (and (:exists pending)
-                           (< (:block-time advanced-world) (:appeal-deadline pending)))
+                           (< event-time (:appeal-deadline pending)))
                    {:ok? false :error :appeal-window-not-expired}
                    {:ok? true}))
                {:ok? true}))}])
@@ -134,7 +134,7 @@
           (if (or (nil? amount) (<= amount 0) (> amount max-safe-amount))
             {:ok false :error :amount-out-of-safe-range
              :detail {:amount amount :max max-safe-amount}}
-            (let [cres     (get p :custom-resolver)
+            (let [cres     (or (get p :custom-resolver) (get p :dispute-resolver))
                   settings (t/make-escrow-settings
                              {:custom-resolver cres
                               :release-address (:release-address p)
@@ -459,7 +459,7 @@
   (res/execute-fraud-slash world (event-workflow-id event)
                            (event-slash-id event)))
 
-(defmethod apply-action "advance-time"
+(defmethod apply-action "time_advance"
   [_ctx world _event]
   (t/ok world))
 
@@ -579,18 +579,6 @@
 
   (world-snapshot [_ world]
     (world-snapshot world))
-
-  (resolve-id-alias [_ event id-alias-map]
-    (let [wf-val (get-in event [:params :workflow-id])]
-      (if (string? wf-val)
-        (if-let [int-id (get id-alias-map wf-val)]
-          {:ok true :event (assoc-in event [:params :workflow-id] int-id)}
-          {:ok false :error :unresolved-alias :alias wf-val :seq (:seq event)})
-        {:ok true :event event})))
-
-  (created-id [_ action extra]
-    (when (= action "create_escrow")
-      (:workflow-id extra)))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)

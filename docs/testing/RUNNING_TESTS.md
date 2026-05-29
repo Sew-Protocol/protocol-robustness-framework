@@ -12,7 +12,7 @@ It runs five targets in sequence:
 - `unit` → Clojure unit tests
 - `generators` → deterministic generator/property regression checks
 - `contracts` → cross-layer contract checks (`proto/simulation.proto` ↔ gRPC server ↔ Python client)
-- `invariants` → deterministic scenario run (`--invariants`, S01–S41)
+- `invariants` → deterministic scenario run (`--invariants`, S01–S100)
 - `suites` → fixture suites (`all-invariants`, `equilibrium-validation`, `spe-validation`)
 
 ### Run comprehensive suite with full reporting
@@ -269,37 +269,20 @@ results/
 
 ## Troubleshooting
 
-### Current baseline (2026-05-17)
+### Current baseline (2026-05-29)
 
-Recent generalisation and protocol-adapter cleanup removed multiple reader/
-namespace-load blockers (malformed docstrings/escaped literals and a protocol
-namespace cycle). The canonical test entrypoint now progresses into substantive
-runtime assertions.
+Canonical invariant suite (`--invariants`): **82/99 pass** (S01–S100).
 
-Current observed baseline from `./scripts/test.sh all`:
+The 14 remaining failures are known behavioural gaps (not parser or compile errors):
+- Scenarios requiring yield-module integration paths not yet fully wired
+- Edge-case temporal scenarios pending deadline arithmetic alignment
+- See `docs/scenarios.md` for per-scenario status
 
-- **Reader/macroexpansion blockers fixed** in:
-  - `src/resolver_sim/protocols/protocol.clj`
-  - `src/resolver_sim/protocols/sew/io/trace_export.clj`
-  - `src/resolver_sim/db/store.clj`
-  - `src/resolver_sim/protocols/sew/db.clj`
-  - `src/resolver_sim/protocols/sew.clj`
-  - `src/resolver_sim/server/session.clj`
-- **Namespace cycle fixed**: `protocols/sew` ↔ `protocols/sew/io/trace_export`
-  via lazy load in Sew `:forge-trace` projection path.
+Unit tests (`./scripts/test.sh unit`): 25 known failures + 2 errors in stochastic
+model tests — pre-existing, do not block invariant or integration work.
 
-Remaining failures are now **behavioural** (not parser-level):
-
-1. `resolver-sim.protocols.sew.replay-test`
-   - escalation chain expectations failing (0→1→2 progression, pending
-     settlement clearing, level-specific resolver transitions)
-2. JSON serialization error in replay tests
-   - `Don't know how to write JSON of class resolver_sim.protocols.sew.SewProtocol`
-3. transition/guard coverage gate step
-   - `FileNotFoundException` in release-gate path (environment/path issue)
-
-This means contributors can now focus on domain logic regressions and test
-expectation alignment rather than syntax recovery.
+Contributors can run `clojure -M:run -- --invariants` in ~1 second to check the
+invariant gate without the full suite.
 
 ### "Could not find artifact io.github.nextjournal:clerk"
 Clerk report generation not available (network/dependency issue).

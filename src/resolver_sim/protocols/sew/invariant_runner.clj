@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.invariant-runner
-  "In-process runner for the S01–S41 deterministic invariant scenarios.
+  "In-process runner for the deterministic invariant scenarios (S01–S100).
 
    Runs every scenario in invariant-scenarios/all-scenarios against
    sew/replay-with-sew-protocol, reports pass/fail per entry, and returns a
@@ -42,6 +42,8 @@
   [entry]
   (if (map? entry)
     (let [{:keys [pass? expected-fail? result]} (run-one entry)]
+      (when (and (not pass?) (pos? (get-in result [:metrics :invariant-violations] 0)))
+        (println (format "Violation details for %s: %s" (:scenario-id entry) (get-in result [:metrics :invariant-results]))))
       {:pass?          pass?
        :expected-fail? expected-fail?
        :steps          (:events-processed result 0)
@@ -68,7 +70,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-all
-  "Run all S01–S41 invariant scenarios.  Returns a summary map:
+  "Run all deterministic invariant scenarios (S01–S100).  Returns a summary map:
      {:passed int :total int :elapsed-ms long :results [{entry-result}]}
    where each entry-result adds :name, :scenario/type, and optional
    :adversary/type / :adversary/traits from the scenario-type-registry."
