@@ -40,14 +40,27 @@
 
 (defn calculate-challenge-bond-amount
   "Calculate the required challenge bond amount (Phase L).
-   If challenge-bond-bps is 0, falls back to appeal-bond-amount or default."
+
+   Priority:
+     1. challenge-bond-bps > 0  → bps of AFA
+     2. appeal-bond-amount > 0  → absolute value
+     3. fallback                → 100 (minimum viable bond)
+
+   NOTE: make-module-snapshot defaults appeal-bond-amount to 0 (an integer).
+   In Clojure (or 0 100) = 0, so the fallback must use pos? not or."
   [afa snap]
-  (if (pos? (:challenge-bond-bps snap 0))
-    (compute-fee afa (:challenge-bond-bps snap))
-    (or (:appeal-bond-amount snap) 100)))
+  (cond
+    (pos? (:challenge-bond-bps snap 0))  (compute-fee afa (:challenge-bond-bps snap))
+    (pos? (:appeal-bond-amount snap 0))  (:appeal-bond-amount snap)
+    :else                                100))
 
 (defn calculate-appeal-bond-amount
-  "Calculate the required appeal bond amount for escalation."
+  "Calculate the required appeal bond amount for escalation.
+
+   Priority:
+     1. appeal-bond-amount > 0  → absolute value (fixed flat fee)
+     2. appeal-bond-bps         → bps of AFA (proportional fee)
+     3. neither configured      → 0 (no bond required)"
   [afa snap]
   (if (pos? (:appeal-bond-amount snap 0))
     (:appeal-bond-amount snap)

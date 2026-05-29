@@ -36,7 +36,7 @@
   (boolean (re-find #"slash|auto_cancel_disputed" (str (or action "")))))
 
 (defn- strategic-action? [action]
-  (contains? #{"raise_dispute" "escalate_dispute" "execute_resolution"} action))
+  (contains? #{"create_escrow" "raise_dispute" "escalate_dispute" "execute_resolution"} action))
 
 (defn terminal-world-from-result
   "Canonical terminal-world accessor for replay result payloads.
@@ -188,10 +188,9 @@
      :raw-trace               — the full trace vector
 
    Returns nil when result has no trace (e.g. :outcome :invalid with 0 events)."
-  [result]
+  [protocol result]
   (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
-      (let [protocol     (:protocol result)
-            live-states  (get world :live-states {})
+      (let [live-states  (get world :live-states {})
             scenario-id  (get-in world [:params :scenario-id] "unknown")
             p-params     (get world :params {})
             escrows      (into {} (map (fn [[id s]] [id (keyword (or s ""))]) live-states))
@@ -461,8 +460,8 @@
         retained-total (long (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
-                             (for [{:keys [token accounted deposited]} (:violations conservation [])]
-                               [token (- (long accounted) (long deposited))]))
+                             (for [{:keys [token accounted inflow]} (:violations conservation [])]
+                               [token (- (long accounted) (long (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token

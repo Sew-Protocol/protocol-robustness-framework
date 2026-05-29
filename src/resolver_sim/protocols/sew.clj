@@ -42,35 +42,39 @@
                      (get pp :yield-profile nil))
         {:keys [profile-id archetype module-id]} (yield-proto/resolve-yield-profile yield-id)]
     (t/make-module-snapshot
+     ;; NOTE: :resolver-fee-bps in protocol-params maps to :escrow-fee-bps in the snapshot.
+     ;; Setting :escrow-fee-bps directly in protocol-params has no effect; use :resolver-fee-bps.
      {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
-    :resolution-module            (get pp :resolution-module nil)
-    :appeal-window-duration       (get pp :appeal-window-duration 0)
-    :max-dispute-duration         (get pp :max-dispute-duration 2592000)
-    :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
-    :dispute-resolver             (get pp :dispute-resolver nil)
-    :appeal-bond-bps              (get pp :appeal-bond-bps 0)
-    :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
-    :appeal-bond-amount           (get pp :appeal-bond-amount 0)
-    :reversal-slash-bps           (get pp :reversal-slash-bps 0)
-    :fraud-slash-bps              (get pp :fraud-slash-bps 5000)
-    :challenge-window-duration    (get pp :challenge-window-duration 0)
-    :challenge-bond-bps           (get pp :challenge-bond-bps 0)
-    :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
-    :default-auto-release-delay   (get pp :default-auto-release-delay 0)
-    :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-     :escrow-modules               {:resolution (get pp :resolution-module nil)
-                                    :yield      profile-id
-                                    :release    (get pp :release-strategy nil)
-                                    :cancel     (get pp :cancellation-strategy nil)}
-     :yield-module-id              :module/aave-yield
-     :yield-profile                profile-id
-     :yield-archetype              archetype
-     :yield-generation-module      module-id
-    :yield-distribution-module    (get pp :yield-distribution-module nil)
-    :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
-    :cancellation-strategy        (get pp :cancellation-strategy nil)
-    :release-strategy             (get pp :release-strategy nil)
-     :incentive-module             (get pp :incentive-module nil)})))
+      :resolution-module            (get pp :resolution-module nil)
+      :appeal-window-duration       (get pp :appeal-window-duration 0)
+      :max-dispute-duration         (get pp :max-dispute-duration 2592000)
+      :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
+      :dispute-resolver             (get pp :dispute-resolver nil)
+      :appeal-bond-bps              (get pp :appeal-bond-bps 0)
+      :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
+      :appeal-bond-amount           (get pp :appeal-bond-amount 0)
+      :reversal-slash-bps           (get pp :reversal-slash-bps 0)
+      ;; NOTE: :fraud-slash-bps is intentionally NOT stored in the snapshot.
+      ;; It is a sim-layer param read from params directly (kernel_bridge, batch, etc).
+      :challenge-window-duration    (get pp :challenge-window-duration 0)
+      :challenge-bond-bps           (get pp :challenge-bond-bps 0)
+      :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
+      :default-auto-release-delay   (get pp :default-auto-release-delay 0)
+      :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
+      ;; NOTE: escrow-modules mirrors :resolution-module for legacy compat.
+      :escrow-modules               {:resolution (get pp :resolution-module nil)
+                                     :yield      profile-id
+                                     :release    (get pp :release-strategy nil)
+                                     :cancel     (get pp :cancellation-strategy nil)}
+      :yield-module-id              (get pp :yield-module-id :module/aave-yield)
+      :yield-profile                profile-id
+      :yield-archetype              archetype
+      :yield-generation-module      module-id
+      :yield-distribution-module    (get pp :yield-distribution-module nil)
+      :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
+      :cancellation-strategy        (get pp :cancellation-strategy nil)
+      :release-strategy             (get pp :release-strategy nil)
+      :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]
@@ -527,7 +531,7 @@
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
 
-(deftype SewProtocol []
+(defrecord SewProtocol []
   proto/SimulationAdapter
 
   (protocol-id [_] "sew-v1")

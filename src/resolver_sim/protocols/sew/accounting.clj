@@ -152,7 +152,10 @@
   "Record an appeal bond posted by appellant for workflow-id.
    Deducts protocol fee into :bond-fees; records net in :bond-balances.
    Also updates :total-held and :total-bonds-posted (cumulative).
-   Increments :total-principal-deposited to ensure solvency KPI accuracy."
+
+   NOTE: Bond inflow is tracked exclusively via :total-bonds-posted.
+   Do NOT also increment :total-principal-deposited — that double-counts
+   inflow in the conservation-of-funds and held-delta-accounted invariants."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
         {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)]
@@ -160,7 +163,6 @@
         (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
         (update-in [:bond-fees token] (fnil + 0) fee)
         (update-in [:total-bonds-posted token] (fnil + 0) amount)
-        (update-in [:total-principal-deposited token] (fnil + 0) amount)
         (add-held token net))))
 
 (defn distribute-slashed-funds
