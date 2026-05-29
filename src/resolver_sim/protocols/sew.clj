@@ -321,7 +321,6 @@
                                                    :module/id module-id})
             new-pos  (get-in world' pos-key)
             reclaimed (:reclaimed-amount new-pos 0)]
-        (println "DEBUG claim-deferred: owner-id=" owner-id " reclaimed=" reclaimed " old-pos=" old-pos " new-pos=" new-pos)
         (if (pos? reclaimed)
           (let [escrow-id (when (vector? owner-id) (second owner-id))
                 world''   (if escrow-id
@@ -330,13 +329,11 @@
                                   state     (t/escrow-state world' escrow-id)
                                   token     (:token et)
                                   recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
-                              (println "DEBUG claim-deferred -> escrow" {:escrow-id escrow-id :token token :recipient recipient})
                               (-> world'
                                   (acct/sub-held token reclaimed)
                                   (acct/record-claimable escrow-id recipient reclaimed)))
                             ;; For resolver stake yield: credit the resolver's stake balance
-                            (do (println "DEBUG claim-deferred -> resolver" {:addr addr :reclaimed reclaimed})
-                                (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed)))]
+                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
             (t/ok world''))
           (t/ok world'))))))
 
