@@ -160,7 +160,5 @@
                     :rate-mode :deterministic
                     :failure-modes #{}}}))
 
-    (def liquid-lending-module
-    (make-module :yield.provider/liquid-lending))
-
-
+(def liquid-lending-module
+  (make-module :yield.provider/liquid-lending))

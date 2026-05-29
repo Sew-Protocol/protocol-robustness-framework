@@ -16,6 +16,9 @@
     (assoc-in world [:yield/positions oid] pos)))
 
 (defn adversarial-accrue [world module op]
+  ;; NOTE: :drain and :bloat intentionally break total-yield-generated accounting.
+  ;; This is by design — adversarial scenarios test how the protocol responds to
+  ;; external protocol failures, not that the conservation invariant is preserved.
   (let [{:keys [token dt]} op
         mid (:module/id module)
         strategy (get-in world [:yield/adversary mid :strategy] :drain)]
@@ -34,13 +37,13 @@
             (:yield/positions world))))
 
 (defn adversarial-withdraw [world module op]
-  (let [{:keys [owner-id]} op
-        pos-key [:yield/positions owner-id]
+  (let [oid     (:owner/id op)
+        pos-key [:yield/positions oid]
         pos     (get-in world pos-key)]
     (if (nil? pos)
       world
       (if (get-in world [:yield/adversary (:module/id pos) :block-withdrawals?])
-        (throw (ex-info "Adversarial withdrawal blocked" {:owner/id owner-id}))
+        (throw (ex-info "Adversarial withdrawal blocked" {:owner/id oid}))
         (update-in world pos-key assoc :status :withdrawn)))))
 
 (def adversarial-yield-module

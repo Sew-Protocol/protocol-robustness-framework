@@ -4,8 +4,7 @@
    This registry manages yield providers and their configurations within the
    simulation world state. It is designed to be protocol-agnostic, provided
    the simulation state follows the standard yield engine keys (e.g., :yield/*)."
-  (:require [resolver-sim.yield.modules.aave :as aave]
-            [resolver-sim.yield.modules.fixed :as fixed]
+  (:require [resolver-sim.yield.modules.fixed :as fixed]
             [resolver-sim.yield.modules.none :as none]
             [resolver-sim.yield.modules.adversarial :as adversarial]
             [resolver-sim.yield.providers.liquid-lending :as liquid-lending]))

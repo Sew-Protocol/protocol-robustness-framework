@@ -1,9 +1,9 @@
 (ns resolver-sim.yield.modules.aave
-  "Aave-v3 yield module implementation.
+  "Aave-v3 yield module — retained as a reference implementation only.
 
-   Models a share-based lending protocol where interest is accrued via a 
-   liquidity index. The behavior and interface are standardized for 
-   simulation portability."
+   SUPERSEDED: registry.clj uses liquid-lending/make-module for :aave-v3.
+   This file is not imported or executed during normal simulation runs.
+   See yield/providers/liquid_lending.clj for the active implementation."
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]))
 
