@@ -523,7 +523,7 @@
                 allow-open-entities? allow-open-disputes?
                 agents temporal-cfg temporal-enabled? agent-index
                 scenario]} options]
-    (loop [world world events events trace trace metrics metrics]
+    (loop [world world events events trace trace metrics metrics states {(:seq (first events) 0) (proto/world-snapshot protocol world)}]
       (if (empty? events)
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
                      (seq (proto/open-entities protocol world)))]
@@ -537,14 +537,16 @@
                     outcome (if expected-errors-mismatch? :fail :pass)
                     halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
                 (log/info! "scenario/end" {:id scenario-id :outcome outcome})
-                {:outcome outcome
-                 :scenario-id scenario-id
+                {:context/version "1.0"
+                 :context/source {:scenario-id scenario-id :run-id (str scenario-id "-run")}
+                 :outcome outcome
                  :events-processed (count trace)
                  :halt-reason halt-reason
                  :trace trace
                  :metrics metrics
+                 :states states
+                 :events events
                  :agents agents
-                 :expected-error-analysis expected-error-analysis
                  :protocol protocol}))))
         (let [event    (first events)
               step     (process-step protocol context world event)
@@ -560,7 +562,9 @@
                                 :reject-phase reject-phase
                                 :expected-failure? expected-failure?))
               new-trace   (conj trace entry)
-              new-metrics (accum-metrics protocol metrics event entry agent-index world)]
+              new-metrics (accum-metrics protocol metrics event entry agent-index world)
+              new-world   (:world step)
+              new-states  (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
 
           (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
           (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
@@ -570,7 +574,7 @@
               (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
               (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
               {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
-            (recur (:world step) (rest events) new-trace new-metrics)))))))
+            (recur new-world (rest events) new-trace new-metrics new-states)))))))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations."

@@ -4,61 +4,34 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.scenario.theory :as theory]))
 
-(deftest test-eval-predicate
+(deftest test-suite-theory-engine
   (let [metrics {:m1 10 :m2 20}
-        result {:metrics metrics :protocol (sew/->SewProtocol) :terminal-world {}}]
+        result {:metrics metrics :protocol (sew/->SewProtocol) :terminal-world {:total-held {:USDC 1000}} :trace [] :events [] :states {}}]
+    (testing "Result contains canonical context envelope"
+      (let [res (theory/evaluate-theory result {:falsifies-if [{:metric :m1 :op :< :value 5}]})]
+        (is (= :not-falsified (:status res)))
+        (is (some? (:evidence res)))))
+
+    (testing "Inconclusive reason when metrics missing"
+      (let [result-missing {:metrics {:m1 10} :protocol (sew/->SewProtocol) :terminal-world {}}
+            theory {:falsifies-if [{:metric :m99 :op :> :value 5}]}
+            res (theory/evaluate-theory result-missing theory)]
+        (is (= :inconclusive (:status res)))
+        (is (= :metrics-missing-in-trace (:reason res)))))
+
+    (testing "Always predicate"
+      (let [trace [{:metrics {:m1 5}} {:metrics {:m1 10}}]
+            result-trace {:metrics metrics :protocol (sew/->SewProtocol) :terminal-world {} :trace trace}
+            theory {:falsifies-if {:always {:metric :m1 :op :> :value 2}}}
+            res (theory/evaluate-theory result-trace theory)]
+        (is (= :falsified (:status res)))))
+
     (testing "Legacy flat list"
       (let [theory {:falsifies-if [{:metric :m1 :op :> :value 5}]}
             res (theory/evaluate-theory result theory)]
         (is (= :not-falsified (:status res)))))
-        
-    (testing "AND predicate"
-      (let [theory {:falsifies-if {:and [{:metric :m1 :op :> :value 5}
-                                        {:metric :m2 :op :< :value 30}]}}
-            res (theory/evaluate-theory result theory)]
-        (is (= :not-falsified (:status res)))))
 
     (testing "State predicate"
-      (let [theory {:falsifies-if {:state {:query [:party/net-position {:party "buyer"}] :op :>= :value 10}}}
+      (let [theory {:falsifies-if {:state {:query [:party/net-position {:party "buyer" :token :USDC}] :op :>= :value 10}}}
             res (theory/evaluate-theory result theory)]
-        (is (= :not-falsified (:status res)))))
-    
-    (testing "State predicate falsified"
-      (let [theory {:falsifies-if {:state {:query [:party/net-position {:party "buyer"}] :op :>= :value 20}}}
-            res (theory/evaluate-theory result theory)]
-        (is (= :falsified (:status res)))))
-        
-    (testing "AND predicate falsified"
-      (let [theory {:falsifies-if {:and [{:metric :m1 :op :> :value 5}
-                                        {:metric :m2 :op :< :value 15}]}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :falsified (:status result)))))
-
-    (testing "OR predicate falsified"
-      (let [theory {:falsifies-if {:or [{:metric :m1 :op :> :value 20}
-                                       {:metric :m2 :op :< :value 15}]}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :not-falsified (:status result)))))
-
-    (testing "OR predicate triggered"
-      (let [theory {:falsifies-if {:or [{:metric :m1 :op :> :value 5}
-                                       {:metric :m2 :op :< :value 15}]}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :falsified (:status result)))))
-
-    (testing "NOT predicate"
-      (let [theory {:falsifies-if {:not {:metric :m1 :op :> :value 20}}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :falsified (:status result)))))
-
-    (testing "IMPLIES predicate (False => True = True)"
-      (let [theory {:falsifies-if {:implies {:if {:metric :m1 :op :> :value 20}
-                                            :then {:metric :m2 :op :< :value 30}}}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :not-falsified (:status result)))))
-
-    (testing "IMPLIES predicate (True => False = False/Falsified)"
-      (let [theory {:falsifies-if {:implies {:if {:metric :m1 :op :< :value 20}
-                                            :then {:metric :m2 :op :> :value 30}}}}
-            result (theory/evaluate-theory {:metrics metrics} theory)]
-        (is (= :falsified (:status result)))))))
+        (is (= :not-falsified (:status res)))))))

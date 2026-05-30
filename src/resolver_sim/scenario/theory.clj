@@ -126,6 +126,7 @@
 (defn- eval-predicate
   "Recursively evaluate a predicate map against the trace, metrics, and world state."
   [protocol world trace metrics predicate]
+  (println (format "Evaluating predicate keys: %s" (keys predicate)))
   (cond
     (:and predicate) (let [results (map #(eval-predicate protocol world trace metrics %) (:and predicate))]
                        {:holds? (every? :holds? results) :children results})
@@ -167,7 +168,8 @@
           {:holds? (every? :holds? results) :children results})))
 
     (:state predicate)
-    (let [proj-val (proto/project-state protocol world (:query predicate))
+    (let [_ (println (format "Evaluating state predicate: %s, protocol: %s" (:query predicate) (some? protocol)))
+          proj-val (proto/project-state protocol world (:query predicate))
           holds?   (evaluate-metric-op (:op predicate) proj-val (:value predicate))]
       {:holds? holds? :state (:query predicate) :op (:op predicate) :value (:value predicate) :actual proj-val})
 
@@ -199,7 +201,7 @@
                       {:and conds}
                       conds)
           eval-res (eval-predicate protocol world trace metrics predicate)
-          _        (println (format "Eval result: %s" eval-res))
+          _        (println (format "Eval result holds?: %s" (if eval-res (:holds? eval-res) "nil")))
           falsified? (not (:holds? eval-res))
 
           falsify-status (cond
