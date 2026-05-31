@@ -19,11 +19,11 @@
      simulated chain timeline.
 
    Datasource:
-     Use evaluation.xtdb/->datasource to obtain a connection to the shared
+     Use resolver-sim.db.xtdb/->datasource to obtain a connection to the
      XTDB pgwire endpoint.  Pass nil as the datasource to skip all writes
      (useful in tests and offline simulation runs)."
-  (:require [next.jdbc       :as jdbc]
-            [evaluation.xtdb :as xtdb]))
+  (:require [next.jdbc              :as jdbc]
+            [resolver-sim.db.xtdb   :as xtdb]))
 
 ;; ---------------------------------------------------------------------------
 ;; Schema helpers

@@ -8,7 +8,7 @@
    resolver-sim.db.store/truncate! at the end of the suite so repeated runs
    don't accumulate rows."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [evaluation.xtdb      :as xtdb]
+            [resolver-sim.db.xtdb :as xtdb]
             [resolver-sim.db.store :as ss]
             [resolver-sim.protocols.sew           :as sew]
             [resolver-sim.protocols.sew.runner    :as runner]

@@ -11,14 +11,14 @@
 
 (defn ds-result []
   (try
-    (require '[evaluation.xtdb])
+    (require '[resolver-sim.db.xtdb])
     {:ok? true
-     :ds ((resolve 'evaluation.xtdb/->datasource))
-     :source "evaluation.xtdb/->datasource"}
+     :ds ((resolve 'resolver-sim.db.xtdb/->datasource))
+     :source "resolver-sim.db.xtdb/->datasource"}
     (catch Throwable e
       {:ok? false
        :error (or (.getMessage e) (str e))
-       :source "evaluation.xtdb/->datasource"})))
+       :source "resolver-sim.db.xtdb/->datasource"})))
 
 (defn query-result [sqlvec]
   (let [{:keys [ok? ds] :as dsr} (ds-result)]
@@ -40,7 +40,7 @@
   (ui/query-error-callout "Telemetry query error" {:kind kind :error error :sql sql}))
 
 (def ^:private telemetry-contract
-  {:datasource "evaluation.xtdb/->datasource"
+  {:datasource "resolver-sim.db.xtdb/->datasource"
    :schemas {:test-run "test-run.v1"
              :test-artifacts "test-artifacts.v1"
              :trace-end-projection "trace-end-projection.v1"

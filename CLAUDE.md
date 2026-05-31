@@ -109,7 +109,7 @@ These must not be violated as the project grows:
 | `stochastic/*` | nothing outside `stochastic/` | everything else |
 | `sim/*` | `contract_model/*`, `protocols/*`, `stochastic/*`, `governance/*`, `adversaries/*`, `oracle/*` | `db/*`, `io/*` |
 | `governance/*`, `adversaries/*`, `oracle/*` | `stochastic/*` only | `db/*`, `io/*` |
-| `db/*` | `contract_model/*`, `protocols/sew/*`, `evaluation.xtdb` | `sim/*` |
+| `db/*` | `contract_model/*`, `protocols/sew/*` | `sim/*` |
 | `io/*` | `stochastic/*`, `sim/*` | `db/*` |
 | `core.clj` | everything | — |
 
@@ -188,24 +188,6 @@ contract_model/
   instrumentation/  metrics and trace collection
   validation/       generic CDRS schema validation
 ```
-
----
-
-## Cross-project coupling (eval-engine)
-
-sew-simulation depends on eval-engine as a local dep:
-```clojure
-og/eval-engine {:local/root "../og/eval-engine"}
-```
-
-**Only `resolver-sim.db.*` may import `evaluation.xtdb`** (or its future home
-`evaluation.db.xtdb` when eval-engine restructures its own shell layer).
-
-This import must never appear in `contract_model/`, `sim/`, `stochastic/`, or any
-other core namespace.
-
-When eval-engine moves `xtdb.clj` → `evaluation/db/xtdb.clj`, update:
-- `resolver-sim.db.store` require: `evaluation.xtdb` → `evaluation.db.xtdb`
 
 ---
 

@@ -11,9 +11,9 @@
      integration tests          — telemetry_integration_test.clj
 
    Layering: protocols/sew/* may import db/* (XTDB shell layer)."
-  (:require [next.jdbc       :as jdbc]
-            [evaluation.xtdb :as xtdb]
-            [resolver-sim.db.store :as store]))
+  (:require [next.jdbc              :as jdbc]
+            [resolver-sim.db.xtdb   :as xtdb]
+            [resolver-sim.db.store  :as store]))
 
 ;; ---------------------------------------------------------------------------
 ;; Row mapping helpers
