@@ -345,7 +345,7 @@
                       :superseded-at (:block-time world)
                       :level (t/dispute-level world workflow-id)})
           (update :pending-settlements dissoc workflow-id))
-      world))))
+      world)))
 
 (defn- pick-eligible-superseded-pending
   "Select the latest superseded pending that is executable at now-ts.

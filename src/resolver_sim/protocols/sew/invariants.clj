@@ -816,18 +816,40 @@
           {:workflow-id wf :claims total :max afa})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
-(defn settlement-yield-boundary?
-  "True when settlement yield claims do not exceed generated yield."
+(defn liability-slash-boundary?
+  "True when liability slash-bounty claims do not exceed distributed slash reserves."
   [world]
   (let [violations
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [yield-claims (get domain-map :settlement/yield {})
-                    total        (reduce + 0 (vals yield-claims))
-                    et           (get-in world [:escrow-transfers wf])
-                    token        (:token et)
-                    generated    (get-in world [:total-yield-generated token] 0)]
-              :when (> total generated)]
-          {:workflow-id wf :claims total :max generated})]
+              :let [slash-bounties (get domain-map :liability/slash-bounty {})
+                    total          (reduce + 0 (vals slash-bounties))
+                    reserves       (get world :retained-slash-reserves 0)]
+              :when (> total reserves)]
+          {:workflow-id wf :claims total :max reserves})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn bond-boundary?
+  "True when bond refund claims do not exceed posted bonds."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [bond-refunds (get domain-map :bond/refund {})
+                    total        (reduce + 0 (vals bond-refunds))
+                    posted       (reduce + 0 (vals (get-in world [:bond-balances wf] {})))]
+              :when (> total posted)]
+          {:workflow-id wf :claims total :max posted})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn fee-boundary?
+  "True when protocol fee claims do not exceed accumulated fees."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [fee-claims (get domain-map :fees/protocol {})
+                    total      (reduce + 0 (vals fee-claims))
+                    accumulated (reduce + 0 (vals (:total-fees world {})))]
+              :when (> total accumulated)]
+          {:workflow-id wf :claims total :max accumulated})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn migration-parity?
@@ -1378,6 +1400,9 @@
                  :conservation-of-funds         (conservation-of-funds? world)
                  :settlement-principal-boundary (settlement-principal-boundary? world)
                  :settlement-yield-boundary     (settlement-yield-boundary? world)
+                 :liability-slash-boundary      (liability-slash-boundary? world)
+                 :bond-boundary                 (bond-boundary? world)
+                 :fee-boundary                  (fee-boundary? world)
                  :migration-parity              (migration-parity? world)
                  :cancellation-mutex            (cancellation-mutex? world)
                  :dispute-resolution-path       (dispute-resolution-path-exists? world)
