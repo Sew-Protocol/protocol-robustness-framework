@@ -840,16 +840,19 @@
           {:workflow-id wf :claims total :max posted})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
-(defn fee-boundary?
-  "True when protocol fee claims do not exceed accumulated fees."
+(defn shortfall-fidelity?
+  "True when fulfilled + deferred + haircut equals the original position amount."
   [world]
   (let [violations
-        (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [fee-claims (get domain-map :fees/protocol {})
-                    total      (reduce + 0 (vals fee-claims))
-                    accumulated (reduce + 0 (vals (:total-fees world {})))]
-              :when (> total accumulated)]
-          {:workflow-id wf :claims total :max accumulated})]
+        (for [[oid pos] (get-in world [:yield/positions] {})
+              :let [shortfall (:shortfall pos)
+                    amount    (:principal pos 0)]
+              :when shortfall
+              :let [total (+ (:fulfilled-amount shortfall 0)
+                             (:deferred-amount shortfall 0)
+                             (:haircut-amount shortfall 0))]
+              :when (not= total amount)]
+          {:oid oid :total total :principal amount})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn migration-parity?
@@ -1403,6 +1406,7 @@
                  :liability-slash-boundary      (liability-slash-boundary? world)
                  :bond-boundary                 (bond-boundary? world)
                  :fee-boundary                  (fee-boundary? world)
+                 :shortfall-fidelity            (shortfall-fidelity? world)
                  :migration-parity              (migration-parity? world)
                  :cancellation-mutex            (cancellation-mutex? world)
                  :dispute-resolution-path       (dispute-resolution-path-exists? world)
