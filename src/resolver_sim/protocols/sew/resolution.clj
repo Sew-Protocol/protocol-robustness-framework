@@ -46,7 +46,7 @@
         (yield-policy/apply-yield-policy workflow-id direction)
         (acct/sub-held token amt)
         (record-fn token net-amt)
-        (acct/record-claimable workflow-id recipient net-amt)
+        (acct/record-claimable-v2 workflow-id :settlement/principal recipient net-amt)
         (t/decrement-resolver-capacity resolver)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id direction)
@@ -228,8 +228,8 @@
     (if (:exists pending)
       (-> world
           (assoc-in [:pending-settlements workflow-id] t/empty-pending-settlement)
-          (acct/record-claimable workflow-id claimant (- existing-claimable)))
-      world))))
+          (acct/record-claimable-v2 workflow-id :settlement/principal claimant (- existing-claimable)))
+      world)))
 
 
 (defn execute-resolution
@@ -675,8 +675,8 @@
              world''     (if appeal-upheld?
                            (if (pos? bond-held)
                              (-> world'
-                                 (assoc-in [:pending-fraud-slashes slash-id :status] :reversed)
-                                 (acct/record-claimable wf-id resolver bond-held))
+                                 (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed)
+                                 (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                              (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed))
                            (if (pos? bond-held)
                              (let [bond-token (or (:token custody) "USDC")]

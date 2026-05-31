@@ -136,7 +136,7 @@
         ;; Track outbound FoT fee (difference between gross held and net claimable)
         (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
         ;; Claimable is the immediately-settled portion (net of any shortfall)
-        (acct/record-claimable workflow-id recipient settled-amt)
+        (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id direction)
         ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)

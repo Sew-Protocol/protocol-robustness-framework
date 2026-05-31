@@ -40,9 +40,9 @@
         (let [world' (-> world
                         (acct/record-fee token fee)
                         (cond-> (pos? sender-amt)
-                          (acct/record-claimable escrow-id (:from et) sender-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/principal (:from et) sender-amt))
                         (cond-> (pos? recipient-amt)
-                          (acct/record-claimable escrow-id (:to et) recipient-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/principal (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
                         (acct/sub-held token yield)
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees

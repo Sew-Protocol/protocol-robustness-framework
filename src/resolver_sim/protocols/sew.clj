@@ -332,7 +332,7 @@
                                   recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
                               (-> world'
                                   (acct/sub-held token reclaimed)
-                                  (acct/record-claimable escrow-id recipient reclaimed)))
+                                  (acct/record-claimable-v2 escrow-id :settlement/principal recipient reclaimed)))
                             ;; For resolver stake yield: credit the resolver's stake balance
                             (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
             (t/ok world''))

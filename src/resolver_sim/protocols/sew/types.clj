@@ -442,3 +442,23 @@
     (update-in world [:resolver-capacities resolver-addr :current-active]
                (fn [n] (max 0 (dec n))))
     world))
+
+(defrecord SlashEvent
+    [slash-id
+     workflow-id
+     escrow-contract
+     resolver
+     reason
+     basis-amount
+     basis-kind
+     slash-bps
+     slash-track
+     amount
+     proposed-at
+     executed-at
+     appeal-deadline
+     status
+     proposer
+     evidence-root
+     original-decision-hash
+     reversal-decision-hash])

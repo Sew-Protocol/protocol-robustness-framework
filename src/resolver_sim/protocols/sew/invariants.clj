@@ -803,17 +803,43 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
-(defn claim-boundary?
-  "True when no workflow has a claimable sum exceeding its principal amount.
-   Guards against 'printing' funds in the claiming map."
+(defn settlement-principal-boundary?
+  "True when settlement principal claims do not exceed escrow principal."
   [world]
   (let [violations
-        (for [[wf cmap] (:claimable world {})
-              :let [total (reduce + 0 (vals cmap))
-                    et    (get-in world [:escrow-transfers wf])
-                    afa   (:amount-after-fee et)]
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [principal-claims (get domain-map :settlement/principal {})
+                    total            (reduce + 0 (vals principal-claims))
+                    et               (get-in world [:escrow-transfers wf])
+                    afa              (:amount-after-fee et 0)]
               :when (> total afa)]
-          {:workflow-id wf :claimable total :max afa})]
+          {:workflow-id wf :claims total :max afa})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn settlement-yield-boundary?
+  "True when settlement yield claims do not exceed generated yield."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [yield-claims (get domain-map :settlement/yield {})
+                    total        (reduce + 0 (vals yield-claims))
+                    et           (get-in world [:escrow-transfers wf])
+                    token        (:token et)
+                    generated    (get-in world [:total-yield-generated token] 0)]
+              :when (> total generated)]
+          {:workflow-id wf :claims total :max generated})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn migration-parity?
+  "True when the sum of v2 claimable domains equals legacy claimable."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [legacy (get-in world [:claimable wf] {})
+                    total-v2 (reduce + 0 (for [d (vals domain-map)] (reduce + 0 (vals d))))
+                    total-legacy (reduce + 0 (vals legacy))]
+              :when (not= total-v2 total-legacy)]
+          {:workflow-id wf :v2 total-v2 :legacy total-legacy})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn claimable-classification
@@ -1350,7 +1376,9 @@
                  :fee-cap                       (fee-cap-holds? world)
                  :no-stale-automatable-escrows  (no-stale-automatable-escrows? world)
                  :conservation-of-funds         (conservation-of-funds? world)
-                 :claim-boundary                (claim-boundary? world)
+                 :settlement-principal-boundary (settlement-principal-boundary? world)
+                 :settlement-yield-boundary     (settlement-yield-boundary? world)
+                 :migration-parity              (migration-parity? world)
                  :cancellation-mutex            (cancellation-mutex? world)
                  :dispute-resolution-path       (dispute-resolution-path-exists? world)
                  :slash-distribution-consistent (slash-distribution-consistent? world)

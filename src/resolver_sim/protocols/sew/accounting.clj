@@ -97,9 +97,22 @@
 
 (defn record-claimable
   "Record amount as claimable by addr for workflow-id.
+   Depreciated: use record-claimable-v2 instead.
    Mirrors: claimableBalances[workflowId][recipient] += amount"
   [world workflow-id addr amount]
-  (update-in world [:claimable workflow-id addr] (fnil + 0) amount))
+  (let [;; Fallback domain for legacy calls: settle to settlement/principal
+        world' (update-in world [:claimable workflow-id addr] (fnil + 0) amount)]
+    (update-in world' [:claimable-v2 workflow-id :settlement/principal addr] (fnil + 0) amount)))
+
+(defn record-claimable-v2
+  "Record amount as claimable by addr for workflow-id in a specific domain.
+   Also updates the legacy :claimable map for temporary backward compatibility."
+  [world workflow-id domain addr amount]
+  (let [world' (update-in world [:claimable-v2 workflow-id domain addr] (fnil + 0) amount)]
+    ;; Maintain dual-write to legacy map if the domain implies principal settlement
+    (if (= domain :settlement/principal)
+      (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
+      world')))
 
 (defn withdraw-escrow
   "Claim claimable balance for addr on workflow-id.
