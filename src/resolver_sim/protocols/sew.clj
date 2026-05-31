@@ -20,7 +20,8 @@
             [resolver-sim.protocols.sew.projection       :as sew-proj]
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
-            [resolver-sim.protocols.sew.db               :as sew-db]
+            [resolver-sim.db.sew                         :as sew-db]
+            [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.yield.protocols                :as yield-proto]
@@ -840,4 +841,12 @@
 
 (defn replay-with-sew-protocol
   [scenario]
-  (replay/replay-with-protocol protocol scenario))
+  (let [scenario*
+        (if-let [te (:temporal-evidence scenario)]
+          (if (and (:enabled? te) (not (:recorder te)))
+            (assoc scenario :temporal-evidence
+                   (assoc te :recorder temporal/record-from-replay!
+                              :protocol protocol))
+            scenario)
+          scenario)]
+    (replay/replay-with-protocol protocol scenario*)))

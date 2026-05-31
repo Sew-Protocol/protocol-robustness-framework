@@ -88,6 +88,45 @@
     (when cov* (ss/insert-temporal-coverage! ds cov*))
     {:run run-rec :steps (vec steps*) :invariants (vec invs*) :coverage cov*}))
 
+(defn record-from-replay!
+  "Temporal recorder callback for contract-model replay.
+   Invoked at scenario terminal states when :temporal-evidence :recorder is set."
+  [ds temporal-cfg scenario-id outcome world metrics trace]
+  (record-temporal-run!
+   ds
+   {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
+          :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
+          :protocol    (:protocol temporal-cfg)
+          :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
+          :scenario-id scenario-id
+          :seed        (:seed temporal-cfg)
+          :git-sha     (or (:git-sha temporal-cfg) "unknown")
+          :outcome     outcome
+          :metrics     metrics
+          :block-time  (:block-time world)}
+    :steps (map-indexed (fn [i e]
+                          {:step-index i
+                           :action (:action e)
+                           :result (:result e)
+                           :time-before (:time-before e {})
+                           :time-advance {}
+                           :time-after (or (:time-after e) {:block-ts (:time e)})
+                           :projection-hash (:projection-hash e)
+                           :block-time (:time e)})
+                        trace)
+    :invariants (mapcat (fn [i e]
+                          (for [[k r] (:violations e)
+                                :when (map? r)]
+                            {:step-index i
+                             :invariant k
+                             :holds? (:holds? r)
+                             :severity :time
+                             :violations (:violations r)
+                             :block-time (:time e)}))
+                        (range)
+                        trace)
+    :coverage (:coverage temporal-cfg)}))
+
 (defn summarize-boundary-outcomes
   "Pure helper for boundary cohorts.
    Input rows with keys: :offset and :result"

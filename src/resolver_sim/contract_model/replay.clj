@@ -17,8 +17,7 @@
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.protocols.protocol :as proto]
-             [resolver-sim.time.model        :as time-model]
-             [resolver-sim.db.temporal       :as temporal]))
+             [resolver-sim.time.model        :as time-model]))
 ;; ---------------------------------------------------------------------------
 ;; Constants
 ;; ---------------------------------------------------------------------------
@@ -476,45 +475,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- maybe-record-temporal!
-  "Write a temporal run record if temporal evidence collection is enabled.
-   outcome — :pass or :fail
-   world   — the world-state at time of recording (for block-time)"
+  "Invoke optional :recorder from :temporal-evidence when collection is enabled."
   [temporal-cfg temporal-enabled? scenario-id outcome world metrics trace]
-  (when temporal-enabled?
-    (temporal/record-temporal-run!
+  (when (and temporal-enabled? (:recorder temporal-cfg))
+    ((:recorder temporal-cfg)
      (:datasource temporal-cfg)
-     {:run {:run-id      (or (:run-id temporal-cfg) (str scenario-id "-run"))
-            :batch-id    (or (:batch-id temporal-cfg) :temporal-batch)
-            :protocol    (:protocol temporal-cfg)
-            :suite-id    (or (:suite-id temporal-cfg) :temporal-suite)
-            :scenario-id scenario-id
-            :seed        (:seed temporal-cfg)
-            :git-sha     (or (:git-sha temporal-cfg) "unknown")
-            :outcome     outcome
-            :metrics     metrics
-            :block-time  (:block-time world)}
-      :steps (map-indexed (fn [i e]
-                            {:step-index i
-                             :action (:action e)
-                             :result (:result e)
-                             :time-before (:time-before e {})
-                             :time-advance {}
-                             :time-after (or (:time-after e) {:block-ts (:time e)})
-                             :projection-hash (:projection-hash e)
-                             :block-time (:time e)})
-                          trace)
-      :invariants (mapcat (fn [i e]
-                            (for [[k r] (:violations e)
-                                  :when (map? r)]
-                              {:step-index i
-                               :invariant k
-                               :holds? (:holds? r)
-                               :severity :time
-                               :violations (:violations r)
-                               :block-time (:time e)}))
-                          (range)
-                          trace)
-      :coverage (:coverage temporal-cfg)})))
+     temporal-cfg
+     scenario-id
+     outcome
+     world
+     metrics
+     trace)))
 
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."

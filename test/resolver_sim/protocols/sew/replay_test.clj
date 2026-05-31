@@ -234,9 +234,15 @@
                          :custom-resolver "0xResolver"}}
                {:seq 1 :time 1001 :agent "alice" :action "release"
                 :params {:workflow-id 0}}])]
-      (with-redefs [temporal/record-temporal-run!
-                    (fn [ds payload]
-                      (swap! calls conj {:ds ds :payload payload})
+      (with-redefs [temporal/record-from-replay!
+                    (fn [ds temporal-cfg scenario-id outcome world metrics trace]
+                      (swap! calls conj {:ds ds
+                                         :temporal-cfg temporal-cfg
+                                         :scenario-id scenario-id
+                                         :outcome outcome
+                                         :world world
+                                         :metrics metrics
+                                         :trace trace})
                       {:ok true})]
         ;; disabled / absent => no call
         (sew/replay-with-sew-protocol scenario-base)
@@ -252,8 +258,8 @@
                                     :suite-id :wire-suite
                                     :git-sha "abc123"}))
         (is (= 1 (count @calls)))
-        (is (= "wire-test-run" (get-in @calls [0 :payload :run :run-id])))
-        (is (= :pass (get-in @calls [0 :payload :run :outcome])))))))
+        (is (= "wire-test-run" (get-in @calls [0 :temporal-cfg :run-id])))
+        (is (= :pass (:outcome (first @calls))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 4: Dispute + resolution

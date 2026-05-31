@@ -1,16 +1,14 @@
-(ns resolver-sim.protocols.sew.db
+(ns resolver-sim.db.sew
   "Sew-specific persistence helpers — query wrappers that unpack the generic
    sim_trial_results / sim_entity_events tables into Sew-shaped :trial/* maps.
 
-   These functions belong here (in the Sew protocol namespace) rather than in
-   the generic resolver-sim.db.store because the generic store has no knowledge
-   of the Sew metrics blob schema or the Sew entity lifecycle.
+   These functions belong in db/* (XTDB shell layer) rather than in the generic
+   resolver-sim.db.store because the generic store has no knowledge of the Sew
+   metrics blob schema or the Sew entity lifecycle.
 
    Callers:
      resolver-sim.db.telemetry  — batch-summary uses sew-trial-outcomes
-     integration tests          — telemetry_integration_test.clj
-
-   Layering: protocols/sew/* may import db/* (XTDB shell layer)."
+     integration tests          — telemetry_integration_test.clj"
   (:require [next.jdbc              :as jdbc]
             [resolver-sim.db.xtdb   :as xtdb]
             [resolver-sim.db.store  :as store]))
