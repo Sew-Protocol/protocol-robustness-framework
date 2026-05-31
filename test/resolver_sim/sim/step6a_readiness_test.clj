@@ -16,6 +16,7 @@
             [clojure.edn      :as edn]
             [resolver-sim.sim.multi-epoch :as me]
             [resolver-sim.sim.audit       :as audit]
+            [resolver-sim.io.audit-outputs :as audit-out]
             [resolver-sim.stochastic.rng  :as rng]
             [resolver-sim.io.params       :as params]))
 
@@ -205,7 +206,7 @@
           audit-r (audit/analyze-multi-epoch r)
           mfst    (audit/make-manifest r p "data/params/phase-j-calibration-pass.edn" 42)
           tmp-dir (str "/tmp/audit-test-" (System/currentTimeMillis))
-          _       (audit/write-audit-outputs tmp-dir r audit-r mfst)
+          _       (audit-out/write-audit-outputs tmp-dir r audit-r mfst)
 
           required ["epoch-results.edn"
                     "trajectory.csv"

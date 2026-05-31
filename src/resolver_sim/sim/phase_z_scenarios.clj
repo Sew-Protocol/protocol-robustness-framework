@@ -13,20 +13,15 @@
    This namespace translates those macro-level risks into concrete EVM
    action sequences that stress the contract layer.  Each scenario is a
    valid input to replay-with-protocol (via protocol registry default) and
-   produces a scored, persistable trace.
+   produces a scored trace map (persistence via resolver-sim.io.phase-z-persist).
 
    Mapping:
      TEST 2/4 → resolver absent: dispute raised, nobody resolves → auto-cancel after 90 days
      TEST 3   → false positive: resolver cancels a honest-release escrow → buyer wrongly refunded
-     TEST 5   → liveness cascade: two escrows dispute; resolver resolves none; both auto-cancel
-
-   Persistence:
-     (persist-top-n! n) runs all Phase Z scenarios, scores them, persists top-n.
-     (persist-top-percent! p) keeps the top p fraction (0.01 = 1%)."
+     TEST 5   → liveness cascade: two escrows dispute; resolver resolves none; both auto-cancel"
   (:require [resolver-sim.contract-model.replay      :as replay]
             [resolver-sim.protocols.registry        :as preg]
-            [resolver-sim.io.trace-score             :as ts]
-            [resolver-sim.io.trace-store             :as store]))
+            [resolver-sim.sim.trace-score           :as ts]))
 
 (defn- default-protocol []
   (preg/get-protocol preg/default-protocol-id))
@@ -172,7 +167,7 @@
    scenario-z5-cascade-liveness])
 
 ;; ---------------------------------------------------------------------------
-;; Scoring and persistence
+;; Scoring (pure)
 ;; ---------------------------------------------------------------------------
 
 (defn run-and-score
@@ -192,39 +187,3 @@
   (->> all-scenarios
        (mapv run-and-score)
        (sort-by #(- (get-in % [:scored-result :trace-score] 0)))))
-
-(defn persist-top-n!
-  "Run all Phase Z scenarios, score them, and persist the top n.
-   Returns a vector of trace-ids for persisted traces."
-  [n & [{:keys [store-dir] :as opts}]]
-  (->> (run-all)
-       (take n)
-       (mapv (fn [{:keys [scenario scored-result]}]
-               (store/store-trace! scored-result scenario
-                                   (merge {:force? true} opts))))))
-
-(defn persist-top-percent!
-  "Run all Phase Z scenarios, score them, and persist the top p fraction.
-   p=0.01 keeps the top 1%.  Always persists at least 1 scenario."
-  [p & [opts]]
-  (let [scored (run-all)
-        n      (max 1 (int (Math/ceil (* p (count scored)))))]
-    (persist-top-n! n opts)))
-
-;; ---------------------------------------------------------------------------
-;; CLI entry point
-;; ---------------------------------------------------------------------------
-
-(defn -main
-  "Run Phase Z scenarios and persist top 1% to the trace store.
-
-   Usage:
-     clojure -M:phase-z-persist
-     clojure -M:phase-z-persist <store-dir>"
-  [& args]
-  (let [store-dir (or (first args) store/default-store-dir)
-        ids       (persist-top-percent! 0.01 {:store-dir store-dir})]
-    (println (str "Phase Z: persisted " (count ids) " trace(s) → " store-dir))
-    (doseq [id ids]
-      (when id (println (str "  " id))))
-    (System/exit 0)))
