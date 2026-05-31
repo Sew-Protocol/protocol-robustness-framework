@@ -10,13 +10,11 @@
 
    Each result entry is enriched with type metadata from
    invariant-scenarios/scenario-type-registry (:scenario/type,
-   :adversary/type, :adversary/traits) for queryable output."
-  (:require [resolver-sim.contract-model.replay            :as replay]
-            [resolver-sim.protocols.sew            :as sew]
-            [resolver-sim.protocols.sew.invariant-scenarios :as sc]
-            [resolver-sim.io.scenarios             :as io-sc]
-            [clojure.java.io                        :as io]
-            [clojure.data.json                      :as json]))
+   :adversary/type, :adversary/traits) for queryable output.
+
+   File-backed scenario runs live in resolver-sim.io.invariant-runner."
+  (:require [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers
@@ -90,25 +88,6 @@
      :elapsed-ms elapsed
      :results   results}))
 
-(defn run-scenario-file
-  "Load a scenario from a file, run it, and optionally write the result to output-path.
-   Returns exit code (0 for pass, 1 for fail/error)."
-  [scenario-path output-path]
-  (try
-    (let [scenario (io-sc/load-scenario-file scenario-path)
-          result   (sew/replay-with-sew-protocol scenario)
-          pass?    (= :pass (:outcome result))]
-      (when (and output-path (not= output-path "-"))
-        (io/make-parents output-path)
-        (with-open [w (io/writer output-path)]
-          (json/write (dissoc result :protocol) w :indent true)))
-      (if pass?
-        (do (println (format "✓ Scenario %s passed." scenario-path)) 0)
-        (do (println (format "✗ Scenario %s failed: %s" scenario-path (:halt-reason result "unknown"))) 1)))
-    (catch Exception e
-      (println (format "Error running scenario %s: %s" scenario-path (.getMessage e)))
-      1)))
-
 (defn print-report
   "Print a human-readable report from run-all output.  Returns exit code (0/1)."
   [{:keys [passed total elapsed-ms results]}]
@@ -133,9 +112,5 @@
 
 (defn run-and-report
   "Convenience: run-all then print-report.  Returns exit code."
-  ([] (run-and-report nil nil))
-  ([scenario-path output-path]
-   (if scenario-path
-     (run-scenario-file scenario-path output-path)
-     (print-report (run-all)))))
-
+  []
+  (print-report (run-all)))

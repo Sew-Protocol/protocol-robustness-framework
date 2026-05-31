@@ -417,6 +417,11 @@ PY
   return $?
 }
 
+run_layering_lint() {
+  echo "Running namespace layering lint..."
+  clojure -M:layering-lint
+}
+
 run_comparison_lint() {
   echo "Running comparison metadata lint..."
   python - <<'PY'
@@ -788,6 +793,9 @@ case "$MODE" in
   comparison-lint)
     run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
     ;;
+  layering-lint)
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    ;;
   coverage)
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     ;;
@@ -813,6 +821,8 @@ case "$MODE" in
     echo ""
     run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
@@ -824,7 +834,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|layering-lint|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac
