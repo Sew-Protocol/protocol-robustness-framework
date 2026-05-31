@@ -28,6 +28,26 @@
 (defn- add-held [world token amount]
   (update-in world [:total-held token] (fnil + 0) amount))
 
+(defn- token-available? [world token]
+  (not (contains? (:token-liquidity-crunch world) token)))
+
+(defn- yield-module-available? [world module-id token]
+  (if (nil? module-id)
+    true
+    (let [mid    (keyword module-id)
+          status (get-in world [:yield/module-status mid] :active)
+          mode   (get-in world [:yield/risk mid token :liquidity-mode] :available)]
+      (and (= status :active)
+           (not (contains? #{:shortfall :frozen :paused} mode))))))
+
+(defn- resolver-available? [world resolver]
+  (if (or (nil? resolver) (= resolver "0x0000000000000000000000000000000000000000"))
+    true
+    (let [capacity-ok? (not (t/resolver-at-capacity? world resolver))
+          freeze-expiry (get-in world [:resolver-frozen-until resolver] 0)
+          unfrozen?     (<= freeze-expiry (:block-time world))]
+      (and capacity-ok? unfrozen?))))
+
 (defn- sub-held [world token amount]
   (update-in world [:total-held token] (fnil - 0) amount))
 
@@ -162,72 +182,90 @@
     (nil? token)
     (t/fail :invalid-token)
 
+    (not (token-available? world token))
+    (t/fail :token-liquidity-crunch)
+
     (nil? to)
     (t/fail :invalid-recipient)
 
     (<= amount 0)
     (t/fail :amount-zero)
 
+    (let [ymid (:yield-generation-module snapshot)
+          yield-enabled? (and ymid (not= (:yield-preset settings) :off))]
+      (and yield-enabled? (not (yield-module-available? world ymid token))))
+    (t/fail :insufficient-module-liquidity)
+
     (and (pos? (:auto-release-time settings 0))
          (pos? (:auto-cancel-time settings 0)))
     (t/fail :cannot-set-both-auto-times)
 
     :else
-    (let [workflow-id   (count (:escrow-transfers world))
-          fee-bps       (:escrow-fee-bps snapshot 0)
-          fee           (payoffs/calculate-escrow-fee amount fee-bps)
-          afa           (- amount fee)
-          ;; _applyEscrowSettings: compute effective auto times
-          snap-rel      (:default-auto-release-delay snapshot 0)
-          snap-can      (:default-auto-cancel-delay snapshot 0)
-          use-defaults? (and (zero? (:auto-release-time settings 0))
-                             (zero? (:auto-cancel-time settings 0)))
-          auto-rel      (cond
-                          (pos? (:auto-release-time settings 0)) (:auto-release-time settings)
-                          (and use-defaults? (pos? snap-rel))    (+ (:block-time world) snap-rel)
-                          :else                                   0)
-          auto-can      (cond
-                          (pos? (:auto-cancel-time settings 0)) (:auto-cancel-time settings)
-                          (and use-defaults? (pos? snap-can))   (+ (:block-time world) snap-can)
-                          :else                                  0)
-          ;; Resolver: custom-resolver takes precedence over snapshot
-          resolver      (or (:custom-resolver settings)
-                            (:dispute-resolver snapshot))
-          ;; Bonding guard: only enforce when resolver-bond-bps is configured
-          bond-bps      (:resolver-bond-bps snapshot 0)
-          stake         (if resolver (reg/get-stake world resolver) 0)]
-      (if (and resolver (pos? bond-bps) (pos? stake) (not (reg/can-handle-escrow? world resolver afa)))
-        (t/fail :insufficient-resolver-stake)
-        (let [et            (t/make-escrow-transfer
-                             {:token             token
-                              :to                to
-                              :from              caller
-                              :amount-after-fee  afa
-                              :initial-fee       fee
-                              :dispute-resolver  resolver
-                              :auto-release-time auto-rel
-                              :auto-cancel-time  auto-can
-                              :last-accrual-time (:block-time world)
-                              :escrow-state      :pending})
-              world'        (-> world
-                                (assoc-in [:escrow-transfers workflow-id] et)
-                                (assoc-in [:escrow-settings workflow-id]
-                                          (t/make-escrow-settings settings))
-                                (assoc-in [:module-snapshots workflow-id] snapshot)
-                                (update-in [:total-principal-deposited token] (fnil + 0) amount)
-                                (add-held token afa)
-                                (add-fee token fee)
-                                (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
-              ;; Trigger yield deposit if module is configured
-              ymid          (:yield-generation-module snapshot)
-              world''       (if (and ymid (contains? (:yield/modules world') ymid))
-                              (yield-ops/apply-yield-op world' {:op/type :yield/deposit
-                                                                :module/id ymid
-                                                                :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                                :amount afa
-                                                                :token token})
-                              world')]
-          (assoc (t/ok world'') :workflow-id workflow-id))))))
+    (let [workflow-id   (get world :next-workflow-id 0)]
+      (let [fee-bps       (:escrow-fee-bps snapshot 0)
+            fee           (payoffs/calculate-escrow-fee amount fee-bps)
+            afa           (- amount fee)
+            ;; _applyEscrowSettings: compute effective auto times
+            snap-rel      (:default-auto-release-delay snapshot 0)
+            snap-can      (:default-auto-cancel-delay snapshot 0)
+            use-defaults? (and (zero? (:auto-release-time settings 0))
+                               (zero? (:auto-cancel-time settings 0)))
+            auto-rel      (cond
+                            (pos? (:auto-release-time settings 0)) (:auto-release-time settings)
+                            (and use-defaults? (pos? snap-rel))    (+ (:block-time world) snap-rel)
+                            :else                                   0)
+            auto-can      (cond
+                            (pos? (:auto-cancel-time settings 0)) (:auto-cancel-time settings)
+                            (and use-defaults? (pos? snap-can))   (+ (:block-time world) snap-can)
+                            :else                                  0)
+            ;; Resolver: custom-resolver takes precedence over snapshot
+            resolver      (or (:custom-resolver settings)
+                              (:dispute-resolver snapshot))
+            ;; Bonding guard: only enforce when resolver-bond-bps is configured
+            bond-bps      (:resolver-bond-bps snapshot 0)
+            stake         (if resolver (reg/get-stake world resolver) 0)]
+            (cond
+            (and resolver (t/resolver-at-capacity? world resolver))
+            (t/fail :resolver-at-capacity)
+
+            (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (:block-time world)))
+            (t/fail :resolver-frozen)
+
+            (and resolver (pos? bond-bps) (pos? stake) (not (reg/can-handle-escrow? world resolver afa)))
+            (t/fail :insufficient-resolver-stake)
+
+            :else
+            (let [et            (t/make-escrow-transfer
+                               {:token             token
+                                :to                to
+                                :from              caller
+                                :amount-after-fee  afa
+                                :initial-fee       fee
+                                :dispute-resolver  resolver
+                                :auto-release-time auto-rel
+                                :auto-cancel-time  auto-can
+                                :last-accrual-time (:block-time world)
+                                :escrow-state      :pending})
+                world'        (-> world
+                                  (assoc :next-workflow-id (inc workflow-id))
+                                  (assoc-in [:escrow-transfers workflow-id] et)
+                                  (assoc-in [:escrow-settings workflow-id]
+                                            (t/make-escrow-settings settings))
+                                  (assoc-in [:module-snapshots workflow-id] snapshot)
+                                  (update-in [:total-principal-deposited token] (fnil + 0) amount)
+                                  (add-held token afa)
+                                  (add-fee token fee)
+                                  (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
+                ;; Trigger yield deposit if module is configured
+                ymid          (:yield-generation-module snapshot)
+                world''       (if (and ymid (contains? (:yield/modules world') ymid))
+                                  (yield-ops/apply-yield-op world' {:op/type :yield/deposit
+                                                                    :module/id ymid
+                                                                    :owner/id (t/escrow-yield-owner-id workflow-id)
+                                                                    :amount afa
+                                                                    :token token})
+                                  world')]
+            (assoc (t/ok world'') :workflow-id workflow-id)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; raise-dispute

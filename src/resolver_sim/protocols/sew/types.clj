@@ -27,6 +27,30 @@
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
+;; Semantic ID Phantom Types
+;; ---------------------------------------------------------------------------
+
+(defrecord TransferId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord DisputeId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord ResolverDecisionId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord WatchdogChallengeId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord ClaimableWithdrawalId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+;; ---------------------------------------------------------------------------
 ;; Enum sets (canonical values)
 ;; ---------------------------------------------------------------------------
 
@@ -234,6 +258,7 @@
     :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
     :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
     :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
+    :next-workflow-id       0
     :paused?                false
     :block-time          block-time}))
 
@@ -269,33 +294,37 @@
   [amount fee-bps]
   (- amount (compute-fee amount fee-bps)))
 
+(defn- try-parse-id [v]
+  (cond
+    (integer? v) v
+    (string? v)  (let [s (str/trim v)
+                       s (if (.startsWith s ":") (subs s 1) s)]
+                   (when (re-matches #"\d+" s)
+                     (Long/parseLong s)))
+    (keyword? v) (try-parse-id (name v))
+    :else nil))
+
 (defn normalize-workflow-id
   "Normalize workflow IDs across call-sites.
 
    Supports integer IDs (canonical), numeric strings (e.g. \"0\"), and
    keyword-like values with a leading colon (e.g. \":0\").
-   Returns the normalized integer ID when parseable, else returns the original
+   Also supports TransferId records.
+
+   Returns the normalized TransferId record when parseable, else returns the original
    value so callers can still fail cleanly via map lookup/guards."
   [workflow-id]
   (cond
-    (integer? workflow-id)
+    (instance? TransferId workflow-id)
     workflow-id
 
-    (string? workflow-id)
-    (let [s (str/trim workflow-id)
-          s (if (.startsWith s ":") (subs s 1) s)]
-      (if (re-matches #"\d+" s)
-        (Long/parseLong s)
-        workflow-id))
-
-    (keyword? workflow-id)
-    (let [s (name workflow-id)]
-      (if (re-matches #"\d+" s)
-        (Long/parseLong s)
-        workflow-id))
+    (instance? DisputeId workflow-id)
+    (->TransferId (:id workflow-id))
 
     :else
-    workflow-id))
+    (if-let [id (try-parse-id workflow-id)]
+      (->TransferId id)
+      workflow-id)))
 
 ;; ---------------------------------------------------------------------------
 ;; Yield owner-id constructors
@@ -305,7 +334,7 @@
   "Canonical owner-id for an escrow's yield position.
    Used as the :owner/id key when registering or withdrawing yield positions."
   [escrow-id]
-  [:sew/escrow escrow-id])
+  [:sew/escrow (normalize-workflow-id escrow-id)])
 
 (defn resolver-yield-owner-id?
   "True when owner-id denotes a resolver staking position (string prefixed 'resolver:')."

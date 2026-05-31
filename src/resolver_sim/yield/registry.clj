@@ -70,9 +70,12 @@
    :apy               (or apy
                           (when apy-bps (/ (double apy-bps) 10000.0))
                           0.0)
-   :liquidity-mode    (or liquidity-mode :available)
-   :loss-mode         (or loss-mode :none)
-   :rate-mode         (or rate-mode :deterministic)
+   :liquidity-mode    (let [m (or liquidity-mode :available)]
+                        (if (string? m) (keyword m) m))
+   :loss-mode         (let [m (or loss-mode :none)]
+                        (if (string? m) (keyword m) m))
+   :rate-mode         (let [m (or rate-mode :deterministic)]
+                        (if (string? m) (keyword m) m))
    :failure-modes     (or failure-modes #{})
    :shortfall         shortfall})
 
