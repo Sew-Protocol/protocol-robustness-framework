@@ -3,9 +3,21 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -30,7 +42,9 @@
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -59,14 +73,23 @@
       "time": 1180,
       "agent": "buyer",
       "action": "challenge_resolution",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 5,
       "time": 1181,
       "agent": "buyer",
       "action": "challenge_resolution",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

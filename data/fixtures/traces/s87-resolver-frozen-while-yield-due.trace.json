@@ -1,1 +1,129 @@
-{"scenario-id":"s87-resolver-frozen-while-yield-due","outcome":"pass","trace":[{"projection-hash":"faKr5\/QotwLl6WaJbu206UyQ4\/r4n7pnLsc4Cu68Zds=","time":1000,"extra":null,"invariants-ok?":true,"agent":"resolver","event-tags":[],"result":"ok","action":"register-resolver-bond","error":null,"seq":0,"violations":null,"trace-metadata":{"type":"unknown","path":"none"},"id":"unknown","detail":null},{"projection-hash":"\/93E5IFBZEP19Yh1YjIfQ9cprIq7+3dsMIss7Z6jJZQ=","time":1010,"extra":{"workflow-id":0},"invariants-ok?":true,"agent":"buyer","event-tags":["entity-created"],"result":"ok","action":"create_escrow","error":null,"seq":1,"violations":null,"trace-metadata":{"type":"creation","path":"none"},"id":"create_escrow","detail":null},{"projection-hash":"RRdfi65TUAWIpWzgmG0RsyIRsfv1T6vxSRlMaJlR58Q=","time":1020,"extra":null,"invariants-ok?":true,"agent":"resolver","event-tags":[],"result":"ok","action":"register-stake","error":null,"seq":2,"violations":null,"trace-metadata":{"type":"unknown","path":"none"},"id":"register_stake","detail":null},{"projection-hash":"Gu4l\/qyGyLtPN4V8zIYjY9DcB\/t28B13nHHgJOh5i0M=","time":1030,"extra":null,"invariants-ok?":true,"agent":"buyer","event-tags":["dispute-raised"],"result":"ok","action":"raise_dispute","error":null,"seq":3,"violations":null,"trace-metadata":{"type":"state-change","path":"none"},"id":"raise_dispute","detail":null},{"projection-hash":"jY\/FuwpvrDxk0itO7z3b5BLZg9YyxHbK5YH7dvxwqFM=","time":87460,"extra":null,"invariants-ok?":true,"agent":"resolver","event-tags":[],"result":"ok","action":"claim-deferred-yield","error":null,"seq":4,"violations":null,"trace-metadata":{"type":"unknown","path":"none"},"id":"unknown","detail":null},{"projection-hash":"RdmvkTlqIBDnjmCH+yzVxwYmcapfqGO+2MNIVMgodUk=","time":87500,"extra":null,"invariants-ok?":true,"agent":"resolver","event-tags":["dispute-resolved"],"result":"ok","action":"execute_resolution","error":null,"seq":5,"violations":null,"trace-metadata":{"type":"resolution","path":"standard"},"id":"execute_resolution","detail":null}]}
+{
+  "scenario-id": "s87-resolver-frozen-while-yield-due",
+  "outcome": "pass",
+  "trace": [
+    {
+      "projection-hash": "faKr5/QotwLl6WaJbu206UyQ4/r4n7pnLsc4Cu68Zds=",
+      "time": 1000,
+      "extra": null,
+      "invariants-ok?": true,
+      "agent": "resolver",
+      "event-tags": [],
+      "result": "ok",
+      "action": "register-resolver-bond",
+      "error": null,
+      "seq": 0,
+      "violations": null,
+      "trace-metadata": {
+        "type": "unknown",
+        "path": "none"
+      },
+      "id": "unknown",
+      "detail": null
+    },
+    {
+      "projection-hash": "/93E5IFBZEP19Yh1YjIfQ9cprIq7+3dsMIss7Z6jJZQ=",
+      "time": 1010,
+      "extra": {
+        "workflow-id": 0
+      },
+      "invariants-ok?": true,
+      "agent": "buyer",
+      "event-tags": [
+        "entity-created"
+      ],
+      "result": "ok",
+      "action": "create_escrow",
+      "error": null,
+      "seq": 1,
+      "violations": null,
+      "trace-metadata": {
+        "type": "creation",
+        "path": "none"
+      },
+      "id": "create_escrow",
+      "detail": null
+    },
+    {
+      "projection-hash": "RRdfi65TUAWIpWzgmG0RsyIRsfv1T6vxSRlMaJlR58Q=",
+      "time": 1020,
+      "extra": null,
+      "invariants-ok?": true,
+      "agent": "resolver",
+      "event-tags": [],
+      "result": "ok",
+      "action": "register-stake",
+      "error": null,
+      "seq": 2,
+      "violations": null,
+      "trace-metadata": {
+        "type": "unknown",
+        "path": "none"
+      },
+      "id": "register_stake",
+      "detail": null
+    },
+    {
+      "projection-hash": "Gu4l/qyGyLtPN4V8zIYjY9DcB/t28B13nHHgJOh5i0M=",
+      "time": 1030,
+      "extra": null,
+      "invariants-ok?": true,
+      "agent": "buyer",
+      "event-tags": [
+        "dispute-raised"
+      ],
+      "result": "ok",
+      "action": "raise_dispute",
+      "error": null,
+      "seq": 3,
+      "violations": null,
+      "trace-metadata": {
+        "type": "state-change",
+        "path": "none"
+      },
+      "id": "raise_dispute",
+      "detail": null
+    },
+    {
+      "projection-hash": "jY/FuwpvrDxk0itO7z3b5BLZg9YyxHbK5YH7dvxwqFM=",
+      "time": 87460,
+      "extra": null,
+      "invariants-ok?": true,
+      "agent": "resolver",
+      "event-tags": [],
+      "result": "ok",
+      "action": "claim-deferred-yield",
+      "error": null,
+      "seq": 4,
+      "violations": null,
+      "trace-metadata": {
+        "type": "unknown",
+        "path": "none"
+      },
+      "id": "unknown",
+      "detail": null
+    },
+    {
+      "projection-hash": "RdmvkTlqIBDnjmCH+yzVxwYmcapfqGO+2MNIVMgodUk=",
+      "time": 87500,
+      "extra": null,
+      "invariants-ok?": true,
+      "agent": "resolver",
+      "event-tags": [
+        "dispute-resolved"
+      ],
+      "result": "ok",
+      "action": "execute_resolution",
+      "error": null,
+      "seq": 5,
+      "violations": null,
+      "trace-metadata": {
+        "type": "resolution",
+        "path": "standard"
+      },
+      "id": "execute_resolution",
+      "detail": null
+    }
+  ],
+  "scenario-author": "@grifma"
+}

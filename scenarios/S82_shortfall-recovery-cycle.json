@@ -3,9 +3,21 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "yield-generation-module": "aave-v3",
@@ -18,7 +30,9 @@
           "USDC": {
             "apy": 0.05,
             "liquidity-mode": "shortfall",
-            "shortfall": { "available-ratio": 0.5 }
+            "shortfall": {
+              "available-ratio": 0.5
+            }
           }
         }
       }
@@ -42,21 +56,32 @@
       "time": 2000,
       "agent": "seller",
       "action": "seller_cancel",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
       "time": 3000,
       "agent": "buyer",
       "action": "withdraw-escrow",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 3,
       "time": 4000,
       "agent": "buyer",
       "action": "claim-deferred-yield",
-      "params": { "owner-id": "escrow:0" }
+      "params": {
+        "owner-id": "escrow:0"
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

@@ -13,7 +13,9 @@
             "apy": 0.05,
             "liquidity_mode": "available",
             "loss_mode": "none",
-            "failure_modes": ["negative-yield"]
+            "failure_modes": [
+              "negative-yield"
+            ]
           }
         }
       }
@@ -27,9 +29,21 @@
     "max_dispute_duration": 2592000
   },
   "agents": [
-    { "id": "sender", "type": "honest", "address": "sender" },
-    { "id": "recipient", "type": "honest", "address": "recipient" },
-    { "id": "resolver", "type": "honest", "address": "resolver" }
+    {
+      "id": "sender",
+      "type": "honest",
+      "address": "sender"
+    },
+    {
+      "id": "recipient",
+      "type": "honest",
+      "address": "recipient"
+    },
+    {
+      "id": "resolver",
+      "type": "honest",
+      "address": "resolver"
+    }
   ],
   "events": [
     {
@@ -49,7 +63,9 @@
       "time": 1100,
       "agent": "recipient",
       "action": "raise_dispute",
-      "params": { "workflow_id": 0 }
+      "params": {
+        "workflow_id": 0
+      }
     },
     {
       "seq": 2,
@@ -62,5 +78,10 @@
         "resolution_hash": "0xneg79"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

@@ -3,12 +3,25 @@
   "title": "Negative Yield and Liquidity Shortfall Cascade",
   "schema-version": "1.0",
   "purpose": "yield-stress",
-  "threat-tags": ["negative-yield", "shortfall", "deferred-recovery", "market-shock"],
+  "threat-tags": [
+    "negative-yield",
+    "shortfall",
+    "deferred-recovery",
+    "market-shock"
+  ],
   "description": "A buyer creates an escrow backed by Aave yield (5% APY). After 6 months of normal positive accrual (~243 USDC unrealized yield), a simulated market event injects a DeFi stress condition: the liquidity index begins declining (negative yield at 3%) AND the Aave module enters a shortfall mode with only 80% of funds immediately redeemable. Two months later the seller cancels, triggering a final accrue step that partially erodes the accrued yield. On withdrawal, the shortfall mechanism defers 20% of gross funds. The buyer must claim the deferred amount once liquidity recovers.",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer",  "address": "0xbuyer",  "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    }
   ],
   "protocol-params": {
     "yield-generation-module": "aave-v3",
@@ -43,10 +56,12 @@
     {
       "seq": 1,
       "time": 15553000,
-      "label": "6 months elapse (15,552,000 s) — positive yield accruing at 5% APY",
+      "label": "6 months elapse (15,552,000 s) \u2014 positive yield accruing at 5% APY",
       "agent": "buyer",
       "action": "trigger-accrue",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -58,9 +73,13 @@
         "module-id": "aave-v3",
         "token": "USDC",
         "liquidity-mode": "shortfall",
-        "failure-modes": ["negative-yield"],
+        "failure-modes": [
+          "negative-yield"
+        ],
         "apy": 0.03,
-        "shortfall": { "available-ratio": 0.8 }
+        "shortfall": {
+          "available-ratio": 0.8
+        }
       }
     },
     {
@@ -69,28 +88,34 @@
       "label": "seller agrees to cancel (sets recipient agree-to-cancel flag)",
       "agent": "seller",
       "action": "recipient-cancel",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
       "time": 20737000,
-      "label": "buyer agrees to cancel — both parties agree; escrow finalises, triggering final accrue under negative yield then shortfall withdrawal",
+      "label": "buyer agrees to cancel \u2014 both parties agree; escrow finalises, triggering final accrue under negative yield then shortfall withdrawal",
       "agent": "buyer",
       "action": "sender-cancel",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 5,
       "time": 20737001,
-      "label": "buyer withdraws — receives fulfilled portion (80% of gross) immediately; 20% deferred in Aave",
+      "label": "buyer withdraws \u2014 receives fulfilled portion (80% of gross) immediately; 20% deferred in Aave",
       "agent": "buyer",
       "action": "withdraw-escrow",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 6,
       "time": 25921000,
-      "label": "5 months later: Aave liquidity recovers — buyer can now claim deferred funds",
+      "label": "5 months later: Aave liquidity recovers \u2014 buyer can now claim deferred funds",
       "agent": "buyer",
       "action": "set-yield-risk",
       "params": {
@@ -106,7 +131,9 @@
       "label": "buyer claims deferred yield position",
       "agent": "buyer",
       "action": "claim-deferred-yield",
-      "params": { "owner-id": "escrow:0" }
+      "params": {
+        "owner-id": "escrow:0"
+      }
     }
   ],
   "expected-outcomes": [
@@ -145,5 +172,10 @@
       "action": "claim-deferred-yield",
       "expect": "ok"
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

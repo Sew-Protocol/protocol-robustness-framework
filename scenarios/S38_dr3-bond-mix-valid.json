@@ -3,10 +3,26 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" },
-    { "id": "keeper", "address": "0xkeeper", "role": "keeper" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "role": "keeper"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -19,14 +35,19 @@
       "time": 1000,
       "agent": "resolver",
       "action": "register_stake",
-      "params": { "amount": 10000 }
+      "params": {
+        "amount": 10000
+      }
     },
     {
       "seq": 1,
       "time": 1000,
       "agent": "resolver",
       "action": "register_resolver_bond",
-      "params": { "stable": 8000, "sew": 2000 }
+      "params": {
+        "stable": 8000,
+        "sew": 2000
+      }
     },
     {
       "seq": 2,
@@ -45,7 +66,9 @@
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
@@ -63,7 +86,14 @@
       "time": 1241,
       "agent": "keeper",
       "action": "execute_pending_settlement",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

@@ -2,7 +2,9 @@
   "scenario-id": "s34-pending-settlement-races-fraud-slash",
   "schema-version": "1.0",
   "title": "pending-settlement-races-fraud-slash",
-  "aliases": ["s34-pending-settlement-races-fraud-slash"],
+  "aliases": [
+    "s34-pending-settlement-races-fraud-slash"
+  ],
   "provenance": {
     "author": "Marc Griffiths",
     "author-id": "@grifma",
@@ -10,7 +12,9 @@
     "updated-at": "2026-05-29T13:00:00Z",
     "source": "manual",
     "license": "CC-BY-4.0",
-    "credit": ["Marc Griffiths"],
+    "credit": [
+      "Marc Griffiths"
+    ],
     "prior-art": []
   },
   "purpose": "adversarial-robustness",
@@ -31,16 +35,24 @@
       "settlement_not_irrevocably_completed_before_fraud_window"
     ],
     "metrics": {
-      "resolver_net_profit": { "lte": 0 },
-      "buyer_loss": { "lte": 8000 },
+      "resolver_net_profit": {
+        "lte": 0
+      },
+      "buyer_loss": {
+        "lte": 8000
+      },
       "slash_executed": true
     }
   },
   "threat": {
     "family": "resolver-misconduct",
     "attack": "profit-maximizing-incorrect-resolution",
-    "actors": ["resolver"],
-    "victims": ["buyer"],
+    "actors": [
+      "resolver"
+    ],
+    "victims": [
+      "buyer"
+    ],
     "severity": "high",
     "assumptions": [
       "resolver can execute an incorrect release",
@@ -78,11 +90,31 @@
   },
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" },
-    { "id": "governance", "address": "0xgov", "role": "governance" },
-    { "id": "keeper", "address": "0xkeeper", "role": "keeper" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    },
+    {
+      "id": "governance",
+      "address": "0xgov",
+      "role": "governance"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "role": "keeper"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -107,7 +139,9 @@
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -136,14 +170,19 @@
       "time": 1241,
       "agent": "keeper",
       "action": "execute_pending_settlement",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 5,
       "time": 1255,
       "agent": "governance",
       "action": "execute_fraud_slash",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

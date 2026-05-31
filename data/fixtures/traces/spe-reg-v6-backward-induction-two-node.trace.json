@@ -126,5 +126,6 @@
       }
     }
   ],
-  "scenario_id": "spe-reg-v6-backward-induction-two-node"
+  "scenario_id": "spe-reg-v6-backward-induction-two-node",
+  "scenario-author": "@grifma"
 }

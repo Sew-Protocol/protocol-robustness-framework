@@ -68,5 +68,6 @@
         "resolution-hash": "0xhash"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

@@ -29,7 +29,7 @@
     (testing "Legacy flat list"
       (let [theory {:falsifies-if [{:metric :m1 :op :> :value 5}]}
             res (theory/evaluate-theory result theory)]
-        (is (= :not-falsified (:status res)))))
+        (is (= :falsified (:status res)))))
 
     (testing "State predicate"
       (let [theory {:falsifies-if {:state {:query [:party/net-position {:party "buyer" :token :USDC}] :op :>= :value 10}}}

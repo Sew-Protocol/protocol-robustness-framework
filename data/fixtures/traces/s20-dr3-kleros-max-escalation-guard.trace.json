@@ -106,5 +106,6 @@
     }
   ],
   "allow-open-disputes?": true,
-  "_allow-open-disputes-reason": "Intentionally tests guard logic; dispute is never resolved (all escalations rejected, no authorized resolution)."
+  "_allow-open-disputes-reason": "Intentionally tests guard logic; dispute is never resolved (all escalations rejected, no authorized resolution).",
+  "scenario-author": "@grifma"
 }

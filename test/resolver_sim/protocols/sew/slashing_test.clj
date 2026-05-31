@@ -210,6 +210,38 @@
         world4  (:world (res/execute-resolution world3a workflow-id l1-res false "0xhash-l1" nil))]
     {:world world4 :workflow-id workflow-id}))
 
+(deftest reversal-slash-basis-is-stake
+  (testing "Reversal slash amount is based on resolver stake, not escrow principal"
+    (let [bps 2500 ;; 25%
+          stake 1000
+          principal 10000
+          ;; setup: resolver has 1000 stake
+          world (-> (t/empty-world 1000)
+                    (reg/register-stake "res1" stake)
+                    (assoc-in [:params :reversal-slash-bps] bps))
+          ;; workflow: escrow 10000
+          wf-id 0
+          world (-> world
+                    (assoc-in [:escrow-transfers wf-id] {:token "USDC" :amount-after-fee principal}))
+          ;; trigger reversal
+          ;; To trigger, we need a previous decision for this workflow.
+          world (assoc-in world [:previous-decisions wf-id 0] {:resolver "res1" :is-release true})
+          
+          ;; Now run handle-reversal-slashing (L0 -> L1 reversal, so level 1)
+          world' (#'resolver-sim.protocols.sew.resolution/handle-reversal-slashing 
+                  (assoc-in world [:dispute-levels wf-id] 1) 
+                  wf-id false) ;; false = refund (reverses release)
+          
+          slash-id (str wf-id "-reversal-0")
+          slash (get-in world' [:pending-fraud-slashes slash-id])]
+      
+      (is (some? slash) "reversal slash should exist")
+      (is (= :stake (:basis-kind slash)))
+      (is (= stake (:basis-amount slash)))
+      ;; 25% of 1000 stake = 250
+      (is (= 250 (:amount slash)) "slash amount should be 25% of stake, not principal")
+      (is (not= 2500 (:amount slash)) "slash amount should NOT be 25% of principal"))))
+
 (deftest reversal-slash-uses-level-scoped-id
   (testing "handle-reversal-slashing generates \"<wf>-reversal-<level-1>\" id"
     (let [{:keys [world workflow-id]} (build-reversal-slash-world)

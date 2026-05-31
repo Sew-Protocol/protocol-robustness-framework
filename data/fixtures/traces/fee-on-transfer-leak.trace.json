@@ -46,5 +46,6 @@
     "fee-on-transfer": 500
   },
   "expected-fail?": true,
-  "description": "FoT token (5% tax): token-tax-reconciliation? fires on release because sub-held removes full AFA but record-released only accounts for net amount after tax. Conservation-of-funds also fires due to the accounting gap."
+  "description": "FoT token (5% tax): token-tax-reconciliation? fires on release because sub-held removes full AFA but record-released only accounts for net amount after tax. Conservation-of-funds also fires due to the accounting gap.",
+  "scenario-author": "@grifma"
 }

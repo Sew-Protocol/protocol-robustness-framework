@@ -3,17 +3,45 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "l0", "address": "0xl0", "role": "resolver" },
-    { "id": "l1", "address": "0xl1", "role": "resolver" },
-    { "id": "challenger", "address": "0xchall", "strategy": "honest" },
-    { "id": "keeper", "address": "0xkeeper", "role": "keeper" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "l0",
+      "address": "0xl0",
+      "role": "resolver"
+    },
+    {
+      "id": "l1",
+      "address": "0xl1",
+      "role": "resolver"
+    },
+    {
+      "id": "challenger",
+      "address": "0xchall",
+      "strategy": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "role": "keeper"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
     "resolution-module": "0xkleros-proxy",
-    "escalation-resolvers": { "0": "0xl0", "1": "0xl1", "2": "0xl2" },
+    "escalation-resolvers": {
+      "0": "0xl0",
+      "1": "0xl1",
+      "2": "0xl2"
+    },
     "appeal-window-duration": 60,
     "max-dispute-duration": 2592000
   },
@@ -23,14 +51,20 @@
       "time": 1000,
       "agent": "buyer",
       "action": "create_escrow",
-      "params": { "token": "USDC", "to": "0xseller", "amount": 5000 }
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 5000
+      }
     },
     {
       "seq": 1,
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -48,7 +82,9 @@
       "time": 1130,
       "agent": "challenger",
       "action": "challenge_resolution",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
@@ -66,7 +102,14 @@
       "time": 1261,
       "agent": "keeper",
       "action": "execute_pending_settlement",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

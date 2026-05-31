@@ -99,5 +99,6 @@
       "replay_idempotent": true,
       "projection_hash_trajectory_identical": true
     }
-  }
+  },
+  "scenario-author": "@grifma"
 }

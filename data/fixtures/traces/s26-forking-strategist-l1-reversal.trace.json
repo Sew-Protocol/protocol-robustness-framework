@@ -338,7 +338,7 @@
       "detail": null
     },
     {
-      "projection-hash": "J14i3W1+HW0DFtiLnF8hnf4FsxkVAh+y+ajB2ZqG+\/0=",
+      "projection-hash": "J14i3W1+HW0DFtiLnF8hnf4FsxkVAh+y+ajB2ZqG+/0=",
       "time": 1190,
       "extra": null,
       "invariants-ok?": true,
@@ -432,7 +432,7 @@
       "detail": null
     },
     {
-      "projection-hash": "u3pFCOm8a+SZPJiQ5QsRp83+w\/Ao2phfst1ui6YLKSI=",
+      "projection-hash": "u3pFCOm8a+SZPJiQ5QsRp83+w/Ao2phfst1ui6YLKSI=",
       "time": 1255,
       "extra": null,
       "invariants-ok?": true,
@@ -567,5 +567,6 @@
       "address": "0xkeeper",
       "role": "keeper"
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

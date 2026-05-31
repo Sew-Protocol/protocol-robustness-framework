@@ -3,15 +3,35 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "l0resolver", "address": "0xl0", "role": "resolver" },
-    { "id": "l1resolver", "address": "0xl1", "role": "resolver" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "l0resolver",
+      "address": "0xl0",
+      "role": "resolver"
+    },
+    {
+      "id": "l1resolver",
+      "address": "0xl1",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
     "resolution-module": "0xkleros-proxy",
-    "escalation-resolvers": { "0": "0xl0", "1": "0xl1", "2": "0xl2" },
+    "escalation-resolvers": {
+      "0": "0xl0",
+      "1": "0xl1",
+      "2": "0xl2"
+    },
     "appeal-window-duration": 0,
     "max-dispute-duration": 2592000
   },
@@ -21,21 +41,29 @@
       "time": 1000,
       "agent": "buyer",
       "action": "create_escrow",
-      "params": { "token": "USDC", "to": "0xseller", "amount": 5000 }
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 5000
+      }
     },
     {
       "seq": 1,
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
       "time": 1060,
       "agent": "buyer",
       "action": "escalate_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 3,
@@ -59,5 +87,10 @@
         "resolution-hash": "0xl1hash"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

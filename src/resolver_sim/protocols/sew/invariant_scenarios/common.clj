@@ -31,6 +31,9 @@
 (def appeal
   {:resolver-fee-bps 150 :appeal-window-duration 120 :max-dispute-duration 600})
 
+(def appeal-60
+  {:resolver-fee-bps 150 :appeal-window-duration 60 :max-dispute-duration 2592000})
+
 (def kleros
   {:resolver-fee-bps 150
    :resolution-module "0xkleros-proxy"
@@ -44,3 +47,5 @@
    :escalation-resolvers {:0 "0xl0" :1 "0xl1" :2 "0xl2"}
    :appeal-window-duration 60
    :max-dispute-duration 2592000})
+
+(def scenario-author "@grifma")

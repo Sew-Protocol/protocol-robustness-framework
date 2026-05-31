@@ -66,5 +66,6 @@
     }
   ],
   "allow-open-disputes?": true,
-  "_allow-open-disputes-reason": "Intentionally stops after raising dispute \u2014 regression test for status clearing when buyer disputes after seller agree-to-cancel."
+  "_allow-open-disputes-reason": "Intentionally stops after raising dispute \u2014 regression test for status clearing when buyer disputes after seller agree-to-cancel.",
+  "scenario-author": "@grifma"
 }

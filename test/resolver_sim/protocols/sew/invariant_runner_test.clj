@@ -5,7 +5,7 @@
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
 
 (deftest test-registry-size
-  (is (= 98 (count sc/all-scenarios))))
+  (is (= 105 (count sc/all-scenarios))))
 
 (deftest test-run-all-all-pass
   (let [{:keys [passed total results]} (runner/run-all)]

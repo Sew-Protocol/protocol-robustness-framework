@@ -95,5 +95,10 @@
         "resolution_hash": "0xl1hash"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

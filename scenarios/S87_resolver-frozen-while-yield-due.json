@@ -4,9 +4,18 @@
   "description": "Resolver registers stake with yield, buyer creates escrow and raises a dispute (freezing the resolver from normal operations), time advances while yield accrues, resolver claims deferred yield (yield claim succeeds independently of open dispute state), resolver resolves the dispute to close the escrow.",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "resolver", "address": "0xresolver" },
-    { "id": "buyer", "address": "0xbuyer" },
-    { "id": "seller", "address": "0xseller" }
+    {
+      "id": "resolver",
+      "address": "0xresolver"
+    },
+    {
+      "id": "buyer",
+      "address": "0xbuyer"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150
@@ -17,7 +26,10 @@
       "time": 1000,
       "agent": "resolver",
       "action": "register-resolver-bond",
-      "params": { "stable": 8000, "sew": 2000 }
+      "params": {
+        "stable": 8000,
+        "sew": 2000
+      }
     },
     {
       "seq": 1,
@@ -46,7 +58,9 @@
       "time": 1030,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
@@ -68,5 +82,10 @@
         "is-release": true
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

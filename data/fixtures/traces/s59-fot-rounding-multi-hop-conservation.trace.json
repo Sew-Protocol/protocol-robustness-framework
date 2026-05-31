@@ -107,5 +107,6 @@
       "held_delta_matches": true,
       "fees_delta_monotone": true
     }
-  }
+  },
+  "scenario-author": "@grifma"
 }

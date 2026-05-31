@@ -19,9 +19,18 @@
 
       (if (:invariants options)
         (let [protocol-id (:protocol options preg/default-protocol-id)
-              runner-sym  (preg/get-invariant-runner protocol-id)]
-          (if runner-sym
-            (System/exit ((requiring-resolve runner-sym) (:scenario options) (:output-file options)))
+              runner-sym  (preg/get-invariant-runner protocol-id)
+              scenario    (:scenario options)
+              output      (:output-file options)]
+          (cond
+            (and runner-sym (not scenario))
+            (System/exit ((requiring-resolve runner-sym)))
+
+            (and runner-sym scenario)
+            (System/exit ((requiring-resolve 'resolver-sim.io.invariant-runner/run-and-report)
+                          scenario output))
+
+            :else
             (do (println (str "Unknown protocol: " protocol-id
                               ". Available: " (str/join ", " (preg/known-protocol-ids))))
                 (log/error! "unknown protocol" {:protocol-id protocol-id})

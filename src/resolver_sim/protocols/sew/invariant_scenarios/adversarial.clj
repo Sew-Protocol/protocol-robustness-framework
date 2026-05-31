@@ -4,6 +4,7 @@
 (def s24
   {:scenario-id        "s24-resolver-stake-depletion-cascade"
    :schema-version     "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents             [{:id "buyer0"   :address "0xbuyer0"   :strategy "honest"}
                         {:id "buyer1"   :address "0xbuyer1"   :strategy "honest"}
@@ -76,6 +77,7 @@
 (def s25
   {:scenario-id     "s25-profit-maximizer-slash-lifecycle"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"     :strategy "honest"}
                      {:id "seller"     :address "0xseller"    :strategy "honest"}
@@ -141,6 +143,7 @@
 (def s26
   {:scenario-id     "s26-forking-strategist-l1-reversal"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates strategically
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -196,6 +199,7 @@
 (def s27
   {:scenario-id     "s27-forking-strategist-l2-fork"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates twice
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -256,6 +260,7 @@
 (def s28
   {:scenario-id     "s28-forking-strategist-late-escalation-rejected"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :expected-errors [{:seq 3 :action "escalate_dispute" :error :appeal-window-expired}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; attempts late escalation
@@ -308,6 +313,7 @@
 (def s29
   {:scenario-id     "s29-forking-strategist-seller-escalates"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
                      {:id "seller"     :address "0xseller" :strategy "honest"} ; escalates strategically
@@ -366,6 +372,7 @@
 (def s30
   {:scenario-id     "s30-forking-strategist-double-loss"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates, but fork never comes
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -427,6 +434,7 @@
 (def s31
   {:scenario-id     "s31-forking-strategist-all-levels-confirm"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :expected-errors [{:seq 7 :action "escalate_dispute" :error :escalation-not-allowed}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates twice; no fork
@@ -498,6 +506,7 @@
 (def s32
   {:scenario-id     "s32-forking-strategist-premature-settlement-rejected"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :expected-errors [{:seq 5 :action "execute_pending_settlement" :error :appeal-window-not-expired}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"} ; escalates; fork lands at L1
@@ -566,6 +575,7 @@
 (def s33
   {:scenario-id     "s33-forking-strategist-two-escrow-fork-isolation"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer0"     :address "0xbuyer0" :strategy "honest"} ; escalates on wf0
                      {:id "buyer1"     :address "0xbuyer1" :strategy "honest"} ; accepts L0 on wf1
@@ -633,6 +643,7 @@
 (def s34
   {:scenario-id     "s34-profit-maximizer-unchallenged-slash"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"     :address "0xseller"   :strategy "honest"}
@@ -694,6 +705,7 @@
 (def s35
   {:scenario-id     "s35-profit-maximizer-governance-wins-appeal"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"     :address "0xseller"   :strategy "honest"}
@@ -760,6 +772,7 @@
 (def s36
   {:scenario-id     "s36-profit-maximizer-pre-window-execute-rejected"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"     :address "0xseller"   :strategy "honest"}
@@ -830,6 +843,7 @@
 (def s37
   {:scenario-id     "s37-profit-maximizer-two-resolver-split-outcomes"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer0"      :address "0xbuyer0"    :strategy "honest"}
                      {:id "buyer1"      :address "0xbuyer1"    :strategy "honest"}
@@ -904,6 +918,7 @@
 (def s38
   {:scenario-id     "s38-dr3-bond-mix-valid"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -940,6 +955,7 @@
 (def s39
   {:scenario-id     "s39-dr3-senior-coverage-delegation"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "senior" :address "0xsenior" :role "resolver"}
                      {:id "junior" :address "0xjunior" :role "resolver"}]
@@ -971,6 +987,7 @@
 (def s40
   {:scenario-id     "s40-dr3-freeze-post-slash"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"     :address "0xseller"   :strategy "honest"}
@@ -1018,6 +1035,7 @@
 (def s41
   {:scenario-id     "s41-dr3-reversal-slash-disabled"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"     :address "0xseller"  :strategy "honest"}
@@ -1075,6 +1093,7 @@
 (def s42
   {:scenario-id     "s42-resolver-buyer-bribery-loop"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "malicious"}
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -1126,6 +1145,7 @@
 (def s45
   {:scenario-id     "s45-flash-loan-stake-inflation"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "resolver" :address "0xadv"    :role "resolver" :strategy "malicious"}
                      {:id "buyer"    :address "0xbuyer"  :strategy "honest"}
@@ -1155,6 +1175,7 @@
     (def s46
     {:scenario-id     "s46-reorg-idempotence"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -1184,6 +1205,7 @@
     (def s66
     {:scenario-id     "s66-cooldown-boundary-reorg"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -1221,6 +1243,7 @@
     (def s67
     {:scenario-id     "s67-reentrancy-callback"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "attacker" :address "0xattacker" :strategy "malicious"}
                      {:id "buyer"    :address "0xbuyer"    :strategy "honest"}
@@ -1237,41 +1260,3 @@
     {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
       :params {:workflow-id 0
                :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id 0}}}}]})
-
-     ;; ---------------------------------------------------------------------------
-     ;; S68 — Yield Pool Insolvency
-     ;;
-     ;; Validates that the protocol correctly handles external liquidity shortages.
-     ;; A 'liquidity crunch' is triggered for USDC, and a subsequent withdrawal
-     ;; attempt is rejected.
-     ;;
-     ;; Expected: The withdrawal action should be REJECTED with :liquidity-insufficient.
-     ;; ---------------------------------------------------------------------------
-
-     (def s68
-     {:scenario-id     "s68-yield-pool-insolvency"
-     :schema-version  "1.0"
-     :initial-block-time 1000
-     :agents          [{:id "buyer"    :address "0xbuyer"  :strategy "honest"}
-                      {:id "seller"   :address "0xseller" :strategy "honest"}
-                      {:id "governance" :address "0xgov"  :role "governance"}]
-     :protocol-params dr3
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-      :params {:token "USDC" :to "0xseller" :amount 5000}}
-     {:seq 1 :time 1060 :agent "buyer" :action "release"
-      :params {:workflow-id 0}}
-     ;; Trigger liquidity crunch for USDC
-     {:seq 2 :time 1100 :agent "governance" :action "set_token_liquidity_crunch"
-      :params {:token "USDC" :active? true}}
-     ;; Attempt withdrawal while crunch is active
-     {:seq 3 :time 1120 :agent "seller" :action "withdraw_escrow"
-      :params {:workflow-id 0}}]})
-
-;; ---------------------------------------------------------------------------
-;; S49 — B2 Appeal window persistence
-;; Test that appeal window is enforced when escalating.
-;; Sequence: L0 resolves → pending (60s window) → L1 escalates within window.
-;; Expected: Escalation accepted, pending settlement cleared, level advanced.
-;; ---------------------------------------------------------------------------
-

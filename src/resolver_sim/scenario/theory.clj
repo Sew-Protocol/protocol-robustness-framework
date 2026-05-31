@@ -180,6 +180,14 @@
           holds?    (evaluate-metric-op (:op predicate) actual (:value predicate))]
       {:holds? holds? :metric (:metric predicate) :op (:op predicate) :value (:value predicate) :actual actual})))
 
+(defn- leaf-conditions [conds]
+  (filter map? conds))
+
+(defn- all-metrics-missing? [metrics conds]
+  (let [leaves (vec (leaf-conditions conds))]
+    (and (seq leaves)
+         (every? #(nil? (get metrics (to-kw (:metric %)))) leaves))))
+
 (defn evaluate-theory
   [result theory]
   (if (nil? theory)
@@ -196,36 +204,41 @@
           trace    (:trace result [])
           metrics  (:metrics result)
           conds    (:falsifies-if theory [])
-          ;; Backward compatibility: handle legacy vector of maps
-          predicate (if (and (vector? conds) (map? (first conds)))
-                      {:and conds}
-                      conds)
-          eval-res (eval-predicate protocol world trace metrics predicate)
-          _        (println (format "Eval result holds?: %s" (if eval-res (:holds? eval-res) "nil")))
-          falsified? (not (:holds? eval-res))
-
-          falsify-status (cond
-                           falsified?       :falsified
-                           (and (empty? conds) (seq (:falsifies-if theory))) :inconclusive
-                           :else            :not-falsified)
-          falsify-reason (cond
-                           falsified?       :falsification-triggered
-                           (and (empty? conds) (seq (:falsifies-if theory))) :metrics-missing-in-trace
-                           :else            :none)
           eq-result (when (or (seq (:mechanism-properties theory))
                               (seq (:equilibrium-concept theory)))
-                      (equilibrium/evaluate-equilibrium theory result))]
-      (merge
-       {:status     falsify-status
-        :reason     falsify-reason
-        :falsified? falsified?
-        :evidence   [eval-res]}
-       (if eq-result
-         {:mechanism-results   (:mechanism-results eq-result)
-          :mechanism-status    (:mechanism-status eq-result)
-          :equilibrium-results (:equilibrium-results eq-result)
-          :equilibrium-status  (:equilibrium-status eq-result)}
-         {:mechanism-results   {}
-          :mechanism-status    :not-checked
-          :equilibrium-results {}
-          :equilibrium-status  :not-checked})))))
+                      (equilibrium/evaluate-equilibrium theory result))
+          merge-eq  (fn [base]
+                      (merge base
+                             (if eq-result
+                               {:mechanism-results   (:mechanism-results eq-result)
+                                :mechanism-status    (:mechanism-status eq-result)
+                                :equilibrium-results (:equilibrium-results eq-result)
+                                :equilibrium-status  (:equilibrium-status eq-result)}
+                               {:mechanism-results   {}
+                                :mechanism-status    :not-checked
+                                :equilibrium-results {}
+                                :equilibrium-status  :not-checked})))]
+      (cond
+        (empty? conds)
+        (merge-eq {:status     :not-falsified
+                   :reason     :none
+                   :falsified? false
+                   :evidence   []})
+
+        (all-metrics-missing? metrics conds)
+        (merge-eq {:status     :inconclusive
+                   :reason     :metrics-missing-in-trace
+                   :falsified? false
+                   :evidence   []})
+
+        :else
+        (let [predicate (if (and (vector? conds) (map? (first conds)))
+                          {:or conds}
+                          conds)
+              eval-res  (eval-predicate protocol world trace metrics predicate)
+              falsified? (boolean (:holds? eval-res))]
+          (merge-eq
+           {:status     (if falsified? :falsified :not-falsified)
+            :reason     (if falsified? :falsification-triggered :none)
+            :falsified? falsified?
+            :evidence   [eval-res]}))))))

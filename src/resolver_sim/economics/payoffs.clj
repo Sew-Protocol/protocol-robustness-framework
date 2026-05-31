@@ -90,10 +90,14 @@
     (compute-fee slash-amount bounty-bps)
     0))
 
-(defn calculate-reversal-slash
-  "Calculate the stake amount to be slashed on a decision reversal."
-  [afa reversal-slash-bps]
-  (compute-fee afa reversal-slash-bps))
+(defn calculate-slash-amount-from-basis
+  "Calculate the stake amount to be slashed on a decision reversal or fraud event.
+   
+   Design Note: Currently slash amount is proportional to the resolver's total stake.
+   Principal-capped or hybrid slashing based on escrow exposure may be considered
+   as a future protocol-design change."
+  [slashable-stake slash-bps]
+  (compute-fee slashable-stake slash-bps))
 
 ;; ---------------------------------------------------------------------------
 ;; Economic Policies (Bands)

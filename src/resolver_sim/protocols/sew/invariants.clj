@@ -1182,9 +1182,13 @@
         (for [[slash-id slash] (:pending-fraud-slashes world {})
               :when (= :reversal (:reason slash))
               :when (pos? (:amount slash 0))]
-          {:slash-id slash-id :amount (:amount slash)})]
+          {:slash-id     slash-id
+           :amount       (:amount slash)
+           :basis-amount (:basis-amount slash)
+           :basis-kind   (:basis-kind slash)
+           :slash-bps    (:slash-bps slash)})]
     {:holds?     (empty? violations)
-     :violations (vec violations)}))
+      :violations (vec violations)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 30: Resolver capacity never exceeded

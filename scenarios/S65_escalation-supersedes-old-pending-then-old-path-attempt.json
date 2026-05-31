@@ -3,18 +3,40 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver0", "address": "0xresolver0", "role": "resolver" },
-    { "id": "resolver1", "address": "0xresolver1", "role": "resolver" },
-    { "id": "keeper", "address": "0xkeeper", "role": "resolver" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver0",
+      "address": "0xresolver0",
+      "role": "resolver"
+    },
+    {
+      "id": "resolver1",
+      "address": "0xresolver1",
+      "role": "resolver"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 0,
     "appeal-window-duration": 120,
     "max-dispute-duration": 600,
     "dispute-resolver": "0xresolver0",
-    "escalation-resolvers": { "1": "0xresolver1" },
+    "escalation-resolvers": {
+      "1": "0xresolver1"
+    },
     "max-escalation-level": 1
   },
   "events": [
@@ -35,7 +57,9 @@
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -53,14 +77,18 @@
       "time": 1160,
       "agent": "seller",
       "action": "escalate_dispute",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
       "time": 1180,
       "agent": "keeper",
       "action": "execute_pending_settlement",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 5,
@@ -78,7 +106,14 @@
       "time": 1365,
       "agent": "keeper",
       "action": "execute_pending_settlement",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

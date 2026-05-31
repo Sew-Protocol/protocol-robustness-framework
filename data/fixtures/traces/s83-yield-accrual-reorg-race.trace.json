@@ -388,5 +388,6 @@
       "conservation-of-funds": "fail"
     },
     "negative-payoff-count": 0
-  }
+  },
+  "scenario-author": "@grifma"
 }

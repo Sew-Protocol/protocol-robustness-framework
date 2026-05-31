@@ -3,10 +3,26 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "attacker", "address": "0xattacker", "strategy": "malicious" },
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" }
+    {
+      "id": "attacker",
+      "address": "0xattacker",
+      "strategy": "malicious"
+    },
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -31,7 +47,9 @@
       "time": 1060,
       "agent": "buyer",
       "action": "release",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
@@ -43,9 +61,16 @@
         "callback": {
           "agent": "attacker",
           "action": "withdraw_escrow",
-          "params": { "workflow-id": 0 }
+          "params": {
+            "workflow-id": 0
+          }
         }
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

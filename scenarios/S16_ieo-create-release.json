@@ -3,8 +3,16 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 0,
@@ -17,14 +25,25 @@
       "time": 1000,
       "agent": "buyer",
       "action": "create_escrow",
-      "params": { "token": "USDC", "to": "0xseller", "amount": 2000 }
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 2000
+      }
     },
     {
       "seq": 1,
       "time": 1060,
       "agent": "buyer",
       "action": "release",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

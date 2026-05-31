@@ -3,11 +3,31 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "buyer0", "address": "0xbuyer0", "strategy": "honest" },
-    { "id": "buyer1", "address": "0xbuyer1", "strategy": "honest" },
-    { "id": "buyer2", "address": "0xbuyer2", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver" }
+    {
+      "id": "buyer0",
+      "address": "0xbuyer0",
+      "strategy": "honest"
+    },
+    {
+      "id": "buyer1",
+      "address": "0xbuyer1",
+      "strategy": "honest"
+    },
+    {
+      "id": "buyer2",
+      "address": "0xbuyer2",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -20,7 +40,11 @@
       "time": 1000,
       "agent": "buyer0",
       "action": "create_escrow",
-      "params": { "token": "USDC", "to": "0xseller", "amount": 1000 }
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 1000
+      }
     },
     {
       "seq": 1,
@@ -51,21 +75,27 @@
       "time": 1060,
       "agent": "buyer0",
       "action": "release",
-      "params": { "workflow-id": 0 }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 4,
       "time": 1060,
       "agent": "buyer1",
       "action": "raise_dispute",
-      "params": { "workflow-id": 1 }
+      "params": {
+        "workflow-id": 1
+      }
     },
     {
       "seq": 5,
       "time": 1060,
       "agent": "buyer2",
       "action": "raise_dispute",
-      "params": { "workflow-id": 2 }
+      "params": {
+        "workflow-id": 2
+      }
     },
     {
       "seq": 6,
@@ -89,5 +119,10 @@
         "resolution-hash": "0xh2"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

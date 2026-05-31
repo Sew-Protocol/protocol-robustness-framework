@@ -11,7 +11,8 @@
    all-scenarios and scenario-type-registry."
   (:require [resolver-sim.protocols.sew.invariant-scenarios.baseline :as baseline]
             [resolver-sim.protocols.sew.invariant-scenarios.adversarial :as adversarial]
-            [resolver-sim.protocols.sew.invariant-scenarios.extended :as extended]))
+            [resolver-sim.protocols.sew.invariant-scenarios.extended :as extended]
+            [resolver-sim.protocols.sew.invariant-scenarios.gaps :as gaps]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario registry
@@ -63,8 +64,14 @@
     ["S40  dr3-freeze-post-slash"                        adversarial/s40]
     ["S41  dr3-reversal-slash-disabled"                  adversarial/s41]
     ["S42  resolver-buyer-bribery-loop"                  adversarial/s42]
+    ["S43  auth-rejected-then-authorized-recovery"       gaps/s43]
+    ["S44  escalation-tier-mismatch-rejected"            gaps/s44]
+    ["S45  stale-module-snapshot-rejects-legacy"         gaps/s45-stale-module-snapshot]
     ["S45  flash-loan-stake-inflation"                   adversarial/s45]
     ["S46  reorg-idempotence"                            adversarial/s46]
+    ["S46  settlement-vs-escalation-window-edge"         [gaps/s46a gaps/s46b]]
+    ["S47  appeal-window-boundary-pair"                  [gaps/s47a gaps/s47b]]
+    ["S48  max-escalation-exact-boundary"                gaps/s48]
     ["S49  appeal-deadline-boundary"                     extended/s49]
     ["S50  false-assertion-unchallenged"                 extended/s50]
     ["S51  same-block-challenge-finalize-race"          extended/s51]
@@ -250,6 +257,38 @@
    {:scenario/type    :adversarial
     :adversary/type   :colluder
     :adversary/traits #{:multi-agent :bribery}}
+
+   "s43-auth-rejected-then-authorized-recovery"
+   {:scenario/type :edge-case
+    :tests #{:authorization-recovery :unauthorized-rejection}}
+
+   "s44-escalation-tier-mismatch-rejected"
+   {:scenario/type :edge-case
+    :tests #{:escalation-tier :authorization-enforcement}}
+
+   "s45-stale-module-snapshot-rejects-legacy-resolver"
+   {:scenario/type :governance
+    :tests #{:module-snapshot :authorization-enforcement}}
+
+   "s46a-settlement-before-escalation-window-edge"
+   {:scenario/type :timing-boundary
+    :tests #{:settlement-race :escalation-rejection}}
+
+   "s46b-escalation-before-settlement-window-edge"
+   {:scenario/type :timing-boundary
+    :tests #{:settlement-race :escalation-precedence}}
+
+   "s47a-appeal-window-last-second-settlement"
+   {:scenario/type :timing-boundary
+    :tests #{:appeal-window :boundary-inclusive}}
+
+   "s47b-appeal-window-plus-one-rejected"
+   {:scenario/type :timing-boundary
+    :tests #{:appeal-window :boundary-rejection}}
+
+   "s48-max-escalation-exact-boundary"
+   {:scenario/type :escalation-mechanism
+    :tests #{:max-level :escalation-acceptance}}
    
    ;; ── Adversarial: Stake Stress ───────────────────────────────────
    "s45-flash-loan-stake-inflation"

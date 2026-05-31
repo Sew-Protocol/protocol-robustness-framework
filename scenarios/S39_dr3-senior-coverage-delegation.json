@@ -3,8 +3,16 @@
   "schema-version": "1.0",
   "initial-block-time": 1000,
   "agents": [
-    { "id": "senior", "address": "0xsenior", "role": "resolver" },
-    { "id": "junior", "address": "0xjunior", "role": "resolver" }
+    {
+      "id": "senior",
+      "address": "0xsenior",
+      "role": "resolver"
+    },
+    {
+      "id": "junior",
+      "address": "0xjunior",
+      "role": "resolver"
+    }
   ],
   "protocol-params": {
     "resolver-fee-bps": 150,
@@ -18,21 +26,34 @@
       "time": 1000,
       "agent": "senior",
       "action": "register_senior_bond",
-      "params": { "coverage-max": 10000 }
+      "params": {
+        "coverage-max": 10000
+      }
     },
     {
       "seq": 1,
       "time": 1000,
       "agent": "junior",
       "action": "delegate_to_senior",
-      "params": { "senior-addr": "0xsenior", "coverage": 8000 }
+      "params": {
+        "senior-addr": "0xsenior",
+        "coverage": 8000
+      }
     },
     {
       "seq": 2,
       "time": 1001,
       "agent": "junior",
       "action": "delegate_to_senior",
-      "params": { "senior-addr": "0xsenior", "coverage": 2000 }
+      "params": {
+        "senior-addr": "0xsenior",
+        "coverage": 2000
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
 }

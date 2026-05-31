@@ -56,8 +56,9 @@
   ],
   "provenance": {
     "author": "Sew Protocol Simulation",
-    "author-id": "@sew-sim",
+    "author-id": "@grifma",
     "created-at": "2026-05-30T16:31:11Z",
     "source": "manual-migration"
-  }
+  },
+  "scenario-author": "@grifma"
 }

@@ -4,6 +4,7 @@
 (def s49
   {:scenario-id     "s49-appeal-deadline-boundary"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
                     {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -40,6 +41,7 @@
 (def s50
   {:scenario-id     "s50-false-assertion-unchallenged"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -72,6 +74,7 @@
 (def s51
   {:scenario-id     "s51-same-block-challenge-finalize-race"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -105,6 +108,7 @@
 (def s52
   {:scenario-id     "s52-yield-accrued-during-dispute"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -139,6 +143,7 @@
 (def s53
   {:scenario-id     "s53-reentrant-withdrawal-guard"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"   :address "0xseller"   :strategy "honest"}
@@ -175,6 +180,7 @@
 (def s54
   {:scenario-id     "s54-multi-claim-ledger-isolation"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer1"    :address "0xbuyer1"   :strategy "honest"}
                     {:id "buyer2"    :address "0xbuyer2"   :strategy "honest"}
@@ -202,6 +208,7 @@
 (def s55
   {:scenario-id     "s55-resolver-unavailable-timeout-fallback"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -223,6 +230,7 @@
 (def s56
   {:scenario-id     "s56-resolver-diversity"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"     :address "0xbuyer"     :strategy "honest"}
                     {:id "seller"    :address "0xseller"    :strategy "honest"}
@@ -244,6 +252,7 @@
 (def s57
   {:scenario-id     "s57-corruption-cost-vs-profit"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"     :address "0xbuyer"    :strategy "honest"}
                     {:id "seller"    :address "0xseller"   :strategy "honest"}
@@ -268,6 +277,7 @@
 (def s58
   {:scenario-id     "s58-watchdog-valid-challenge"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -294,6 +304,7 @@
 (def s59
   {:scenario-id     "s59-watchdog-false-challenge-loss"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -320,6 +331,7 @@
 (def s60
   {:scenario-id     "s60-resolver-abstention-timeout-griefing"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -339,6 +351,7 @@
 (def s61
   {:scenario-id     "s61-fee-on-transfer-token-handling"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -360,6 +373,7 @@
 (def s62
   {:scenario-id     "s62-multi-appeal-escalation-chain"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -388,6 +402,7 @@
 (def s62-cross-token-isolation-under-dispute-load
   {:scenario-id "s62-cross-token-isolation-under-dispute-load"
    :schema-version "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents [{:id "buyer1" :address "0xbuyer1" :strategy "honest"}
             {:id "seller1" :address "0xseller1" :strategy "honest"}
@@ -430,6 +445,7 @@
 (def s62-cross-token-fee-on-transfer-under-dispute-load
   {:scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load"
    :schema-version "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents [{:id "buyerA" :address "0xbuyerA" :strategy "honest"}
             {:id "sellerA" :address "0xsellerA" :strategy "honest"}
@@ -465,6 +481,7 @@
 (def s62-cross-token-parallel-appeal-depths-under-dispute-load
   {:scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load"
    :schema-version "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents [{:id "buyerX" :address "0xbuyerX" :strategy "honest"}
             {:id "sellerX" :address "0xsellerX" :strategy "honest"}
@@ -497,6 +514,7 @@
 (def s63
   {:scenario-id     "s63-frivolous-appeal-slashing"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "profit-maximizer"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -520,6 +538,7 @@
 (def s64
   {:scenario-id     "s64-minimal-bond-edge-case"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -541,6 +560,7 @@
 (def s65
   {:scenario-id     "s65-appeal-after-settlement-rejected"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -564,6 +584,7 @@
 (def s68
   {:scenario-id     "s68-double-settlement-guard"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -587,6 +608,7 @@
 (def s69
   {:scenario-id     "s69-stale-dispute-cleanup"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -608,6 +630,7 @@
 (def s70
   {:scenario-id     "s70-large-escrow-resolution"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -629,6 +652,7 @@
 (def s71
   {:scenario-id     "s71-zero-fee-settlement"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -650,6 +674,7 @@
 (def s72
   {:scenario-id     "s72-challenge-during-appeal-window"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -676,6 +701,7 @@
 (def s73
   {:scenario-id     "s73-challenge-after-appeal-window-closed"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -700,6 +726,7 @@
 (def s74
   {:scenario-id     "s74-multi-escrow-parallel-disputes"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller1"  :address "0xseller1"  :strategy "honest"}
@@ -731,6 +758,7 @@
 (def s75
   {:scenario-id     "s75-receiver-cancels-after-dispute"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -754,6 +782,7 @@
 (def s76
   {:scenario-id     "s76-sender-cancel-during-appeal"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -777,6 +806,7 @@
 (def s77
   {:scenario-id     "s77-escalation-rejected-wrong-layer"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -800,6 +830,7 @@
 (def s78
   {:scenario-id     "s78-many-appeals-eventually-rejects"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "profit-maximizer"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -825,6 +856,7 @@
 (def s79
   {:scenario-id     "s79-partial-resolution-release"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -846,6 +878,7 @@
 (def s80
   {:scenario-id     "s80-disputed-escrow-expiry-settlement"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -867,6 +900,7 @@
 (def s81
   {:scenario-id     "s81-appeal-deadline-boundary-before"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :expected-fail?   true
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
@@ -889,6 +923,7 @@
 (def s82
   {:scenario-id     "s82-appeal-deadline-boundary-exact"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -910,6 +945,7 @@
 (def s83
   {:scenario-id     "s83-appeal-deadline-boundary-after"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -931,6 +967,7 @@
 (def s84
   {:scenario-id     "s84-false-assertion-unchallenged"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -952,6 +989,7 @@
 (def s85
   {:scenario-id     "s85-watchdog-challenges-resolution"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -976,6 +1014,7 @@
 (def s86
   {:scenario-id     "s86-reentrant-withdrawal-guard"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -999,6 +1038,7 @@
 (def s87
   {:scenario-id     "s87-cross-escrow-isolation"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller1"  :address "0xseller1"  :strategy "honest"}
@@ -1026,6 +1066,7 @@
 (def s88
   {:scenario-id     "s88-resolution-with-conflicting-evidence"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1049,6 +1090,7 @@
 (def s89
   {:scenario-id     "s89-dispute-resolution-with-zero-appeal-window"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1070,6 +1112,7 @@
 (def s90
   {:scenario-id     "s90-resolver-capacity-stress"
    :schema-version  "1.0"
+   :scenario-author "@grifma"
    :initial-block-time 1000
    :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                     {:id "seller1"  :address "0xseller1"  :strategy "honest"}
@@ -1111,6 +1154,7 @@
 (def s91
    {:scenario-id     "s91-governance-snapshot-dispute-state"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1138,6 +1182,7 @@
 (def s92
    {:scenario-id     "s92-settlement-zero-amount-edge"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1162,6 +1207,7 @@
 (def s93
    {:scenario-id     "s93-multiple-appeals-with-refund"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1190,6 +1236,7 @@
 (def s94
    {:scenario-id     "s94-dispute-timeout-auto-refund"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1210,6 +1257,7 @@
 (def s95
    {:scenario-id     "s95-resolution-challenge-and-counter"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "adversarial"}
@@ -1238,6 +1286,7 @@
 (def s96
    {:scenario-id     "s96-multi-token-dispute"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1272,6 +1321,7 @@
 (def s97
    {:scenario-id     "s97-appeal-after-settlement-attempt"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1296,6 +1346,7 @@
 (def s98
    {:scenario-id     "s98-receiver-cancel-after-auto-cancel"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1316,6 +1367,7 @@
 (def s99
    {:scenario-id     "s99-large-escrow-fee-impact"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
@@ -1340,6 +1392,7 @@
 (def s100
    {:scenario-id     "s100-deny-then-resolver-releases"
     :schema-version  "1.0"
+   :scenario-author "@grifma"
     :initial-block-time 1000
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}

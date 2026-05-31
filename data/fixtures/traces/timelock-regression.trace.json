@@ -61,5 +61,6 @@
         "is-release": true
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }
