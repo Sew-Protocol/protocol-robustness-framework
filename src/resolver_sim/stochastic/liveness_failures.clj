@@ -84,35 +84,25 @@
    - resolver-cognitive-limit: How many boring cases can they take
    - cases-in-period: How many cases to decide
    - case-interest-distribution: Fraction that are interesting
+   - rng: optional SplittableRandom for reproducible sampling
    
    Returns: Dropout risk and final participation"
-  [case-difficulty resolver-cognitive-limit cases-in-period case-interest-distribution]
-  
-  (let [; Boring cases drain cognitive capacity faster
-        cognitive-cost-per-case (if (> case-difficulty 0.5)
+  ([case-difficulty resolver-cognitive-limit cases-in-period case-interest-distribution]
+   (boredom-threshold case-difficulty resolver-cognitive-limit cases-in-period case-interest-distribution nil))
+  ([case-difficulty resolver-cognitive-limit cases-in-period case-interest-distribution rng]
+  (let [cognitive-cost-per-case (if (> case-difficulty 0.5)
                                   1.0
-                                  3.0)  ; Boring cases cost 3x mental energy
-        
+                                  3.0)
         total-cognitive-load (* cognitive-cost-per-case cases-in-period)
-        
-        ; Can they handle this load?
         exceeds-limit? (> total-cognitive-load resolver-cognitive-limit)
-        
-        ; If interesting cases, load is reduced
         interesting-cases (* cases-in-period case-interest-distribution)
         boring-cases (* cases-in-period (- 1.0 case-interest-distribution))
-        
         interesting-load (* 1.0 interesting-cases)
         boring-load (* 3.0 boring-cases)
         adjusted-load (+ interesting-load boring-load)
-        
-        ; Dropout probability increases with load
         dropout-risk (min 1.0 (/ (max 0 (- adjusted-load resolver-cognitive-limit))
                                 resolver-cognitive-limit))
-        
-        ; If high dropout, system is in trouble
-        will-participate? (< (rand) (- 1.0 dropout-risk))]
-    
+        will-participate? (< (rng/roll-double rng) (- 1.0 dropout-risk))]
     {:case-difficulty case-difficulty
      :resolver-limit resolver-cognitive-limit
      :total-cases cases-in-period
@@ -127,7 +117,7 @@
                 (> dropout-risk 0.8) "CRITICAL: Likely exit"
                 (> dropout-risk 0.5) "SERIOUS: Significant exit risk"
                 (> dropout-risk 0.2) "CAUTION: Some dropout expected"
-                :else "STABLE: Low dropout")}))
+                :else "STABLE: Low dropout")})))
 
 (defn adverse-selection-effect
   "Model adverse selection: Only risk-seeking resolvers remain.

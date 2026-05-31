@@ -27,6 +27,18 @@
   [^SplittableRandom rng]
   (.nextDouble rng))
 
+(defn roll-double
+  "Sample uniform double in [0, 1).
+
+   Uses SplittableRandom when provided; otherwise falls back to (rand).
+   Prefer passing an explicit rng for reproducible sweeps."
+  (^double []
+   (rand))
+  (^double [rng]
+   (if rng
+     (next-double rng)
+     (rand))))
+
 (defn next-int
   "Generate next int [0, bound) from RNG."
   [^SplittableRandom rng ^long bound]

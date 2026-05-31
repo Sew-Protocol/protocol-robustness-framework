@@ -8,9 +8,7 @@
   "Sample a double from the RNG in params, falling back to bare rand.
    Callers should always provide :rng in params for reproducibility."
   [params]
-  (if-let [r (:rng params)]
-    (rng/next-double r)
-    (rand)))
+  (rng/roll-double (:rng params)))
 
 (defn estimate-bribery-cost
   "Estimate bribery cost from parameters."
