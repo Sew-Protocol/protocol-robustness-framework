@@ -694,13 +694,18 @@
        (let [resolver        (:resolver pending)
              amount          (:amount pending)
              freeze-duration 259200                ; 72 hours in seconds
-             world'          (-> world
+             world-slashed   (-> world
                                  (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
                                  (reg/slash-resolver-stake resolver amount)
-                                 :world
+                                 :world)
+             ;; Reconcile the conservation-of-funds by removing the slashed amount from total-held
+             held            (get-in world-slashed [:total-held :USDC] 0)
+             amt             (min held amount)
+             world'          (-> world-slashed
+                                 (acct/sub-held :USDC amt) 
                                  (assoc-in [:resolver-frozen-until resolver]
                                             (+ (:block-time world) freeze-duration))
-                                  (update-unavailability resolver true))]
+                                 (update-unavailability resolver true))]
          (t/ok world'))))))
 
 (defn unfreeze-resolver

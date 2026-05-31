@@ -411,6 +411,7 @@
     (let [et             (t/get-transfer world workflow-id)
           resolver        (:dispute-resolver et)
           slash-amt       (:amount-after-fee et)
+          token           (:token et)
           has-resolver?   (and resolver
                                (not= resolver "0x0000000000000000000000000000000000000000"))
           
@@ -418,7 +419,11 @@
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?
-                            (:world (reg/slash-resolver-stake world-finalized resolver slash-amt))
+                            (let [res (reg/slash-resolver-stake world-finalized resolver slash-amt)
+                                  held (get-in (:world res) [:total-held token] 0)
+                                  amt  (min held slash-amt)]
+                              (-> (:world res)
+                                  (acct/sub-held token amt)))
                             world-finalized)
           world-dist      (acct/distribute-slashed-funds world-slashed slash-amt)
           world-result    (-> world-dist

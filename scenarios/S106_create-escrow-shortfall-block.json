@@ -1,0 +1,63 @@
+{
+  "scenario-id": "s106-create-escrow-shortfall-block",
+  "title": "Create-escrow blocked by yield module shortfall",
+  "schema-version": "1.0",
+  "purpose": "adversarial-robustness",
+  "description": "Ensure create-escrow fails if the designated yield module is in a shortfall or frozen state.",
+  "initial-block-time": 1000,
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    }
+  ],
+  "protocol-params": {
+    "yield-generation-module": "aave-v3",
+    "resolver-fee-bps": 0
+  },
+  "yield-config": {
+    "modules": {
+      "aave-v3": {
+        "tokens": {
+          "USDC": {
+            "apy": 0.05,
+            "liquidity-mode": "frozen"
+          }
+        }
+      }
+    }
+  },
+  "events": [
+    {
+      "seq": 0,
+      "time": 1000,
+      "agent": "buyer",
+      "action": "create-escrow",
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 5000,
+        "yield-preset": "aave-v3"
+      }
+    }
+  ],
+  "expected-errors": [
+    {
+      "seq": 0,
+      "action": "create-escrow",
+      "error": "insufficient-module-liquidity"
+    }
+  ],
+  "provenance": {
+    "author": "Sew Protocol Simulation",
+    "author-id": "@sew-sim",
+    "created-at": "2026-05-30T16:31:11Z",
+    "source": "manual-migration"
+  }
+}

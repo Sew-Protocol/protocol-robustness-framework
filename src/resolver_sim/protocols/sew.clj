@@ -647,7 +647,9 @@
                      (conj {:action "recipient-cancel" :params {:workflow-id wf}})))
 
              ;; Disputed actions
-             (= :disputed (:escrow-state et))
+             (and (= :disputed (:escrow-state et))
+                  (not (and (= actor (:dispute-resolver et))
+                            (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))))
              (into (let [pending (t/get-pending world wf)
                          resolver (:dispute-resolver et)]
                      (cond-> []

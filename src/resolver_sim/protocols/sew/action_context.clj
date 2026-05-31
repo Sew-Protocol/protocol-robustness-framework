@@ -23,12 +23,21 @@
   [agent-index event f]
   (common-actx/with-resolved-actor resolve-address agent-index event f))
 
+(defn check-unfrozen
+  [world actor]
+  (if (and (contains? (:resolver-stakes world) actor)
+           (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))
+    (t/fail :resolver-frozen)
+    {:ok true}))
+
 (defn with-resolved-actor-and-unpaused
-  "Resolve event actor, reject when world is paused, then call (f actor-address)."
+  "Resolve event actor, reject when world is paused or resolver frozen, then call (f actor-address)."
   [agent-index world event f]
   (common-actx/with-resolved-actor-and-check
     resolve-address
-    #(if (:paused? world) (t/fail :protocol-paused) {:ok true})
+    #(let [paused? (check-paused world)
+           unfrozen? (check-unfrozen world (get-in event [:params :resolver] (:agent event)))]
+       (if (:ok paused?) unfrozen? paused?))
     agent-index event f))
 
 (defn with-governance-actor
