@@ -463,7 +463,8 @@
         (is (false? (:all-hold? r)))))))
 
 (deftest test-solvency-strict-equality-passes-clean-world
-  ;; Clean world: total-held exactly matches live escrow amount
+  ;; Clean world: total-held exactly matches live escrow amount.
+  ;; total-principal-deposited must also be set to satisfy conservation-of-funds.
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0]
                              {:token "0xUSDC" :to "0xBob" :from "0xAlice"
@@ -472,7 +473,8 @@
                               :auto-release-time 0 :auto-cancel-time 0
                               :escrow-state :pending
                               :sender-status :none :recipient-status :none})
-                  (assoc-in [:total-held "0xUSDC"] 5000))]
+                  (assoc-in [:total-held "0xUSDC"] 5000)
+                  (assoc-in [:total-principal-deposited "0xUSDC"] 5000))]
     (let [r (inv/check-all world)]
       (is (true? (:all-hold? r))))))
 
@@ -1226,18 +1228,18 @@
           ;; Helper to remove ambiguity around `upheld?` semantics using
           ;; snapshot-visible effects (world snapshot omits pending-fraud-slashes).
           ;; true  => APPEAL upheld  => bond refunded to resolver claimable
-          ;; false => APPEAL rejected => bond forfeited to insurance
+          ;; false => APPEAL rejected => bond forfeited; tracked per-token in :appeal-bond-distributions-by-token
           (if upheld?
             (is (pos? (get-in world [:claimable 0 "0xResolver"] 0))
                 "upheld?=true should refund appeal bond to resolver claimable")
-            (is (pos? (get-in world [:bond-distribution :insurance] 0))
-                "upheld?=false should forfeit appeal bond to insurance")))]
+            (is (pos? (reduce + 0 (vals (get world :appeal-bond-distributions-by-token {}))))
+                "upheld?=false should forfeit appeal bond to insurance bucket")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
     (assert-appeal-resolution-semantics w-upheld true)
     (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
-    (is (= 80 (get-in w-rejected [:bond-distribution :insurance] 0)))
+    (is (= 80 (get-in w-rejected [:appeal-bond-distributions-by-token :0xUSDC] 0)))
     (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
 
 (deftest test-replay-s35-profit-maximizer-governance-wins-appeal

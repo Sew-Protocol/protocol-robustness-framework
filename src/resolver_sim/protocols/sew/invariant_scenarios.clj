@@ -2379,12 +2379,12 @@
     {:seq 7 :time 1122 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 0 :is-release false :resolution-hash "0xhash0"}}
 
-    ;; watchdog challenges one, buyer escalates another, keeper settles others
-    {:seq 8 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id 0 :evidence-hash "0xchall_e0"}}
-    {:seq 9 :time 1140 :agent "buyer3" :action "escalate_dispute" :params {:workflow-id 2}}
-    {:seq 10 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
-    {:seq 11 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}
-    {:seq 12 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
+    ;; resolve wf2, then settle all three workflows
+    {:seq 8 :time 1130 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 2 :is-release true :resolution-hash "0xhash2"}}
+    {:seq 9 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 10 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}
+    {:seq 11 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
 
 (def s62-cross-token-fee-on-transfer-under-dispute-load
   {:scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load"
@@ -2395,6 +2395,7 @@
             {:id "buyerB" :address "0xbuyerB" :strategy "honest"}
             {:id "sellerB" :address "0xsellerB" :strategy "honest"}
             {:id "resolver" :address "0xresolver" :role "resolver"}
+            {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
             {:id "keeper" :address "0xkeeper" :role "keeper"}]
    :protocol-params kleros
    :notes "Under-dispute-load variant that mixes fee-on-transfer tokens (e.g., USDT_FEE) with normal tokens to verify ledger accounting under concurrent appeal activity. Developers: verify fee deductions, net recipient balances, and that fee logic is escrow-local."
@@ -2409,12 +2410,16 @@
     {:seq 2 :time 1060 :agent "buyerA" :action "raise_dispute" :params {:workflow-id 0}}
     {:seq 3 :time 1061 :agent "buyerB" :action "raise_dispute" :params {:workflow-id 1}}
 
-    ;; resolver resolves wfB immediately, wfA goes through challenge and appeal
-    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution" :params {:workflow-id 1 :is-release true :resolution-hash "0xhashB"}}
-    {:seq 5 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id 0 :evidence-hash "0xchallA"}}
+    ;; resolver resolves wf0 (appeal chain), then wf1; challenge + escalate on wf0
+    {:seq 4 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release false :resolution-hash "0xhashA"}}
+    {:seq 5 :time 1130 :agent "watchdog" :action "challenge_resolution"
+     :params {:workflow-id 0 :evidence-hash "0xchallA"}}
     {:seq 6 :time 1140 :agent "buyerA" :action "escalate_dispute" :params {:workflow-id 0}}
-    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
-    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
+    {:seq 7 :time 1150 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 1 :is-release true :resolution-hash "0xhashB"}}
+    {:seq 8 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 9 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
 
 (def s62-cross-token-parallel-appeal-depths-under-dispute-load
   {:scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load"
@@ -2424,26 +2429,29 @@
             {:id "sellerX" :address "0xsellerX" :strategy "honest"}
             {:id "buyerY" :address "0xbuyerY" :strategy "honest"}
             {:id "sellerY" :address "0xsellerY" :strategy "honest"}
-            {:id "resolver-l1" :address "0xresolverL1" :role "resolver"}
-            {:id "resolver-l2" :address "0xresolverL2" :role "resolver"}
+            {:id "resolver-l0" :address "0xl0" :role "resolver"}
+            {:id "resolver-l1" :address "0xl1" :role "resolver"}
+            {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
             {:id "keeper" :address "0xkeeper" :role "keeper"}]
    :protocol-params kleros
    :notes "Simultaneous disputes with differing appeal depths to ensure escalation paths remain escrow-local and do not interfere when several appeal-chains are active. Developers: verify jurisdiction/state transitions remain scoped to the escrow."
    :events
-   [;; create two escrows
-    {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xresolverL1"}}
-    {:seq 1 :time 1002 :agent "buyerY" :action "create_escrow" :params {:token "DAI" :to "0xsellerY" :amount 3500 :custom-resolver "0xresolverL1"}}
+   [;; create two escrows (L0 resolver)
+    {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xl0"}}
+    {:seq 1 :time 1002 :agent "buyerY" :action "create_escrow" :params {:token "DAI" :to "0xsellerY" :amount 3500 :custom-resolver "0xl0"}}
 
     ;; both raise disputes
     {:seq 2 :time 1060 :agent "buyerX" :action "raise_dispute" :params {:workflow-id 0}}
     {:seq 3 :time 1061 :agent "buyerY" :action "raise_dispute" :params {:workflow-id 1}}
 
-    ;; wfx goes through multiple appeals (deeper chain), wfy resolves quickly
-    {:seq 4 :time 1120 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id 1 :is-release true :resolution-hash "0xhashY"}}
-    {:seq 5 :time 1130 :agent "buyerX" :action "escalate_dispute" :params {:workflow-id 0}}
-    {:seq 6 :time 1200 :agent "resolver-l2" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xhashX"}}
-    {:seq 7 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
-    {:seq 8 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
+    ;; wfY resolves quickly; wfX goes through challenge + escalation to L1
+    {:seq 4 :time 1120 :agent "resolver-l0" :action "execute_resolution" :params {:workflow-id 1 :is-release true :resolution-hash "0xhashY"}}
+    {:seq 5 :time 1125 :agent "resolver-l0" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xhashX0"}}
+    {:seq 6 :time 1130 :agent "watchdog" :action "challenge_resolution" :params {:workflow-id 0 :evidence-hash "0xchallX"}}
+    {:seq 7 :time 1140 :agent "buyerX" :action "escalate_dispute" :params {:workflow-id 0}}
+    {:seq 8 :time 1200 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xhashX1"}}
+    {:seq 9 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 10 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
 
 (def s63
   {:scenario-id     "s63-frivolous-appeal-slashing"

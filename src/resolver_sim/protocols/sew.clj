@@ -544,6 +544,7 @@
    :resolver-stakes     (:resolver-stakes world)
    :resolver-slash-total (:resolver-slash-total world)
    :bond-distribution   (:bond-distribution world)
+   :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
    :claimable           (:claimable world {})
    :bond-balances       (:bond-balances world {})
    :yield-positions     (when-let [pos (:yield/positions world)]

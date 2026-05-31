@@ -542,6 +542,7 @@
                  :outcome outcome
                  :events-processed (count trace)
                  :halt-reason halt-reason
+                 :expected-error-analysis expected-error-analysis
                  :trace trace
                  :metrics metrics
                  :states states

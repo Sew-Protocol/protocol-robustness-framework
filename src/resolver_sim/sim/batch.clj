@@ -2,7 +2,7 @@
   "Batch runner: aggregate N trials into summary statistics."
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.dispute :as dispute]
-            [resolver-sim.stochastic.resolver-ring :as ring]
+            [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]))
 
 (defn- common-kwargs

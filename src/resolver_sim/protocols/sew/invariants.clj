@@ -85,21 +85,25 @@
                 (or amt 0))))
 
 (defn- get-distributed-sum [world token]
-  (let [bd          (:bond-distribution world {:insurance 0 :protocol 0})
-        retained    (:retained-slash-reserves world 0)
-        bond-fees   (get (:bond-fees world) token 0)]
+  (let [bd               (:bond-distribution world {:insurance 0 :protocol 0})
+        retained         (:retained-slash-reserves world 0)
+        bond-fees        (get (:bond-fees world) token 0)
+        appeal-bond-dist (get (:appeal-bond-distributions-by-token world {}) token 0)]
     (if (= token :USDC)
-      (+ (:insurance bd 0) (:protocol bd 0) retained bond-fees)
-      bond-fees)))
+      (+ (:insurance bd 0) (:protocol bd 0) retained bond-fees appeal-bond-dist)
+      (+ bond-fees appeal-bond-dist))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 1: Solvency
 ;; ---------------------------------------------------------------------------
 
 (defn- get-slash-appeal-bond-sum [world token]
-  (reduce + 0 (for [[_ ev] (:pending-fraud-slashes world {})
-                    :let [et (get-in world [:escrow-transfers (:resolver ev)])] ;; Default token logic
-                    :when (= token "USDC") ;; Slashing bonds currently USDC-only in registry
+  (reduce + 0 (for [[slash-id ev] (:pending-fraud-slashes world {})
+                    :let [custody (get-in world [:appeal-bond-custody slash-id])
+                          bond-token (or (:token custody)
+                                         ;; Legacy fallback: look up via escrow-transfer token
+                                         (get-in world [:escrow-transfers (:workflow-id custody) :token]))]
+                    :when (= token bond-token)
                     :let [amt (:appeal-bond-held ev 0)]]
                 amt)))
 
@@ -417,6 +421,15 @@
                      claimable-after  (get-token-claimable-sum world-after token)
                      delta-claimable  (- claimable-after claimable-before)
 
+                     ;; Resolver stake slashes (USDC-only) may occur in the same
+                     ;; transition as escrow finalization (e.g. dispute timeout).
+                     stake-held-delta
+                     (if (= token :USDC)
+                       (let [sb (reduce + 0 (vals (:resolver-stakes world-before {})))
+                             sa (reduce + 0 (vals (:resolver-stakes world-after {})))]
+                         (- sa sb))
+                       0)
+
                      ;; Expected immediately-claimable amount:
                      ;;   shortfall → fulfilled-amount (deferred remainder stays in held)
                      ;;   no yield  → net-afa exactly
@@ -432,7 +445,7 @@
                      (cond
                        ;; No yield module: strict principal accounting
                        (nil? yield-mid)
-                       (and (= delta-held (- afa))
+                       (and (= delta-held (+ (- afa) stake-held-delta))
                             (= delta-claimable net-afa))
 
                        ;; Yield with shortfall: only fulfilled-amount goes to claimable immediately
@@ -987,12 +1000,14 @@
                     delta-claimable (- claimable-after claimable-before)
                     delta-withdrawn (- withdrawn-after withdrawn-before)
                     delta-stake     (- stake-after stake-before)
+                    delta-distributed (- (get-distributed-sum world-after token)
+                                         (get-distributed-sum world-before token))
                     ;; Positive = funds left the protocol without being accounted for.
-                    ;; A drop in held should be matched by increases in released/refunded/claimable.
-                    ;; A drop in claimable (withdraw-escrow) is matched by delta-withdrawn.
-                    ;; A drop in stake liability (-delta-stake) also offsets.
+                    ;; A drop in held should be matched by increases in released/refunded/claimable
+                    ;; or by bond/appeal distributions leaving the protocol custody.
                     unexplained-leak (+ delta-held delta-released delta-refunded
-                                        delta-claimable delta-withdrawn (- delta-stake))]
+                                        delta-claimable delta-withdrawn (- delta-stake)
+                                        delta-distributed)]
               :when (neg? unexplained-leak)]
           {:token token
            :delta-held delta-held

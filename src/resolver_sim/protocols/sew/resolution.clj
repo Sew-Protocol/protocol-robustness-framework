@@ -593,8 +593,7 @@
                                (assoc-in [:appeal-bond-custody slash-id]
                                          {:resolver caller :workflow-id workflow-id :amount bond-amount :token token})
                                (acct/add-held token bond-amount)
-                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount)
-                               (update-in [:total-principal-deposited token] (fnil + 0) bond-amount))
+                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount))
                            world)]
          (t/ok (assoc-in world' [:pending-fraud-slashes slash-id :status] :appealed)))))))
 
@@ -661,10 +660,11 @@
                                  (acct/record-claimable wf-id resolver bond-held))
                              (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed))
                            (if (pos? bond-held)
-                             (-> world'
-                                 (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
-                                 (update-in [:bond-distribution :insurance] (fnil + 0) bond-held)
-                                 (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held))
+                             (let [bond-token (or (:token custody) "USDC")]
+                               (-> world'
+                                   (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
+                                   (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
+                                   (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
                              (assoc-in world' [:pending-fraud-slashes slash-id :status] :pending)))]
          (t/ok world''))))))
 

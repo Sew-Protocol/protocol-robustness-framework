@@ -457,14 +457,13 @@
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?
-                            (let [res (reg/slash-resolver-stake world-finalized resolver slash-amt)
-                                  held (get-in (:world res) [:total-held token] 0)
-                                  amt  (min held slash-amt)]
-                              (-> (:world res)
-                                  (acct/sub-held token amt)))
+                            (let [res    (reg/slash-resolver-stake world-finalized resolver slash-amt)
+                                  actual (:slashed-from-stake res)]
+                              (if (pos? actual)
+                                (acct/sub-held (:world res) token actual)
+                                (:world res)))
                             world-finalized)
-          world-dist      (acct/distribute-slashed-funds world-slashed slash-amt)
-          world-result    (-> world-dist
+          world-result    (-> world-slashed
                               (t/decrement-resolver-capacity resolver)
                               (update :dispute-timestamps dissoc workflow-id))]
       (t/ok world-result))))

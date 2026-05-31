@@ -100,7 +100,7 @@
       ;; Buyer/claimant raise-dispute or escalate-dispute depend on private
       ;; evidence quality — these are information-set nodes.
       (and (contains? private-evidence-roles agent)
-           (contains? #{"raise-dispute" "escalate-dispute"} action))
+           (contains? #{"raise_dispute" "escalate_dispute"} action))
       {:checkability :information-set-node
        :spe/checkability :information-set-node
        :checkability-reason "buyer private evidence quality not modeled; decision is information-set node"}

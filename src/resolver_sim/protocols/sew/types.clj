@@ -305,26 +305,28 @@
     :else nil))
 
 (defn normalize-workflow-id
-  "Normalize workflow IDs across call-sites.
+  "Normalize workflow IDs across call-sites to a canonical plain integer.
 
    Supports integer IDs (canonical), numeric strings (e.g. \"0\"), and
    keyword-like values with a leading colon (e.g. \":0\").
-   Also supports TransferId records.
+   Also accepts TransferId and DisputeId records (unwrapped to their integer :id).
 
-   Returns the normalized TransferId record when parseable, else returns the original
-   value so callers can still fail cleanly via map lookup/guards."
+   Returns the parsed integer when the input is parseable, otherwise returns
+   the original value so callers can still fail cleanly via map lookup/guards.
+
+   NOTE: all world-state maps (escrow-transfers, dispute-levels, etc.) use plain
+   integers as keys, so this function returns plain integers — not TransferId records —
+   to ensure storage lookups always succeed."
   [workflow-id]
   (cond
     (instance? TransferId workflow-id)
-    workflow-id
+    (:id workflow-id)
 
     (instance? DisputeId workflow-id)
-    (->TransferId (:id workflow-id))
+    (:id workflow-id)
 
     :else
-    (if-let [id (try-parse-id workflow-id)]
-      (->TransferId id)
-      workflow-id)))
+    (or (try-parse-id workflow-id) workflow-id)))
 
 ;; ---------------------------------------------------------------------------
 ;; Yield owner-id constructors
