@@ -8,6 +8,8 @@
  :protocol   :protocol/baseline
  :state      :states/minimal-world
  :thresholds :thresholds/strict-baseline
- :traces [:traces/s54-alias-poisoning-noncanonical-id-rejected
+ :traces [{:trace :traces/s54-alias-poisoning-noncanonical-id-rejected
+           :expected-outcome :fail
+           :expected-halt-reason :invariant-violation}
           :traces/s55-alias-rebinding-after-create-blocked
           :traces/s57-pending-settlement-expiry-boundary-1s]}

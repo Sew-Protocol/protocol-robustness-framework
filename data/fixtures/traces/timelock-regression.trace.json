@@ -23,6 +23,11 @@
       "id": "resolver",
       "address": "0xresolver",
       "type": "resolver"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "resolver"
     }
   ],
   "protocol-params": {
@@ -59,6 +64,15 @@
       "params": {
         "workflow-id": 0,
         "is-release": true
+      }
+    },
+    {
+      "seq": 3,
+      "time": 1120,
+      "agent": "keeper",
+      "action": "execute_pending_settlement",
+      "params": {
+        "workflow-id": 0
       }
     }
   ],

@@ -8,11 +8,19 @@
    :unclassified {:label "Unclassified (v1.0)" :default-story-family :scenario-deep-dive}})
 
 (def statuses
-  {:not-evaluated {:label "Not evaluated"}
-   :not-falsified {:label "Claim not falsified"}
-   :falsified {:label "Claim falsified"}
-   :inconclusive {:label "Inconclusive"}
+  {:not-evaluated {:label "Not evaluated: no theory block"}
+   :not-falsified {:label "Not falsified in this replay"}
+   :falsified     {:label "Falsified by this replay"}
+   :inconclusive  {:label "Inconclusive: evidence incomplete or invalid"}
    :not-applicable {:label "Not applicable"}})
+
+(def proxy-statuses
+  "Human-facing labels for mechanism/equilibrium validator status (not metric falsification)."
+  {:pass            {:label "Proxy check passed"}
+   :fail            {:label "Proxy check failed"}
+   :inconclusive    {:label "Proxy check inconclusive"}
+   :not-applicable  {:label "Proxy check not applicable"}
+   :not-checked     {:label "Proxy check not run"}})
 
 (def severities
   {:critical {:rank 4}
@@ -227,6 +235,7 @@
 
 (defn purpose-def [k] (get purposes k))
 (defn status-def [k] (get statuses k))
+(defn proxy-status-def [k] (get proxy-statuses k))
 (defn severity-def [k] (get severities k))
 (defn story-family-def [k] (get story-families k))
 (defn valid-purpose? [k] (contains? purposes k))

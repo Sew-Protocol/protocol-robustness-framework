@@ -52,7 +52,12 @@
     :fee-cap
     :no-stale-automatable-escrows
     :conservation-of-funds
-    :claim-boundary
+    ;; Claimable accounting boundaries (see settlement-*-boundary?, bond-boundary?, etc.)
+    :settlement-principal-boundary
+    :settlement-yield-boundary
+    :liability-slash-boundary
+    :bond-boundary
+    :fee-boundary
     :dispute-resolution-path
     :slash-distribution-consistent
     :resolver-bond-mix-valid
@@ -715,8 +720,8 @@
   [world]
   (let [violations
         (for [[wf et] (:escrow-transfers world)
-              :let [afa         (:amount-after-fee et)
-                    fee         (:initial-fee et 0)
+              :let [afa         (or (:amount-after-fee et) 0)
+                    fee         (or (:initial-fee et) 0)
                     original    (+ afa fee)
                     appeal-fees (reduce + 0 (vals (get (:bond-balances world) wf {})))
                     total-fees  (+ fee appeal-fees)]
@@ -746,7 +751,7 @@
    first (i.e. :last-escalation-block-time carried forward from world-before
    equals bt-after of the new transition)."
   [world-before world-after]
-  (let [bt-after (:block-time world-after)]
+  (let [bt-after (or (:block-time world-after) 0)]
     (if (zero? bt-after)
       {:holds? true :violations []}
       (let [violations
@@ -816,6 +821,20 @@
           {:workflow-id wf :claims total :max afa})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
+(defn settlement-yield-boundary?
+  "True when :settlement/yield claimable does not exceed the escrow yield position."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [yield-claims (get domain-map :settlement/yield {})
+                    total        (reduce + 0 (vals yield-claims))
+                    owner-id     (t/escrow-yield-owner-id wf)
+                    pos          (get-in world [:yield/positions owner-id])
+                    max-yield    (+ (:realized-yield pos 0) (:unrealized-yield pos 0))]
+              :when (> total max-yield)]
+          {:workflow-id wf :claims total :max max-yield})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
 (defn liability-slash-boundary?
   "True when liability slash-bounty claims do not exceed distributed slash reserves."
   [world]
@@ -826,6 +845,23 @@
                     reserves       (get world :retained-slash-reserves 0)]
               :when (> total reserves)]
           {:workflow-id wf :claims total :max reserves})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
+(defn fee-boundary?
+  "True when fee-domain claimable does not exceed fees attributable to the workflow."
+  [world]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [resolver-fees (get domain-map :fees/resolver {})
+                    protocol-fees (get domain-map :fees/protocol {})
+                    claimed       (+ (reduce + 0 (vals resolver-fees))
+                                     (reduce + 0 (vals protocol-fees)))
+                    et            (get-in world [:escrow-transfers wf])
+                    fee           (:initial-fee et 0)
+                    appeal-fees   (reduce + 0 (vals (get (:bond-balances world) wf {})))
+                    max-fees      (+ fee appeal-fees)]
+              :when (> claimed max-fees)]
+          {:workflow-id wf :claims claimed :max max-fees})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn bond-boundary?

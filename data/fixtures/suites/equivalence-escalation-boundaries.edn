@@ -9,7 +9,5 @@
  :state      :states/minimal-world
  :thresholds :thresholds/strict-baseline
  :traces [:traces/s48-max-escalation-exact-boundary
-          {:trace :traces/s49-max-escalation-plus-one-rejected
-           :expected-outcome :invalid
-           :expected-halt-reason :adversarial-requires-analysis}
+          :traces/s49-max-escalation-plus-one-rejected
           :traces/s50-multi-hop-pending-cleared-every-hop]}

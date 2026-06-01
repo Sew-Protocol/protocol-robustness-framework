@@ -1,6 +1,7 @@
 (ns resolver-sim.scenario.outcome-semantics
   "Shared outcome interpretation semantics used across reporting and suite evaluation."
-  (:require [resolver-sim.definitions.registry :as defs]))
+  (:require [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.scenario.theory-result :as theory-result]))
 
 (defn normalize-purpose [purpose]
   (keyword (or purpose "")))
@@ -10,10 +11,18 @@
   [purpose]
   (= (normalize-purpose purpose) :theory-falsification))
 
-(defn theory-label [status]
-  (or (get-in (defs/status-def status) [:label])
-      (get-in (defs/status-def :not-evaluated) [:label])
-      "Not evaluated"))
+(defn theory-label
+  "Human label for metric-track theory status.
+
+  Prefer `theory-result/result-display-label` when a full result map is available."
+  ([status]
+   (or (:label (defs/status-def status))
+       (:label (defs/status-def :not-evaluated))
+       "Not evaluated"))
+  ([status result]
+   (if result
+     (theory-result/result-display-label result)
+     (theory-label status))))
 
 (defn theory-expected?
   "Whether a theory status is expected under a scenario purpose.
@@ -27,8 +36,10 @@
     true))
 
 (defn theory-status-ok?
-  "Suite pass/fail semantics for theory evaluation statuses.
-   :inconclusive is soft by default, optionally strict via require-conclusive?."
+  "Suite pass/fail semantics for metric-track theory status.
+   :inconclusive is soft by default, optionally strict via require-conclusive?.
+
+   Uses canonical :status on the theory result map."
   [status purpose {:keys [require-conclusive?] :or {require-conclusive? false}}]
   (case status
     nil            true
@@ -37,6 +48,16 @@
     :falsified     (negative-test-purpose? purpose)
     :inconclusive  (not require-conclusive?)
     true))
+
+(defn theory-result-ok?
+  "Suite pass/fail for a full theory result map (metric track).
+   Uses canonical :status (see `theory-result/result-status`). Nil theory-result passes."
+  [theory-result purpose opts]
+  (if (nil? theory-result)
+    true
+    (theory-status-ok? (theory-result/result-status theory-result)
+                       purpose
+                       opts)))
 
 (defn hard-failure-results?
   "True when any result entry is an explicit hard failure."

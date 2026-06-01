@@ -7,6 +7,15 @@
     "authorization-bypass",
     "equivalence-auth-path"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s43-auth-rejected-then-authorized-recovery",
   "initial-block-time": 1000,
   "agents": [

@@ -6,6 +6,15 @@
   "threat-tags": [
     "token-accounting"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "total-escrows",
+        "op": ":>=",
+        "value": 1
+      }
+    ]
+  },
   "scenario-id": "fee-on-transfer-leak",
   "initial-block-time": 1000,
   "agents": [

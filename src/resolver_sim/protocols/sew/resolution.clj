@@ -27,7 +27,6 @@
    direction — :released (to recipient) or :refunded (to sender)."
   [world workflow-id direction]
   (let [et        (t/get-transfer world workflow-id)
-        _         (println "DEBUG: finalize et" et)
         token     (:token et)
         amt       (:amount-after-fee et)
         fot-bps   (get-in world [:token-fot-bps token] 0)
@@ -70,79 +69,57 @@
       Slash is PENDING and can be appealed by the resolver."
   [world workflow-id current-is-release]
   (let [level (t/dispute-level world workflow-id)]
-    (if (pos? level)
+    (if-not (pos? level)
+      world
       (let [prev-decision (get-in world [:previous-decisions workflow-id (dec level)])]
-        (if (and (some? prev-decision) (not= (:is-release prev-decision) current-is-release))
+        (if-not (and (some? prev-decision)
+                     (not= (:is-release prev-decision) current-is-release))
+          world
           (let [prev-resolver (:resolver prev-decision)
-                et            (t/get-transfer world workflow-id)
-                afa           (:amount-after-fee et)
                 snap          (t/get-snapshot world workflow-id)
-                
-                ;; Evidence Check (Phase M Practicality)
-                ;; In a real system, the resolver signs an evidence hash.
-                ;; Here we check if the world state indicates "new information".
                 ;; NOTE: :evidence-updated? is not yet set by any action; Track 2 is
                 ;; a forward-placeholder for when evidence-submission is modelled.
                 new-evidence? (get-in world [:evidence-updated? workflow-id] false)
-                
                 slash-bps     (:reversal-slash-bps snap 0)
                 det-prob      (:reversal-detection-probability snap 0.0)
-                
-                ;; Basis: Resolver Stake
                 prev-stake    (reg/get-stake world prev-resolver)
                 slash-amt     (payoffs/calculate-slash-amount-from-basis prev-stake slash-bps)
-                
-                ;; Probabilistic detection: Only slash if rand < probability.
-                ;; DESIGN NOTE: In production, the RESOLUTION_MODULE (or governance
-                ;; entity triggering slashForReversal) MUST enforce this detection 
-                ;; probability, as the SlashingModule executes unconditionally.
                 detected?     (< (rand) det-prob)
-                
-                ;; Level-scoped slash-id prevents collision when multiple reversals
-                ;; occur on the same workflow across different escalation levels.
                 slash-id      (str workflow-id "-reversal-" (dec level))
                 now           (:block-time world)]
-            
-            (if (and detected? (not new-evidence?))
-              ;; TRACK 1: AUTOMATED (Same evidence = Negligence/Bias)
-              ;; Slash is EXECUTED immediately, no appeal window.
-              (if (pos? slash-amt)
-                (let [challenger (get-in world [:challengers workflow-id (dec level)])
-                      bounty-bps (:challenge-bounty-bps snap 0)]
-                  (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps)
-                      :world
-                      (assoc-in [:pending-fraud-slashes slash-id]
-                                {:resolver         prev-resolver
-                                 :basis-amount     prev-stake
-                                 :basis-kind       :stake
-                                 :slash-bps        slash-bps
-                                 :amount           slash-amt
-                                 :status           :executed
-                                 :reason           :reversal
-                                 :proposed-at      now
-                                 :appeal-deadline  0
-                                 :appeal-bond-held 0
-                                 :contest-deadline 0})))
-                world)
-              
-              (if (and detected? new-evidence?)
-                ;; TRACK 2: MANUAL (New evidence = Honest Disagreement potential)
-                ;; Slash is PENDING with appeal window — resolver can contest.
-                (let [gov-delay (or (:appeal-window-duration snap) 259200)]
-                  (assoc-in world [:pending-fraud-slashes slash-id]
-                            {:resolver         prev-resolver
-                             :basis-amount     prev-stake
-                             :basis-kind       :stake
-                             :slash-bps        slash-bps
-                             :amount           slash-amt
-                             :reason           :reversal
-                             :status           :pending
-                             :proposed-at      now
-                             :appeal-bond-held 0
-                             :contest-deadline 0}))
-                world))
-          world))
-      world))))
+            (cond
+              (and detected? (not new-evidence?) (pos? slash-amt))
+              (let [challenger (get-in world [:challengers workflow-id (dec level)])
+                    bounty-bps (:challenge-bounty-bps snap 0)]
+                (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps)
+                    :world
+                    (assoc-in [:pending-fraud-slashes slash-id]
+                              {:resolver         prev-resolver
+                               :basis-amount     prev-stake
+                               :basis-kind       :stake
+                               :slash-bps        slash-bps
+                               :amount           slash-amt
+                               :status           :executed
+                               :reason           :reversal
+                               :proposed-at      now
+                               :appeal-deadline  0
+                               :appeal-bond-held 0
+                               :contest-deadline 0})))
+
+              (and detected? new-evidence?)
+              (assoc-in world [:pending-fraud-slashes slash-id]
+                        {:resolver         prev-resolver
+                         :basis-amount     prev-stake
+                         :basis-kind       :stake
+                         :slash-bps        slash-bps
+                         :amount           slash-amt
+                         :reason           :reversal
+                         :status           :pending
+                         :proposed-at      now
+                         :appeal-bond-held 0
+                         :contest-deadline 0})
+
+              :else world)))))))
 
 (defn- handle-fraud-slashing
   "Create a PENDING fraud slash for a resolver.
@@ -423,7 +400,7 @@
                                ;; Increment escalation count for this address (Layer B)
                                (update-in [:escalation-counts-per-addr caller] (fnil inc 0))
                                (assoc-in [:last-escalation-block-time workflow-id]
-                                         (:block-time world))))]
+                                         (:block-time world)))]
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))
@@ -575,7 +552,7 @@
                                (update-in [:escalation-counts-per-addr caller] (fnil inc 0))
                                ;; Track when this escalation occurred for this workflow (Invariant check)
                                (assoc-in [:last-escalation-block-time workflow-id]
-                                         (:block-time world))))]
+                                         (:block-time world)))]
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))

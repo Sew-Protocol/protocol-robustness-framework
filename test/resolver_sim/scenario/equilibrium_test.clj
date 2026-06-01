@@ -241,8 +241,10 @@
                       {:claim-tier :deviation-tested}))]
       (is (= :inconclusive (get-in result [:dominant-strategy-equilibrium :status])))
       (is (= :multi-trace-required (get-in result [:dominant-strategy-equilibrium :basis])))
+      (is (= :missing-deviation-bundles (get-in result [:dominant-strategy-equilibrium :reason])))
       (is (= :inconclusive (get-in result [:nash-equilibrium :status])))
-      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))))
+      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))
+      (is (= :missing-deviation-bundles (get-in result [:nash-equilibrium :reason])))))
 
   (testing "deviation-tested tier passes through when deviation bundle evidence is present"
     (let [proj   (assoc (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})

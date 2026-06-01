@@ -1,5 +1,7 @@
 (ns scripts.regenerate-goldens
   (:require [clojure.edn :as edn]
+            [resolver-sim.scenario.outcome-semantics :as ose]
+            [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.sim.fixtures :as f]))
 
 (def suite-ids
@@ -19,14 +21,18 @@
    :suites/timelock-regression])
 
 (defn- theory-fail-reason [r]
-  (when (:theory r)
-    (let [status (get-in r [:theory :status])
-          mech   (get-in r [:theory :mechanism-status])
-          eq     (get-in r [:theory :equilibrium-status])]
-      (when-not (and (= :pass status)
-                     (contains? #{:pass :not-checked :inconclusive} mech)
-                     (contains? #{:pass :not-checked :inconclusive} eq))
-        (select-keys (:theory r) [:status :mechanism-status :equilibrium-status])))))
+  (when-let [theory (:theory r)]
+    (let [purpose (:purpose r)
+          strict? (true? (get-in r [:theory-source :require-conclusive?]))
+          opts    {:require-conclusive? strict?}
+          mech    (:mechanism-status theory :not-checked)
+          eq      (:equilibrium-status theory :not-checked)
+          metric-ok? (ose/theory-result-ok? theory purpose opts)
+          mech-ok?   (ose/domain-results-ok? purpose mech (vals (:mechanism-results theory {})) opts)
+          eq-ok?     (ose/domain-results-ok? purpose eq (vals (:equilibrium-results theory {})) opts)]
+      (when-not (and metric-ok? mech-ok? eq-ok?)
+        (merge (theory-result/summarize theory)
+               {:mechanism-status mech :equilibrium-status eq})))))
 
 (defn- trace-fail? [r]
   (or (not= :pass (:outcome r))

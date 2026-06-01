@@ -264,10 +264,14 @@
 ;; ---------------------------------------------------------------------------
 
 (def claim-status-style
-  {:not-falsified {:color "#4ade80" :bg "#052e16" :border "#16a34a" :label "NOT FALSIFIED"}
-   :falsified     {:color "#f87171" :bg "#1f0707" :border "#dc2626" :label "FALSIFIED"}
-   :not-evaluated {:color "#9ca3af" :bg "#111827" :border "#4b5563" :label "NOT EVALUATED"}
-   :inconclusive  {:color "#fbbf24" :bg "#1c1007" :border "#d97706" :label "INCONCLUSIVE"}})
+  {:not-falsified {:color "#4ade80" :bg "#052e16" :border "#16a34a"
+                   :label "NOT FALSIFIED IN THIS REPLAY"}
+   :falsified     {:color "#f87171" :bg "#1f0707" :border "#dc2626"
+                   :label "FALSIFIED BY THIS REPLAY"}
+   :not-evaluated {:color "#9ca3af" :bg "#111827" :border "#4b5563"
+                   :label "NOT EVALUATED"}
+   :inconclusive  {:color "#fbbf24" :bg "#1c1007" :border "#d97706"
+                   :label "INCONCLUSIVE"}})
 
 (defn claim-row [{:claim/keys [id description status confidence assumptions]}]
   (let [{:keys [color bg border label]} (get claim-status-style (keyword status)

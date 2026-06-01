@@ -7,6 +7,15 @@
     "appeal-escalation",
     "max-level-boundary"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "comparison": {
     "comparison_group": "max-escalation-boundary-vs-plus-one",
     "variant": "B",

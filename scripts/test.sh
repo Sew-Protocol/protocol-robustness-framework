@@ -266,7 +266,8 @@ run_suites() {
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]
-      results (map (fn [id] [id (f/run-suite id)]) suites)
+      verify-opts {:golden-verify-mode :replay-and-theory}
+      results (map (fn [id] [id (f/run-suite id :verify nil verify-opts)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))

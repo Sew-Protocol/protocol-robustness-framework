@@ -7,6 +7,15 @@
     "governance-transition",
     "authorization-bypass"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s45-stale-module-snapshot-rejects-legacy-resolver",
   "initial-block-time": 1000,
   "agents": [

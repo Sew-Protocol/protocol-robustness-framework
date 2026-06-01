@@ -214,8 +214,16 @@
       {:ok false :error :theory-missing-assumptions
        :detail ":theory must include an :assumptions vector (may be empty)"}
 
-      ;; :falsifies-if may be absent or empty ONLY when mechanism-properties or
-      ;; equilibrium-concept are declared (mechanism-only theory blocks are valid).
+      ;; :purpose :theory-falsification requires a direct metric disconfirmer (negative test).
+      (and (:theory scenario)
+           (contains? (set (schema-profile/required-fields version)) :purpose)
+           (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
+           (not (seq (get-in scenario [:theory :falsifies-if]))))
+      {:ok false :error :theory-falsification-requires-falsifies-if
+       :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer); mechanism/equilibrium proxies alone are insufficient"}
+
+      ;; :falsifies-if may be empty for regression/adversarial when mechanism-properties or
+      ;; equilibrium-concept are declared (mechanism-only theory blocks).
       (and (:theory scenario)
            (not (seq (get-in scenario [:theory :falsifies-if])))
            (empty? (get-in scenario [:theory :mechanism-properties]))

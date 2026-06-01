@@ -159,6 +159,15 @@ Typical namespaces: exploratory `sim/*`, `sim/adversarial/*`, research-oriented 
 - For **protocol-semantic** claims, cite Sew reference modules.
 - For **exploratory** claims, mark results as research/evidence, not framework API.
 
+### CDRS theory “claim” vs protocol “claimable”
+
+CDRS `:theory` uses **claim** for a falsifiable hypothesis (`:claim-id`, optional `:claim` text).
+Protocol replay uses **claimable** for withdrawal rights and **`*-boundary` invariants**
+(principal/yield/fee/bond caps). Those accounting checks are unrelated to theory
+falsification unless explicitly wired into `:falsifies-if` or expectations.
+
+See `docs/CDRS-v1.1-THEORY-SCHEMA.md` — **Claim boundaries**.
+
 ### Accounting-specific boundary
 
 Safe to generalize: reconciliation mechanics, aggregation mechanics, drift/conservation reporting contracts.

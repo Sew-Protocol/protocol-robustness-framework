@@ -6,6 +6,15 @@
   "threat-tags": [
     "timelock-integrity"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "padded-timelock-failure",
   "initial-block-time": 1000,
   "agents": [

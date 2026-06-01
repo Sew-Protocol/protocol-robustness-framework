@@ -48,7 +48,8 @@
      an explicit extra-validators map for direct use outside the protocol dispatch.
 
    This namespace is pure — no I/O, no DB, no side effects."
-  (:require [resolver-sim.protocols.protocol :as protocol]))
+  (:require [resolver-sim.protocols.protocol :as protocol]
+            [resolver-sim.scenario.equilibrium-result :as eq-result]))
 
 (def ^:private evidence-schema-version
   "Semantic version for equilibrium/mechanism evidence payload shape."
@@ -91,48 +92,22 @@
   (= :strict-attestation trust-mode))
 
 ;; ---------------------------------------------------------------------------
-;; Result constructors
+;; Result constructors (delegate to equilibrium-result)
 ;; ---------------------------------------------------------------------------
 
 (defn- pass [property basis observed expected]
-  {:property  property
-   :status    :pass
-   :severity  :hard
-   :basis     basis
-   :observed  observed
-   :expected  expected
-   :offending []
-   :requires  []})
+  (eq-result/pass-result property basis observed expected))
 
 (defn- fail [property basis observed expected offending]
-  {:property  property
-   :status    :fail
-   :severity  :hard
-   :basis     basis
-   :observed  observed
-   :expected  expected
-   :offending (vec offending)
-   :requires  []})
+  (eq-result/fail-result property basis observed expected offending))
 
-(defn- inconclusive [property basis reason]
-  {:property  property
-   :status    :inconclusive
-   :severity  :soft
-   :basis     basis
-   :observed  nil
-   :expected  nil
-   :offending []
-   :requires  [reason]})
+(defn- inconclusive [property basis reason-kw detail & {:keys [required available]}]
+  (eq-result/inconclusive-result property basis reason-kw
+                                 :detail detail :required required :available available))
 
-(defn- not-applicable [property reason]
-  {:property  property
-   :status    :not-applicable
-   :severity  :soft
-   :basis     :not-applicable
-   :observed  nil
-   :expected  nil
-   :offending []
-   :requires  [reason]})
+(defn- not-applicable [property reason-kw detail & opts]
+  (eq-result/not-applicable-result property reason-kw
+                                   (assoc opts :detail detail)))
 
 ;; ---------------------------------------------------------------------------
 ;; Mechanism-property validators (generic — Sew-specific validators are in
@@ -152,8 +127,10 @@
         lost      (:funds-lost metrics 0)]
     (cond
       (zero? attempts)
-      (inconclusive :incentive-compatibility :single-trace-metric-proxy
-                    "no adversarial actors in trace; property vacuously consistent but untested")
+      (inconclusive :incentive-compatibility :single-trace-metric-proxy :untested-no-adversary
+                    "no adversarial actors in trace; property vacuously consistent but untested"
+                    :required [:attack-attempts :attack-successes]
+                    :available [:metrics])
 
       (or (pos? successes) (pos? lost))
       (fail :incentive-compatibility :single-trace-metric-proxy
@@ -181,8 +158,9 @@
         successes (:attack-successes metrics 0)]
     (cond
       (zero? attempts)
-      (inconclusive :sybil-resistance :single-trace-metric-proxy
-                    "no adversarial actors; sybil resistance untested in this trace")
+      (inconclusive :sybil-resistance :single-trace-metric-proxy :untested-no-adversary
+                    "no adversarial actors; sybil resistance untested in this trace"
+                    :required [:attack-attempts])
 
       (pos? successes)
       (fail :sybil-resistance :single-trace-metric-proxy
@@ -215,8 +193,9 @@
         attempts   (:attack-attempts metrics 0)]
     (cond
       (and (zero? attempts) (zero? violations))
-      (inconclusive :dominant-strategy-equilibrium :single-trace-metric-proxy
-                    "no adversarial actors in trace; dominance is consistent but untested")
+      (inconclusive :dominant-strategy-equilibrium :single-trace-metric-proxy :untested-no-adversary
+                    "no adversarial actors in trace; dominance is consistent but untested"
+                    :required [:attack-attempts])
 
       (or (pos? violations) (pos? successes))
       (fail :dominant-strategy-equilibrium :single-trace-metric-proxy
@@ -246,8 +225,9 @@
         attempts   (:attack-attempts metrics 0)]
     (cond
       (and (zero? attempts) (zero? violations))
-      (inconclusive :nash-equilibrium :single-trace-metric-proxy
-                    "no adversarial actors; Nash consistency untested in this trace")
+      (inconclusive :nash-equilibrium :single-trace-metric-proxy :untested-no-adversary
+                    "no adversarial actors; Nash consistency untested in this trace"
+                    :required [:attack-attempts])
 
       (or (pos? violations) (pos? successes))
       (fail :nash-equilibrium :single-trace-metric-proxy
@@ -266,8 +246,9 @@
   "Requires population/belief distributions across resolvers. Always
    :inconclusive for single-trace replay."
   [_projection]
-  (inconclusive :bayesian-nash-equilibrium :multi-epoch-required
-                "requires population data across resolvers; single-trace cannot evaluate"))
+  (inconclusive :bayesian-nash-equilibrium :multi-epoch-required :multi-epoch-required
+                "requires population data across resolvers; single-trace cannot evaluate"
+                :required [:population-metrics :belief-distributions]))
 
 ;; ---------------------------------------------------------------------------
 ;; Dispatcher maps (generic only)
@@ -307,6 +288,7 @@
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
+
 (defn evaluate-mechanism-properties
   "Check all declared :mechanism-properties against the terminal projection.
    Merges built-in generic validators with protocol-specific extra-validators.
@@ -320,8 +302,9 @@
                            chk (get validators kw)]
                        [kw (if chk
                              (chk projection)
-                             (inconclusive kw :absent-evidence
-                                           (str "no validator implemented for mechanism property: " (name kw))))]))
+                             (inconclusive kw :absent-evidence :unsupported-concept
+                                           (str "no validator implemented for mechanism property: " (name kw))
+                                           :required [(keyword (name kw))]))]))
                    properties)))))
 
 (defn evaluate-equilibrium-concepts
@@ -342,28 +325,33 @@
                        [kw (cond
                              (and (strict-valid-time-required? trust-mode)
                                   (not explicit-valid-time?))
-                             (inconclusive kw :absent-evidence
+                             (inconclusive kw :absent-evidence :missing-valid-time-provenance
                                            (str "trust mode " trust-mode
-                                                " requires explicit valid-time provenance; projection/result missing :temporal-confidence.time-basis=:valid-time"))
+                                                " requires explicit valid-time provenance; projection/result missing :temporal-confidence.time-basis=:valid-time")
+                                           :required [:temporal-confidence.time-basis/valid-time])
 
                              (and (strict-attestation-required? trust-mode)
                                   (not= :verified attestation-status))
-                             (inconclusive kw :absent-evidence
+                             (inconclusive kw :absent-evidence :missing-verified-attestation
                                            (str "trust mode " trust-mode
-                                                " requires attestation status :verified; observed status=" attestation-status))
+                                                " requires attestation status :verified; observed status=" attestation-status)
+                                           :required [:attestation.status/verified]
+                                           :available [(keyword "attestation.status" (name attestation-status))])
 
                              (and (requires-deviation-bundle? claim-tier kw)
                                   (not bundle-ok?))
-                             (inconclusive kw :multi-trace-required
+                             (inconclusive kw :multi-trace-required :missing-deviation-bundles
                                            (str "claim tier " claim-tier
-                                                " requires deviation bundle evidence; projection missing :deviation-bundle.meets-minimum? true"))
+                                                " requires deviation bundle evidence; projection missing :deviation-bundle.meets-minimum? true")
+                                           :required [:deviation-bundle.meets-minimum?])
 
                              chk
                              (chk projection)
 
                              :else
-                             (inconclusive kw :absent-evidence
-                                            (str "no validator implemented for equilibrium concept: " (name kw))))]))
+                             (inconclusive kw :absent-evidence :unsupported-concept
+                                            (str "no validator implemented for equilibrium concept: " (name kw))
+                                            :required [(keyword (name kw))]))]))
                    concepts)))))
 
 (defn evaluate-equilibrium
@@ -418,6 +406,8 @@
       :provenance          provenance
      :mechanism-results  mech-results
      :mechanism-status   (roll-up-status (vals mech-results))
+     :mechanism-reasons  (eq-result/domain-status-reasons mech-results)
      :equilibrium-results eq-results
-     :equilibrium-status  (roll-up-status (vals eq-results))}))
+     :equilibrium-status  (roll-up-status (vals eq-results))
+     :equilibrium-reasons (eq-result/domain-status-reasons eq-results)}))
 

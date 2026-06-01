@@ -8,12 +8,6 @@
  :protocol   :protocol/baseline
  :state      :states/minimal-world
  :thresholds :thresholds/strict-baseline
- :traces [{:trace :traces/s43-auth-rejected-then-authorized-recovery
-           :expected-outcome :invalid
-           :expected-halt-reason :adversarial-requires-analysis}
-          {:trace :traces/s44-escalation-tier-mismatch-rejected
-           :expected-outcome :invalid
-           :expected-halt-reason :adversarial-requires-analysis}
-          {:trace :traces/s45-stale-module-snapshot-rejects-legacy-resolver
-           :expected-outcome :invalid
-           :expected-halt-reason :adversarial-requires-analysis}]}
+ :traces [:traces/s43-auth-rejected-then-authorized-recovery
+          :traces/s44-escalation-tier-mismatch-rejected
+          :traces/s45-stale-module-snapshot-rejects-legacy-resolver]}
