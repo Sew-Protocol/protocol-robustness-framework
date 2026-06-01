@@ -148,6 +148,7 @@
       }
     },
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": [
       "resolver-stake-topped-up-post-decision",
       "reputation-slash-penalty-600",

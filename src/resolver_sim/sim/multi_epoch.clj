@@ -53,7 +53,9 @@
 (def known-metrics
   "Stochastic population metrics computed by Phase J (multi-epoch simulation).
    These describe reputation trajectories and strategy dynamics.
-   Not available in deterministic replay; must not be used in :theory.falsifies-if."
+   Not available in deterministic replay; must not be used in :theory.falsifies-if
+   unless :theory {:metric-scope :population}. Keep in sync with
+   `resolver-sim.contract-model.replay/population-metrics`."
   #{:coalition/net-profit        ;; aggregate profit of all resolvers of a strategy
     :malice-mean-profit         ;; mean profit per malicious resolver
     :dominance-ratio            ;; ratio of dominant strategy profit to mean

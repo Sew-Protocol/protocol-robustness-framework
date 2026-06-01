@@ -79,6 +79,17 @@
 ;; the deterministic replay can never satisfy, producing silent :inconclusive
 ;; results for the wrong reason.
 
+(def population-metrics
+  "Metrics that require stochastic / multi-epoch population simulation.
+   Must not appear in single-trace `:theory :falsifies-if` unless
+   `:theory :metric-scope` is `:population` (multi-epoch runner).
+   Keep in sync with `resolver-sim.sim.multi-epoch/known-metrics`."
+  #{:coalition/net-profit
+    :malice-mean-profit
+    :dominance-ratio
+    :mean-profit
+    :reputation-concentration})
+
 (def base-metrics
   "Universal metrics incremented by the replay engine for every protocol.
 
@@ -103,12 +114,45 @@
     :invariant-violations})
 
 (defn- metric-key
-  "Coerce a metric name (string or keyword) to a keyword, stripping any
-   spurious leading colon (e.g. ':reverts' → :reverts)."
+  "Coerce a metric name to a keyword; preserve namespaced keys like :coalition/net-profit."
   [x]
-  (let [s  (if (keyword? x) (name x) (str x))
-        s' (if (.startsWith s ":") (subs s 1) s)]
-    (keyword s')))
+  (cond
+    (keyword? x) x
+    (string? x)
+    (let [s (if (.startsWith ^String x ":") (subs x 1) x)]
+      (if (.contains s "/")
+        (let [[ns n] (str/split s "/" 2)]
+          (keyword ns n))
+        (keyword s)))
+    :else (keyword (str x))))
+
+(defn- falsifies-if-metric-refs
+  "All metric keywords referenced by a `:falsifies-if` vector or predicate tree."
+  [falsifies-if]
+  (cond
+    (nil? falsifies-if) []
+    (sequential? falsifies-if)
+    (vec (distinct (keep #(when-let [m (:metric %)] (metric-key m)) falsifies-if)))
+
+    (map? falsifies-if)
+    (vec (distinct
+          (concat
+           (when-let [m (:metric falsifies-if)] [(metric-key m)])
+           (mapcat falsifies-if-metric-refs (:and falsifies-if))
+           (mapcat falsifies-if-metric-refs (:or falsifies-if))
+           (mapcat falsifies-if-metric-refs (list (:not falsifies-if)))
+           (mapcat falsifies-if-metric-refs (:always falsifies-if))
+           (mapcat falsifies-if-metric-refs (:eventually falsifies-if))
+           (when-let [p (:after falsifies-if)] (falsifies-if-metric-refs (:predicate p)))
+           (when-let [p (:before falsifies-if)] (falsifies-if-metric-refs (:predicate p)))
+           (when-let [p (:implies falsifies-if)]
+             (concat (falsifies-if-metric-refs (:if p))
+                     (falsifies-if-metric-refs (:then p)))))))
+
+    :else []))
+
+(defn- theory-metric-scope [scenario]
+  (metric-key (or (get-in scenario [:theory :metric-scope]) :trace)))
 
 (defn- action->transition-id
   "Map an event action string/keyword to canonical transition semantic id.
@@ -218,9 +262,10 @@
       (and (:theory scenario)
            (contains? (set (schema-profile/required-fields version)) :purpose)
            (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
-           (not (seq (get-in scenario [:theory :falsifies-if]))))
+           (not (seq (get-in scenario [:theory :falsifies-if])))
+           (not (true? (get-in scenario [:theory :mechanism-only-negative-test?]))))
       {:ok false :error :theory-falsification-requires-falsifies-if
-       :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer); mechanism/equilibrium proxies alone are insufficient"}
+       :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer), or :mechanism-only-negative-test? true with mechanism/equilibrium proxies"}
 
       ;; :falsifies-if may be empty for regression/adversarial when mechanism-properties or
       ;; equilibrium-concept are declared (mechanism-only theory blocks).
@@ -253,18 +298,40 @@
       {:ok false :error :unknown-agent-in-event
        :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
 
-      ;; All metric names in expectations.metrics and theory.falsifies-if must
-      ;; be in effective-metrics. This prevents silent :inconclusive results
-      ;; caused by typos or references to unimplemented metrics.
-      (let [exp-metrics    (map #(metric-key (:name   %)) (get-in scenario [:expectations :metrics] []))
-            theory-metrics (map #(metric-key (:metric %)) (get-in scenario [:theory :falsifies-if] []))
-            all-refs       (concat exp-metrics theory-metrics)
-            unknown        (vec (remove effective-metrics all-refs))]
-        (seq unknown))
-      {:ok false :error :unknown-metric-references
+      ;; Population metrics in single-trace theory → hard error (silent inconclusive otherwise).
+      (and (:theory scenario)
+           (not= :population (theory-metric-scope scenario))
+           (seq (let [refs (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
+                      bad  (vec (filter population-metrics refs))]
+                  bad)))
+      {:ok false :error :population-metric-in-trace-theory
+       :detail {:metrics (vec (filter population-metrics
+                               (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
+                :metric-scope (theory-metric-scope scenario)
+                :hint "Single-trace replay cannot compute population metrics. Use trace metrics (e.g. :coalition-net-profit), or set :theory {:metric-scope :population} for multi-epoch scenarios."}}
+
+      ;; Theory :falsifies-if metrics must be in the active trace metric registry
+      ;; (population-scoped metrics are validated by the multi-epoch runner, not here).
+      (let [scope          (theory-metric-scope scenario)
+            theory-metrics (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
+            trace-metrics  (if (= scope :population)
+                             (vec (remove population-metrics theory-metrics))
+                             theory-metrics)
+            unknown-theory (vec (remove effective-metrics trace-metrics))]
+        (seq unknown-theory))
+      {:ok false :error :unknown-theory-metric
        :detail {:unknown (vec (remove effective-metrics
-                                (concat (map #(metric-key (:name   %)) (get-in scenario [:expectations :metrics] []))
-                                        (map #(metric-key (:metric %)) (get-in scenario [:theory :falsifies-if] [])))))
+                               (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
+                :known   effective-metrics
+                :hint    "Declare the metric in the protocol metric-vocabulary or fix the name."}}
+
+      ;; Expectations metrics — separate error code for clearer diagnostics.
+      (let [exp-metrics (map #(metric-key (:name %)) (get-in scenario [:expectations :metrics] []))
+            unknown-exp (vec (remove effective-metrics exp-metrics))]
+        (seq unknown-exp))
+      {:ok false :error :unknown-expectation-metric
+       :detail {:unknown (vec (remove effective-metrics
+                               (map #(metric-key (:name %)) (get-in scenario [:expectations :metrics] []))))
                 :known effective-metrics}}
 
       :else {:ok true}))))

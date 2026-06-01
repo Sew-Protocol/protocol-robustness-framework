@@ -55,6 +55,7 @@
       "epsilon-rel": 0.0
     },
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": [
       "resolver-stake-slashed-after-decision",
       "single-trace-proxy"

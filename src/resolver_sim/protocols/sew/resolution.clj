@@ -584,6 +584,8 @@
              token       (:token et)
              bond-amount (max 0 (or (:appeal-bond-amount snap) 0))
              world'      (if (pos? bond-amount)
+                           ;; Fraud-slash appeals track custody via :appeal-bond-held (solvency),
+                           ;; not :bond-balances — post-appeal-bond would double-count liabilities.
                            (-> world
                                (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
                                (assoc-in [:appeal-bond-custody slash-id]
@@ -644,25 +646,28 @@
              ;; Prefer custody workflow-id (an integer); fall back to pending's resolver context.
              ;; Do NOT fall back to slash-id which may be a string like "0-reversal-0".
              wf-id       (or (:workflow-id custody) (:workflow-id pending))
-             world'      (-> world
+             bond-token  (or (:token custody) "USDC")
+             world-base  (-> world
                              (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] 0)
-                             (update :appeal-bond-custody dissoc slash-id)
-                             (cond-> (pos? bond-held)
-                               (acct/sub-held (or (:token custody) "USDC") bond-held)))
-             world''     (if appeal-upheld?
-                           (if (pos? bond-held)
-                             (-> world'
-                                 (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed)
-                                 (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
-                             (assoc-in world' [:pending-fraud-slashes slash-id :status] :reversed))
-                           (if (pos? bond-held)
-                             (let [bond-token (or (:token custody) "USDC")]
-                               (-> world'
-                                   (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
-                                   (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
-                                   (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
-                             (assoc-in world' [:pending-fraud-slashes slash-id :status] :pending)))]
-         (t/ok world''))))))
+                             (update :appeal-bond-custody dissoc slash-id))]
+         (cond
+           appeal-upheld?
+           (t/ok (cond-> world-base
+                  (pos? bond-held)
+                  (-> (acct/sub-held bond-token bond-held)
+                      (update-in [:claimable wf-id resolver] (fnil + 0) bond-held))
+                  :always
+                  (assoc-in [:pending-fraud-slashes slash-id :status] :reversed)))
+
+           (pos? bond-held)
+           (t/ok (-> world-base
+                     (acct/sub-held bond-token bond-held)
+                     (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
+                     (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
+                     (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
+
+           :else
+           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending))))))))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.

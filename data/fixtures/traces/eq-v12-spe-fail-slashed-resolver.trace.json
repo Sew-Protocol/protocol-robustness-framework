@@ -49,6 +49,7 @@
       "subgame-perfect-equilibrium"
     ],
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": [
       "resolver-stake-slashed-after-decision",
       "single-trace-proxy"

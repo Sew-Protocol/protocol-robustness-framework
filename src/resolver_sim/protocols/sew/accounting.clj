@@ -114,6 +114,17 @@
       (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
       world')))
 
+(defn- clear-claimable-v2-for-addr
+  "Zero claimable-v2 balances for addr on workflow-id (all domains)."
+  [world wf-id addr]
+  (if-let [domains (get-in world [:claimable-v2 wf-id])]
+    (update-in world [:claimable-v2 wf-id]
+                 (fn [domain-map]
+                   (into {}
+                         (for [[domain addr-map] domain-map]
+                           [domain (assoc addr-map addr 0)]))))
+    world))
+
 (defn withdraw-escrow
   "Claim claimable balance for addr on workflow-id.
    Mirrors: BaseEscrow.withdrawEscrow.
@@ -146,6 +157,7 @@
             :else
             (let [world' (-> world
                              (assoc-in [:claimable wf-id addr] 0)
+                             (clear-claimable-v2-for-addr wf-id addr)
                              (update-in [:total-withdrawn token] (fnil + 0) amount))]
               (assoc (t/ok world') :amount amount))))))))
 

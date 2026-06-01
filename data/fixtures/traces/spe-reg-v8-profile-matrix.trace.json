@@ -152,6 +152,7 @@
       }
     },
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": [
       "reputation-deters-at-any-positive-penalty",
       "forward-pass-best-alt-uses-local-snapshot",

@@ -82,6 +82,15 @@
 (defn- resolved-policy [opts]
   (:missing-metric-policy (theory-eval/resolve-theory-eval-opts opts)))
 
+(defn metric-track-applicability-label
+  "Human label for `:diagnostics :claim-status` — not 'claim status' (avoids accounting confusion)."
+  [claim-status]
+  (case claim-status
+    :evaluated       "Metric track evaluated"
+    :not-applicable  "Metric track not applicable (no metric disconfirmers)"
+    :not-evaluated   "Metric track not evaluated"
+    (str "Metric track: " (name (or claim-status :unknown)))))
+
 (defn derive-claim-status
   [result]
   (cond

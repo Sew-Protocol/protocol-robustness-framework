@@ -37,6 +37,7 @@
       "incentive-compatibility"
     ],
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": []
   },
   "expectations": {

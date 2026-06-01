@@ -14,7 +14,8 @@
      3. state-irreversibility (cross)— terminal states are absorbing (checked via check-transition)
      4. bond-boundedness (single)    — slash amount <= posted bond per workflow (vacuous until bonds added)
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
-  (:require [resolver-sim.protocols.sew.types         :as t]
+  (:require [clojure.set :as set]
+            [resolver-sim.protocols.sew.types         :as t]
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.time.invariants :as time-inv]
             [resolver-sim.yield.invariants :as generic-yield-inv]
@@ -32,9 +33,8 @@
           {:workflow-id wf :state (:escrow-state et)})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
-(def canonical-ids
-  "The full set of canonical invariant IDs across Sew v1.
-   Used for standardized error mapping and validation gates."
+(def world-invariant-ids
+  "Single-world invariants run by `check-all` on every replay step."
   #{:solvency
     :cancellation-mutex
     :fees-non-negative
@@ -68,7 +68,15 @@
     :resolver-capacity
     :yield-position-consistency
     :yield-exposure
-    :terminal-states-unchanged
+    :shortfall-fidelity
+    :migration-parity
+    :claimable-classification
+    :single-resolution-payout-consistent
+    :fraud-slash-executions-accounted})
+
+(def transition-invariant-ids
+  "Cross-world invariants run by `check-transition` after each successful step."
+  #{:terminal-states-unchanged
     :time-non-decreasing
     :time-no-action-after-finality
     :finalization-accounting-correct
@@ -78,9 +86,12 @@
     :token-tax-reconciliation
     :withdrawn-monotonic
     :released-monotonic
-    :held-delta-accounted
-    :single-resolution-payout-consistent
-    :fraud-slash-executions-accounted})
+    :held-delta-accounted})
+
+(def canonical-ids
+  "Union of world + transition invariant IDs. Used for mapping, docs, and parity tests.
+   Every ID here must be executed by `check-all` or `check-transition`."
+  (set/union world-invariant-ids transition-invariant-ids))
 
 (defn- get-token-claimable-sum [world token]
   (reduce + 0 (for [[wf cmap] (:claimable world {})

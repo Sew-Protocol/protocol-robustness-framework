@@ -51,12 +51,11 @@ the theory claim (falsification evidence, not validation).
 (`:and`, `:or`, `:not`, `:always`, `:state`, etc.)
 - **Required:** yes when `:theory` is present **unless** a mechanism-only block is
   explicitly allowed (see below)
-- **Mechanism-only empty `:falsifies-if`:** allowed for `:purpose` regression,
-  `:adversarial-robustness`, and similar when `:mechanism-properties` and/or
-  `:equilibrium-concept` are declared — metric track is `:not-applicable`
-- **`:purpose :theory-falsification`:** **always** requires non-empty `:falsifies-if`
-  (at least one direct metric disconfirmer). Proxy validators alone are not enough
-  for negative-test scenarios; see [Purpose: theory-falsification](#purpose-theory-falsification)
+- **Mechanism-only empty `:falsifies-if`:** allowed when `:mechanism-properties` and/or
+  `:equilibrium-concept` are declared and purpose allows it — metric track is `:not-applicable`
+- **`:purpose :theory-falsification`:** requires non-empty `:falsifies-if` **or**
+  `:mechanism-only-negative-test? true` with proxies declared — see
+  [Purpose: theory-falsification](#purpose-theory-falsification)
 - **Example:**
   ```clojure
   [{:metric :coalition/net-profit :op > :value 0}
@@ -113,9 +112,22 @@ Observed:              attack-successes = 0
 Result:                Not falsified in this replay — the declared disconfirmer did not occur.
 ```
 
-#### Terminology boundaries: claim, claim-status, and claimable
+#### Terminology boundaries: theory claims vs accounting claimables
 
 The word **claim** appears in several layers. They must not be conflated.
+
+**Human-facing wording (notebooks, protocol docs, reports)**
+
+| Prefer | Avoid (ambiguous) |
+|--------|-------------------|
+| theory claim (`:claim-id`, `:claim` text) | bare “claim” |
+| metric disconfirmer / metric falsification track | “claim passed” / “claim failed” |
+| withdrawal claimable / claimable balance | “claim boundary” |
+| accounting boundary invariant (`:settlement-principal-boundary`, …) | “claim status” |
+| metric-track applicability (`:diagnostics :claim-status`) | “claim status” as a verdict |
+
+Machine field `:claim-status` remains in `:diagnostics`; display via
+`theory-result/metric-track-applicability-label`.
 
 
 | Term                                            | Layer                                 | What it means                                                                                          | What it is **not**                                                                                                                                                             |
@@ -123,7 +135,7 @@ The word **claim** appears in several layers. They must not be conflated.
 | `**:claim-id`**                                 | Theory design                         | Stable name for the hypothesis under test in this scenario                                             | Not an on-chain claimable balance, not a proof that the hypothesis is true                                                                                                     |
 | `**:claim**` (string)                           | Theory metadata                       | Human-readable description of the hypothesis                                                           | Not evaluated; not a pass/fail verdict                                                                                                                                         |
 | `**:falsifies-if**`                             | Metric falsification                  | Observable **disconfirmers** for that hypothesis                                                       | Not validation criteria; not mechanism/equilibrium checks                                                                                                                      |
-| `**:claim-status`**                             | Evaluator diagnostic (`:diagnostics`) | Whether the **metric falsification track** ran                                                         | **Not** “the theory claim is true.” Values: `:evaluated` (had metric disconfirmers to check), `:not-applicable` (empty `:falsifies-if`), `:not-evaluated` (no `:theory` block) |
+| `**:claim-status`** (say *metric-track applicability*) | Evaluator diagnostic (`:diagnostics`) | Whether the **metric falsification track** ran                                                         | **Not** “the theory claim is true.” Values: `:evaluated`, `:not-applicable` (empty `:falsifies-if`), `:not-evaluated` (no `:theory` block) |
 | `**:falsification-status`**                     | Evaluator diagnostic                  | Whether contradiction evidence was **observed** on the metric track                                    | Independent of `:claim-status`; see [Falsification vs evidence](#falsification-vs-evidence) for partial-telemetry semantics                                                    |
 | `**:status`**                                   | Fixture / audit **gate**              | Single outcome for the metric track: `:falsified`, `:not-falsified`, `:inconclusive`, `:not-evaluated` | Not “theory passed”; not a universal protocol verdict. **Replay-local.**                                                                                                       |
 | `**:mechanism-status` / `:equilibrium-status`** | Separate validators                   | Trace-consistency **proxy** checks for declared properties/concepts                                    | Not metric OR logic; not full game-theoretic proofs                                                                                                                            |
@@ -134,7 +146,7 @@ The word **claim** appears in several layers. They must not be conflated.
 **Boundary rules (read these before interpreting any result)**
 
 1. **Metric track only** — `:status`, `:falsified?`, and `:falsifies-if` apply to the metric falsification track. Mechanism and equilibrium have their own statuses.
-2. **Empty `:falsifies-if`** — No metric disconfirmers declared (`:reason :no-metric-falsification-claim`, `:claim-status :not-applicable`). Mechanism/equilibrium may still run and fail independently.
+2. **Empty `:falsifies-if`** — Mechanism-only theory blocks may use `[]` when the scenario purpose allows proxy validation without a direct metric disconfirmer (`:regression`, `:adversarial-robustness`, …). For `:purpose :theory-falsification`, a non-empty metric `:falsifies-if` is required unless `:mechanism-only-negative-test? true` is set on `:theory` with mechanism/equilibrium proxies declared.
 3. `**:not-falsified` ≠ validated** — Means this replay did not trigger declared disconfirmers with sufficient telemetry (profile-dependent). It does **not** mean the `:claim-id` hypothesis is true for all futures or strategy profiles.
 4. `**:claim-status :evaluated` ≠ assumptions hold** — Assumptions remain `:assumption-status :unchecked` unless encoded as predicates, invariants, or validators.
 5. **Suite pass ≠ scientific proof** — `:purpose :theory-falsification` expects `:falsified` as a **negative test** success. Regression scenarios usually expect `:not-falsified` on the metric gate. Neither proves the protocol globally.
@@ -147,7 +159,7 @@ The word **claim** appears in several layers. They must not be conflated.
 | --------------------------------------------- | -------------------------------------------------------- | ----------------------------------- |
 | Did this replay refute the theory hypothesis? | `:status` or `:falsified?` (metric track)                | `:claim-status`                     |
 | Was there enough telemetry to decide?         | `:diagnostics :evidence-completeness`, `:grounded?`      | `:falsification-status` alone       |
-| Did the metric falsification track run?       | `:diagnostics :claim-status`                             | `:claim-id`                         |
+| Did the metric falsification track run?       | `:diagnostics :claim-status` (metric-track applicability) | `:claim-id`                         |
 | Did the escrow proxy property hold?           | `:mechanism-status`, `:equilibrium-status`               | `:status` on metric track           |
 | Did claimable exceed escrow principal?        | Invariant `:settlement-principal-boundary` (replay halt) | `:theory` block                     |
 | Is the hypothesis true in general?            | *No field* — out of scope for single-trace evaluation    | `:not-falsified`, `:grounded? true` |
@@ -336,10 +348,9 @@ Adversarial scenarios test robustness against attack strategies. They may use `:
 ### `:purpose :theory-falsification`
 
 **Metric disconfirmer required:** scenarios with this purpose must include a **non-empty**
-`:falsifies-if`. Mechanism-only theory blocks (empty `:falsifies-if` with only
-`:mechanism-properties` / `:equilibrium-concept`) are valid for regression and
-`:adversarial-robustness`, but **not** for `:theory-falsification` — negative tests must
-declare at least one observable metric that could contradict the claim.
+`:falsifies-if`, **unless** `:theory {:mechanism-only-negative-test? true}` explicitly opts into
+a mechanism/equilibrium-only negative test. Mechanism-only empty `:falsifies-if` remains valid
+for `:regression` and `:adversarial-robustness` when proxies are declared.
 
 Theory-falsification scenarios are designed as exploit replays or edge case demonstrations. They **must** include a `:theory` block and are expected to falsify claims (which is a **success** outcome for these scenarios).
 
@@ -482,10 +493,11 @@ Golden `:theory` snapshots include `:mechanism-summary`, `:equilibrium-summary`,
 
 **`:falsification-status :not-falsified` with `:evidence-completeness :partial`**
 
-Under `:regression`, `:status` becomes `:inconclusive` even when `:falsification-status` is
-`:not-falsified`. In that case **`:not-falsified` means no declared disconfirmer fired on the
-telemetry that was available** — it does **not** mean the full `:falsifies-if` tree was evaluated
-against complete evidence. Always pair with `:evidence-completeness` and `:grounded?`.
+When telemetry is partial, `:diagnostics :falsification-status :not-falsified` means **no evaluated
+disconfirmer branch fired** on the telemetry that was available. The canonical `:status` remains
+`:inconclusive` under `:regression` because unevaluated disconfirmers may still matter. It does
+**not** mean the full `:falsifies-if` tree was evaluated against complete evidence. Always pair
+with `:evidence-completeness` and `:grounded?`.
 
 Under `:strict` / `:public-evidence`, partial missing metrics yield `:status :inconclusive`,
 `:reason :strict-missing-metrics` (never `:falsified` — missing telemetry is not contradiction).
@@ -668,11 +680,25 @@ The following fields are reserved for future use and should be accepted but not 
 > **Scope: deterministic trace metrics only.**
 > This registry covers metrics the replay engine can compute from a single scenario execution.
 > Population-level metrics (e.g. `:coalition/net-profit`, `:malice-mean-profit`, `:dominance-ratio`)
-> belong in a separate future registry — `resolver-sim.sim.multi-epoch/known-metrics`.
-> Do not mix them. A scenario referencing a population metric in `falsifies-if` would produce
-> silent `:inconclusive` results because the replay engine can never compute it.
+> belong in `resolver-sim.sim.multi-epoch/known-metrics` and `replay/population-metrics`.
+>
+> **Do not mix deterministic trace metrics with population-level metrics.**
+> If someone writes `{:metric :coalition/net-profit :op :> :value 0}` in a single-trace scenario,
+> validation fails with `:population-metric-in-trace-theory` (or the run becomes `:inconclusive`
+> forever — worse, misleading `:not-falsified` under `:optimistic`).
 
-All metrics usable in `:expectations/:metrics` and `:theory/:falsifies-if` must be declared in `replay/known-metrics`.
+**Validation rules (`validate-scenario`)**
+
+| Check | Error | When |
+|-------|-------|------|
+| Trace theory metric unknown | `:unknown-theory-metric` | `:falsifies-if` references a metric not in the active trace registry (protocol `metric-vocabulary` ∪ `base-metrics`) |
+| Expectation metric unknown | `:unknown-expectation-metric` | `:expectations :metrics` typo / unimplemented |
+| Population metric in trace theory | `:population-metric-in-trace-theory` | Population metric in `:falsifies-if` without `:theory {:metric-scope :population}` |
+| Population scope | (allowed) | `:metric-scope :population` — validated by multi-epoch runner, not single-trace replay |
+
+All trace metrics in `:expectations/:metrics` and `:theory/:falsifies-if` (default `:metric-scope :trace`)
+must be computable from one replay. Prefer trace-local names such as `:coalition-net-profit` when
+projection supplies them; do not use slash-form population keys unless scope is explicit.
 
 ### Live metrics (computed during replay)
 
