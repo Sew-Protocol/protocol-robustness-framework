@@ -1,0 +1,130 @@
+{
+  "scenario-id": "s83-yield-accrual-reorg-race",
+  "title": "Yield Accrual Reorg Race Around Pending Settlement Finality",
+  "schema-version": "1.0",
+  "purpose": "adversarial-robustness",
+  "threat-tags": [
+    "reorg",
+    "timing-boundary",
+    "finality"
+  ],
+  "initial-block-time": 1000,
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "role": "keeper"
+    }
+  ],
+  "protocol-params": {
+    "yield-generation-module": "aave-v3",
+    "resolver-fee-bps": 150,
+    "appeal-window-duration": 60,
+    "max-dispute-duration": 2592000
+  },
+  "yield-config": {
+    "modules": {
+      "aave-v3": {
+        "tokens": {
+          "USDC": {
+            "apy": 0.05,
+            "liquidity-mode": "available"
+          }
+        }
+      }
+    }
+  },
+  "events": [
+    {
+      "seq": 0,
+      "time": 1000,
+      "agent": "buyer",
+      "action": "create_escrow",
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 100000,
+        "custom-resolver": "0xresolver",
+        "yield_preset": "to-recipient"
+      }
+    },
+    {
+      "seq": 1,
+      "time": 1060,
+      "agent": "buyer",
+      "action": "raise_dispute",
+      "params": {
+        "workflow-id": 0
+      }
+    },
+    {
+      "seq": 2,
+      "time": 2000000,
+      "agent": "resolver",
+      "action": "execute_resolution",
+      "params": {
+        "workflow-id": 0,
+        "is-release": true,
+        "resolution-hash": "0xbranchA"
+      }
+    },
+    {
+      "seq": 3,
+      "time": 2000000,
+      "agent": "resolver",
+      "action": "execute_resolution",
+      "params": {
+        "workflow-id": 0,
+        "is-release": false,
+        "resolution-hash": "0xbranchB"
+      }
+    },
+    {
+      "seq": 4,
+      "time": 2000059,
+      "agent": "buyer",
+      "action": "challenge_resolution",
+      "params": {
+        "workflow-id": 0
+      }
+    },
+    {
+      "seq": 5,
+      "time": 2000060,
+      "agent": "keeper",
+      "action": "execute_pending_settlement",
+      "params": {
+        "workflow-id": 0
+      }
+    },
+    {
+      "seq": 6,
+      "time": 2000061,
+      "agent": "keeper",
+      "action": "execute_pending_settlement",
+      "params": {
+        "workflow-id": 0
+      }
+    }
+  ],
+  "scenario-author": "@grifma",
+  "provenance": {
+    "author-id": "@grifma",
+    "author": "Marc Griffiths"
+  }
+}

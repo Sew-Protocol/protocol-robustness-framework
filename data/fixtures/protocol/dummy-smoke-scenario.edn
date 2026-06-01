@@ -8,10 +8,9 @@
            :time 1000
            :agent "buyer"
            :action "create_escrow"
-           :params {:token "USDC" :to "0xseller" :amount 1000}
-           :save-id-as "wf0"}
+           :params {:token "USDC" :to "0xseller" :amount 1000}}
           {:seq 1
            :time 1060
            :agent "buyer"
            :action "release"
-           :params {:workflow-id "wf0"}}]}
+           :params {:workflow-id 0}}]}

@@ -26,6 +26,13 @@
    :finding-category "dispute_resolution"
    :bundle-cert-label "BUNDLE_v1.1"
    :default-theory-falsification-scenario-id "scenarios/S26_forking-strategist-l1-reversal"
+   :severity-rules
+   {:invariant-severity-order [:high :medium]
+    :tag-severity-map {"reentrancy" :high
+                       "solvency" :high
+                       "appeal-escalation" :medium
+                       "timing-boundary" :medium}
+    :default-severity :low}
    :story-family-rules
    {:default :deflection
     :families
@@ -52,6 +59,15 @@
    :finding-category "protocol_risk"
    :bundle-cert-label "BUNDLE_v1"
    :default-theory-falsification-scenario-id "scenarios/X01_hypothesis-boundary-check"
+   :severity-rules
+   {:invariant-severity-order [:high :medium]
+    :tag-severity-map {"reentrancy" :high
+                       "solvency" :high
+                       "liquidity" :medium
+                       "timing" :medium
+                       "window-boundary" :medium
+                       "conservation" :medium}
+    :default-severity :low}
    :story-family-rules
    {:default :deflection
     :families
@@ -76,18 +92,18 @@
 
 (defn selected-profile-key
   "Select active SPEDS profile via env var `SPEDS_PROFILE`.
-   Supported values: sew, generic. Defaults to sew."
+   Supported values: sew, generic. Defaults to generic."
   []
   (let [raw (some-> (System/getenv "SPEDS_PROFILE") str/lower-case)]
     (case raw
       "generic" :generic
       "sew" :sew
-      :sew)))
+      :generic)))
 
 (defn active-profile []
-  (get profiles (selected-profile-key) sew-profile))
+  (get profiles (selected-profile-key) sample-generic-profile))
 
 (def profile
   "Active profile map used by SPEDS modules.
-   Override via `SPEDS_PROFILE=generic` (or `sew`)."
+   Override via `SPEDS_PROFILE=sew` (or `generic`)."
   (active-profile))

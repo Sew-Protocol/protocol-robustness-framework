@@ -23,6 +23,11 @@
       "id": "resolver",
       "address": "0xresolver",
       "type": "resolver"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "resolver"
     }
   ],
   "protocol-params": {
@@ -40,8 +45,7 @@
         "to": "0xseller",
         "amount": 5000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -49,7 +53,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -58,9 +62,19 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true
       }
+    },
+    {
+      "seq": 3,
+      "time": 1120,
+      "agent": "keeper",
+      "action": "execute_pending_settlement",
+      "params": {
+        "workflow-id": 0
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

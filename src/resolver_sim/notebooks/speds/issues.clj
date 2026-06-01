@@ -49,7 +49,7 @@
 
 (def default-issue-policy
   {:open-issue-when [{:status-kinds #{"observed"} :min-severity :medium}
-                     {:kinds #{"missing_evidence" "invariant_failure"}}]
+                     {:kinds #{"missing_evidence" "invariant_failure" "inconclusive_result"}}]
    :do-not-open-for #{"robustness_confirmation" "expected_negative"}})
 
 (defn- severity-rank [s]
@@ -62,16 +62,30 @@
           :low 1
           0))))
 
+(defn- norm-token [v]
+  (-> (cond
+        (keyword? v) (name v)
+        (string? v) v
+        (nil? v) ""
+        :else (str v))
+      str/lower-case))
+
+(defn- norm-token-set [xs]
+  (set (map norm-token (or xs #{}))))
+
 (defn- should-open-issue? [finding policy]
-  (let [kind (or (:kind finding) "")
-        status-kind (or (:status_kind finding) "")
+  (let [kind (norm-token (:kind finding))
+        status-kind (norm-token (:status_kind finding))
         sev (keyword (str/lower-case (str (:severity finding))))
-        blocked? ((:do-not-open-for policy) kind)]
+        blocked-kinds (norm-token-set (:do-not-open-for policy))
+        blocked? (contains? blocked-kinds kind)]
     (and (not blocked?)
-         (or (some (fn [{:keys [kinds]}] (and kinds (contains? kinds kind))) (:open-issue-when policy))
+         (or (some (fn [{:keys [kinds]}]
+                     (and kinds (contains? (norm-token-set kinds) kind)))
+                   (:open-issue-when policy))
              (some (fn [{:keys [status-kinds min-severity]}]
-                     (and status-kinds
-                          (contains? status-kinds status-kind)
+                     (and (seq status-kinds)
+                          (contains? (norm-token-set status-kinds) status-kind)
                           (>= (severity-rank sev) (severity-rank (or min-severity :low)))))
                    (:open-issue-when policy))))))
 
@@ -130,7 +144,8 @@
   ([artifacts]
    (let [bundle (generate-issues-bundle artifacts)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
-     (spit issues-path (json/write-str bundle))
+     (with-open [w (clojure.java.io/writer issues-path)]
+       (json/write bundle w :indent true))
      bundle)))
 
 (defn load-issues []
@@ -177,7 +192,8 @@
   ([artifacts opts]
    (let [report (generate-comparator-shadow-report artifacts opts)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
-     (spit comparator-shadow-path (json/write-str report))
+     (with-open [w (clojure.java.io/writer comparator-shadow-path)]
+       (json/write report w :indent true))
      report)))
 
 (defn load-comparator-shadow-report []

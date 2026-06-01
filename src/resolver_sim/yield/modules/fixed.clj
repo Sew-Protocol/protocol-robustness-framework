@@ -26,8 +26,9 @@
                       yield-delta (long (quot (long val) seconds-per-year))]
                   (-> w
                       (update-in [:yield/positions oid :unrealized-yield] + yield-delta)
+                      (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
                       (update-in [:total-held token] (fnil + 0) yield-delta)))
-                (do (println "NO MATCH:" (:module/id pos) mid (:token pos) token) w)))
+                w))
             world
             (:yield/positions world))))
 

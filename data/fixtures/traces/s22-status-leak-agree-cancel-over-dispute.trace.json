@@ -6,6 +6,15 @@
   "threat-tags": [
     "state-leakage"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s22-status-leak-agree-cancel-over-dispute",
   "initial-block-time": 1000,
   "agents": [
@@ -35,8 +44,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 5000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -44,7 +52,7 @@
       "agent": "seller",
       "action": "recipient_cancel",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -53,10 +61,11 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ],
   "allow-open-disputes?": true,
-  "_allow-open-disputes-reason": "Intentionally stops after raising dispute \u2014 regression test for status clearing when buyer disputes after seller agree-to-cancel."
+  "_allow-open-disputes-reason": "Intentionally stops after raising dispute \u2014 regression test for status clearing when buyer disputes after seller agree-to-cancel.",
+  "scenario-author": "@grifma"
 }

@@ -2,14 +2,14 @@
 
 (defn ds-result []
   (try
-    (require '[evaluation.xtdb])
+    (require '[resolver-sim.db.xtdb])
     {:ok? true
-     :ds ((resolve 'evaluation.xtdb/->datasource))
-     :source "evaluation.xtdb/->datasource"}
+     :ds ((resolve 'resolver-sim.db.xtdb/->datasource))
+     :source "resolver-sim.db.xtdb/->datasource"}
     (catch Throwable e
       {:ok? false
        :error (or (.getMessage e) (str e))
-       :source "evaluation.xtdb/->datasource"})))
+       :source "resolver-sim.db.xtdb/->datasource"})))
 
 (defn query [sqlvec]
   (let [{:keys [ok? ds] :as dsr} (ds-result)]

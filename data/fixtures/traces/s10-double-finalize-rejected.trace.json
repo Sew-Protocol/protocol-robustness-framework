@@ -6,6 +6,15 @@
   "threat-tags": [
     "double-settlement"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s10-double-finalize-rejected",
   "initial-block-time": 1000,
   "agents": [
@@ -45,8 +54,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 500
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -58,8 +66,7 @@
         "to": "0xseller2",
         "amount": 500,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf1"
+      }
     },
     {
       "seq": 2,
@@ -67,7 +74,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -76,7 +83,7 @@
       "agent": "resolver",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf1"
+        "workflow-id": 1
       }
     },
     {
@@ -85,7 +92,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf1",
+        "workflow-id": 1,
         "is-release": true,
         "resolution-hash": "0xok"
       }
@@ -96,7 +103,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -105,7 +112,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -114,10 +121,11 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf1",
+        "workflow-id": 1,
         "is-release": true,
         "resolution-hash": "0xdup"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

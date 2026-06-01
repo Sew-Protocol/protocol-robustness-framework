@@ -42,8 +42,7 @@
         "to": "0xseller",
         "amount": 4200,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -51,7 +50,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -60,7 +59,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xdet"
       }
@@ -71,7 +70,7 @@
       "agent": "buyer",
       "action": "challenge_resolution",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -80,7 +79,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xdet2"
       }
@@ -91,7 +90,7 @@
       "agent": "buyer",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ],
@@ -100,5 +99,6 @@
       "replay_idempotent": true,
       "projection_hash_trajectory_identical": true
     }
-  }
+  },
+  "scenario-author": "@grifma"
 }

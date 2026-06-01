@@ -5,11 +5,21 @@
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 
 ### Added
+- **Accounting Reconciliation Patch:** Resolved a critical double-counting bug in `execute-fraud-slash` and `auto-cancel-disputed-escrow` by explicitly reconciling `held` balances during slash events. Optimized invariant pass rate to 96/99.
+- **Robust Serialization Protocol:** Implemented the `ToJsonData` protocol to ensure complex simulation records and yield positions are safely converted to JSON for auditable artifact emission.
+- **Operational Safety Guards:** Hardened `create-escrow` with multi-tier checks to block deposits during token-specific liquidity crunches, yield module emergency unwinds, and resolver capacity exhaustion.
+- **V2 Semantic Identity Architecture:** Formalized the shift to derived, immutable identifiers (`TransferId`, `DisputeId`, `ClaimId`) to eliminate identity-confusion and rebinding vulnerabilities.
 - **Golden Evidence Artifacts:** Created a library of 6 technical validation artifacts mapping core protocol robustness (Reorgs, Timing, Collusion, Economic Stability, and Governance Hardening) using the **VENS** and **SPEDS** design systems.
 - **Production Evidence Workbench:** Implemented `notebooks/workbench-v2.clj` and `notebooks/evidence_explorer.clj`—a data-driven observability surface that bridges high-level simulation metrics with raw, signed cryptographic evidence bundles.
 - **Evidence-to-Share Workflow:** Integrated the `bb benchmark:publish-ipfs` pipeline to automatically generate an `evidence-manifest.json` for workbench consumption, cryptographically binding every visual artifact to an immutable IPFS bundle.
 
 ### Fixed
+- **Simulator ID Abstraction Leak:** Replaced dynamic `count`-based workflow identification with a persistent, monotonic `:next-workflow-id` counter, aligning the simulation's identity model with Solidity's immutable contract semantics.
+- **Cross-layer Equivalence Test Alignment (Forge):** Updated symlinked smart-contract test expectations to match current on-chain behavior and Foundry semantics:
+  - `ModuleManagementContract.t.sol`: constructor zero-owner revert now asserts `InvalidAddress(8, address(0))` instead of legacy `InvalidValue()`.
+  - `RepeatAttackerIntegration.t.sol`: cooldown tests now reflect deadline-safety behavior where escalation cooldown tracks/scales rather than hard-blocking within-window valid appeals.
+  - `IncentiveModuleIntegration.test.t.sol`: removed nested `vm.prank` inside active `vm.startPrank` in `setUp()` to fix prank-override failure.
+  - Verified via targeted `forge test` reruns for each previously failing case.
 - **CLI Compilation:** Resolved the `load-index` symbol resolution error in `src/resolver_sim/benchmark/cli.clj`.
 - **JSON Serialization:** Corrected `publish-ipfs` to use `clojure.data.json/write-str` to properly generate IPFS manifests.
 - **Artifact Readability:** Finalized the high-contrast design for the Golden Artifacts, optimizing typography and color palettes for mobile readability and social sharing.

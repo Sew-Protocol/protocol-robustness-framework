@@ -12,8 +12,7 @@
 
      run-epoch-simulation — drive an epoch-state simulation to completion
      run-sweep            — run multiple epoch simulations under a common label"
-  (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.io.results :as results]))
+  (:require [resolver-sim.stochastic.rng :as rng]))
 
 ;; ---------------------------------------------------------------------------
 ;; Standard result schema
@@ -118,8 +117,8 @@
      :seed           — RNG seed
      :params         — Static parameters for the update-fn
      :summary-fn     — (fn [history params]) -> result-summary-map
-     :persist-trace? — If true, save trial traces to results/ directory"
-  [{:keys [label initial-state update-fn epochs seed params summary-fn persist-trace?]}]
+     :persist-trace-fn — Optional (fn [dir-path label history]) -> nil"
+  [{:keys [label initial-state update-fn epochs seed params summary-fn persist-trace-fn]}]
   (println (format "📋 %s" label))
   (let [d-rng   (rng/make-rng seed)
         res-dir (format "results/%s" (java.time.LocalDateTime/now))]
@@ -129,8 +128,8 @@
       (if (> epoch epochs)
         (let [summary (summary-fn history params)]
           (println (format "   Final status: %s" (:status summary "COMPLETE")))
-          (when persist-trace?
-            (results/persist-trace! res-dir label history))
+          (when persist-trace-fn
+            (persist-trace-fn res-dir label history))
           (assoc summary :history history :label label))
         (let [new-state (update-fn epoch state params d-rng)]
           (recur (inc epoch)

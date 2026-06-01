@@ -47,7 +47,7 @@ Execution time depends on scenario complexity and environment.
   - `python/sew_sim/grpc_client.py` service/method targeting
 
 ### `invariants`
-- Deterministic scenario execution via `clojure -M:run -- --invariants` (S01–S41).
+- Deterministic scenario execution via `clojure -M:run -- --invariants` (S01–S100).
 
 ### `suites`
 - Fixture suite execution:

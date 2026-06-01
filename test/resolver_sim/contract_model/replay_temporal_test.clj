@@ -121,15 +121,14 @@
                                       :appeal-window-duration 60
                                       :max-dispute-duration 2592000}
                     :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-                              :params {:token "USDC" :to "0xseller" :amount 6000}
-                              :save-id-as "wf0"}
+                              :params {:token "USDC" :to "0xseller" :amount 6000}}
                              {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-                              :params {:workflow-id "wf0"}}
+                              :params {:workflow-id 0}}
                              {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-                              :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+                              :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
                              ;; before appeal window expires (1120 + 60 = 1180)
                              {:seq 3 :time 1130 :agent "keeper" :action "execute_pending_settlement"
-                              :params {:workflow-id "wf0"}}]}
+                              :params {:workflow-id 0}}]}
           result (sew/replay-with-sew-protocol scenario)
           entry  (some #(when (= 3 (:seq %)) %) (:trace result))]
       (is (= :rejected (:result entry)))
@@ -155,14 +154,13 @@
                                       :appeal-window-duration 60
                                       :max-dispute-duration 2592000}
                     :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-                              :params {:token "USDC" :to "0xseller" :amount 6000}
-                              :save-id-as "wf0"}
+                              :params {:token "USDC" :to "0xseller" :amount 6000}}
                              {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-                              :params {:workflow-id "wf0"}}
+                              :params {:workflow-id 0}}
                              {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-                              :params {:workflow-id "wf0" :is-release true :resolution-hash "0xl0hash"}}
+                              :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
                              {:seq 3 :time 1130 :agent "keeper" :action "execute_pending_settlement"
-                              :params {:workflow-id "wf0"}}]}
+                              :params {:workflow-id 0}}]}
           result  (sew/replay-with-sew-protocol scenario)
           fixture (trace-export/export-trace-fixture result scenario)
           step    (some #(when (= 3 (:seq %)) %) (:steps fixture))]

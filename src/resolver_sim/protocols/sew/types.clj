@@ -27,6 +27,30 @@
   (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
+;; Semantic ID Phantom Types
+;; ---------------------------------------------------------------------------
+
+(defrecord TransferId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord DisputeId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord ResolverDecisionId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord WatchdogChallengeId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+(defrecord ClaimableWithdrawalId [id]
+  java.lang.Comparable
+  (compareTo [_ other] (compare id (:id other))))
+
+;; ---------------------------------------------------------------------------
 ;; Enum sets (canonical values)
 ;; ---------------------------------------------------------------------------
 
@@ -109,7 +133,18 @@
    this is the key correctness property: governance config changes cannot affect
    in-flight escrows.
 
-   Numeric fee/timeout fields use integer (uint256 semantics)."
+   Numeric fee/timeout fields use integer (uint256 semantics).
+
+   Bond configuration (two styles, applied in priority order):
+     appeal-bond-amount  — absolute flat fee (takes priority over appeal-bond-bps)
+     appeal-bond-bps     — bps of amount-after-fee (used when appeal-bond-amount = 0)
+     challenge-bond-bps  — Phase L challenge bond; falls back to appeal-bond-amount,
+                           then to a 100-unit minimum if neither is configured
+
+   Keys NOT stored in the snapshot (handle elsewhere):
+     :escalation-resolvers — converted to an escalation-fn in build-execution-context
+     :max-dispute-level    — global constant t/max-dispute-level, not per-escrow
+     :fraud-slash-bps      — sim-layer parameter read from params, not from snapshot"
   [{:keys [resolution-module release-strategy cancellation-strategy
            yield-generation-module yield-distribution-module incentive-module
             yield-module-id yield-profile yield-archetype escrow-modules
@@ -117,7 +152,7 @@
            default-auto-release-delay default-auto-cancel-delay
            max-dispute-duration appeal-window-duration dispute-resolver
            appeal-bond-bps resolver-bond-bps appeal-bond-amount
-           reversal-slash-bps fraud-slash-bps
+           reversal-slash-bps
            challenge-window-duration challenge-bond-bps challenge-bounty-bps]}]
   {:resolution-module           resolution-module
    :release-strategy            release-strategy
@@ -141,7 +176,6 @@
    :resolver-bond-bps           (or resolver-bond-bps 0)
    :appeal-bond-amount          (or appeal-bond-amount 0)
    :reversal-slash-bps          (or reversal-slash-bps 0)
-   :fraud-slash-bps             (or fraud-slash-bps 0)
    :challenge-window-duration   (or challenge-window-duration 0)
    :challenge-bond-bps          (or challenge-bond-bps 0)
    :challenge-bounty-bps        (or challenge-bounty-bps 0)})
@@ -224,6 +258,7 @@
     :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
     :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
     :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
+    :next-workflow-id       0
     :paused?                false
     :block-time          block-time}))
 
@@ -259,33 +294,54 @@
   [amount fee-bps]
   (- amount (compute-fee amount fee-bps)))
 
+(defn- try-parse-id [v]
+  (cond
+    (integer? v) v
+    (string? v)  (let [s (str/trim v)
+                       s (if (.startsWith s ":") (subs s 1) s)]
+                   (when (re-matches #"\d+" s)
+                     (Long/parseLong s)))
+    (keyword? v) (try-parse-id (name v))
+    :else nil))
+
 (defn normalize-workflow-id
-  "Normalize workflow IDs across call-sites.
+  "Normalize workflow IDs across call-sites to a canonical plain integer.
 
    Supports integer IDs (canonical), numeric strings (e.g. \"0\"), and
    keyword-like values with a leading colon (e.g. \":0\").
-   Returns the normalized integer ID when parseable, else returns the original
-   value so callers can still fail cleanly via map lookup/guards."
+   Also accepts TransferId and DisputeId records (unwrapped to their integer :id).
+
+   Returns the parsed integer when the input is parseable, otherwise returns
+   the original value so callers can still fail cleanly via map lookup/guards.
+
+   NOTE: all world-state maps (escrow-transfers, dispute-levels, etc.) use plain
+   integers as keys, so this function returns plain integers — not TransferId records —
+   to ensure storage lookups always succeed."
   [workflow-id]
   (cond
-    (integer? workflow-id)
-    workflow-id
+    (instance? TransferId workflow-id)
+    (:id workflow-id)
 
-    (string? workflow-id)
-    (let [s (str/trim workflow-id)
-          s (if (.startsWith s ":") (subs s 1) s)]
-      (if (re-matches #"\d+" s)
-        (Long/parseLong s)
-        workflow-id))
-
-    (keyword? workflow-id)
-    (let [s (name workflow-id)]
-      (if (re-matches #"\d+" s)
-        (Long/parseLong s)
-        workflow-id))
+    (instance? DisputeId workflow-id)
+    (:id workflow-id)
 
     :else
-    workflow-id))
+    (or (try-parse-id workflow-id) workflow-id)))
+
+;; ---------------------------------------------------------------------------
+;; Yield owner-id constructors
+;; ---------------------------------------------------------------------------
+
+(defn escrow-yield-owner-id
+  "Canonical owner-id for an escrow's yield position.
+   Used as the :owner/id key when registering or withdrawing yield positions."
+  [escrow-id]
+  [:sew/escrow (normalize-workflow-id escrow-id)])
+
+(defn resolver-yield-owner-id?
+  "True when owner-id denotes a resolver staking position (string prefixed 'resolver:')."
+  [oid]
+  (and (string? oid) (.startsWith ^String oid "resolver:")))
 
 ;; ---------------------------------------------------------------------------
 ;; World-state accessors
@@ -386,3 +442,23 @@
     (update-in world [:resolver-capacities resolver-addr :current-active]
                (fn [n] (max 0 (dec n))))
     world))
+
+(defrecord SlashEvent
+    [slash-id
+     workflow-id
+     escrow-contract
+     resolver
+     reason
+     basis-amount
+     basis-kind
+     slash-bps
+     slash-track
+     amount
+     proposed-at
+     executed-at
+     appeal-deadline
+     status
+     proposer
+     evidence-root
+     original-decision-hash
+     reversal-decision-hash])

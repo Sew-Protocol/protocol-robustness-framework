@@ -6,10 +6,8 @@
    2. Applying penalties (slashing) based on detected violations
    3. Enforcing penalties with delay and freeze mechanics
    
-   Phases:
-   - Phase H: Realistic bond mechanics (freeze + unstaking delay + appeal window)
-   - Phase I: Fraud/reversal/timeout detection with slashing
-   - Phase P-R: TBD (detection probability may change based on attacks)")
+   Pass :rng (SplittableRandom) in params for reproducible detection rolls."
+  (:require [resolver-sim.stochastic.rng :as rng]))
 
 (defprotocol Oracle
   "Fraud detection and penalty application."
@@ -26,22 +24,12 @@
 
 ;; ============ PHASE I ORACLE (Multi-mechanism detection) ============
 
-(deftype PhaseIOracl []
-  "Detects fraud, reversal, and timeout violations.
-   
-   Mechanisms:
-   - Fraud detection (50% prob): Detects when attacker forced wrong outcome
-   - Reversal detection (25% prob): Detects when outcome reversed on appeal
-   - Timeout detection (2% prob): Penalizes missed deadlines
-   
-   Each mechanism applies corresponding slash (5000 / 2500 / 200 bps)."
-  
+(deftype PhaseIOracle []
   Oracle
   
-  (detect-fraud? [_ dispute-outcome params]
-    ;; Fraud: outcome was wrong due to attacker influence
+  (detect-fraud? [_ _dispute-outcome params]
     (let [fraud-det-prob (:fraud-detection-probability params 0.0)]
-      (< (rand) fraud-det-prob)))
+      (< (rng/roll-double (:rng params)) fraud-det-prob)))
   
   (apply-penalties [_ detection-result dispute-outcome params]
     ;; Determine which violation occurred and apply corresponding slash
@@ -75,10 +63,6 @@
 ;; ============ STATIC ORACLE (Phase H baseline - no detection) ============
 
 (deftype StaticOracle []
-  "No fraud detection. (Baseline for Phase H before Phase I enhancements.)
-   
-   Returns: All disputes appear honest, no penalties."
-  
   Oracle
   
   (detect-fraud? [_ dispute-outcome params]
@@ -95,25 +79,28 @@
 
 (defn detect-fraud
   "Detect fraud based on multiple mechanisms.
-   
+
    Mechanisms (can co-occur):
    - fraud-detection-prob: Catches attacker forcing wrong outcome
    - reversal-detection-prob: Catches appeal reversal (honest outcome restored)
    - timeout-detection-prob: Catches missed deadlines
-   
+
+   Pass :rng (a SplittableRandom) in params for deterministic replay.
+
    Returns:
    {:fraud-detected? bool
     :reversal-detected? bool
     :timeout-detected? bool}"
   [params]
-  
-  (let [fraud-det (:fraud-detection-probability params 0.0)
+  (let [fraud-det    (:fraud-detection-probability params 0.0)
         reversal-det (:reversal-detection-probability params 0.0)
-        timeout-det (:timeout-detection-probability params 0.0)]
-    
-    {:fraud-detected? (< (rand) fraud-det)
-     :reversal-detected? (< (rand) reversal-det)
-     :timeout-detected? (< (rand) timeout-det)}))
+        timeout-det  (:timeout-detection-probability params 0.0)
+        rng          (:rng params)
+        roll         #(rng/roll-double rng)]
+
+    {:fraud-detected?    (< (roll) fraud-det)
+     :reversal-detected? (< (roll) reversal-det)
+     :timeout-detected?  (< (roll) timeout-det)}))
 
 (defn apply-slashing
   "Calculate penalty amount from slash basis points.

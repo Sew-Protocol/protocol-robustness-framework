@@ -262,5 +262,6 @@
   },
   "scenario_id": "phase-z-5-cascade-liveness",
   "protocol_id": "sew-v1",
-  "trace_id": "trace_phase_z_leakage"
+  "trace_id": "trace_phase_z_leakage",
+  "scenario-author": "@grifma"
 }

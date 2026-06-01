@@ -82,11 +82,12 @@
   (let [case-difficulties [0.2 0.5 0.8]  ; Easy, medium, hard
         cases-per-week 10
         cognitive-limit 50  ; Max cognitive load per week
+        d-rng (rng/make-rng 42)
         
         results (for [difficulty case-difficulties]
                   
                   (let [{:keys [dropout-risk will-participate? verdict]}
-                        (liveness/boredom-threshold difficulty cognitive-limit cases-per-week 0.2)
+                        (liveness/boredom-threshold difficulty cognitive-limit cases-per-week 0.2 d-rng)
                         
                         class (cond
                                 (> dropout-risk 0.5) "C"

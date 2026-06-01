@@ -4,8 +4,7 @@
    This module adapts Phase P-R adversary models to the standard batch simulation.
    It calculates bribery costs and adjusts attack success probabilities based on
    economic feasibility of different attack types."
-  (:require [resolver-sim.stochastic.contingent-bribery :as bribery]
-            [resolver-sim.adversaries.strategy :as strategy]))
+  (:require [resolver-sim.adversaries.strategy :as strategy]))
 
 ;; ============ BRIBERY COST INTEGRATION ============
 

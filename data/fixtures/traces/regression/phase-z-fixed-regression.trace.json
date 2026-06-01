@@ -260,5 +260,6 @@
   },
   "scenario_id": "phase-z-5-cascade-liveness",
   "protocol_id": "sew-v1",
-  "trace_id": "trace_phase_z_reconciled"
+  "trace_id": "trace_phase_z_reconciled",
+  "scenario-author": "@grifma"
 }

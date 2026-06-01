@@ -5,7 +5,7 @@
 #   ./scripts/test.sh            # run all suites (unit + invariants + fixtures + triage)
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
-#   ./scripts/test.sh invariants # S01–S41 deterministic invariant scenarios only
+#   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
@@ -27,6 +27,7 @@ CLAIMABLE_CLASSIFICATION_FILE="$ARTIFACT_DIR/claimable-classification.json"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 MAX_UNHIT_TRANSITIONS="${MAX_UNHIT_TRANSITIONS:-4}"
 MAX_UNSAFE_REGION_DELTA_PCT="${MAX_UNSAFE_REGION_DELTA_PCT:-10}"
+STRICT_CLAIM_REGISTRY="${STRICT_CLAIM_REGISTRY:-0}"
 
 mkdir -p "$ARTIFACT_DIR"
 
@@ -95,7 +96,7 @@ run_unit() {
 
 run_invariants() {
   require_clojure || return $?
-  echo "Running S01–S41 deterministic invariant scenarios..."
+  echo "Running deterministic invariant scenarios (S01–S100)..."
   clojure -M:run -- --invariants
   return $?
 }
@@ -243,7 +244,11 @@ PY
   python scripts/validate_artifact_registry.py
 
   # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
-  python scripts/validate_claim_registry.py
+  if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
+    python scripts/validate_claim_registry.py --strict-theory-claims
+  else
+    python scripts/validate_claim_registry.py
+  fi
 
   return $?
 }
@@ -261,7 +266,8 @@ run_suites() {
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]
-      results (map (fn [id] [id (f/run-suite id)]) suites)
+      verify-opts {:golden-verify-mode :replay-and-theory}
+      results (map (fn [id] [id (f/run-suite id :verify nil verify-opts)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
@@ -410,6 +416,11 @@ print(f"Wrote equivalence comparison summary: {out_path}")
 PY
 
   return $?
+}
+
+run_layering_lint() {
+  echo "Running namespace layering lint..."
+  clojure -M:layering-lint
 }
 
 run_comparison_lint() {
@@ -783,6 +794,9 @@ case "$MODE" in
   comparison-lint)
     run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
     ;;
+  layering-lint)
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    ;;
   coverage)
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     ;;
@@ -808,6 +822,8 @@ case "$MODE" in
     echo ""
     run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
@@ -819,7 +835,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|layering-lint|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

@@ -38,14 +38,20 @@
   (world-snapshot [adapter world]
     "Create a lean, serializable map of the world state for trace output.")
 
+  (available-actions [adapter world actor]
+    "Return a seq of all valid action maps {:action str :params map} for the actor in the given world state.")
+
   (resolve-id-alias [adapter event id-alias-map]
-    "Resolve ID aliases in event params to entity IDs.")
+    "Resolve entity aliases in the event. Returns {:ok bool :event event' :error kw}.")
 
   (created-id [adapter action extra]
-    "Return entity ID of a newly created entity, or nil.")
+    "Extract the ID of a newly created entity from an action's extra metadata.")
 
   (open-entities [adapter world]
-    "Return a seq of entity IDs still open/unresolved at end of scenario."))
+    "Return a seq of entity IDs still open/unresolved at end of scenario.")
+
+  (project-state [adapter world query]
+    "Query the world state using a protocol-specific projection query."))
 
 
 ;; ---------------------------------------------------------------------------

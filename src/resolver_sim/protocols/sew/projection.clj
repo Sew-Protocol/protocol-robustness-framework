@@ -36,7 +36,7 @@
   (boolean (re-find #"slash|auto_cancel_disputed" (str (or action "")))))
 
 (defn- strategic-action? [action]
-  (contains? #{"raise_dispute" "escalate_dispute" "execute_resolution"} action))
+  (contains? #{"create_escrow" "raise_dispute" "escalate_dispute" "execute_resolution"} action))
 
 (defn terminal-world-from-result
   "Canonical terminal-world accessor for replay result payloads.
@@ -51,6 +51,7 @@
     (when world
       {:trace trace
        :world world
+       :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
        :halt-reason (:halt-reason result)})))
@@ -174,6 +175,10 @@
    mechanism-property and equilibrium-concept validators.
 
    Returns a map with keys:
+     :protocol                — the protocol implementation instance
+     :agents                  — the agents involved in the scenario
+     :protocol-params         — the protocol parameters
+     :scenario-id             — the scenario identifier
      :terminal-world          — world state at end of trace
      :metrics                 — accumulated metrics
      :trace-summary           — high-level trace statistics
@@ -183,10 +188,15 @@
      :decisions               — strategic decision nodes in trace
      :raw-trace               — the full trace vector
 
-   Returns nil when result has no trace (e.g. :outcome :invalid with 0 events)."
-  [result]
+   Returns nil when result has no trace (e.g. :outcome :invalid with 0 events).
+
+   1-arity form is provided for backward compatibility; protocol defaults to nil."
+  ([result] (trace-end-projection nil result))
+  ([protocol result]
   (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
       (let [live-states  (get world :live-states {})
+            scenario-id  (get-in world [:params :scenario-id] "unknown")
+            p-params     (get world :params {})
             escrows      (into {} (map (fn [[id s]] [id (keyword (or s ""))]) live-states))
             all-terminal (every? (fn [[_ s]] (terminal-state? s)) escrows)
 
@@ -386,10 +396,14 @@
 
          :stake-flow-summary stake-flow
 
+         :protocol protocol
+         :agents agents
+         :protocol-params p-params
+         :scenario-id scenario-id
          :decisions decisions
          :raw-trace trace
          :funds-ledger-summary funds-ledger
-         :yield-evidence yield-evidence}))))
+         :yield-evidence yield-evidence})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection
@@ -450,8 +464,8 @@
         retained-total (long (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
-                             (for [{:keys [token accounted deposited]} (:violations conservation [])]
-                               [token (- (long accounted) (long deposited))]))
+                             (for [{:keys [token accounted inflow]} (:violations conservation [])]
+                               [token (- (long accounted) (long (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token

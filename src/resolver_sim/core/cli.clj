@@ -44,7 +44,7 @@
    [nil "--phase-e-dr" "Run Phase E DR: Evidence integrity sweep"]
    [nil "--phase-m-dr" "Run Phase M DR: Fairness analysis sweep"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
-   [nil "--invariants" "Run S01-S41 deterministic invariant scenarios (in-process, no gRPC)"]
+   [nil "--invariants" "Run S01-S100 deterministic invariant scenarios (in-process, no gRPC)"]
    [nil "--scenario PATH" "Path to a single scenario JSON file to run (requires --invariants)"]
    [nil "--output-file PATH" "Path to write the replay result JSON (requires --scenario)"]
    [nil "--protocol ID" (str "Protocol to use for --invariants (default: " preg/default-protocol-id ")")

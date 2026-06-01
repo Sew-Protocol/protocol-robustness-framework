@@ -22,14 +22,13 @@
                        :appeal-window-duration appeal-window
                        :max-dispute-duration 2592000}
      :events [{:seq 0 :time t0 :agent "buyer" :action "create_escrow"
-               :params {:token "USDC" :to "0xseller" :amount 7000 :custom-resolver "0xresolver"}
-               :save-id-as "wf0"}
+               :params {:token "USDC" :to "0xseller" :amount 7000 :custom-resolver "0xresolver"}}
               {:seq 1 :time t-dispute :agent "buyer" :action "raise_dispute"
-               :params {:workflow-id "wf0"}}
+               :params {:workflow-id 0}}
               {:seq 2 :time t-rule :agent "resolver" :action "execute_resolution"
-               :params {:workflow-id "wf0" :is-release true :resolution-hash "0xedge"}}
+               :params {:workflow-id 0 :is-release true :resolution-hash "0xedge"}}
               {:seq 3 :time t-exec :agent "keeper" :action "execute_pending_settlement"
-               :params {:workflow-id "wf0"}}]}))
+               :params {:workflow-id 0}}]}))
 
 (deftest generated-boundary-offsets-behave-as-expected
   (testing "Boundary-biased generated offsets enforce t-1 reject, t and t+1 success"
@@ -77,14 +76,13 @@
                                       :appeal-window-duration 0
                                       :max-dispute-duration 2592000}
                     :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-                              :params {:token "USDC" :to "0xseller" :amount 8000 :auto-release-time 1300}
-                              :save-id-as "wf0"}
+                              :params {:token "USDC" :to "0xseller" :amount 8000 :auto-release-time 1300}}
                              {:seq 1 :time 1299 :agent "buyer" :action "raise_dispute"
-                              :params {:workflow-id "wf0"}}
+                              :params {:workflow-id 0}}
                              {:seq 2 :time 1300 :agent "keeper" :action "automate_timed_actions"
-                              :params {:workflow-id "wf0"}}
+                              :params {:workflow-id 0}}
                              {:seq 3 :time 1300 :agent "buyer" :action "release"
-                              :params {:workflow-id "wf0"}}]}
+                              :params {:workflow-id 0}}]}
           r1 (replay/replay-with-protocol sew/protocol scenario)
           r2 (replay/replay-with-protocol sew/protocol scenario)]
       (is (= :fail (:outcome r1)))

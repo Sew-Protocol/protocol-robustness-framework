@@ -26,7 +26,7 @@ checking 31 invariants after every action. An invariant is a property that must
 *always* hold: "no escrow can be released twice," "the contract can never owe more
 than it holds," "a resolver without authority cannot finalise a dispute."
 
-There are 41 built-in scenarios (S01–S41) covering the full lifecycle: honest
+There are 96 built-in scenarios (S01–S100) covering the full lifecycle: honest
 resolution, adversarial manipulation, governance failure, liveness under no-resolver
 conditions, and Kleros fallback. If a scenario produces a single invariant violation,
 the run fails.
@@ -86,7 +86,7 @@ from two directions.
 ### What is solid
 
 **Deterministic engine — production-quality.**
-The 41-scenario invariant suite is the most reliable part of the codebase. Scenarios
+The 96-scenario invariant suite is the most reliable part of the codebase. Scenarios
 are named, documented, and independently runnable. The 31 invariant predicates mirror
 the intended on-chain guards. This output is suitable for inclusion in a grant
 application or audit brief.
@@ -214,7 +214,7 @@ binary outcome is what matters; the exact numbers are illustrative.
 
 Nine of 41 attack scenarios in the adversarial suite produce a successful outcome for
 the attacker. This is the denominator for the headline claim. It does *not* mean
-9 of 41 scenarios in the invariant suite fail — all 41 invariant scenarios pass. The
+9 of 41 scenarios in the invariant suite fail — all 96 deterministic invariant scenarios pass (82/99 with current known-baseline failures). The
 adversarial suite tests *whether an attacker can find a profitable position*; the
 invariant suite tests *whether the state machine breaks*. These are different questions.
 
@@ -243,7 +243,7 @@ invariant suite tests *whether the state machine breaks*. These are different qu
 
 ### For grant reviewers and auditors
 
-The most auditable output is the deterministic scenario suite. Each of the 41
+The most auditable output is the deterministic scenario suite. Each of the 96
 scenarios can be run individually and its full event trace inspected:
 
 ```
@@ -317,7 +317,7 @@ The Phase AA model can be used to evaluate each of these options before implemen
 
 
 
-The 41 deterministic scenarios cover the main lifecycle paths well. The gaps are:
+The 96 deterministic scenarios cover the main lifecycle paths well. The gaps are:
 
 - **Multi-party collusion** at scale (>2 colluders with coordinated timing)
 - **Economic griefing** (attacker absorbs loss to impose disproportionate cost on

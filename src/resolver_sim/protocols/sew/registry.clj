@@ -20,9 +20,20 @@
 
 (defn register-stake
   "Deposit stake for a resolver address.
-   Returns updated world."
-  [world resolver-addr amount]
-  (update-in world [:resolver-stakes resolver-addr] (fnil + 0) amount))
+   Returns updated world.
+   
+   If yield-profile-id is provided, the stake will be managed by that yield module."
+  ([world resolver-addr amount] (register-stake world resolver-addr amount nil))
+  ([world resolver-addr amount yield-profile-id]
+   (let [world (update-in world [:resolver-stakes resolver-addr] (fnil + 0) amount)]
+     (if yield-profile-id
+       (assoc-in world [:resolver-yield-profiles resolver-addr] yield-profile-id)
+       world))))
+
+(defn get-resolver-yield-profile
+  "Returns the yield profile ID assigned to a resolver."
+  [world resolver-addr]
+  (get-in world [:resolver-yield-profiles resolver-addr]))
 
 (defn get-stake
   "Get the current stake for a resolver address."

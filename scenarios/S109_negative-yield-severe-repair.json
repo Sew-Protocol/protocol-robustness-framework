@@ -1,0 +1,20 @@
+{
+  "scenario-id": "s109-negative-yield-severe-repair",
+  "title": "Severe Negative Yield with Waterfall Repair",
+  "schema-version": "1.0",
+  "purpose": "yield-stress",
+  "threat-tags": ["negative-yield", "shortfall", "repair-waterfall"],
+  "description": "Severe negative yield triggers a shortfall. Slashed funds are allocated to the insurance pool, and a repair-waterfall event is triggered to bridge the shortfall.",
+  "initial-block-time": 1000,
+  "agents": [{"id": "buyer", "address": "0xbuyer", "strategy": "honest"}, {"id": "seller", "address": "0xseller", "strategy": "honest"}, {"id": "resolver", "address": "0xres", "strategy": "malicious"}],
+  "protocol-params": {"yield-generation-module": "aave-v3"},
+  "yield-config": {"modules": {"aave-v3": {"tokens": {"USDC": {"apy": 0.05, "liquidity-mode": "available"}}}}},
+  "events": [
+    {"seq": 0, "time": 1000, "label": "create", "agent": "buyer", "action": "create_escrow", "params": {"token": "USDC", "to": "0xseller", "amount": 10000, "yield-preset": "to-sender"}},
+    {"seq": 1, "time": 5000, "label": "market shock: severe negative yield + shortfall", "agent": "buyer", "action": "set-yield-risk", "params": {"module-id": "aave-v3", "token": "USDC", "liquidity-mode": "shortfall", "apy": -0.20, "shortfall": {"available-ratio": 0.5}}},
+    {"seq": 2, "time": 6000, "label": "settle trigger", "agent": "buyer", "action": "sender-cancel", "params": {"workflow-id": 0}},
+    {"seq": 3, "time": 6000, "label": "slash resolver to create reserves", "agent": "resolver", "action": "execute-fraud-slash", "params": {"workflow-id": 0, "reason": "fraud"}},
+    {"seq": 4, "time": 7000, "label": "repair shortfall", "agent": "buyer", "action": "trigger-repair-waterfall", "params": {"workflow-id": 0}}
+  ],
+  "expected-outcomes": [{"seq": 1, "action": "set-yield-risk", "expect": "ok"}, {"seq": 3, "action": "execute-fraud-slash", "expect": "ok"}, {"seq": 4, "action": "trigger-repair-waterfall", "expect": "ok"}]
+}

@@ -6,6 +6,15 @@
   "threat-tags": [
     "escalation-abuse"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s20-dr3-kleros-max-escalation-guard",
   "initial-block-time": 1000,
   "agents": [
@@ -46,8 +55,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 5000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -55,7 +63,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -64,7 +72,7 @@
       "agent": "buyer",
       "action": "escalate_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -73,7 +81,7 @@
       "agent": "buyer",
       "action": "escalate_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -82,7 +90,7 @@
       "agent": "buyer",
       "action": "escalate_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -91,12 +99,13 @@
       "agent": "l2resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xl2hash"
       }
     }
   ],
   "allow-open-disputes?": true,
-  "_allow-open-disputes-reason": "Intentionally tests guard logic; dispute is never resolved (all escalations rejected, no authorized resolution)."
+  "_allow-open-disputes-reason": "Intentionally tests guard logic; dispute is never resolved (all escalations rejected, no authorized resolution).",
+  "scenario-author": "@grifma"
 }

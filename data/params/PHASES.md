@@ -7,7 +7,7 @@ This directory contains parameter configurations for different DR phases. The si
 **Most people want DR3 (the full system):**
 
 ```bash
-clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"data/params/baseline.edn\" \"-s\")"
+clojure -M:run -- -p data/params/baseline.edn
 ```
 
 ## Phase Comparison
@@ -25,7 +25,7 @@ clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"
 ### DR3 (Full System) - Default
 
 ```bash
-clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"data/params/baseline.edn\" \"-s\")"
+clojure -M:run -- -p data/params/baseline.edn
 ```
 
 - 10% resolver bond
@@ -37,7 +37,7 @@ clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"
 ### DR1 (Fee-Only)
 
 ```bash
-clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"data/params/dr1-fee-only.edn\" \"-s\")"
+clojure -M:run -- -p data/params/dr1-fee-only.edn
 ```
 
 - No bonds required
@@ -49,7 +49,7 @@ clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"
 ### DR2 (Reputation + Bond)
 
 ```bash
-clojure -M -e "(require '[resolver-sim.core]) (resolver-sim.core/-main \"-p\" \"data/params/dr2-reputation.edn\" \"-s\")"
+clojure -M:run -- -p data/params/dr2-reputation.edn
 ```
 
 - 5% resolver bond required

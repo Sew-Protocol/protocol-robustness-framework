@@ -13,6 +13,7 @@ Authority model: Clojure is the sole source of truth.
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from contextlib import contextmanager
 from typing import Any

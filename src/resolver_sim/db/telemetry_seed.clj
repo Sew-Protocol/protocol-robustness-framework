@@ -1,5 +1,5 @@
 (ns resolver-sim.db.telemetry-seed
-  (:require [evaluation.xtdb :as xtdb]
+  (:require [resolver-sim.db.xtdb :as xtdb]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.runner :as runner]
             [resolver-sim.db.telemetry :as tel]))

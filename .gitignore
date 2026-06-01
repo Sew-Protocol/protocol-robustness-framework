@@ -65,7 +65,15 @@ resources
 notebook.log
 grpc-server.log
 clerk.log
+debug_*.log
+*_debug.log
+violations.log
+all_violations.log
+invariants_only.log
+invariant_test.log
+test-debug.log
 
 # jar
 sew-simulation.jar
 
+results/.notebook-focus

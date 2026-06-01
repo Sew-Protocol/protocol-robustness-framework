@@ -87,8 +87,7 @@
         "to": "0xseller",
         "amount": 2000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 2,
@@ -96,7 +95,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -105,7 +104,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xhash"
       }
@@ -116,8 +115,9 @@
       "agent": "keeper",
       "action": "execute_pending_settlement",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

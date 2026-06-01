@@ -45,8 +45,7 @@
         "to": "0xseller",
         "amount": 2000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -55,7 +54,7 @@
       "action": "execute_resolution",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xh"
       }
@@ -66,7 +65,7 @@
       "agent": "buyer",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -76,7 +75,7 @@
       "action": "release",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -86,7 +85,7 @@
       "action": "raise_dispute",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -95,7 +94,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xauth"
       }
@@ -107,7 +106,7 @@
       "action": "execute_resolution",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0",
+        "workflow-id": 0,
         "is-release": true,
         "resolution-hash": "0xdup"
       }
@@ -119,7 +118,7 @@
       "action": "raise_dispute",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -129,7 +128,7 @@
       "action": "release",
       "adversarial?": true,
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ],
@@ -196,5 +195,6 @@
         "value": 0
       }
     ]
-  }
+  },
+  "scenario-author": "@grifma"
 }

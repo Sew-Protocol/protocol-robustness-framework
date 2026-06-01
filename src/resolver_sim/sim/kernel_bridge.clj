@@ -53,12 +53,11 @@
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller"
               :amount          (:escrow-size params 10000)
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id    "wf0"
+     :params {:workflow-id 0
               :is-release     true
               :resolution-hash "0xhash"}}]})
 
@@ -96,24 +95,23 @@
      [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
        :params {:token "USDC" :to "0xseller"
                 :amount          escrow-size
-                :custom-resolver "0xresolver"}
-       :save-id-as "wf0"}
+                :custom-resolver "0xresolver"}}
       {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id "wf0"}}
+       :params {:workflow-id 0}}
       ;; Malicious: wrong verdict (refund instead of release, i.e. is-release=false)
       {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-       :params {:workflow-id     "wf0"
+       :params {:workflow-id 0
                 :is-release      false
                 :resolution-hash "0xbad-hash"}
        :event-tags #{:adversarial}}
       ;; Governance proposes fraud slash; appeal window = 120s → deadline = 1130+120 = 1250
       {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
-       :params {:workflow-id   "wf0"
+       :params {:workflow-id 0
                 :resolver-addr "0xresolver"
                 :amount        slash-amount}}
       ;; Advance time past the appeal deadline, then execute the slash
       {:seq 4 :time t-slash-exec :agent "governance" :action "execute_fraud_slash"
-       :params {:workflow-id "wf0"}}]}))
+       :params {:workflow-id 0}}]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Kernel validation
@@ -216,16 +214,15 @@
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller"
               :amount          (:escrow-size params 10000)
-              :custom-resolver "0xresolver"}
-     :save-id-as "wf0"}
+              :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-     :params {:workflow-id "wf0"}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-     :params {:workflow-id     "wf0"
+     :params {:workflow-id 0
               :is-release      false
               :resolution-hash "0xhash-refund"}}
     {:seq 3 :time 2000 :agent "keeper" :action "execute_pending_settlement"
-     :params {:workflow-id "wf0"}}]})
+     :params {:workflow-id 0}}]})
 
 (defn generate-appeal-slash-scenario
   "Generate a dispute scenario covering the appeal-slash path.
@@ -256,23 +253,22 @@
      [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
        :params {:token "USDC" :to "0xseller"
                 :amount          escrow-size
-                :custom-resolver "0xresolver"}
-       :save-id-as "wf0"}
+                :custom-resolver "0xresolver"}}
       {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id "wf0"}}
+       :params {:workflow-id 0}}
       {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-       :params {:workflow-id     "wf0"
+       :params {:workflow-id 0
                 :is-release      false
                 :resolution-hash "0xbad-hash"}
        :event-tags #{:adversarial}}
       {:seq 3 :time 1130 :agent "governance" :action "propose_fraud_slash"
-       :params {:workflow-id   "wf0"
+       :params {:workflow-id 0
                 :resolver-addr "0xresolver"
                 :amount        slash-amount}}
       {:seq 4 :time 1140 :agent "resolver" :action "appeal_slash"
-       :params {:workflow-id "wf0"}}
+       :params {:workflow-id 0}}
       {:seq 5 :time 1160 :agent "governance" :action "resolve_appeal"
-       :params {:workflow-id     "wf0"
+       :params {:workflow-id 0
                 :is-appeal-valid false}}]}))
 
 (defn- check-domain-metrics

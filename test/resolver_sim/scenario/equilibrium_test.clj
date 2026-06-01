@@ -241,8 +241,10 @@
                       {:claim-tier :deviation-tested}))]
       (is (= :inconclusive (get-in result [:dominant-strategy-equilibrium :status])))
       (is (= :multi-trace-required (get-in result [:dominant-strategy-equilibrium :basis])))
+      (is (= :missing-deviation-bundles (get-in result [:dominant-strategy-equilibrium :reason])))
       (is (= :inconclusive (get-in result [:nash-equilibrium :status])))
-      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))))
+      (is (= :multi-trace-required (get-in result [:nash-equilibrium :basis])))
+      (is (= :missing-deviation-bundles (get-in result [:nash-equilibrium :reason])))))
 
   (testing "deviation-tested tier passes through when deviation bundle evidence is present"
     (let [proj   (assoc (projection {:attack-attempts 2 :attack-successes 0 :invariant-violations 0})
@@ -1037,8 +1039,7 @@
           ;; Find the execute_resolution row in the regret table
           rows     (get-in r [:observed :counterexamples] [])
           ;; Get the actual projection to inspect the regret-table directly
-          raw-proj (-> result
-                       sew-proj/trace-end-projection
+          raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol result)
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation-slash-penalty 200
@@ -1065,8 +1066,7 @@
     ;; terminal-realized=50, best-alt=100 (pre-wealth), gap=50, discount=1.0
     ;; min-required = ceil(50/1.0) = 50
     (let [result (reputation-slash-replay-result)
-          raw-proj (-> result
-                       sew-proj/trace-end-projection
+          raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol result)
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation-slash-penalty 200
@@ -1151,8 +1151,7 @@
 (deftest test-expected-future-earnings-model
   (testing ":expected-future-earnings model computes penalty from routing probability delta"
     (let [result (reputation-slash-replay-result)
-          raw-proj (-> result
-                       sew-proj/trace-end-projection
+          raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol result)
                        (assoc :spe-config {:regret-threshold 9999
                                            :utility-spec {:type :resolver-reputation-v1
                                                           :reputation/model :expected-future-earnings
@@ -1179,8 +1178,7 @@
     ;; terminal-realized=140 > pre=100; partial slash of 20
     ;; none:         adj=0,   chosen=140 > 100 → PASS
     ;; baseline:     adj=-80, chosen=60  < 100 → FAIL
-    (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/none :reputation/baseline])]
       (is (map? matrix) "should return a map")
@@ -1198,8 +1196,7 @@
 
 (deftest test-profile-matrix-all-pass
   (testing "run-profile-matrix all-pass? when resolver is honest (no slash, chosen > pre)"
-    (let [raw-proj (-> (reputation-no-slash-replay-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-no-slash-replay-result))
                        (assoc :spe-config {:regret-threshold 0}))
           ;; No slash → no reputation penalty applied → chosen=150, pre=100 → PASS for all
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/none :reputation/conservative])]
@@ -1212,8 +1209,7 @@
     ;; terminal-realized=140, pre=100, best-alt=140 (chosen-local, no slash)
     ;; conservative: adj=-13, chosen=127 < best-alt=140 → regret=13 → FAIL
     ;; This shows deterrence kicks in at any non-zero reputation penalty.
-    (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj [:reputation/conservative])]
       (is (= :fail (-> matrix :profile-results first :status))
@@ -1221,8 +1217,7 @@
 
 (deftest test-profile-matrix-validator-no-profiles-inconclusive
   (testing ":resolver-reputation-profile-matrix → inconclusive when no utility-profiles declared"
-    (let [raw-proj (-> (reputation-slash-replay-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-slash-replay-result))
                        (assoc :spe-config {:regret-threshold 0}))
           eq-map   (eq/evaluate-equilibrium-concepts
                     [:resolver-reputation-profile-matrix] raw-proj
@@ -1234,8 +1229,7 @@
 
 (deftest test-profile-matrix-validator-dispatches
   (testing ":resolver-reputation-profile-matrix validator dispatches and returns profile-results"
-    (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
                        (assoc :spe-config {:regret-threshold 0
                                            :utility-profiles [:reputation/none
                                                               :reputation/baseline]}))
@@ -1262,8 +1256,7 @@
     ;; baseline:     adj=-80, chosen=60,  regret=80 → FAIL
     ;; This shows deterrence is active under conservative and strong assumptions; only purely
     ;; reputationless actors (none) are indifferent.
-    (let [raw-proj (-> (reputation-gain-then-slash-result)
-                       sew-proj/trace-end-projection
+    (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj
                                                   [:reputation/none

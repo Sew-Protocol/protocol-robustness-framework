@@ -53,10 +53,9 @@
                              {:id "recipient" :address "recipient"}]
                     :events [{:seq 0 :time 1000 :agent "sender" :action "create_escrow"
                               :params {:token "USDC" :to "recipient" :amount 10000
-                                       :yield-preset :to-recipient}
-                              :save-id-as "wf0"}
+                                       :yield-preset :to-recipient}}
                              {:seq 1 :time (+ 1000 31536000) :agent "sender" :action "release"
-                              :params {:workflow-id "wf0"}}]}
+                              :params {:workflow-id 0}}]}
           result   (replay/replay-with-protocol sew/protocol scenario)
           world    (-> result :trace last :projection)]
       (is (= :pass (:outcome result)))

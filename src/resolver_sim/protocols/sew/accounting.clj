@@ -97,9 +97,33 @@
 
 (defn record-claimable
   "Record amount as claimable by addr for workflow-id.
+   Depreciated: use record-claimable-v2 instead.
    Mirrors: claimableBalances[workflowId][recipient] += amount"
   [world workflow-id addr amount]
-  (update-in world [:claimable workflow-id addr] (fnil + 0) amount))
+  (let [;; Fallback domain for legacy calls: settle to settlement/principal
+        world' (update-in world [:claimable workflow-id addr] (fnil + 0) amount)]
+    (update-in world' [:claimable-v2 workflow-id :settlement/principal addr] (fnil + 0) amount)))
+
+(defn record-claimable-v2
+  "Record amount as claimable by addr for workflow-id in a specific domain.
+   Also updates the legacy :claimable map for temporary backward compatibility."
+  [world workflow-id domain addr amount]
+  (let [world' (update-in world [:claimable-v2 workflow-id domain addr] (fnil + 0) amount)]
+    ;; Maintain dual-write to legacy map for principal-like settlements
+    (if (= domain :settlement/principal)
+      (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
+      world')))
+
+(defn- clear-claimable-v2-for-addr
+  "Zero claimable-v2 balances for addr on workflow-id (all domains)."
+  [world wf-id addr]
+  (if-let [domains (get-in world [:claimable-v2 wf-id])]
+    (update-in world [:claimable-v2 wf-id]
+                 (fn [domain-map]
+                   (into {}
+                         (for [[domain addr-map] domain-map]
+                           [domain (assoc addr-map addr 0)]))))
+    world))
 
 (defn withdraw-escrow
   "Claim claimable balance for addr on workflow-id.
@@ -133,6 +157,7 @@
             :else
             (let [world' (-> world
                              (assoc-in [:claimable wf-id addr] 0)
+                             (clear-claimable-v2-for-addr wf-id addr)
                              (update-in [:total-withdrawn token] (fnil + 0) amount))]
               (assoc (t/ok world') :amount amount))))))))
 
@@ -152,7 +177,10 @@
   "Record an appeal bond posted by appellant for workflow-id.
    Deducts protocol fee into :bond-fees; records net in :bond-balances.
    Also updates :total-held and :total-bonds-posted (cumulative).
-   Increments :total-principal-deposited to ensure solvency KPI accuracy."
+
+   NOTE: Bond inflow is tracked exclusively via :total-bonds-posted.
+   Do NOT also increment :total-principal-deposited — that double-counts
+   inflow in the conservation-of-funds and held-delta-accounted invariants."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
         {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)]
@@ -160,7 +188,6 @@
         (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
         (update-in [:bond-fees token] (fnil + 0) fee)
         (update-in [:total-bonds-posted token] (fnil + 0) amount)
-        (update-in [:total-principal-deposited token] (fnil + 0) amount)
         (add-held token net))))
 
 (defn distribute-slashed-funds

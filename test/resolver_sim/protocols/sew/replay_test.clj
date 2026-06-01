@@ -121,6 +121,29 @@
     (is (= :invalid (:outcome r)))
     (is (= :duplicate-agent-addresses (:halt-reason r)))))
 
+(deftest test-strict-expected-errors-enforced-and-trace-annotated
+  (let [r (sew/replay-with-sew-protocol
+           (assoc
+            (sc :events [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                          :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
+                         ;; invalid workflow-id -> deterministic reject, then valid close path
+                         {:seq 1 :time 1001 :agent "alice" :action "release"
+                          :params {:workflow-id 999}}
+                         {:seq 2 :time 1002 :agent "alice" :action "release"
+                          :params {:workflow-id 0}}])
+            :strict-expected-errors? true
+            :expected-errors [{:seq 1 :action "release" :error :invalid-workflow-id}]))]
+    (is (= :pass (:outcome r)))
+    (is (= {:ok? true
+            :matched [{:seq 1 :action "release" :error :invalid-workflow-id}]
+            :missing []
+            :unexpected []}
+           (:expected-error-analysis r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))
+    (is (= :invalid-workflow-id (get-in r [:trace 1 :reject-class])))
+    (is (= :dispatch (get-in r [:trace 1 :reject-phase])))
+    (is (true? (get-in r [:trace 1 :expected-failure?])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 2: Time regression in process-step
 ;; ---------------------------------------------------------------------------
@@ -211,9 +234,15 @@
                          :custom-resolver "0xResolver"}}
                {:seq 1 :time 1001 :agent "alice" :action "release"
                 :params {:workflow-id 0}}])]
-      (with-redefs [temporal/record-temporal-run!
-                    (fn [ds payload]
-                      (swap! calls conj {:ds ds :payload payload})
+      (with-redefs [temporal/record-from-replay!
+                    (fn [ds temporal-cfg scenario-id outcome world metrics trace]
+                      (swap! calls conj {:ds ds
+                                         :temporal-cfg temporal-cfg
+                                         :scenario-id scenario-id
+                                         :outcome outcome
+                                         :world world
+                                         :metrics metrics
+                                         :trace trace})
                       {:ok true})]
         ;; disabled / absent => no call
         (sew/replay-with-sew-protocol scenario-base)
@@ -229,8 +258,8 @@
                                     :suite-id :wire-suite
                                     :git-sha "abc123"}))
         (is (= 1 (count @calls)))
-        (is (= "wire-test-run" (get-in @calls [0 :payload :run :run-id])))
-        (is (= :pass (get-in @calls [0 :payload :run :outcome])))))))
+        (is (= "wire-test-run" (get-in @calls [0 :temporal-cfg :run-id])))
+        (is (= :pass (:outcome (first @calls))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Section 4: Dispute + resolution
@@ -440,7 +469,8 @@
         (is (false? (:all-hold? r)))))))
 
 (deftest test-solvency-strict-equality-passes-clean-world
-  ;; Clean world: total-held exactly matches live escrow amount
+  ;; Clean world: total-held exactly matches live escrow amount.
+  ;; total-principal-deposited must also be set to satisfy conservation-of-funds.
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0]
                              {:token "0xUSDC" :to "0xBob" :from "0xAlice"
@@ -449,7 +479,8 @@
                               :auto-release-time 0 :auto-cancel-time 0
                               :escrow-state :pending
                               :sender-status :none :recipient-status :none})
-                  (assoc-in [:total-held "0xUSDC"] 5000))]
+                  (assoc-in [:total-held "0xUSDC"] 5000)
+                  (assoc-in [:total-principal-deposited "0xUSDC"] 5000))]
     (let [r (inv/check-all world)]
       (is (true? (:all-hold? r))))))
 
@@ -714,57 +745,57 @@
       (is (true? (:all-hold? (inv/check-all (:world s6))))))))
 
 ;; ---------------------------------------------------------------------------
-;; Section 18: Workflow-id alias resolution
+;; Section 18: Workflow-id sequential integer IDs
 ;; ---------------------------------------------------------------------------
+;; Sew assigns workflow IDs as sequential integers (0, 1, 2, ...).
+;; Use direct integers in scenario events — no aliasing required.
 
-(deftest test-wf-alias-save-and-resolve
-  ":save-id-as captures the assigned workflow-id; subsequent events resolve the alias."
+(deftest test-wf-id-first-escrow-is-zero
+  "First created escrow gets workflow-id 0; subsequent events use integer 0 directly."
   (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000
-                            :custom-resolver "0xResolver"}
-                  :save-id-as "wf0"}
+                            :custom-resolver "0xResolver"}}
                 {:seq 1 :time 1001 :agent "alice" :action "release"
-                  :params {:workflow-id "wf0"}}]))]
+                  :params {:workflow-id 0}}]))]
     (is (= :pass (:outcome r)))
     (is (= 2 (:events-processed r)))
     (is (= :ok (get-in r [:trace 0 :result])))
     (is (= :ok (get-in r [:trace 1 :result])))))
 
-(deftest test-wf-alias-multi-escrow
-  "Multiple aliases can be saved and resolved independently."
+(deftest test-wf-id-multi-escrow-sequential
+  "Two creates produce IDs 0 and 1; operations targeting each work independently."
   (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
-                  :params {:token "0xUSDC" :to "0xBob" :amount 3000}
-                  :save-id-as "wf0"}
+                  :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
                 {:seq 1 :time 1001 :agent "alice" :action "create_escrow"
-                  :params {:token "0xUSDC" :to "0xBob" :amount 4000}
-                  :save-id-as "wf1"}
+                  :params {:token "0xUSDC" :to "0xBob" :amount 4000}}
                 {:seq 2 :time 1002 :agent "alice" :action "release"
-                  :params {:workflow-id "wf1"}}
+                  :params {:workflow-id 1}}
                 {:seq 3 :time 1003 :agent "alice" :action "release"
-                  :params {:workflow-id "wf0"}}]))]
+                  :params {:workflow-id 0}}]))]
     (is (= :pass (:outcome r)))
     (is (= 4 (:events-processed r)))
     (is (= 2 (get-in r [:metrics :total-escrows])))
     (is (= :ok (get-in r [:trace 2 :result])))
     (is (= :ok (get-in r [:trace 3 :result])))))
 
-(deftest test-wf-alias-unresolved-returns-invalid
-  "A string alias with no prior :save-id-as returns :invalid outcome."
+(deftest test-wf-id-nonexistent-returns-rejected
+  "A non-existent integer workflow-id (999) causes the action to be :rejected.
+   The scenario itself still :pass — the kernel doesn't halt on a rejected action."
   (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
                 {:seq 1 :time 1001 :agent "alice" :action "release"
-                  :params {:workflow-id "no-such-alias"}}]))]
-    (is (= :invalid (:outcome r)))
-    (is (= :unresolved-alias (:halt-reason r)))))
+                  :params {:workflow-id 999}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 1 :result])))))
 
-(deftest test-wf-alias-integer-passes-through
-  "Integer workflow-ids bypass the alias layer unchanged."
+(deftest test-wf-id-integer-zero-passes-through
+  "Integer workflow-id 0 is accepted as-is without any transformation."
   (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
@@ -1203,18 +1234,18 @@
           ;; Helper to remove ambiguity around `upheld?` semantics using
           ;; snapshot-visible effects (world snapshot omits pending-fraud-slashes).
           ;; true  => APPEAL upheld  => bond refunded to resolver claimable
-          ;; false => APPEAL rejected => bond forfeited to insurance
+          ;; false => APPEAL rejected => bond forfeited; tracked per-token in :appeal-bond-distributions-by-token
           (if upheld?
             (is (pos? (get-in world [:claimable 0 "0xResolver"] 0))
                 "upheld?=true should refund appeal bond to resolver claimable")
-            (is (pos? (get-in world [:bond-distribution :insurance] 0))
-                "upheld?=false should forfeit appeal bond to insurance")))]
+            (is (pos? (reduce + 0 (vals (get world :appeal-bond-distributions-by-token {}))))
+                "upheld?=false should forfeit appeal bond to insurance bucket")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
     (assert-appeal-resolution-semantics w-upheld true)
     (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
-    (is (= 80 (get-in w-rejected [:bond-distribution :insurance] 0)))
+    (is (= 80 (get-in w-rejected [:appeal-bond-distributions-by-token :0xUSDC] 0)))
     (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
 
 (deftest test-replay-s35-profit-maximizer-governance-wins-appeal

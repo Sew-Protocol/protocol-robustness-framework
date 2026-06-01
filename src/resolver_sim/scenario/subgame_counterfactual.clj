@@ -23,6 +23,8 @@
    Phase I — structured counterexample maps for every profitable deviation
    Phase J — off-path coverage reporting"
   (:require [clojure.string :as str]
+            [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
 
 (def ^:private default-continuation-policy
@@ -55,7 +57,8 @@
    :resolver-verdict ["verdict_for_buyer" "verdict_for_seller" "defer_verdict"]})
 
 (def ^:private node-type-by-action
-  {"raise_dispute" :challenge-timing
+  {"create_escrow" :escrow-creation
+   "raise_dispute" :challenge-timing
    "escalate_dispute" :escalation-timing
    "execute_resolution" :resolver-verdict})
 
@@ -94,7 +97,7 @@
        :spe/checkability :not-spe-checkable
        :checkability-reason "action is not a recognized strategic decision type"}
 
-      ;; Buyer/claimant raise_dispute or escalate_dispute depend on private
+      ;; Buyer/claimant raise-dispute or escalate-dispute depend on private
       ;; evidence quality — these are information-set nodes.
       (and (contains? private-evidence-roles agent)
            (contains? #{"raise_dispute" "escalate_dispute"} action))
@@ -102,22 +105,10 @@
        :spe/checkability :information-set-node
        :checkability-reason "buyer private evidence quality not modeled; decision is information-set node"}
 
-      ;; Resolver execute_resolution from a public dispute state is a proper subgame:
-      ;; all protocol state (dispute-levels, live-states, available actions) is public.
-      (= action "execute_resolution")
-      {:checkability :proper-subgame
-       :spe/checkability :proper-subgame
-       :checkability-reason "all protocol state public; resolver verdict from known public dispute state"}
-
-      ;; Seller escalation from a known dispute state is treated as a proper subgame.
-      ;; Assumption: seller delivery state is publicly observable by the time of escalation
-      ;; (the dispute was already raised and protocol state is on-chain). This is a modeling
-      ;; assumption — if seller private evidence quality were material, this would be an
-      ;; information-set node. Mark as :proper-subgame under the public-state assumption.
       :else
       {:checkability :proper-subgame
        :spe/checkability :proper-subgame
-       :checkability-reason "protocol dispute state is public; escalation from known dispute state (assumes seller delivery status observable)"})))
+       :checkability-reason "protocol state public; strategic action from public state"})))
 
 ;; ---------------------------------------------------------------------------
 ;; Phase G — Strategy profile definition
@@ -395,6 +386,26 @@
       local-regret
       (+ local-regret (long (Math/floor (/ local-regret 2.0)))))))
 
+(defn- expand-strategic-tree
+  "Phase 2: Expand strategic branches from a decision node.
+   Forks the simulation for each alternative action and follows the original
+   trace continuation where possible."
+  [protocol agents p-params scenario-id world actor remaining-events options]
+  (let [available (proto/available-actions protocol world actor)]
+    (for [{:keys [action params] :as action-map} available]
+      (let [deviation-event {:seq 0 :time (:block-time world) :agent actor :action action :params params}
+            ;; Adjust seq for continuation events
+            cont-events     (map-indexed (fn [i e] (assoc e :seq (inc i))) remaining-events)
+            result (replay/resume-from-snapshot
+                    protocol agents p-params scenario-id world
+                    (into [deviation-event] cont-events)
+                    [] {} options)]
+        {:action           action-map
+         :outcome          (:outcome result)
+         :halt-reason      (:halt-reason result)
+         :terminal-world   (:world result)
+         :terminal-utility (compute-utility (:world result) actor (:utility-spec options))}))))
+
 (defn- classify-row
   [{:keys [node-type alternatives chosen-utility best-alt-utility]}]
   (cond
@@ -405,7 +416,8 @@
 
 (defn- node->table-row
   [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec
-           strategy-profile backward-induction-ctx]}
+           strategy-profile backward-induction-ctx
+           protocol agents protocol-params scenario-id] :as row-ctx}
    {:keys [agent address action] :as node}
    spe-config]
   (let [node-seq        (:seq node)
@@ -419,11 +431,24 @@
         ;; Phase F: subgame boundary classification
         subgame-class  (classify-subgame-node node pre-world)
         info-set       (build-information-set pre-world node)
-        alternatives   (bounded-alternatives node-type action info-set spe-config)
+        
+        ;; Phase 2: Dynamic Tree Expansion
+        tree-expansion? (boolean (get spe-config :enable-tree-expansion? false))
+        dynamic-branches (when (and tree-expansion? pre-world protocol)
+                           (expand-strategic-tree
+                            protocol agents protocol-params scenario-id pre-world actor
+                            (drop (inc idx) raw-trace)
+                            spe-config))
+
+        alternatives   (if (seq dynamic-branches)
+                         (mapv #(get-in % [:action :action]) dynamic-branches)
+                         (bounded-alternatives node-type action info-set spe-config))
+        
         pre-utility-r  (when pre-world (compute-utility pre-world actor utility-spec))
         chosen-utility-r (when terminal-state (compute-utility terminal-state actor utility-spec pre-world))
         pre-utility    (:value pre-utility-r)
         chosen-utility (:value chosen-utility-r)
+
         ;; Phase K: backward-induction-ctx overrides the forward-pass heuristic when present.
         ;; bi-result = {:best-alt-utility n :deviation-classes {alt → class}}, or nil.
         bi-result
@@ -437,6 +462,11 @@
             {:best-alt-utility  (apply max per-alt-vals)
              :deviation-classes (zipmap alternatives
                                         (map classify-deviation-action alternatives))}))
+        
+        ;; Phase 2: Best alt from dynamic expansion (forward mode)
+        best-alt-from-tree (when (seq dynamic-branches)
+                             (apply max (keep (fn [b] (get-in b [:terminal-utility :value])) dynamic-branches)))
+
         ;; Forward-pass heuristic (used when bi-result is nil).
         local-alt-utility
         (when (and (nil? bi-result) chosen-world)
@@ -449,6 +479,7 @@
               chosen-local)))
         response-delta  (when (nil? bi-result) (response-adjustment continuation-policy chosen-utility))
         best-alt-utility (or (:best-alt-utility bi-result)
+                             best-alt-from-tree
                              (if (seq alternatives)
                                (max (or local-alt-utility Long/MIN_VALUE)
                                     (+ (long (or chosen-utility Long/MIN_VALUE)) (or response-delta 0)))
@@ -596,7 +627,8 @@
     :off-path-coverage map                           (Phase J)
     :counterexamples [...]                           (Phase I)
     :requires [...]}"
-  [{:keys [raw-trace decisions terminal-world spe-config]}]
+  [{:keys [raw-trace decisions terminal-world spe-config
+            protocol agents protocol-params scenario-id]}]
   (let [decision-nodes (->> decisions
                             (sort-by (juxt :seq :agent :action))
                             vec)
@@ -688,7 +720,11 @@
                         :continuation-policy continuation-policy
                         :replay-boundary replay-boundary
                         :utility-spec utility-spec
-                        :strategy-profile strategy-profile}
+                        :strategy-profile strategy-profile
+                        :protocol protocol
+                        :agents agents
+                        :protocol-params protocol-params
+                        :scenario-id scenario-id}
             cached-row (fn [node]
                          (let [k (cache-key node)]
                            (if-let [hit (get @memo* k)]

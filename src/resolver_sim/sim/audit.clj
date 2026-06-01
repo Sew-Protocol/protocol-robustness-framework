@@ -15,10 +15,8 @@
    Step 6b — canonical run: run-phase-j-audit executes the full 1000-epoch
    baseline and writes all output files.
 
-   Layering: sim/* + io/* only. No db/* imports."
+   Layering: sim/* only. File I/O via resolver-sim.io.audit-outputs."
   (:require [resolver-sim.sim.trajectory :as trajectory]
-            [resolver-sim.io.results      :as results]
-            [clojure.java.io              :as io]
             [clojure.string               :as str])
   (:import [java.security MessageDigest]
            [java.math BigInteger]))
@@ -263,7 +261,7 @@
 ;; Canonical output writing
 ;; ---------------------------------------------------------------------------
 
-(defn- trajectory-csv-rows
+(defn trajectory-csv-rows
   "Build seq of per-resolver-per-epoch rows for the trajectory CSV.
    Each row: resolver-id, strategy, epoch (1-based), equity, reputation,
               trial-count, verdict-count, slash-count"
@@ -280,7 +278,7 @@
        :verdict_count (long (get-in traj [:verdict-count epoch-idx] 0))
        :slash_count  (long (get-in traj [:slash-count epoch-idx] 0))})))
 
-(defn- audit-markdown
+(defn audit-markdown
   "Generate a human-readable PHASE_J_STABILITY_AUDIT.md from the audit result and manifest."
   [audit-result manifest]
   (let [{:keys [result epochs-checked checks summary violations]} audit-result
@@ -349,72 +347,33 @@
                                  violations))))
                ""])))
 
-(defn write-audit-outputs
-  "Write all canonical audit output files to output-dir.
-
-   Writes:
-     epoch-results.edn
-     trajectory.csv
-     audit-result.edn
-     manifest.edn
-     PHASE_J_STABILITY_AUDIT.md
-
-   Returns output-dir."
-  [output-dir result audit-result manifest]
-  (.mkdirs (io/file output-dir))
-  (results/write-edn   (str output-dir "/epoch-results.edn")  (:epoch-results result))
-  (results/write-edn   (str output-dir "/audit-result.edn")   audit-result)
-  (results/write-edn   (str output-dir "/manifest.edn")       manifest)
-  (results/write-csv   (str output-dir "/trajectory.csv")
-                       (trajectory-csv-rows
-                        (:full-trajectories result)
-                        (:resolver-histories result)
-                        (:n-epochs result)))
-  (spit (str output-dir "/PHASE_J_STABILITY_AUDIT.md")
-        (audit-markdown audit-result manifest))
-  output-dir)
-
 ;; ---------------------------------------------------------------------------
-;; Step 6b — canonical run
+;; Step 6b — canonical run (pure; file writes via io.audit-outputs)
 ;; ---------------------------------------------------------------------------
 
 (defn run-phase-j-audit
-  "Run the canonical multi-epoch stability audit and write all output files.
+  "Run the canonical multi-epoch stability audit.
 
-   params      — simulation parameters map (load from EDN with io/params)
+   params      — simulation parameters map
    params-file — path to the params file (for manifest)
-   output-dir  — directory to write results (created if absent)
 
    Optional keyword args:
      :seed             — RNG seed (default: :rng-seed in params, or 42)
      :n-epochs         — epoch count override (default: :n-epochs in params)
      :n-trials         — trials/epoch override (default: :n-trials-per-epoch in params)
      :audit-opts       — map of options for analyze-multi-epoch
+     :epoch-callback   — (fn [epoch-n summary]) invoked after each epoch
 
-   Returns {:result run-result :audit audit-result :manifest manifest :output-dir output-dir}."
-  [params params-file output-dir & {:keys [seed n-epochs n-trials audit-opts]}]
+   Returns {:result run-result :audit audit-result :manifest manifest}."
+  [params params-file & {:keys [seed n-epochs n-trials audit-opts epoch-callback]}]
   (let [seed'     (or seed (:rng-seed params 42))
         n-epochs' (or n-epochs (:n-epochs params 10))
         n-trials' (or n-trials (:n-trials-per-epoch params 500))
-
-        ;; Incremental flush: write each epoch summary as it completes
-        epoch-dir (str output-dir "/epochs")
-        _         (.mkdirs (io/file epoch-dir))
-        callback  (fn [n summary]
-                    (results/write-edn
-                     (str epoch-dir "/epoch-" (format "%04d" n) ".edn")
-                     summary))
-
         rng-inst  (@(requiring-resolve 'resolver-sim.stochastic.rng/make-rng) seed')
         run-fn    @(requiring-resolve 'resolver-sim.sim.multi-epoch/run-multi-epoch)
-        result    (run-fn rng-inst n-epochs' n-trials' params callback)
+        result    (run-fn rng-inst n-epochs' n-trials' params (or epoch-callback (constantly nil)))
         audit-res (analyze-multi-epoch result (or audit-opts {}))
         mfst      (make-manifest result params params-file seed')]
-
-    (write-audit-outputs output-dir result audit-res mfst)
-    (println (format "\nAudit result: %s" (name (:result audit-res))))
-    (println (format "Output written to: %s" output-dir))
-    {:result     result
-     :audit      audit-res
-     :manifest   mfst
-     :output-dir output-dir}))
+    {:result  result
+     :audit   audit-res
+     :manifest mfst}))

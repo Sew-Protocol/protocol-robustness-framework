@@ -6,28 +6,69 @@
   "purpose": "adversarial-robustness",
   "schema-version": "1.1",
   "initial-block-time": 1000,
-  "threat-tags": ["same-block-ordering"],
+  "threat-tags": [
+    "same-block-ordering"
+  ],
   "agents": [
-    { "id": "buyer", "address": "0xbuyer", "role": "buyer", "strategy": "honest" },
-    { "id": "seller", "address": "0xseller", "role": "seller", "strategy": "honest" },
-    { "id": "resolver", "address": "0xresolver", "role": "resolver", "strategy": "honest" }
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "role": "buyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "role": "seller",
+      "strategy": "honest"
+    },
+    {
+      "id": "resolver",
+      "address": "0xresolver",
+      "role": "resolver",
+      "strategy": "honest"
+    }
   ],
   "theory": {
     "claim-id": "claims/atomic-lifecycle-consistency",
     "claim": "Same-block lifecycle transitions cannot produce inconsistent state, double settlement, or fund loss.",
-    "assumptions": ["Transactions are processed in sequence order within the replay trace"],
+    "assumptions": [
+      "Transactions are processed in sequence order within the replay trace"
+    ],
     "falsifies-if": [
-      { "metric": "double-settlements", "op": ">", "value": 0 },
-      { "metric": "invalid-state-transitions", "op": ">", "value": 0 },
-      { "metric": "funds-lost", "op": ">", "value": 0 }
+      {
+        "metric": "double-settlements",
+        "op": ">",
+        "value": 0
+      },
+      {
+        "metric": "invalid-state-transitions",
+        "op": ">",
+        "value": 0
+      },
+      {
+        "metric": "funds-lost",
+        "op": ">",
+        "value": 0
+      }
     ]
   },
   "expectations": {
     "terminal": [
-      { "path": ["live-states", 0], "equals": "released" }
+      {
+        "path": [
+          "live-states",
+          0
+        ],
+        "equals": "released"
+      }
     ],
     "metrics": [
-      { "name": "resolutions-executed", "op": ":=", "value": 1 }
+      {
+        "name": "resolutions-executed",
+        "op": ":=",
+        "value": 1
+      }
     ]
   },
   "events": [
@@ -36,22 +77,32 @@
       "time": 1000,
       "agent": "buyer",
       "action": "create_escrow",
-      "params": { "token": "USDC", "to": "0xseller", "amount": 1000, "custom-resolver": "0xresolver" },
-      "save-id-as": "wf0"
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 1000,
+        "custom-resolver": "0xresolver"
+      }
     },
     {
       "seq": 1,
       "time": 1000,
       "agent": "buyer",
       "action": "raise_dispute",
-      "params": { "workflow-id": "wf0" }
+      "params": {
+        "workflow-id": 0
+      }
     },
     {
       "seq": 2,
       "time": 1000,
       "agent": "resolver",
       "action": "execute_resolution",
-      "params": { "workflow-id": "wf0", "is-release": true }
+      "params": {
+        "workflow-id": 0,
+        "is-release": true
+      }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

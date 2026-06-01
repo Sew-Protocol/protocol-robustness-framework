@@ -9,8 +9,8 @@
    This replaces Phase P Lite which modeled wrong system architecture."
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.decision-quality :as dq]
-            [resolver-sim.stochastic.information-cascade :as ic]
-            [resolver-sim.stochastic.escalation-economics :as ee]
+            [resolver-sim.protocols.sew.research-models.information-cascade :as ic]
+            [resolver-sim.protocols.sew.research-models.escalation-economics :as ee]
             [resolver-sim.sim.engine :as proto]))
 
 ;; ============ Test Parameters ============

@@ -6,6 +6,15 @@
   "threat-tags": [
     "token-accounting"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "total-escrows",
+        "op": ":>=",
+        "value": 1
+      }
+    ]
+  },
   "scenario-id": "fee-on-transfer-leak",
   "initial-block-time": 1000,
   "agents": [
@@ -30,8 +39,7 @@
         "token": "FOT-TOKEN",
         "to": "0xseller",
         "amount": 10000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -39,7 +47,7 @@
       "agent": "buyer",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
   ],
@@ -47,5 +55,6 @@
     "fee-on-transfer": 500
   },
   "expected-fail?": true,
-  "description": "FoT token (5% tax): token-tax-reconciliation? fires on release because sub-held removes full AFA but record-released only accounts for net amount after tax. Conservation-of-funds also fires due to the accounting gap."
+  "description": "FoT token (5% tax): token-tax-reconciliation? fires on release because sub-held removes full AFA but record-released only accounts for net amount after tax. Conservation-of-funds also fires due to the accounting gap.",
+  "scenario-author": "@grifma"
 }

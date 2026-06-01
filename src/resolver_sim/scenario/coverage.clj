@@ -54,10 +54,61 @@
     (and (string? v) (seq v)) (keyword v)
     :else nil))
 
+(defn- normalize-sid [v]
+  (-> (str (or v ""))
+      str/lower-case
+      (str/replace #"^:" "")
+      (str/replace #"^scenarios/" "")
+      (str/replace #"\.json$" "")
+      (str/replace #"\.trace\.json$" "")))
+
+(defn- scenario-map->meta [m source-file]
+  (let [sid (or (:id m) (:scenario-id m))
+        purpose (safe-keyword (:purpose m))
+        threat-tags (->> (or (:threat-tags m) []) (map safe-keyword) (filter some?) vec)
+        transitions (->> (or (:transitions m)
+                             (map :action (or (:events m) [])))
+                         (map safe-keyword)
+                         (filter some?)
+                         vec)]
+    {:id sid
+     :title (or (:title m) "")
+     :purpose purpose
+     :threat-tags threat-tags
+     :transitions transitions
+     :source-file source-file}))
+
+(defn- load-scenario-metadata-index
+  "Index canonical scenario metadata by normalized scenario id.
+   Supports both single-scenario maps and array-of-scenarios files."
+  []
+  (let [scenario-files (->> (file-seq (io/file "scenarios"))
+                            (filter #(.isFile %))
+                            (filter #(str/ends-with? (.getName %) ".json")))]
+    (reduce (fn [idx f]
+              (try
+                (let [raw (with-open [r (io/reader f)] (json/read r :key-fn keyword))
+                      entries (cond
+                                (map? raw) [raw]
+                                (vector? raw) (filter map? raw)
+                                :else [])]
+                  (reduce (fn [m e]
+                            (let [{:keys [id] :as meta} (scenario-map->meta e (.getName f))
+                                  k (normalize-sid id)]
+                              (if (seq k)
+                                (assoc m k meta)
+                                m)))
+                          idx
+                          entries))
+                (catch Exception _
+                  idx)))
+            {}
+            scenario-files)))
+
 (defn- read-trace-metadata
   "Read only the metadata header fields from a .trace.json file.
    Returns nil if the file cannot be parsed."
-  [file]
+  [file scenario-index]
   (try
     (with-open [r (io/reader file)]
       (let [raw (json/read r :key-fn keyword)
@@ -73,15 +124,18 @@
                                      (when (true? (get e :adversarial?))
                                        {:guard :adversarial-attempt
                                         :transition (safe-keyword (:action e))})))
-                             vec)]
+                             vec)
+            trace-id (or (:id raw) (str/replace (.getName file) #"\.trace\.json$" ""))
+            fallback-meta (get scenario-index (normalize-sid trace-id))]
         {:file           (.getName file)
          :path           (.getPath file)
-         :id             (or (:id raw) (keyword (str/replace (.getName file) #"\.trace\.json$" "")))
-         :title          (or (:title raw) "")
+         :id             trace-id
+         :title          (or (:title raw) (:title fallback-meta) "")
          :schema-version (or (str (:schema-version raw)) "unknown")
-         :purpose        purpose
-         :threat-tags    (filterv some? threat-tags)
-         :transitions    transitions
+         :purpose        (or purpose (:purpose fallback-meta))
+         :threat-tags    (let [tags (filterv some? threat-tags)]
+                           (if (seq tags) tags (or (:threat-tags fallback-meta) [])))
+         :transitions    (if (seq transitions) transitions (or (:transitions fallback-meta) []))
          :guards         guards}))
     (catch Exception _
       nil)))
@@ -107,13 +161,14 @@
      :purpose        — keyword or nil
      :threat-tags    — vector of keywords (may be empty)"
   [dir]
-  (let [d (io/file dir)]
+  (let [d (io/file dir)
+        scenario-index (load-scenario-metadata-index)]
     (if (.isDirectory d)
       (->> (file-seq d)
            (filter #(.isFile %))
            (filter #(str/ends-with? (.getName %) ".trace.json"))
            (sort-by #(.getPath %))
-           (keep read-trace-metadata)
+           (keep #(read-trace-metadata % scenario-index))
            vec)
       [])))
 

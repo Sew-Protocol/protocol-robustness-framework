@@ -189,17 +189,27 @@
 
 (defn- severity [scenario]
   (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))
+        {:keys [invariant-severity-order tag-severity-map default-severity]}
+        (or (:severity-rules config/profile) {})
         invariant-severities (->> (or (:invariant-results scenario) {})
                                   (keep (fn [[inv status]]
                                           (when (= status :fail)
                                             (get-in (defs/invariant-def inv) [:default-severity]))))
-                                  set)]
+                                  set)
+        matched-tag-severity
+        (some (fn [[tag sev]]
+                (when (contains? tags (str/lower-case (name tag)))
+                  (name sev)))
+              (or tag-severity-map {}))
+        invariant-severity
+        (some (fn [sev]
+                (when (contains? invariant-severities sev)
+                  (name sev)))
+              (or invariant-severity-order [:high :medium]))]
     (cond
-      (contains? invariant-severities :high) "high"
-      (contains? invariant-severities :medium) "medium"
-      (or (contains? tags "reentrancy") (contains? tags "solvency")) "high"
-      (or (contains? tags "appeal-escalation") (contains? tags "timing-boundary")) "medium"
-      :else "low")))
+      invariant-severity invariant-severity
+      matched-tag-severity matched-tag-severity
+      :else (name (or default-severity :low)))))
 
 (defn- status-kind [scenario]
   (if (ose/negative-test-purpose? (:purpose scenario))
@@ -307,7 +317,8 @@
   ([artifacts]
    (let [bundle (generate-findings-bundle artifacts)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
-     (spit findings-path (json/write-str bundle))
+     (with-open [w (clojure.java.io/writer findings-path)]
+       (json/write bundle w :indent true))
      bundle)))
 
 (defn load-findings []

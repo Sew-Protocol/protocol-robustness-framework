@@ -6,6 +6,15 @@
   "threat-tags": [
     "solvency"
   ],
+  "expectations": {
+    "metrics": [
+      {
+        "name": "reverts",
+        "op": ":>=",
+        "value": 0
+      }
+    ]
+  },
   "scenario-id": "s09-multi-escrow-solvency",
   "initial-block-time": 1000,
   "agents": [
@@ -50,8 +59,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 1000
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -63,8 +71,7 @@
         "to": "0xseller",
         "amount": 2000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf1"
+      }
     },
     {
       "seq": 2,
@@ -76,8 +83,7 @@
         "to": "0xseller",
         "amount": 3000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf2"
+      }
     },
     {
       "seq": 3,
@@ -85,7 +91,7 @@
       "agent": "buyer0",
       "action": "release",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     },
     {
@@ -94,7 +100,7 @@
       "agent": "buyer1",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf1"
+        "workflow-id": 1
       }
     },
     {
@@ -103,7 +109,7 @@
       "agent": "buyer2",
       "action": "raise_dispute",
       "params": {
-        "workflow-id": "wf2"
+        "workflow-id": 2
       }
     },
     {
@@ -112,7 +118,7 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf1",
+        "workflow-id": 1,
         "is-release": true,
         "resolution-hash": "0xh1"
       }
@@ -123,10 +129,11 @@
       "agent": "resolver",
       "action": "execute_resolution",
       "params": {
-        "workflow-id": "wf2",
+        "workflow-id": 2,
         "is-release": true,
         "resolution-hash": "0xh2"
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

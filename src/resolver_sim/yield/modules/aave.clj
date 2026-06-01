@@ -1,9 +1,9 @@
 (ns resolver-sim.yield.modules.aave
-  "[REFERENCE MODULE / Sew-INTEGRATED]
+  "Aave-v3 yield module — retained as a reference implementation only.
 
-   Aave-inspired yield module used as the current reference module.
-   The interface pattern is reusable; concrete world-field coupling and
-   policy assumptions are currently tuned to Sew integration."
+   SUPERSEDED: registry.clj uses liquid-lending/make-module for :aave-v3.
+   This file is not imported or executed during normal simulation runs.
+   See yield/providers/liquid_lending.clj for the active implementation."
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]))
 
@@ -70,6 +70,7 @@
                       yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
                   (-> w
                       (assoc-in [:yield/positions oid] new-pos)
+                      (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
                       (update-in [:total-held token] (fnil + 0) yield-delta)))
                 w))
             world'
@@ -93,8 +94,26 @@
                          :liquidity-mode mode
                          :owner/id oid}))
         (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              crystallized  (acct/realize-yield world (acct/update-position-yield world pos current-index))]
-          (assoc-in world pos-key (assoc crystallized :status :withdrawn)))))))
+              updated-pos   (acct/update-position-yield world pos current-index)
+              gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
+              {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
+              realized-yield (max 0 (min (:unrealized-yield updated-pos 0)
+                                          (- fulfilled (:principal updated-pos 0))))
+              crystallized  (-> updated-pos
+                                (assoc :status (if shortfall :unwinding :withdrawn))
+                                (assoc :realized-yield realized-yield)
+                                (assoc :unrealized-yield 0)
+                                (assoc :shortfall shortfall))]
+          (assoc-in world pos-key crystallized))))))
+
+(defn aave-claim-deferred [world module op]
+  (let [oid     (:owner/id op)
+        pos-key [:yield/positions oid]
+        pos     (get-in world pos-key)
+        mid     (:module/id module)]
+    (if (and pos (= (:status pos) :unwinding))
+      (assoc-in world pos-key (acct/claim-deferred world mid pos))
+      world)))
 
 (defn aave-emergency-unwind [world module op]
   (let [mid   (:module/id module)
@@ -109,12 +128,13 @@
 (def aave-v3-module
   {:module/id :aave-v3
    :module/type :aave-v3
-   :module/capabilities #{:deposit :withdraw :accrue :emergency-unwind}
+   :module/capabilities #{:deposit :withdraw :accrue :emergency-unwind :claim-deferred}
    :accounting/type :shares
    :ops {:yield/deposit aave-deposit
          :yield/withdraw aave-withdraw
          :yield/accrue aave-accrue
-         :yield/emergency-unwind aave-emergency-unwind}
+         :yield/emergency-unwind aave-emergency-unwind
+         :yield/claim-deferred aave-claim-deferred}
    :risk/defaults {:liquidity-mode :available
                    :loss-mode :none
                    :rate-mode :external}})

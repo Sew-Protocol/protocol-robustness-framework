@@ -37,6 +37,7 @@
       "incentive-compatibility"
     ],
     "falsifies-if": [],
+    "mechanism-only-negative-test?": true,
     "assumptions": []
   },
   "expectations": {
@@ -75,8 +76,7 @@
         "to": "0xseller",
         "amount": 4000,
         "custom-resolver": "0xresolver"
-      },
-      "save-id-as": "wf0"
+      }
     },
     {
       "seq": 1,
@@ -86,8 +86,9 @@
       "adversarial?": true,
       "_note": "Valid buyer action, marked adversarial. Succeeds \u2192 attack-successes = 1 \u2192 incentive-compat FAIL.",
       "params": {
-        "workflow-id": "wf0"
+        "workflow-id": 0
       }
     }
-  ]
+  ],
+  "scenario-author": "@grifma"
 }

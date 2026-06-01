@@ -20,9 +20,11 @@
             [resolver-sim.protocols.sew.projection       :as sew-proj]
             [resolver-sim.protocols.sew.equilibrium      :as sew-eq]
             [resolver-sim.protocols.sew.advisory         :as sew-adv]
-            [resolver-sim.protocols.sew.db               :as sew-db]
+            [resolver-sim.db.sew                         :as sew-db]
+            [resolver-sim.db.temporal                    :as temporal]
+            [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
-            [resolver-sim.yield.registry                 :as yield-reg]
+            [resolver-sim.yield.protocols                :as yield-proto]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
 
@@ -39,37 +41,41 @@
 (defn- build-snapshot [pp]
   (let [yield-id (or (get pp :yield-generation-module nil)
                      (get pp :yield-profile nil))
-        {:keys [profile-id archetype module-id]} (yield-reg/resolve-yield-profile yield-id)]
+        {:keys [profile-id archetype module-id]} (yield-proto/resolve-yield-profile yield-id)]
     (t/make-module-snapshot
+     ;; NOTE: :resolver-fee-bps in protocol-params maps to :escrow-fee-bps in the snapshot.
+     ;; Setting :escrow-fee-bps directly in protocol-params has no effect; use :resolver-fee-bps.
      {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
-    :resolution-module            (get pp :resolution-module nil)
-    :appeal-window-duration       (get pp :appeal-window-duration 0)
-    :max-dispute-duration         (get pp :max-dispute-duration 2592000)
-    :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
-    :dispute-resolver             (get pp :dispute-resolver nil)
-    :appeal-bond-bps              (get pp :appeal-bond-bps 0)
-    :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
-    :appeal-bond-amount           (get pp :appeal-bond-amount 0)
-    :reversal-slash-bps           (get pp :reversal-slash-bps 0)
-    :fraud-slash-bps              (get pp :fraud-slash-bps 5000)
-    :challenge-window-duration    (get pp :challenge-window-duration 0)
-    :challenge-bond-bps           (get pp :challenge-bond-bps 0)
-    :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
-    :default-auto-release-delay   (get pp :default-auto-release-delay 0)
-    :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-     :escrow-modules               {:resolution (get pp :resolution-module nil)
-                                    :yield      profile-id
-                                    :release    (get pp :release-strategy nil)
-                                    :cancel     (get pp :cancellation-strategy nil)}
-     :yield-module-id              :module/aave-yield
-     :yield-profile                profile-id
-     :yield-archetype              archetype
-     :yield-generation-module      module-id
-    :yield-distribution-module    (get pp :yield-distribution-module nil)
-    :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
-    :cancellation-strategy        (get pp :cancellation-strategy nil)
-    :release-strategy             (get pp :release-strategy nil)
-     :incentive-module             (get pp :incentive-module nil)})))
+      :resolution-module            (get pp :resolution-module nil)
+      :appeal-window-duration       (get pp :appeal-window-duration 0)
+      :max-dispute-duration         (get pp :max-dispute-duration 2592000)
+      :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
+      :dispute-resolver             (get pp :dispute-resolver nil)
+      :appeal-bond-bps              (get pp :appeal-bond-bps 0)
+      :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
+      :appeal-bond-amount           (get pp :appeal-bond-amount 0)
+      :reversal-slash-bps           (get pp :reversal-slash-bps 0)
+      ;; NOTE: :fraud-slash-bps is intentionally NOT stored in the snapshot.
+      ;; It is a sim-layer param read from params directly (kernel_bridge, batch, etc).
+      :challenge-window-duration    (get pp :challenge-window-duration 0)
+      :challenge-bond-bps           (get pp :challenge-bond-bps 0)
+      :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
+      :default-auto-release-delay   (get pp :default-auto-release-delay 0)
+      :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
+      ;; NOTE: escrow-modules mirrors :resolution-module for legacy compat.
+      :escrow-modules               {:resolution (get pp :resolution-module nil)
+                                     :yield      profile-id
+                                     :release    (get pp :release-strategy nil)
+                                     :cancel     (get pp :cancellation-strategy nil)}
+      :yield-module-id              (get pp :yield-module-id :module/aave-yield)
+      :yield-profile                profile-id
+      :yield-archetype              archetype
+      :yield-generation-module      module-id
+      :yield-distribution-module    (get pp :yield-distribution-module nil)
+      :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
+      :cancellation-strategy        (get pp :cancellation-strategy nil)
+      :release-strategy             (get pp :release-strategy nil)
+      :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]
@@ -103,12 +109,12 @@
    These rules are optional and run through replay's generic temporal rule engine."
   []
   [{:id :sew/appeal-window-open
-    :check (fn [{:keys [world event now]}]
+    :check (fn [{:keys [world event event-time]}]
              (if (= "execute_pending_settlement" (:action event))
                (let [wf-id   (compat/wf-id event)
                      pending (t/get-pending world wf-id)]
                  (if (and (:exists pending)
-                          (< now (:appeal-deadline pending)))
+                           (< event-time (:appeal-deadline pending)))
                    {:ok? false :error :appeal-window-not-expired}
                    {:ok? true}))
                {:ok? true}))}])
@@ -127,13 +133,13 @@
     (actx/with-resolved-actor-and-unpaused
       agent-index world event
       (fn [caller]
-        (let [token  (:token p)
+        (let [token  (keyword (:token p))
               to     (:to p)
               amount (:amount p)]
           (if (or (nil? amount) (<= amount 0) (> amount max-safe-amount))
             {:ok false :error :amount-out-of-safe-range
              :detail {:amount amount :max max-safe-amount}}
-            (let [cres     (get p :custom-resolver)
+            (let [cres     (or (get p :custom-resolver) (get p :dispute-resolver))
                   settings (t/make-escrow-settings
                              {:custom-resolver cres
                               :release-address (:release-address p)
@@ -234,16 +240,33 @@
   (actx/with-resolved-actor
     agent-index event
     (fn [addr]
-      (let [amount (get-in event [:params :amount] 0)]
-        (t/ok (reg/register-stake world addr amount))))))
+      (let [p                (:params event)
+            amount           (:amount p 0)
+            token            (keyword (:token p "USDC"))
+            yield-profile-id (:yield-profile-id p)
+            world            (reg/register-stake world addr amount yield-profile-id)
+            world            (acct/add-held world token amount)
+            world            (update-in world [:total-principal-deposited token] (fnil + 0) amount)]
+        (if yield-profile-id
+          (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
+                world' (yield-proto/apply-op world {:op/type :yield/deposit
+                                                     :owner/id (str "resolver:" addr)
+                                                     :module/id module-id
+                                                     :amount amount
+                                                     :token token})]
+            (t/ok world'))
+          (t/ok world))))))
 
 (defmethod apply-action "withdraw-stake"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
     agent-index event
     (fn [resolver-addr]
-      (let [amount       (get-in event [:params :amount])
-            current      (reg/get-stake world resolver-addr)
+      (let [p                    (:params event)
+            amount               (:amount p)
+            token                (keyword (:token p "USDC"))
+            current              (reg/get-stake world resolver-addr)
+            yield-profile-id     (reg/get-resolver-yield-profile world resolver-addr)
             pending-slash-amount (reduce + 0
                                   (for [[_ slash] (:pending-fraud-slashes world)
                                         :when (and (= (:resolver slash) resolver-addr)
@@ -263,7 +286,57 @@
           (t/fail :resolver-frozen)
 
           :else
-          (reg/withdraw-stake world resolver-addr amount))))))
+          (let [res (reg/withdraw-stake world resolver-addr amount)]
+            (if (:ok res)
+              (let [world' (-> (:world res)
+                               (acct/sub-held token amount)
+                               (update-in [:total-withdrawn token] (fnil + 0) amount))]
+                (if yield-profile-id
+                  (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
+                        world'' (yield-proto/apply-op world'
+                                                      {:op/type :yield/withdraw
+                                                       :owner/id (str "resolver:" resolver-addr)
+                                                       :module/id module-id})]
+                    (t/ok world''))
+                  (t/ok world')))
+              res)))))))
+
+(defmethod apply-action "claim-deferred-yield"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [yield-id  (or (get-in event [:params :yield-profile-id])
+                          (get-in world [:params :yield-generation-module]))
+            module-id (:module-id (yield-proto/resolve-yield-profile yield-id))
+            raw-owner (get-in event [:params :owner-id])
+            owner-id  (cond
+                        (nil? raw-owner) (str "resolver:" addr)
+                        (and (string? raw-owner) (.startsWith raw-owner "escrow:"))
+                        [:sew/escrow (Long/parseLong (subs raw-owner 7))]
+                        :else raw-owner)
+            pos-key  [:yield/positions owner-id]
+            old-pos  (get-in world pos-key)
+            world'   (yield-proto/apply-op world {:op/type :yield/claim-deferred
+                                                   :owner/id owner-id
+                                                   :module/id module-id})
+            new-pos  (get-in world' pos-key)
+            reclaimed (:reclaimed-amount new-pos 0)]
+        (if (pos? reclaimed)
+          (let [escrow-id (when (vector? owner-id) (second owner-id))
+                world''   (if escrow-id
+                            ;; For escrow yield: recover principal and credit recipient
+                            (let [et        (t/get-transfer world' escrow-id)
+                                  state     (t/escrow-state world' escrow-id)
+                                  token     (:token et)
+                                  recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
+                              (-> world'
+                                  (acct/sub-held token reclaimed)
+                                  (acct/record-claimable-v2 escrow-id :settlement/principal recipient reclaimed)))
+                            ;; For resolver stake yield: credit the resolver's stake balance
+                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
+            (t/ok world''))
+          (t/ok world'))))))
 
 (defmethod apply-action "withdraw-escrow"
   [{:keys [agent-index]} world event]
@@ -289,7 +362,8 @@
     governance-actor?
     (fn [_addr _agent]
       (let [p     (:params event)
-            token (:token p)]
+            token (:token p)
+            token (when token (keyword token))]
         (acct/withdraw-fees world token)))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
@@ -299,7 +373,7 @@
     (fn [_addr]
       (let [agent (get agent-index (:agent event))]
         (let [p       (:params event)
-              token   (:token p)
+              token   (keyword (:token p))
               active? (get p :active? true)]
           (t/ok (update world :token-liquidity-crunch
                         (if active?
@@ -397,9 +471,38 @@
   (res/execute-fraud-slash world (event-workflow-id event)
                            (event-slash-id event)))
 
-(defmethod apply-action "advance-time"
+(defmethod apply-action "time_advance"
   [_ctx world _event]
   (t/ok world))
+
+(defmethod apply-action "trigger-accrue"
+  [_ctx world event]
+  (t/ok (lc/accrue-yield world (event-workflow-id event))))
+
+(defmethod apply-action "set-yield-risk"
+  ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
+  ;; Params:
+  ;;   :module-id      — yield module id (string, will be keywordised and alias-resolved)
+  ;;   :token          — token symbol (string, will be keywordised)
+  ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
+  ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
+  ;;   :apy            — new APY (double), optional
+  ;;   :shortfall      — map e.g. {:available-ratio 0.8}
+  [_ctx world event]
+  (let [{:keys [module-id token liquidity-mode failure-modes apy shortfall]} (:params event)
+        raw-mid (keyword module-id)
+        ;; Resolve through module aliases so "aave-v3" → :yield.provider/liquid-lending
+        mid (get-in world [:yield/module-aliases raw-mid] raw-mid)
+        tok (keyword token)]
+    (t/ok (cond-> world
+            liquidity-mode
+            (assoc-in [:yield/risk mid tok :liquidity-mode] (keyword liquidity-mode))
+            failure-modes
+            (assoc-in [:yield/risk mid tok :failure-modes] (into #{} (map keyword failure-modes)))
+            apy
+            (assoc-in [:yield/rates mid tok] (double apy))
+            shortfall
+            (assoc-in [:yield/risk mid tok :shortfall] shortfall)))))
 
 (defmethod apply-action :default
   [_ctx _world event]
@@ -410,7 +513,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- run-single-invariants [world]
-  (let [r (inv/check-all world)]
+  (let [scenario-id (get-in world [:params :scenario-id])
+        r (inv/check-all world scenario-id)]
     {:ok?        (:all-hold? r)
      :violations (when-not (:all-hold? r) (:results r))}))
 
@@ -437,11 +541,20 @@
    :resolver-rotations (into {} (:resolver-rotations world))
    :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
                                      (:escrow-transfers world)))
+   :escrow-transfers    (:escrow-transfers world {})
    :resolver-stakes     (:resolver-stakes world)
    :resolver-slash-total (:resolver-slash-total world)
    :bond-distribution   (:bond-distribution world)
+   :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
    :claimable           (:claimable world {})
-   :bond-balances       (:bond-balances world {})})
+   :bond-balances       (:bond-balances world {})
+   :yield-positions     (when-let [pos (:yield/positions world)]
+                          (into {} (map (fn [[oid p]]
+                                          [oid (select-keys p [:status :principal :shares
+                                                               :unrealized-yield :realized-yield
+                                                               :shortfall :reclaimed-amount
+                                                               :token :module/id])])
+                                        pos)))})
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending
@@ -463,7 +576,7 @@
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
 
-(deftype SewProtocol []
+(defrecord SewProtocol []
   proto/SimulationAdapter
 
   (protocol-id [_] "sew-v1")
@@ -471,11 +584,12 @@
   (init-world [_ scenario]
     (let [init-time    (get scenario :initial-block-time 1000)
           tp           (:token-params scenario)
+          pp           (assoc (:protocol-params scenario {}) :scenario-id (:scenario-id scenario))
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)
-                           yield-reg/init-yield-modules
-                           (yield-reg/apply-yield-config (:yield-config scenario)))]
+                           (assoc :params pp)
+                           (yield-proto/init-world pp (:yield-config scenario)))]
       (if (and fot-bps (pos? fot-bps) (seq s-tokens))
         (reduce (fn [w tok] (assoc-in w [:token-fot-bps tok] fot-bps)) base s-tokens)
         base)))
@@ -515,22 +629,62 @@
   (world-snapshot [_ world]
     (world-snapshot world))
 
-  (resolve-id-alias [_ event id-alias-map]
-    (let [wf-val (get-in event [:params :workflow-id])]
-      (if (string? wf-val)
-        (if-let [int-id (get id-alias-map wf-val)]
-          {:ok true :event (assoc-in event [:params :workflow-id] int-id)}
-          {:ok false :error :unresolved-alias :alias wf-val :seq (:seq event)})
-        {:ok true :event event})))
+  (available-actions [_ world actor]
+    (let [wfs (keys (:escrow-transfers world))]
+      (mapcat identity
+              (for [wf wfs]
+         (let [et (t/get-transfer world wf)]
+           (cond-> []
+             ;; Pending actions
+             (= :pending (:escrow-state et))
+             (into (cond-> []
+                     (or (= actor (:from et)) (= actor (:to et)))
+                     (conj {:action "raise-dispute" :params {:workflow-id wf}})
 
-  (created-id [_ action extra]
-    (when (= action "create_escrow")
-      (:workflow-id extra)))
+                     (= actor (:from et))
+                     (into [{:action "release" :params {:workflow-id wf}}
+                            {:action "sender-cancel" :params {:workflow-id wf}}])
+
+                     (= actor (:to et))
+                     (conj {:action "recipient-cancel" :params {:workflow-id wf}})))
+
+             ;; Disputed actions
+             (and (= :disputed (:escrow-state et))
+                  (not (and (= actor (:dispute-resolver et))
+                            (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))))
+             (into (let [pending (t/get-pending world wf)
+                         resolver (:dispute-resolver et)]
+                     (cond-> []
+                       ;; Resolver verdict
+                       (and (not (:exists pending)) (= actor resolver))
+                       (into [{:action "execute-resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
+                              {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
+
+                       ;; Escalation/Challenge (if pending exists and not expired)
+                       (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
+                       (into (cond-> []
+                               (or (= actor (:from et)) (= actor (:to et)))
+                               (conj {:action "escalate-dispute" :params {:workflow-id wf}})
+
+                               ;; Anyone can challenge (Phase L)
+                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
                :when (= :disputed (:escrow-state et))]
            wf)))
+
+  (project-state [_ world query]
+    (case (first query)
+      :party/net-position
+      (let [params (second query)
+            actor  (:party params)
+            hold   (get-in world [:total-held (get params :token "USDC")] 0)
+            claim  (reduce + 0 (for [[_ wf] (:claimable world {})
+                                     :when (contains? wf actor)]
+                                 (get wf actor 0)))]
+        (+ hold claim))
+      nil))
 
   proto/EconomicModel
 
@@ -622,8 +776,8 @@
     {:transition/type (meta/transition-type action)
      :resolution/path (meta/resolution-path action)})
 
-  (trace-projection [_ result]
-    (sew-proj/trace-end-projection result))
+  (trace-projection [this result]
+    (sew-proj/trace-end-projection this result))
 
   (io-projection [_ data target-type]
     (case target-type
@@ -687,4 +841,12 @@
 
 (defn replay-with-sew-protocol
   [scenario]
-  (replay/replay-with-protocol protocol scenario))
+  (let [scenario*
+        (if-let [te (:temporal-evidence scenario)]
+          (if (and (:enabled? te) (not (:recorder te)))
+            (assoc scenario :temporal-evidence
+                   (assoc te :recorder temporal/record-from-replay!
+                              :protocol protocol))
+            scenario)
+          scenario)]
+    (replay/replay-with-protocol protocol scenario*)))

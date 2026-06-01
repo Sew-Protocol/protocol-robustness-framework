@@ -11,7 +11,14 @@
            withdrawal-events
            recovery-events
            assumptions
-           supported-failure-modes]}]
+           supported-failure-modes
+           ;; Added forensic tracking fields
+           principal
+           total-held
+           yield-delta
+           shortfall
+           entitled
+           withdrawable-now]}]
   {:routing-by-workflow routing-by-workflow
    :supported-failure-modes (or supported-failure-modes default-supported-failure-modes)
    :yield/available-liquidity nil
@@ -20,6 +27,13 @@
    :yield/deferred-amount nil
    :yield/recovery-events (or recovery-events [])
    :yield/withdrawal-events (or withdrawal-events [])
+   ;; Added forensic fields to output structure
+   :yield/principal principal
+   :yield/total-held total-held
+   :yield/yield-delta yield-delta
+   :yield/shortfall shortfall
+   :yield/entitled entitled
+   :yield/withdrawable-now withdrawable-now
    :yield/assumptions (or assumptions
                           ["Archetype evidence is protocol-neutral; settlement semantics are protocol-specific."])})
 

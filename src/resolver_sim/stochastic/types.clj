@@ -128,7 +128,10 @@
     :p-l2-reversal
     :ring-spec
     :l2-detection-prob
-    :senior-resolver-skill})
+    :senior-resolver-skill
+    ;; Optional author metadata
+    :author
+    :author-id})
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."

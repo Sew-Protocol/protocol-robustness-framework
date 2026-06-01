@@ -9,12 +9,11 @@
    Metrics:
    - Ring profit = sum of profits across all members
    - Catch rate = % of disputes where ring is caught
-   - Member states = individual bond remaining per resolver")
-
-(require '[resolver-sim.protocols.sew.research-models.delegation :as delegation]
-         '[resolver-sim.stochastic.dispute :as dispute]
-         '[resolver-sim.stochastic.rng :as rng]
-         '[resolver-sim.stochastic.economics :as econ])
+   - Member states = individual bond remaining per resolver"
+  (:require [resolver-sim.protocols.sew.research-models.delegation :as delegation]
+            [resolver-sim.stochastic.dispute :as dispute]
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.economics :as econ]))
 
 (defn create-ring
   "Create a resolver ring with given structure.

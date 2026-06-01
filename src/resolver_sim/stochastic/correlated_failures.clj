@@ -29,39 +29,29 @@
    - ground-truth: What's actually true
    - num-resolvers: How many resolvers affected
    - correlation-coefficient: [0.0-1.0] How much they correlate
+   - rng: optional SplittableRandom for reproducible sampling
    
    Returns: Accuracy distribution with shared bias"
-  [bias-strength ground-truth num-resolvers correlation-coefficient]
-  
-  (let [; Shared component (affects all)
-        shared-error (if (< (rand) bias-strength)
-                      (not ground-truth)  ; Bias causes shared error
-                      ground-truth)       ; Or correct independently
-        
-        ; Individual component (independent errors)
-        individual-error (if (< (rand) 0.1)  ; 10% baseline error
+  ([bias-strength ground-truth num-resolvers correlation-coefficient]
+   (shared-bias-effect bias-strength ground-truth num-resolvers correlation-coefficient nil))
+  ([bias-strength ground-truth num-resolvers correlation-coefficient rng]
+  (let [roll #(rng/roll-double rng)
+        shared-error (if (< (roll) bias-strength)
+                      (not ground-truth)
+                      ground-truth)
+        individual-error (if (< (roll) 0.1)
                           (not ground-truth)
                           ground-truth)
-        
-        ; Combine based on correlation
-        ;; With high correlation, shared error dominates
         make-decision (fn [rho]
-                       (if (< (rand) rho)
-                         shared-error
-                         individual-error))
-        
-        ; Decisions for all resolvers
+                        (if (< (roll) rho)
+                          shared-error
+                          individual-error))
         decisions (map (fn [_] (make-decision correlation-coefficient))
                       (range num-resolvers))
-        
-        ; Count agreement
         agreeing (count (filter #(= % shared-error) decisions))
         agreement-fraction (/ agreeing num-resolvers)
-        
-        ; Accuracy: Are we getting the right answer?
         correct-count (count (filter #(= % ground-truth) decisions))
         accuracy (/ correct-count num-resolvers)]
-    
     {:shared-error shared-error
      :ground-truth ground-truth
      :decisions decisions
@@ -70,7 +60,7 @@
      :correlation-coefficient correlation-coefficient
      :biased? (not= shared-error ground-truth)
      :systemic-risk? (and (not= shared-error ground-truth)
-                         (> agreement-fraction 0.7))}))
+                         (> agreement-fraction 0.7))})))
 
 (defn herding-dynamic
   "Model herding: Resolvers converge on same decision through:
@@ -84,38 +74,29 @@
    - accuracy-if-independent: Accuracy without herding
    - reputation-pressure: [0.0-1.0] Cost of disagreeing
    - evidence-quality: [0.0-1.0] How clear is the case
+   - rng: optional SplittableRandom for reproducible sampling
    
    Returns: Probability of herding (following prior)"
-  [round prior-decision accuracy-if-independent reputation-pressure evidence-quality]
-  
-  (let [; Herding increases with:
-        ; - Higher round (later resolvers, more pressure)
-        ; - Lower evidence quality (hard to judge independently)
-        ; - Higher reputation pressure
-        ; - But decreases if accuracy-if-independent is very high
-        
-        round-factor (/ round 2.0)  ; 0.0 at R0, 0.5 at R1, 1.0 at R2
-        clarity-factor (- 1.0 evidence-quality)  ; Low clarity = high herding
+  ([round prior-decision accuracy-if-independent reputation-pressure evidence-quality]
+   (herding-dynamic round prior-decision accuracy-if-independent reputation-pressure evidence-quality nil))
+  ([round prior-decision accuracy-if-independent reputation-pressure evidence-quality rng]
+  (let [round-factor (/ round 2.0)
+        clarity-factor (- 1.0 evidence-quality)
         pressure-factor reputation-pressure
-        accuracy-factor (- 1.0 accuracy-if-independent)  ; Low accuracy = easier to follow
-        
-        ; Base herding probability
+        accuracy-factor (- 1.0 accuracy-if-independent)
         base-herding (* round-factor clarity-factor pressure-factor accuracy-factor)
-        
-        ; Clamped to [0, 1]
         herding-prob (min 1.0 (max 0.0 base-herding))]
-    
     {:round round
      :prior-decision prior-decision
      :herding-probability herding-prob
      :reputation-pressure reputation-pressure
      :evidence-quality evidence-quality
-     :will-herd? (< (rand) herding-prob)
+     :will-herd? (< (rng/roll-double rng) herding-prob)
      :risk-level (cond
                    (< herding-prob 0.2) "LOW"
                    (< herding-prob 0.5) "MODERATE"
                    (< herding-prob 0.8) "HIGH"
-                   :else "CRITICAL")}))
+                   :else "CRITICAL")})))
 
 (defn shared-information-source
   "Model resolvers using same external information.
@@ -132,33 +113,26 @@
    - num-resolvers: How many use this source
    - source-accuracy: [0.0-1.0] How reliable is source
    - ground-truth: What's actually correct
+   - rng: optional SplittableRandom for reproducible sampling
    
    Returns: Correlation created by shared source"
-  [num-resolvers source-accuracy ground-truth]
-  
-  (let [; Source gives either correct or wrong signal
-        source-signal (if (< (rand) source-accuracy)
+  ([num-resolvers source-accuracy ground-truth]
+   (shared-information-source num-resolvers source-accuracy ground-truth nil))
+  ([num-resolvers source-accuracy ground-truth rng]
+  (let [roll #(rng/roll-double rng)
+        source-signal (if (< (roll) source-accuracy)
                        ground-truth
                        (not ground-truth))
-        
-        ; Resolvers follow source with high probability
-        follow-prob 0.8  ; 80% of resolvers trust and follow
-        
-        ; Decisions
+        follow-prob 0.8
         decisions (map (fn [_]
-                        (if (< (rand) follow-prob)
+                        (if (< (roll) follow-prob)
                           source-signal
-                          (if (< (rand) 0.5) ground-truth (not ground-truth))))
+                          (if (< (roll) 0.5) ground-truth (not ground-truth))))
                       (range num-resolvers))
-        
-        ; Agreement
         agreeing-with-source (count (filter #(= % source-signal) decisions))
         agreement-fraction (/ agreeing-with-source num-resolvers)
-        
-        ; Accuracy
         correct-count (count (filter #(= % ground-truth) decisions))
         accuracy (/ correct-count num-resolvers)]
-    
     {:source-signal source-signal
      :source-accuracy source-accuracy
      :ground-truth ground-truth
@@ -168,7 +142,7 @@
      :correlation-risk (cond
                          (< source-accuracy 0.7) "HIGH: Unreliable source creates errors"
                          (> agreement-fraction 0.9) "HIGH: Over-reliance on source"
-                         :else "LOW: Good source with healthy skepticism")}))
+                         :else "LOW: Good source with healthy skepticism")})))
 
 (defn diversity-effect
   "Model how resolver diversity (geographic, institutional, training)

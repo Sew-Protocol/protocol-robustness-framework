@@ -88,18 +88,17 @@ interface (`protocols/protocol.clj`).
                    :max-dispute-duration 2592000}
  :events
  [{:seq 0 :time 1000 :agent "buyer"    :action "create_escrow"
-   :params {:token "USDC" :to "0xseller" :amount 5000}
-   :save-id-as "wf0"}
+   :params {:token "USDC" :to "0xseller" :amount 5000}}
   {:seq 1 :time 1100 :agent "buyer"    :action "dispute"
-   :params {:workflow-id "wf0"}}
+   :params {:workflow-id 0}}
   {:seq 2 :time 1200 :agent "resolver" :action "resolve"
-   :params {:workflow-id "wf0" :outcome :release}}]}
+   :params {:workflow-id 0 :outcome :release}}]}
 ```
 
 Key properties:
 
-- **Workflow ID aliasing**: `:save-id-as` / `:workflow-id` allow referencing
-  escrow IDs symbolically; the engine resolves them lazily in the event loop.
+- **Workflow IDs**: sequential integers assigned by creation order (first create → `0`,
+  second → `1`, etc.). Use integers directly in `:params/:workflow-id`.
 - **Deterministic time**: block time is integer-typed; `time-non-decreasing` is
   an enforced invariant.
 - **Schema versioning**: schema versions `"1.0"` and `"1.1"` are supported;
