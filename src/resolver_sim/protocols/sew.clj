@@ -598,6 +598,7 @@
    :yield-positions     (when-let [pos (:yield/positions world)]
                           (into {} (map (fn [[oid p]]
                                           [oid (select-keys p [:status :principal :shares
+                                                               :entry-index :current-index :current-value
                                                                :unrealized-yield :realized-yield
                                                                :yield-loss :shortfall :reclaimed-amount
                                                                :token :module/id])])

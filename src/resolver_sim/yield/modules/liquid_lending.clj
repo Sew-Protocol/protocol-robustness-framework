@@ -80,7 +80,9 @@
                       {:module/id mid :token token :liquidity-mode mode}))
 
       :else
-      (let [pos (model/make-position {:owner/id oid
+      (let [;; Model A: shares = principal / entry share price at deposit.
+            ;; `index` is the module liquidity index / share price at entry.
+            pos (model/make-position {:owner/id oid
                                       :module/id mid
                                       :token token
                                       :principal amount

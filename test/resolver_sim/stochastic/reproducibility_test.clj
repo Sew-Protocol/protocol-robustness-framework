@@ -1,6 +1,7 @@
 (ns resolver-sim.stochastic.reproducibility-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.detection :as det]
             [resolver-sim.stochastic.correlated-failures :as corr]
             [resolver-sim.stochastic.liveness-failures :as liveness]
             [resolver-sim.oracle.detection :as detection]))
@@ -65,6 +66,25 @@
       (is (false? (:fraud-detected? out)))
       (is (true? (:timeout-detected? out)))
       (is (false? (:l1-slashed? out))))))
+
+(deftest fixed-or-shorthand-vector-consumes-rolls-in-order
+  (testing ":fixed-or [rolls...] is equivalent to :fixed-roll-sequence"
+    (let [params {:rng (rng/make-rng 42)
+                  :fixed-or [0.90 0.01 0.50]
+                  :oracle-roll-cursor (atom 0)
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          out (detection/detect-probabilistic-violations params :malicious false 0.1)]
+      (is (false? (:fraud-detected? out)))
+      (is (true? (:timeout-detected? out)))
+      (is (false? (:l1-slashed? out))))))
+
+(deftest fixed-or-mode-alias-normalizes-to-fixed-roll-sequence
+  (testing ":oracle-mode :fixed-or normalizes to :fixed-roll-sequence"
+    (let [norm (det/normalize-oracle-fixture {:oracle-mode :fixed-or
+                                              :oracle-roll-sequence [0.5]})]
+      (is (= :fixed-roll-sequence (:mode norm)))
+      (is (= [0.5] (:rolls norm))))))
 
 (deftest oracle-fixture-fixed-sequence-exhaustion-throws
   (testing ":fixed-roll-sequence throws when rolls are exhausted with :throw policy"

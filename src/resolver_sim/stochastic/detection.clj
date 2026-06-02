@@ -12,6 +12,33 @@
   #{:fraud-detection :timeout-detection :reversal-detection :l1-detection
     :l2-detection :pending-evidence})
 
+(defn- normalize-oracle-mode
+  "Mode aliases. :fixed-or is shorthand for :fixed-roll-sequence."
+  [mode]
+  (if (= mode :fixed-or) :fixed-roll-sequence mode))
+
+(defn- fixture-from-fixed-or
+  "Build a partial :oracle-fixture map from top-level :fixed-or shorthand.
+
+   Accepts:
+   - vector → {:mode :fixed-roll-sequence :rolls <vector>}
+   - map    → {:mode :fixed-roll-sequence ...} (mode :fixed-or is normalized)"
+  [fixed-or]
+  (when fixed-or
+    (cond
+      (vector? fixed-or)
+      {:mode :fixed-roll-sequence :rolls fixed-or}
+
+      (map? fixed-or)
+      (let [m (if (:mode fixed-or)
+                (update fixed-or :mode normalize-oracle-mode)
+                (assoc fixed-or :mode :fixed-roll-sequence))]
+        (update m :mode normalize-oracle-mode))
+
+      :else
+      (throw (ex-info "Invalid :fixed-or — use a roll vector or fixture map"
+                      {:fixed-or fixed-or})))))
+
 (defn normalize-oracle-fixture
   "Normalize legacy flat oracle fixture params into canonical nested shape.
 
@@ -19,13 +46,19 @@
    {:mode :stochastic|:static-no-slash|:static-always-detect|:fixed-roll-sequence
     :rolls [0.1 0.9 ...]                  ; fixed mode
     :scope #{:detection}                  ; default detection-only
-    :on-exhaustion :throw|:repeat-last|:cycle}"
+    :on-exhaustion :throw|:repeat-last|:cycle}
+
+   Flat aliases (normalized internally):
+   - :oracle-mode :fixed-or               → :fixed-roll-sequence
+   - :fixed-or [0.99 0.01]                → fixed-roll fixture
+   - :fixed-or {:rolls {...} :scope ...}  → fixed-roll fixture"
   [params]
-  (let [legacy-mode (:oracle-mode params)
+  (let [legacy-mode (some-> (:oracle-mode params) normalize-oracle-mode)
         legacy-rolls (:oracle-roll-sequence params)
         legacy-on-exhaustion (:oracle-roll-on-exhaustion params)
-        fixture (:oracle-fixture params)
-        mode (or (:mode fixture) legacy-mode :stochastic)
+        fixture (merge (:oracle-fixture params {})
+                     (fixture-from-fixed-or (:fixed-or params)))
+        mode (normalize-oracle-mode (or (:mode fixture) legacy-mode :stochastic))
         scope (or (:scope fixture) #{:detection})
         on-exhaustion (or (:on-exhaustion fixture) legacy-on-exhaustion :throw)
         rolls (or (:rolls fixture) legacy-rolls [])]

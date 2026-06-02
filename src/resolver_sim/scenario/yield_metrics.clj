@@ -22,6 +22,9 @@
         recipient  (get-in last-world [:escrow-transfers workflow-id :to])]
     (cond-> {:yield/escrow-principal     (long (or (:principal pos) 0))
              :yield/escrow-unrealized    (long (or (:unrealized-yield pos) 0))
+             :yield/escrow-current-value (long (or (:current-value pos)
+                                                   (+ (or (:principal pos) 0)
+                                                      (or (:unrealized-yield pos) 0))))
              :yield/escrow-realized      (long (or (:realized-yield pos) 0))
              :yield/accrual-loss         (long (or (:amount (:yield-loss pos)) 0))
              :yield/escrow-deferred      (long (or (:deferred-amount shortfall) 0))
@@ -41,6 +44,8 @@
              :recipient/claimable        (long (or (when claimable (get claimable recipient))
                                                   (get claimable (keyword recipient))
                                                   0))}
+      (:current-index pos) (assoc :yield/escrow-current-index (:current-index pos))
+      (:entry-index pos) (assoc :yield/escrow-entry-index (:entry-index pos))
       (:status pos) (assoc :yield/escrow-status (name (:status pos)))
       (or (:reason shortfall) (:reason (:yield-loss pos)))
       (assoc :yield/loss-reason (name (or (:reason shortfall) (:reason (:yield-loss pos)))))

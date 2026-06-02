@@ -1,18 +1,42 @@
-# Reference Validation Suite v1.1 Report
+# Reference Validation Suite v1 Report
 
 ## Summary
 
 - Suite: reference-validation-v1
-- Version: 1.1.0
+- Version: 1.0.0
 - Status: PASS
 - Scenarios: 7
-- Simulator-backed: 1
-- Pinned-derivation: 6
-- Placeholder: 0
+- Failed: 0
+- Inconclusive: 0
 
-## Simulator-backed scenario(s)
+## Claims tested
 
-- 001 governance-sandwich-v1
-  - source_artifact: scenarios/S61_governance-snapshot-mid-dispute-immutability.json
-  - trace_path: actual/traces/001-governance-sandwich.trace.json
-  - trace_hash: generated deterministically during run
+| Claim | Scenario | Status |
+|---|---|---|
+| active-escrow-rules-immutable | governance-sandwich-v1 | PASS |
+| malicious-verdict-economically-bounded | malicious-resolver-verdict-v1 | PASS |
+| liveness-under-adversarial-load | dispute-flooding-v1 | PASS |
+| unresolved-liabilities-block-withdrawal | bond-withdrawal-race-v1 | PASS |
+| settlement-mutual-exclusion | same-block-ordering-v1 | PASS |
+| pull-first-settlement-safety | autopush-settlement-v1 | PASS |
+| corrupt-verdict-must-survive-escalation | appeal-failure-cascade-v1 | PASS |
+
+## Invariant summary
+
+See `actual/invariants.json`.
+
+## Economic checks
+
+See `actual/economic-results.json`.
+
+## Limitations
+
+See `docs/limitations.md`.
+
+## Reproduction instructions
+
+```bash
+make clean-reference-validation-v1
+make reference-validation-v1
+make verify-reference-validation-v1
+```

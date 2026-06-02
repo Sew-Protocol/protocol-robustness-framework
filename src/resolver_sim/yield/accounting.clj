@@ -25,9 +25,12 @@
   "Resolve token decimals from world metadata.
    Falls back to 18 when unspecified."
   [world token]
-  (long (or (get-in world [:token/decimals token])
-            (get-in world [:yield/token-decimals token])
-            default-asset-decimals)))
+  (let [tok (normalize-token token)]
+    (long (or (get-in world [:token/decimals tok])
+              (get-in world [:token/decimals (name tok)])
+              (get-in world [:yield/token-decimals tok])
+              (get-in world [:yield/token-decimals (name tok)])
+              default-asset-decimals))))
 
 (defn floor-to-asset-decimals
   "Floor numeric amount to token precision (base units).
@@ -42,29 +45,54 @@
   [amount _decimals]
   (long (Math/floor (double amount))))
 
+(defn position-current-value
+  "Redeemable position value in underlying token units.
+
+   `current-share-price` is the generic scalar multiplier stored in world paths
+   as `:yield/indices` — it may represent an Aave liquidity index, an ERC-4626
+   share price, or another module exchange rate. Semantics are module-specific;
+   the math is always `shares × price`.
+
+   Shares are minted at deposit as `principal / entry-index` (see liquid-lending
+   deposit); `entry-index` is not re-applied here."
+  [position current-share-price]
+  (* (:shares position 0) (double current-share-price)))
+
 (defn update-position-yield
-  "Update unrealized yield for a position based on new index/price.
-   Supports both share-based and exchange-rate based accounting."
+  "Update unrealized yield from shares and the current share price / index.
+
+   Invariant (share-price model, Model A):
+     shares            = principal / entry-index   (at deposit)
+     current-value     = shares × current-share-price
+     unrealized-yield  = current-value − principal (floored; signed under :mark-to-market)
+
+   The `current-index` argument is the current share price / exchange rate /
+   liquidity index for this module — one scalar multiplier, module-specific name.
+
+   `world` is required so loss-mode and token decimals resolve correctly."
   ([position current-index]
-   (update-position-yield nil position current-index))
+   (throw (ex-info "world is required for yield risk/loss-mode evaluation"
+                   {:fn 'update-position-yield
+                    :position position
+                    :current-index current-index})))
   ([world position current-index]
-  (let [entry-index (:entry-index position 1.0)
-        shares      (:shares position 0)
-        principal   (:principal position 0)
-        token       (:token position)
-        module-id   (:module/id position)
-        decimals    (token-decimals world token)
-        risk      (risk-map world module-id token)
-        loss-mode   (risk/effective-loss-mode risk)
-        ;; For share-based (like Aave aTokens):
-        ;; value = shares * current-index
-        ;; yield = value - principal
-        current-value (* shares current-index)
-        pnl          (- current-value principal)
-        unrealized   (if (= loss-mode :mark-to-market)
-                       (floor-to-asset-decimals-signed pnl decimals)
-                       (floor-to-asset-decimals (max 0 pnl) decimals))]
-    (assoc position :unrealized-yield unrealized))))
+   (let [shares              (:shares position 0)
+         principal           (:principal position 0)
+         token               (:token position)
+         module-id           (:module/id position)
+         decimals            (token-decimals world token)
+         risk                (risk-map world module-id token)
+         loss-mode           (risk/effective-loss-mode risk)
+         current-share-price (double current-index)
+         current-value       (position-current-value position current-share-price)
+         pnl                 (- current-value principal)
+         unrealized          (if (= loss-mode :mark-to-market)
+                               (floor-to-asset-decimals-signed pnl decimals)
+                               (floor-to-asset-decimals (max 0 pnl) decimals))]
+     (assoc position
+            :current-index current-index
+            :current-value (long (Math/floor current-value))
+            :unrealized-yield unrealized))))
 
 (defn realize-yield
   "Move unrealized yield to realized-yield. Usually called during crystallization."
@@ -134,8 +162,8 @@
    If liquidity-mode is :available, transitions position to :withdrawn and returns reclaimed amount."
   [world module-id position]
   (let [token (:token position)
-        risk  (get-in world [:yield/risk module-id token] {})
-        mode  (:liquidity-mode risk :available)
+        risk  (risk-map world module-id token)
+        mode  (or (:liquidity-mode risk) :available)
         shortfall (:shortfall position)]
     (if (and (= mode :available) shortfall)
       (let [reclaimed (:deferred-amount shortfall 0)]

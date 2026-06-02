@@ -1,7 +1,7 @@
 suite_id: reference-validation-v1
-title: Reference Validation Suite v1
+title: Reference Validation Suite v1.1
 status: public-candidate
-version: 1.0.0
+version: 1.1.0
 created: 2026-05
 protocol_phase: DR3 built; simulation-backed hardening and gated rollout
 
@@ -12,12 +12,11 @@ description: >
 
 public_disclosure:
   classification: deterministic-evidence-pack-harness
-  simulator_backed: false
+  simulator_backed: partial
   confidence: provisional
   note: >
-    The v1 harness does not yet execute deep simulator replay for each
-    scenario. Scenario outputs are pinned deterministic artifacts.
-    v1.1 work upgrades scenarios to simulator-backed traces.
+    v1.1 runs manifest-driven replay for simulator-backed scenarios (S61
+    governance today). Remaining rows are pinned derivations until wired.
 
 goals:
   - Provide externally reproducible validation evidence packaging.
@@ -36,7 +35,8 @@ repository:
   expected_root: suites/reference-validation-v1
 
 pinned_inputs:
-  suite_version: 1.0.0
+  suite_version: 1.1.0
+  manifest: manifest.edn
   config_version: reference-config-v1
   economic_assumptions_version: economic-assumptions-v1
   resolver_capacity_version: resolver-capacity-v1
@@ -58,10 +58,10 @@ outputs:
 scenarios:
   - id: governance-sandwich-v1
     file: scenarios/001-governance-sandwich.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: malicious-resolver-verdict-v1
     file: scenarios/002-malicious-resolver-verdict.edn

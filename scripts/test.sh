@@ -9,6 +9,7 @@
 #   ./scripts/test.sh yield-scenarios # yield JSON scenarios (path suite, same report shape)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
+#   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
 #   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
 #   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
@@ -294,6 +295,15 @@ run_suites() {
         (when (not= :pass (:outcome r))
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
+  return $?
+}
+
+run_reference_validation() {
+  require_clojure || return $?
+  echo "Running reference validation suite v1..."
+  make clean-reference-validation-v1 >/dev/null
+  make reference-validation-v1
+  make verify-reference-validation-v1
   return $?
 }
 
@@ -806,6 +816,9 @@ case "$MODE" in
   suites)
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     ;;
+  reference-validation)
+    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+    ;;
   dr3-coverage)
     run_target dr3-coverage run_dr3_coverage || FAILURES=$((FAILURES + 1))
     ;;
@@ -847,6 +860,8 @@ case "$MODE" in
     echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     echo ""
     run_target triage run_triage || FAILURES=$((FAILURES + 1))
@@ -856,7 +871,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|yield-scenarios|layering-lint|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

@@ -19,6 +19,8 @@
              [resolver-sim.scenario.expectations :as expectations]
              [resolver-sim.scenario.theory :as theory]
              [resolver-sim.scenario.yield-metrics :as yield-metrics]
+             [resolver-sim.contract-model.replay.metrics :as metrics]
+             [resolver-sim.contract-model.replay.io      :as replay-io]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.time.model        :as time-model]))
 ;; ---------------------------------------------------------------------------
@@ -31,11 +33,8 @@
 ;; JSON serialisation helpers (Generic)
 ;; ---------------------------------------------------------------------------
 
-(defn- kw->json-key [k]
-  (if (keyword? k) (name k) (str k)))
-
-(defn- kw-val->str [_k v]
-  (if (keyword? v) (name v) v))
+(defn- kw->json-key [k] (replay-io/kw->json-key k))
+(defn- kw-val->str [_k v] (replay-io/kw-val->str _k v))
 
 ;; ---------------------------------------------------------------------------
 ;; Agent Validation (Generic)
@@ -82,83 +81,15 @@
 ;; the deterministic replay can never satisfy, producing silent :inconclusive
 ;; results for the wrong reason.
 
-(def population-metrics
-  "Metrics that require stochastic / multi-epoch population simulation.
-   Must not appear in single-trace `:theory :falsifies-if` unless
-   `:theory :metric-scope` is `:population` (multi-epoch runner).
-   Keep in sync with `resolver-sim.sim.multi-epoch/known-metrics`."
-  #{:coalition/net-profit
-    :malice-mean-profit
-    :dominance-ratio
-    :mean-profit
-    :reputation-concentration})
+(def population-metrics metrics/population-metrics)
 
-(def base-metrics
-  "Universal metrics incremented by the replay engine for every protocol.
+(def base-metrics metrics/base-metrics)
 
-   These counters are tracked regardless of which DisputeProtocol is active.
-   Protocol implementations declare their own additional metrics via
-   DisputeProtocol/metric-vocabulary; the full effective set is the union of
-   base-metrics and metric-vocabulary.
+(defn- metric-key [x] (metrics/metric-key x))
 
-     :attack-attempts      adversarial events (per-event :adversarial? flag or agent type)
-     :attack-successes     adversarial events that were accepted
-     :rejected-attacks     adversarial events that were rejected
-     :reverts              all rejected events (blunt aggregate)
-     :invariant-violations aggregate count of invariant failures
+(defn- falsifies-if-metric-refs [falsifies-if] (metrics/falsifies-if-metric-refs falsifies-if))
 
-   NOTE: :funds-lost is NOT a base metric — it is protocol-specific (financial
-   protocols declare it via metric-vocabulary). Non-financial protocols (e.g.
-   governance, identity) would never populate it."
-  #{:attack-attempts
-    :attack-successes
-    :rejected-attacks
-    :reverts
-    :invariant-violations
-    :batch-buckets
-    :batch-events
-    :batch-conflicts})
-
-(defn- metric-key
-  "Coerce a metric name to a keyword; preserve namespaced keys like :coalition/net-profit."
-  [x]
-  (cond
-    (keyword? x) x
-    (string? x)
-    (let [s (if (.startsWith ^String x ":") (subs x 1) x)]
-      (if (.contains s "/")
-        (let [[ns n] (str/split s #"/" 2)]
-          (keyword ns n))
-        (keyword s)))
-    :else (keyword (str x))))
-
-(defn- falsifies-if-metric-refs
-  "All metric keywords referenced by a `:falsifies-if` vector or predicate tree."
-  [falsifies-if]
-  (cond
-    (nil? falsifies-if) []
-    (sequential? falsifies-if)
-    (vec (distinct (keep #(when-let [m (:metric %)] (metric-key m)) falsifies-if)))
-
-    (map? falsifies-if)
-    (vec (distinct
-          (concat
-           (when-let [m (:metric falsifies-if)] [(metric-key m)])
-           (mapcat falsifies-if-metric-refs (:and falsifies-if))
-           (mapcat falsifies-if-metric-refs (:or falsifies-if))
-           (mapcat falsifies-if-metric-refs (list (:not falsifies-if)))
-           (mapcat falsifies-if-metric-refs (:always falsifies-if))
-           (mapcat falsifies-if-metric-refs (:eventually falsifies-if))
-           (when-let [p (:after falsifies-if)] (falsifies-if-metric-refs (:predicate p)))
-           (when-let [p (:before falsifies-if)] (falsifies-if-metric-refs (:predicate p)))
-           (when-let [p (:implies falsifies-if)]
-             (concat (falsifies-if-metric-refs (:if p))
-                     (falsifies-if-metric-refs (:then p)))))))
-
-    :else []))
-
-(defn- theory-metric-scope [scenario]
-  (metric-key (or (get-in scenario [:theory :metric-scope]) :trace)))
+(defn- theory-metric-scope [scenario] (metrics/theory-metric-scope scenario))
 
 (defn- action->transition-id
   "Map an event action string/keyword to canonical transition semantic id.
@@ -328,10 +259,10 @@
       (and (:theory scenario)
            (not= :population (theory-metric-scope scenario))
            (seq (let [refs (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
-                      bad  (vec (filter population-metrics refs))]
+                      bad  (vec (filter metrics/population-metrics refs))]
                   bad)))
       {:ok false :error :population-metric-in-trace-theory
-       :detail {:metrics (vec (filter population-metrics
+       :detail {:metrics (vec (filter metrics/population-metrics
                                (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
                 :metric-scope (theory-metric-scope scenario)
                 :hint "Single-trace replay cannot compute population metrics. Use trace metrics (e.g. :coalition-net-profit), or set :theory {:metric-scope :population} for multi-epoch scenarios."}}
@@ -341,7 +272,7 @@
       (let [scope          (theory-metric-scope scenario)
             theory-metrics (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
             trace-metrics  (if (= scope :population)
-                             (vec (remove population-metrics theory-metrics))
+                             (vec (remove metrics/population-metrics theory-metrics))
                              theory-metrics)
             unknown-theory (vec (remove effective-metrics trace-metrics))]
         (seq unknown-theory))
@@ -366,25 +297,7 @@
 ;; Metrics — accumulation
 ;; ---------------------------------------------------------------------------
 
-(defn- zero-metrics
-  "Initialise the metrics accumulator for one replay run.
-
-   Produces a map containing all base-metrics keys, zeroed, plus any
-   protocol-specific keys declared via EconomicModel/metric-vocabulary."
-  [protocol]
-  (let [base {:attack-attempts      0
-              :attack-successes     0
-              :rejected-attacks     0
-              :reverts              0
-              :invariant-violations 0
-              :batch-buckets        0
-              :batch-events         0
-              :batch-conflicts      0
-              :invariant-results    {}}
-        vocab (if (satisfies? proto/EconomicModel protocol)
-                (proto/metric-vocabulary protocol)
-                #{})]
-    (into base (map #(vector % 0) vocab))))
+(defn- zero-metrics [protocol] (metrics/zero-metrics protocol))
 
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (let [result-kw (:result trace-entry)
@@ -750,7 +663,7 @@
                                                                         [(:seq event) (:action event) :batch-conflict])))]
                                         (-> acc
                                             (update :trace conj entry)
-                                            (assoc :metrics (accum-metrics protocol (:metrics acc) event entry agent-index working-world))
+                                            (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))))
                                       (let [step (process-step protocol context working-world event)
                                             entry0 (:trace-entry step)
@@ -784,7 +697,7 @@
                                                                    (assoc (:id-alias-map acc) alias-key new-id)
                                                                    (:id-alias-map acc)))
                                             (update :trace conj entry)
-                                            (assoc :metrics (accum-metrics protocol (:metrics acc) event entry agent-index working-world))
+                                            (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))))))))
                               {:world base-world
                                :trace trace
@@ -855,7 +768,7 @@
                                :reject-phase reject-phase
                                :expected-failure? expected-failure?))
                 new-trace (conj trace entry)
-                new-metrics (accum-metrics protocol metrics event entry agent-index world)
+                new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)
                 new-states (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
             (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
@@ -874,12 +787,12 @@
                              (proto/metric-vocabulary protocol)
                              #{})
         effective-metrics  (into (into base-metrics vocab)
-                                 (or (expectation-metric-keys scenario) #{}))
+                                 (or (metrics/expectation-metric-keys scenario) #{}))
         validation (validate-scenario scenario effective-metrics)
         temporal-cfg (:temporal-evidence scenario)
         temporal-enabled? (boolean (:enabled? temporal-cfg))]
     (if-not (:ok validation)
-      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
+      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
       (let [agents   (:agents scenario)
             p-params (get scenario :protocol-params {})
             context  (proto/build-execution-context protocol agents p-params)
@@ -892,7 +805,7 @@
         (log/info! "scenario/start" {:id scenario-id})
         (finalize-scenario-result
          scenario
-         (run-simulation-loop protocol context scenario-id events world0 [] (zero-metrics protocol)
+         (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
                               {:expected-errors-set expected-errors-set
                                :strict-expected-errors? strict-expected-errors?
                                :allow-open-entities? (:allow-open-entities? scenario)
@@ -953,5 +866,4 @@
 (defn result->json-str
   "Serialize a replay result to a JSON string."
   [result]
-  (let [serializable (dissoc result :protocol)]
-    (json/write-str serializable :key-fn kw->json-key :value-fn kw-val->str)))
+  (replay-io/result->json-str result))
