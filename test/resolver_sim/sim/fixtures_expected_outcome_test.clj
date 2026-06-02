@@ -10,8 +10,6 @@
         s50    (get by-id "s50-multi-hop-pending-cleared-every-hop")]
     (is (:ok? result) "Suite should pass with mixed keyword and map trace entries")
     (is (= :pass (:outcome s48)))
-    (is (= :invalid (:outcome s49)))
-    (is (= :adversarial-requires-analysis (:halt-reason s49)))
-    (is (= :invalid (:expected-outcome s49)))
-    (is (= :adversarial-requires-analysis (:expected-halt-reason s49)))
+    (is (= :pass (:outcome s49))
+        "Plus-one escalation at max level is rejected; scenario still completes")
     (is (= :pass (:outcome s50)))))

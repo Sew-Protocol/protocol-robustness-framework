@@ -102,29 +102,44 @@
         token   (:token pos)
         status  (module-status world mid)
         mode    (liquidity-mode world mid token)]
-    (if (nil? pos)
+    (cond
+      (nil? pos)
       world
-      (if (or (= status :paused)
-              (withdraw-blocked? mode)
-              (fail-enabled? world mid token :withdraw-fails))
-        (throw (ex-info "Liquid-lending withdraw unavailable"
-                        {:module/id mid
-                         :token token
-                         :module-status status
-                         :liquidity-mode mode
-                         :owner/id oid}))
-        (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              updated-pos   (acct/update-position-yield world pos current-index)
-              gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
-              {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
-              realized-yield (max 0 (min (:unrealized-yield updated-pos 0)
-                                          (- fulfilled (:principal updated-pos 0))))
-              crystallized  (-> updated-pos
-                                (assoc :status (if shortfall :unwinding :withdrawn))
-                                (assoc :realized-yield realized-yield)
-                                (assoc :unrealized-yield 0)
-                                (assoc :shortfall shortfall))]
-          (assoc-in world pos-key crystallized))))))
+
+      ;; Retry/idempotency guard: once a position is crystallized, withdrawing
+      ;; again must be a no-op so liquidity stress is never applied twice.
+      (not= (:status pos) :active)
+      world
+
+      (or (= status :paused)
+          (withdraw-blocked? mode)
+          (fail-enabled? world mid token :withdraw-fails))
+      (throw (ex-info "Liquid-lending withdraw unavailable"
+                      {:module/id mid
+                       :token token
+                       :module-status status
+                       :liquidity-mode mode
+                       :owner/id oid}))
+
+      :else
+      (let [current-index (get-in world [:yield/indices mid token]
+                                  (:entry-index pos 1.0))
+            updated-pos   (acct/update-position-yield world pos current-index)
+            gross-amount  (+ (:principal updated-pos 0)
+                             (:unrealized-yield updated-pos 0))
+            {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world
+                                                                       mid
+                                                                       token
+                                                                       gross-amount)
+            realized-yield (max 0
+                                (min (:unrealized-yield updated-pos 0)
+                                     (- fulfilled (:principal updated-pos 0))))
+            crystallized  (-> updated-pos
+                              (assoc :status (if shortfall :unwinding :withdrawn))
+                              (assoc :realized-yield realized-yield)
+                              (assoc :unrealized-yield 0)
+                              (assoc :shortfall shortfall))]
+        (assoc-in world pos-key crystallized)))))
 
 (defn claim-deferred [world module op]
   (let [oid     (:owner/id op)

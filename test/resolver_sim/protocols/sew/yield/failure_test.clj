@@ -170,3 +170,29 @@
       (is (= :pass (:outcome result)))
       (is (= :disabled-for-new-deposits
              (get-in world [:yield/module-status :yield.provider/liquid-lending]))))))
+
+(deftest test-liquid-withdraw-idempotent-on-non-active-position
+  (testing "Liquid withdraw is a no-op when retried after crystallization"
+    (let [module {:module/id :yield.provider/liquid-lending}
+          world  {:yield/indices {:yield.provider/liquid-lending {"USDC" 1.0}}
+                  :yield/risk {:yield.provider/liquid-lending {"USDC" {:liquidity-mode :available}}}
+                  :yield/positions {"user1" {:owner/id "user1" :module/id :yield.provider/liquid-lending
+                                             :token "USDC" :principal 1000 :shares 1000 :entry-index 1.0
+                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+          first-withdraw (liquid/withdraw world module {:owner/id "user1"})
+          second-withdraw (liquid/withdraw first-withdraw module {:owner/id "user1"})]
+      (is (= first-withdraw second-withdraw))
+      (is (= :withdrawn (get-in second-withdraw [:yield/positions "user1" :status]))))))
+
+(deftest test-aave-withdraw-idempotent-on-non-active-position
+  (testing "Aave withdraw is a no-op when retried after crystallization"
+    (let [world {:yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
+                 :yield/indices {:aave-v3 {"USDC" 1.0}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
+                                             :principal 1000 :shares 1000 :entry-index 1.0
+                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+          module {:module/id :aave-v3}
+          first-withdraw (aave/aave-withdraw world module {:owner/id "user1"})
+          second-withdraw (aave/aave-withdraw first-withdraw module {:owner/id "user1"})]
+      (is (= first-withdraw second-withdraw))
+      (is (= :withdrawn (get-in second-withdraw [:yield/positions "user1" :status]))))))

@@ -24,6 +24,7 @@
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
+            [resolver-sim.contract-model.idempotency     :as idem]
             [resolver-sim.yield.protocols                :as yield-proto]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
@@ -55,6 +56,7 @@
       :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
       :appeal-bond-amount           (get pp :appeal-bond-amount 0)
       :reversal-slash-bps           (get pp :reversal-slash-bps 0)
+      :reversal-detection-probability (get pp :reversal-detection-probability 0.0)
       ;; NOTE: :fraud-slash-bps is intentionally NOT stored in the snapshot.
       ;; It is a sim-layer param read from params directly (kernel_bridge, batch, etc).
       :challenge-window-duration    (get pp :challenge-window-duration 0)
@@ -103,6 +105,49 @@
   [event]
   (let [p (:params event)]
     (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
+
+(defn- event-id
+  "Optional logical event identifier used for replay dedupe."
+  [event]
+  (or (get-in event [:params :event-id])
+      (get-in event [:params :event_id])))
+
+(def replay-sensitive-actions
+  "Actions that should be replay-idempotent when a logical event-id is provided."
+  #{"escalate-dispute"
+    "challenge-resolution"
+    "execute-resolution"
+    "execute-pending-settlement"
+    "rotate-dispute-resolver"
+    "propose-fraud-slash"
+    "resolve-appeal"
+    "execute-fraud-slash"})
+
+(defn- replay-sensitive?
+  [event]
+  (contains? replay-sensitive-actions (compat/canonical-action event)))
+
+(defn- dedupe-op-key
+  "Build a stable dedupe key for replay-sensitive events."
+  [world event]
+  (let [wf  (event-workflow-id event)
+        sid (event-slash-id event)
+        eid (event-id event)
+        action (compat/canonical-action event)
+        explicit-hop (or (get-in event [:params :hop-id])
+                         (get-in event [:params :hop_id]))
+        hop-level (when (and (nil? explicit-hop)
+                             (contains? #{"escalate-dispute" "challenge-resolution"} action))
+                    (t/dispute-level world wf))
+        hop-scope (or explicit-hop hop-level)]
+    [:sew
+     :replay-dedupe
+     action
+     (:agent event)
+     wf
+     sid
+     hop-scope
+     eid]))
 
 (defn- sew-temporal-rules
   "Protocol-aware temporal guards executed before dispatch.
@@ -218,8 +263,10 @@
       (let [workflow-id (compat/wf-id event)
             result      (res/escalate-dispute world workflow-id addr escalation-fn)]
         (if (:ok result)
-          (assoc result :extra {:new-level    (:new-level result)
-                                :new-resolver (:new-resolver result)})
+          (assoc result :extra (merge (:extra result)
+                                      (when (:new-level result)
+                                        {:new-level    (:new-level result)
+                                         :new-resolver (:new-resolver result)})))
           result)))))
 
 (defmethod apply-action "rotate-dispute-resolver"
@@ -445,6 +492,15 @@
     (fn [addr]
       (res/challenge-resolution world (compat/wf-id event) addr escalation-fn))))
 
+(defmethod apply-action "submit-evidence"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [p (:params event)]
+        (res/submit-evidence world (event-workflow-id event) addr
+                             {:evidence-hash (:evidence-hash p)})))))
+
 (defmethod apply-action "appeal-slash"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
@@ -618,7 +674,11 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (apply-action context world event))
+    (let [eid (event-id event)]
+      (if (and eid (replay-sensitive? event))
+        (idem/apply-once world (dedupe-op-key world event)
+                         (fn [w] (apply-action context w event)))
+        (apply-action context world event))))
 
   (check-invariants-single [_ world]
     (run-single-invariants world))
@@ -668,6 +728,21 @@
 
                                ;; Anyone can challenge (Phase L)
                                true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
+
+  (created-id [_ action extra]
+    (when (= (compat/canonical-action {:action action}) "create-escrow")
+      (:workflow-id extra)))
+
+  (resolve-id-alias [_ event id-alias-map]
+    (if (empty? id-alias-map)
+      {:ok true :event event}
+      (let [params   (:params event)
+            resolved (into {} (map (fn [[k v]]
+                                     [k (if (and (string? v) (contains? id-alias-map v))
+                                          (get id-alias-map v)
+                                          v)])
+                                   params))]
+        {:ok true :event (assoc event :params resolved)})))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)

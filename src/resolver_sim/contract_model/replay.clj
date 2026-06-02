@@ -166,13 +166,23 @@
       (keyword "scenario.transition" s)
       (keyword "scenario.transition" "unknown"))))
 
+(defn- normalize-error-value
+  [error]
+  (cond
+    (keyword? error) error
+    (string? error)  (let [s (if (.startsWith ^String error ":")
+                               (subs error 1)
+                               error)]
+                       (keyword s))
+    :else error))
+
 (defn- expected-error-key
   [{:keys [seq action error]}]
-  [seq action error])
+  [seq action (normalize-error-value error)])
 
 (defn- rejected-entry-key
   [{:keys [seq action error]}]
-  [seq action error])
+  [seq action (normalize-error-value error)])
 
 (defn- analyze-expected-errors
   "Compare rejected trace entries against scenario :expected-errors.
@@ -466,26 +476,27 @@
             tags      (if (satisfies? proto/EconomicModel protocol)
                         (proto/classify-event protocol event :rejected (:error temporal-failure))
                         #{})]
-        {:ok?    true
-         :world  world
-         :trace-entry {:seq             (:seq event)
-                       :time            event-time
-                       :time-before     time-before
-                       :time-after      {:block-ts event-time}
-                       :agent           (:agent event)
-                       :action          (:action event)
-                       :transition/id   (action->transition-id (:action event))
-                       :result          :rejected
-                       :error           (:error temporal-failure)
-                       :temporal-rule-id (:rule-id temporal-failure)
-                       :extra           nil
-                       :event-tags      tags
-                       :invariants-ok?  true
-                       :violations      nil
-                       :world           (proto/world-snapshot protocol world)
-                       :projection      proj
-                       :projection-hash ph}
-         :halted? false})
+         {:ok?    true
+          :world  world
+          :trace-entry {:seq             (:seq event)
+                        :time            event-time
+                        :time-before     time-before
+                        :time-after      {:block-ts event-time}
+                        :agent           (:agent event)
+                        :action          (:action event)
+                        :params          (:params event)
+                        :transition/id   (action->transition-id (:action event))
+                        :result          :rejected
+                        :error           (:error temporal-failure)
+                        :temporal-rule-id (:rule-id temporal-failure)
+                        :extra           nil
+                        :event-tags      tags
+                        :invariants-ok?  true
+                        :violations      nil
+                        :world           (proto/world-snapshot protocol world)
+                        :projection      proj
+                        :projection-hash ph}
+          :halted? false})
 
       (let [{world-t :world} (advance-world-time world event-time)
             time-after       {:block-ts event-time}
@@ -531,7 +542,8 @@
             :time-after      time-after
             :agent           (:agent event)
             :action          (:action event)
-             :transition/id   (action->transition-id (:action event))
+            :params          (:params event)
+            :transition/id   (action->transition-id (:action event))
             :result          result-kw
             :error           error-kw
             :extra           (:extra result)
@@ -568,8 +580,11 @@
   (let [{:keys [expected-errors-set strict-expected-errors?
                 allow-open-entities? allow-open-disputes?
                 agents temporal-cfg temporal-enabled? agent-index
-                scenario]} options]
-    (loop [world world events events trace trace metrics metrics states {(:seq (first events) 0) (proto/world-snapshot protocol world)}]
+                scenario]} options
+        supports-alias? (satisfies? proto/SimulationAdapter protocol)]
+    (loop [world world events events trace trace metrics metrics
+           states {(:seq (first events) 0) (proto/world-snapshot protocol world)}
+           id-alias-map {}]
       (if (empty? events)
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
                      (seq (proto/open-entities protocol world)))]
@@ -595,9 +610,21 @@
                  :events events
                  :agents agents
                  :protocol protocol}))))
-        (let [event    (first events)
-              step     (process-step protocol context world event)
-              entry0   (:trace-entry step)
+        (let [raw-event (first events)
+              ;; Resolve any save-id-as aliases in event params before dispatch
+              event     (if (and supports-alias? (seq id-alias-map))
+                          (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
+                            (if (:ok res) (:event res) raw-event))
+                          raw-event)
+              step      (process-step protocol context world event)
+              entry0    (:trace-entry step)
+              ;; After a successful creation, register the alias if save-id-as is present
+              alias-key  (:save-id-as raw-event)
+              new-id     (when (and alias-key supports-alias? (= :ok (:result entry0)))
+                           (proto/created-id protocol (:action raw-event) (:extra entry0)))
+              new-alias-map (if (and alias-key new-id)
+                              (assoc id-alias-map alias-key new-id)
+                              id-alias-map)
               expected-failure? (and (= :rejected (:result entry0))
                                      (contains? expected-errors-set
                                                 [(:seq entry0) (:action entry0) (:error entry0)]))
@@ -621,7 +648,7 @@
               (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
               (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
               {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :protocol protocol})
-            (recur new-world (rest events) new-trace new-metrics new-states)))))))
+            (recur new-world (rest events) new-trace new-metrics new-states new-alias-map)))))))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations."
@@ -675,6 +702,33 @@
                                  :temporal-enabled? temporal-enabled?
                                  :agent-index agent-index}
                                 options))))
+
+(defn replay-idempotent-same-trace?
+  "Run the same scenario twice and check deterministic equivalence of key outputs.
+   Returns:
+     {:idempotent? bool
+      :first result
+      :second result}
+
+   Equivalence checks:
+   - :outcome
+   - :halt-reason
+   - :events-processed
+   - trace result/error sequence
+   - final world snapshot in trace tail"
+  [protocol scenario]
+  (let [r1 (replay-with-protocol protocol scenario)
+        r2 (replay-with-protocol protocol scenario)
+        trace-shape (fn [r] (mapv (juxt :seq :result :error) (:trace r)))
+        last-world  (fn [r] (:world (last (:trace r))))
+        eq? (and (= (:outcome r1) (:outcome r2))
+                 (= (:halt-reason r1) (:halt-reason r2))
+                 (= (:events-processed r1) (:events-processed r2))
+                 (= (trace-shape r1) (trace-shape r2))
+                 (= (last-world r1) (last-world r2)))]
+    {:idempotent? eq?
+     :first r1
+     :second r2}))
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

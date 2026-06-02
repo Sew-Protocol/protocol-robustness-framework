@@ -79,12 +79,26 @@
                {} m)
     m))
 
+(defn- normalize-error-kw [v]
+  (cond
+    (keyword? v) v
+    (string? v) (keyword v)
+    :else v))
+
+(defn- normalize-expected-errors
+  [scenario]
+  (if-let [errs (:expected-errors scenario)]
+    (assoc scenario :expected-errors
+           (mapv #(update % :error normalize-error-kw) errs))
+    scenario))
+
 (defn normalize-scenario
   "Recursively normalize a loaded scenario to fix JSON deserialization issues:
    1. Convert string keywords (e.g. ':released') to proper keywords
-   2. Convert numeric string keys to Integer keys in all maps"
+   2. Convert numeric string keys to Integer keys in all maps
+   3. Keywordize :error in :expected-errors entries"
   [x]
-  (walk/postwalk
+  (let [normalized (walk/postwalk
     (fn [v]
       (cond
         ;; First handle maps - normalize keys
@@ -101,7 +115,10 @@
         
         ;; Everything else stays as-is
         :else v))
-    x))
+    x)]
+    (if (map? normalized)
+      (normalize-expected-errors normalized)
+      normalized)))
 
 (defn- fixture-ref? [x]
   (and (keyword? x) (namespace x)

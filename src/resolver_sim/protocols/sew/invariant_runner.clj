@@ -14,7 +14,8 @@
 
    File-backed scenario runs live in resolver-sim.io.invariant-runner."
   (:require [resolver-sim.protocols.sew :as sew]
-            [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
+            [resolver-sim.protocols.sew.invariant-scenarios :as sc]
+            [resolver-sim.protocols.sew.narrative :as narrative]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers
@@ -88,29 +89,56 @@
      :elapsed-ms elapsed
      :results   results}))
 
+(defn print-scenario-outline
+  "Print a human-readable per-step narrative for one replay result.
+   Called automatically for failing scenarios in print-report, and for all
+   scenarios when verbose? is true."
+  [display-name result]
+  (let [{:keys [header lines footer separator]} (narrative/scenario-outline display-name result)]
+    (println header)
+    (doseq [line lines] (println line))
+    (println footer)
+    (println separator)))
+
 (defn print-report
-  "Print a human-readable report from run-all output.  Returns exit code (0/1)."
-  [{:keys [passed total elapsed-ms results]}]
-  (let [w 72]
-    (println (apply str (repeat w "═")))
-    (println "  Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)")
-    (println (apply str (repeat w "═")))
-    (println (format "  %-47s %5s  %7s  %s" "Scenario" "steps" "reverts" "status"))
-    (println (str "  " (apply str (repeat (- w 2) "─"))))
-    (doseq [{:keys [name pass? expected-fail? steps reverts violations]} results]
-      (let [status (cond
-                     (and pass? expected-fail?) "✓ XFAIL"
-                     pass?                      "✓ PASS"
-                     :else                      "✗ FAIL")
-            extra  (when (pos? violations) (format "  violations=%d" violations))]
-        (println (format "  %s  %-45s %5d  %7d%s"
-                         status name steps reverts (or extra "")))))
-    (println (apply str (repeat w "─")))
-    (println (format "  %d/%d passed  (%.1f s)" passed total (/ elapsed-ms 1000.0)))
-    (println (apply str (repeat w "═")))
-    (if (= passed total) 0 1)))
+  "Print a human-readable report from run-all output.  Returns exit code (0/1).
+
+   Options map (second arg):
+     :verbose?       — print step-by-step outline for every scenario (default false)
+     :show-failures? — print step-by-step outline for failing scenarios (default true)"
+  ([summary] (print-report summary {}))
+  ([{:keys [passed total elapsed-ms results]} opts]
+   (let [verbose?       (:verbose? opts false)
+         show-failures? (:show-failures? opts true)
+         w              72]
+     (println (apply str (repeat w "═")))
+     (println "  Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)")
+     (println (apply str (repeat w "═")))
+     (println (format "  %-47s %5s  %7s  %s" "Scenario" "steps" "reverts" "status"))
+     (println (str "  " (apply str (repeat (- w 2) "─"))))
+     (doseq [{:keys [name pass? expected-fail? steps reverts violations]} results]
+       (let [status (cond
+                      (and pass? expected-fail?) "✓ XFAIL"
+                      pass?                      "✓ PASS"
+                      :else                      "✗ FAIL")
+             extra  (when (pos? violations) (format "  violations=%d" violations))]
+         (println (format "  %s  %-45s %5d  %7d%s"
+                          status name steps reverts (or extra "")))))
+     (println (apply str (repeat w "─")))
+     (println (format "  %d/%d passed  (%.1f s)" passed total (/ elapsed-ms 1000.0)))
+     (println (apply str (repeat w "═")))
+
+     ;; Narrative outlines: always for failures, optionally for all
+     (when (or verbose? show-failures?)
+       (doseq [{:keys [name pass? details]} results
+               :when (or verbose? (not pass?))
+               detail details]
+         (print-scenario-outline name detail)))
+
+     (if (= passed total) 0 1))))
 
 (defn run-and-report
-  "Convenience: run-all then print-report.  Returns exit code."
-  []
-  (print-report (run-all)))
+  "Convenience: run-all then print-report.  Returns exit code.
+   Accepts an optional options map forwarded to print-report."
+  ([] (run-and-report {}))
+  ([opts] (print-report (run-all) opts)))

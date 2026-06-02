@@ -86,7 +86,8 @@
    :advance_time {:label "Advance time"}
    :escalate_dispute {:label "Escalate dispute"}
    :register_stake {:label "Register stake"}
-   :challenge_resolution {:label "Challenge resolution"}})
+   :challenge_resolution {:label "Challenge resolution"}
+   :submit_evidence {:label "Submit evidence"}})
 
 (def transition-metadata
   {:create_escrow {:allowed-sources [:none]
@@ -153,7 +154,12 @@
                           :allowed-targets [:disputed]
                           :guards [:resolution-exists :challenge-window-open]
                           :actor-permissions [:challenger :watchdog]
-                          :pause-effect :blocked-when-paused}})
+                          :pause-effect :blocked-when-paused}
+   :submit_evidence {:allowed-sources [:disputed]
+                     :allowed-targets [:disputed]
+                     :guards [:state-disputed]
+                     :actor-permissions [:sender :recipient :challenger :watchdog]
+                     :pause-effect :blocked-when-paused}})
 
 (def invariants
   {:invariant/conservation {:invariant/id :invariant/conservation
@@ -211,7 +217,47 @@
     :claim/type :safety
     :claim/statement "Escalation and settlement on one escrow do not leak state/balance to another escrow."
     :claim/evidence-mode :support
-    :claim/related-invariants [:invariant/conservation :invariant/solvency]}})
+    :claim/related-invariants [:invariant/conservation :invariant/solvency]}
+
+   :claims/dr3-reversal-slash-disabled
+   {:claim/id :claims/dr3-reversal-slash-disabled
+    :claim/title "DR3 v3 disables non-zero reversal slashes"
+    :claim/type :safety
+    :claim/statement "When reversal-slash-bps is 0 in the module snapshot, no reversal slash entry carries a positive amount."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:reversal-slash-disabled]}
+
+   :claims/bribery-neutralized-by-l1
+   {:claim/id :claims/bribery-neutralized-by-l1
+    :claim/title "L1 challenge reverses biased L0 ruling"
+    :claim/type :dispute-resolution
+    :claim/statement "An honest L1 decision after challenge can overturn a collusive L0 refund and release escrow to the seller."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality :invariant/conservation]}
+
+   :claims/reversal-slash-track1
+   {:claim/id :claims/reversal-slash-track1
+    :claim/title "Same-evidence reversal slash executes immediately"
+    :claim/type :safety
+    :claim/statement "When reversal-slash-bps > 0 and no new evidence, the prior resolver is slashed on stake basis with :executed status."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/solvency :invariant/conservation]}
+
+   :claims/reversal-slash-track2-reversed
+   {:claim/id :claims/reversal-slash-track2-reversed
+    :claim/title "Track 2 reversal slash can be reversed on appeal"
+    :claim/type :safety
+    :claim/statement "When new evidence triggers a pending reversal slash, a upheld appeal reverses the slash before stake is executed."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:slash-status-consistent? :invariant/solvency]}
+
+   :claims/reversal-slash-track2-executes
+   {:claim/id :claims/reversal-slash-track2-executes
+    :claim/title "Rejected Track 2 reversal appeal allows slash execution"
+    :claim/type :safety
+    :claim/statement "When governance rejects a reversal-slash appeal after the timelock, the pending slash executes and reduces resolver stake."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:slash-status-consistent? :invariant/solvency]}})
 
 (def claim-scenario-map
   {:claims/forking-l1-reversal
@@ -231,6 +277,22 @@
                  "S62_cross-token-isolation-under-dispute-load"
                  "S62_cross-token-fee-on-transfer-under-dispute-load"
                  "S62_cross-token-parallel-appeal-depths-under-dispute-load"]
+    :falsifying []}
+   :claims/dr3-reversal-slash-disabled
+   {:supporting ["S41_dr3-reversal-slash-disabled"]
+    :falsifying []}
+   :claims/bribery-neutralized-by-l1
+   {:supporting ["S42_resolver-buyer-bribery-loop"]
+    :falsifying []}
+   :claims/reversal-slash-track1
+   {:supporting ["S101_reversal-slash-track1-enabled"
+                 "S103_l2-reversal-slash-ids"]
+    :falsifying []}
+   :claims/reversal-slash-track2-reversed
+   {:supporting ["S106_reversal-track2-evidence-appeal"]
+    :falsifying []}
+   :claims/reversal-slash-track2-executes
+   {:supporting ["S107_reversal-track2-appeal-rejected-executes"]
     :falsifying []}})
 
 (defn purpose-def [k] (get purposes k))

@@ -1,6 +1,10 @@
 {:release/id :dr3
  :release/title "DR3 canonical module mapping"
  :release/purpose "Single source of truth for DR3 module wiring used by fixture suites and coverage checks."
+ :kleros-defaults {:resolver-fee-bps 150
+                   :escrow-amount 5000}
+ :kleros-resolver-fixture {:resolution-module "0xkleros-proxy"
+                           :escalation-resolvers {:0 "0xl0" :1 "0xl1" :2 "0xl2"}}
 
  :solidity->clojure
  {:DecentralizedResolutionModule.sol

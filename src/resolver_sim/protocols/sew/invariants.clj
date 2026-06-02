@@ -93,12 +93,30 @@
    Every ID here must be executed by `check-all` or `check-transition`."
   (set/union world-invariant-ids transition-invariant-ids))
 
-(defn- get-token-claimable-sum [world token]
-  (reduce + 0 (for [[wf cmap] (:claimable world {})
-                    :let [et (get-in world [:escrow-transfers wf])]
-                    :when (= (:token et) token)
-                    [_ amt] cmap]
-                (or amt 0))))
+(defn- get-token-claimable-v2-non-principal-sum
+  "Sum v2 claimable outside :settlement/principal.
+   For settlement principal accounting, :claimable-v2 is authoritative; legacy :claimable
+   is mirrored for backward compatibility and parity checks."
+  [world token]
+  (reduce + 0
+          (for [[wf domain-map] (get-in world [:claimable-v2] {})
+                :let [et (get-in world [:escrow-transfers wf])]
+                :when (and et (= (:token et) token))
+                [domain addr-map] domain-map
+                :when (not= domain :settlement/principal)
+                [_ amt] addr-map]
+            (or amt 0))))
+
+(defn- get-token-claimable-sum
+  "Aggregate claimable amount by token.
+   Uses legacy :claimable for principal (mirrored from v2) plus non-principal v2 domains."
+  [world token]
+  (+ (reduce + 0 (for [[wf cmap] (:claimable world {})
+                        :let [et (get-in world [:escrow-transfers wf])]
+                        :when (= (:token et) token)
+                        [_ amt] cmap]
+                    (or amt 0)))
+     (get-token-claimable-v2-non-principal-sum world token)))
 
 (defn- get-distributed-sum [world token]
   (let [bd               (:bond-distribution world {:insurance 0 :protocol 0})
@@ -903,15 +921,17 @@
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn migration-parity?
-  "True when the sum of v2 claimable domains equals legacy claimable."
+  "True when v2 :settlement/principal matches legacy :claimable per workflow.
+   Non-principal v2 domains (e.g. :liability/challenge-bounty) are allowed without legacy dual-write."
   [world]
   (let [violations
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [legacy (get-in world [:claimable wf] {})
-                    total-v2 (reduce + 0 (for [d (vals domain-map)] (reduce + 0 (vals d))))
+                    principal-v2 (get domain-map :settlement/principal {})
+                    total-v2-principal (reduce + 0 (vals principal-v2))
                     total-legacy (reduce + 0 (vals legacy))]
-              :when (not= total-v2 total-legacy)]
-          {:workflow-id wf :v2 total-v2 :legacy total-legacy})]
+              :when (not= total-v2-principal total-legacy)]
+          {:workflow-id wf :v2-principal total-v2-principal :legacy total-legacy})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn claimable-classification
@@ -1273,20 +1293,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn reversal-slash-disabled?
-  "True when no reversal slash has a non-zero amount.
-   Mirrors SlashingModuleInvariants: reversal slashing is disabled in DR3 v3."
+  "True when no reversal slash has a non-zero amount on escrows snapshotted with
+   reversal-slash-bps = 0 (DR3 v3 default). When any in-flight snapshot enables
+   reversal slashing, this invariant is not applicable."
   [world]
-  (let [violations
-        (for [[slash-id slash] (:pending-fraud-slashes world {})
-              :when (= :reversal (:reason slash))
-              :when (pos? (:amount slash 0))]
-          {:slash-id     slash-id
-           :amount       (:amount slash)
-           :basis-amount (:basis-amount slash)
-           :basis-kind   (:basis-kind slash)
-           :slash-bps    (:slash-bps slash)})]
+  (let [snapshots   (vals (:module-snapshots world {}))
+        dr3-disabled? (and (seq snapshots)
+                           (every? #(zero? (:reversal-slash-bps % 0)) snapshots))
+        violations
+        (when dr3-disabled?
+          (for [[slash-id slash] (:pending-fraud-slashes world {})
+                :when (= :reversal (:reason slash))
+                :when (pos? (:amount slash 0))]
+            {:slash-id     slash-id
+             :amount       (:amount slash)
+             :basis-amount (:basis-amount slash)
+             :basis-kind   (:basis-kind slash)
+             :slash-bps    (:slash-bps slash)}))]
     {:holds?     (empty? violations)
-      :violations (vec violations)}))
+     :violations (vec (or violations []))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 30: Resolver capacity never exceeded

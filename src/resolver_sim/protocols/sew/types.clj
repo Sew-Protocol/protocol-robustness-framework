@@ -152,7 +152,7 @@
            default-auto-release-delay default-auto-cancel-delay
            max-dispute-duration appeal-window-duration dispute-resolver
            appeal-bond-bps resolver-bond-bps appeal-bond-amount
-           reversal-slash-bps
+           reversal-slash-bps reversal-detection-probability
            challenge-window-duration challenge-bond-bps challenge-bounty-bps]}]
   {:resolution-module           resolution-module
    :release-strategy            release-strategy
@@ -176,6 +176,7 @@
    :resolver-bond-bps           (or resolver-bond-bps 0)
    :appeal-bond-amount          (or appeal-bond-amount 0)
    :reversal-slash-bps          (or reversal-slash-bps 0)
+   :reversal-detection-probability (or reversal-detection-probability 0.0)
    :challenge-window-duration   (or challenge-window-duration 0)
    :challenge-bond-bps          (or challenge-bond-bps 0)
    :challenge-bounty-bps        (or challenge-bounty-bps 0)})

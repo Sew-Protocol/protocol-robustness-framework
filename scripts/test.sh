@@ -83,12 +83,22 @@ run_unit() {
 (require '[resolver-sim.scenario.expectations-test])
 (require '[resolver-sim.scenario.equilibrium-test])
 (require '[resolver-sim.sim.multi-epoch-test])
+(require '[resolver-sim.sim.defection-test])
+(require '[resolver-sim.sim.strategy-adaptation-test])
+(require '[resolver-sim.protocols.sew.slashing-test])
+(require '[resolver-sim.protocols.sew.phase-k-test])
+(require '[resolver-sim.protocols.sew.phase-m-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
+                'resolver-sim.protocols.sew.slashing-test
+                'resolver-sim.protocols.sew.phase-k-test
+                'resolver-sim.protocols.sew.phase-m-test
                 'resolver-sim.scenario.expectations-test
                 'resolver-sim.scenario.equilibrium-test
-                'resolver-sim.sim.multi-epoch-test)]
+                'resolver-sim.sim.multi-epoch-test
+                'resolver-sim.sim.defection-test
+                'resolver-sim.sim.strategy-adaptation-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?

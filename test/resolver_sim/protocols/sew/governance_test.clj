@@ -38,3 +38,26 @@
                 world-final (:world r-final)]
             (is (true? (:ok r-final)))
             (is (= :refunded (t/escrow-state world-final workflow-id)))))))))
+
+(deftest rotate-dispute-resolver-idempotent-same-target
+  (let [world (t/empty-world 1000)
+        buyer "0xBuyer"
+        seller "0xSeller"
+        honest-r "0xHonestRes"
+        token "0xToken"
+        snap (t/make-module-snapshot {:dispute-resolver honest-r
+                                      :escrow-fee-bps 50})
+        world (reg/register-stake world honest-r 1000)
+        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 1000 {} snap)
+        world (-> (lc/raise-dispute world workflow-id buyer) :world)
+        r1 (res/rotate-dispute-resolver world workflow-id honest-r)
+        w1 (:world r1)
+        r2 (res/rotate-dispute-resolver w1 workflow-id honest-r)
+        w2 (:world r2)]
+    (is (:ok r1))
+    (is (:ok r2))
+    (is (= honest-r (get-in w2 [:escrow-transfers workflow-id :dispute-resolver])))
+    (is (true? (:idempotent? r1)))
+    (is (true? (:idempotent? r2)))
+    (is (empty? (get-in w2 [:resolver-rotations workflow-id] []))
+        "same-target rotations should not append audit events")))

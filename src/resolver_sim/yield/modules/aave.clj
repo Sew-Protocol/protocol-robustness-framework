@@ -86,25 +86,29 @@
         mode    (liquidity-mode world mid token)]
     (if (nil? pos)
       world
-      (if (or (= status :paused) (blocked-mode? mode))
-        (throw (ex-info "Aave withdraw unavailable under current liquidity mode"
-                        {:module/id mid
-                         :token token
-                         :module-status status
-                         :liquidity-mode mode
-                         :owner/id oid}))
-        (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
-              updated-pos   (acct/update-position-yield world pos current-index)
-              gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
-              {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
-              realized-yield (max 0 (min (:unrealized-yield updated-pos 0)
-                                          (- fulfilled (:principal updated-pos 0))))
-              crystallized  (-> updated-pos
-                                (assoc :status (if shortfall :unwinding :withdrawn))
-                                (assoc :realized-yield realized-yield)
-                                (assoc :unrealized-yield 0)
-                                (assoc :shortfall shortfall))]
-          (assoc-in world pos-key crystallized))))))
+      ;; Retry/idempotency guard: once a position is crystallized, withdrawing
+      ;; again must be a no-op so liquidity stress is never applied twice.
+      (if (not= (:status pos) :active)
+        world
+        (if (or (= status :paused) (blocked-mode? mode))
+          (throw (ex-info "Aave withdraw unavailable under current liquidity mode"
+                          {:module/id mid
+                           :token token
+                           :module-status status
+                           :liquidity-mode mode
+                           :owner/id oid}))
+          (let [current-index (get-in world [:yield/indices mid token] (:entry-index pos 1.0))
+                updated-pos   (acct/update-position-yield world pos current-index)
+                gross-amount  (+ (:principal updated-pos 0) (:unrealized-yield updated-pos 0))
+                {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world mid token gross-amount)
+                realized-yield (max 0 (min (:unrealized-yield updated-pos 0)
+                                            (- fulfilled (:principal updated-pos 0))))
+                crystallized  (-> updated-pos
+                                  (assoc :status (if shortfall :unwinding :withdrawn))
+                                  (assoc :realized-yield realized-yield)
+                                  (assoc :unrealized-yield 0)
+                                  (assoc :shortfall shortfall))]
+            (assoc-in world pos-key crystallized)))))))
 
 (defn aave-claim-deferred [world module op]
   (let [oid     (:owner/id op)

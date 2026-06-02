@@ -88,6 +88,19 @@
       }
     }
   ],
+  "strict-expected-errors?": true,
+  "expected-errors": [
+    {
+      "seq": 2,
+      "action": "escalate_dispute",
+      "error": "no-resolution-to-appeal"
+    },
+    {
+      "seq": 4,
+      "action": "execute_resolution",
+      "error": "transfer-not-in-dispute"
+    }
+  ],
   "scenario-author": "@grifma",
   "provenance": {
     "author-id": "@grifma",

@@ -57,6 +57,8 @@
    :fraud-slash-bps                (:fraud-slash-bps params 0)
    :reversal-detection-probability (:reversal-detection-probability params 0.0)
    :reversal-slash-bps             (:reversal-slash-bps params 0)
+   :resolver-stake-wei             (:resolver-stake-wei params)
+   :new-evidence-probability       (:new-evidence-probability params 0.0)
    :timeout-slash-bps              (:timeout-slash-bps params 200)
    :unstaking-delay-days           (:unstaking-delay-days params 14)
    :freeze-on-detection?           (:freeze-on-detection? params true)

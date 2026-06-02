@@ -50,7 +50,7 @@
                   (reg/register-stake r0 5000)
                   (reg/register-stake r1 5000))
         ;; Create escrow and raise dispute
-        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 1000 {} snap)
+        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 5000 {} snap)
         world (-> world
                   (lc/raise-dispute workflow-id buyer)
                   :world)]
@@ -73,9 +73,10 @@
                     world-final (:world r-final)]
                 (is (true? (:ok r-final)))
                 ;; Check if r0 was slashed (25% of 1000 = 250)
-                (is (= 4750 (reg/get-stake world-final r0)))
-                (is (= 125 (get-in world-final [:bond-distribution :insurance])))
-                (is (= 75 (get-in world-final [:bond-distribution :protocol])))))))))))
+                ;; 25% of 5000 stake = 1250 slashed
+                (is (= 3750 (reg/get-stake world-final r0)))
+                (is (= 625 (get-in world-final [:bond-distribution :insurance])))
+                (is (= 375 (get-in world-final [:bond-distribution :protocol])))))))))))
 
 (deftest manual-fraud-slash-test
   (let [world (t/empty-world 1000)
@@ -87,7 +88,7 @@
         snap (t/make-module-snapshot {:appeal-window-duration 86400}) ; 1 day
         world (reg/register-stake world resolver 10000)
         ;; Create escrow
-        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 1000 {} snap)
+        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 5000 {} snap)
         ;; Propose
         r-prop (res/propose-fraud-slash world workflow-id gov resolver 5000)
         world-prop (:world r-prop)]

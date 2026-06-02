@@ -519,6 +519,18 @@
     (is (string? json))
     (is (clojure.string/includes? json "pass"))))
 
+(deftest test-replay-idempotent-same-trace-helper
+  (let [scenario (sc :events
+                     [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                       :params {:token "0xUSDC" :to "0xBob" :amount 5000
+                                :custom-resolver "0xResolver"}}
+                      {:seq 1 :time 1001 :agent "alice" :action "release"
+                       :params {:workflow-id 0}}])
+        result (replay/replay-idempotent-same-trace? sew/protocol scenario)]
+    (is (true? (:idempotent? result)))
+    (is (= :pass (get-in result [:first :outcome])))
+    (is (= :pass (get-in result [:second :outcome])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section 14: advance_time no-op
 ;; ---------------------------------------------------------------------------

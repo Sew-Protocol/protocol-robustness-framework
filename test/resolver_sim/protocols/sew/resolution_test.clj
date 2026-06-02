@@ -66,6 +66,53 @@
       (is (= (+ 1000 1800) (:appeal-deadline pending))
           "appeal-deadline = block-time + appeal-window-duration"))))
 
+(deftest execute-resolution-clears-v2-only-principal-on-pending-replacement
+  (let [w (-> (base-world 1800)
+              (assoc-in [:pending-settlements 0]
+                        (t/make-pending-settlement {:exists true
+                                                    :is-release true
+                                                    :appeal-deadline 2800
+                                                    :resolution-hash "0xold"}))
+              (assoc-in [:claimable-v2 0 :settlement/principal bob] 100)
+              (assoc-in [:claimable 0] {}))
+        r (res/execute-resolution w 0 resolver false "0xnew" direct-resolver-fn)]
+    (is (true? (:ok r)))
+    (is (:exists (t/get-pending (:world r) 0)) "replacement pending should exist")
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob]))
+        "v2-only principal entitlement must be fully cleared")
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal nil]))
+        "cleanup must never write principal under nil claimant")
+    (is (empty? (get-in (:world r) [:claimable 0] {}))
+        "legacy principal map should remain clear after replacement")))
+
+(deftest execute-resolution-pending-replacement-double-clear-idempotent
+  (let [w0 (-> (base-world 1800)
+               (assoc-in [:pending-settlements 0]
+                         (t/make-pending-settlement {:exists true
+                                                     :is-release true
+                                                     :appeal-deadline 2800
+                                                     :resolution-hash "0xold"}))
+               (assoc-in [:claimable-v2 0 :settlement/principal bob] 100)
+               (assoc-in [:claimable 0] {}))
+        ;; First replacement clears stale v2 principal and writes a new pending.
+        r1 (res/execute-resolution w0 0 resolver false "0xnew-1" direct-resolver-fn)
+        w1 (:world r1)
+        ;; Re-seed a principal claim to simulate another superseded pending write-set,
+        ;; then replace again to verify clear path is idempotent/non-accumulative.
+        w1' (assoc-in w1 [:claimable-v2 0 :settlement/principal alice] 77)
+        r2 (res/execute-resolution w1' 0 resolver true "0xnew-2" direct-resolver-fn)
+        w2 (:world r2)]
+    (is (true? (:ok r1)))
+    (is (true? (:ok r2)))
+    (is (nil? (get-in w1 [:claimable-v2 0 :settlement/principal bob]))
+        "first replacement clears original stale principal claim")
+    (is (nil? (get-in w2 [:claimable-v2 0 :settlement/principal alice]))
+        "second replacement clears re-seeded principal claim without accumulation")
+    (is (empty? (get-in w2 [:claimable 0] {}))
+        "legacy principal map remains clear after repeated cleanup")
+    (is (:exists (t/get-pending w2 0))
+        "pending remains valid after repeated replacements")))
+
 ;; ---------------------------------------------------------------------------
 ;; execute-resolution guards
 ;; ---------------------------------------------------------------------------
@@ -153,6 +200,25 @@
     (is (true? (:ok r)))
     (is (= :released (t/escrow-state (:world r) 0))
         "latest eligible superseded pending (deadline 5000) should be executed")))
+
+(deftest execute-pending-superseded-fallback-single-finalization
+  "Superseded fallback must still be single-shot: second keeper execution cannot re-finalize."
+  (let [w0 (-> (base-world 0)
+               (assoc :block-time 5000)
+               (assoc :pending-settlements {})
+               (assoc-in [:superseded-pending-settlements 0]
+                         [{:pending (t/make-pending-settlement {:exists true
+                                                                :is-release true
+                                                                :appeal-deadline 4900
+                                                                :resolution-hash "fallback"})
+                           :superseded-at 4950
+                           :level 0}]))
+        r1 (res/execute-pending-settlement w0 0)
+        r2 (res/execute-pending-settlement (:world r1) 0)]
+    (is (:ok r1))
+    (is (= :released (t/escrow-state (:world r1) 0)))
+    (is (false? (:ok r2)))
+    (is (= :transfer-not-in-dispute (:error r2)))))
 
 ;; ---------------------------------------------------------------------------
 ;; automate-timed-actions
@@ -456,3 +522,26 @@
     (is (= :appeal-window-expired (:error r-chal)))
     (is (true? (:ok r-exec)))
     (is (= :released (t/escrow-state (:world r-exec) 0)))))
+
+(deftest deadline-ordering-matrix-same-block-execute-vs-escalate
+  "Matrix coverage for ordering semantics at boundary times:
+   t=deadline-1, t=deadline, t=deadline+1 for both execute->escalate and escalate->execute."
+  (let [esc-fn (make-escalation-fn senior-resolver)
+        cases [{:label :deadline-minus-1 :time 4999 :expect-escalate-ok? true  :expect-exec-ok? false}
+               {:label :deadline-exact   :time 5000 :expect-escalate-ok? false :expect-exec-ok? true}
+               {:label :deadline-plus-1  :time 5001 :expect-escalate-ok? false :expect-exec-ok? true}]]
+    (doseq [{:keys [label time expect-escalate-ok? expect-exec-ok?]} cases]
+      (testing (str "execute->escalate at " label)
+        (let [w0     (-> (base-world 0) (assoc :block-time time) (with-pending 0 true 5000))
+              r-exec (res/execute-pending-settlement w0 0)
+              w1     (if (:ok r-exec) (:world r-exec) w0)
+              r-esc  (res/escalate-dispute w1 0 alice esc-fn)]
+          (is (= expect-exec-ok? (:ok r-exec)))
+          (is (= expect-escalate-ok? (:ok r-esc)))))
+      (testing (str "escalate->execute at " label)
+        (let [w0     (-> (base-world 0) (assoc :block-time time) (with-pending 0 true 5000))
+              r-esc  (res/escalate-dispute w0 0 alice esc-fn)
+              w1     (if (:ok r-esc) (:world r-esc) w0)
+              r-exec (res/execute-pending-settlement w1 0)]
+          (is (= expect-escalate-ok? (:ok r-esc)))
+          (is (= expect-exec-ok? (:ok r-exec))))))))

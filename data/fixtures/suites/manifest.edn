@@ -3,6 +3,7 @@
   :suites/baseline-safety {:file "baseline-safety.edn" :title "Baseline safety properties" :class :safety :criticality :high}
   :suites/escalation-collision {:file "escalation-collision.edn" :title "Escalation collision scenarios" :class :adversarial :criticality :medium}
   :suites/governance-decay {:file "governance-decay.edn" :title "Governance decay simulation" :class :governance :criticality :medium}
+  :suites/governance-decay-explicit {:file "governance-decay-explicit.edn" :title "Governance decay explicit & approval paths" :class :governance :criticality :high}
   :suites/same-block-ordering {:file "same-block-ordering.edn" :title "Same-block ordering scenarios" :class :safety :criticality :medium}
   :suites/timelock-regression {:file "timelock-regression.edn" :title "Timelock regression scenarios" :class :safety :criticality :high}
   :suites/token-pathologies {:file "token-pathologies.edn" :title "Token-based pathologies (FoT/Rebasing)" :class :adversarial :criticality :high}

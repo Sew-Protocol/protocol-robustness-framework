@@ -357,6 +357,7 @@
     "delegate_to_senior"        :transition/creation
     "raise_dispute"             :transition/state-change
     "challenge_resolution"      :transition/escalation
+    "submit_evidence"           :transition/escalation
     "escalate_dispute"          :transition/escalation
     "execute_resolution"        :transition/resolution
     "execute_pending_settlement" :transition/resolution

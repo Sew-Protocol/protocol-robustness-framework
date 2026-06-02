@@ -126,6 +126,8 @@
     :p-l1-reversal
     :p-l2-escalation
     :p-l2-reversal
+    :resolver-stake-wei
+    :new-evidence-probability
     :ring-spec
     :l2-detection-prob
     :senior-resolver-skill

@@ -62,9 +62,11 @@
      2. appeal-bond-bps         → bps of AFA (proportional fee)
      3. neither configured      → 0 (no bond required)"
   [afa snap]
-  (if (pos? (:appeal-bond-amount snap 0))
-    (:appeal-bond-amount snap)
-    (compute-fee afa (:appeal-bond-bps snap 0))))
+  (cond
+    (pos? (:appeal-bond-amount snap 0)) (:appeal-bond-amount snap)
+    (and (number? afa) (pos? afa) (pos? (:appeal-bond-bps snap 0)))
+    (compute-fee afa (:appeal-bond-bps snap 0))
+    :else 0))
 
 ;; ---------------------------------------------------------------------------
 ;; Slashing & Bounties
@@ -98,6 +100,12 @@
    as a future protocol-design change."
   [slashable-stake slash-bps]
   (compute-fee slashable-stake slash-bps))
+
+(defn calculate-reversal-slash
+  "Stake-basis reversal slash (replay engine). Prefer this name in calibration docs.
+   Monte Carlo dispute.clj may still use escrow AFA × bps — see calibration_test."
+  [slashable-stake slash-bps]
+  (calculate-slash-amount-from-basis slashable-stake slash-bps))
 
 ;; ---------------------------------------------------------------------------
 ;; Economic Policies (Bands)

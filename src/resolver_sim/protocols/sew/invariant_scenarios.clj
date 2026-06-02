@@ -12,7 +12,8 @@
   (:require [resolver-sim.protocols.sew.invariant-scenarios.baseline :as baseline]
             [resolver-sim.protocols.sew.invariant-scenarios.adversarial :as adversarial]
             [resolver-sim.protocols.sew.invariant-scenarios.extended :as extended]
-            [resolver-sim.protocols.sew.invariant-scenarios.gaps :as gaps]))
+            [resolver-sim.protocols.sew.invariant-scenarios.gaps :as gaps]
+            [resolver-sim.protocols.sew.invariant-scenarios.reversal :as reversal]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario registry
@@ -75,6 +76,9 @@
     ["S49  appeal-deadline-boundary"                     extended/s49]
     ["S50  false-assertion-unchallenged"                 extended/s50]
     ["S51  same-block-challenge-finalize-race"          extended/s51]
+    ["S51b same-block-escalate-finalize-inverse"        extended/s51-inverse]
+    ["S51c deadline-matrix-execute-then-escalate"       extended/s51c-deadline-matrix-execute-then-escalate]
+    ["S51d deadline-matrix-escalate-then-execute"       extended/s51d-deadline-matrix-escalate-then-execute]
     ["S52  yield-accrued-during-dispute"                extended/s52]
     ["S53  reentrant-withdrawal-guard"                  extended/s53]
     ["S54  multi-claim-ledger-isolation"                extended/s54]
@@ -125,6 +129,13 @@
     ["S98  receiver-cancel-after-auto-cancel"           extended/s98]
     ["S99  large-escrow-fee-impact"                     extended/s99]
     ["S100 deny-then-resolver-releases"                 extended/s100]
+    ["S101 reversal-slash-track1-enabled"             reversal/s101]
+    ["S102 reversal-challenge-bounty"                 reversal/s102]
+    ["S103 l2-reversal-slash-ids"                       reversal/s103]
+    ["S104 executed-reversal-slash-not-appealable"      reversal/s104]
+    ["S105 escalate-challenger-on-reversal"             reversal/s105]
+    ["S106 reversal-track2-evidence-appeal"             reversal/s106]
+    ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
     ["S66  cooldown-boundary-reorg"                      adversarial/s66]
     ["S67  reentrancy-callback"                          adversarial/s67]])
 
@@ -179,6 +190,13 @@
     "s39-dr3-senior-coverage-delegation"     {:scenario/type :stress}
     "s40-dr3-freeze-post-slash"              {:scenario/type :stress}
     "s41-dr3-reversal-slash-disabled"        {:scenario/type :stress}
+    "s101-reversal-slash-track1-enabled"   {:scenario/type :stress}
+    "s102-reversal-challenge-bounty"       {:scenario/type :stress}
+    "s103-l2-reversal-slash-ids"           {:scenario/type :stress}
+    "s104-executed-reversal-slash-not-appealable" {:scenario/type :edge-case}
+    "s105-escalate-challenger-on-reversal" {:scenario/type :stress}
+    "s106-reversal-track2-evidence-appeal" {:scenario/type :adversarial}
+    "s107-reversal-track2-appeal-rejected-executes" {:scenario/type :adversarial}
 
     ;; ── Adversarial: profit-maximizer ─────────────────────────────────────
     "s25-profit-maximizer-slash-lifecycle"
@@ -308,6 +326,18 @@
    "s51-same-block-challenge-finalize-race"
    {:scenario/type :mev-ordering
     :tests #{:ordering-determinism :finality :race-condition}}
+
+   "s51-inverse-same-block-escalate-then-finalize"
+   {:scenario/type :mev-ordering
+    :tests #{:ordering-determinism :finality :race-condition :inverse-ordering}}
+
+   "s51c-deadline-matrix-execute-then-escalate"
+   {:scenario/type :timing-boundary
+    :tests #{:ordering-determinism :deadline-matrix :execute-then-escalate}}
+
+   "s51d-deadline-matrix-escalate-then-execute"
+   {:scenario/type :timing-boundary
+    :tests #{:ordering-determinism :deadline-matrix :escalate-then-execute}}
 
    "s52-yield-accrued-during-dispute"
    {:scenario/type :accounting

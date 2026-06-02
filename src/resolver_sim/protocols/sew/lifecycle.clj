@@ -178,7 +178,8 @@
    The snapshot is passed in rather than derived internally so the model
    remains pure: callers supply the governance config state they want to test."
   [world caller token to amount settings snapshot]
-  (cond
+  (let [token (keyword token)]
+    (cond
     (nil? token)
     (t/fail :invalid-token)
 
@@ -231,7 +232,8 @@
             (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (:block-time world)))
             (t/fail :resolver-frozen)
 
-            (and resolver (pos? bond-bps) (pos? stake) (not (reg/can-handle-escrow? world resolver afa)))
+            (and resolver (pos? bond-bps)
+                 (or (zero? stake) (not (reg/can-handle-escrow? world resolver afa))))
             (t/fail :insufficient-resolver-stake)
 
             :else
@@ -265,7 +267,7 @@
                                                                     :amount afa
                                                                     :token token})
                                   world')]
-            (assoc (t/ok world'') :workflow-id workflow-id)))))))
+            (assoc (t/ok world'') :workflow-id workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; raise-dispute
@@ -457,11 +459,8 @@
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?
-                            (let [res    (reg/slash-resolver-stake world-finalized resolver slash-amt)
-                                  actual (:slashed-from-stake res)]
-                              (if (pos? actual)
-                                (acct/sub-held (:world res) token actual)
-                                (:world res)))
+                            (:world (reg/slash-resolver-stake world-finalized resolver slash-amt
+                                                              nil 0 workflow-id))
                             world-finalized)
           world-result    (-> world-slashed
                               (t/decrement-resolver-capacity resolver)
