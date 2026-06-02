@@ -46,11 +46,18 @@
         (throw (ex-info "Adversarial withdrawal blocked" {:owner/id oid}))
         (update-in world pos-key assoc :status :withdrawn)))))
 
+(defn make-adversarial-module
+  "Build a declarative adversarial module record (strategy via world [:yield/adversary ...])."
+  ([module-id]
+   (make-adversarial-module module-id :adversarial))
+  ([module-id module-type]
+   {:module/id module-id
+    :module/type module-type
+    :module/capabilities #{:deposit :withdraw :accrue}
+    :accounting/type :principal
+    :ops {:yield/deposit adversarial-deposit
+          :yield/withdraw adversarial-withdraw
+          :yield/accrue adversarial-accrue}}))
+
 (def adversarial-yield-module
-  {:module/id :adversarial
-   :module/type :adversarial
-   :module/capabilities #{:deposit :withdraw :accrue}
-   :accounting/type :principal
-   :ops {:yield/deposit adversarial-deposit
-         :yield/withdraw adversarial-withdraw
-         :yield/accrue adversarial-accrue}})
+  (make-adversarial-module :adversarial))

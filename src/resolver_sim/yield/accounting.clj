@@ -4,7 +4,8 @@
    Provides reusable arithmetic and reconciliation mechanics for yield-related
    balances and accrual transformations.
 
-   This substrate is designed to be portable across different protocol simulations.")
+   This substrate is designed to be portable across different protocol simulations."
+  (:require [resolver-sim.yield.risk :as risk]))
 
 (def ^:private default-asset-decimals 18)
 
@@ -41,7 +42,8 @@
         token       (:token position)
         module-id   (:module/id position)
         decimals    (token-decimals world token)
-        loss-mode   (get-in world [:yield/risk module-id token :loss-mode] :none)
+        risk      (get-in world [:yield/risk module-id token] {})
+        loss-mode   (risk/effective-loss-mode risk)
         ;; For share-based (like Aave aTokens):
         ;; value = shares * current-index
         ;; yield = value - principal
@@ -68,19 +70,21 @@
    Returns a map with :fulfilled and :shortfall (if any)."
   [world module-id token amount]
   (let [risk (get-in world [:yield/risk module-id token] {})
-        mode (:liquidity-mode risk :available)]
+        mode (risk/effective-liquidity-mode risk)]
     (case mode
       :available {:fulfilled amount :shortfall nil}
       :shortfall (let [ratio (double (get-in risk [:shortfall :available-ratio] 0.5))
                        fulfilled (long (Math/floor (* amount ratio)))
                        deferred  (- amount fulfilled)]
                    {:fulfilled fulfilled
-                    :shortfall {:reason :liquidity-shortfall
-                                :basis-amount amount
-                                :available-ratio ratio
-                                :fulfilled-amount fulfilled
-                                :deferred-amount deferred
-                                :haircut-amount 0}})
+                    :shortfall (merge {:reason (or (get-in risk [:shortfall :reason])
+                                                   :liquidity-shortfall)
+                                       :basis-amount amount
+                                       :available-ratio ratio
+                                       :fulfilled-amount fulfilled
+                                       :deferred-amount deferred
+                                       :haircut-amount 0}
+                                      (select-keys (:shortfall risk {}) [:reason]))})
       :haircut   (let [ratio (double (get-in risk [:haircut :loss-ratio] 0.1))
                        loss  (long (Math/floor (* amount ratio)))
                        fulfilled (- amount loss)]
@@ -96,6 +100,22 @@
                                 :fulfilled-amount 0
                                 :deferred-amount amount
                                 :haircut-amount 0}})))
+
+(defn apply-liquidity-stress-for-withdraw
+  "Apply liquidity stress at withdrawal.
+
+   Under :partial-liquidity, stress applies to the yield leg only; principal
+   remains immediately available. Returns total :fulfilled (principal + liquid yield)."
+  [world module-id token gross-amount principal]
+  (let [risk (get-in world [:yield/risk module-id token] {})
+        failure-modes (risk/normalize-failure-modes (:failure-modes risk))]
+    (if (contains? failure-modes :partial-liquidity)
+      (let [yield-portion (max 0 (- gross-amount principal))
+            {:keys [fulfilled shortfall]}
+            (apply-liquidity-stress world module-id token yield-portion)]
+        {:fulfilled (+ principal fulfilled)
+         :shortfall shortfall})
+      (apply-liquidity-stress world module-id token gross-amount))))
 
 (defn claim-deferred
   "Attempts to reclaim deferred funds from a position in :unwinding status.

@@ -16,6 +16,9 @@
               [resolver-sim.logging          :as log]
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
+             [resolver-sim.scenario.expectations :as expectations]
+             [resolver-sim.scenario.theory :as theory]
+             [resolver-sim.scenario.yield-metrics :as yield-metrics]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.time.model        :as time-model]))
 ;; ---------------------------------------------------------------------------
@@ -124,7 +127,7 @@
     (string? x)
     (let [s (if (.startsWith ^String x ":") (subs x 1) x)]
       (if (.contains s "/")
-        (let [[ns n] (str/split s "/" 2)]
+        (let [[ns n] (str/split s #"/" 2)]
           (keyword ns n))
         (keyword s)))
     :else (keyword (str x))))
@@ -631,6 +634,32 @@
 ;; Public API (Generic)
 ;; ---------------------------------------------------------------------------
 
+(defn- expectation-metric-keys [scenario]
+  (when-let [metrics (get-in scenario [:expectations :metrics])]
+    (into #{} (map #(theory/metric-key (:name %)) metrics))))
+
+(defn finalize-scenario-result
+  "Apply yield metrics, expected-outcomes, and :expectations checks."
+  [scenario result]
+  (let [result'      (yield-metrics/merge-yield-metrics result)
+        outcomes     (expectations/analyze-expected-outcomes scenario (:trace result'))
+        expect       (when (:expectations scenario)
+                       (expectations/evaluate-expectations result' (:expectations scenario)))
+        outcomes-ok? (:ok? outcomes true)
+        expect-ok?   (or (nil? expect) (:ok? expect))
+        checks-ok?   (and outcomes-ok? expect-ok?)]
+    (cond-> (assoc result'
+              :expected-outcomes outcomes
+              :expectations expect)
+      (and (= (:outcome result') :pass) (not checks-ok?))
+      (assoc :outcome :fail
+             :halt-reason (if (not outcomes-ok?)
+                            :expected-outcome-mismatch
+                            :expectation-mismatch)
+             :expectation-violations
+             (vec (concat (:violations outcomes [])
+                          (:violations expect [])))))))
+
 (defn- maybe-record-temporal!
   "Invoke optional :recorder from :temporal-evidence when collection is enabled."
   [temporal-cfg temporal-enabled? scenario-id outcome world metrics trace]
@@ -844,7 +873,8 @@
   (let [vocab              (if (satisfies? proto/EconomicModel protocol)
                              (proto/metric-vocabulary protocol)
                              #{})
-        effective-metrics  (into base-metrics vocab)
+        effective-metrics  (into (into base-metrics vocab)
+                                 (or (expectation-metric-keys scenario) #{}))
         validation (validate-scenario scenario effective-metrics)
         temporal-cfg (:temporal-evidence scenario)
         temporal-enabled? (boolean (:enabled? temporal-cfg))]
@@ -860,16 +890,18 @@
             expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
             strict-expected-errors? (boolean (:strict-expected-errors? scenario false))]
         (log/info! "scenario/start" {:id scenario-id})
-        (run-simulation-loop protocol context scenario-id events world0 [] (zero-metrics protocol)
-                             {:expected-errors-set expected-errors-set
-                              :strict-expected-errors? strict-expected-errors?
-                              :allow-open-entities? (:allow-open-entities? scenario)
-                              :allow-open-disputes? (:allow-open-disputes? scenario)
-                              :agents agents
-                              :temporal-cfg temporal-cfg
-                              :temporal-enabled? temporal-enabled?
-                              :agent-index agent-index
-                              :scenario scenario})))))
+        (finalize-scenario-result
+         scenario
+         (run-simulation-loop protocol context scenario-id events world0 [] (zero-metrics protocol)
+                              {:expected-errors-set expected-errors-set
+                               :strict-expected-errors? strict-expected-errors?
+                               :allow-open-entities? (:allow-open-entities? scenario)
+                               :allow-open-disputes? (:allow-open-disputes? scenario)
+                               :agents agents
+                               :temporal-cfg temporal-cfg
+                               :temporal-enabled? temporal-enabled?
+                               :agent-index agent-index
+                               :scenario scenario}))))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

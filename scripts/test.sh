@@ -6,6 +6,7 @@
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
+#   ./scripts/test.sh yield-scenarios # yield JSON scenarios (path suite, same report shape)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
@@ -108,6 +109,13 @@ run_invariants() {
   require_clojure || return $?
   echo "Running deterministic invariant scenarios (S01–S100)..."
   clojure -M:run -- --invariants
+  return $?
+}
+
+run_yield_scenarios() {
+  require_clojure || return $?
+  echo "Running yield scenario path suite (JSON, normalized)..."
+  clojure -M:run -- --invariants --suite yield-scenarios
   return $?
 }
 
@@ -783,6 +791,9 @@ case "$MODE" in
   invariants)
     run_invariants || FAILURES=$((FAILURES + 1))
     ;;
+  yield-scenarios)
+    run_yield_scenarios || FAILURES=$((FAILURES + 1))
+    ;;
   generators)
     run_generators || FAILURES=$((FAILURES + 1))
     ;;
@@ -845,7 +856,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|layering-lint|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|generators|contracts|invariants|yield-scenarios|layering-lint|suites|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

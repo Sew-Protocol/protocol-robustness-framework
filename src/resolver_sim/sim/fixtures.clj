@@ -16,6 +16,8 @@
             [resolver-sim.scenario.theory :as theory]
             [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.scenario.expectations :as expectations]
+            [resolver-sim.scenario.normalize :as scenario-norm]
+            [resolver-sim.sim.reporter :as reporter]
             [clojure.pprint :as pp]))
 
 (def ^:private golden-schema-version "2.0")
@@ -50,75 +52,10 @@
           (edn/read (java.io.PushbackReader. r))))
       (throw (ex-info "Fixture not found" {:key k :path path})))))
 
-;; ---------------------------------------------------------------------------
-;; JSON Normalization: Handle EDN/JSON type mismatches
-;; ---------------------------------------------------------------------------
-
-(defn- normalize-keyword-strings
-  "Convert string values starting with ':' to proper Clojure keywords.
-   This fixes keyword corruption from JSON deserialization."
-  [v]
-  (cond
-    (string? v)
-    (if (and (.startsWith v ":") (> (count v) 1))
-      (keyword (subs v 1))  ; Remove leading colon and convert to keyword
-      v)
-    (keyword? v) v
-    :else v))
-
-(defn- normalize-map-keys
-  "Recursively convert numeric string keys in maps to Integer keys."
-  [m]
-  (if (map? m)
-    (reduce-kv (fn [acc k v]
-                  (let [normalized-k (if (string? k)
-                                       (try (Integer/parseInt k)
-                                            (catch Exception _ k))
-                                       k)]
-                    (assoc acc normalized-k v)))
-               {} m)
-    m))
-
-(defn- normalize-error-kw [v]
-  (cond
-    (keyword? v) v
-    (string? v) (keyword v)
-    :else v))
-
-(defn- normalize-expected-errors
-  [scenario]
-  (if-let [errs (:expected-errors scenario)]
-    (assoc scenario :expected-errors
-           (mapv #(update % :error normalize-error-kw) errs))
-    scenario))
-
 (defn normalize-scenario
-  "Recursively normalize a loaded scenario to fix JSON deserialization issues:
-   1. Convert string keywords (e.g. ':released') to proper keywords
-   2. Convert numeric string keys to Integer keys in all maps
-   3. Keywordize :error in :expected-errors entries"
+  "Delegate to `resolver-sim.scenario.normalize/normalize-scenario`."
   [x]
-  (let [normalized (walk/postwalk
-    (fn [v]
-      (cond
-        ;; First handle maps - normalize keys
-        (map? v)
-        (let [key-normalized (normalize-map-keys v)]
-          ;; Then normalize all values in the map
-          (reduce-kv (fn [m k kv]
-                       (assoc m k (normalize-keyword-strings kv)))
-                     key-normalized key-normalized))
-        
-        ;; Then handle keyword string values
-        (string? v)
-        (normalize-keyword-strings v)
-        
-        ;; Everything else stays as-is
-        :else v))
-    x)]
-    (if (map? normalized)
-      (normalize-expected-errors normalized)
-      normalized)))
+  (scenario-norm/normalize-scenario x))
 
 (defn- fixture-ref? [x]
   (and (keyword? x) (namespace x)
@@ -268,12 +205,15 @@
    An optional protocol can be supplied; defaults to the registry default protocol.
 
    opts (4th arg or via metadata on 3-arg call when protocol is a map — prefer 4-arg):
-     :golden-verify-mode — :replay-only | :replay-and-theory (default in :verify mode)"
+     :golden-verify-mode — :replay-only | :replay-and-theory (default in :verify mode)
+     :result-display-level — :summary | :failures | :standard | :verbose | :audit (stdout only; default :summary)
+     :verbose? / :show-failures? — legacy aliases for display level (stdout only)"
   ([suite-key] (run-suite suite-key nil nil {}))
   ([suite-key mode] (run-suite suite-key mode nil {}))
   ([suite-key mode protocol] (run-suite suite-key mode protocol {}))
   ([suite-key mode protocol opts]
-   (let [effective-protocol (or protocol
+   (let [t0               (System/currentTimeMillis)
+         effective-protocol (or protocol
                                 (preg/get-protocol preg/default-protocol-id))
          suite (compose-suite (load-fixture suite-key))
          golden-verify-mode (resolve-golden-verify-mode suite mode opts)
@@ -308,8 +248,9 @@
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
                                res (replay/replay-with-protocol effective-protocol effective-trace)
-                               expect-res (when (:expectations trace)
-                                            (expectations/evaluate-expectations res (:expectations trace)))
+                               expect-res (or (:expectations res)
+                                              (when (:expectations trace)
+                                                (expectations/evaluate-expectations res (:expectations trace))))
                                theory-res (when (:theory trace)
                                             (let [theory    (:theory trace)
                                                   profile   (or (:theory-eval-profile theory)
@@ -326,18 +267,6 @@
                                             (compare-golden-report suite-key
                                                                    {:trace-id trace-id :golden-report report}
                                                                    {:golden-verify-mode golden-verify-mode}))]
-                           
-                           (when (not= :pass (:outcome res))
-                             (println (str "DEBUG: Trace " (:scenario-id trace) " failed with " (:outcome res) " reason " (:halt-reason res)))
-                             (when (= (:outcome res) :fail)
-                               (let [last-entry (last (:trace res))
-                                     violations (:violations last-entry)]
-                                 (println (str "       Halted at seq " (:seq last-entry) " action " (:action last-entry)))
-                                 (doseq [[inv-kw res-map] violations]
-                                   (when-not (:holds? res-map)
-                                     (println (str "       VIOLATION: " inv-kw " details: " (:violations res-map))))))))
-
-
                            (when (= mode :save) (save-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
                            {:trace-id (:scenario-id trace)
                             :scenario-author (:scenario-author trace)
@@ -376,11 +305,23 @@
                                       (or (nil? (:expectations r)) (:ok? (:expectations r)))
                                       (theory-ok? r)
                                       (if (= mode :verify) (:ok? (:golden-comparison r)) true)))
-                         results)]
-     {:suite-id suite-key
-      :golden-verify-mode golden-verify-mode
-      :ok? all-ok?
-      :results results})))
+                         results)
+         expectations-by-trace-id (into {}
+                                        (keep (fn [{:keys [trace]}]
+                                                (when-let [id (:scenario-id trace)]
+                                                  (when (:expectations trace)
+                                                    [id (:expectations trace)]))))
+                                      traces)
+         suite-result {:suite-id suite-key
+                       :golden-verify-mode golden-verify-mode
+                       :ok? all-ok?
+                       :results results}
+         display-opts (merge opts
+                             {:elapsed-ms (- (System/currentTimeMillis) t0)
+                              :expectations-by-trace-id expectations-by-trace-id
+                              :result-display-level (or (:result-display-level opts) :summary)})]
+     (reporter/print-suite-results suite-result display-opts)
+     suite-result)))
 
 ;; ---------------------------------------------------------------------------
 ;; Trace Minimisation Interface

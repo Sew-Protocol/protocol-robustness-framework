@@ -4,7 +4,8 @@
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
-            [resolver-sim.protocols.sew.accounting :as acct]))
+            [resolver-sim.protocols.sew.accounting :as acct]
+            [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]))
 
 (deftest tiered-authority-test
   (let [world (t/empty-world 1000)
@@ -34,49 +35,19 @@
         (is (= :insufficient-resolver-stake (:error r)))))))
 
 (deftest auto-slashing-on-reversal-test
-  (let [world (t/empty-world 1000)
-        buyer "0xBuyer"
-        seller "0xSeller"
-        r0 "0xRes0"
+  (let [r0 "0xRes0"
         r1 "0xRes1"
-        token "0xToken"
-        snap (t/make-module-snapshot {:dispute-resolver r0 
-                                      :escrow-fee-bps 0 
-                                      :appeal-window-duration 3600
-                                      :appeal-bond-bps 1000
-                                      :reversal-slash-bps 2500})
-        ;; Register stakes
-        world (-> world
-                  (reg/register-stake r0 5000)
-                  (reg/register-stake r1 5000))
-        ;; Create escrow and raise dispute
-        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 5000 {} snap)
-        world (-> world
-                  (lc/raise-dispute workflow-id buyer)
-                  :world)]
-
+        {:keys [world workflow-id steps]}
+        (rev-fx/build-reversal-world rev-fx/participant-escalation-reversal)]
     (testing "Level 0 resolution"
-      (let [r (res/execute-resolution world workflow-id r0 true "hash0" nil)
-            world-res (:world r)]
-        (is (true? (:ok r)))
-        (is (= r0 (get-in world-res [:previous-decisions workflow-id 0 :resolver])))
-        
-        (testing "Escalation to Level 1"
-          (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver r1})
-                r-esc (res/escalate-dispute world-res workflow-id seller esc-fn)
-                world-esc (:world r-esc)]
-            (is (true? (:ok r-esc)))
-            (is (= 1 (t/dispute-level world-esc workflow-id)))
-
-            (testing "Level 1 resolution reverses Level 0 -> Slashing"
-              (let [r-final (res/execute-resolution world-esc workflow-id r1 false "hash1" nil)
-                    world-final (:world r-final)]
-                (is (true? (:ok r-final)))
-                ;; Check if r0 was slashed (25% of 1000 = 250)
-                ;; 25% of 5000 stake = 1250 slashed
-                (is (= 3750 (reg/get-stake world-final r0)))
-                (is (= 625 (get-in world-final [:bond-distribution :insurance])))
-                (is (= 375 (get-in world-final [:bond-distribution :protocol])))))))))))
+      (is (= r0 (get-in (:after-l0 steps) [:previous-decisions workflow-id 0 :resolver]))))
+    (testing "Escalation to Level 1"
+      (is (= 1 (t/dispute-level (:after-escalation steps) workflow-id))))
+    (testing "Level 1 resolution reverses Level 0 -> slashing"
+      ;; 25% of 5000 stake = 1250 slashed
+      (is (= 3750 (reg/get-stake world r0)))
+      (is (= 625 (get-in world [:bond-distribution :insurance])))
+      (is (= 375 (get-in world [:bond-distribution :protocol]))))))
 
 (deftest manual-fraud-slash-test
   (let [world (t/empty-world 1000)

@@ -25,7 +25,10 @@
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.contract-model.idempotency     :as idem]
+            [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]
             [resolver-sim.yield.protocols                :as yield-proto]
+            [resolver-sim.yield.module                   :as yield-module]
+            [resolver-sim.yield.risk                     :as yield-risk]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
 
@@ -38,46 +41,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- build-snapshot [pp]
-  (let [yield-id (or (get pp :yield-generation-module nil)
-                     (get pp :yield-profile nil))
-        {:keys [profile-id archetype module-id]} (yield-proto/resolve-yield-profile yield-id)]
-    (t/make-module-snapshot
-     ;; NOTE: :resolver-fee-bps in protocol-params maps to :escrow-fee-bps in the snapshot.
-     ;; Setting :escrow-fee-bps directly in protocol-params has no effect; use :resolver-fee-bps.
-     {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
-      :resolution-module            (get pp :resolution-module nil)
-      :appeal-window-duration       (get pp :appeal-window-duration 0)
-      :max-dispute-duration         (get pp :max-dispute-duration 2592000)
-      :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
-      :dispute-resolver             (get pp :dispute-resolver nil)
-      :appeal-bond-bps              (get pp :appeal-bond-bps 0)
-      :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
-      :appeal-bond-amount           (get pp :appeal-bond-amount 0)
-      :reversal-slash-bps           (get pp :reversal-slash-bps 0)
-      :reversal-detection-probability (get pp :reversal-detection-probability 0.0)
-      ;; NOTE: :fraud-slash-bps is intentionally NOT stored in the snapshot.
-      ;; It is a sim-layer param read from params directly (kernel_bridge, batch, etc).
-      :challenge-window-duration    (get pp :challenge-window-duration 0)
-      :challenge-bond-bps           (get pp :challenge-bond-bps 0)
-      :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
-      :default-auto-release-delay   (get pp :default-auto-release-delay 0)
-      :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-      ;; NOTE: escrow-modules mirrors :resolution-module for legacy compat.
-      :escrow-modules               {:resolution (get pp :resolution-module nil)
-                                     :yield      profile-id
-                                     :release    (get pp :release-strategy nil)
-                                     :cancel     (get pp :cancellation-strategy nil)}
-      :yield-module-id              (get pp :yield-module-id :module/aave-yield)
-      :yield-profile                profile-id
-      :yield-archetype              archetype
-      :yield-generation-module      module-id
-      :yield-distribution-module    (get pp :yield-distribution-module nil)
-      :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
-      :cancellation-strategy        (get pp :cancellation-strategy nil)
-      :release-strategy             (get pp :release-strategy nil)
-      :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]
@@ -415,8 +378,9 @@
                               (-> world'
                                   (acct/sub-held token reclaimed)
                                   (acct/record-claimable-v2 escrow-id :settlement/principal recipient reclaimed)))
-                            ;; For resolver stake yield: credit the resolver's stake balance
-                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
+                            ;; Resolver stake: reclaimed deferred was already in :total-held via
+                            ;; register-stake; closing the yield position is sufficient (no stake bump).
+                            world')]
             (t/ok world''))
           (t/ok world'))))))
 
@@ -572,31 +536,20 @@
 
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
-  ;; Params:
-  ;;   :module-id      — yield module id (string, will be keywordised and alias-resolved)
-  ;;   :token          — token symbol (string, will be keywordised)
-  ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
-  ;;   :loss-mode      — :none | :mark-to-market
-  ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
-  ;;   :apy            — new APY (double), optional
-  ;;   :shortfall      — map e.g. {:available-ratio 0.8}
+  ;;
+  ;; Legacy flat params:
+  ;;   :liquidity-mode, :loss-mode, :failure-modes, :apy, :shortfall
+  ;;
+  ;; Composable shocks (preferred for stress tests):
+  ;;   :shocks [{:type :apy :value -0.2}
+  ;;           {:type :liquidity-mode :mode :shortfall}
+  ;;           {:type :shortfall :available-ratio 0.8}
+  ;;           {:type :failure-mode :mode :negative-yield}]
   [_ctx world event]
-  (let [{:keys [module-id token liquidity-mode loss-mode failure-modes apy shortfall]} (:params event)
-        raw-mid (keyword module-id)
-        ;; Resolve through module aliases so "aave-v3" → :yield.provider/liquid-lending
-        mid (get-in world [:yield/module-aliases raw-mid] raw-mid)
+  (let [{:keys [module-id token]} (:params event)
+        mid (yield-module/resolve-module-id world module-id)
         tok (keyword token)]
-    (t/ok (cond-> world
-            liquidity-mode
-            (assoc-in [:yield/risk mid tok :liquidity-mode] (keyword liquidity-mode))
-            loss-mode
-            (assoc-in [:yield/risk mid tok :loss-mode] (keyword loss-mode))
-            failure-modes
-            (assoc-in [:yield/risk mid tok :failure-modes] (into #{} (map keyword failure-modes)))
-            apy
-            (assoc-in [:yield/rates mid tok] (double apy))
-            shortfall
-            (assoc-in [:yield/risk mid tok :shortfall] shortfall)))))
+    (t/ok (yield-risk/apply-market-shock world mid tok (:params event)))))
 
 (defmethod apply-action :default
   [_ctx _world event]
@@ -690,7 +643,7 @@
 
   (build-execution-context [_ agents protocol-params]
     (let [pp         protocol-params
-          snapshot   (build-snapshot pp)
+          snapshot   (sew-snapshot/snapshot-from-protocol-params pp)
           rm-addr    (get pp :resolution-module nil)
           esc-map    (get pp :escalation-resolvers nil)
           level-map  (when esc-map

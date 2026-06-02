@@ -24,7 +24,8 @@
 
    Every operation function signature:
      (fn [world workflow-id ...args] -> {:ok bool :world world' :error keyword})"
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [resolver-sim.protocols.sew.snapshot :as snapshot]))
 
 ;; ---------------------------------------------------------------------------
 ;; Semantic ID Phantom Types
@@ -128,58 +129,11 @@
    :auto-cancel-time  (or auto-cancel-time 0)})
 
 (defn make-module-snapshot
-  "Construct a ModuleSnapshot map.
-   All fields are snapshotted at createEscrow time and NEVER change thereafter —
-   this is the key correctness property: governance config changes cannot affect
-   in-flight escrows.
+  "Deprecated alias for `snapshot/make-escrow-snapshot`. Prefer that name in new code.
 
-   Numeric fee/timeout fields use integer (uint256 semantics).
-
-   Bond configuration (two styles, applied in priority order):
-     appeal-bond-amount  — absolute flat fee (takes priority over appeal-bond-bps)
-     appeal-bond-bps     — bps of amount-after-fee (used when appeal-bond-amount = 0)
-     challenge-bond-bps  — Phase L challenge bond; falls back to appeal-bond-amount,
-                           then to a 100-unit minimum if neither is configured
-
-   Keys NOT stored in the snapshot (handle elsewhere):
-     :escalation-resolvers — converted to an escalation-fn in build-execution-context
-     :max-dispute-level    — global constant t/max-dispute-level, not per-escrow
-     :fraud-slash-bps      — sim-layer parameter read from params, not from snapshot"
-  [{:keys [resolution-module release-strategy cancellation-strategy
-           yield-generation-module yield-distribution-module incentive-module
-            yield-module-id yield-profile yield-archetype escrow-modules
-           yield-protocol-fee-bps appeal-bond-protocol-fee-bps escrow-fee-bps
-           default-auto-release-delay default-auto-cancel-delay
-           max-dispute-duration appeal-window-duration dispute-resolver
-           appeal-bond-bps resolver-bond-bps appeal-bond-amount
-           reversal-slash-bps reversal-detection-probability
-           challenge-window-duration challenge-bond-bps challenge-bounty-bps]}]
-  {:resolution-module           resolution-module
-   :release-strategy            release-strategy
-   :cancellation-strategy       cancellation-strategy
-   :escrow/modules              escrow-modules
-   :yield-module-id             yield-module-id
-   :yield-profile               yield-profile
-   :yield-archetype             yield-archetype
-   :yield-generation-module     yield-generation-module
-   :yield-distribution-module   yield-distribution-module
-   :incentive-module            incentive-module
-   :yield-protocol-fee-bps      (or yield-protocol-fee-bps 0)
-   :appeal-bond-protocol-fee-bps (or appeal-bond-protocol-fee-bps 0)
-   :escrow-fee-bps              (or escrow-fee-bps 0)
-   :default-auto-release-delay  (or default-auto-release-delay 0)
-   :default-auto-cancel-delay   (or default-auto-cancel-delay 0)
-   :max-dispute-duration        (or max-dispute-duration 0)
-   :appeal-window-duration      (or appeal-window-duration 0)
-   :dispute-resolver            dispute-resolver
-   :appeal-bond-bps             (or appeal-bond-bps 0)
-   :resolver-bond-bps           (or resolver-bond-bps 0)
-   :appeal-bond-amount          (or appeal-bond-amount 0)
-   :reversal-slash-bps          (or reversal-slash-bps 0)
-   :reversal-detection-probability (or reversal-detection-probability 0.0)
-   :challenge-window-duration   (or challenge-window-duration 0)
-   :challenge-bond-bps          (or challenge-bond-bps 0)
-   :challenge-bounty-bps        (or challenge-bounty-bps 0)})
+   See `resolver-sim.protocols.sew.snapshot` for validation and presets."
+  [params]
+  (snapshot/make-escrow-snapshot params))
 
 (defn make-pending-settlement
   "Construct a PendingSettlement map.

@@ -8,7 +8,8 @@
      {:holds? bool :violations [...]}
 
    Invariants:
-     1. solvency (single-world)      — total-held[t] = sum(live afa[t])  STRICT =
+     1. solvency (single-world)      — total-held[t] = live-escrow-AFA + bonds + slash-bonds
+                                       + yield-component + resolver-stakes (USDC)  STRICT =
                                        and total-held[t] <= token-balance[t]  (external)
      2. fee-monotonicity (single)    — total-fees[t] never goes negative
      3. state-irreversibility (cross)— terminal states are absorbing (checked via check-transition)
@@ -168,10 +169,12 @@
                      (or (and et (contains? live-states (:escrow-state et)))
                          (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
-                ;; Unwinding (shortfall-deferred) position — deferred amount remains in :total-held
-                ;; until claim-deferred-yield closes it out, regardless of escrow state
+                ;; Escrow :unwinding — deferred remains in :total-held after finalize (live AFA gone).
+                ;; Resolver :unwinding — deferred is still inside the stake already in :total-held;
+                ;; do not add to yield-sum (would double-count with :resolver-stakes).
                 (and (= (:token pos) token)
-                     (= (:status pos) :unwinding))
+                     (= (:status pos) :unwinding)
+                     (not (t/resolver-yield-owner-id? oid)))
                 (+ acc (get-in pos [:shortfall :deferred-amount] 0))
                 :else acc)))
           0

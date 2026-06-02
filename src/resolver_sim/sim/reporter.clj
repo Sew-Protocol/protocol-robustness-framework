@@ -1,63 +1,27 @@
 (ns resolver-sim.sim.reporter
-  "Result reporting for schema-profile-driven suite execution."
+  "Stdout reporting for schema-profile-driven suite execution."
   (:require [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.schema-profile :as schema-profile]
-            [resolver-sim.scenario.outcome-semantics :as ose]))
+            [resolver-sim.scenario.outcome-semantics :as ose]
+            [resolver-sim.sim.result-display :as display]))
 
-(defn print-expectations [expectations]
-  (if (nil? expectations)
-    (println "    - Expectations: Not evaluated")
-    (if (:ok? expectations)
-      (println "    ✓ Expectations: Pass")
-      (do
-        (println "    ✗ Expectations: Fail")
-        (doseq [v (:violations expectations)]
-          (case (:type v)
-            :terminal-mismatch (println "      - Terminal mismatch at" (:path v) ": expected" (:expected v) "got" (:actual v))
-            :metric-violation  (println "      - Metric violation:" (:name v) (:op v) (:expected v) "got" (:actual v))
-            :invariant-failed  (println "      - Invariant failed:" (:invariant v) (when (:note v) (str "(" (:note v) ")")))
-            (println "      - Unknown violation:" v)))))))
+(defn print-suite-results
+  "Print human-readable fixture suite output.
 
-(defn print-theory [theory purpose]
-  (let [status (or (:status theory) :not-evaluated)
-        label  (ose/theory-label status)
-        ok?    (ose/theory-expected? status purpose)
-        marker (case status
-                 :inconclusive  "?"
-                 :not-evaluated "-"
-                 (if ok? "✓" "✗"))]
-    (println (str "    " marker " Theory: " label))
-    (when (and (= status :falsified) (seq (:evidence theory)))
-      (doseq [e (:evidence theory)]
-        (println "      - Evidence:" (:metric e) (:op e) (:value e) "→ actual" (:actual e))))
-    (when (= status :inconclusive)
-      (println "      - No tracked metrics matched the falsifies-if conditions"))))
-
-(defn print-equilibrium [theory]
-  (let [status (get theory :equilibrium-status :not-checked)
-        results (get theory :equilibrium-results {})]
-    (when (not= status :not-checked)
-      (println (str "    " (case status
-                             :pass "✓"
-                             :fail "✗"
-                             "?") " Equilibrium: " (name status)))
-      (doseq [[k v] results]
-        (println (str "      - " (name k) ": " (name (:status v))))
-        (when (:note v) (println "        Note:" (:note v)))))))
-
-(defn print-suite-results [suite-result]
-  (println (str "\nSuite: " (:suite-id suite-result)))
-  (println (str "Overall Status: " (if (:ok? suite-result) "PASS" "FAIL")))
-  (println "----------------------------------------------------------------------")
-  (doseq [r (:results suite-result)]
-    (println (str "[" (:outcome r) "] " (:trace-id r)))
-    (print-expectations (:expectations r))
-    (print-theory (:theory r) (:purpose r))
-    (print-equilibrium (:theory r))))
+   opts:
+     :result-display-level — see `resolver-sim.sim.result-display/display-levels`
+     :verbose? / :show-failures? — legacy aliases
+     :elapsed-ms — optional wall time (not stored on suite-result)
+     :expectations-by-trace-id — display-only expectations decls by trace-id"
+  ([suite-result] (print-suite-results suite-result {}))
+  ([suite-result opts]
+   (doseq [line (display/suite-report-lines suite-result opts)]
+     (println line))
+   nil))
 
 ;; ---------------------------------------------------------------------------
-;; Coverage reporting
+;; Coverage reporting (unchanged — separate concern from fixture display levels)
 ;; ---------------------------------------------------------------------------
 
 (defn- purpose-label [p]

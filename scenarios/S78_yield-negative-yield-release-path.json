@@ -3,6 +3,8 @@
   "schema_version": "1.0",
   "initial_block_time": 1000,
   "seed": 78001,
+  "purpose": "yield-stress",
+  "threat_tags": ["negative-yield"],
   "yield_config": {
     "modules": {
       "aave-v3": {
@@ -12,10 +14,7 @@
             "initial_index": 1.0,
             "apy": 0.05,
             "liquidity_mode": "available",
-            "loss_mode": "none",
-            "failure_modes": [
-              "negative-yield"
-            ]
+            "loss_mode": "none"
           }
         }
       }
@@ -29,16 +28,8 @@
     "max_dispute_duration": 2592000
   },
   "agents": [
-    {
-      "id": "sender",
-      "type": "honest",
-      "address": "sender"
-    },
-    {
-      "id": "recipient",
-      "type": "honest",
-      "address": "recipient"
-    }
+    {"id": "sender", "type": "honest", "address": "sender"},
+    {"id": "recipient", "type": "honest", "address": "recipient"}
   ],
   "events": [
     {
@@ -55,17 +46,57 @@
     },
     {
       "seq": 1,
-      "time": 31537000,
+      "time": 31536000,
+      "agent": "sender",
+      "action": "trigger-accrue",
+      "params": {"workflow_id": 0}
+    },
+    {
+      "seq": 2,
+      "time": 31536001,
+      "agent": "sender",
+      "action": "set-yield-risk",
+      "params": {
+        "module_id": "aave-v3",
+        "token": "USDC",
+        "apy": -0.03,
+        "failure_modes": ["negative-yield"]
+      }
+    },
+    {
+      "seq": 3,
+      "time": 47088000,
       "agent": "sender",
       "action": "release",
-      "params": {
-        "workflow_id": 0
-      }
+      "params": {"workflow_id": 0}
     }
   ],
+  "expected_outcomes": [
+    {"seq": 0, "action": "create_escrow", "expect": "ok"},
+    {"seq": 1, "action": "trigger-accrue", "expect": "ok"},
+    {"seq": 2, "action": "set-yield-risk", "expect": "ok"},
+    {"seq": 3, "action": "release", "expect": "ok"}
+  ],
+  "expectations": {
+    "metrics": [
+      {"name": "yield/escrow-principal", "op": ":=", "value": 98500},
+      {"name": "escrow/amount-after-fee", "op": ":=", "value": 98500},
+      {"name": "yield/escrow-gross", "op": ":<", "value": 103424},
+      {"name": "yield/escrow-deferred", "op": ":=", "value": 0}
+    ],
+    "terminal": [
+      {"path": ["live-states", 0], "equals": "released"},
+      {"path": ["escrow-transfers", 0, "escrow-state"], "equals": "released"}
+    ],
+    "step-terminal": [
+      {
+        "seq": 1,
+        "path": ["yield-positions", ["sew/escrow", 0], "unrealized-yield"],
+        "op": ":>",
+        "value": 0
+      }
+    ]
+  },
   "scenario-author": "@grifma",
-  "provenance": {
-    "author-id": "@grifma",
-    "author": "Marc Griffiths"
-  }
+  "provenance": {"author-id": "@grifma", "author": "Marc Griffiths"}
 }

@@ -1,4 +1,4 @@
-(ns resolver-sim.yield.providers.liquid-lending
+(ns resolver-sim.yield.modules.liquid-lending
   "Generic liquid-lending yield archetype.
 
    Behavior class:
@@ -130,18 +130,20 @@
             ;; mark-to-market loss (gross < principal) is modeled as a permanent haircut
             ;; even when liquidity-mode is :available.
             intrinsic-loss (max 0 (- (:principal updated-pos 0) gross-amount))
-            {:keys [fulfilled shortfall]}
+            shortfall-result
             (if (pos? intrinsic-loss)
               {:fulfilled gross-amount
                :shortfall {:reason :negative-carry-loss
                            :basis-amount (:principal updated-pos 0)
                            :fulfilled-amount gross-amount
                            :deferred-amount 0
-                           :haircut-amount intrinsic-loss}}
-              (acct/apply-liquidity-stress world
-                                           mid
-                                           token
-                                           gross-amount))
+                           :haircut-amount intrinsic-loss
+                           :as-of-index current-index}}
+              (acct/apply-liquidity-stress-for-withdraw world mid token gross-amount
+                                                        (:principal updated-pos 0)))
+            {:keys [fulfilled shortfall]} shortfall-result
+            shortfall' (when shortfall
+                         (assoc shortfall :as-of-index current-index))
             realized-yield (max 0
                                 (min (:unrealized-yield updated-pos 0)
                                      (- fulfilled (:principal updated-pos 0))))
@@ -149,7 +151,7 @@
                               (assoc :status (if shortfall :unwinding :withdrawn))
                               (assoc :realized-yield realized-yield)
                               (assoc :unrealized-yield 0)
-                              (assoc :shortfall shortfall))]
+                              (assoc :shortfall shortfall'))]
         (assoc-in world pos-key crystallized)))))
 
 (defn claim-deferred [world module op]
@@ -174,8 +176,13 @@
               world
               (:yield/positions world)))))
 
-(defn make-module
-  ([module-id] (make-module module-id :yield.provider/liquid-lending))
+(defn make-liquid-lending-module
+  "Build a declarative liquid-lending module record (shared ops; risk via world/config).
+
+   `module-id` — registry/dispatch key (e.g. :aave-v3).
+   `module-type` — profile label (e.g. :yield.profile/aave-v3-like)."
+  ([module-id]
+   (make-liquid-lending-module module-id :yield.provider/liquid-lending))
   ([module-id module-type]
    {:module/id module-id
     :module/type module-type
@@ -185,11 +192,7 @@
           :yield/withdraw withdraw
           :yield/accrue accrue
           :yield/emergency-unwind emergency-unwind
-          :yield/claim-deferred claim-deferred}
-    :risk/defaults {:liquidity-mode :available
-                    :loss-mode :none
-                    :rate-mode :deterministic
-                    :failure-modes #{}}}))
+          :yield/claim-deferred claim-deferred}}))
 
 (def liquid-lending-module
-  (make-module :yield.provider/liquid-lending))
+  (make-liquid-lending-module :yield.provider/liquid-lending))

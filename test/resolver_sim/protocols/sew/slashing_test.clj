@@ -4,7 +4,8 @@
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.registry   :as reg]))
+            [resolver-sim.protocols.sew.registry   :as reg]
+            [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]))
 
 (deftest slashing-logic-test
   (let [world (t/empty-world 1000)
@@ -178,43 +179,9 @@
 
 ;; ============ Reversal-slash specific tests ============
 
-;; Helper: build a world where L0 has resolved :release and L1 has resolved :refund
-;; triggering handle-reversal-slashing. Uses reversal-slash-bps > 0 so a slash entry is created.
-(defn- build-reversal-slash-world
-  "Returns world with a level-scoped reversal slash entry.
-   workflow-id = 0. The L0 resolver (0xL0Res) is the slashed party.
-   slash-id = \"0-reversal-0\" (level 1, dec = 0)."
-  []
-  (let [buyer   "0xBuyer"
-        seller  "0xSeller"
-        l0-res  "0xL0Res"
-        l1-res  "0xL1Res"
-        snap    (t/make-module-snapshot {:appeal-window-duration 120
-                                         :challenge-window-duration 120
-                                         :reversal-slash-bps 2500
-                                         :max-dispute-level 2
-                                         :dispute-resolver l0-res})
-        world0  (-> (t/empty-world 1000)
-                    (reg/register-stake l0-res 10000)
-                    (reg/register-stake l1-res 10000)
-                    (assoc-in [:total-held :USDC] 20000)
-                    (assoc-in [:total-principal-deposited :USDC] 20000))
-        {:keys [world workflow-id]} (lc/create-escrow world0 buyer "USDC" seller 8000 {} snap)
-        world1  (:world (lc/raise-dispute world workflow-id buyer))
-        ;; L0 resolver rules :release
-        world2  (:world (res/execute-resolution world1 workflow-id l0-res true "0xhash-l0" nil))
-        ;; Escalate to L1 (buyer challenges, time within appeal window)
-        world2a (assoc world2 :block-time 1080)
-        esc-fn  (fn [_w _wfid _caller _level] {:ok true :new-resolver l1-res})
-        world3  (:world (res/escalate-dispute world2a workflow-id buyer esc-fn))
-        ;; L1 resolver rules :refund (opposite → triggers reversal slashing)
-        world3a (assoc world3 :block-time 1200)
-        world4  (:world (res/execute-resolution world3a workflow-id l1-res false "0xhash-l1" nil))]
-    {:world world4 :workflow-id workflow-id}))
-
 (deftest reversal-slash-basis-is-stake
   (testing "Reversal slash amount is based on resolver stake, not escrow principal"
-    (let [{:keys [world workflow-id]} (build-reversal-slash-world)
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           slash-id (str workflow-id "-reversal-0")
           slash (get-in world [:pending-fraud-slashes slash-id])
           stake (reg/get-stake world "0xL0Res")]
@@ -228,7 +195,7 @@
 
 (deftest reversal-slash-uses-level-scoped-id
   (testing "handle-reversal-slashing generates \"<wf>-reversal-<level-1>\" id"
-    (let [{:keys [world workflow-id]} (build-reversal-slash-world)
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           expected-slash-id (str workflow-id "-reversal-0")
           slash (get-in world [:pending-fraud-slashes expected-slash-id])]
       (is (some? slash) "reversal slash entry should exist under level-scoped id")
@@ -325,7 +292,7 @@
 
 (deftest appeal-executed-reversal-slash-rejected
   (testing "Track 1 :executed reversal slash cannot be appealed"
-    (let [{:keys [world workflow-id]} (build-reversal-slash-world)
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
           slash-id (str workflow-id "-reversal-0")
           r (res/appeal-slash world workflow-id "0xL0Res" slash-id)]
       (is (false? (:ok r)))

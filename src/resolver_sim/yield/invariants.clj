@@ -1,15 +1,22 @@
 (ns resolver-sim.yield.invariants
-  "Generic accounting invariants for yield mechanism.")
+  "Generic accounting invariants for yield mechanism."
+  (:require [resolver-sim.yield.risk :as risk]))
 
 (defn check-position-consistency
-  "Check that position arithmetic is valid (non-negative principal/shares/yield)."
+  "Check that position arithmetic is valid.
+
+   Under :mark-to-market loss mode, unrealized yield may be negative; principal
+   and shares remain non-negative."
   [world]
   (let [positions (:yield/positions world {})]
     (every? (fn [[_ pos]]
-              (and (>= (:principal pos 0) 0)
-                   (>= (:shares pos 0) 0)
-                   (>= (:unrealized-yield pos 0) 0)
-                   (>= (:realized-yield pos 0) 0)))
+              (let [risk      (get-in world [:yield/risk (:module/id pos) (:token pos)] {})
+                    mark-to-market? (= :mark-to-market (risk/effective-loss-mode risk))]
+                (and (>= (:principal pos 0) 0)
+                     (>= (:shares pos 0) 0)
+                     (>= (:realized-yield pos 0) 0)
+                     (or mark-to-market?
+                         (>= (:unrealized-yield pos 0) 0)))))
             positions)))
 
 (defn check-yield-exposure

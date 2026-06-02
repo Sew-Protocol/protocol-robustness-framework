@@ -40,11 +40,18 @@
       world
       (update-in world pos-key assoc :status :withdrawn))))
 
+(defn make-fixed-module
+  "Build a declarative fixed-rate module record (rates via world/config)."
+  ([module-id]
+   (make-fixed-module module-id :fixed-rate))
+  ([module-id module-type]
+   {:module/id module-id
+    :module/type module-type
+    :module/capabilities #{:deposit :withdraw :accrue}
+    :accounting/type :principal
+    :ops {:yield/deposit fixed-deposit
+          :yield/withdraw fixed-withdraw
+          :yield/accrue fixed-accrue}}))
+
 (def fixed-rate-module
-  {:module/id :fixed-rate
-   :module/type :fixed-rate
-   :module/capabilities #{:deposit :withdraw :accrue}
-   :accounting/type :principal
-   :ops {:yield/deposit fixed-deposit
-         :yield/withdraw fixed-withdraw
-         :yield/accrue fixed-accrue}})
+  (make-fixed-module :fixed-rate))
