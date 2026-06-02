@@ -50,7 +50,9 @@
              new-evidence-probability
              fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
-             model-appeal-costs? appeal-bond-recovery-rate]
+             model-appeal-costs? appeal-bond-recovery-rate
+             oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
+             oracle-roll-trace-enabled?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -62,7 +64,7 @@
            appeal-window-days 7
            detection-type :fraud
            timeout-detection-probability 0.0
-           reversal-detection-probability 0.0
+           reversal-detection-probability 1.0
            fraud-detection-probability 0.0
            fraud-slash-bps 0
            reversal-slash-bps 0
@@ -84,7 +86,8 @@
            ;; false = original model; true = resolver earns fraction of failed challenge bond.
            model-appeal-costs? false
            ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
-           appeal-bond-recovery-rate 0.5}}]
+           appeal-bond-recovery-rate 0.5
+           oracle-roll-trace-enabled? false}}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
@@ -95,6 +98,8 @@
         oracle-params   {:rng rng
                          :fraud-detection-probability fraud-detection-probability
                          :timeout-detection-probability timeout-detection-probability
+                         :reversal-detection-probability reversal-detection-probability
+                         :l2-detection-prob l2-detection-prob
                          :fraud-slash-bps fraud-slash-bps
                          :reversal-slash-bps reversal-slash-bps
                          :timeout-slash-bps timeout-slash-bps
@@ -109,7 +114,15 @@
                          :p-l1-reversal p-l1-reversal
                          :p-l2-escalation p-l2-escalation
                          :p-l2-reversal p-l2-reversal
-                         :has-kleros? has-kleros?}
+                         :has-kleros? has-kleros?
+                         :oracle-fixture oracle-fixture
+                         :oracle-mode oracle-mode
+                         :oracle-roll-sequence oracle-roll-sequence
+                         :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
+                         :oracle-roll-cursor (atom 0)
+                         :oracle-roll-cursors (atom {})
+                         :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
+                         :oracle-roll-trace (atom [])}
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
@@ -136,7 +149,7 @@
                                         :decision-reversed? decision-reversed?})
 
         reversal-pending?
-        (detection/reversal-pending-live? oracle-params rng {:reversal-slashed? reversal-slashed?})
+        (detection/reversal-pending-live? oracle-params {:reversal-slashed? reversal-slashed?})
 
         ;; ── Probabilistic detection (oracle) ─────────────────────────────
         {:keys [fraud-detected? timeout-detected? l1-slashed?]}
@@ -144,9 +157,9 @@
 
         ;; Phase E1: L2 (Kleros) backstop — additional catch when case is appealed
         l2-slashed?
-        (if (and appealed? (not verdict-correct?) (> l2-detection-prob 0))
-          (< (rng/next-double rng) l2-detection-prob)
-          false)
+        (detection/l2-slashed? oracle-params
+                               {:verdict-correct? verdict-correct?
+                                :appealed? appealed?})
 
         ;; ── Escalation ──────────────────────────────────────────────────
         escalation-level
@@ -267,6 +280,8 @@
      :fraud-upside          fraud-upside
      :fraud-survival-prob   fraud-success-prob  ; probability that fraud outcome survives escalation
      :slash-distributed     slash-distributed
+     :oracle-roll-trace     (when oracle-roll-trace-enabled?
+                              @(:oracle-roll-trace oracle-params))
      :strategy              strategy}))
 
 (defn multiple-disputes

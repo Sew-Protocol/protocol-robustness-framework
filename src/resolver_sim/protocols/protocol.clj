@@ -135,3 +135,19 @@
 
   (reference-model [module scenario]
     "Return results of an idealised reference implementation."))
+
+;; ---------------------------------------------------------------------------
+;; 4. BatchConflictModel (Optional)
+;;
+;; Used by deterministic same-timestamp batch replay to classify event-level
+;; serialization/conflict domains.
+;; ---------------------------------------------------------------------------
+
+(defprotocol BatchConflictModel
+  "Optional interface for deterministic batch conflict classification.
+   Returns a set of structured tuples, e.g. #{[:workflow 1] [:resolver \"0xabc\"]}.
+   Unknown or unsupported actions should map conservatively (for example,
+   #{[:global :unknown]}), never to an empty set."
+
+  (event-conflict-domains [model world event]
+    "Return serialization/conflict domains touched by event in world.")) 

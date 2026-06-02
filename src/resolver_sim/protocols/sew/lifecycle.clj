@@ -125,9 +125,12 @@
         pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
         pos-shortfall (:shortfall pos)
         settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
-        ;; Sub-held: remove gross afa (amt) for no-shortfall so FoT accounting holds.
-        ;; Under shortfall, only remove the fulfilled portion — deferred stays in held.
-        sub-held-amt  (if pos-shortfall settled-amt amt)]
+        haircut-amt   (if pos-shortfall (:haircut-amount pos-shortfall 0) 0)
+        ;; Sub-held:
+        ;; - no-shortfall: remove gross afa (amt) so FoT accounting holds
+        ;; - shortfall/deferred: remove fulfilled only (deferred remains in held)
+        ;; - permanent loss: also remove haircuted amount from held
+        sub-held-amt  (if pos-shortfall (+ settled-amt haircut-amt) amt)]
     (-> world-after-yield
         (yield-policy/apply-yield-policy workflow-id direction)
         ;; Sub-held — see sub-held-amt above

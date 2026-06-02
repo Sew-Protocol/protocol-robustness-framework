@@ -22,6 +22,8 @@
  :reversal-slash-bps             0
  :timeout-slash-bps              0
  :allow-slashing?                false
+;; Migrated oracle fixture: explicit no-detection mode for calibration fail.
+:oracle-fixture {:mode :static-no-slash}
 
  :unstaking-delay-days 0
  :freeze-on-detection? false

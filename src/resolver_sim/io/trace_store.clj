@@ -33,7 +33,7 @@
             [clojure.java.io                   :as io]
             [clojure.string                    :as str]
             [resolver-sim.io.trace-score       :as ts]
-            [resolver-sim.io.trace-export      :as te])
+            [resolver-sim.protocols.sew.io.trace-export :as te])
   (:gen-class))
 
 ;; ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@
     :fees-non-negative
     :held-non-negative
     :all-status-combinations-valid
+    :persisted-escrow-state-valid
     :pending-settlement-consistent
     :dispute-timestamp-consistent
     :dispute-level-bounded
@@ -342,6 +343,30 @@
      :violations (vec violations)}))
 
 ;; ---------------------------------------------------------------------------
+;; Invariant 7b: Persisted escrow state valid
+;;
+;; `:none` is a pre-creation sentinel only. Every entry in :escrow-transfers
+;; must use a post-creation EscrowState.
+;; ---------------------------------------------------------------------------
+
+(def ^:private persisted-escrow-states
+  "EscrowState values allowed on stored EscrowTransfer records."
+  #{:pending :disputed :released :refunded :resolved})
+
+(defn persisted-escrow-state-valid?
+  "True when no stored escrow uses :none or an unknown :escrow-state."
+  [world]
+  (let [violations
+        (for [[wf et] (:escrow-transfers world)
+              :let  [state (:escrow-state et)]
+              :when (not (contains? persisted-escrow-states state))]
+          {:workflow-id  wf
+           :escrow-state state
+           :allowed      persisted-escrow-states})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
 ;; Invariant 8: Pending-settlement consistency
 ;;
 ;; A pending settlement may only exist for an escrow in :disputed state.
@@ -510,14 +535,26 @@
 ;; ---------------------------------------------------------------------------
 
 (defn dispute-level-bounded?
-  "True when every :dispute-levels entry is in [0, max-dispute-level]
-   and only exists for escrows that are or were :disputed."
+  "True when every :dispute-levels entry is in [0, max-dispute-level], refers to
+   an existing escrow, and is absent while the escrow is still :pending (or :none).
+   Terminal escrows may retain a level entry after finalization."
   [world]
-  (let [violations
+  (let [transfers (:escrow-transfers world {})
+        violations
         (for [[wf level] (:dispute-levels world)
-              :when (or (neg? level)
-                        (> level t/max-dispute-level))]
-          {:workflow-id wf :level level :max t/max-dispute-level})]
+              :let  [et    (get transfers wf)
+                     state (:escrow-state et)
+                     reason (cond
+                              (nil? et) :orphan-dispute-level
+                              (or (neg? level) (> level t/max-dispute-level))
+                              :level-out-of-range
+                              (contains? #{:pending :none} state)
+                              :dispute-level-on-non-disputed
+                              :else nil)]
+              :when reason]
+          (cond-> {:workflow-id wf :level level :reason reason}
+            et (assoc :escrow-state state)
+            (= reason :level-out-of-range) (assoc :max t/max-dispute-level)))]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -906,12 +943,13 @@
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn shortfall-fidelity?
-  "True when fulfilled + deferred + haircut equals the original position amount."
+  "True when fulfilled + deferred + haircut equals shortfall basis.
+   Uses :basis-amount when present; falls back to position principal for legacy data."
   [world]
   (let [violations
         (for [[oid pos] (get-in world [:yield/positions] {})
               :let [shortfall (:shortfall pos)
-                    amount    (:principal pos 0)]
+                    amount    (or (:basis-amount shortfall) (:principal pos 0))]
               :when shortfall
               :let [total (+ (:fulfilled-amount shortfall 0)
                              (:deferred-amount shortfall 0)
@@ -1461,6 +1499,7 @@
                  :fees-non-negative             (fees-non-negative? world)
                  :held-non-negative             (held-non-negative? world)
                  :all-status-combinations-valid (all-status-combinations-valid? world)
+                 :persisted-escrow-state-valid (persisted-escrow-state-valid? world)
                  :pending-settlement-consistent (pending-settlement-consistency? world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)

@@ -140,11 +140,11 @@
                     {:id "appealer" :address "0xappealer" :role "keeper"}]
    :protocol-params appeal
    :strict-expected-errors? true
-   :expected-errors [{:seq 3 :action "execute_pending_settlement" :error :appeal-window-not-expired}
-                     {:seq 4 :action "escalate_dispute" :error :transfer-not-in-dispute}
-                     {:seq 7 :action "escalate_dispute" :error :transfer-not-in-dispute}
-                     {:seq 10 :action "escalate_dispute" :error :transfer-not-in-dispute}]
-   :notes "Matrix branch execute->escalate. Three escrows exercise t=deadline-1, t=deadline, t=deadline+1 with same-block ordering. At deadline-1 execute rejects then escalate succeeds; at deadline and deadline+1 execute succeeds then escalate rejects on terminal state."
+  :expected-errors [{:seq 3  :action "execute_pending_settlement" :error :appeal-window-not-expired}
+                    {:seq 4  :action "escalate_dispute"           :error :not-participant}
+                    {:seq 10 :action "escalate_dispute"           :error :transfer-not-in-dispute}
+                    {:seq 15 :action "escalate_dispute"           :error :transfer-not-in-dispute}]
+   :notes "Matrix branch execute->escalate. Three escrows exercise t=deadline-1, t=deadline, t=deadline+1 with same-block ordering. At deadline-1 execute rejects then escalate succeeds; at deadline and deadline+1 execute succeeds then escalate rejects on terminal state. A keeper settlement cleanup step is inserted between branches so no automatable stale work remains."
    :events
    [;; wf0: time = deadline-1 => execute rejects, escalate succeeds
     {:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
@@ -155,21 +155,22 @@
     {:seq 3 :time 1239 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 0}}
     {:seq 4 :time 1239 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 0}}
     ;; wf1: time = deadline => execute succeeds, escalate rejects
-    {:seq 5 :time 2000 :agent "buyer" :action "create_escrow"
+    {:seq 5 :time 1840 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 0}}
+    {:seq 6 :time 2000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000 :custom-resolver "0xresolver"}}
-    {:seq 6 :time 2060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 1}}
-    {:seq 7 :time 2120 :agent "resolver" :action "execute_resolution"
+    {:seq 7 :time 2060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 1}}
+    {:seq 8 :time 2120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 1 :is-release true :resolution-hash "0xhash1"}}
-    {:seq 8 :time 2240 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 1}}
-    {:seq 9 :time 2240 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 1}}
+    {:seq 9 :time 2240 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 10 :time 2240 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 1}}
     ;; wf2: time = deadline+1 => execute succeeds, escalate rejects
-    {:seq 10 :time 3000 :agent "buyer" :action "create_escrow"
+    {:seq 11 :time 3000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000 :custom-resolver "0xresolver"}}
-    {:seq 11 :time 3060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 2}}
-    {:seq 12 :time 3120 :agent "resolver" :action "execute_resolution"
+    {:seq 12 :time 3060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 2}}
+    {:seq 13 :time 3120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 2 :is-release true :resolution-hash "0xhash2"}}
-    {:seq 13 :time 3241 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 2}}
-    {:seq 14 :time 3241 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 2}}]})
+    {:seq 14 :time 3241 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 2}}
+    {:seq 15 :time 3241 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 2}}]})
 
 (def s51d-deadline-matrix-escalate-then-execute
   {:scenario-id     "s51d-deadline-matrix-escalate-then-execute"
@@ -183,10 +184,11 @@
                     {:id "appealer" :address "0xappealer" :role "keeper"}]
    :protocol-params appeal
    :strict-expected-errors? true
-   :expected-errors [{:seq 4 :action "execute_pending_settlement" :error :appeal-window-not-expired}
-                     {:seq 8 :action "escalate_dispute" :error :appeal-window-expired}
-                     {:seq 11 :action "escalate_dispute" :error :appeal-window-expired}]
-   :notes "Matrix branch escalate->execute. Three escrows exercise t=deadline-1, t=deadline, t=deadline+1 with same-block ordering. At deadline-1 escalate succeeds and execute rejects due to no pending; at deadline and deadline+1 escalate expires and execute succeeds."
+  :expected-errors [{:seq 3  :action "escalate_dispute"           :error :not-participant}
+                    {:seq 4  :action "execute_pending_settlement" :error :appeal-window-not-expired}
+                    {:seq 9  :action "escalate_dispute"           :error :not-participant}
+                    {:seq 14 :action "escalate_dispute"           :error :not-participant}]
+   :notes "Matrix branch escalate->execute. Three escrows exercise t=deadline-1, t=deadline, t=deadline+1 with same-block ordering. At deadline-1 escalate succeeds and execute rejects due to no pending; at deadline and deadline+1 escalate expires and execute succeeds. A keeper settlement cleanup step is inserted between branches so no automatable stale work remains."
    :events
    [;; wf0: time = deadline-1 => escalate succeeds, execute rejects
     {:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
@@ -197,21 +199,22 @@
     {:seq 3 :time 1239 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 0}}
     {:seq 4 :time 1239 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 0}}
     ;; wf1: time = deadline => escalate rejects, execute succeeds
-    {:seq 5 :time 2000 :agent "buyer" :action "create_escrow"
+    {:seq 5 :time 1840 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 0}}
+    {:seq 6 :time 2000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000 :custom-resolver "0xresolver"}}
-    {:seq 6 :time 2060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 1}}
-    {:seq 7 :time 2120 :agent "resolver" :action "execute_resolution"
+    {:seq 7 :time 2060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 1}}
+    {:seq 8 :time 2120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 1 :is-release true :resolution-hash "0xhash1"}}
-    {:seq 8 :time 2240 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 1}}
-    {:seq 9 :time 2240 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 9 :time 2240 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 1}}
+    {:seq 10 :time 2240 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 1}}
     ;; wf2: time = deadline+1 => escalate rejects, execute succeeds
-    {:seq 10 :time 3000 :agent "buyer" :action "create_escrow"
+    {:seq 11 :time 3000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 3000 :custom-resolver "0xresolver"}}
-    {:seq 11 :time 3060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 2}}
-    {:seq 12 :time 3120 :agent "resolver" :action "execute_resolution"
+    {:seq 12 :time 3060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 2}}
+    {:seq 13 :time 3120 :agent "resolver" :action "execute_resolution"
      :params {:workflow-id 2 :is-release true :resolution-hash "0xhash2"}}
-    {:seq 13 :time 3241 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 2}}
-    {:seq 14 :time 3241 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
+    {:seq 14 :time 3241 :agent "appealer" :action "escalate_dispute" :params {:workflow-id 2}}
+    {:seq 15 :time 3241 :agent "executor" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
 
 ;; ---------------------------------------------------------------------------
 ;; S52 — I4 Yield accrued during dispute

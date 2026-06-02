@@ -751,7 +751,7 @@ run_long_horizon() {
   z_log="$(mktemp)"
   clojure -M:run -- -Z -p data/params/phase-z-legitimacy.edn >"$z_log" 2>&1 || lh_fail=$((lh_fail + 1))
   cat "$z_log"
-  if grep -Eq "Hypothesis holds\? ❌ NO|DEATH SPIRAL" "$z_log"; then
+  if grep -Eq "Hypothesis holds\\? ❌ NO|UNEXPECTED DEATH SPIRAL" "$z_log"; then
     echo "HARD GATE: Phase Z reported legitimacy instability; marking long-horizon as failed."
     echo "critical|phase-z|Z_LEGITIMACY_FAILURE|Phase Z reports legitimacy instability or death spiral" >> "$lh_risk_lines"
     lh_fail=$((lh_fail + 1))

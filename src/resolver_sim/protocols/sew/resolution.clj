@@ -36,21 +36,35 @@
         mid       (:yield-generation-module snap)
         recipient (if (= direction :released) (:to et) (:from et))
         record-fn (if (= direction :released) acct/record-released acct/record-refunded)]
-    (-> world
-        (lc/accrue-yield workflow-id)
-        (cond-> (and mid (contains? (:yield/modules world) mid))
-          (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                     :module/id mid
-                                     :owner/id (t/escrow-yield-owner-id workflow-id)}))
-        (yield-policy/apply-yield-policy workflow-id direction)
-        (acct/sub-held token amt)
-        (record-fn token net-amt)
-        (acct/record-claimable-v2 workflow-id :settlement/principal recipient net-amt)
-        (t/decrement-resolver-capacity resolver)
-        (update :pending-settlements dissoc workflow-id)
-        (sm/apply-transition! workflow-id direction)
-        ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
-        (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))))
+    (let [owner-id (t/escrow-yield-owner-id workflow-id)
+          world-after-yield
+          (-> world
+              (lc/accrue-yield workflow-id)
+              (cond-> (and mid (contains? (:yield/modules world) mid))
+                (yield-ops/apply-yield-op {:op/type :yield/withdraw
+                                           :module/id mid
+                                           :owner/id owner-id})))
+          pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
+          pos-shortfall (:shortfall pos)
+          ;; Under a liquidity shortfall, only the fulfilled portion is immediately settleable.
+          ;; Deferred remainder stays in :total-held until claim-deferred closes it out.
+          settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
+          haircut-amt   (if pos-shortfall (:haircut-amount pos-shortfall 0) 0)
+          ;; Under shortfall, remove fulfilled + permanent haircut from held.
+          ;; Deferred amounts remain in held until claim-deferred.
+          sub-held-amt  (if pos-shortfall (+ settled-amt haircut-amt) amt)]
+      (-> world-after-yield
+          (yield-policy/apply-yield-policy workflow-id direction)
+          (acct/sub-held token sub-held-amt)
+          (record-fn token settled-amt)
+          ;; Track outbound FoT fee (difference between gross held and net claimable)
+          (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
+          (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
+          (t/decrement-resolver-capacity resolver)
+          (update :pending-settlements dissoc workflow-id)
+          (sm/apply-transition! workflow-id direction)
+          ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
+          (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: slashing helpers

@@ -20,6 +20,8 @@
  :reversal-slash-bps             2500
  :timeout-slash-bps              200
  :allow-slashing?                true
+;; Migrated oracle fixture: explicit stochastic mode with seeded RNG.
+:oracle-fixture {:mode :stochastic}
 
  :unstaking-delay-days 14
  :freeze-on-detection? true

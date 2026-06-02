@@ -82,13 +82,18 @@
         min-part (apply min (map :participation history))
         final (last history)
         spiral? (< (:participation final) 0.3)
-        passed? (not spiral?)]
-    {:status (if passed? "✅ STABLE" "❌ DEATH SPIRAL")
+        passed? (not spiral?)
+        expected-negative? (boolean (:expected-negative-control? params))]
+    {:status (cond
+               (and expected-negative? (not passed?)) "⚠️ EXPECTED NEGATIVE CONTROL"
+               passed? "✅ STABLE"
+               :else "❌ UNEXPECTED DEATH SPIRAL")
      :min-trust min-trust
      :min-part min-part
      :final-trust (:trust final)
      :final-part (:participation final)
      :class (if passed? "A" "C")
+     :expected-negative-control? expected-negative?
      :passed? passed?}))
 
 ;; ============ Scenario Definitions ============
@@ -126,13 +131,15 @@
     :seed (+ seed 3)
     :params {:shock-epoch 30 :shock-magnitude 0.30 :false-positive-rate 0.06}}
    
-   {:label "TEST 5: Cascading Failures (Low accuracy + slow resolution)"
+   {:label "TEST 5: Cascading Failures (Negative control: low accuracy + slow resolution)"
     :initial-state {:trust 0.75 :participation 0.85}
     :update-fn simulate-epoch-z
     :summary-fn summarize-z-history
     :epochs 100
     :seed (+ seed 4)
-    :params {:base-accuracy 0.60 :resolution-time 8}}])
+    :params {:base-accuracy 0.60
+             :resolution-time 8
+             :expected-negative-control? true}}])
 
 ;; ============ Full Phase Z Run ============
 
@@ -171,14 +178,18 @@
         scenarios (make-scenarios seed)
         results (proto/run-sweep "PHASE Z SWEEP" scenarios params)
         
-        class-a (count (filter #(= "A" (:class %)) results))
-        class-c (count (filter #(= "C" (:class %)) results))
-        hypothesis-holds? (zero? class-c)]
+        expected-neg? (fn [r] (true? (:expected-negative-control? r)))
+        gate-results  (remove expected-neg? results)
+        class-a (count (filter #(= "A" (:class %)) gate-results))
+        class-c (count (filter #(= "C" (:class %)) gate-results))
+        hypothesis-holds? (zero? class-c)
+        neg-count (count (filter expected-neg? results))]
 
     (proto/print-phase-footer
      {:benchmark-id  "Z"
       :passed?       hypothesis-holds?
-      :summary-lines [(format "Robust (A): %d  Fragile (C): %d" class-a class-c)]})
+      :summary-lines [(format "Robust (A): %d  Fragile (C): %d  (negative controls: %d)"
+                              class-a class-c neg-count)]})
 
     (proto/make-result
      {:benchmark-id          "Z"

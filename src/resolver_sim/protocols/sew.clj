@@ -164,6 +164,41 @@
                    {:ok? true}))
                {:ok? true}))}])
 
+(defn- sew-event-conflict-domains
+  "Conservative serialization/conflict domains for same-timestamp batch replay."
+  [world event]
+  (let [action (compat/canonical-action event)
+        wf-id  (event-workflow-id event)
+        token  (some-> (get-in event [:params :token]) keyword)
+        resolver (or (get-in event [:params :resolver-addr])
+                     (get-in event [:params :resolver])
+                     (get-in world [:escrow-transfers wf-id :dispute-resolver]))]
+    (cond
+      (contains? #{"create-escrow" "raise-dispute" "release" "sender-cancel" "recipient-cancel"
+                   "execute-resolution" "execute-pending-settlement" "escalate-dispute"
+                   "challenge-resolution" "automate-timed-actions" "withdraw-escrow"
+                   "rotate-dispute-resolver"}
+                 action)
+      (cond-> #{[:workflow wf-id]}
+        resolver (conj [:resolver resolver])
+        token (conj [:token token]))
+
+      (contains? #{"register-stake" "withdraw-stake" "register-resolver-bond" "register-senior-bond"
+                   "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"}
+                 action)
+      (cond-> #{}
+        resolver (conj [:resolver resolver])
+        wf-id (conj [:workflow wf-id]))
+
+      (contains? #{"set-token-liquidity-crunch" "set-yield-risk"} action)
+      (if token #{[:token token]} #{[:global :unknown]})
+
+      (contains? #{"set-paused" "withdraw-fees"} action)
+      #{[:global :protocol]}
+
+      :else
+      #{[:global :unknown]})))
+
 ;; ---------------------------------------------------------------------------
 ;; Dispatch
 ;; ---------------------------------------------------------------------------
@@ -541,11 +576,12 @@
   ;;   :module-id      — yield module id (string, will be keywordised and alias-resolved)
   ;;   :token          — token symbol (string, will be keywordised)
   ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
+  ;;   :loss-mode      — :none | :mark-to-market
   ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
   ;;   :apy            — new APY (double), optional
   ;;   :shortfall      — map e.g. {:available-ratio 0.8}
   [_ctx world event]
-  (let [{:keys [module-id token liquidity-mode failure-modes apy shortfall]} (:params event)
+  (let [{:keys [module-id token liquidity-mode loss-mode failure-modes apy shortfall]} (:params event)
         raw-mid (keyword module-id)
         ;; Resolve through module aliases so "aave-v3" → :yield.provider/liquid-lending
         mid (get-in world [:yield/module-aliases raw-mid] raw-mid)
@@ -553,6 +589,8 @@
     (t/ok (cond-> world
             liquidity-mode
             (assoc-in [:yield/risk mid tok :liquidity-mode] (keyword liquidity-mode))
+            loss-mode
+            (assoc-in [:yield/risk mid tok :loss-mode] (keyword loss-mode))
             failure-modes
             (assoc-in [:yield/risk mid tok :failure-modes] (into #{} (map keyword failure-modes)))
             apy
@@ -760,6 +798,11 @@
                                  (get wf actor 0)))]
         (+ hold claim))
       nil))
+
+  proto/BatchConflictModel
+
+  (event-conflict-domains [_ world event]
+    (sew-event-conflict-domains world event))
 
   proto/EconomicModel
 

@@ -24,6 +24,11 @@
   [amount _decimals]
   (long (Math/floor (double (max 0 amount)))))
 
+(defn floor-to-asset-decimals-signed
+  "Floor numeric amount to token precision while preserving sign."
+  [amount _decimals]
+  (long (Math/floor (double amount))))
+
 (defn update-position-yield
   "Update unrealized yield for a position based on new index/price.
    Supports both share-based and exchange-rate based accounting."
@@ -34,12 +39,17 @@
         shares      (:shares position 0)
         principal   (:principal position 0)
         token       (:token position)
+        module-id   (:module/id position)
         decimals    (token-decimals world token)
+        loss-mode   (get-in world [:yield/risk module-id token :loss-mode] :none)
         ;; For share-based (like Aave aTokens):
         ;; value = shares * current-index
         ;; yield = value - principal
         current-value (* shares current-index)
-        unrealized    (floor-to-asset-decimals (max 0 (- current-value principal)) decimals)]
+        pnl          (- current-value principal)
+        unrealized   (if (= loss-mode :mark-to-market)
+                       (floor-to-asset-decimals-signed pnl decimals)
+                       (floor-to-asset-decimals (max 0 pnl) decimals))]
     (assoc position :unrealized-yield unrealized))))
 
 (defn realize-yield
@@ -66,6 +76,7 @@
                        deferred  (- amount fulfilled)]
                    {:fulfilled fulfilled
                     :shortfall {:reason :liquidity-shortfall
+                                :basis-amount amount
                                 :available-ratio ratio
                                 :fulfilled-amount fulfilled
                                 :deferred-amount deferred
@@ -75,11 +86,16 @@
                        fulfilled (- amount loss)]
                    {:fulfilled fulfilled
                     :shortfall {:reason :permanent-loss
+                                :basis-amount amount
                                 :fulfilled-amount fulfilled
                                 :deferred-amount 0
                                 :haircut-amount loss}})
       ;; Default to hard block if mode is unrecognized/extreme (frozen, paused)
-      {:fulfilled 0 :shortfall {:reason mode :fulfilled-amount 0 :deferred-amount amount :haircut-amount 0}})))
+      {:fulfilled 0 :shortfall {:reason mode
+                                :basis-amount amount
+                                :fulfilled-amount 0
+                                :deferred-amount amount
+                                :haircut-amount 0}})))
 
 (defn claim-deferred
   "Attempts to reclaim deferred funds from a position in :unwinding status.

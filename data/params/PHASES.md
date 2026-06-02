@@ -78,6 +78,55 @@ Key parameters:
 | `:allow-slashing?`   | false | true | true        | Enable/disable slashing      |
 | `:l2-detection-prob` | 0     | 0    | >0          | Kleros backstop probability  |
 
+## Oracle Fixtures and Notebook Tracing
+
+The stochastic dispute model supports oracle fixture overrides for deterministic
+experiments and notebook evidence capture.
+
+### Fixture modes
+
+```edn
+:oracle-fixture {:mode :stochastic}
+:oracle-fixture {:mode :static-no-slash}
+:oracle-fixture {:mode :static-always-detect}
+:oracle-fixture
+{:mode :fixed-roll-sequence
+ :rolls {:fraud-detection [0.99 0.01]
+         :timeout-detection [0.75]
+         :reversal-detection [0.20]
+         :l2-detection [0.50]
+         :default [0.90]}
+ :scope #{:detection}
+ :on-exhaustion :throw}
+```
+
+For `:fixed-roll-sequence`, `:rolls` can be either:
+
+- a vector (shared sequence for all detection roll kinds), or
+- a map (independent per-kind sequences with optional `:default` fallback).
+
+### Notebook roll-trace metadata
+
+Enable trace output on a params file:
+
+```edn
+:oracle-roll-trace-enabled? true
+```
+
+When enabled, each dispute trial result includes `:oracle-roll-trace`, a vector
+of entries:
+
+```edn
+{:roll/kind :fraud-detection
+ :roll/source :fixed-roll-sequence
+ :roll/value 0.01
+ :threshold 0.25
+ :detected? true}
+```
+
+This is intended for notebook analysis and evidence artifacts where you need to
+show exactly why a detection decision fired (or did not fire).
+
 ## Architecture
 
 ```

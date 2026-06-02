@@ -100,19 +100,57 @@
             (str "bond slash mismatch at amount=" amt " bps=" bps))))))
 
 (deftest live-reversal-slash-requires-appeal-outcome
-  (testing "reversal slash is deterministic on appeal reversal (ignores reversal-detection-probability)"
-    (is (oracle/reversal-slashed-live? {:reversal-slash-bps 2500}
+  (testing "reversal slash requires appeal reversal and respects reversal detection probability"
+    (is (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                        :reversal-detection-probability 1.0
+                                        :oracle-fixture {:mode :fixed-roll-sequence
+                                                         :rolls [0.1]
+                                                         :scope #{:detection}
+                                                         :on-exhaustion :throw}
+                                        :oracle-roll-cursor (atom 0)}
                                        {:verdict-correct? false
                                         :appealed? true
                                         :decision-reversed? true}))
-    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500}
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 0.0
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.1]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
                                            {:verdict-correct? false
                                             :appealed? true
                                             :decision-reversed? false})))
-    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500}
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 1.0
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.1]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
                                            {:verdict-correct? false
                                             :appealed? false
-                                            :decision-reversed? true})))))
+                                            :decision-reversed? true})))
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 0.25
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.30]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
+                                            {:verdict-correct? false
+                                             :appealed? true
+                                             :decision-reversed? true})))
+    (is (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                        :reversal-detection-probability 0.25
+                                        :oracle-fixture {:mode :fixed-roll-sequence
+                                                         :rolls [0.20]
+                                                         :scope #{:detection}
+                                                         :on-exhaustion :throw}
+                                        :oracle-roll-cursor (atom 0)}
+                                       {:verdict-correct? false
+                                        :appealed? true
+                                        :decision-reversed? true}))))
 
 (deftest dispute-reversal-slash-uses-stake-basis
   (testing "resolve-dispute reversal slash amount matches stake × bps"
@@ -127,7 +165,7 @@
                                           :timeout-detection-probability 0
                                           :slashing-detection-probability 0
                                           :resolver-stake-wei stake
-                                          :reversal-detection-probability 0)]
+                                          :reversal-detection-probability 1.0)]
       (when (= (:slashing-reason result) :reversal)
         (is (= (payoffs/calculate-reversal-slash stake bps)
                (- (econ/calculate-fee 10000 150)

@@ -22,8 +22,11 @@
   Oracle
 
   (detect-fraud? [_ _dispute-outcome params]
-    (let [fraud-det-prob (:fraud-detection-probability params 0.0)]
-      (< (rng/roll-double (:rng params)) fraud-det-prob)))
+    (let [fraud-det-prob (:fraud-detection-probability params 0.0)
+          oracle-params (assoc params
+                               :oracle-roll-cursor (atom 0)
+                               :oracle-roll-cursors (atom {}))]
+      (< (det/oracle-roll oracle-params :fraud-detection) fraud-det-prob)))
 
   (apply-penalties [_ detection-result _dispute-outcome params]
     (if (:fraud-detected? detection-result)
@@ -69,6 +72,8 @@
 (def appeal-reversal-outcome det/appeal-reversal-outcome)
 (def reversal-slashed-live? det/reversal-slashed-live?)
 (def reversal-pending-live? det/reversal-pending-live?)
+(def l2-slashed? det/l2-slashed?)
+(def normalize-detection-probabilities det/normalize-detection-probabilities)
 (def detect-probabilistic-violations det/detect-probabilistic-violations)
 (def select-slash-reason det/select-slash-reason)
 (def slash-amount-for-reason det/slash-amount-for-reason)

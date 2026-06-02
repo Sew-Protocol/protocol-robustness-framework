@@ -7,7 +7,7 @@
   {:supported-versions #{"1.0" "1.1"}
    :enriched-version "1.1"
    :required-fields-by-version
-   {"1.1" [:id :title :purpose]}
+   {"1.1" [:id :title :purpose :scenario-author]}
    :purpose-requirements
    {:theory-falsification {:requires-theory? true
                            :requires-metric-falsifies-if? true}

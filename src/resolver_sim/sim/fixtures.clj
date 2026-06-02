@@ -340,6 +340,7 @@
 
                            (when (= mode :save) (save-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
                            {:trace-id (:scenario-id trace)
+                            :scenario-author (:scenario-author trace)
                             :purpose  (:purpose trace)
                              :theory-source (:theory trace)
                             :outcome (:outcome res)

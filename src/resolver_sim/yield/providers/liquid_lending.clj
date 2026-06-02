@@ -127,10 +127,21 @@
             updated-pos   (acct/update-position-yield world pos current-index)
             gross-amount  (+ (:principal updated-pos 0)
                              (:unrealized-yield updated-pos 0))
-            {:keys [fulfilled shortfall]} (acct/apply-liquidity-stress world
-                                                                       mid
-                                                                       token
-                                                                       gross-amount)
+            ;; mark-to-market loss (gross < principal) is modeled as a permanent haircut
+            ;; even when liquidity-mode is :available.
+            intrinsic-loss (max 0 (- (:principal updated-pos 0) gross-amount))
+            {:keys [fulfilled shortfall]}
+            (if (pos? intrinsic-loss)
+              {:fulfilled gross-amount
+               :shortfall {:reason :negative-carry-loss
+                           :basis-amount (:principal updated-pos 0)
+                           :fulfilled-amount gross-amount
+                           :deferred-amount 0
+                           :haircut-amount intrinsic-loss}}
+              (acct/apply-liquidity-stress world
+                                           mid
+                                           token
+                                           gross-amount))
             realized-yield (max 0
                                 (min (:unrealized-yield updated-pos 0)
                                      (- fulfilled (:principal updated-pos 0))))
