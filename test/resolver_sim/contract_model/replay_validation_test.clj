@@ -11,6 +11,7 @@
    :id "metric-validation-test"
    :title "Metric validation"
    :purpose :regression
+  :scenario-author "@test-author"
    :agents [{:id "buyer" :address "0xB" :role "buyer"}
             {:id "seller" :address "0xS" :role "seller"}]
    :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
@@ -36,6 +37,11 @@
     (is (= false (:ok v)))
     (is (= :population-metric-in-trace-theory (:error v))
         "slash-form population metrics must not appear in single-trace theory")))
+
+(deftest requires-scenario-author-in-v1-1
+  (let [v (validate (dissoc minimal-scenario :scenario-author))]
+    (is (= false (:ok v)))
+    (is (= :missing-scenario-author (:error v)))))
 
 (deftest allows-population-metric-when-scope-declared
   (let [v (validate (-> minimal-scenario

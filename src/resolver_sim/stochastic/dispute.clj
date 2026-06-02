@@ -2,7 +2,8 @@
   "Dispute lifecycle and resolution mechanics."
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.economics :as econ]
-            [resolver-sim.economics.payoffs :as payoffs]))
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.stochastic.detection :as detection]))
 
 ;; Dispute resolution for a single trial
 ;; Phase D: Track slashing reasons (timeout/reversal/fraud) without RNG changes
@@ -18,7 +19,7 @@
 
    Detection mechanisms (mutually exclusive priority order):
      1. fraud-detected?    — intentional wrong verdict caught (fraud-slash-bps penalty)
-     2. reversal-detected? — L1 verdict overturned by L2 (reversal-slash-bps penalty)
+     2. reversal-slashed? — appeal reversed wrong verdict (stake × reversal-slash-bps, live-aligned)
      3. l2-slashed?        — Kleros backstop catches wrong verdict (fraud-slash-bps penalty)
      4. timeout-detected?  — resolver missed deadline (timeout-slash-bps penalty)
      5. l1-slashed?        — generic L1 detection (slash-mult penalty, reason :timeout)
@@ -37,18 +38,21 @@
     :profit-honest integer        ; Profit if honest (MC-4: includes appeal-bond recovery when enabled)
     :profit-malice integer        ; Profit if malicious (MC-1: includes escrow-diversion upside when fraud-success-rate > 0)
     :fraud-upside integer         ; MC-1: escrow-diversion gain (0 when fraud-success-rate=0 or slashed)
-    :slash-distributed map        ; {:insurance :protocol :burned} — nil when not slashed
+    :slash-distributed map        ; {:insurance :protocol :retained} — nil when not slashed
     :strategy keyword}            ; Strategy used"
   [rng escrow-wei fee-bps bond-bps slash-mult strategy
    appeal-prob-correct appeal-prob-wrong detection-prob
-   & {:keys [senior-resolver-skill resolver-bond-bps l2-detection-prob
+   & {:keys [senior-resolver-skill resolver-bond-bps resolver-stake-wei l2-detection-prob
              slashing-detection-delay-weeks allow-slashing?
              unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
              detection-type timeout-detection-probability reversal-detection-probability
              fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
-              fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
-              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
-              model-appeal-costs? appeal-bond-recovery-rate]
+             new-evidence-probability
+             fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
+             p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+             model-appeal-costs? appeal-bond-recovery-rate
+             oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
+             oracle-roll-trace-enabled?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -60,11 +64,13 @@
            appeal-window-days 7
            detection-type :fraud
            timeout-detection-probability 0.0
-           reversal-detection-probability 0.0
+           reversal-detection-probability 1.0
            fraud-detection-probability 0.0
            fraud-slash-bps 0
            reversal-slash-bps 0
            timeout-slash-bps 200
+           new-evidence-probability 0.0
+           resolver-stake-wei nil
            ;; MC-1: escrow-diversion upside for malicious resolvers.
            ;; 0.0 = original model (no upside); 0.22 = calibrated to adversarial suite.
            fraud-success-rate 0.0
@@ -80,11 +86,43 @@
            ;; false = original model; true = resolver earns fraction of failed challenge bond.
            model-appeal-costs? false
            ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
-           appeal-bond-recovery-rate 0.5}}]
+           appeal-bond-recovery-rate 0.5
+           oracle-roll-trace-enabled? false}}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
-        appeal-bond   (econ/calculate-bond escrow-wei bond-bps)
-        resolver-bond (econ/calculate-bond escrow-wei resolver-bond-bps)
+        appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
+        resolver-bond   (econ/calculate-bond escrow-wei resolver-bond-bps)
+        bond-total      (+ appeal-bond resolver-bond)
+        resolver-stake  (long (or resolver-stake-wei escrow-wei))
+
+        oracle-params   {:rng rng
+                         :fraud-detection-probability fraud-detection-probability
+                         :timeout-detection-probability timeout-detection-probability
+                         :reversal-detection-probability reversal-detection-probability
+                         :l2-detection-prob l2-detection-prob
+                         :fraud-slash-bps fraud-slash-bps
+                         :reversal-slash-bps reversal-slash-bps
+                         :timeout-slash-bps timeout-slash-bps
+                         :new-evidence-probability new-evidence-probability
+                         :freeze-on-detection? freeze-on-detection?
+                         :freeze-duration-days freeze-duration-days
+                         :appeal-window-days appeal-window-days
+                         :unstaking-delay-days unstaking-delay-days
+                         :slashing-detection-delay-weeks slashing-detection-delay-weeks
+                         :escalation-assumptions escalation-assumptions
+                         :escalation-assumption-band escalation-assumption-band
+                         :p-l1-reversal p-l1-reversal
+                         :p-l2-escalation p-l2-escalation
+                         :p-l2-reversal p-l2-reversal
+                         :has-kleros? has-kleros?
+                         :oracle-fixture oracle-fixture
+                         :oracle-mode oracle-mode
+                         :oracle-roll-sequence oracle-roll-sequence
+                         :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
+                         :oracle-roll-cursor (atom 0)
+                         :oracle-roll-cursors (atom {})
+                         :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
+                         :oracle-roll-trace (atom [])}
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
@@ -98,102 +136,68 @@
         appeal-prob (if verdict-correct? appeal-prob-correct appeal-prob-wrong)
         appealed?   (< (rng/next-double rng) appeal-prob)
 
-        ;; ── Detection mechanisms ─────────────────────────────────────────
-        ;; Evaluated before escalation-level so l2-slashed? can inform level.
+        ;; ── Live-aligned appeal reversal (deterministic slash, stake basis) ──
+        {:keys [l1-reversed? l2-escalated? l2-reversed? decision-reversed?]}
+        (detection/appeal-reversal-outcome rng oracle-params
+                                        {:verdict-correct? verdict-correct?
+                                         :appealed? appealed?})
 
-        ;; Generic L1 detection (wrong verdict caught by base mechanism)
-        base-detection-prob
-        (case strategy
-          :honest    0.01
-          :lazy      0.02
-          :malicious detection-prob
-          :collusive 0.05)
+        reversal-slashed?
+        (detection/reversal-slashed-live? oracle-params
+                                       {:verdict-correct? verdict-correct?
+                                        :appealed? appealed?
+                                        :decision-reversed? decision-reversed?})
 
-        l1-slashed?
-        (and (not verdict-correct?) (< (rng/next-double rng) base-detection-prob))
+        reversal-pending?
+        (detection/reversal-pending-live? oracle-params {:reversal-slashed? reversal-slashed?})
 
-        ;; Phase I: Fraud-specific detection (malicious only; 50% penalty when triggered)
-        fraud-detected?
-        (if (and (not verdict-correct?)
-                 (> fraud-detection-probability 0)
-                 (= strategy :malicious))
-          (< (rng/next-double rng) fraud-detection-probability)
-          false)
-
-        ;; Phase I: Reversal detection (lazy/collusive; 25% penalty when triggered)
-        reversal-detected?
-        (if (and (not verdict-correct?)
-                 (> reversal-detection-probability 0)
-                 (or (= strategy :lazy) (= strategy :collusive)))
-          (< (rng/next-double rng) reversal-detection-probability)
-          false)
-
-        ;; Bug C fix — timeout detection now reads timeout-detection-probability.
-        ;; Applies to lazy and malicious resolvers who miss response deadlines.
-        ;; Independent of verdict correctness: a resolver can have a correct verdict
-        ;; but still be penalised for missing a deadline.
-        timeout-detected?
-        (if (and (> timeout-detection-probability 0)
-                 (or (= strategy :lazy) (= strategy :malicious)))
-          (< (rng/next-double rng) timeout-detection-probability)
-          false)
+        ;; ── Probabilistic detection (oracle) ─────────────────────────────
+        {:keys [fraud-detected? timeout-detected? l1-slashed?]}
+        (detection/detect-probabilistic-violations oracle-params strategy verdict-correct? detection-prob)
 
         ;; Phase E1: L2 (Kleros) backstop — additional catch when case is appealed
-        ;; Bug B fix — l2-slashed? now evaluated before effective-slash-multiplier
-        ;; so the correct penalty branch can be selected below.
         l2-slashed?
-        (if (and appealed? (not verdict-correct?) (> l2-detection-prob 0))
-          (< (rng/next-double rng) l2-detection-prob)
-          false)
+        (detection/l2-slashed? oracle-params
+                               {:verdict-correct? verdict-correct?
+                                :appealed? appealed?})
 
         ;; ── Escalation ──────────────────────────────────────────────────
-        ;; Bug A fix — escalation-level now reaches 2 when Kleros is involved.
-        ;; Previously capped at 1; escalated? was limited to malicious only.
         escalation-level
         (cond
-          l2-slashed? 2    ; Kleros backstop invoked
-          appealed?   1    ; appealed, resolved at L1
-          :else       0)
+          (or l2-slashed? l2-reversed?) 2
+          l2-escalated?                 2
+          (or l1-reversed? appealed?)   1
+          :else                         0)
 
         escalated? (pos? escalation-level)
 
         ;; ── Slashing outcome ────────────────────────────────────────────
-        ;; Final slashing: caught by any mechanism
         slashed-detected?
         (and allow-slashing?
-             (or l1-slashed? fraud-detected? reversal-detected?
+             (or l1-slashed? fraud-detected? reversal-slashed?
                  l2-slashed? timeout-detected?))
 
-        ;; Phase I: Penalty selection — priority order matches docstring.
-        ;; Bug B fix — l2-slashed? now has its own branch applying fraud-slash-bps
-        ;;             (Kleros backstop = full fraud penalty, not generic slash-mult).
-        ;; Bug C fix — timeout-detected? now has its own branch applying timeout-slash-bps.
-        effective-slash-multiplier
-        (cond
-          fraud-detected?    (/ fraud-slash-bps 10000.0)
-          reversal-detected? (/ reversal-slash-bps 10000.0)
-          l2-slashed?        (/ fraud-slash-bps 10000.0)    ; L2 backstop = fraud penalty
-          timeout-detected?  (/ timeout-slash-bps 10000.0)
-          :else              slash-mult)   ; L1 generic catch uses legacy slash-mult
-
-        ;; Phase D: Slashing reason (first matching mechanism wins)
         slash-reason
+        (when slashed-detected?
+          (detection/select-slash-reason {:fraud-detected? fraud-detected?
+                                       :reversal-slashed? reversal-slashed?
+                                       :l2-slashed? l2-slashed?
+                                       :timeout-detected? timeout-detected?
+                                       :l1-slashed? l1-slashed?}))
+
+        bond-loss
         (if slashed-detected?
-          (cond
-            fraud-detected?    :fraud
-            reversal-detected? :reversal
-            l2-slashed?        :fraud     ; L2 backstop is fraud escalation
-            timeout-detected?  :timeout
-            :else              :timeout)  ; L1 generic catch → classified as timeout
-          nil)
+          (detection/slash-amount-for-reason slash-reason oracle-params
+                                          {:bond-total bond-total
+                                           :resolver-stake resolver-stake
+                                           :slash-mult slash-mult
+                                           :timeout-detected? timeout-detected?})
+          0)
 
-        total-bond-slashing
-        (econ/calculate-slashing-loss (+ appeal-bond resolver-bond)
-                                      effective-slash-multiplier)
-        bond-loss (if slashed-detected? total-bond-slashing 0)
-
-        ;; Phase G: Slashing delay handling
-        slashing-pending? (and slashed-detected? (> slashing-detection-delay-weeks 0))
+        ;; Phase G / Track 2: delayed slashing (detection delay or new-evidence pending)
+        slashing-pending? (and slashed-detected?
+                             (or reversal-pending?
+                                 (> slashing-detection-delay-weeks 0)))
         delay-weeks       (if slashing-pending? slashing-detection-delay-weeks 0)
 
         ;; Phase H: Realistic bond mechanics
@@ -276,6 +280,8 @@
      :fraud-upside          fraud-upside
      :fraud-survival-prob   fraud-success-prob  ; probability that fraud outcome survives escalation
      :slash-distributed     slash-distributed
+     :oracle-roll-trace     (when oracle-roll-trace-enabled?
+                              @(:oracle-roll-trace oracle-params))
      :strategy              strategy}))
 
 (defn multiple-disputes

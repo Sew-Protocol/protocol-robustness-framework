@@ -25,29 +25,32 @@
         esc-fn (fn [_ _ _ _] {:ok true :new-resolver r1})
         world (-> (res/escalate-dispute world workflow-id buyer esc-fn) :world)]
 
-        (testing "TRACK 1: Automated Slash (Same Evidence)"
-        (let [r-final (res/execute-resolution world workflow-id r1 false "h1" nil)
+    (testing "TRACK 1: Automated Slash (Same Evidence)"
+      (let [slash-id (str workflow-id "-reversal-0")
+            r-final (res/execute-resolution world workflow-id r1 false "h1" nil)
             world-final (:world r-final)]
-        (is (= :executed (get-in world-final [:pending-fraud-slashes workflow-id :status]))
+        (is (= :executed (get-in world-final [:pending-fraud-slashes slash-id :status]))
             "Slash should be executed immediately on same-evidence reversal")
-        (is (= (- 2000 net-escrow) (reg/get-stake world-final r0)) (str "Resolver was slashed " net-escrow))))
+        (is (= 0 (reg/get-stake world-final r0))
+            "100% reversal slash-bps on 2000 stake removes all stake")))
 
     (testing "TRACK 2: Manual Proposal (New Evidence)"
-      (let [world-new-info (assoc-in world [:evidence-updated? workflow-id] true)
+      (let [slash-id (str workflow-id "-reversal-0")
+            world-new-info (assoc-in world [:evidence-updated? workflow-id] true)
             r-final (res/execute-resolution world-new-info workflow-id r1 false "h1" nil)
             world-final (:world r-final)
-            slash-entry (get-in world-final [:pending-fraud-slashes workflow-id])]
+            slash-entry (get-in world-final [:pending-fraud-slashes slash-id])]
         (is (= :pending (:status slash-entry)) "Slash should be PENDING when new evidence exists")
         (is (= 2000 (reg/get-stake world-final r0)) "Resolver NOT slashed yet")
-        
+
         (testing "Successful Slashing Appeal"
-          (let [world-appealed (-> (res/appeal-slash world-final workflow-id r0) :world)
-                world-upheld   (-> (res/resolve-appeal world-appealed workflow-id gov true) :world)]
-            (is (= :reversed (get-in world-upheld [:pending-fraud-slashes workflow-id :status]))
+          (let [world-appealed (-> (res/appeal-slash world-final workflow-id r0 slash-id) :world)
+                world-upheld   (-> (res/resolve-appeal world-appealed workflow-id gov true slash-id) :world)]
+            (is (= :reversed (get-in world-upheld [:pending-fraud-slashes slash-id :status]))
                 "Slash status should be REVERSED")
-            
+
             (testing "Execution of reversed slash fails"
               (let [world-late (assoc world-upheld :block-time 1000000)
-                    r-exec (res/execute-fraud-slash world-late workflow-id)]
+                    r-exec (res/execute-fraud-slash world-late workflow-id slash-id)]
                 (is (false? (:ok r-exec)))
                 (is (= :slash-already-reversed (:error r-exec)))))))))))

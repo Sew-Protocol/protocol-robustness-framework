@@ -92,6 +92,22 @@ These scenarios verify that the protocol behaves correctly under normal and edge
 - The sponsor address is recorded as the bond poster of record in `:bond-balances`.
 - In practice, third-party sponsorship currently flows through `challenge_resolution`.
 
+### Same-block ordering contract (S51 family)
+
+`S51`, `S51b`, `S51c`, and `S51d` define the deterministic same-block ordering rules at the appeal-deadline boundary.
+
+- Same timestamp events are ordered by scenario `:seq` (engine preserves list order for equal `:time`).
+- Escalation/challenge eligibility is strict before deadline only (`now < deadline`).
+- Pending execution eligibility is inclusive at deadline (`now >= deadline`).
+- At `deadline-1`:
+  - `execute -> escalate` yields `execute` reject then `escalate` accept.
+  - `escalate -> execute` yields `escalate` accept then `execute` reject (pending cleared).
+- At `deadline` and `deadline+1`:
+  - `execute -> escalate` yields `execute` accept then `escalate` reject (terminal state).
+  - `escalate -> execute` yields `escalate` reject (`appeal-window-expired`) then `execute` accept.
+
+These scenarios are regression guards for deadline interpretation, same-block determinism, and pending-settlement replacement behavior.
+
 ---
 
 ## S24–S33: Ethereum Failure Modes (F1–F10)

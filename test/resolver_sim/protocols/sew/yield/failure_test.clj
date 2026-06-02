@@ -1,8 +1,9 @@
 (ns resolver-sim.protocols.sew.yield.failure-test
   (:require [clojure.test :refer :all]
-            [resolver-sim.yield.modules.aave :as aave]
-            [resolver-sim.yield.providers.liquid-lending :as liquid]
+            [resolver-sim.yield.modules.liquid-lending :as liquid]
+            [resolver-sim.yield.presets :as yield-presets]
             [resolver-sim.yield.registry :as yield-reg]
+            [resolver-sim.yield.risk :as yield-risk]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.protocol :as proto]))
@@ -38,6 +39,7 @@
         (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
         (is (= 500 (get-in w' [:yield/positions "user1" :realized-yield])))
         (is (= {:reason :liquidity-shortfall
+                :basis-amount 1000
                 :available-ratio 0.5
                 :fulfilled-amount 500
                 :deferred-amount 500
@@ -55,6 +57,7 @@
         (is (= :unwinding (get-in w' [:yield/positions "user1" :status])))
         (is (= 250 (get-in w' [:yield/positions "user1" :realized-yield])))
         (is (= {:reason :market-dislocation
+                :basis-amount 1000
                 :available-ratio 0.25
                 :fulfilled-amount 250
                 :deferred-amount 750
@@ -67,6 +70,35 @@
                               module
                               {:token "USDC" :dt 31536000})]
         (is (< (get-in w' [:yield/indices :yield.provider/liquid-lending "USDC"]) 1.0))))
+    (testing ":negative-yield mark-to-market accrual"
+      (let [risk {:failure-modes #{:negative-yield}}
+            w    (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC"] risk)
+            w'   (liquid/accrue w module {:token "USDC" :dt 31536000})
+            pos  (get-in w' [:yield/positions "user1"])]
+        (is (= :mark-to-market (yield-risk/effective-loss-mode risk)))
+        (is (< (:unrealized-yield pos 0) 0))
+        (is (= :negative-accrual-yield (get-in pos [:yield-loss :reason])))
+        (is (pos? (get-in pos [:yield-loss :amount])))))
+    (testing "intrinsic loss on withdraw when gross < principal"
+      (let [pos  {:owner/id "user1"
+                  :module/id :yield.provider/liquid-lending
+                  :token "USDC"
+                  :principal 10000
+                  :shares 10000
+                  :entry-index 1.0
+                  :status :active
+                  :unrealized-yield -150}
+            w    (-> base-world
+                     (assoc-in [:yield/positions "user1"] pos)
+                     (assoc-in [:yield/indices :yield.provider/liquid-lending "USDC"] 0.985)
+                     (assoc-in [:yield/risk :yield.provider/liquid-lending "USDC"]
+                               {:liquidity-mode :available
+                                :failure-modes #{:negative-yield}}))
+            w'   (liquid/withdraw w module {:owner/id "user1"})]
+        (is (= :negative-carry-loss
+               (get-in w' [:yield/positions "user1" :shortfall :reason])))
+        (is (= 10000 (get-in w' [:yield/positions "user1" :shortfall :basis-amount])))
+        (is (= 150 (get-in w' [:yield/positions "user1" :shortfall :haircut-amount])))))
     (testing ":provider-paused"
       (is (thrown? clojure.lang.ExceptionInfo
                    (liquid/deposit (assoc base-world :yield/module-status {:yield.provider/liquid-lending :paused})
@@ -91,63 +123,54 @@
     (is (= :immediate-withdrawal-lending
            (get-in world [:yield/behavior :aave-v3 :yield/provider-kind])))
     (is (= #{:withdraw-fails}
-           (get-in world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes])))))
+           (get-in world [:yield/risk :yield.provider/liquid-lending :USDC :failure-modes])))))
   
 
-(deftest test-aave-deposit-blocked-under-liquidity-shortfall
-  (testing "Aave deposit throws when liquidity-mode is shortfall"
-    (let [world {:yield/risk {:aave-v3 {"USDC" {:liquidity-mode :shortfall}}}
+(deftest test-liquid-lending-deposit-blocked-under-liquidity-shortfall
+  (testing "Liquid-lending deposit throws when liquidity-mode is shortfall"
+    (let [module {:module/id :aave-v3}
+          world {:yield/risk {:aave-v3 {"USDC" {:liquidity-mode :shortfall}}}
                  :yield/indices {:aave-v3 {"USDC" 1.0}}}
           op    {:owner/id "user1" :amount 1000 :token "USDC"}]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"deposit unavailable"
-           (aave/aave-deposit world {:module/id :aave-v3} op))))))
+           (liquid/deposit world module op))))))
 
-(deftest test-aave-withdraw-blocked-under-liquidity-shortfall
-  (testing "Aave withdraw throws when liquidity-mode is shortfall"
-    (let [world {:yield/risk {:aave-v3 {"USDC" {:liquidity-mode :shortfall}}}
-                 :yield/indices {:aave-v3 {"USDC" 1.1}}
-                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
-                                             :principal 1000 :shares 1000 :entry-index 1.0
-                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
-          op    {:owner/id "user1"}]
-      (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo
-           #"withdraw unavailable"
-           (aave/aave-withdraw world {:module/id :aave-v3} op))))))
-
-(deftest test-aave-emergency-unwind-marks-active-positions
+(deftest test-liquid-lending-emergency-unwind-marks-active-positions
   (testing "Emergency unwind marks matching active positions as :unwinding"
-    (let [world {:yield/positions {"u1" {:owner/id "u1" :module/id :aave-v3 :token "USDC" :status :active}
+    (let [module {:module/id :aave-v3}
+          world {:yield/positions {"u1" {:owner/id "u1" :module/id :aave-v3 :token "USDC" :status :active}
                                    "u2" {:owner/id "u2" :module/id :aave-v3 :token "USDC" :status :withdrawn}
                                    "u3" {:owner/id "u3" :module/id :aave-v3 :token "DAI"  :status :active}}}
-          world' (aave/aave-emergency-unwind world {:module/id :aave-v3} {:token "USDC"})]
+          world' (liquid/emergency-unwind world module {:token "USDC"})]
       (is (= :unwinding (get-in world' [:yield/positions "u1" :status])))
       (is (= :withdrawn (get-in world' [:yield/positions "u2" :status])))
       (is (= :active (get-in world' [:yield/positions "u3" :status]))))))
 
-(deftest test-aave-deposit-blocked-when-module-paused
-  (testing "Aave deposit is blocked when module status is paused"
-    (let [world {:yield/module-status {:aave-v3 :paused}
+(deftest test-liquid-lending-deposit-blocked-when-module-paused
+  (testing "Liquid-lending deposit is blocked when module status is paused"
+    (let [module {:module/id :aave-v3}
+          world {:yield/module-status {:aave-v3 :paused}
                  :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
                  :yield/indices {:aave-v3 {"USDC" 1.0}}}
           op    {:owner/id "user1" :amount 1000 :token "USDC"}]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           #"module is paused"
-           (aave/aave-deposit world {:module/id :aave-v3} op))))))
+           #"provider is paused"
+           (liquid/deposit world module op))))))
 
-(deftest test-aave-deposit-blocked-when-disabled-for-new-deposits
-  (testing "Aave deposit is blocked when module status disables new deposits"
-    (let [world {:yield/module-status {:aave-v3 :disabled-for-new-deposits}
+(deftest test-liquid-lending-deposit-blocked-when-disabled-for-new-deposits
+  (testing "Liquid-lending deposit is blocked when module status disables new deposits"
+    (let [module {:module/id :aave-v3}
+          world {:yield/module-status {:aave-v3 :disabled-for-new-deposits}
                  :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
                  :yield/indices {:aave-v3 {"USDC" 1.0}}}
           op    {:owner/id "user1" :amount 1000 :token "USDC"}]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"disabled for new deposits"
-           (aave/aave-deposit world {:module/id :aave-v3} op))))))
+           (liquid/deposit world module op))))))
 
 (deftest test-replay-yield-config-sets-module-status
   (testing "Scenario yield-config can set module status and still replay non-yield actions"
@@ -170,3 +193,37 @@
       (is (= :pass (:outcome result)))
       (is (= :disabled-for-new-deposits
              (get-in world [:yield/module-status :yield.provider/liquid-lending]))))))
+
+(deftest test-liquid-withdraw-idempotent-on-non-active-position
+  (testing "Liquid withdraw is a no-op when retried after crystallization"
+    (let [module {:module/id :yield.provider/liquid-lending}
+          world  {:yield/indices {:yield.provider/liquid-lending {"USDC" 1.0}}
+                  :yield/risk {:yield.provider/liquid-lending {"USDC" {:liquidity-mode :available}}}
+                  :yield/positions {"user1" {:owner/id "user1" :module/id :yield.provider/liquid-lending
+                                             :token "USDC" :principal 1000 :shares 1000 :entry-index 1.0
+                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+          first-withdraw (liquid/withdraw world module {:owner/id "user1"})
+          second-withdraw (liquid/withdraw first-withdraw module {:owner/id "user1"})]
+      (is (= first-withdraw second-withdraw))
+      (is (= :withdrawn (get-in second-withdraw [:yield/positions "user1" :status]))))))
+
+(deftest test-liquid-lending-withdraw-idempotent-for-aave-module-id
+  (testing "Liquid-lending withdraw is a no-op when retried after crystallization (:aave-v3 id)"
+    (let [module {:module/id :aave-v3}
+          world {:yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
+                 :yield/indices {:aave-v3 {"USDC" 1.0}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
+                                             :principal 1000 :shares 1000 :entry-index 1.0
+                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+          first-withdraw (liquid/withdraw world module {:owner/id "user1"})
+          second-withdraw (liquid/withdraw first-withdraw module {:owner/id "user1"})]
+      (is (= first-withdraw second-withdraw))
+      (is (= :withdrawn (get-in second-withdraw [:yield/positions "user1" :status]))))))
+
+(deftest test-yield-preset-negative-yield-mild
+  (let [world (-> (proto/init-world sew/protocol {:scenario-id "preset-test"})
+                  yield-reg/init-yield-modules
+                  (yield-presets/apply-preset :yield.preset/negative-yield-mild))]
+    (is (= #{:negative-yield}
+           (get-in world [:yield/risk :yield.provider/liquid-lending :USDC :failure-modes])))
+    (is (= -0.01 (get-in world [:yield/rates :yield.provider/liquid-lending :USDC])))))

@@ -19,7 +19,7 @@
    p=0.01 keeps the top 1%.  Always persists at least 1 scenario."
   [p & [opts]]
   (let [scored (phase-z/run-all)
-        n      (max 1 (int (Math/ceil (* p (count scored))))]
+        n      (max 1 (int (Math/ceil (* p (count scored)))))]
     (persist-top-n! n opts)))
 
 (defn -main

@@ -125,9 +125,21 @@
         pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
         pos-shortfall (:shortfall pos)
         settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
-        ;; Sub-held: remove gross afa (amt) for no-shortfall so FoT accounting holds.
-        ;; Under shortfall, only remove the fulfilled portion — deferred stays in held.
-        sub-held-amt  (if pos-shortfall settled-amt amt)]
+        ;; Sub-held:
+        ;; - no-shortfall: remove gross afa (amt) so FoT accounting holds
+        ;; - liquidity shortfall: fulfilled only (deferred remains in :total-held)
+        ;; - crystallized haircut: fulfilled + haircut when held still carries the loss
+        ;;   (mark-to-market accrual may have already reduced :total-held to economic value)
+        sub-held-amt  (if pos-shortfall
+                        (let [fulfilled (:fulfilled-amount pos-shortfall 0)
+                              deferred  (:deferred-amount pos-shortfall 0)
+                              haircut   (:haircut-amount pos-shortfall 0)
+                              held      (get-in world-after-yield [:total-held token] 0)]
+                          (cond
+                            (pos? deferred) fulfilled
+                            (>= held (+ fulfilled haircut)) (+ fulfilled haircut)
+                            :else fulfilled))
+                        amt)]
     (-> world-after-yield
         (yield-policy/apply-yield-policy workflow-id direction)
         ;; Sub-held — see sub-held-amt above
@@ -178,7 +190,8 @@
    The snapshot is passed in rather than derived internally so the model
    remains pure: callers supply the governance config state they want to test."
   [world caller token to amount settings snapshot]
-  (cond
+  (let [token (keyword token)]
+    (cond
     (nil? token)
     (t/fail :invalid-token)
 
@@ -231,7 +244,8 @@
             (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (:block-time world)))
             (t/fail :resolver-frozen)
 
-            (and resolver (pos? bond-bps) (pos? stake) (not (reg/can-handle-escrow? world resolver afa)))
+            (and resolver (pos? bond-bps)
+                 (or (zero? stake) (not (reg/can-handle-escrow? world resolver afa))))
             (t/fail :insufficient-resolver-stake)
 
             :else
@@ -265,7 +279,7 @@
                                                                     :amount afa
                                                                     :token token})
                                   world')]
-            (assoc (t/ok world'') :workflow-id workflow-id)))))))
+            (assoc (t/ok world'') :workflow-id workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; raise-dispute
@@ -457,11 +471,8 @@
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?
-                            (let [res    (reg/slash-resolver-stake world-finalized resolver slash-amt)
-                                  actual (:slashed-from-stake res)]
-                              (if (pos? actual)
-                                (acct/sub-held (:world res) token actual)
-                                (:world res)))
+                            (:world (reg/slash-resolver-stake world-finalized resolver slash-amt
+                                                              nil 0 workflow-id))
                             world-finalized)
           world-result    (-> world-slashed
                               (t/decrement-resolver-capacity resolver)

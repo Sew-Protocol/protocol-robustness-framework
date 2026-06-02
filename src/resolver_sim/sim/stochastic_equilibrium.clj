@@ -246,12 +246,53 @@
                 (format "honest survival=%.1f%% ≤ malice survival=%.1f%%"
                         (* 100 h-survival) (* 100 m-survival))))))))
 
+(defn evaluate-strategy-adaptation-compatibility
+  "Claim: adaptation targets are compatible with scenario strategy space.
+
+   If any epoch reports :resolver.strategy/blocked with
+   :target-outside-strategy-space, load-adaptation evidence is marked
+   inconclusive at scenario level."
+  [result]
+  (let [epoch-results (:epoch-results result)
+        policy (or (some-> epoch-results first (get-in [:defection :adaptation/resolved-config :blocked-target-policy]))
+                   :inconclusive)
+        blocked (->> epoch-results
+                     (mapcat (fn [ep] (get-in ep [:defection :diagnostics] [])))
+                     (filter #(= :target-outside-strategy-space (:reason %)))
+                     vec)]
+    (if (seq blocked)
+      (case policy
+        :fail
+        (fail :strategy-adaptation-compatibility
+              {:blocked-events (count blocked)
+               :blocked-target-policy policy}
+              (format "load-optimal target outside strategy space in %d event(s); policy=%s"
+                      (count blocked) (name policy)))
+        :warn
+        (pass :strategy-adaptation-compatibility
+              {:blocked-events (count blocked)
+               :blocked-target-policy policy}
+              (format "load-optimal target outside strategy space in %d event(s); policy=%s"
+                      (count blocked) (name policy)))
+        {:claim-id :strategy-adaptation-compatibility
+         :status   :inconclusive
+         :basis    :single-simulation-evidence
+         :reason   (format "load-optimal target outside strategy space in %d event(s); policy=%s"
+                          (count blocked) (name policy))
+         :evidence {:blocked-events (count blocked)
+                    :blocked-target-policy policy}})
+      (pass :strategy-adaptation-compatibility
+            {:blocked-events 0
+             :blocked-target-policy policy}
+            "no strategy-space mismatch detected for adaptation targets"))))
+
 ;; ---------------------------------------------------------------------------
 ;; Registry
 ;; ---------------------------------------------------------------------------
 
 (def ^:private evaluators
-  [evaluate-malice-net-profit-negative
+  [evaluate-strategy-adaptation-compatibility
+   evaluate-malice-net-profit-negative
    evaluate-honest-dominates
    evaluate-slashing-deters
    evaluate-participation-stable
@@ -446,7 +487,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private evaluators
-  [evaluate-malice-net-profit-negative
+  [evaluate-strategy-adaptation-compatibility
+   evaluate-malice-net-profit-negative
    evaluate-honest-dominates
    evaluate-slashing-deters
    evaluate-participation-stable

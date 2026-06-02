@@ -79,11 +79,26 @@
    
    Matches DR3 slashing distribution (50/30/20).
    Supports optional challenger bounty for Phase L."
-  ([world resolver-addr amount] (slash-resolver-stake world resolver-addr amount nil 0))
+  ([world resolver-addr amount] (slash-resolver-stake world resolver-addr amount nil 0 nil))
   ([world resolver-addr amount challenger bounty-bps]
+   (slash-resolver-stake world resolver-addr amount challenger bounty-bps nil))
+  ([world resolver-addr amount challenger bounty-bps workflow-id]
    (let [current (get-stake world resolver-addr)
          actual  (min current amount)
-         world'  (-> (update-in world [:resolver-stakes resolver-addr] (fnil - 0) actual)
+         token   (if workflow-id
+                   (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
+                   :USDC)
+         held-available (get-in world [:total-held token] 0)
+         ;; Stake is not in :total-held until register_stake credits custody. Reduce held when
+         ;; the slash is backed by on-hand custody (terminal escrow or held >= slash amount).
+         sub-held?      (and (pos? actual)
+                             (or (when workflow-id
+                                   (let [state (t/escrow-state world workflow-id)]
+                                     (contains? #{:released :refunded :resolved} state)))
+                                 (>= held-available actual)))
+         world'  (-> world
+                     (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
-                     (acct/distribute-slashed-funds actual challenger bounty-bps))]
+                     (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
+                     (cond-> sub-held? (acct/sub-held token actual)))]
      (assoc (t/ok world') :slashed-from-stake actual))))

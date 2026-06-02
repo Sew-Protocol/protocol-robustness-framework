@@ -76,7 +76,7 @@
         "failure-modes": [
           "negative-yield"
         ],
-        "apy": 0.03,
+        "apy": -0.03,
         "shortfall": {
           "available-ratio": 0.8
         }
@@ -173,6 +173,26 @@
       "expect": "ok"
     }
   ],
+  "expectations": {
+    "metrics": [
+      {"name": "yield/escrow-principal", "op": ":=", "value": 9850},
+      {"name": "yield/escrow-realized", "op": ":=", "value": 2009},
+      {"name": "yield/escrow-reclaimed", "op": ":=", "value": 2009},
+      {"name": "buyer/claimable", "op": ":=", "value": 2009},
+      {"name": "protocol/fees-usdc", "op": ":=", "value": 150}
+    ],
+    "terminal": [
+      {"path": ["live-states", 0], "equals": "refunded"}
+    ],
+    "step-terminal": [
+      {
+        "seq": 5,
+        "path": ["yield-positions", ["sew/escrow", 0], "shortfall", "deferred-amount"],
+        "op": ":=",
+        "value": 2009
+      }
+    ]
+  },
   "scenario-author": "@grifma",
   "provenance": {
     "author-id": "@grifma",

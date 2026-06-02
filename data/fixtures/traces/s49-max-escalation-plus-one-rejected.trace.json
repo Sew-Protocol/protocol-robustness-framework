@@ -7,12 +7,20 @@
     "appeal-escalation",
     "max-level-boundary"
   ],
+  "expected-errors": [
+    {
+      "seq": 6,
+      "action": "escalate_dispute",
+      "error": "escalation-not-allowed"
+    }
+  ],
+  "strict-expected-errors?": true,
   "expectations": {
     "metrics": [
       {
         "name": "reverts",
         "op": ":>=",
-        "value": 0
+        "value": 1
       }
     ]
   },
@@ -132,17 +140,6 @@
     },
     {
       "seq": 6,
-      "time": 1260,
-      "agent": "l2resolver",
-      "action": "execute_resolution",
-      "params": {
-        "workflow-id": 0,
-        "is-release": true,
-        "resolution-hash": "0xl2hash"
-      }
-    },
-    {
-      "seq": 7,
       "time": 1270,
       "agent": "buyer",
       "action": "escalate_dispute",
@@ -151,12 +148,14 @@
       }
     },
     {
-      "seq": 8,
-      "time": 1330,
+      "seq": 7,
+      "time": 1320,
       "agent": "l2resolver",
-      "action": "execute_pending_settlement",
+      "action": "execute_resolution",
       "params": {
-        "workflow-id": 0
+        "workflow-id": 0,
+        "is-release": true,
+        "resolution-hash": "0xl2hash"
       }
     }
   ],

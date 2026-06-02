@@ -41,7 +41,8 @@
             [resolver-sim.stochastic.rng       :as rng]
             [resolver-sim.stochastic.params    :as params]
             [resolver-sim.protocols.sew.types  :as t]
-            [resolver-sim.economics.payoffs    :as payoffs]))
+            [resolver-sim.economics.payoffs    :as payoffs]
+            [resolver-sim.oracle.detection     :as oracle]))
 
 ;; ── Test grid ────────────────────────────────────────────────────────────────
 ;; Representative escrow amounts (wei) and fee/bond/slash bps values drawn
@@ -73,28 +74,103 @@
           (str "bond mismatch at amount=" amt " bond-bps=" bps)))))
 
 ;; ── 3. Slash amount formula ───────────────────────────────────────────────────
-;; In stochastic/dispute.clj the fraud/reversal branch sets:
-;;   effective-slash-multiplier = (/ slash-bps 10000.0)
-;;   total-bond-slashing = (calculate-slashing-loss bond effective-slash-multiplier)
-;;                       = (* bond (/ slash-bps 10000.0))
-;;
-;; In payoffs.clj (used by the replay engine):
-;;   (calculate-reversal-slash afa reversal-slash-bps) = (compute-fee afa reversal-slash-bps)
-;;                                                      = (quot (* afa slash-bps) 10000)
-;;
-;; These must agree on integer truncation semantics. The stochastic path multiplies
-;; by a float then truncates; the replay path uses integer arithmetic throughout.
-;; We test that the two paths yield the same value after truncation.
+;; Reversal slashes use stake basis (live-aligned via oracle/detection).
+;; Fraud/timeout/L1 generic use bond × bps multiplier.
 
 (deftest reversal-slash-formula-identity
-  (testing "stochastic slash (via effective-slash-multiplier) == payoffs/calculate-reversal-slash"
+  (testing "oracle reversal slash == payoffs/calculate-reversal-slash on stake"
+    (doseq [stake amounts
+            bps slash-bps-values]
+      (let [oracle-slash (oracle/slash-amount-for-reason
+                          :reversal {:reversal-slash-bps bps}
+                          {:resolver-stake stake :bond-total 0 :slash-mult 0})
+            replay-slash (payoffs/calculate-reversal-slash stake bps)]
+        (is (= oracle-slash replay-slash)
+            (str "reversal slash mismatch at stake=" stake " bps=" bps))))))
+
+(deftest bond-slash-formula-identity
+  (testing "bond-basis slash (fraud) == calculate-slashing-loss × multiplier"
     (doseq [amt amounts
             bps slash-bps-values]
       (let [stochastic-slash (long (econ/calculate-slashing-loss amt (/ bps 10000.0)))
-            replay-slash     (payoffs/calculate-reversal-slash amt bps)]
-        (is (= stochastic-slash replay-slash)
-            (str "slash mismatch at amount=" amt " slash-bps=" bps
-                 " stochastic=" stochastic-slash " replay=" replay-slash))))))
+            oracle-slash     (oracle/slash-amount-for-reason
+                              :fraud {:fraud-slash-bps bps}
+                              {:bond-total amt :resolver-stake 0 :slash-mult 0})]
+        (is (= stochastic-slash oracle-slash)
+            (str "bond slash mismatch at amount=" amt " bps=" bps))))))
+
+(deftest live-reversal-slash-requires-appeal-outcome
+  (testing "reversal slash requires appeal reversal and respects reversal detection probability"
+    (is (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                        :reversal-detection-probability 1.0
+                                        :oracle-fixture {:mode :fixed-roll-sequence
+                                                         :rolls [0.1]
+                                                         :scope #{:detection}
+                                                         :on-exhaustion :throw}
+                                        :oracle-roll-cursor (atom 0)}
+                                       {:verdict-correct? false
+                                        :appealed? true
+                                        :decision-reversed? true}))
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 0.0
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.1]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
+                                           {:verdict-correct? false
+                                            :appealed? true
+                                            :decision-reversed? false})))
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 1.0
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.1]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
+                                           {:verdict-correct? false
+                                            :appealed? false
+                                            :decision-reversed? true})))
+    (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                             :reversal-detection-probability 0.25
+                                             :oracle-fixture {:mode :fixed-roll-sequence
+                                                              :rolls [0.30]
+                                                              :scope #{:detection}
+                                                              :on-exhaustion :throw}
+                                             :oracle-roll-cursor (atom 0)}
+                                            {:verdict-correct? false
+                                             :appealed? true
+                                             :decision-reversed? true})))
+    (is (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
+                                        :reversal-detection-probability 0.25
+                                        :oracle-fixture {:mode :fixed-roll-sequence
+                                                         :rolls [0.20]
+                                                         :scope #{:detection}
+                                                         :on-exhaustion :throw}
+                                        :oracle-roll-cursor (atom 0)}
+                                       {:verdict-correct? false
+                                        :appealed? true
+                                        :decision-reversed? true}))))
+
+(deftest dispute-reversal-slash-uses-stake-basis
+  (testing "resolve-dispute reversal slash amount matches stake × bps"
+    ;; Seed chosen so :collusive gets wrong verdict, appeal fires, L1 reverses (p=1.0)
+    (let [r      (rng/make-rng 101)
+          stake  50000
+          bps    2500
+          result (dispute/resolve-dispute r 10000 150 700 0 :collusive 0 1.0 0
+                                          :reversal-slash-bps bps
+                                          :p-l1-reversal 1.0
+                                          :fraud-detection-probability 0
+                                          :timeout-detection-probability 0
+                                          :slashing-detection-probability 0
+                                          :resolver-stake-wei stake
+                                          :reversal-detection-probability 1.0)]
+      (when (= (:slashing-reason result) :reversal)
+        (is (= (payoffs/calculate-reversal-slash stake bps)
+               (- (econ/calculate-fee 10000 150)
+                  (:profit-malice result)))
+            "malice profit should reflect stake-basis reversal slash")))))
 
 ;; ── 4. Appeal bond fee formula ────────────────────────────────────────────────
 ;; Both engines use types/compute-fee for the protocol fee on appeal bonds.
@@ -114,16 +190,16 @@
 
 ;; ── 5. Slashing distribution adds up ─────────────────────────────────────────
 ;; payoffs/calculate-slashing-distribution must be lossless (no wei destroyed).
-;; insurance + protocol + burned = amount - bounty.
+;; insurance + protocol + retained = amount - bounty.
 
 (deftest slashing-distribution-conservation
   (testing "slashing distribution is lossless (no wei destroyed)"
     (doseq [amount [0 100 1000 9999 10000]
             bounty [0 10 50]]
       (when (<= bounty amount)
-        (let [{:keys [insurance protocol burned]}
+        (let [{:keys [insurance protocol retained]}
               (payoffs/calculate-slashing-distribution amount bounty)
-              total (+ insurance protocol burned)]
+              total (+ insurance protocol retained)]
           (is (= total (- amount bounty))
               (str "distribution not lossless: amount=" amount
                    " bounty=" bounty
@@ -238,9 +314,9 @@
     (let [r      (rng/make-rng 42)
           result (dispute/resolve-dispute r 10000 150 700 2.5 :malicious 0.05 0.4 1.0)]
       (when (:slashed? result)
-        (let [{:keys [insurance protocol burned]} (:slash-distributed result)]
+        (let [{:keys [insurance protocol retained]} (:slash-distributed result)]
           (is (some? insurance) ":slash-distributed should be present when slashed")
-          (is (every? #(>= % 0) [insurance protocol burned])
+          (is (every? #(>= % 0) [insurance protocol retained])
               "all distribution components should be non-negative"))))))
 
 ;; ── 10. Convergence regression (MC-7) ────────────────────────────────────────

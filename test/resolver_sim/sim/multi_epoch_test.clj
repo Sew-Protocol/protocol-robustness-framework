@@ -227,3 +227,42 @@
       (is (<= 0.0 (:honest-share comp) 1.0))
       (is (<= 0.0 (:malice-share comp) 1.0))
       (is (< (Math/abs (- 1.0 (+ (:honest-share comp) (:malice-share comp)))) 1.0e-9)))))
+
+(deftest load-optimal-strategy-space-mismatch-marks-adaptation-inconclusive
+  (testing "when load-optimal targets a disallowed strategy, report includes inconclusive adaptation claim"
+    (let [p (assoc test-params
+                   :defection-rate 1.0
+                   :n-trials-per-epoch 2000
+                   :strategy-space #{:honest :malicious}
+                   :strategy-adaptation {:enabled true
+                                         :rate 1.0
+                                         :mode :load-optimal
+                                         :allowed-targets #{:honest :malicious}})
+          result (me/run-multi-epoch (rng/make-rng 13) 2 2000 p)
+          adaptation-claim (->> (get-in result [:equilibrium-report :claim-results])
+                                (filter #(= :strategy-adaptation-compatibility (:claim-id %)))
+                                first)]
+      (is (= :inconclusive (:status adaptation-claim)))
+      (is (string? (:reason adaptation-claim))))))
+
+;; ---------------------------------------------------------------------------
+;; 8. Governance decay explicit signals
+;; ---------------------------------------------------------------------------
+
+(deftest governance-decay-explicit-decays-reversal-quality
+  (testing "apply-detection-decay decays p-l1/p-l2 reversal quality explicitly"
+    (let [params {:detection-decay-rate 0.20
+                  :slashing-detection-probability 0.10
+                  :fraud-detection-probability 0.25
+                  :p-l1-reversal 0.85
+                  :p-l2-reversal 0.95
+                  :reversal-detection-probability 0.33}
+          e1 (me/apply-detection-decay params 1)
+          e3 (me/apply-detection-decay params 3)
+          mult (Math/pow 0.8 2)]
+      (is (= 0.85 (:p-l1-reversal e1)))
+      (is (= 0.95 (:p-l2-reversal e1)))
+      (is (< (Math/abs (- (* 0.85 mult) (:p-l1-reversal e3))) 1.0e-12))
+      (is (< (Math/abs (- (* 0.95 mult) (:p-l2-reversal e3))) 1.0e-12))
+      ;; Legacy field is no longer part of decay semantics.
+      (is (= 0.33 (:reversal-detection-probability e3))))))

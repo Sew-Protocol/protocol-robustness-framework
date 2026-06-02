@@ -8,7 +8,8 @@
             [resolver-sim.sim.fixtures :as fixtures]))
 
 (deftest all-invariants-suite-is-deterministic
-  (let [result-1 (fixtures/run-suite :suites/all-invariants)
-        result-2 (fixtures/run-suite :suites/all-invariants)]
-    (is (= result-1 result-2)
+  (let [result-1 (fixtures/run-suite :suites/all-invariants nil nil {:silent? true})
+        result-2 (fixtures/run-suite :suites/all-invariants nil nil {:silent? true})]
+    (is (= (dissoc result-1 :elapsed-ms)
+           (dissoc result-2 :elapsed-ms))
         "Suite results differ between runs — replay engine has a non-deterministic code path")))

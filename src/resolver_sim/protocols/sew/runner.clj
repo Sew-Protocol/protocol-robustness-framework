@@ -15,7 +15,8 @@
      - run-trial is pure: takes an explicit rng-fn for random decisions.
      - Escalation is modelled with Priority-3 authority (no custom-resolver):
        et.dispute-resolver tracks the current-round resolver through escalations."
-  (:require [resolver-sim.protocols.sew.types      :as t]
+  (:require [resolver-sim.protocols.sew.snapshot  :as snap]
+            [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.accounting :as ac]
@@ -42,10 +43,10 @@
            appeal-window-duration       0
            max-dispute-duration         2592000
            appeal-bond-protocol-fee-bps 0}}]
-  (t/make-module-snapshot
-   {:escrow-fee-bps              resolver-fee-bps
-    :appeal-window-duration      appeal-window-duration
-    :max-dispute-duration        max-dispute-duration
+  (snap/make-escrow-snapshot
+   {:escrow-fee-bps               resolver-fee-bps
+    :appeal-window-duration       appeal-window-duration
+    :max-dispute-duration         max-dispute-duration
     :appeal-bond-protocol-fee-bps appeal-bond-protocol-fee-bps}))
 
 ;; ---------------------------------------------------------------------------

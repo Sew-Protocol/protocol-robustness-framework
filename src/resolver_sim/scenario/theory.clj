@@ -58,7 +58,7 @@
   (cond
     (keyword? m) m
     (string? m)  (if (.contains ^String m "/")
-                   (let [[ns n] (str/split m "/" 2)]
+                   (let [[ns n] (str/split m #"/" 2)]
                      (keyword ns n))
                    (keyword m))
     :else (to-kw m)))

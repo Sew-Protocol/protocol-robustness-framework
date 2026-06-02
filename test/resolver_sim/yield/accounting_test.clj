@@ -1,16 +1,16 @@
 (ns resolver-sim.yield.accounting-test
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.modules.aave :as aave]
+            [resolver-sim.yield.modules.liquid-lending :as liquid]
             [resolver-sim.yield.modules.fixed :as fixed]))
 
-(defn- run-aave-fragmented
+(defn- run-liquid-lending-fragmented
   [world module token dt n]
   (let [per-step (quot dt n)
         remainder (- dt (* per-step n))
-        world* (nth (iterate #(aave/aave-accrue % module {:token token :dt per-step}) world) n)]
+        world* (nth (iterate #(liquid/accrue % module {:token token :dt per-step}) world) n)]
     (if (pos? remainder)
-      (aave/aave-accrue world* module {:token token :dt remainder})
+      (liquid/accrue world* module {:token token :dt remainder})
       world*)))
 
 (defn- run-fixed-fragmented
@@ -22,23 +22,24 @@
       (fixed/fixed-accrue world* module {:token token :dt remainder})
       world*)))
 
-(deftest test-aave-accrual-math
-  (testing "Aave index-based accrual"
+(deftest test-liquid-lending-accrual-math
+  (testing "Liquid-lending index-based accrual (:aave-v3 module id)"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.0}}
                  :yield/rates   {:aave-v3 {"USDC" 0.10}}
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC" 
                                            :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
-          world' (aave/aave-accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})]
+          world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})]
       (is (== 1.1 (get-in world' [:yield/indices :aave-v3 "USDC"])))
       (is (== 100 (get-in world' [:yield/positions "user1" :unrealized-yield]))))))
 
-(deftest test-aave-withdraw-crystallizes-yield
-  (testing "Aave withdraw realizes current unrealized yield before marking withdrawn"
+(deftest test-liquid-lending-withdraw-crystallizes-yield
+  (testing "Liquid-lending withdraw realizes current unrealized yield before marking withdrawn"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.1}}
+                 :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
                                              :principal 1000 :shares 1000 :entry-index 1.0
                                              :status :active :unrealized-yield 0 :realized-yield 0}}}
-          world' (aave/aave-withdraw world {:module/id :aave-v3} {:owner/id "user1"})
+          world' (liquid/withdraw world {:module/id :aave-v3} {:owner/id "user1"})
           pos    (get-in world' [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
       (is (== 100 (:realized-yield pos)))
@@ -52,8 +53,8 @@
           world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})]
       (is (== 50 (get-in world' [:yield/positions [:sew/escrow "user1"] :unrealized-yield]))))))
 
-(deftest test-aave-accrual-partition-equivalence-bounded-drift
-  (testing "One-shot vs fragmented Aave accrual stays within explicit drift budget"
+(deftest test-liquid-lending-accrual-partition-equivalence-bounded-drift
+  (testing "One-shot vs fragmented liquid-lending accrual stays within explicit drift budget"
     (let [token "USDC"
           module {:module/id :aave-v3}
           dt 31536000
@@ -64,13 +65,13 @@
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token token
                                              :principal 1000 :shares 1000 :entry-index 1.0
                                              :status :active :unrealized-yield 0 :realized-yield 0}}}
-          one-shot    (aave/aave-accrue world module {:token token :dt dt})
-          fragmented  (run-aave-fragmented world module token dt n)
+          one-shot    (liquid/accrue world module {:token token :dt dt})
+          fragmented  (run-liquid-lending-fragmented world module token dt n)
           y1          (get-in one-shot [:yield/positions "user1" :unrealized-yield])
           y2          (get-in fragmented [:yield/positions "user1" :unrealized-yield])
           drift       (Math/abs (long (- y1 y2)))]
       (is (<= drift max-rounding-drift)
-          (str "Aave accrual drift " drift " exceeded budget " max-rounding-drift)))))
+          (str "Liquid-lending accrual drift " drift " exceeded budget " max-rounding-drift)))))
 
 (deftest test-fixed-accrual-partition-equivalence-bounded-drift
   (testing "One-shot vs fragmented fixed accrual stays within explicit drift budget"

@@ -12,10 +12,12 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.sim.minimizer :as minimizer]
-            [resolver-sim.scenario.outcome-semantics :as ose]
-            [resolver-sim.scenario.theory :as theory]
+            [resolver-sim.scenario.normalize :as scenario-norm]
+            [resolver-sim.scenario.runner :as scenario-runner]
+            [resolver-sim.scenario.golden :as golden]
+            [resolver-sim.scenario.summary :as scenario-summary]
             [resolver-sim.scenario.theory-result :as theory-result]
-            [resolver-sim.scenario.expectations :as expectations]
+            [resolver-sim.sim.reporter :as reporter]
             [clojure.pprint :as pp]))
 
 (def ^:private golden-schema-version "2.0")
@@ -50,58 +52,10 @@
           (edn/read (java.io.PushbackReader. r))))
       (throw (ex-info "Fixture not found" {:key k :path path})))))
 
-;; ---------------------------------------------------------------------------
-;; JSON Normalization: Handle EDN/JSON type mismatches
-;; ---------------------------------------------------------------------------
-
-(defn- normalize-keyword-strings
-  "Convert string values starting with ':' to proper Clojure keywords.
-   This fixes keyword corruption from JSON deserialization."
-  [v]
-  (cond
-    (string? v)
-    (if (and (.startsWith v ":") (> (count v) 1))
-      (keyword (subs v 1))  ; Remove leading colon and convert to keyword
-      v)
-    (keyword? v) v
-    :else v))
-
-(defn- normalize-map-keys
-  "Recursively convert numeric string keys in maps to Integer keys."
-  [m]
-  (if (map? m)
-    (reduce-kv (fn [acc k v]
-                  (let [normalized-k (if (string? k)
-                                       (try (Integer/parseInt k)
-                                            (catch Exception _ k))
-                                       k)]
-                    (assoc acc normalized-k v)))
-               {} m)
-    m))
-
 (defn normalize-scenario
-  "Recursively normalize a loaded scenario to fix JSON deserialization issues:
-   1. Convert string keywords (e.g. ':released') to proper keywords
-   2. Convert numeric string keys to Integer keys in all maps"
+  "Delegate to `resolver-sim.scenario.normalize/normalize-scenario`."
   [x]
-  (walk/postwalk
-    (fn [v]
-      (cond
-        ;; First handle maps - normalize keys
-        (map? v)
-        (let [key-normalized (normalize-map-keys v)]
-          ;; Then normalize all values in the map
-          (reduce-kv (fn [m k kv]
-                       (assoc m k (normalize-keyword-strings kv)))
-                     key-normalized key-normalized))
-        
-        ;; Then handle keyword string values
-        (string? v)
-        (normalize-keyword-strings v)
-        
-        ;; Everything else stays as-is
-        :else v))
-    x))
+  (scenario-norm/normalize-scenario x))
 
 (defn- fixture-ref? [x]
   (and (keyword? x) (namespace x)
@@ -178,7 +132,7 @@
 (defn replay-golden-snapshot
   "Replay fields compared in every golden verify mode."
   [report]
-  (select-keys report [:suite-id :trace-id :final-state-hash :metrics :outcome]))
+  (golden/replay-golden-snapshot report))
 
 (defn generate-golden-report
   "Build a golden report map for one trace replay (+ optional theory snapshot)."
@@ -205,36 +159,24 @@
    opts:
      :golden-verify-mode — :replay-only | :replay-and-theory (default)
 
-   Legacy goldens without :theory or :golden-schema-version compare replay fields only."
-  [golden actual {:keys [golden-verify-mode]
-                  :or {golden-verify-mode :replay-and-theory}}]
-  (when-not (golden-verify-modes golden-verify-mode)
-    (throw (ex-info "Invalid golden-verify-mode" {:mode golden-verify-mode
-                                                  :allowed golden-verify-modes})))
-  (let [replay-ok? (= (replay-golden-snapshot golden) (replay-golden-snapshot actual))
-        legacy?    (nil? (:golden-schema-version golden))
-        theory-ok? (case golden-verify-mode
-                     :replay-only true
-                     (cond
-                       legacy? true
-                       (nil? (:theory golden)) true
-                       (nil? (:theory actual)) false
-                       :else (= (:theory golden) (:theory actual))))]
-    (if (and replay-ok? theory-ok?)
-      {:ok? true :golden-verify-mode golden-verify-mode}
-      {:ok? false
-       :golden-verify-mode golden-verify-mode
-       :replay-ok? replay-ok?
-       :theory-ok? theory-ok?
-       :expected golden
-       :actual actual})))
+   Returns structured `:checks :golden` data including :summary and :mismatches.
+   Legacy keys :expected, :actual, :replay-ok?, :theory-ok? retained on mismatch."
+  [golden actual opts]
+  (let [mode (or (:golden-verify-mode opts) :replay-and-theory)]
+    (when-not (golden-verify-modes mode)
+      (throw (ex-info "Invalid golden-verify-mode"
+                      {:mode mode :allowed golden-verify-modes})))
+    (golden/compare-reports golden actual (assoc opts :golden-verify-mode mode))))
 
 (defn- compare-golden-report
   [suite-key result opts]
-  (let [path (str "data/fixtures/golden/" (name (:trace-id result)) ".report.edn")
-        golden (edn/read-string (slurp path))
-        report (:golden-report result)]
-    (compare-golden-reports golden report opts)))
+  (let [trace-id (:trace-id result)
+        path     (str "data/fixtures/golden/" (name trace-id) ".report.edn")
+        report   (:golden-report result)
+        mode     (or (:golden-verify-mode opts) :replay-and-theory)]
+    (if (.exists (java.io.File. path))
+      (compare-golden-reports (edn/read-string (slurp path)) report opts)
+      (golden/missing-golden-check trace-id path mode))))
 
 (defn- resolve-golden-verify-mode
   [suite mode opts]
@@ -247,16 +189,32 @@
       mode*)))
 
 (defn run-suite
-  "Execute a suite fixture: compose, replay traces, validate thresholds, and optionally save or verify golden reports.
-   An optional protocol can be supplied; defaults to the registry default protocol.
+  "Data-first fixture suite runner: compose traces, replay, judge, return summary.
 
-   opts (4th arg or via metadata on 3-arg call when protocol is a map — prefer 4-arg):
-     :golden-verify-mode — :replay-only | :replay-and-theory (default in :verify mode)"
+   Returns `scenario.summary/build-summary` shape:
+     :passed :total :elapsed-ms :ok? :results :suite-id
+
+   Each result entry includes canonical `:pass?` and `:checks` plus legacy
+   fixture keys (:trace-id, :golden-report, …).
+
+   opts:
+     :silent? — suppress automatic legacy fixture printing (default false).
+                Prefer `:report? false` in a future option shape; `:silent?` is
+                the current name.
+     :golden-verify-mode — :replay-only | :replay-and-theory (in :verify mode)
+     :result-display-level — legacy fixture display when not silent
+
+   Reporting boundaries:
+     - Judgement: `scenario.runner` (`:pass?`)
+     - Table report: `scenario.report/print-report`
+     - Legacy detail: `sim.reporter` / `sim.result-display` (this fn when not silent)
+     - CLI shell: `io.scenario-runner`"
   ([suite-key] (run-suite suite-key nil nil {}))
   ([suite-key mode] (run-suite suite-key mode nil {}))
   ([suite-key mode protocol] (run-suite suite-key mode protocol {}))
   ([suite-key mode protocol opts]
-   (let [effective-protocol (or protocol
+   (let [t0               (System/currentTimeMillis)
+         effective-protocol (or protocol
                                 (preg/get-protocol preg/default-protocol-id))
          suite (compose-suite (load-fixture suite-key))
          golden-verify-mode (resolve-golden-verify-mode suite mode opts)
@@ -291,78 +249,57 @@
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
                                res (replay/replay-with-protocol effective-protocol effective-trace)
-                               expect-res (when (:expectations trace)
-                                            (expectations/evaluate-expectations res (:expectations trace)))
-                               theory-res (when (:theory trace)
-                                            (let [theory    (:theory trace)
-                                                  profile   (or (:theory-eval-profile theory)
-                                                                (when (true? (:require-conclusive? theory)) :strict)
-                                                                :regression)
-                                                  strict-profile? (#{:strict :public-evidence} profile)]
-                                              (theory/evaluate-theory res theory
-                                                                      {:theory-eval-profile profile})))
                                trace-id (:scenario-id trace)
+                               runner-opts (scenario-runner/runner-opts-for-scenario effective-trace opts)
+                               threshold-validation (validate-thresholds res thresholds
+                                                                           {:expected-outcome expected-outcome})
+                               base-entry (scenario-runner/build-entry-result
+                                           {:name          (str trace-id)
+                                            :replay-result res
+                                            :scenario      effective-trace
+                                            :source        :fixture}
+                                           runner-opts)
+                               theory-res-for-golden (get-in base-entry [:checks :theory :result])
                                report (generate-golden-report suite-key trace-id res
-                                                              {:theory-res theory-res
-                                                               :theory-decl (:theory trace)})
+                                                                {:theory-res theory-res-for-golden
+                                                                 :theory-decl (:theory trace)})
                                comparison (when (= mode :verify)
                                             (compare-golden-report suite-key
                                                                    {:trace-id trace-id :golden-report report}
                                                                    {:golden-verify-mode golden-verify-mode}))]
-                           
-                           (when (not= :pass (:outcome res))
-                             (println (str "DEBUG: Trace " (:scenario-id trace) " failed with " (:outcome res) " reason " (:halt-reason res)))
-                             (when (= (:outcome res) :fail)
-                               (let [last-entry (last (:trace res))
-                                     violations (:violations last-entry)]
-                                 (println (str "       Halted at seq " (:seq last-entry) " action " (:action last-entry)))
-                                 (doseq [[inv-kw res-map] violations]
-                                   (when-not (:holds? res-map)
-                                     (println (str "       VIOLATION: " inv-kw " details: " (:violations res-map))))))))
-
-
-                           (when (= mode :save) (save-golden-report suite-key {:trace-id (:scenario-id trace) :golden-report report}))
-                           {:trace-id (:scenario-id trace)
-                            :purpose  (:purpose trace)
-                             :theory-source (:theory trace)
-                            :outcome (:outcome res)
-                             :halt-reason (:halt-reason res)
-                             :expected-outcome expected-outcome
+                           (when (= mode :save)
+                             (save-golden-report suite-key {:trace-id trace-id :golden-report report}))
+                           (scenario-runner/finalize-fixture-entry
+                            base-entry
+                            {:expected-outcome     expected-outcome
                              :expected-halt-reason expected-halt-reason
-                            :metrics (:metrics res)
-                            :threshold-validation (validate-thresholds res thresholds
-                                                                    {:expected-outcome expected-outcome})
-                            :golden-report report
-                            :golden-comparison comparison
-                            :expectations expect-res
-                            :theory theory-res}))
+                             :threshold-validation threshold-validation
+                             :golden-comparison    comparison
+                             :golden-report        report
+                             :metrics              (:metrics res)
+                             :trace-id             trace-id
+                             :scenario-author      (:scenario-author trace)
+                             :purpose              (:purpose trace)
+                             :theory-source        (:theory trace)}
+                            runner-opts)))
                        traces)
-         theory-ok? (fn [r]
-                      (let [purpose       (:purpose r)
-                            mech-status   (get-in r [:theory :mechanism-status] :not-checked)
-                            eq-status     (get-in r [:theory :equilibrium-status] :not-checked)
-                            mech-results  (vals (get-in r [:theory :mechanism-results] {}))
-                            eq-results    (vals (get-in r [:theory :equilibrium-results] {}))
-                            profile       (get-in r [:theory :diagnostics :theory-eval-profile])
-                            strict?       (or (true? (get-in r [:theory-source :require-conclusive?]))
-                                              (#{:strict :public-evidence} profile))
-                            opts          {:require-conclusive? strict?}
-                            falsify-ok?   (ose/theory-result-ok? (:theory r) purpose opts)
-                            mech-ok?      (ose/domain-results-ok? purpose mech-status mech-results opts)
-                            eq-ok?        (ose/domain-results-ok? purpose eq-status eq-results opts)]
-                        (and falsify-ok? mech-ok? eq-ok?)))
-         all-ok? (every? (fn [r] (and (= (or (:expected-outcome r) :pass) (:outcome r))
-                                      (or (nil? (:expected-halt-reason r))
-                                          (= (:expected-halt-reason r) (:halt-reason r)))
-                                      (:ok? (:threshold-validation r))
-                                      (or (nil? (:expectations r)) (:ok? (:expectations r)))
-                                      (theory-ok? r)
-                                      (if (= mode :verify) (:ok? (:golden-comparison r)) true)))
-                         results)]
-     {:suite-id suite-key
-      :golden-verify-mode golden-verify-mode
-      :ok? all-ok?
-      :results results})))
+         elapsed-ms (- (System/currentTimeMillis) t0)
+         suite-result (scenario-summary/build-summary results
+                                                      {:suite-id           suite-key
+                                                       :golden-verify-mode golden-verify-mode})
+         expectations-by-trace-id (into {}
+                                        (keep (fn [{:keys [trace]}]
+                                                (when-let [id (:scenario-id trace)]
+                                                  (when (:expectations trace)
+                                                    [id (:expectations trace)]))))
+                                      traces)
+         display-opts (merge opts
+                             {:elapsed-ms elapsed-ms
+                              :expectations-by-trace-id expectations-by-trace-id
+                              :result-display-level (or (:result-display-level opts) :summary)})]
+     (when-not (:silent? opts)
+       (reporter/print-suite-results suite-result display-opts))
+     suite-result)))
 
 ;; ---------------------------------------------------------------------------
 ;; Trace Minimisation Interface

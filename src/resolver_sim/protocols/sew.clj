@@ -24,7 +24,11 @@
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
             [resolver-sim.contract-model.replay          :as replay]
+            [resolver-sim.contract-model.idempotency     :as idem]
+            [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]
             [resolver-sim.yield.protocols                :as yield-proto]
+            [resolver-sim.yield.module                   :as yield-module]
+            [resolver-sim.yield.risk                     :as yield-risk]
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]))
 
@@ -37,45 +41,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- build-snapshot [pp]
-  (let [yield-id (or (get pp :yield-generation-module nil)
-                     (get pp :yield-profile nil))
-        {:keys [profile-id archetype module-id]} (yield-proto/resolve-yield-profile yield-id)]
-    (t/make-module-snapshot
-     ;; NOTE: :resolver-fee-bps in protocol-params maps to :escrow-fee-bps in the snapshot.
-     ;; Setting :escrow-fee-bps directly in protocol-params has no effect; use :resolver-fee-bps.
-     {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
-      :resolution-module            (get pp :resolution-module nil)
-      :appeal-window-duration       (get pp :appeal-window-duration 0)
-      :max-dispute-duration         (get pp :max-dispute-duration 2592000)
-      :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
-      :dispute-resolver             (get pp :dispute-resolver nil)
-      :appeal-bond-bps              (get pp :appeal-bond-bps 0)
-      :resolver-bond-bps            (get pp :resolver-bond-bps 1000)
-      :appeal-bond-amount           (get pp :appeal-bond-amount 0)
-      :reversal-slash-bps           (get pp :reversal-slash-bps 0)
-      ;; NOTE: :fraud-slash-bps is intentionally NOT stored in the snapshot.
-      ;; It is a sim-layer param read from params directly (kernel_bridge, batch, etc).
-      :challenge-window-duration    (get pp :challenge-window-duration 0)
-      :challenge-bond-bps           (get pp :challenge-bond-bps 0)
-      :challenge-bounty-bps         (get pp :challenge-bounty-bps 0)
-      :default-auto-release-delay   (get pp :default-auto-release-delay 0)
-      :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
-      ;; NOTE: escrow-modules mirrors :resolution-module for legacy compat.
-      :escrow-modules               {:resolution (get pp :resolution-module nil)
-                                     :yield      profile-id
-                                     :release    (get pp :release-strategy nil)
-                                     :cancel     (get pp :cancellation-strategy nil)}
-      :yield-module-id              (get pp :yield-module-id :module/aave-yield)
-      :yield-profile                profile-id
-      :yield-archetype              archetype
-      :yield-generation-module      module-id
-      :yield-distribution-module    (get pp :yield-distribution-module nil)
-      :yield-protocol-fee-bps       (get pp :yield-protocol-fee-bps 0)
-      :cancellation-strategy        (get pp :cancellation-strategy nil)
-      :release-strategy             (get pp :release-strategy nil)
-      :incentive-module             (get pp :incentive-module nil)})))
 
 (defn- sender-only-release [world workflow-id caller]
   (let [et (t/get-transfer world workflow-id)]
@@ -104,6 +69,49 @@
   (let [p (:params event)]
     (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
 
+(defn- event-id
+  "Optional logical event identifier used for replay dedupe."
+  [event]
+  (or (get-in event [:params :event-id])
+      (get-in event [:params :event_id])))
+
+(def replay-sensitive-actions
+  "Actions that should be replay-idempotent when a logical event-id is provided."
+  #{"escalate-dispute"
+    "challenge-resolution"
+    "execute-resolution"
+    "execute-pending-settlement"
+    "rotate-dispute-resolver"
+    "propose-fraud-slash"
+    "resolve-appeal"
+    "execute-fraud-slash"})
+
+(defn- replay-sensitive?
+  [event]
+  (contains? replay-sensitive-actions (compat/canonical-action event)))
+
+(defn- dedupe-op-key
+  "Build a stable dedupe key for replay-sensitive events."
+  [world event]
+  (let [wf  (event-workflow-id event)
+        sid (event-slash-id event)
+        eid (event-id event)
+        action (compat/canonical-action event)
+        explicit-hop (or (get-in event [:params :hop-id])
+                         (get-in event [:params :hop_id]))
+        hop-level (when (and (nil? explicit-hop)
+                             (contains? #{"escalate-dispute" "challenge-resolution"} action))
+                    (t/dispute-level world wf))
+        hop-scope (or explicit-hop hop-level)]
+    [:sew
+     :replay-dedupe
+     action
+     (:agent event)
+     wf
+     sid
+     hop-scope
+     eid]))
+
 (defn- sew-temporal-rules
   "Protocol-aware temporal guards executed before dispatch.
    These rules are optional and run through replay's generic temporal rule engine."
@@ -118,6 +126,41 @@
                    {:ok? false :error :appeal-window-not-expired}
                    {:ok? true}))
                {:ok? true}))}])
+
+(defn- sew-event-conflict-domains
+  "Conservative serialization/conflict domains for same-timestamp batch replay."
+  [world event]
+  (let [action (compat/canonical-action event)
+        wf-id  (event-workflow-id event)
+        token  (some-> (get-in event [:params :token]) keyword)
+        resolver (or (get-in event [:params :resolver-addr])
+                     (get-in event [:params :resolver])
+                     (get-in world [:escrow-transfers wf-id :dispute-resolver]))]
+    (cond
+      (contains? #{"create-escrow" "raise-dispute" "release" "sender-cancel" "recipient-cancel"
+                   "execute-resolution" "execute-pending-settlement" "escalate-dispute"
+                   "challenge-resolution" "automate-timed-actions" "withdraw-escrow"
+                   "rotate-dispute-resolver"}
+                 action)
+      (cond-> #{[:workflow wf-id]}
+        resolver (conj [:resolver resolver])
+        token (conj [:token token]))
+
+      (contains? #{"register-stake" "withdraw-stake" "register-resolver-bond" "register-senior-bond"
+                   "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"}
+                 action)
+      (cond-> #{}
+        resolver (conj [:resolver resolver])
+        wf-id (conj [:workflow wf-id]))
+
+      (contains? #{"set-token-liquidity-crunch" "set-yield-risk"} action)
+      (if token #{[:token token]} #{[:global :unknown]})
+
+      (contains? #{"set-paused" "withdraw-fees"} action)
+      #{[:global :protocol]}
+
+      :else
+      #{[:global :unknown]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Dispatch
@@ -218,8 +261,10 @@
       (let [workflow-id (compat/wf-id event)
             result      (res/escalate-dispute world workflow-id addr escalation-fn)]
         (if (:ok result)
-          (assoc result :extra {:new-level    (:new-level result)
-                                :new-resolver (:new-resolver result)})
+          (assoc result :extra (merge (:extra result)
+                                      (when (:new-level result)
+                                        {:new-level    (:new-level result)
+                                         :new-resolver (:new-resolver result)})))
           result)))))
 
 (defmethod apply-action "rotate-dispute-resolver"
@@ -333,8 +378,9 @@
                               (-> world'
                                   (acct/sub-held token reclaimed)
                                   (acct/record-claimable-v2 escrow-id :settlement/principal recipient reclaimed)))
-                            ;; For resolver stake yield: credit the resolver's stake balance
-                            (update-in world' [:resolver-stakes addr] (fnil + 0) reclaimed))]
+                            ;; Resolver stake: reclaimed deferred was already in :total-held via
+                            ;; register-stake; closing the yield position is sufficient (no stake bump).
+                            world')]
             (t/ok world''))
           (t/ok world'))))))
 
@@ -445,6 +491,15 @@
     (fn [addr]
       (res/challenge-resolution world (compat/wf-id event) addr escalation-fn))))
 
+(defmethod apply-action "submit-evidence"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [p (:params event)]
+        (res/submit-evidence world (event-workflow-id event) addr
+                             {:evidence-hash (:evidence-hash p)})))))
+
 (defmethod apply-action "appeal-slash"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
@@ -481,28 +536,20 @@
 
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
-  ;; Params:
-  ;;   :module-id      — yield module id (string, will be keywordised and alias-resolved)
-  ;;   :token          — token symbol (string, will be keywordised)
-  ;;   :liquidity-mode — :available | :shortfall | :haircut | :frozen | :paused
-  ;;   :failure-modes  — vector of strings, e.g. ["negative-yield"]
-  ;;   :apy            — new APY (double), optional
-  ;;   :shortfall      — map e.g. {:available-ratio 0.8}
+  ;;
+  ;; Legacy flat params:
+  ;;   :liquidity-mode, :loss-mode, :failure-modes, :apy, :shortfall
+  ;;
+  ;; Composable shocks (preferred for stress tests):
+  ;;   :shocks [{:type :apy :value -0.2}
+  ;;           {:type :liquidity-mode :mode :shortfall}
+  ;;           {:type :shortfall :available-ratio 0.8}
+  ;;           {:type :failure-mode :mode :negative-yield}]
   [_ctx world event]
-  (let [{:keys [module-id token liquidity-mode failure-modes apy shortfall]} (:params event)
-        raw-mid (keyword module-id)
-        ;; Resolve through module aliases so "aave-v3" → :yield.provider/liquid-lending
-        mid (get-in world [:yield/module-aliases raw-mid] raw-mid)
+  (let [{:keys [module-id token]} (:params event)
+        mid (yield-module/resolve-module-id world module-id)
         tok (keyword token)]
-    (t/ok (cond-> world
-            liquidity-mode
-            (assoc-in [:yield/risk mid tok :liquidity-mode] (keyword liquidity-mode))
-            failure-modes
-            (assoc-in [:yield/risk mid tok :failure-modes] (into #{} (map keyword failure-modes)))
-            apy
-            (assoc-in [:yield/rates mid tok] (double apy))
-            shortfall
-            (assoc-in [:yield/risk mid tok :shortfall] shortfall)))))
+    (t/ok (yield-risk/apply-market-shock world mid tok (:params event)))))
 
 (defmethod apply-action :default
   [_ctx _world event]
@@ -552,7 +599,7 @@
                           (into {} (map (fn [[oid p]]
                                           [oid (select-keys p [:status :principal :shares
                                                                :unrealized-yield :realized-yield
-                                                               :shortfall :reclaimed-amount
+                                                               :yield-loss :shortfall :reclaimed-amount
                                                                :token :module/id])])
                                         pos)))})
 
@@ -596,7 +643,7 @@
 
   (build-execution-context [_ agents protocol-params]
     (let [pp         protocol-params
-          snapshot   (build-snapshot pp)
+          snapshot   (sew-snapshot/snapshot-from-protocol-params pp)
           rm-addr    (get pp :resolution-module nil)
           esc-map    (get pp :escalation-resolvers nil)
           level-map  (when esc-map
@@ -618,7 +665,11 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (apply-action context world event))
+    (let [eid (event-id event)]
+      (if (and eid (replay-sensitive? event))
+        (idem/apply-once world (dedupe-op-key world event)
+                         (fn [w] (apply-action context w event)))
+        (apply-action context world event))))
 
   (check-invariants-single [_ world]
     (run-single-invariants world))
@@ -669,6 +720,21 @@
                                ;; Anyone can challenge (Phase L)
                                true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
 
+  (created-id [_ action extra]
+    (when (= (compat/canonical-action {:action action}) "create-escrow")
+      (:workflow-id extra)))
+
+  (resolve-id-alias [_ event id-alias-map]
+    (if (empty? id-alias-map)
+      {:ok true :event event}
+      (let [params   (:params event)
+            resolved (into {} (map (fn [[k v]]
+                                     [k (if (and (string? v) (contains? id-alias-map v))
+                                          (get id-alias-map v)
+                                          v)])
+                                   params))]
+        {:ok true :event (assoc event :params resolved)})))
+
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
                :when (= :disputed (:escrow-state et))]
@@ -685,6 +751,11 @@
                                  (get wf actor 0)))]
         (+ hold claim))
       nil))
+
+  proto/BatchConflictModel
+
+  (event-conflict-domains [_ world event]
+    (sew-event-conflict-domains world event))
 
   proto/EconomicModel
 

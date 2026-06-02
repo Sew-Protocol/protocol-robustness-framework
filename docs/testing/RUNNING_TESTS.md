@@ -228,6 +228,24 @@ clojure -M:run -- -p data/params/phase-j-governance-failure.edn -m
 clojure -M:run -- -p data/params/phase-j-sybil-re-entry.edn -m
 ```
 
+### Phase J: Strategy Adaptation Defaults
+
+Use `:strategy-adaptation` to make adaptation assumptions explicit. `nil` means "resolve from params or fallback default", and resolved values are emitted in epoch evidence under `:defection`.
+
+| Setting | Default | Meaning | Override |
+|---|---|---|---|
+| `:slash-risk-inhibition` | `0.7` | Reduces honest→malicious switching when slash risk is high | `:strategy-adaptation` |
+| `:max-switch-probability` | `0.8` | Upper bound on per-epoch strategy switch probability | `:strategy-adaptation` or top-level fallback |
+| `:detection-probability` | `0.1` | Fallback detection probability for load snapshot | `:strategy-adaptation` or scenario params |
+| `:slash-multiplier` | `2.0` | Fallback penalty multiplier for load snapshot | `:strategy-adaptation` or scenario params |
+| `:allowed-targets` | `#{:honest :lazy :malicious}` | Strategies load-optimal adaptation may select | `:strategy-adaptation` |
+| `:blocked-target-policy` | `:inconclusive` | How to classify blocked optimal targets (`:inconclusive`, `:fail`, `:warn`) | `:strategy-adaptation` |
+
+Policy intent:
+- `:inconclusive` — conservative benchmark evidence.
+- `:fail` — strict scenario validation.
+- `:warn` — exploratory runs where classification continues with diagnostics.
+
 Expected Phase J output (all scenarios):
 - 10 epochs executed
 - Honest cumulative profit: 1500

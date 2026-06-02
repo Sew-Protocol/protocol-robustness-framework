@@ -67,14 +67,16 @@ any results.
 
 The engines are **not redundant**. They address different threat models:
 
-| Question | Engine |
-|---|---|
-| *Can this specific attack succeed?* | Deterministic replay |
-| *Is fraud economically rational on average?* | Monte Carlo |
-| *Does the state machine follow the spec?* | Deterministic replay |
-| *Does governance capture become viable at scale?* | Monte Carlo |
-| *Are funds conserved across all transitions?* | Deterministic replay |
-| *Do honest resolvers consistently out-earn malicious ones?* | Monte Carlo |
+
+| Question                                                    | Engine               |
+| ----------------------------------------------------------- | -------------------- |
+| *Can this specific attack succeed?*                         | Deterministic replay |
+| *Is fraud economically rational on average?*                | Monte Carlo          |
+| *Does the state machine follow the spec?*                   | Deterministic replay |
+| *Does governance capture become viable at scale?*           | Monte Carlo          |
+| *Are funds conserved across all transitions?*               | Deterministic replay |
+| *Do honest resolvers consistently out-earn malicious ones?* | Monte Carlo          |
+
 
 Think of them as a double-entry bookkeeping check: the same economic reality, measured
 from two directions.
@@ -97,6 +99,7 @@ Fee, bond, reversal-slash, and appeal-bond formulas are identical across both en
 
 **Governance and liveness failure classes — demonstrated.**
 Three distinct failure classes have reproducible evidence with named scenarios:
+
 - *Security*: adversarial pressure (S01 vs S08)
 - *Governance*: resolver-role takeover mid-dispute (`governance-decay-exploit`)
 - *Liveness*: fund-lock vs Kleros fallback (S17 vs S18)
@@ -110,62 +113,52 @@ suite provide consistent directional signals across thousands of parameter combi
 The Monte Carlo model has been updated with four accuracy improvements:
 
 1. **Fraud upside is now modellable — and the corrected model produces the most
-   important finding in the repository.** The original model only counted the resolver's
+  important finding in the repository.** The original model only counted the resolver's
    *protocol income* (fee minus bond loss). It ignored the fact that a malicious
    resolver who is not caught can redirect the full escrow — an upside roughly 665×
    larger than the fee. With this correction, two results follow immediately:
-
-   - **At calibrated fraud-success-rate (0.22)**, malice EV (201) already exceeds
-     honest EV (142). The original "honest dominates" result was pointing in the wrong
-     direction.
-
-   - **The breakeven detection rate is 70%.** To deter fraud through bond-and-detection
-     alone (ignoring the state machine), detection probability must be ≥ 70%.
-     Current baseline: 10%. Required bond at current detection: **21× current levels**
-     (88,650 wei per 10,000 wei escrow; current: 4,250).
-
+  - **At calibrated fraud-success-rate (0.22)**, malice EV (201) already exceeds
+  honest EV (142). The original "honest dominates" result was pointing in the wrong
+  direction.
+  - **The breakeven detection rate is 70%.** To deter fraud through bond-and-detection
+  alone (ignoring the state machine), detection probability must be ≥ 70%.
+  Current baseline: 10%. Required bond at current detection: **21× current levels**
+  (88,650 wei per 10,000 wei escrow; current: 4,250).
    **What this means for the protocol:** The state machine is not just good design —
    it is *load-bearing* for economic security. The invariant suite constrains the
    effective fraud-success-rate to near zero for all 41 modelled attack vectors.
    Bond deterrence alone is insufficient at current parameter levels.
-
    The new `fraud-success-rate` parameter (default 0.0) allows this to be set
    explicitly. At the default, all existing results are unchanged.
-
 2. **Slash proceeds are now tracked.** Every slashing event now records how the
-   penalty is split between the insurance pool, the protocol, and the burn address.
+  penalty is split between the insurance pool, the protocol, and the burn address.
    This enables insurance solvency questions to be asked of the Monte Carlo output.
-
 3. **Appeal economics are modellable.** Honest resolvers can now optionally earn a
-   share of failed challenge bonds, making the appeal incentive structure more
+  share of failed challenge bonds, making the appeal incentive structure more
    realistic. Off by default.
-
 4. **Collusive gain rate is now parameter-driven.** The original model used a
-   hard-coded mathematical formula for collusion bonuses. This is now a calibratable
+  hard-coded mathematical formula for collusion bonuses. This is now a calibratable
    input, with the original formula as the fallback.
-
 5. **Governance capacity boundary — falsified hypothesis, actionable policy numbers.**
-   Phase AA ("governance as adversary") tests whether attackers can exceed a 20% win rate
+  Phase AA ("governance as adversary") tests whether attackers can exceed a 20% win rate
    via selective enforcement gaming. Results across 5 scenarios:
 
-   | Scenario | Result |
-   |---|---|
-   | High capacity, naive attacker | ✅ SAFE |
-   | Limited capacity (cap=3), learning attacker | ❌ VULNERABLE |
-   | Biased governance (focus on high-value disputes) | ❌ VULNERABLE |
-   | Low-value flooding | ❌ VULNERABLE |
-   | Adversarial threshold search | ❌ VULNERABLE |
+  | Scenario                                         | Result       |
+  | ------------------------------------------------ | ------------ |
+  | High capacity, naive attacker                    | ✅ SAFE       |
+  | Limited capacity (cap=3), learning attacker      | ❌ VULNERABLE |
+  | Biased governance (focus on high-value disputes) | ❌ VULNERABLE |
+  | Low-value flooding                               | ❌ VULNERABLE |
+  | Adversarial threshold search                     | ❌ VULNERABLE |
 
    **Key numbers:** Max attacker win rate 33.6% (threshold 20%). Reviewed-share ≥ 50%
    required to hold the hypothesis. Governance capacity floor: 3 reviews/epoch.
-
    **What this means:** The 20% bound holds only when governance has unconstrained
    capacity and the attacker is naive — an unrealistic baseline. Under capacity
    constraints, a learning attacker exceeds the threshold via selective non-enforcement.
    This is a *governance mechanism design gap*, not an implementation bug.
    The deterministic `governance-decay-exploit` trace shows the same vulnerability class
    in a single trace; Phase AA shows it holds statistically at scale.
-
    **Policy implication:** Reviewed-share ≥ 50% is a necessary condition for the 20%
    bound. If governance capacity cannot guarantee this, a stronger bound or alternative
    enforcement mechanism is required before mainnet.
@@ -225,19 +218,16 @@ invariant suite tests *whether the state machine breaks*. These are different qu
 ### For protocol designers
 
 1. **Run the invariant suite first.** `./scripts/test.sh invariants` takes about
-   one second and is the most reliable signal in the repository. If you change a
+  one second and is the most reliable signal in the repository. If you change a
    protocol parameter, run this.
-
 2. **Use the deterministic engine for any specific attack claim.** If you want to
-   know whether attack pattern X is possible, write a scenario trace and run it. Do
+  know whether attack pattern X is possible, write a scenario trace and run it. Do
    not use Monte Carlo output to answer scenario-specific questions.
-
 3. **Use Monte Carlo for parameter sensitivity.** Sweeping `fee-bps` from 100 to 500,
-   or `fraud-slash-bps` from 1000 to 8000, is exactly the right use of the MC engine.
+  or `fraud-slash-bps` from 1000 to 8000, is exactly the right use of the MC engine.
    It will tell you how directional incentives change across the parameter space.
-
 4. **Set `fraud-success-rate` when modelling adversarial economics.** The calibrated
-   value (0.22, from the adversarial suite) gives a more realistic picture of whether
+  value (0.22, from the adversarial suite) gives a more realistic picture of whether
    fraud is economically rational for a given parameter set. The zero default is
    conservative in the wrong direction.
 
@@ -276,18 +266,19 @@ payoff matrix. The breakeven analysis (implemented in mc-b1 through mc-b4) estab
 the required conditions for bond-and-detection deterrence to work. The current finding:
 
 - **At baseline params:** detection must be ≥ 70% OR bond must be 21× current to deter
-  fraud through incentives alone
+fraud through incentives alone
 - **The state machine is load-bearing:** if the invariant suite constrains fraud-success-rate
-  to near zero (which it does for the 41 modelled vectors), the bond-and-detection gap
-  does not matter
+to near zero (which it does for the 41 modelled vectors), the bond-and-detection gap
+does not matter
 - **The open question:** what is the effective fraud-success-rate for *unmodelled* attack
-  vectors? The invariant suite cannot answer this for attacks it has not yet been shown
+vectors? The invariant suite cannot answer this for attacks it has not yet been shown
 
 Closing this requires:
+
 1. Calibrating `fraud-success-rate` empirically from on-chain dispute data or a richer
-   agent model
+  agent model
 2. Adding a multi-party model where the *recipient of the misdirected escrow* is also
-   a modelled actor with costs and risks
+  a modelled actor with costs and risks
 3. Running the combined model across the fee/bond/detection-probability parameter space
 
 This is the single change that would most materially strengthen the economic security
@@ -300,32 +291,28 @@ guarantee reviewed-share ≥ 50%, or the 20% attacker win-rate bound must be rep
 a weaker one that is defensible under realistic capacity. Three concrete options:
 
 1. **Minimum reviewed-share protocol rule.** Require that every governance epoch reviews
-   at least 50% of disputes before threshold votes are executed. Failing epochs trigger
+  at least 50% of disputes before threshold votes are executed. Failing epochs trigger
    an automatic capacity extension. This is implementable without changing the core
    state machine.
-
 2. **Commit-reveal threshold submission.** Attackers exploit the visibility of which
-   disputes are reviewed to selectively target unreviewed ones. Hiding review status until
+  disputes are reviewed to selectively target unreviewed ones. Hiding review status until
    the epoch closes removes the information advantage. Adds one round-trip to governance.
-
 3. **Random audit with deterrence bond.** Instead of guaranteeing review coverage,
-   randomly audit a fraction of disputes after the fact. Resolvers who submitted
+  randomly audit a fraction of disputes after the fact. Resolvers who submitted
    governance-gaming requests face retroactive slashing. Effective deterrence at lower
    governance cost, but requires a slashing mechanism for governance actors.
 
 The Phase AA model can be used to evaluate each of these options before implementation.
 
-
-
 The 96 deterministic scenarios cover the main lifecycle paths well. The gaps are:
 
 - **Multi-party collusion** at scale (>2 colluders with coordinated timing)
 - **Economic griefing** (attacker absorbs loss to impose disproportionate cost on
-  honest parties)
+honest parties)
 - **Oracle manipulation** (false price signals fed to a resolver that uses external
-  data)
+data)
 - **Cross-workflow attacks** (attacker uses a sequence of small disputes to build
-  position before a large one)
+position before a large one)
 
 Each of these can be added as new scenario traces without changing the protocol logic.
 
@@ -371,11 +358,11 @@ The repository currently covers Layer 2 well and provides partial evidence for
 Layer 1. The target end state is a system where:
 
 - Every claim made in the research note is directly traceable to a passing test or
-  calibrated model output
+calibrated model output
 - The simulation suite is used as the *specification* for Layer 3 formal tests — each
-  invariant predicate in `invariants.clj` becomes a Halmos property
+invariant predicate in `invariants.clj` becomes a Halmos property
 - The economic model includes a full multi-party payoff matrix (resolver, challenger,
-  colluder, insurance pool) with calibrated parameters
+colluder, insurance pool) with calibrated parameters
 - The fraud-success-rate is bounded empirically, not assumed
 
 At that point the simulation moves from *exploratory evidence* to *engineering
@@ -385,14 +372,16 @@ specification*.
 
 ## Quick reference
 
-| Task | Command |
-|---|---|
-| Run all deterministic tests | `./scripts/test.sh invariants` |
-| Run full unit suite | `./scripts/test.sh unit` |
-| Run Monte Carlo phases | `./scripts/test.sh monte-carlo` |
-| Run everything | `./scripts/test.sh all` |
-| Run single MC phase | `clojure -M:run -- -p data/params/baseline.edn -O` |
-| Generate attack-outcome diagrams | `python python/attack_outcome_map.py` |
+
+| Task                             | Command                                            |
+| -------------------------------- | -------------------------------------------------- |
+| Run all deterministic tests      | `./scripts/test.sh invariants`                     |
+| Run full unit suite              | `./scripts/test.sh unit`                           |
+| Run Monte Carlo phases           | `./scripts/test.sh monte-carlo`                    |
+| Run everything                   | `./scripts/test.sh all`                            |
+| Run single MC phase              | `clojure -M:run -- -p data/params/baseline.edn -O` |
+| Generate attack-outcome diagrams | `python python/attack_outcome_map.py`              |
+
 
 Parameter files live in `data/params/`. Results are written to `results/`. The
 evidence pack is in `docs/evidence/`.
@@ -409,29 +398,31 @@ as the primary validation target.
 
 - The replay kernel (`contract_model/replay.clj`) is protocol-agnostic.
 - Protocol logic is provided via the `SimulationAdapter` interface (`protocols/protocol.clj`),
-  with optional `EconomicModel` and `AnalysisModule` extensions.
+with optional `EconomicModel` and `AnalysisModule` extensions.
 - `SewProtocol` (`protocols/sew.clj`) is the adapter that connects Sew domain logic
-  (`protocols/sew/*`) to those interfaces.
+(`protocols/sew/`*) to those interfaces.
 
 ### Architecture in one view
 
-| Layer | Purpose | Key namespaces |
-|---|---|---|
-| Protocol-agnostic kernel | Deterministic replay of scenario actions | `contract_model/replay.clj` |
-| Protocol adapters | Plug-in interface + concrete implementation wiring | `protocols/protocol.clj`, `protocols/sew.clj`, `protocols/dummy.clj` |
-| Shared adapter flow-control | Reusable precondition wrappers (actor resolution, checks, role gates) | `protocols/common/action_context.clj` |
-| Sew domain implementation | State machine, lifecycle, accounting, resolution, invariants | `protocols/sew/*` |
-| Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*` |
-| Shell/integration | Persistence, file I/O, gRPC/session management, CLI | `db/*`, `io/*`, `server/*`, `core.clj` |
+
+| Layer                            | Purpose                                                               | Key namespaces                                                       |
+| -------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Protocol-agnostic kernel         | Deterministic replay of scenario actions                              | `contract_model/replay.clj`                                          |
+| Protocol adapters                | Plug-in interface + concrete implementation wiring                    | `protocols/protocol.clj`, `protocols/sew.clj`, `protocols/dummy.clj` |
+| Shared adapter flow-control      | Reusable precondition wrappers (actor resolution, checks, role gates) | `protocols/common/action_context.clj`                                |
+| Sew domain implementation        | State machine, lifecycle, accounting, resolution, invariants          | `protocols/sew/*`                                                    |
+| Simulation and stochastic models | Parameter sweeps, adversarial/economic phases, deterministic fixtures | `sim/*`, `stochastic/*`, `adversaries/*`                             |
+| Shell/integration                | Persistence, file I/O, gRPC/session management, CLI                   | `db/*`, `io/*`, `server/*`, `core.clj`                               |
+
 
 ### Namespace maturity
 
 **Stable core (framework-level):**
-`contract_model/*`, `protocols/protocol.clj`, `protocols/common/*`, `scenario/*`,
+`contract_model/`*, `protocols/protocol.clj`, `protocols/common/*`, `scenario/*`,
 `io/scenarios.clj`, `db/*`, `server/*`
 
 **Sew implementation (production-grade for this repo):**
-`protocols/sew/*`, `yield/modules/aave.clj` and Sew-integrated yield flows.
+`protocols/sew/`*, `yield/modules/aave.clj` and Sew-integrated yield flows.
 Sew is the primary protocol model. Its semantics are not assumed to be universal.
 
 **Generic adapter façades (stable API; Sew default providers today):**
@@ -440,7 +431,7 @@ Sew is the primary protocol model. Its semantics are not assumed to be universal
 `io/trace_score.clj` → `io/sew/trace_score.clj`
 
 **Experimental / research track (exclude from core capability claims):**
-`sim/adversarial/reorg_check.clj`, selected exploratory `sim/*` modules, `research/sew/*`
+`sim/adversarial/reorg_check.clj`, selected exploratory `sim/`* modules, `research/sew/*`
 
 For the complete namespace-to-layer mapping table see `docs/architecture/ARCHITECTURE.md` Appendix A.
 
@@ -459,16 +450,18 @@ These controls are tested in focused yield failure tests and are replay/scenario
 
 ### How to navigate
 
-| Goal | Document |
-|---|---|
-| Deep architecture and layering rules | `docs/architecture/ARCHITECTURE.md` |
-| Adapter implementation and authoring | `docs/architecture/ADAPTER_AUTHORING_GUIDE.md` |
-| Framework / adapter / Sew / research boundaries | `docs/framework-boundaries.md` |
-| Reusable adapter design notes | `docs/overview/REUSABLE_COMPONENTS.md` |
-| Use-of-funds accounting contract | `docs/overview/USE_OF_FUNDS.md` |
-| End-user and CLI workflows | `docs/quickstart/QUICKSTART.md`, `docs/usage.md` |
-| Test suite reference | `docs/testing/TEST_SUITE.md`, `docs/testing/RUNNING_TESTS.md` |
-| Evidence and reproducibility | `docs/evidence/RESEARCHER_EVIDENCE_PACK.md` |
+
+| Goal                                            | Document                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| Deep architecture and layering rules            | `docs/architecture/ARCHITECTURE.md`                           |
+| Adapter implementation and authoring            | `docs/architecture/ADAPTER_AUTHORING_GUIDE.md`                |
+| Framework / adapter / Sew / research boundaries | `docs/framework-boundaries.md`                                |
+| Reusable adapter design notes                   | `docs/overview/REUSABLE_COMPONENTS.md`                        |
+| Use-of-funds accounting contract                | `docs/overview/USE_OF_FUNDS.md`                               |
+| End-user and CLI workflows                      | `docs/quickstart/QUICKSTART.md`, `docs/usage.md`              |
+| Test suite reference                            | `docs/testing/TEST_SUITE.md`, `docs/testing/RUNNING_TESTS.md` |
+| Evidence and reproducibility                    | `docs/evidence/RESEARCHER_EVIDENCE_PACK.md`                   |
+
 
 ---
 

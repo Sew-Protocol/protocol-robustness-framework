@@ -19,22 +19,32 @@
 
       (if (:invariants options)
         (let [protocol-id (:protocol options preg/default-protocol-id)
-              runner-sym  (preg/get-invariant-runner protocol-id)
+              suite-kw    (when-let [s (:suite options)]
+                            (keyword s))
+              fixture-kw  (when-let [s (:fixture-suite options)]
+                            (keyword s))
               scenario    (:scenario options)
               output      (:output-file options)]
           (cond
-            (and runner-sym (not scenario))
-            (System/exit ((requiring-resolve runner-sym)))
-
-            (and runner-sym scenario)
-            (System/exit ((requiring-resolve 'resolver-sim.io.invariant-runner/run-and-report)
-                          scenario output))
-
-            :else
+            (not= protocol-id preg/default-protocol-id)
             (do (println (str "Unknown protocol: " protocol-id
                               ". Available: " (str/join ", " (preg/known-protocol-ids))))
                 (log/error! "unknown protocol" {:protocol-id protocol-id})
-                (System/exit 1))))
+                (System/exit 1))
+
+            (and suite-kw fixture-kw)
+            (do (println "Use only one of --suite or --fixture-suite.")
+                (System/exit 1))
+
+            :else
+            (System/exit
+             ((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report)
+              {:protocol       protocol-id
+               :suite          suite-kw
+               :fixture-suite  fixture-kw
+               :scenario       scenario
+               :output-file    output}
+              {}))))
 
         (if (:serve options)
           (try

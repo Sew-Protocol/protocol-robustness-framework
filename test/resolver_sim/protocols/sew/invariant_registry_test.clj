@@ -40,3 +40,24 @@
                                 (set (keys (:results (inv/check-transition world w1)))))]
       (is (set/subset? inv/canonical-ids executed))
       (is (set/subset? executed inv/canonical-ids)))))
+
+(deftest persisted-escrow-state-valid-rejects-none
+  (let [world (assoc-in (sample-world) [:escrow-transfers 0 :escrow-state] :none)]
+    (is (not (:holds? (inv/persisted-escrow-state-valid? world))))
+    (is (= [{:workflow-id 0
+             :escrow-state :none
+             :allowed #{:pending :disputed :released :refunded :resolved}}]
+           (:violations (inv/persisted-escrow-state-valid? world))))))
+
+(deftest dispute-level-bounded-rejects-pending-with-level
+  (let [world (-> (sample-world)
+                  (assoc-in [:dispute-levels 0] 1))]
+    (is (not (:holds? (inv/dispute-level-bounded? world))))
+    (is (= :dispute-level-on-non-disputed
+           (:reason (first (:violations (inv/dispute-level-bounded? world))))))))
+
+(deftest dispute-level-bounded-allows-terminal-with-level
+  (let [world (-> (sample-world)
+                  (assoc-in [:escrow-transfers 0 :escrow-state] :released)
+                  (assoc-in [:dispute-levels 0] 1))]
+    (is (:holds? (inv/dispute-level-bounded? world)))))

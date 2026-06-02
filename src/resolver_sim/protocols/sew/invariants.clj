@@ -8,7 +8,8 @@
      {:holds? bool :violations [...]}
 
    Invariants:
-     1. solvency (single-world)      — total-held[t] = sum(live afa[t])  STRICT =
+     1. solvency (single-world)      — total-held[t] = live-escrow-AFA + bonds + slash-bonds
+                                       + yield-component + resolver-stakes (USDC)  STRICT =
                                        and total-held[t] <= token-balance[t]  (external)
      2. fee-monotonicity (single)    — total-fees[t] never goes negative
      3. state-irreversibility (cross)— terminal states are absorbing (checked via check-transition)
@@ -40,6 +41,7 @@
     :fees-non-negative
     :held-non-negative
     :all-status-combinations-valid
+    :persisted-escrow-state-valid
     :pending-settlement-consistent
     :dispute-timestamp-consistent
     :dispute-level-bounded
@@ -93,12 +95,30 @@
    Every ID here must be executed by `check-all` or `check-transition`."
   (set/union world-invariant-ids transition-invariant-ids))
 
-(defn- get-token-claimable-sum [world token]
-  (reduce + 0 (for [[wf cmap] (:claimable world {})
-                    :let [et (get-in world [:escrow-transfers wf])]
-                    :when (= (:token et) token)
-                    [_ amt] cmap]
-                (or amt 0))))
+(defn- get-token-claimable-v2-non-principal-sum
+  "Sum v2 claimable outside :settlement/principal.
+   For settlement principal accounting, :claimable-v2 is authoritative; legacy :claimable
+   is mirrored for backward compatibility and parity checks."
+  [world token]
+  (reduce + 0
+          (for [[wf domain-map] (get-in world [:claimable-v2] {})
+                :let [et (get-in world [:escrow-transfers wf])]
+                :when (and et (= (:token et) token))
+                [domain addr-map] domain-map
+                :when (not= domain :settlement/principal)
+                [_ amt] addr-map]
+            (or amt 0))))
+
+(defn- get-token-claimable-sum
+  "Aggregate claimable amount by token.
+   Uses legacy :claimable for principal (mirrored from v2) plus non-principal v2 domains."
+  [world token]
+  (+ (reduce + 0 (for [[wf cmap] (:claimable world {})
+                        :let [et (get-in world [:escrow-transfers wf])]
+                        :when (= (:token et) token)
+                        [_ amt] cmap]
+                    (or amt 0)))
+     (get-token-claimable-v2-non-principal-sum world token)))
 
 (defn- get-distributed-sum [world token]
   (let [bd               (:bond-distribution world {:insurance 0 :protocol 0})
@@ -149,10 +169,12 @@
                      (or (and et (contains? live-states (:escrow-state et)))
                          (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
-                ;; Unwinding (shortfall-deferred) position — deferred amount remains in :total-held
-                ;; until claim-deferred-yield closes it out, regardless of escrow state
+                ;; Escrow :unwinding — deferred remains in :total-held after finalize (live AFA gone).
+                ;; Resolver :unwinding — deferred is still inside the stake already in :total-held;
+                ;; do not add to yield-sum (would double-count with :resolver-stakes).
                 (and (= (:token pos) token)
-                     (= (:status pos) :unwinding))
+                     (= (:status pos) :unwinding)
+                     (not (t/resolver-yield-owner-id? oid)))
                 (+ acc (get-in pos [:shortfall :deferred-amount] 0))
                 :else acc)))
           0
@@ -320,6 +342,30 @@
            :escrow-state     (:escrow-state et)
            :sender-status    (:sender-status et :none)
            :recipient-status (:recipient-status et :none)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant 7b: Persisted escrow state valid
+;;
+;; `:none` is a pre-creation sentinel only. Every entry in :escrow-transfers
+;; must use a post-creation EscrowState.
+;; ---------------------------------------------------------------------------
+
+(def ^:private persisted-escrow-states
+  "EscrowState values allowed on stored EscrowTransfer records."
+  #{:pending :disputed :released :refunded :resolved})
+
+(defn persisted-escrow-state-valid?
+  "True when no stored escrow uses :none or an unknown :escrow-state."
+  [world]
+  (let [violations
+        (for [[wf et] (:escrow-transfers world)
+              :let  [state (:escrow-state et)]
+              :when (not (contains? persisted-escrow-states state))]
+          {:workflow-id  wf
+           :escrow-state state
+           :allowed      persisted-escrow-states})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -492,14 +538,26 @@
 ;; ---------------------------------------------------------------------------
 
 (defn dispute-level-bounded?
-  "True when every :dispute-levels entry is in [0, max-dispute-level]
-   and only exists for escrows that are or were :disputed."
+  "True when every :dispute-levels entry is in [0, max-dispute-level], refers to
+   an existing escrow, and is absent while the escrow is still :pending (or :none).
+   Terminal escrows may retain a level entry after finalization."
   [world]
-  (let [violations
+  (let [transfers (:escrow-transfers world {})
+        violations
         (for [[wf level] (:dispute-levels world)
-              :when (or (neg? level)
-                        (> level t/max-dispute-level))]
-          {:workflow-id wf :level level :max t/max-dispute-level})]
+              :let  [et    (get transfers wf)
+                     state (:escrow-state et)
+                     reason (cond
+                              (nil? et) :orphan-dispute-level
+                              (or (neg? level) (> level t/max-dispute-level))
+                              :level-out-of-range
+                              (contains? #{:pending :none} state)
+                              :dispute-level-on-non-disputed
+                              :else nil)]
+              :when reason]
+          (cond-> {:workflow-id wf :level level :reason reason}
+            et (assoc :escrow-state state)
+            (= reason :level-out-of-range) (assoc :max t/max-dispute-level)))]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
@@ -888,12 +946,13 @@
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn shortfall-fidelity?
-  "True when fulfilled + deferred + haircut equals the original position amount."
+  "True when fulfilled + deferred + haircut equals shortfall basis.
+   Uses :basis-amount when present; falls back to position principal for legacy data."
   [world]
   (let [violations
         (for [[oid pos] (get-in world [:yield/positions] {})
               :let [shortfall (:shortfall pos)
-                    amount    (:principal pos 0)]
+                    amount    (or (:basis-amount shortfall) (:principal pos 0))]
               :when shortfall
               :let [total (+ (:fulfilled-amount shortfall 0)
                              (:deferred-amount shortfall 0)
@@ -903,15 +962,17 @@
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn migration-parity?
-  "True when the sum of v2 claimable domains equals legacy claimable."
+  "True when v2 :settlement/principal matches legacy :claimable per workflow.
+   Non-principal v2 domains (e.g. :liability/challenge-bounty) are allowed without legacy dual-write."
   [world]
   (let [violations
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [legacy (get-in world [:claimable wf] {})
-                    total-v2 (reduce + 0 (for [d (vals domain-map)] (reduce + 0 (vals d))))
+                    principal-v2 (get domain-map :settlement/principal {})
+                    total-v2-principal (reduce + 0 (vals principal-v2))
                     total-legacy (reduce + 0 (vals legacy))]
-              :when (not= total-v2 total-legacy)]
-          {:workflow-id wf :v2 total-v2 :legacy total-legacy})]
+              :when (not= total-v2-principal total-legacy)]
+          {:workflow-id wf :v2-principal total-v2-principal :legacy total-legacy})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn claimable-classification
@@ -1092,20 +1153,24 @@
                                    0)
                     withdrawn-before (get (:total-withdrawn world-before) token 0)
                     withdrawn-after  (get (:total-withdrawn world-after) token 0)
+                    yield-gen-before (get (:total-yield-generated world-before) token 0)
+                    yield-gen-after  (get (:total-yield-generated world-after) token 0)
                     delta-held      (- held-after held-before)
                     delta-released  (- released-after released-before)
                     delta-refunded  (- refunded-after refunded-before)
                     delta-claimable (- claimable-after claimable-before)
                     delta-withdrawn (- withdrawn-after withdrawn-before)
                     delta-stake     (- stake-after stake-before)
+                    delta-yield-gen (- yield-gen-after yield-gen-before)
                     delta-distributed (- (get-distributed-sum world-after token)
                                          (get-distributed-sum world-before token))
                     ;; Positive = funds left the protocol without being accounted for.
                     ;; A drop in held should be matched by increases in released/refunded/claimable
                     ;; or by bond/appeal distributions leaving the protocol custody.
+                    ;; Mark-to-market accrual reversals pair with :total-yield-generated.
                     unexplained-leak (+ delta-held delta-released delta-refunded
                                         delta-claimable delta-withdrawn (- delta-stake)
-                                        delta-distributed)]
+                                        delta-distributed (- delta-yield-gen))]
               :when (neg? unexplained-leak)]
           {:token token
            :delta-held delta-held
@@ -1273,20 +1338,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn reversal-slash-disabled?
-  "True when no reversal slash has a non-zero amount.
-   Mirrors SlashingModuleInvariants: reversal slashing is disabled in DR3 v3."
+  "True when no reversal slash has a non-zero amount on escrows snapshotted with
+   reversal-slash-bps = 0 (DR3 v3 default). When any in-flight snapshot enables
+   reversal slashing, this invariant is not applicable."
   [world]
-  (let [violations
-        (for [[slash-id slash] (:pending-fraud-slashes world {})
-              :when (= :reversal (:reason slash))
-              :when (pos? (:amount slash 0))]
-          {:slash-id     slash-id
-           :amount       (:amount slash)
-           :basis-amount (:basis-amount slash)
-           :basis-kind   (:basis-kind slash)
-           :slash-bps    (:slash-bps slash)})]
+  (let [snapshots   (vals (:module-snapshots world {}))
+        dr3-disabled? (and (seq snapshots)
+                           (every? #(zero? (:reversal-slash-bps % 0)) snapshots))
+        violations
+        (when dr3-disabled?
+          (for [[slash-id slash] (:pending-fraud-slashes world {})
+                :when (= :reversal (:reason slash))
+                :when (pos? (:amount slash 0))]
+            {:slash-id     slash-id
+             :amount       (:amount slash)
+             :basis-amount (:basis-amount slash)
+             :basis-kind   (:basis-kind slash)
+             :slash-bps    (:slash-bps slash)}))]
     {:holds?     (empty? violations)
-      :violations (vec violations)}))
+     :violations (vec (or violations []))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 30: Resolver capacity never exceeded
@@ -1436,6 +1506,7 @@
                  :fees-non-negative             (fees-non-negative? world)
                  :held-non-negative             (held-non-negative? world)
                  :all-status-combinations-valid (all-status-combinations-valid? world)
+                 :persisted-escrow-state-valid (persisted-escrow-state-valid? world)
                  :pending-settlement-consistent (pending-settlement-consistency? world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)

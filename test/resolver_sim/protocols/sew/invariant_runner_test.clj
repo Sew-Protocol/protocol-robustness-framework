@@ -2,10 +2,11 @@
   "Smoke tests for the S01–S100 deterministic invariant suite runner."
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.invariant-runner :as runner]
-            [resolver-sim.protocols.sew.invariant-scenarios :as sc]))
+            [resolver-sim.protocols.sew.invariant-scenarios :as sc]
+            [resolver-sim.scenario.runner :as scenario-runner]))
 
 (deftest test-registry-size
-  (is (= 105 (count sc/all-scenarios))))
+  (is (= 115 (count sc/all-scenarios))))
 
 (deftest test-run-all-all-pass
   (let [{:keys [passed total results]} (runner/run-all)]
@@ -25,3 +26,9 @@
   (let [summary (runner/run-all)
         code    (runner/print-report summary)]
     (is (= 0 code))))
+
+(deftest test-scenario-pass-aligned-with-run-all
+  (let [{:keys [results]} (runner/run-all)]
+    (testing "single-scenario entries (paired registry rows omit :outcome)"
+      (is (every? #(= (:pass? %) (scenario-runner/scenario-pass? % {}))
+                  (filter #(contains? % :outcome) results))))))

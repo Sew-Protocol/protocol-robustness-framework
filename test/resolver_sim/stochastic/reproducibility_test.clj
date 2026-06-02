@@ -39,3 +39,141 @@
           params' (assoc params :rng (rng/make-rng 1))]
       (is (= (detection/detect-fraud? oracle nil params)
              (detection/detect-fraud? oracle nil params'))))))
+
+(deftest oracle-fixture-static-no-slash-suppresses-detection
+  (testing ":static-no-slash forces detection rolls to fail"
+    (let [params {:rng (rng/make-rng 7)
+                  :oracle-fixture {:mode :static-no-slash}
+                  :fraud-detection-probability 1.0
+                  :timeout-detection-probability 1.0}
+          out (detection/detect-probabilistic-violations params :malicious false 1.0)]
+      (is (false? (:fraud-detected? out)))
+      (is (false? (:timeout-detected? out)))
+      (is (false? (:l1-slashed? out))))))
+
+(deftest oracle-fixture-fixed-sequence-consumes-rolls-in-order
+  (testing ":fixed-roll-sequence consumes rolls in call order"
+    (let [params {:rng (rng/make-rng 42)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls [0.90 0.01 0.50]
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursor (atom 0)
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          out (detection/detect-probabilistic-violations params :malicious false 0.1)]
+      (is (false? (:fraud-detected? out)))
+      (is (true? (:timeout-detected? out)))
+      (is (false? (:l1-slashed? out))))))
+
+(deftest oracle-fixture-fixed-sequence-exhaustion-throws
+  (testing ":fixed-roll-sequence throws when rolls are exhausted with :throw policy"
+    (let [params {:rng (rng/make-rng 1)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls [0.2]
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursor (atom 0)
+                  :fraud-detection-probability 1.0
+                  :timeout-detection-probability 1.0}]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"exhausted"
+           (detection/detect-probabilistic-violations params :malicious false 1.0))))))
+
+(deftest oracle-fixture-static-always-detect-forces-detection
+  (testing ":static-always-detect forces fraud/timeout/L1 detection when thresholds > 0"
+    (let [params {:rng (rng/make-rng 3)
+                  :oracle-fixture {:mode :static-always-detect}
+                  :fraud-detection-probability 0.25
+                  :timeout-detection-probability 0.25}
+          out (detection/detect-probabilistic-violations params :malicious false 0.25)]
+      (is (true? (:fraud-detected? out)))
+      (is (true? (:timeout-detected? out)))
+      (is (true? (:l1-slashed? out))))))
+
+(deftest oracle-fixture-static-no-slash-suppresses-l2
+  (testing ":static-no-slash suppresses L2 backstop detection"
+    (let [params {:rng (rng/make-rng 9)
+                  :oracle-fixture {:mode :static-no-slash}
+                  :l2-detection-prob 0.99}]
+      (is (false? (detection/l2-slashed? params
+                                         {:verdict-correct? false
+                                          :appealed? true}))))))
+
+(deftest timeout-detection-probability-is-active
+  (testing ":timeout-detection-probability controls timeout detection rolls"
+    (let [params {:rng (rng/make-rng 11)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls [0.04]
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursor (atom 0)
+                  :timeout-detection-probability 0.05
+                  :fraud-detection-probability 0.0}
+          out (detection/detect-probabilistic-violations params :lazy true 0.0)]
+      (is (true? (:timeout-detected? out))))))
+
+(deftest oracle-fixture-per-kind-roll-map-uses-independent-sequences
+  (testing "per-kind roll maps consume independent cursors by roll-kind"
+    (let [params {:rng (rng/make-rng 21)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls {:fraud-detection [0.90]
+                                           :timeout-detection [0.01]
+                                           :l1-detection [0.80]}
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursors (atom {})
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          out (detection/detect-probabilistic-violations params :malicious false 0.1)]
+      (is (false? (:fraud-detected? out)))
+      (is (true? (:timeout-detected? out)))
+      (is (false? (:l1-slashed? out))))))
+
+(deftest oracle-fixture-per-kind-roll-map-exhaustion-is-per-kind
+  (testing "exhaustion is evaluated per roll-kind sequence"
+    (let [params {:rng (rng/make-rng 22)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls {:fraud-detection [0.5]
+                                           :default [0.1 0.2]}
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursors (atom {})
+                  :fraud-detection-probability 1.0
+                  :timeout-detection-probability 0.0}]
+      ;; First fraud roll consumes the only fraud-detection entry.
+      (is (true? (:fraud-detected?
+                  (detection/detect-probabilistic-violations params :malicious false 0.0))))
+      ;; Second fraud roll should exhaust that per-kind sequence.
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"exhausted"
+           (detection/detect-probabilistic-violations params :malicious false 0.0))))))
+
+(deftest oracle-roll-trace-metadata-is-emitted
+  (testing "roll trace entries include kind/source/value/threshold/detected"
+    (let [trace (atom [])
+          params {:rng (rng/make-rng 31)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls {:fraud-detection [0.90]
+                                           :timeout-detection [0.01]
+                                           :l1-detection [0.80]}
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-trace-enabled? true
+                  :oracle-roll-trace trace
+                  :oracle-roll-cursors (atom {})
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}]
+      (detection/detect-probabilistic-violations params :malicious false 0.1)
+      (is (= 3 (count @trace)))
+      (doseq [entry @trace]
+        (is (contains? entry :roll/kind))
+        (is (contains? entry :roll/source))
+        (is (contains? entry :roll/value))
+        (is (contains? entry :threshold))
+        (is (contains? entry :detected?)))
+      (is (= :fraud-detection (:roll/kind (first @trace))))
+      (is (= :fixed-roll-sequence (:roll/source (first @trace))))
+      (is (false? (:detected? (first @trace)))))))

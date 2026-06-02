@@ -114,6 +114,22 @@
       (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
       world')))
 
+(defn clear-claimable-v2-kind
+  "Clear all v2 claimables for a workflow + kind.
+   Idempotent by construction (dissoc-based), so repeated calls do not create negatives.
+   For :settlement/principal, clears legacy :claimable for backward-compat parity.
+   This function never infers claimants and never creates nil claimant keys."
+  [world workflow-id kind]
+  (let [world' (update-in world [:claimable-v2 workflow-id] dissoc kind)]
+    (if (= kind :settlement/principal)
+      (update world' :claimable dissoc workflow-id)
+      world')))
+
+(defn clear-claimable-v2-domain
+  "Backward-compatible alias for clear-claimable-v2-kind."
+  [world workflow-id domain]
+  (clear-claimable-v2-kind world workflow-id domain))
+
 (defn- clear-claimable-v2-for-addr
   "Zero claimable-v2 balances for addr on workflow-id (all domains)."
   [world wf-id addr]
@@ -196,16 +212,18 @@
    50% -> insurance, 30% -> protocol, 20% -> retained reserves.
    Bounty is subtracted from the 'insurance' and 'protocol' portions proportionally.
    Returns updated world."
-  ([world amount] (distribute-slashed-funds world amount nil 0))
+  ([world amount] (distribute-slashed-funds world amount nil 0 nil))
   ([world amount challenger bounty-bps]
+   (distribute-slashed-funds world amount challenger bounty-bps nil))
+  ([world amount challenger bounty-bps workflow-id]
    (let [bounty (payoffs/calculate-bounty amount bounty-bps)
          dist   (payoffs/calculate-slashing-distribution amount bounty)]
      (-> world
          (update-in [:bond-distribution :insurance] (fnil + 0) (:insurance dist))
          (update-in [:bond-distribution :protocol]  (fnil + 0) (:protocol dist))
          (update-in [:retained-slash-reserves]      (fnil + 0) (:retained dist))
-         (cond-> (and challenger (pos? bounty))
-           (update-in [:claimable challenger] (fnil + 0) bounty))))))
+         (cond-> (and challenger (pos? bounty) (some? workflow-id))
+           (record-claimable-v2 workflow-id :liability/challenge-bounty challenger bounty))))))
 
 (defn slash-bond
   "Slash the posted bond for a losing appellant.

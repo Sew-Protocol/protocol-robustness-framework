@@ -5,10 +5,18 @@
 (defn none-accrue [world _ _] world)
 (defn none-withdraw [world _ _] world)
 
+(defn make-none-module
+  "Build a declarative zero-yield module record (no-op ops; no capabilities advertised)."
+  ([module-id]
+   (make-none-module module-id :none))
+  ([module-id module-type]
+   {:module/id module-id
+    :module/type module-type
+    :module/capabilities #{}
+    :accounting/type :none
+    :ops {:yield/deposit none-deposit
+          :yield/withdraw none-withdraw
+          :yield/accrue none-accrue}}))
+
 (def zero-yield-module
-  {:module/id :none
-   :module/type :none
-   :module/capabilities #{}
-   :ops {:yield/deposit none-deposit
-         :yield/withdraw none-withdraw
-         :yield/accrue none-accrue}})
+  (make-none-module :none))

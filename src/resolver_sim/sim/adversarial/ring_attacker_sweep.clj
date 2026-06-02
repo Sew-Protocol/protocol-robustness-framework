@@ -24,7 +24,9 @@
     (assoc params
            :fraud-detection-probability    (reduce-prob (:fraud-detection-probability params 0.05))
            :slashing-detection-probability (reduce-prob (:slashing-detection-probability params 0.10))
-           :reversal-detection-probability (reduce-prob (:reversal-detection-probability params 0.03)))))
+           :reversal-detection-probability (reduce-prob (:reversal-detection-probability params 0.03))
+           :p-l1-reversal                  (reduce-prob (or (:p-l1-reversal params) 0.85))
+           :p-l2-reversal                  (reduce-prob (or (:p-l2-reversal params) 0.95))))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-ring-size multi-epoch run

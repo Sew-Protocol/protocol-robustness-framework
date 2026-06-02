@@ -473,8 +473,7 @@
                      {:id "l0resolver" :address "0xl0"     :role "resolver"}]
    :protocol-params kleros
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}}
+   [(kleros-create-escrow-event 0 1000)
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id 0}}
     ;; Kleros module authorizes 0xl0 at level 0 → finalized immediately
@@ -491,6 +490,9 @@
   {:scenario-id     "s19-dr3-kleros-escalation-rejected-l0-resolves"
    :schema-version  "1.0"
    :scenario-author "@grifma"
+   :strict-expected-errors? true
+   :expected-errors [{:seq 2 :action "escalate_dispute" :error :no-resolution-to-appeal}
+                     {:seq 4 :action "execute_resolution" :error :transfer-not-in-dispute}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
                      {:id "seller"     :address "0xseller" :strategy "honest"}
@@ -498,8 +500,7 @@
                      {:id "l1resolver" :address "0xl1"     :role "resolver"}]
    :protocol-params kleros
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}}
+   [(kleros-create-escrow-event 0 1000)
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id 0}}
     ;; Escalation before any resolution → rejected (:no-resolution-to-appeal)
@@ -508,7 +509,9 @@
     ;; L0 resolver resolves immediately (no appeal window)
     {:seq 3 :time 1120 :agent "l0resolver" :action "execute_resolution"
      :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
-    ;; L1 tries on terminal state → rejected
+    ;; L1 tries after L0 resolved → rejected (:transfer-not-in-dispute)
+    ;; State check now fires before auth; escrow is :released, so any caller
+    ;; receives the same informative error regardless of resolver identity.
     {:seq 4 :time 1180 :agent "l1resolver" :action "execute_resolution"
      :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}]})
 
@@ -530,8 +533,7 @@
                      {:id "l2resolver" :address "0xl2"     :role "resolver"}]
    :protocol-params kleros
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}}
+   [(kleros-create-escrow-event 0 1000)
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id 0}}
     ;; Three escalation attempts, all rejected (:no-resolution-to-appeal)
@@ -564,8 +566,7 @@
                      {:id "keeper"     :address "0xkeeper" :role "resolver"}]
    :protocol-params kleros-appeal
    :events
-   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-     :params {:token "USDC" :to "0xseller" :amount 5000}}
+   [(kleros-create-escrow-event 0 1000)
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
      :params {:workflow-id 0}}
     ;; L0 resolves → creates pending (deadline = 1120+60 = 1180)

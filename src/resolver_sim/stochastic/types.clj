@@ -23,6 +23,28 @@
    :reversal-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :reversal-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
    :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
+   :oracle-fixture (fn [m]
+                     (and (map? m)
+                          (contains? #{:stochastic :static-no-slash :static-always-detect
+                                       :fixed-roll-sequence}
+                                     (:mode m :stochastic))
+                         (or (nil? (:rolls m))
+                             (vector? (:rolls m))
+                             (and (map? (:rolls m))
+                                  (every? (fn [[k v]]
+                                            (and (keyword? k)
+                                                 (vector? v)
+                                                 (every? number? v)))
+                                          (:rolls m))))
+                          (or (nil? (:scope m)) (set? (:scope m)))
+                          (or (nil? (:on-exhaustion m))
+                              (contains? #{:throw :repeat-last :cycle}
+                                         (:on-exhaustion m)))))
+   :oracle-mode (fn [x] (contains? #{:stochastic :static-no-slash :static-always-detect
+                                   :fixed-roll-sequence} x))
+   :oracle-roll-sequence vector?
+   :oracle-roll-on-exhaustion (fn [x] (contains? #{:throw :repeat-last :cycle} x))
+   :oracle-roll-trace-enabled? boolean?
    :fraud-model (fn [x] (contains? #{:single-stage-ev :sequential-escalation :strict-all-tiers} x))
    :escalation-assumption-band (fn [x] (contains? #{:conservative :base :optimistic} x))
    :p-appeal-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
@@ -77,7 +99,7 @@
    :slashing-detection-probability 0.10
    :fraud-detection-probability 0.0              ; Phase I: fraud detection disabled by default
    :fraud-slash-bps 0                           ; Phase I: fraud slashing disabled (0 bps)
-   :reversal-detection-probability 0.0          ; Phase I: reversal detection disabled by default
+   :reversal-detection-probability 1.0          ; Keep historical deterministic reversal behavior
    :reversal-slash-bps 0                        ; Phase I: reversal slashing disabled (0 bps)
    :timeout-slash-bps 200                       ; Phase I: timeout penalty (2% = 200 bps, from contracts)
    :fraud-model :single-stage-ev                ; legacy default for backward compatibility
@@ -97,7 +119,9 @@
    :freeze-duration-days 3                ; Phase H: 72 hours freeze duration
    :appeal-window-days 7                  ; Phase H: days before slash executes
    :detection-type :fraud                 ; Phase H: :fraud (explicit), :timeout (automatic), :reversal (on appeal)
-   :timeout-detection-probability 0.0})  ; Phase H: detection on appeal (separate from fraud)
+   :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
+   :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
+   :oracle-roll-trace-enabled? false})
 
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.
@@ -126,9 +150,16 @@
     :p-l1-reversal
     :p-l2-escalation
     :p-l2-reversal
+    :resolver-stake-wei
+    :new-evidence-probability
     :ring-spec
     :l2-detection-prob
     :senior-resolver-skill
+    :oracle-fixture
+    :oracle-mode
+    :oracle-roll-sequence
+    :oracle-roll-on-exhaustion
+    :oracle-roll-trace-enabled?
     ;; Optional author metadata
     :author
     :author-id})

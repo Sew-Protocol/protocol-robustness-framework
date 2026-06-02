@@ -66,7 +66,8 @@
   "Apply detection decay for governance failure scenarios.
    If :detection-decay-rate is set, multiply detection by (1 - decay-rate) each epoch.
    If :detection-failure-epoch is set, drop detection to 0 at that epoch.
-   Returns: Updated params with decayed detection probabilities"
+   Decays both detection probabilities and appeal-reversal quality.
+   Returns: Updated params with decayed governance quality signals."
   [params epoch]
   (let [decay-rate (:detection-decay-rate params 0.0)
         failure-epoch (:detection-failure-epoch params nil)
@@ -85,8 +86,10 @@
                    (* (:slashing-detection-probability params 0.1) decay-multiplier))
             (assoc :fraud-detection-probability
                    (* (:fraud-detection-probability params 0.0) decay-multiplier))
-            (assoc :reversal-detection-probability
-                   (* (:reversal-detection-probability params 0.0) decay-multiplier)))]
+            (assoc :p-l1-reversal
+                   (* (or (:p-l1-reversal params) 0.85) decay-multiplier))
+            (assoc :p-l2-reversal
+                   (* (or (:p-l2-reversal params) 0.95) decay-multiplier)))]
     
     decayed-params))
 
@@ -218,6 +221,8 @@
                   :reversal-slashed-count (:reversal-slashed-count aggregate-malice 0)
                   :timeout-slashed-count  (:timeout-slashed-count aggregate-malice 0)
                   :detection-rate         (:slashing-detection-probability decayed-params)
+                 :l1-reversal-rate       (:p-l1-reversal decayed-params)
+                 :l2-reversal-rate       (:p-l2-reversal decayed-params)
                   :routing-mode           (router/routing-mode trial-router)}
            kernel-validation
            (assoc :kernel-validation kernel-validation))
@@ -251,16 +256,22 @@
           {}
           resolver-histories)]
 
-     ;; ── Optional strategy defection ──────────────────────────────────────
-     ;; Resolvers with ≥1 trial may switch strategy based on payoff differential.
-     ;; Only fires when :defection-rate > 0 (default 0 = disabled for backward compat).
-     (let [{:keys [updated-histories defection-events]}
-           (defection/apply-strategy-defection rng-def updated-histories epoch params)
+    ;; ── Optional strategy adaptation ─────────────────────────────────────
+    ;; Supports binary legacy defection and load-optimal adaptation modes.
+    (let [{:keys [updated-histories defection-events diagnostics resolved-config]}
+          (defection/apply-strategy-defection
+            rng-def updated-histories epoch (assoc params :_epoch-trials n-trials))
 
            epoch-summary
            (cond-> epoch-summary
-             (seq defection-events)
-             (assoc :defection (defection/defection-summary defection-events)))]
+             (or (seq defection-events) (seq diagnostics))
+             (assoc :defection
+                    (defection/defection-summary
+                      defection-events
+                      resolver-histories
+                      updated-histories
+                      diagnostics
+                      resolved-config)))]
 
        ;; Apply population decay with seeded RNG; thread next-id to avoid ID collisions
        (let [{:keys [histories next-id slashed-exits natural-exits]}

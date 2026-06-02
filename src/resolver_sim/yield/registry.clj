@@ -4,10 +4,12 @@
    This registry manages yield providers and their configurations within the
    simulation world state. It is designed to be protocol-agnostic, provided
    the simulation state follows the standard yield engine keys (e.g., :yield/*)."
-  (:require [resolver-sim.yield.modules.fixed :as fixed]
+  (:require [resolver-sim.yield.module :as ymodule]
+            [resolver-sim.yield.modules.fixed :as fixed]
             [resolver-sim.yield.modules.none :as none]
             [resolver-sim.yield.modules.adversarial :as adversarial]
-            [resolver-sim.yield.providers.liquid-lending :as liquid-lending]))
+            [resolver-sim.yield.modules.liquid-lending :as liquid-lending]
+            [resolver-sim.yield.risk :as risk]))
 
 (def default-behavior-descriptor
   {:yield/provider-kind :immediate-withdrawal-lending
@@ -46,14 +48,27 @@
      :module-id  module-id}))
 
 (def default-modules
-  {:yield.provider/liquid-lending liquid-lending/liquid-lending-module
-   :aave-v3 (liquid-lending/make-module :aave-v3 :yield.profile/aave-v3-like)
-   :fixed-rate fixed/fixed-rate-module
-   :none none/zero-yield-module
-   :adversarial adversarial/adversarial-yield-module})
+  "Registry module records — each built by an archetype constructor (see yield.modules.*)."
+  {:yield.provider/liquid-lending
+   (liquid-lending/make-liquid-lending-module :yield.provider/liquid-lending)
 
-(defn register-module [world module]
-  (assoc-in world [:yield/modules (:module/id module)] module))
+   :aave-v3
+   (liquid-lending/make-liquid-lending-module :aave-v3 :yield.profile/aave-v3-like)
+
+   :fixed-rate
+   (fixed/make-fixed-module :fixed-rate)
+
+   :none
+   (none/make-none-module :none)
+
+   :adversarial
+   (adversarial/make-adversarial-module :adversarial)})
+
+(defn register-module
+  "Register a validated yield module on the world."
+  [world module]
+  (let [m (ymodule/validate-module module)]
+    (assoc-in world [:yield/modules (:module/id m)] m)))
 
 (defn init-yield-modules [world]
   (reduce register-module world (vals default-modules)))
@@ -72,11 +87,16 @@
                           0.0)
    :liquidity-mode    (let [m (or liquidity-mode :available)]
                         (if (string? m) (keyword m) m))
-   :loss-mode         (let [m (or loss-mode :none)]
-                        (if (string? m) (keyword m) m))
+   :loss-mode         (let [m (let [raw (or loss-mode :none)]
+                               (if (string? raw) (keyword raw) raw))
+                               failure-modes* (risk/normalize-failure-modes failure-modes)]
+                           (if (and (= m :none)
+                                    (contains? failure-modes* :negative-yield))
+                             :mark-to-market
+                             m))
    :rate-mode         (let [m (or rate-mode :deterministic)]
                         (if (string? m) (keyword m) m))
-   :failure-modes     (or failure-modes #{})
+   :failure-modes     (risk/normalize-failure-modes failure-modes)
    :shortfall         shortfall})
 
 (defn- normalize-behavior-descriptor [desc]
@@ -121,7 +141,8 @@
                    (assoc-in [:yield/module-aliases normalized-module-id] resolved-module-id)
                    (assoc-in [:yield/module-aliases resolved-module-id] resolved-module-id))
             w* (if-let [status module-status]
-                 (assoc-in w* [:yield/module-status resolved-module-id] status)
+                 (assoc-in w* [:yield/module-status resolved-module-id]
+                           (if (string? status) (keyword status) status))
                  w*)]
         (reduce-kv
           (fn [w' token token-config]

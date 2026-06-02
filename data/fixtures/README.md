@@ -36,3 +36,41 @@ Use the Clojure runner:
 ```bash
 clojure -M -e "(require '[resolver-sim.sim.fixtures :as f]) (f/run-suite :suites/my-test)"
 ```
+
+### Result display level (stdout only)
+
+`run-suite` accepts `:result-display-level` in the opts map (4th argument). This
+controls human-readable terminal output only. It does **not** change evaluation,
+pass/fail semantics, golden EDN, metrics, or the returned suite map.
+
+| Level | Use case |
+|-------|----------|
+| `:summary` | CI and scripts (default) — suite PASS/FAIL, N/M, elapsed, failed IDs |
+| `:failures` | Local triage — summary plus compact failure reasons |
+| `:standard` | Daily dev — one row per scenario (outcome, theory label, expectations) |
+| `:verbose` | Debugging — standard rows plus violations, theory evidence, yield metrics |
+| `:audit` | Reserved; currently aliases `:verbose` (golden diff UX TBD) |
+
+Examples:
+
+```clojure
+;; CI default
+(f/run-suite :suites/my-test)
+
+;; Triage a failing suite
+(f/run-suite :suites/my-test nil nil {:result-display-level :failures})
+
+;; Full scenario table + failure detail
+(f/run-suite :suites/my-test nil nil {:result-display-level :verbose})
+
+;; Suppress stdout (e.g. tests)
+(f/run-suite :suites/my-test nil nil {:silent? true})
+```
+
+Legacy aliases `:verbose?` and `:show-failures?` map to display levels. Unknown
+levels (e.g. `:verbsoe`) throw — there is no silent fallback.
+
+Display-only print opts (never on the returned suite map):
+
+- `:elapsed-ms` — wall time for the summary header
+- `:expectations-by-trace-id` — yield/expectation display hints

@@ -14,7 +14,8 @@
 ;;;; ============================================================================
 
 (defn apply-detection-decay
-  "Apply detection decay for governance failure scenarios (same as Phase J)"
+  "Apply detection decay for governance failure scenarios (same as Phase J).
+   Decays detection probabilities and appeal-reversal quality."
   [params epoch]
   (let [decay-rate (:detection-decay-rate params 0.0)
         failure-epoch (:detection-failure-epoch params nil)
@@ -29,9 +30,16 @@
                    (* (:slashing-detection-probability params 0.1) decay-multiplier))
             (assoc :fraud-detection-probability
                    (* (:fraud-detection-probability params 0.0) decay-multiplier))
-            (assoc :reversal-detection-probability
-                   (* (:reversal-detection-probability params 0.0) decay-multiplier)))]
+            (assoc :p-l1-reversal
+                   (* (or (:p-l1-reversal params) 0.85) decay-multiplier))
+            (assoc :p-l2-reversal
+                   (* (or (:p-l2-reversal params) 0.95) decay-multiplier)))]
     decayed-params))
+
+(defn- next-int
+  "Seeded [0,n) integer using stochastic RNG."
+  [rng n]
+  (int (Math/floor (* (rng/next-double rng) n))))
 
 (defn run-single-epoch-with-governance
   "Run one epoch with governance delay mechanics
@@ -50,22 +58,23 @@
   (let [;; Step 1: Execute any pending slashes whose governance window closed
         {:keys [pending-state executable-slashes slashes-still-pending]}
         (gov-delay/process-governance-approvals governance-state epoch)
+        [rng-batch rng-events] (rng/split-rng rng)
         
         ;; Get set of frozen resolvers (those with pending slashes)
         frozen-resolver-ids (set (map :resolver-id slashes-still-pending))
         
         ;; Step 2: Run batch simulation for this epoch (frozen resolvers don't get assignments)
         decayed-params (apply-detection-decay params epoch)
-        batch-result (batch/run-batch rng n-trials decayed-params)
+        batch-result (batch/run-batch rng-batch n-trials decayed-params)
         
         ;; Step 3: Mark newly detected slashes as pending governance approval
         detection-rate (:slashing-detection-probability decayed-params)
         detected-slashes-count (long (* n-trials detection-rate))
         
         ;; Create pending slash entries for detected slashes
-        new-pending (reduce (fn [acc i]
-                             (let [resolver-id (rand-int (count resolver-histories))
-                                   slash-amount (+ 5000 (rand-int 5000))] ; $5-10k
+        new-pending (reduce (fn [acc _]
+                             (let [resolver-id (next-int rng-events (max 1 (count resolver-histories)))
+                                   slash-amount (+ 5000 (next-int rng-events 5000))] ; $5-10k
                                (gov-delay/mark-slash-detected
                                  acc
                                  slash-amount
@@ -84,6 +93,8 @@
          :malice-mean-profit (:malice-mean batch-result)
          :dominance-ratio (:dominance-ratio batch-result)
          :detection-rate detection-rate
+         :l1-reversal-rate (:p-l1-reversal decayed-params)
+         :l2-reversal-rate (:p-l2-reversal decayed-params)
          :slashes-detected detected-slashes-count
          :slashes-executed (count executable-slashes)
          :slashes-pending (count (:pending-slashes new-pending))
@@ -113,7 +124,7 @@
                              
                              was-slashed? (and (not is-honest?)
                                               (> (:slash-rate batch-result 0) 0)
-                                              (< (rand) (:slash-rate batch-result 0.1)))
+                                              (< (rng/next-double rng-events) (:slash-rate batch-result 0.1)))
                              
                              updated (rep/update-resolver-history
                                      resolver

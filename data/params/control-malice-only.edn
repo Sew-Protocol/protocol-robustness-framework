@@ -15,6 +15,7 @@
   :collusive 0.0}
 
  :allow-slashing? true
+:oracle-fixture {:mode :stochastic}
 
  :resolver-fee-bps 150
  :appeal-bond-bps 700

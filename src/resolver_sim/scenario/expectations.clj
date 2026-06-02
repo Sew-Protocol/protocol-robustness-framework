@@ -8,7 +8,8 @@
    evaluate-metric-op. The split is intentional: theory evaluation (claim
    falsification) and expectation evaluation (execution correctness) are
    separate concerns that may have different failure semantics."
-  (:require [resolver-sim.scenario.theory :as theory]))
+  (:require [clojure.string :as str]
+            [resolver-sim.scenario.theory :as theory]))
 
 ;; ---------------------------------------------------------------------------
 ;; Key-relaxed world lookup
@@ -34,6 +35,47 @@
 
 (defn- get-in-relaxed [m path]
   (reduce get-relaxed m path))
+
+(defn- try-number [v]
+  (cond
+    (number? v) v
+    (string? v) (try (Long/parseLong v) (catch Exception _ nil))
+    :else nil))
+
+(defn- normalize-path-segment [seg]
+  (cond
+    (and (vector? seg) (= 2 (count seg)))
+    [(if (keyword? (first seg)) (first seg) (keyword (str (first seg))))
+     (try-number (second seg))]
+
+    (and (string? seg) (.contains ^String seg "/"))
+    (let [parts (str/split seg #"/")]
+      (if (and (= 3 (count parts))
+               (= "sew" (first parts))
+               (= "escrow" (second parts))
+               (re-matches #"\d+" (nth parts 2)))
+        [(keyword "sew/escrow") (Long/parseLong (nth parts 2))]
+        (mapv keyword parts)))
+
+    (string? seg) (keyword seg)
+    :else seg))
+
+(defn- normalize-path [path]
+  (mapv normalize-path-segment path))
+
+(defn- metric-within-slack? [actual target slack]
+  (let [a (try-number actual)
+        t (try-number target)
+        s (long (or slack 0))]
+    (and a t (<= (Math/abs (- a t)) s))))
+
+(defn- terminal-check-ok? [actual spec]
+  (let [op (or (:op spec) :=)]
+    (if (:equals spec)
+      (if (= op :=)
+        (= (theory/normalize-val actual) (theory/normalize-val (:equals spec)))
+        (theory/evaluate-metric-op op actual (:equals spec)))
+      (theory/evaluate-metric-op op actual (:value spec)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant evaluation
@@ -89,13 +131,38 @@
 ;; Expectations evaluation
 ;; ---------------------------------------------------------------------------
 
+(defn analyze-expected-outcomes
+  "Validate per-step :expected-outcomes against the replay trace.
+
+   Each entry: {:seq n :action \"...\" :expect \"ok\"|\"rejected\"}."
+  [scenario trace]
+  (let [expected (vec (or (:expected-outcomes scenario) []))
+        by-seq   (into {} (map (juxt :seq identity) trace))]
+    (if (empty? expected)
+      {:ok? true :violations []}
+      (let [violations
+            (for [{:keys [seq action expect]} expected
+                  :let [entry (get by-seq seq)
+                        want  (keyword (or expect "ok"))
+                        got   (:result entry)]
+                  :when (or (nil? entry)
+                            (not= (name got) (name want)))]
+              {:type     :expected-outcome-mismatch
+               :seq      seq
+               :action   action
+               :expected want
+               :actual   got
+               :error    (:error entry)})]
+        {:ok? (empty? violations) :violations (vec violations)}))))
+
 (defn evaluate-expectations
   "Evaluate execution-level pass/fail criteria from an :expectations block.
 
    Checks in order:
      0. :invariants — named invariant checks (aggregate fallback if no per-invariant map)
-     1. :terminal   — world state at end of trace (path + expected value)
-     2. :metrics    — named metric assertions (op + value)
+     1. :terminal   — world state at end of trace (path + :equals or :op/:value)
+     2. :step-terminal — world snapshot after a given :seq
+     3. :metrics    — named metric assertions (op + value, optional :slack)
 
    Returns {:ok? bool :violations [v-map]}"
   [result expectations]
@@ -112,21 +179,43 @@
 
     ;; 1. Terminal state checks
     (doseq [t (:terminal expectations)]
-      (let [actual (get-in-relaxed last-world (:path t))]
-        (when-not (= (theory/normalize-val actual) (theory/normalize-val (:equals t)))
+      (let [path   (normalize-path (:path t))
+            actual (get-in-relaxed last-world path)]
+        (when-not (terminal-check-ok? actual t)
           (swap! violations conj {:type     :terminal-mismatch
-                                  :path     (:path t)
-                                  :expected (:equals t)
+                                  :path     path
+                                  :expected (or (:equals t) (:value t))
+                                  :op       (:op t :=)
                                   :actual   actual}))))
 
-    ;; 2. Metric expectations
+    ;; 2. Step terminal checks
+    (doseq [t (:step-terminal expectations)]
+      (let [entry  (first (filter #(= (:seq t) (:seq %)) trace))
+            world  (:world entry)
+            path   (normalize-path (:path t))
+            actual (get-in-relaxed world path)]
+        (when-not (terminal-check-ok? actual t)
+          (swap! violations conj {:type     :step-terminal-mismatch
+                                  :seq      (:seq t)
+                                  :path     path
+                                  :expected (or (:equals t) (:value t))
+                                  :op       (:op t :=)
+                                  :actual   actual}))))
+
+    ;; 3. Metric expectations
     (doseq [m (:metrics expectations)]
-      (let [actual (get metrics (theory/to-kw (:name m)))]
-        (when-not (theory/evaluate-metric-op (:op m) actual (:value m))
+      (let [actual (get metrics (theory/metric-key (:name m)))
+            target (:value m)
+            slack  (:slack m)
+            ok?    (if slack
+                     (metric-within-slack? actual target slack)
+                     (theory/evaluate-metric-op (:op m) actual target))]
+        (when-not ok?
           (swap! violations conj {:type     :metric-violation
                                   :name     (:name m)
                                   :op       (:op m)
-                                  :expected (:value m)
+                                  :expected target
+                                  :slack    slack
                                   :actual   actual}))))
 
     {:ok? (empty? @violations)

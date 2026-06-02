@@ -540,17 +540,25 @@ process with a fixed seed and no external dependencies.
 This runs: unit tests → generator regressions → cross-layer contract checks →
 deterministic invariant suite → fixture suites.
 
-### Invariant suite only (fast, ~1s, no gRPC required)
+### Deterministic scenario run & report
+
+See [scenario-run-report.md](./scenario-run-report.md) for the unified summary
+contract, `:pass?` semantics, and reporting boundaries.
 
 ```bash
 clojure -M:run -- --invariants
+clojure -M:run -- --invariants --suite yield-scenarios
+clojure -M:run -- --invariants --fixture-suite suites/all-invariants
 ```
 
-### Fixture suite runner
+### Fixture suite runner (REPL)
 
 ```clojure
 (require '[resolver-sim.sim.fixtures :as f])
+;; Legacy auto-print + summary map:
 (f/run-suite :suites/all-invariants)
+;; Data only:
+(f/run-suite :suites/all-invariants nil nil {:silent? true})
 ```
 
 ### Monte Carlo simulation (example)

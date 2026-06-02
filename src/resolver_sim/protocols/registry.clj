@@ -9,7 +9,7 @@
    "dummy"  'resolver-sim.protocols.dummy/protocol})
 
 (def ^:private invariant-runners
-  {"sew-v1" 'resolver-sim.protocols.sew.invariant-runner/run-and-report})
+  {"sew-v1" 'resolver-sim.io.scenario-runner/run-registry-suite-and-report})
 
 (defn- resolve-var-value
   [sym]
