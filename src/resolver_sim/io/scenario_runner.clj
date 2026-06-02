@@ -1,7 +1,9 @@
 (ns resolver-sim.io.scenario-runner
-  "Shell: load scenarios, run collections, print reports, exit codes.
+  "CLI shell: load scenarios, run collections, print reports, exit codes.
 
-   `run-and-report*` functions compose pure `scenario.runner` + `scenario.report`."
+   Does not judge pass/fail — delegates to `scenario.runner` and `sim.fixtures`.
+   Table output via `scenario.report/print-report`; legacy fixture detail via
+   `sim.reporter` when `:report-format :fixture`."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [resolver-sim.io.scenarios :as io-sc]
@@ -13,7 +15,8 @@
             [resolver-sim.scenario.normalize :as normalize]
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
-            [resolver-sim.scenario.suites :as suites]))
+            [resolver-sim.scenario.suites :as suites]
+            [resolver-sim.sim.fixtures :as fixtures]))
 
 (defn- sew-replay-fn []
   (fn [scenario] (sew/replay-with-sew-protocol scenario)))
@@ -114,14 +117,39 @@
                     ". Known: " (str/join ", " (map name (suites/known-suite-keys)))))
       1)))
 
+(defn run-fixture-suite
+  "Run a composed EDN fixture suite (e.g. :suites/all-invariants).
+   Returns the unified summary map; does not print unless opts request it."
+  [suite-key mode opts]
+  (fixtures/run-suite suite-key mode nil (assoc opts :silent? true)))
+
+(defn run-fixture-suite-and-report
+  "Run fixture suite with the invariant-style table report. Returns exit code.
+
+   opts:
+     :report-format — :table (default) uses scenario.report; :fixture uses sim.reporter
+     Other opts forwarded to fixtures/run-suite (e.g. :result-display-level for :fixture)."
+  [suite-key mode opts]
+  (let [report-format (or (:report-format opts) :table)
+        silent?       (= :table report-format)
+        summary       (fixtures/run-suite suite-key mode nil
+                                          (assoc opts :silent? silent?))]
+    (if (= :table report-format)
+      (report/print-report summary
+                           (default-report-opts
+                            (assoc opts
+                                   :title (format "Fixture suite: %s" (name suite-key)))))
+      (if (:ok? summary) 0 1))))
+
 (defn run-and-report
   "CLI dispatcher: full invariant suite, named suite, or single file.
 
    `dispatch` is a map with optional keys:
-     :suite      — keyword (e.g. :yield-scenarios)
-     :scenario   — file path
-     :output-file — JSON path when running a single scenario
-     :protocol   — protocol id (default sew-v1)
+     :suite          — path-list keyword (e.g. :yield-scenarios)
+     :fixture-suite  — EDN fixture keyword (e.g. :suites/all-invariants)
+     :scenario       — file path
+     :output-file    — JSON path when running a single scenario
+     :protocol       — protocol id (default sew-v1)
      opts are forwarded to report/runner."
   [dispatch opts]
   (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)]
@@ -129,6 +157,9 @@
       (not= protocol-id preg/default-protocol-id)
       (do (println (str "Scenario runner supports only " preg/default-protocol-id " for now."))
           1)
+
+      (:fixture-suite dispatch)
+      (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
 
       (:suite dispatch)
       (run-named-suite-and-report (:suite dispatch) opts)

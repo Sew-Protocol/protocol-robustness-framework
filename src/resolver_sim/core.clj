@@ -19,10 +19,12 @@
 
       (if (:invariants options)
         (let [protocol-id (:protocol options preg/default-protocol-id)
-              suite-kw  (when-let [s (:suite options)]
-                          (keyword s))
-              scenario  (:scenario options)
-              output    (:output-file options)]
+              suite-kw    (when-let [s (:suite options)]
+                            (keyword s))
+              fixture-kw  (when-let [s (:fixture-suite options)]
+                            (keyword s))
+              scenario    (:scenario options)
+              output      (:output-file options)]
           (cond
             (not= protocol-id preg/default-protocol-id)
             (do (println (str "Unknown protocol: " protocol-id
@@ -30,13 +32,18 @@
                 (log/error! "unknown protocol" {:protocol-id protocol-id})
                 (System/exit 1))
 
+            (and suite-kw fixture-kw)
+            (do (println "Use only one of --suite or --fixture-suite.")
+                (System/exit 1))
+
             :else
             (System/exit
              ((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report)
-              {:protocol protocol-id
-               :suite    suite-kw
-               :scenario scenario
-               :output-file output}
+              {:protocol       protocol-id
+               :suite          suite-kw
+               :fixture-suite  fixture-kw
+               :scenario       scenario
+               :output-file    output}
               {}))))
 
         (if (:serve options)

@@ -599,7 +599,7 @@
                           (into {} (map (fn [[oid p]]
                                           [oid (select-keys p [:status :principal :shares
                                                                :unrealized-yield :realized-yield
-                                                               :shortfall :reclaimed-amount
+                                                               :yield-loss :shortfall :reclaimed-amount
                                                                :token :module/id])])
                                         pos)))})
 

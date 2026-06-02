@@ -23,6 +23,7 @@
     (cond-> {:yield/escrow-principal     (long (or (:principal pos) 0))
              :yield/escrow-unrealized    (long (or (:unrealized-yield pos) 0))
              :yield/escrow-realized      (long (or (:realized-yield pos) 0))
+             :yield/accrual-loss         (long (or (:amount (:yield-loss pos)) 0))
              :yield/escrow-deferred      (long (or (:deferred-amount shortfall) 0))
              :yield/escrow-haircut       (long (or (:haircut-amount shortfall) 0))
              :yield/escrow-reclaimed     (long (or (:reclaimed-amount pos) 0))
@@ -41,6 +42,8 @@
                                                   (get claimable (keyword recipient))
                                                   0))}
       (:status pos) (assoc :yield/escrow-status (name (:status pos)))
+      (or (:reason shortfall) (:reason (:yield-loss pos)))
+      (assoc :yield/loss-reason (name (or (:reason shortfall) (:reason (:yield-loss pos)))))
       (:escrow-state (get-in last-world [:escrow-transfers workflow-id]))
       (assoc :escrow/state (name (:escrow-state (get-in last-world [:escrow-transfers workflow-id]))))
       (get-in last-world [:live-states workflow-id])
@@ -56,11 +59,19 @@
     :yield/escrow-status})
 
 (defn yield-metric-key?
-  "True when k names a yield/* metric (keyword or string)."
+  "True when k names a yield/* metric.
+
+   Accepts namespaced keywords (`:yield/escrow-principal`), plain strings
+   (`\"yield/escrow-principal\"`), and JSON-normalized keyword strings
+   (`\":yield/escrow-principal\"`)."
   [k]
   (cond
     (and (keyword? k) (= "yield" (namespace k))) true
-    (string? k) (.startsWith ^String k "yield/")
+    (string? k)
+    (let [s (if (and (.startsWith ^String k ":") (> (count k) 1))
+              (subs k 1)
+              k)]
+      (.startsWith ^String s "yield/"))
     :else false))
 
 (defn yield-metric-label

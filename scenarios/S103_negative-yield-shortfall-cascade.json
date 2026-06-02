@@ -76,7 +76,7 @@
         "failure-modes": [
           "negative-yield"
         ],
-        "apy": 0.03,
+        "apy": -0.03,
         "shortfall": {
           "available-ratio": 0.8
         }

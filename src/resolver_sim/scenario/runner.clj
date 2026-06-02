@@ -1,7 +1,10 @@
 (ns resolver-sim.scenario.runner
   "Pure deterministic scenario run and pass/fail judgement.
 
-   Returns data only — no printing, files, or exit codes."
+   Returns data only — no printing, files, or exit codes.
+
+   `:pass?` on each entry is the single source of truth for pass/fail.
+   Reports read `:pass?` and use `:checks` only to explain failures."
   (:require [resolver-sim.scenario.expectations :as expectations]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.summary :as summary]
@@ -33,23 +36,36 @@
    `entry` must include :outcome, :expected-fail?, :checks, and optionally
    :replay-result for expected-outcomes from replay finalize.
 
+   Optional top-level keys (fixture suites):
+     :expected-halt-reason — must match :halt-reason when present
+
+   Optional :checks keys:
+     :thresholds — {:ok? bool ...}
+     :golden     — {:ok? bool ...} (golden verify mode)
+
    `opts` may include :require-theory? — when true, a scenario with :theory
    must have an evaluated theory check in :checks (see build-entry-result)."
-  [{:keys [outcome expected-fail? checks replay-result scenario]} opts]
+  [{:keys [outcome expected-fail? expected-halt-reason halt-reason checks replay-result scenario]} opts]
   (let [outcome-ok? (if expected-fail?
                       (= :fail outcome)
                       (= :pass outcome))
+        halt-ok?    (or (nil? expected-halt-reason)
+                        (= expected-halt-reason halt-reason))
         expected-outcomes (or (:expected-outcomes checks)
                               (:expected-outcomes replay-result))
         expectations     (:expectations checks)
         theory-check     (:theory checks)
+        thresholds       (:thresholds checks)
+        golden           (:golden checks)
         checks-ok?       (and (or (nil? expected-outcomes) (:ok? expected-outcomes true))
                               (or (nil? expectations) (:ok? expectations true))
-                              (or (nil? theory-check) (:ok? theory-check true)))
+                              (or (nil? theory-check) (:ok? theory-check true))
+                              (or (nil? thresholds) (:ok? thresholds true))
+                              (or (nil? golden) (:ok? golden true)))
         theory-required? (and (:require-theory? opts)
                               (:theory scenario)
                               (nil? theory-check))]
-    (and outcome-ok? checks-ok? (not theory-required?))))
+    (and outcome-ok? halt-ok? checks-ok? (not theory-required?))))
 
 ;; ---------------------------------------------------------------------------
 ;; Entry construction
@@ -115,6 +131,64 @@
                                 :details        [replay-result]}
                          scenario (assoc :scenario scenario))]
      (assoc entry :pass? (scenario-pass? entry opts)))))
+
+(defn runner-opts-for-scenario
+  "Default theory evaluation opts for a scenario map (fixture or JSON).
+
+   `:evaluate-theory?` defaults to `(boolean (:theory scenario))` but may be
+   overridden in `suite-opts` to force or suppress evaluation."
+  [scenario & [suite-opts]]
+  (let [suite-opts (or suite-opts {})
+        evaluate?  (if (contains? suite-opts :evaluate-theory?)
+                     (:evaluate-theory? suite-opts)
+                     (boolean (:theory scenario)))]
+    (merge {:require-theory? false
+            :strict-theory? false}
+           suite-opts
+           {:evaluate-theory? evaluate?})))
+
+(defn finalize-fixture-entry
+  "Attach fixture-only metadata and checks to a `build-entry-result` entry.
+
+   Adds legacy keys (:trace-id, :expectations, :theory, :golden-report, …)
+   for existing fixture consumers while keeping unified :checks / :pass?."
+  [base-entry fixture-meta opts]
+  (let [{:keys [expected-outcome expected-halt-reason threshold-validation
+                golden-comparison golden-report metrics trace-id
+                scenario-author purpose theory-source]} fixture-meta
+        expected-fail? (= :fail (or expected-outcome :pass))
+        expectations   (get-in base-entry [:checks :expectations])
+        theory-res     (get-in base-entry [:checks :theory :result])
+        fixture-outcome (when expected-outcome
+                          {:ok? (= expected-outcome (:outcome base-entry))
+                           :expected expected-outcome
+                           :actual (:outcome base-entry)})
+        halt-check     (when expected-halt-reason
+                          {:ok? (= expected-halt-reason (:halt-reason base-entry))
+                           :expected expected-halt-reason
+                           :actual (:halt-reason base-entry)})
+        entry          (-> base-entry
+                           (assoc :expected-outcome expected-outcome
+                                  :expected-halt-reason expected-halt-reason
+                                  :expected-fail? expected-fail?
+                                  :trace-id trace-id
+                                  :scenario-id trace-id
+                                  :scenario-author scenario-author
+                                  :purpose purpose
+                                  :theory-source theory-source
+                                  :threshold-validation threshold-validation
+                                  :golden-comparison golden-comparison
+                                  :golden-report golden-report
+                                  :metrics metrics
+                                  :expectations expectations
+                                  :theory theory-res
+                                  :name (or (:name base-entry) (str trace-id)))
+                           (update :checks assoc
+                                   :fixture-outcome fixture-outcome
+                                   :halt halt-check
+                                   :thresholds threshold-validation
+                                   :golden golden-comparison))]
+    (assoc entry :pass? (scenario-pass? entry opts))))
 
 (defn- build-paired-entry
   [name scenarios replay-fn opts type-meta]

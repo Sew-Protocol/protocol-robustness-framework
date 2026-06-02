@@ -76,7 +76,9 @@
             w'   (liquid/accrue w module {:token "USDC" :dt 31536000})
             pos  (get-in w' [:yield/positions "user1"])]
         (is (= :mark-to-market (yield-risk/effective-loss-mode risk)))
-        (is (< (:unrealized-yield pos 0) 0))))
+        (is (< (:unrealized-yield pos 0) 0))
+        (is (= :negative-accrual-yield (get-in pos [:yield-loss :reason])))
+        (is (pos? (get-in pos [:yield-loss :amount])))))
     (testing "intrinsic loss on withdraw when gross < principal"
       (let [pos  {:owner/id "user1"
                   :module/id :yield.provider/liquid-lending

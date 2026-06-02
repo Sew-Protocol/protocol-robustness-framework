@@ -2,7 +2,8 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.risk :as risk]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.model :as model]))
+            [resolver-sim.yield.model :as model]
+            [resolver-sim.yield.modules.liquid-lending :as liquid]))
 
 (deftest effective-loss-mode-defaults
   (is (= :mark-to-market
@@ -28,6 +29,19 @@
     (is (= 0.03 (get-in world' [:yield/rates :mod :USDC])))
     (is (= :shortfall (get-in world' [:yield/risk :mod :USDC :liquidity-mode])))
     (is (= 0.8 (get-in world' [:yield/risk :mod :USDC :shortfall :available-ratio])))))
+
+(deftest accrual-loss-annotation
+  (let [world {:yield/risk {:mod {:USDC {:failure-modes #{:negative-yield}}}}
+               :yield/rates {:mod {:USDC -0.05}}
+               :yield/indices {:mod {:USDC 1.0}}
+               :yield/positions {"o" {:owner/id "o" :module/id :mod :token :USDC
+                                      :principal 10000 :shares 10000 :entry-index 1.0
+                                      :status :active :unrealized-yield 0 :realized-yield 0}}}
+        module {:module/id :mod}
+        w' (liquid/accrue world module {:token :USDC :dt 31536000})
+        pos (get-in w' [:yield/positions "o"])]
+    (is (= :negative-accrual-yield (get-in pos [:yield-loss :reason])))
+    (is (pos? (:amount (:yield-loss pos))))))
 
 (deftest mark-to-market-negative-unrealized
   (let [world {:yield/risk {:mod {:USDC {:loss-mode :none

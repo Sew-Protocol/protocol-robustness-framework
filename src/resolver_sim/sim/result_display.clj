@@ -1,10 +1,11 @@
 (ns resolver-sim.sim.result-display
-  "Pure display formatting for fixture suite results.
+  "Pure display formatting for legacy fixture suite reports.
 
-   `:result-display-level` affects human report lines only — never evaluation,
-   golden EDN, or returned suite maps."
+   Not the canonical pass/fail source — reads `:pass?` from each entry.
+   For failure lines, delegates to `scenario.report/format-check-failures`.
+   For the standard deterministic table, use `scenario.report/print-report`."
   (:require [clojure.string :as str]
-            [resolver-sim.scenario.outcome-semantics :as ose]
+            [resolver-sim.scenario.report :as scenario-report]
             [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.scenario.yield-metrics :as yield-metrics]))
 
@@ -19,35 +20,32 @@
 (defn resolve-display-level
   "Normalize explicit level and legacy reporter opts.
 
-   Priority: `:result-display-level` > `:verbose?` > `:show-failures?` > default."
+   Priority: `:result-display-level` > `:verbose?` > `:show-failures?` > default.
+
+   Throws `ex-info` with `:valid-levels` when `:result-display-level` is unknown
+   (e.g. typos like `:verbsoe`) — no silent fallback."
   [opts & {:keys [default] :or {default :summary}}]
   (let [level (:result-display-level opts)]
     (cond
       level (let [kw (keyword level)]
               (when-not (contains? display-levels kw)
-                (throw (ex-info "Unknown result-display-level" {:level level})))
+                (throw (ex-info "Unknown result-display-level"
+                                {:level level
+                                 :valid-levels (sort display-levels)})))
               kw)
       (:verbose? opts) :verbose
       (false? (:show-failures? opts)) :summary
       (:show-failures? opts) :failures
       :else default)))
 
-(defn- theory-opts-for-entry [r]
-  (let [profile (get-in r [:theory :diagnostics :theory-eval-profile])
-        strict? (or (true? (get-in r [:theory-source :require-conclusive?]))
-                    (#{:strict :public-evidence} profile))]
-    {:require-conclusive? strict?}))
-
 (defn scenario-entry-ok?
-  "Display-only pass check mirroring fixtures/run-suite row semantics."
+  "Display gating only — not a second source of pass/fail truth.
+
+   Reads the canonical `:pass?` set by `scenario.runner/scenario-pass?` via
+   `build-entry-result` / `finalize-fixture-entry`. Do not re-derive pass
+   semantics here; use `scenario.runner/scenario-pass?` in the judgement layer."
   [r]
-  (and (= (or (:expected-outcome r) :pass) (:outcome r))
-       (or (nil? (:expected-halt-reason r))
-           (= (:expected-halt-reason r) (:halt-reason r)))
-       (:ok? (:threshold-validation r))
-       (or (nil? (:expectations r)) (:ok? (:expectations r)))
-       (ose/theory-result-ok? (:theory r) (:purpose r) (theory-opts-for-entry r))
-       (or (nil? (:golden-comparison r)) (:ok? (:golden-comparison r)))))
+  (boolean (:pass? r)))
 
 (defn- expectations-decl-for
   [trace-id opts]
@@ -96,26 +94,13 @@
 
     (str v)))
 
-(defn- compact-failure-reasons [r]
-  (vec
-   (concat
-    (when (not= (or (:expected-outcome r) :pass) (:outcome r))
-      [(format "outcome: expected %s got %s"
-               (or (:expected-outcome r) :pass) (:outcome r))])
-    (when (and (:expected-halt-reason r)
-               (not= (:expected-halt-reason r) (:halt-reason r)))
-      [(format "halt-reason: expected %s got %s"
-               (:expected-halt-reason r) (:halt-reason r))])
-    (when (false? (:ok? (:threshold-validation r)))
-      [(format "threshold: %s" (or (:reason (:threshold-validation r)) "failed"))])
-    (when (and (:expectations r) (not (:ok? (:expectations r))))
-      (map #(str "expectation: " (format-violation %))
-           (:violations (:expectations r))))
-    (when (and (:theory r)
-               (not (ose/theory-result-ok? (:theory r) (:purpose r) (theory-opts-for-entry r))))
-      [(str "theory: " (theory-status-label r))])
-    (when (and (:golden-comparison r) (not (:ok? (:golden-comparison r))))
-      [(format "golden: %s" (or (:reason (:golden-comparison r)) "mismatch"))]))))
+(defn- compact-failure-reasons
+  "Human-readable failure lines — uses `:checks` via `scenario.report`."
+  [r opts]
+  (mapv #(if (and (string? %) (.startsWith ^String % "  "))
+           (.substring ^String % 2)
+           (str %))
+        (scenario-report/format-check-failures r opts)))
 
 (defn- format-yield-metrics-line [metrics]
   (let [subset (yield-metrics/yield-metrics-for-display metrics)]
@@ -175,7 +160,7 @@
     (into (summary-lines suite-result opts)
           (mapcat (fn [r]
                     (into [(str "  " (:trace-id r) ":")]
-                          (map #(str "    " %) (compact-failure-reasons r))))
+                          (map #(str "    " %) (compact-failure-reasons r opts))))
                   failed))))
 
 (defn- standard-lines [suite-result opts]

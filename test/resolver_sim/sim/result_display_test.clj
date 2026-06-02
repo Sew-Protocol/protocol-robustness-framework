@@ -1,9 +1,11 @@
 (ns resolver-sim.sim.result-display-test
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.sim.result-display :as display]))
+            [resolver-sim.sim.result-display :as display]
+            [resolver-sim.sim.fixtures :as fixtures]))
 
 (def ^:private pass-entry
   {:trace-id "s-pass"
+   :pass? true
    :outcome :pass
    :purpose :regression
    :threshold-validation {:ok? true}
@@ -17,6 +19,7 @@
 
 (def ^:private yield-fail-entry
   {:trace-id "S108-fake-yield"
+   :pass? false
    :outcome :pass
    :purpose :regression
    :threshold-validation {:ok? true}
@@ -64,12 +67,13 @@
     (is (< (count standard) (count verbose)))
     (is (= verbose audit) ":audit mirrors :verbose for now")))
 
-(deftest summary-includes-pass-fail-counts-and-failed-ids
+(deftest summary-includes-failed-scenario-ids-when-suite-fails
   (let [lines (lines-at :summary)]
     (is (some #(re-find #"Status: FAIL" %) lines))
     (is (some #(re-find #"Scenarios: 1/2" %) lines))
     (is (some #(re-find #"\(1\.2 s\)" %) lines))
-    (is (some #(re-find #"Failed: S108-fake-yield" %) lines))
+    (is (some #(re-find #"Failed: S108-fake-yield" %) lines)
+        "CI summary must name failed scenario IDs")
     (is (not (some #(re-find #"yield/escrow-principal" %) lines)))))
 
 (deftest failures-print-exact-expectation-key-and-value
@@ -115,6 +119,26 @@
   (is (= :verbose (display/resolve-display-level {:result-display-level :verbose
                                                    :verbose? false}))))
 
-(deftest scenario-entry-ok-mirrors-suite-semantics
+(deftest unknown-display-level-throws-with-valid-levels
+  (try
+    (display/resolve-display-level {:result-display-level :verbsoe})
+    (is false "expected ex-info for unknown display level")
+    (catch clojure.lang.ExceptionInfo e
+      (is (= "Unknown result-display-level" (.getMessage e)))
+      (is (= :verbsoe (:level (ex-data e))))
+      (is (= (sort display/display-levels) (:valid-levels (ex-data e)))))))
+
+(deftest scenario-entry-ok-reads-canonical-pass-flag
   (is (display/scenario-entry-ok? pass-entry))
-  (is (not (display/scenario-entry-ok? yield-fail-entry))))
+  (is (not (display/scenario-entry-ok? yield-fail-entry)))
+  (is (not (display/scenario-entry-ok? (dissoc pass-entry :pass?)))
+        "missing :pass? is treated as fail for display gating only"))
+
+(deftest run-suite-return-map-excludes-display-only-keys
+  (let [result (fixtures/run-suite :suites/equivalence-escalation-boundaries
+                                   nil nil {:silent? true})]
+    (is (map? result))
+    (is (contains? result :ok?))
+    (is (contains? result :results))
+    (is (not (contains? result :expectations-by-trace-id)))
+    (is (not (contains? result :result-display-level)))))

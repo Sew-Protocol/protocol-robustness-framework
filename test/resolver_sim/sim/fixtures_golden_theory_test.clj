@@ -45,7 +45,10 @@
                                                  {:golden-verify-mode :replay-and-theory})]
         (is (not (:ok? cmp)))
         (is (:replay-ok? cmp))
-        (is (not (:theory-ok? cmp)))))
+        (is (not (:theory-ok? cmp)))
+        (is (= "theory snapshot mismatch" (:summary cmp)))
+        (is (pos? (count (:mismatches cmp))))
+        (is (= :theory (first (:path (first (:mismatches cmp))))))))
     (testing "replay-only ignores theory drift"
       (is (:ok? (fixtures/compare-golden-reports golden actual-theory-drift
                                                 {:golden-verify-mode :replay-only}))))

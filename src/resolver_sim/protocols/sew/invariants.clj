@@ -1153,20 +1153,24 @@
                                    0)
                     withdrawn-before (get (:total-withdrawn world-before) token 0)
                     withdrawn-after  (get (:total-withdrawn world-after) token 0)
+                    yield-gen-before (get (:total-yield-generated world-before) token 0)
+                    yield-gen-after  (get (:total-yield-generated world-after) token 0)
                     delta-held      (- held-after held-before)
                     delta-released  (- released-after released-before)
                     delta-refunded  (- refunded-after refunded-before)
                     delta-claimable (- claimable-after claimable-before)
                     delta-withdrawn (- withdrawn-after withdrawn-before)
                     delta-stake     (- stake-after stake-before)
+                    delta-yield-gen (- yield-gen-after yield-gen-before)
                     delta-distributed (- (get-distributed-sum world-after token)
                                          (get-distributed-sum world-before token))
                     ;; Positive = funds left the protocol without being accounted for.
                     ;; A drop in held should be matched by increases in released/refunded/claimable
                     ;; or by bond/appeal distributions leaving the protocol custody.
+                    ;; Mark-to-market accrual reversals pair with :total-yield-generated.
                     unexplained-leak (+ delta-held delta-released delta-refunded
                                         delta-claimable delta-withdrawn (- delta-stake)
-                                        delta-distributed)]
+                                        delta-distributed (- delta-yield-gen))]
               :when (neg? unexplained-leak)]
           {:token token
            :delta-held delta-held

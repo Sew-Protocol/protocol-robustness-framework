@@ -66,10 +66,17 @@
 (defn- step-asserts-yield-stress? [step]
   (let [path   (vec (:path step))
         op     (norm-op (:op step))
-        last-k (when (seq path) (if (keyword? (last path)) (name (last path)) (last path)))]
-    (or (and (= last-k "unrealized-yield")
+        path-str (str/join "/" (map (fn [seg]
+                                      (cond
+                                        (keyword? seg) (name seg)
+                                        (vector? seg) (str/join "/" (map str seg))
+                                        :else (str seg)))
+                                    path))]
+    (or (and (str/ends-with? path-str "unrealized-yield")
              (contains? #{"<" ">" "<=" ">="} op))
-        (and (= last-k "deferred-amount")
+        (and (str/includes? path-str "yield-loss")
+             (or (= op "=") (:equals step)))
+        (and (str/ends-with? path-str "deferred-amount")
              (= op "=")))))
 
 (defn scenario-asserts-yield-stress?

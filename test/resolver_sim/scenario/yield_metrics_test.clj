@@ -14,3 +14,11 @@
     (is (= 1000 (:yield/escrow-principal m)))
     (is (= 50 (:yield/escrow-unrealized m)))
     (is (= 10 (:yield/escrow-realized m)))))
+
+(deftest yield-metric-key-handles-keyword-and-string-forms
+  (is (ym/yield-metric-key? :yield/escrow-principal))
+  (is (ym/yield-metric-key? "yield/escrow-principal"))
+  (is (ym/yield-metric-key? ":yield/escrow-principal"))
+  (is (not (ym/yield-metric-key? :escrow-principal))
+      "bare name without yield namespace is not a yield metric")
+  (is (not (ym/yield-metric-key? "escrow-principal"))))

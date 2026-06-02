@@ -9,6 +9,18 @@
 
 (def ^:private default-asset-decimals 18)
 
+(defn- normalize-token [token]
+  (cond
+    (keyword? token) token
+    (string? token)  (keyword token)
+    :else            token))
+
+(defn- risk-map [world module-id token]
+  (let [tok (normalize-token token)]
+    (or (get-in world [:yield/risk module-id tok])
+        (get-in world [:yield/risk module-id (name tok)])
+        {})))
+
 (defn token-decimals
   "Resolve token decimals from world metadata.
    Falls back to 18 when unspecified."
@@ -42,7 +54,7 @@
         token       (:token position)
         module-id   (:module/id position)
         decimals    (token-decimals world token)
-        risk      (get-in world [:yield/risk module-id token] {})
+        risk      (risk-map world module-id token)
         loss-mode   (risk/effective-loss-mode risk)
         ;; For share-based (like Aave aTokens):
         ;; value = shares * current-index
@@ -69,7 +81,7 @@
   "Calculates potential shortfall and haircuts based on world risk parameters.
    Returns a map with :fulfilled and :shortfall (if any)."
   [world module-id token amount]
-  (let [risk (get-in world [:yield/risk module-id token] {})
+  (let [risk (risk-map world module-id token)
         mode (risk/effective-liquidity-mode risk)]
     (case mode
       :available {:fulfilled amount :shortfall nil}
@@ -107,7 +119,7 @@
    Under :partial-liquidity, stress applies to the yield leg only; principal
    remains immediately available. Returns total :fulfilled (principal + liquid yield)."
   [world module-id token gross-amount principal]
-  (let [risk (get-in world [:yield/risk module-id token] {})
+  (let [risk (risk-map world module-id token)
         failure-modes (risk/normalize-failure-modes (:failure-modes risk))]
     (if (contains? failure-modes :partial-liquidity)
       (let [yield-portion (max 0 (- gross-amount principal))

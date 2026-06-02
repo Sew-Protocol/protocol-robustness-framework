@@ -1,5 +1,8 @@
 (ns resolver-sim.sim.reporter
-  "Stdout reporting for schema-profile-driven suite execution."
+  "Legacy fixture stdout reporter — detailed sections via `sim.result-display`.
+
+   For the canonical deterministic table, use `scenario.report/print-report`.
+   This namespace is not used for pass/fail judgement."
   (:require [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.schema-profile :as schema-profile]
