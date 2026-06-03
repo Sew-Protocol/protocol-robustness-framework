@@ -29,7 +29,9 @@
 
 (def ^:private default-params
   {:resolver-fee-bps 50 :appeal-window-duration 0
-   :max-dispute-duration 2592000 :appeal-bond-protocol-fee-bps 0})
+   :max-dispute-duration 2592000 :appeal-bond-protocol-fee-bps 0
+   ;; Match invariant_scenarios/common — skip stake gate when tests use custom-resolver
+   :resolver-bond-bps 0})
 
 (defn- sc [& {:keys [agents params init-time events schema-version]
               :or   {agents       [alice bob resolver]
@@ -944,28 +946,29 @@
     (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 6 :error])))))
 
 (deftest test-withdraw-stake-blocked-while-resolver-frozen
+  "Mirrors S40: keeper settles at 1241, governance executes slash at 1255 (72h freeze)."
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
+        slash-at 1255
         r (sew/replay-with-sew-protocol
-           (sc :agents [alice bob resolver gov]
-               :params (assoc default-params :appeal-window-duration 100)
+           (sc :agents [alice bob resolver gov keeper]
+               :params (assoc default-params :appeal-window-duration 120)
                :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
-                 :params {:amount 5000}}
+                 :params {:amount 10000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                 :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
                 {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                  :params {:workflow-id 0}}
                 {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
                  :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
                 {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
-                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
                  :params {:workflow-id 0}}
-                ;; fraud-slash appeal window expired (1130 + 100)
-                {:seq 6 :time 1240 :agent "alice" :action "execute_fraud_slash"
+                {:seq 6 :time slash-at :agent "gov" :action "execute_fraud_slash"
                  :params {:workflow-id 0}}
-                ;; still within freeze window: withdraw must be blocked
-                {:seq 7 :time 2000 :agent "resolver" :action "withdraw_stake"
+                {:seq 7 :time (+ slash-at 100) :agent "resolver" :action "withdraw_stake"
                  :params {:amount 100}}]))]
     (is (= :pass (:outcome r)))
     (is (= :ok (get-in r [:trace 6 :result])))
@@ -974,27 +977,27 @@
 
 (deftest test-withdraw-stake-allows-at-unfreeze-boundary
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        slash-execute-at 1240
-        freeze-until (+ slash-execute-at 259200)
+        keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
+        slash-at 1255
+        freeze-until (+ slash-at 259200)
         r (sew/replay-with-sew-protocol
-           (sc :agents [alice bob resolver gov]
-               :params (assoc default-params :appeal-window-duration 100)
+           (sc :agents [alice bob resolver gov keeper]
+               :params (assoc default-params :appeal-window-duration 120)
                :events
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
-                 :params {:amount 5000}}
+                 :params {:amount 10000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                 :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+                 :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
                 {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                  :params {:workflow-id 0}}
                 {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
                  :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
                 {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
-                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
+                {:seq 5 :time 1241 :agent "keeper" :action "execute_pending_settlement"
                  :params {:workflow-id 0}}
-                {:seq 6 :time slash-execute-at :agent "alice" :action "execute_fraud_slash"
+                {:seq 6 :time slash-at :agent "gov" :action "execute_fraud_slash"
                  :params {:workflow-id 0}}
-                ;; exactly at freeze boundary: should be allowed
                 {:seq 7 :time freeze-until :agent "resolver" :action "withdraw_stake"
                  :params {:amount 100}}]))]
     (is (= :pass (:outcome r)))
@@ -1231,54 +1234,59 @@
    - upheld appeal refunds bond to resolver claimable
    - rejected appeal forfeits bond to insurance accounting"
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
         r-upheld
         (sew/replay-with-sew-protocol
-         (sc :agents [alice bob resolver gov]
+         (sc :agents [alice bob resolver gov keeper]
              :params (assoc default-params
-                            :appeal-window-duration 100
+                            :appeal-window-duration 120
                             :appeal-bond-amount 70)
              :events
-             [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
-               :params {:amount 5000}}
+             [               {:seq 0 :time 1000 :agent "resolver" :action "register_stake"
+               :params {:amount 10000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-               :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+               :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
               {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
               {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
                :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
               {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
+               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
               {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
                :params {:workflow-id 0}}
-              {:seq 6 :time 1150 :agent "gov" :action "resolve_appeal"
+              {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? true}}
-              {:seq 7 :time 1230 :agent "alice" :action "execute_pending_settlement"
+              {:seq 7 :time 1200 :agent "gov" :action "execute_fraud_slash"
+               :params {:workflow-id 0}}
+              {:seq 8 :time 1250 :agent "keeper" :action "execute_pending_settlement"
                :params {:workflow-id 0}}]))
         r-rejected
         (sew/replay-with-sew-protocol
-         (sc :agents [alice bob resolver gov]
+         (sc :agents [alice bob resolver gov keeper]
              :params (assoc default-params
-                            :appeal-window-duration 100
+                            :appeal-window-duration 120
                             :appeal-bond-amount 80)
              :events
              [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
-               :params {:amount 5000}}
+               :params {:amount 10000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-               :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
+               :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
               {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
               {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
                :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
               {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
-               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
+               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 500}}
               {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
                :params {:workflow-id 0}}
-              {:seq 6 :time 1150 :agent "gov" :action "resolve_appeal"
+              {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? false}}
-              {:seq 7 :time 1230 :agent "alice" :action "execute_pending_settlement"
+              {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
+               :params {:workflow-id 0}}
+              {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
                :params {:workflow-id 0}}]))
-        w-upheld   (get-in r-upheld [:trace 6 :world])
-        w-rejected (get-in r-rejected [:trace 6 :world])
+        w-upheld   (get-in r-upheld [:trace 5 :world])
+        w-rejected (get-in r-rejected [:trace 7 :world])
         assert-appeal-resolution-semantics
         (fn [world upheld?]
           ;; Helper to remove ambiguity around `upheld?` semantics using
@@ -1292,6 +1300,8 @@
                 "upheld?=false should forfeit appeal bond to insurance bucket")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
+    (is (= :rejected (get-in r-upheld [:trace 7 :result])))
+    (is (= :slash-already-reversed (get-in r-upheld [:trace 7 :error])))
     (assert-appeal-resolution-semantics w-upheld true)
     (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
@@ -1302,8 +1312,9 @@
   "Dedicated replay test mirroring invariant scenario S35 exactly.
    Path: pending -> appealed -> pending (upheld? false) -> executed after deadline."
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
+        keeper {:id "keeper" :type "keeper" :address "0xKeeper"}
         r   (sew/replay-with-sew-protocol
-             (sc :agents [alice bob resolver gov]
+             (sc :agents [alice bob resolver gov keeper]
                  :params (assoc default-params :appeal-window-duration 120)
                  :events
                  [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
@@ -1320,14 +1331,13 @@
                    :params {:workflow-id 0}}
                   {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                    :params {:workflow-id 0 :upheld? false}}
-                  ;; Slash before settlement (matches S25 ordering).
-                  {:seq 7 :time 1255 :agent "alice" :action "execute_fraud_slash"
+                  {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
                    :params {:workflow-id 0}}
-                  {:seq 8 :time 1260 :agent "alice" :action "execute_pending_settlement"
+                  {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
                    :params {:workflow-id 0}}]))
         w-appealed (get-in r [:trace 5 :world])
         w-resolved (get-in r [:trace 6 :world])
-        w-slashed  (get-in r [:trace 7 :world])
+        w-slashed  (get-in r [:trace 8 :world])
         w-final    (get-in r [:trace 8 :world])]
     (is (= :pass (:outcome r)))
     ;; Snapshot-level proxy checks for appealed->rejected path.
