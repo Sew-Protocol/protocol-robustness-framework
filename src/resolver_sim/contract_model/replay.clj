@@ -9,25 +9,19 @@
    Replay invariants (after every successful transition):
      1. protocol/check-invariants-single
      2. protocol/check-invariants-transition"
-   (:require [clojure.data.json              :as json]
-             [clojure.set                    :as set]
-             [clojure.stacktrace             :as st]
+   (:require [clojure.stacktrace             :as st]
              [clojure.string                :as str]
-              [resolver-sim.logging          :as log]
+             [resolver-sim.logging          :as log]
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
-             [resolver-sim.scenario.expectations :as expectations]
-             [resolver-sim.scenario.theory :as theory]
-             [resolver-sim.scenario.yield-metrics :as yield-metrics]
              [resolver-sim.contract-model.replay.metrics :as metrics]
              [resolver-sim.contract-model.replay.io      :as replay-io]
+             [resolver-sim.contract-model.replay.validation :as validation]
+             [resolver-sim.contract-model.replay.analysis :as analysis]
+             [resolver-sim.contract-model.replay.temporal :as temporal]
              [resolver-sim.protocols.protocol :as proto]
+             [resolver-sim.protocols.registry :as preg]
              [resolver-sim.time.model        :as time-model]))
-;; ---------------------------------------------------------------------------
-;; Constants
-;; ---------------------------------------------------------------------------
-
-(def ^:private supported-versions (:supported-versions schema-profile/default-profile))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -40,23 +34,52 @@
 ;; Agent Validation (Generic)
 ;; ---------------------------------------------------------------------------
 
-(defn validate-agents
-  "Validate a list of agent maps {:id :address :role :strategy ...} for structural correctness.
-   Returns {:ok true} or {:ok false :error kw :detail {...}}.
+(defn validate-agents [agents] (validation/validate-agents agents))
 
-   Checks: non-empty, unique :id values, unique :address values."
-  [agents]
-  (let [id-counts   (frequencies (map :id agents))
-        addr-counts (frequencies (map :address agents))
-        dup-ids     (keys (filter (fn [[_ n]] (> n 1)) id-counts))
-        dup-addrs   (keys (filter (fn [[_ n]] (> n 1)) addr-counts))]
-    (cond
-      (empty? agents)   {:ok false :error :no-agents}
-      (seq dup-ids)     {:ok false :error :duplicate-agent-ids
-                         :detail {:duplicates (vec dup-ids)}}
-      (seq dup-addrs)   {:ok false :error :duplicate-agent-addresses
-                         :detail {:duplicates (vec dup-addrs)}}
-      :else             {:ok true})))
+;; ---------------------------------------------------------------------------
+;; Bridge functions (Legacy Sew support)
+;; ---------------------------------------------------------------------------
+
+(defn build-context
+  "Bridge to proto/build-execution-context using SewProtocol."
+  [agents params]
+  (proto/build-execution-context (preg/get-protocol "sew-v1") agents params))
+
+(defn sew-dispatch-action
+  "Bridge to proto/dispatch-action using SewProtocol."
+  [context world event]
+  (proto/dispatch-action (preg/get-protocol "sew-v1") context world event))
+
+(defn sew-check-invariants-single
+  "Bridge to proto/check-invariants-single using SewProtocol."
+  [world]
+  (proto/check-invariants-single (preg/get-protocol "sew-v1") world))
+
+(defn sew-check-invariants-transition
+  "Bridge to proto/check-invariants-transition using SewProtocol."
+  [world-before world-after]
+  (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after))
+
+;; ---------------------------------------------------------------------------
+;; Analysis & Result Interpretation
+;; ---------------------------------------------------------------------------
+
+(defn- normalize-error-value [error] (analysis/normalize-error-value error))
+(defn- expected-error-key [x] (analysis/expected-error-key x))
+(defn- rejected-entry-key [x] (analysis/rejected-entry-key x))
+(defn- analyze-expected-errors [scenario trace] (analysis/analyze-expected-errors scenario trace))
+
+(defn finalize-scenario-result [scenario result] (analysis/finalize-scenario-result scenario result))
+
+;; ---------------------------------------------------------------------------
+;; Temporal Instrumentation
+;; ---------------------------------------------------------------------------
+
+(defn- advance-world-time [world event-time] (temporal/advance-world-time world event-time))
+(defn- effective-temporal-rules [context] (temporal/effective-temporal-rules context))
+(defn- evaluate-temporal-rules [rules ctx] (temporal/evaluate-temporal-rules rules ctx))
+(defn- maybe-record-temporal! [cfg enabled? id outcome world metrics trace] (temporal/maybe-record-temporal! cfg enabled? id outcome world metrics trace))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Metrics — registry (must precede validate-scenario which references it)
@@ -91,207 +114,17 @@
 
 (defn- theory-metric-scope [scenario] (metrics/theory-metric-scope scenario))
 
-(defn- action->transition-id
-  "Map an event action string/keyword to canonical transition semantic id.
-   Keeps backward compatibility by tolerating hyphen/underscore forms."
-  [action]
-  (let [s (-> (if (keyword? action) (name action) (str action))
-              str/lower-case
-              (str/replace "-" "_"))
-        k (keyword s)]
-    (if (defs/transition-def k)
-      (keyword "scenario.transition" s)
-      (keyword "scenario.transition" "unknown"))))
+(defn- action->transition-id [action] (analysis/action->transition-id action))
 
-(defn- normalize-error-value
-  [error]
-  (cond
-    (keyword? error) error
-    (string? error)  (let [s (if (.startsWith ^String error ":")
-                               (subs error 1)
-                               error)]
-                       (keyword s))
-    :else error))
 
-(defn- expected-error-key
-  [{:keys [seq action error]}]
-  [seq action (normalize-error-value error)])
-
-(defn- rejected-entry-key
-  [{:keys [seq action error]}]
-  [seq action (normalize-error-value error)])
-
-(defn- analyze-expected-errors
-  "Compare rejected trace entries against scenario :expected-errors.
-
-   Returns {:ok? bool :matched [...] :missing [...] :unexpected [...]}.
-   Matching is exact on [:seq :action :error]."
-  [scenario trace]
-  (let [expected        (vec (:expected-errors scenario []))
-        expected-set    (set (map expected-error-key expected))
-        rejected        (->> trace
-                             (filter #(= :rejected (:result %)))
-                             (map #(select-keys % [:seq :action :error]))
-                             vec)
-        rejected-set    (set (map rejected-entry-key rejected))
-        matched-set     (set/intersection expected-set rejected-set)
-        missing-set     (set/difference expected-set rejected-set)
-        unexpected-set  (set/difference rejected-set expected-set)]
-    {:ok?        (and (empty? missing-set) (empty? unexpected-set))
-     :matched    (vec (sort-by (juxt :seq :action)
-                               (filter #(contains? matched-set (expected-error-key %)) expected)))
-     :missing    (vec (sort-by (juxt :seq :action)
-                               (filter #(contains? missing-set (expected-error-key %)) expected)))
-     :unexpected (vec (sort-by (juxt :seq :action)
-                               (filter #(contains? unexpected-set (rejected-entry-key %)) rejected)))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
 ;; ---------------------------------------------------------------------------
 
 (defn validate-scenario
-  "Validate a scenario map for structural correctness before replay.
-   Accepts an optional effective-metrics set used to validate metric references
-   in :expectations and :theory. Defaults to base-metrics (universal counters)."
-  ([scenario] (validate-scenario scenario base-metrics))
-  ([scenario effective-metrics]
-   (let [version     (str (:schema-version scenario))
-         agents      (:agents scenario)
-         events      (sort-by :seq (:events scenario))
-         known-ids   (set (map :id agents))
-         init-time   (get scenario :initial-block-time 1000)
-         agent-check (validate-agents agents)]
-    (cond
-      (not (contains? supported-versions version))
-      {:ok false :error :unsupported-schema-version
-       :detail {:expected supported-versions :got version}}
-
-      (and (contains? (set (schema-profile/required-fields version)) :id)
-           (not (:id scenario)))
-      {:ok false :error :missing-id :detail "v1.1 scenarios must have a unique :id"}
-
-      (and (contains? (set (schema-profile/required-fields version)) :title)
-           (not (:title scenario)))
-      {:ok false :error :missing-title :detail "v1.1 scenarios must have a human-readable :title"}
-
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
-           (not (:purpose scenario)))
-      {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
-
-      (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
-           (not (string? (:scenario-author scenario))))
-      {:ok false :error :missing-scenario-author
-       :detail "v1.1 scenarios must include :scenario-author as a non-empty string"}
-
-      (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
-           (str/blank? (:scenario-author scenario)))
-      {:ok false :error :blank-scenario-author
-       :detail ":scenario-author must not be blank"}
-
-      ;; Purpose-based requirements are enforced for enriched schemas only
-      ;; (v1.1+). Legacy v1.0 scenario packs are intentionally tolerated.
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-theory? (:purpose scenario))
-           (not (:theory scenario)))
-      {:ok false :error :theory-required
-       :detail "purpose :theory-falsification requires a :theory block"}
-
-      ;; :adversarial-robustness scenarios must include :theory or meaningful :expectations
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-theory-or-expectations? (:purpose scenario))
-           (not (:theory scenario))
-           (empty? (get-in scenario [:expectations :metrics]))
-           (empty? (get-in scenario [:expectations :terminal]))
-           (empty? (get-in scenario [:expectations :invariants])))
-      {:ok false :error :adversarial-requires-analysis
-       :detail "purpose :adversarial-robustness requires :theory or non-trivial :expectations"}
-
-      ;; Validate :theory structure when present
-      (and (:theory scenario) (not (get-in scenario [:theory :claim-id])))
-      {:ok false :error :theory-missing-claim-id
-       :detail ":theory must include a :claim-id"}
-
-      (and (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
-      {:ok false :error :theory-missing-assumptions
-       :detail ":theory must include an :assumptions vector (may be empty)"}
-
-      ;; :purpose :theory-falsification requires a direct metric disconfirmer (negative test).
-      (and (:theory scenario)
-           (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
-           (not (seq (get-in scenario [:theory :falsifies-if])))
-           (not (true? (get-in scenario [:theory :mechanism-only-negative-test?]))))
-      {:ok false :error :theory-falsification-requires-falsifies-if
-       :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer), or :mechanism-only-negative-test? true with mechanism/equilibrium proxies"}
-
-      ;; :falsifies-if may be empty for regression/adversarial when mechanism-properties or
-      ;; equilibrium-concept are declared (mechanism-only theory blocks).
-      (and (:theory scenario)
-           (not (seq (get-in scenario [:theory :falsifies-if])))
-           (empty? (get-in scenario [:theory :mechanism-properties]))
-           (empty? (get-in scenario [:theory :equilibrium-concept])))
-      {:ok false :error :theory-missing-falsifies-if
-       :detail ":theory must include a non-empty :falsifies-if vector, or declare :mechanism-properties / :equilibrium-concept"}
-
-      (not (:ok agent-check))
-      agent-check
-
-      (empty? events)
-      {:ok false :error :no-events}
-
-      (not= (mapv :seq events) (vec (range (count events))))
-      {:ok false :error :non-contiguous-event-seq :detail {:got (mapv :seq events)}}
-
-      (some (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events))
-      {:ok false :error :non-monotonic-event-time
-       :detail {:violations (vec (filter (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events)))}}
-
-      (some #(< (:time %) init-time) events)
-      {:ok false :error :event-time-before-initial
-       :detail {:initial-block-time init-time
-                :violations (mapv :time (filter #(< (:time %) init-time) events))}}
-
-      (some #(not (contains? known-ids (:agent %))) events)
-      {:ok false :error :unknown-agent-in-event
-       :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
-
-      ;; Population metrics in single-trace theory → hard error (silent inconclusive otherwise).
-      (and (:theory scenario)
-           (not= :population (theory-metric-scope scenario))
-           (seq (let [refs (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
-                      bad  (vec (filter metrics/population-metrics refs))]
-                  bad)))
-      {:ok false :error :population-metric-in-trace-theory
-       :detail {:metrics (vec (filter metrics/population-metrics
-                               (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
-                :metric-scope (theory-metric-scope scenario)
-                :hint "Single-trace replay cannot compute population metrics. Use trace metrics (e.g. :coalition-net-profit), or set :theory {:metric-scope :population} for multi-epoch scenarios."}}
-
-      ;; Theory :falsifies-if metrics must be in the active trace metric registry
-      ;; (population-scoped metrics are validated by the multi-epoch runner, not here).
-      (let [scope          (theory-metric-scope scenario)
-            theory-metrics (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
-            trace-metrics  (if (= scope :population)
-                             (vec (remove metrics/population-metrics theory-metrics))
-                             theory-metrics)
-            unknown-theory (vec (remove effective-metrics trace-metrics))]
-        (seq unknown-theory))
-      {:ok false :error :unknown-theory-metric
-       :detail {:unknown (vec (remove effective-metrics
-                               (falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
-                :known   effective-metrics
-                :hint    "Declare the metric in the protocol metric-vocabulary or fix the name."}}
-
-      ;; Expectations metrics — separate error code for clearer diagnostics.
-      (let [exp-metrics (map #(metric-key (:name %)) (get-in scenario [:expectations :metrics] []))
-            unknown-exp (vec (remove effective-metrics exp-metrics))]
-        (seq unknown-exp))
-      {:ok false :error :unknown-expectation-metric
-       :detail {:unknown (vec (remove effective-metrics
-                               (map #(metric-key (:name %)) (get-in scenario [:expectations :metrics] []))))
-                :known effective-metrics}}
-
-      :else {:ok true}))))
+  ([scenario] (validation/validate-scenario scenario metrics/base-metrics))
+  ([scenario effective-metrics] (validation/validate-scenario scenario effective-metrics)))
 
 ;; ---------------------------------------------------------------------------
 ;; Metrics — accumulation
@@ -300,91 +133,9 @@
 (defn- zero-metrics [protocol] (metrics/zero-metrics protocol))
 
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
-  (let [result-kw (:result trace-entry)
-        accepted? (= result-kw :ok)
-        agent     (get agent-index (:agent event))
-        attack?   (if (satisfies? proto/EconomicModel protocol)
-                    (proto/adversarial-event? protocol event agent)
-                    false)
-        tags      (:event-tags trace-entry)
-        world-after (:world trace-entry)
-        base (cond-> metrics
-               (and attack? accepted?)
-               (update :attack-successes inc)
+  (metrics/accum-metrics protocol metrics event trace-entry agent-index world-before))
 
-               attack?
-               (update :attack-attempts inc)
 
-               (and attack? (not accepted?))
-               (update :rejected-attacks inc)
-
-               (not accepted?)
-               (update :reverts inc)
-
-               (= :batch-conflict (:error trace-entry))
-               (update :batch-conflicts inc)
-
-               (:violations trace-entry)
-               (-> (update :invariant-violations inc)
-                   (update :invariant-results
-                           (fn [acc]
-                             (reduce (fn [m [kw r]]
-                                       (if (:holds? r) m (assoc m kw :fail)))
-                                     acc
-                                     (:violations trace-entry))))))]
-    (if (satisfies? proto/EconomicModel protocol)
-      (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
-      base)))
-
-(defn- advance-world-time
-  "Advance :block-time and scenario-step counter atomically.
-   Returns {:world w' :delta-ms n :advanced? bool}.
-
-   Same-timestamp events (event-time == block-time) are a no-op:
-   world is unchanged and scenario-step is NOT incremented.
-   This models same-block semantics — multiple actions at the same
-   timestamp share a single time context without stepping the counter."
-  [world event-time]
-  (let [now (:block-time world)
-        delta (- event-time now)]
-    (if (pos? delta)
-      (let [step (inc (get-in world [:time :scenario-step] 0))]
-        {:world     (time-model/with-time world {:block-ts event-time :scenario-step step})
-         :delta-ms  delta
-         :advanced? true})
-      {:world     world
-       :delta-ms  0
-       :advanced? false})))
-
-(def ^:private temporal-rules
-  [{:id :missing-event-time
-    :check (fn [{:keys [event-time]}]
-             (if (number? event-time)
-               {:ok? true}
-               {:ok? false :error :invalid-event-time}))}
-   {:id :non-regressive-time
-    :check (fn [{:keys [event-time now]}]
-             (if (< event-time now)
-               {:ok? false :error :time-regression}
-               {:ok? true}))}])
-
-(defn- effective-temporal-rules
-  "Base temporal rules + optional protocol/context-provided rules.
-   Extra rules must be maps with keys {:id kw :check (fn [ctx] -> {:ok? bool ...})}."
-  [context]
-  (let [extra (:temporal-rules context)
-        extra' (if (sequential? extra) extra [])]
-    (into temporal-rules extra')))
-
-(defn- evaluate-temporal-rules
-  [rules ctx]
-  (reduce (fn [_ {:keys [id check]}]
-            (let [r (check ctx)]
-              (if (:ok? r)
-                nil
-                (reduced (assoc r :rule-id id)))))
-          nil
-          rules))
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
@@ -547,44 +298,7 @@
 ;; Public API (Generic)
 ;; ---------------------------------------------------------------------------
 
-(defn- expectation-metric-keys [scenario]
-  (when-let [metrics (get-in scenario [:expectations :metrics])]
-    (into #{} (map #(theory/metric-key (:name %)) metrics))))
-
-(defn finalize-scenario-result
-  "Apply yield metrics, expected-outcomes, and :expectations checks."
-  [scenario result]
-  (let [result'      (yield-metrics/merge-yield-metrics result)
-        outcomes     (expectations/analyze-expected-outcomes scenario (:trace result'))
-        expect       (when (:expectations scenario)
-                       (expectations/evaluate-expectations result' (:expectations scenario)))
-        outcomes-ok? (:ok? outcomes true)
-        expect-ok?   (or (nil? expect) (:ok? expect))
-        checks-ok?   (and outcomes-ok? expect-ok?)]
-    (cond-> (assoc result'
-              :expected-outcomes outcomes
-              :expectations expect)
-      (and (= (:outcome result') :pass) (not checks-ok?))
-      (assoc :outcome :fail
-             :halt-reason (if (not outcomes-ok?)
-                            :expected-outcome-mismatch
-                            :expectation-mismatch)
-             :expectation-violations
-             (vec (concat (:violations outcomes [])
-                          (:violations expect [])))))))
-
-(defn- maybe-record-temporal!
-  "Invoke optional :recorder from :temporal-evidence when collection is enabled."
-  [temporal-cfg temporal-enabled? scenario-id outcome world metrics trace]
-  (when (and temporal-enabled? (:recorder temporal-cfg))
-    ((:recorder temporal-cfg)
-     (:datasource temporal-cfg)
-     temporal-cfg
-     scenario-id
-     outcome
-     world
-     metrics
-     trace)))
+(defn- expectation-metric-keys [scenario] (metrics/expectation-metric-keys scenario))
 
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."
@@ -786,7 +500,7 @@
   (let [vocab              (if (satisfies? proto/EconomicModel protocol)
                              (proto/metric-vocabulary protocol)
                              #{})
-        effective-metrics  (into (into base-metrics vocab)
+        effective-metrics  (into (into metrics/base-metrics vocab)
                                  (or (metrics/expectation-metric-keys scenario) #{}))
         validation (validate-scenario scenario effective-metrics)
         temporal-cfg (:temporal-evidence scenario)
@@ -836,6 +550,17 @@
                                  :agent-index agent-index}
                                 options))))
 
+
+
+(defn result->json-str
+  "Serialize a replay result to a JSON string."
+  [result]
+  (replay-io/result->json-str result))
+
+;; ---------------------------------------------------------------------------
+;; Verification & Determinism
+;; ---------------------------------------------------------------------------
+
 (defn replay-idempotent-same-trace?
   "Run the same scenario twice and check deterministic equivalence of key outputs.
    Returns:
@@ -862,8 +587,3 @@
     {:idempotent? eq?
      :first r1
      :second r2}))
-
-(defn result->json-str
-  "Serialize a replay result to a JSON string."
-  [result]
-  (replay-io/result->json-str result))

@@ -93,21 +93,36 @@
         attack?   (if (satisfies? proto/EconomicModel protocol)
                     (proto/adversarial-event? protocol event agent)
                     false)
+        tags      (:event-tags trace-entry)
         world-after (:world trace-entry)
         base (cond-> metrics
                (and attack? accepted?)
                (update :attack-successes inc)
+
+               attack?
+               (update :attack-attempts inc)
+
                (and attack? (not accepted?))
                (update :rejected-attacks inc)
-               (or attack? (= result-kw :revert))
+
+               (not accepted?)
                (update :reverts inc)
-               (or attack? accepted?)
-               (update :attack-attempts inc)
-               (:invariant-violations (:diagnostics trace-entry))
-               (update :invariant-violations + (:invariant-violations (:diagnostics trace-entry))))]
+
+               (= :batch-conflict (:error trace-entry))
+               (update :batch-conflicts inc)
+
+               (:violations trace-entry)
+               (-> (update :invariant-violations inc)
+                   (update :invariant-results
+                           (fn [acc]
+                             (reduce (fn [m [kw r]]
+                                       (if (:holds? r) m (assoc m kw :fail)))
+                                     acc
+                                     (:violations trace-entry))))))]
     (if (satisfies? proto/EconomicModel protocol)
-      (proto/accum-protocol-metrics protocol base (:event-tags trace-entry) event accepted? attack? world-before world-after)
+      (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
       base)))
+
 
 (defn expectation-metric-keys [scenario]
   (when-let [metrics (get-in scenario [:expectations :metrics])]
