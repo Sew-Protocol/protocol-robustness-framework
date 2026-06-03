@@ -262,9 +262,9 @@
   [{:keys [escrow-state sender-status recipient-status]}]
   (let [terminals #{:released :refunded :resolved}]
     (cond
-      ;; Terminal states: statuses are frozen; accept any combination
+      ;; Terminal states: party statuses are cleared at finalization (cancellation-mutex)
       (contains? terminals escrow-state)
-      true
+      (and (= :none sender-status) (= :none recipient-status))
 
       ;; :none — pre-creation or uninitialized; both statuses must be :none
       (= :none escrow-state)

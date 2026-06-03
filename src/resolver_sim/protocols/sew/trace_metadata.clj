@@ -129,36 +129,61 @@
 
 (def invariant-categories
   "Mapping of invariant keyword → semantic category.
-   Categories: :accounting :state-machine :economic :liveness :safety :consensus"
-  {:solvency                       :accounting
-   :fees-non-negative              :accounting
-   :held-non-negative              :accounting
-   :conservation-of-funds          :accounting
-   :finalization-accounting-correct :accounting
-   :token-tax-reconciliation       :accounting
-   :fees-monotone                  :accounting
-   :all-status-combinations-valid  :state-machine
-   :pending-settlement-consistent  :state-machine
-   :dispute-timestamp-consistent   :state-machine
-   :dispute-level-bounded          :state-machine
-   :terminal-states-unchanged      :state-machine
-   :escalation-level-monotonic     :state-machine
-   :slash-status-consistent        :economic
-   :appeal-bond-conserved          :economic
-   :bond-liquidity                 :economic
-   :bond-slash-bounded             :economic
-   :fee-cap                        :economic
-   :slash-distribution-consistent  :economic
-   :resolver-bond-mix-valid        :economic
-   :senior-coverage-not-exceeded   :economic
-   :slash-epoch-cap-respected      :economic
-   :no-auto-fraud-execute          :safety
-   :resolver-not-frozen-on-assign  :safety
-   :reversal-slash-disabled        :safety
-   :no-withdrawal-during-dispute   :safety
-   :time-lock-integrity            :safety
-   :no-stale-automatable-escrows   :liveness
-   :dispute-resolution-path        :liveness})
+   Categories: :accounting :state-machine :economic :liveness :safety :governance
+
+   Must cover every ID in `protocols.sew.invariants/canonical-ids`."
+  {:solvency                          :accounting
+   :fees-non-negative                 :accounting
+   :held-non-negative                 :accounting
+   :conservation-of-funds             :accounting
+   :finalization-accounting-correct   :accounting
+   :token-tax-reconciliation          :accounting
+   :settlement-principal-boundary     :accounting
+   :settlement-yield-boundary         :accounting
+   :liability-slash-boundary          :accounting
+   :bond-boundary                     :accounting
+   :fee-boundary                      :accounting
+   :shortfall-fidelity                :accounting
+   :migration-parity                  :accounting
+   :claimable-classification          :accounting
+   :single-resolution-payout-consistent :accounting
+   :held-delta-accounted              :accounting
+   :withdrawn-monotonic               :accounting
+   :released-monotonic                :accounting
+   :all-status-combinations-valid     :state-machine
+   :persisted-escrow-state-valid      :state-machine
+   :escrow-state-in-graph             :state-machine
+   :escrow-dispute-metadata-consistent :state-machine
+   :pending-settlement-consistent     :state-machine
+   :dispute-timestamp-consistent      :state-machine
+   :dispute-level-bounded             :state-machine
+   :terminal-states-unchanged         :state-machine
+   :escalation-level-monotonic        :state-machine
+   :cancellation-mutex                :state-machine
+   :module-snapshot-immutable         :governance
+   :slash-status-consistent           :economic
+   :appeal-bond-conserved             :economic
+   :appeal-bond-custody-consistent    :economic
+   :bond-liquidity                    :economic
+   :bond-slash-bounded                :economic
+   :fee-cap                           :economic
+   :slash-distribution-consistent     :economic
+   :resolver-bond-mix-valid           :economic
+   :senior-coverage-not-exceeded      :economic
+   :slash-epoch-cap-respected         :economic
+   :fraud-slash-executions-accounted  :economic
+   :no-auto-fraud-execute             :safety
+   :resolver-not-frozen-on-assign     :safety
+   :reversal-slash-disabled           :safety
+   :no-withdrawal-during-dispute      :safety
+   :time-lock-integrity               :safety
+   :time-non-decreasing               :safety
+   :time-no-action-after-finality     :safety
+   :no-stale-automatable-escrows      :liveness
+   :dispute-resolution-path           :liveness
+   :resolver-capacity                 :liveness
+   :yield-position-consistency        :accounting
+   :yield-exposure                    :accounting})
 
 ;; ---------------------------------------------------------------------------
 ;; A6. Scenario taxonomy

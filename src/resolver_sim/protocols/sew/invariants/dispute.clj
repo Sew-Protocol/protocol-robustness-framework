@@ -37,3 +37,31 @@
             (= reason :level-out-of-range) (assoc :max t/max-dispute-level)))]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
+
+(defn escrow-dispute-metadata-consistent?
+  "True when dispute timestamps and levels align with escrow-state.
+
+   Complements :dispute-timestamp-consistent and :dispute-level-bounded by
+   rejecting :pending escrows that already carry dispute metadata."
+  [world]
+  (let [violations
+        (for [[wf et] (:escrow-transfers world {})
+              :let  [state (:escrow-state et)
+                     ts    (get-in world [:dispute-timestamps wf] 0)
+                     level (get-in world [:dispute-levels wf] 0)
+                     reason (cond
+                              (= :pending state)
+                              (when (or (pos? (long ts)) (pos? (long level)))
+                                :pending-with-dispute-metadata)
+
+                              (= :disputed state)
+                              (when-not (pos? (long ts))
+                                :disputed-without-timestamp)
+
+                              :else nil)]
+              :when reason]
+          (cond-> {:workflow-id wf :reason reason :escrow-state state}
+            (pos? (long ts)) (assoc :timestamp ts)
+            (pos? (long level)) (assoc :level level)))]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))

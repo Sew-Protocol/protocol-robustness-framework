@@ -22,6 +22,7 @@
             [resolver-sim.yield.invariants :as generic-yield-inv]
             [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]
             [resolver-sim.protocols.sew.invariants.escrow :as escrow]
+            [resolver-sim.protocols.sew.invariants.governance :as governance]
             [resolver-sim.protocols.sew.invariants.solvency :as solvency]
             [resolver-sim.protocols.sew.invariants.fees :as fees]
             [resolver-sim.protocols.sew.invariants.state :as state]
@@ -39,6 +40,8 @@
     :held-non-negative
     :all-status-combinations-valid
     :persisted-escrow-state-valid
+    :escrow-state-in-graph
+    :escrow-dispute-metadata-consistent
     :pending-settlement-consistent
     :dispute-timestamp-consistent
     :dispute-level-bounded
@@ -76,6 +79,7 @@
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
   #{:terminal-states-unchanged
+    :module-snapshot-immutable
     :time-non-decreasing
     :time-no-action-after-finality
     :finalization-accounting-correct
@@ -93,16 +97,14 @@
   (set/union world-invariant-ids transition-invariant-ids))
 
 (defn- get-token-claimable-v2-non-principal-sum
-  "Sum v2 claimable outside :settlement/principal.
-   For settlement principal accounting, :claimable-v2 is authoritative; legacy :claimable
-   is mirrored for backward compatibility and parity checks."
+  "Sum v2 claimable outside settlement domains mirrored into legacy :claimable."
   [world token]
   (reduce + 0
           (for [[wf domain-map] (get-in world [:claimable-v2] {})
                 :let [et (get-in world [:escrow-transfers wf])]
                 :when (and et (= (:token et) token))
                 [domain addr-map] domain-map
-                :when (not= domain :settlement/principal)
+                :when (not (#{:settlement/principal :settlement/yield} domain))
                 [_ amt] addr-map]
             (or amt 0))))
 
@@ -265,6 +267,14 @@
 (defn dispute-timestamp-consistency? [world] (dispute/dispute-timestamp-consistency? world))
 
 (defn dispute-level-bounded? [world] (dispute/dispute-level-bounded? world))
+
+(defn escrow-state-in-graph? [world] (escrow/escrow-state-in-graph? world))
+
+(defn escrow-dispute-metadata-consistent? [world]
+  (dispute/escrow-dispute-metadata-consistent? world))
+
+(defn module-snapshot-immutable? [world-before world-after]
+  (governance/module-snapshot-immutable? world-before world-after))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 10: No stale automatable escrows
@@ -735,7 +745,11 @@
                     total        (reduce + 0 (vals yield-claims))
                     owner-id     (t/escrow-yield-owner-id wf)
                     pos          (get-in world [:yield/positions owner-id])
-                    max-yield    (+ (:realized-yield pos 0) (:unrealized-yield pos 0))]
+                    pos-yield    (+ (:realized-yield pos 0) (:unrealized-yield pos 0))
+                    ;; After settlement, yield is allocated to claimable; position is zeroed.
+                    max-yield    (if (= :settled (:status pos))
+                                   (max total pos-yield)
+                                   pos-yield)]
               :when (> total max-yield)]
           {:workflow-id wf :claims total :max max-yield})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -799,17 +813,20 @@
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn migration-parity?
-  "True when v2 :settlement/principal matches legacy :claimable per workflow.
-   Non-principal v2 domains (e.g. :liability/challenge-bounty) are allowed without legacy dual-write."
+  "True when v2 settlement domains match legacy :claimable per workflow.
+   Legacy dual-writes :settlement/principal and :settlement/yield; other v2 domains
+   (e.g. :liability/challenge-bounty) are allowed without legacy dual-write."
   [world]
   (let [violations
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [legacy (get-in world [:claimable wf] {})
                     principal-v2 (get domain-map :settlement/principal {})
-                    total-v2-principal (reduce + 0 (vals principal-v2))
+                    yield-v2     (get domain-map :settlement/yield {})
+                    total-v2     (+ (reduce + 0 (vals principal-v2))
+                                      (reduce + 0 (vals yield-v2)))
                     total-legacy (reduce + 0 (vals legacy))]
-              :when (not= total-v2-principal total-legacy)]
-          {:workflow-id wf :v2-principal total-v2-principal :legacy total-legacy})]
+              :when (not= total-v2 total-legacy)]
+          {:workflow-id wf :v2-settlement total-v2 :legacy total-legacy})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn claimable-classification
@@ -1334,6 +1351,8 @@
                  :held-non-negative             (held-non-negative? world)
                  :all-status-combinations-valid (all-status-combinations-valid? world)
                  :persisted-escrow-state-valid (persisted-escrow-state-valid? world)
+                 :escrow-state-in-graph         (escrow-state-in-graph? world)
+                 :escrow-dispute-metadata-consistent (escrow-dispute-metadata-consistent? world)
                  :pending-settlement-consistent (pending-settlement-consistency? world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)
@@ -1389,6 +1408,8 @@
   [world-before world-after]
   (let [results {:terminal-states-unchanged
                  (terminal-states-unchanged? world-before world-after)
+                 :module-snapshot-immutable
+                 (module-snapshot-immutable? world-before world-after)
                  :time-non-decreasing
                  (time-inv/non-decreasing-time? world-before world-after)
                  :time-no-action-after-finality

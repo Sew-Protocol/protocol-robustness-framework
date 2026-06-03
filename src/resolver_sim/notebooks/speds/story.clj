@@ -6,8 +6,18 @@
             [resolver-sim.notebooks.speds.data :as data]
             [resolver-sim.notebooks.speds.findings :as findings]
             [resolver-sim.notebooks.speds.tokens :as tokens]
+            [resolver-sim.notebooks.speds.story-data :as story-data]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [clojure.string :as str]))
+
+(def ^:private frame-registry
+  {:theory-falsification falsification-frame-specs
+   :deadline-boundary    deadline-frame-specs
+   :collusion            collusion-frame-specs
+   :economic-solvency    economic-solvency-frame-specs})
+
+(defn- get-frame-specs [family frame-ctx]
+  ((get frame-registry family deflection-frame-specs) frame-ctx))
 
 ;; ---
 ;; Internal Narrative Helpers
@@ -22,10 +32,13 @@
 (defn- render-frame-specs
   "Renders a vector of frame specs with keys:
    :header :footer-left :footer-right :content"
-  [frame-specs]
-  [:div.frame-carousel {:style {:display "grid" :gridTemplateColumns "repeat(2, 1fr)" :gap "40px"}}
-   (for [[idx {:keys [header footer-left footer-right content]}] (map-indexed vector frame-specs)]
-     (apply render-story-frame (inc idx) (count frame-specs) header footer-left footer-right content))])
+  ([frame-specs] (render-frame-specs frame-specs {}))
+  ([frame-specs options]
+   (speds/render-carousel
+    (fn [idx total-frames {:keys [header footer-left footer-right content]}]
+      (apply render-story-frame idx total-frames header footer-left footer-right content))
+    frame-specs
+    options)))
 
 (defn- story-family
   [scenario-id scenario]
@@ -238,18 +251,9 @@
 (defn generate-deflection-story
   "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
   [scenario-id artifacts]
-  (let [ctx (data/generate-proof-context artifacts scenario-id)
-        scenario (data/find-scenario-by-id (:coverage artifacts) scenario-id)
-        family (story-family scenario-id scenario)
-        {:keys [trace-id git-sha hash title]} ctx
-        {:keys [replay-match-label]} (data/narrative-metrics artifacts)
-        frame-ctx {:trace-id trace-id :git-sha git-sha :hash hash :title title :replay-match-label replay-match-label}
-        frame-specs (case family
-                      :theory-falsification (falsification-frame-specs frame-ctx)
-                      :deadline-boundary    (deadline-frame-specs frame-ctx)
-                      :collusion            (collusion-frame-specs frame-ctx)
-                      :economic-solvency    (economic-solvency-frame-specs frame-ctx)
-                      (deflection-frame-specs frame-ctx))]
+  (let [story-data (story-data/build-story-data artifacts scenario-id)
+        family (story-family scenario-id (:scenario story-data))
+        frame-specs (get-frame-specs family story-data)]
     (render-frame-specs frame-specs)))
 
 (defn generate-theory-falsification-story

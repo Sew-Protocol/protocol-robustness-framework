@@ -20,7 +20,8 @@
      12. Delayed resolver     — second resolution after finalization is rejected
      13. Conflicting actions  — escalation mid-pending clears it; execute-pending fails
      14. Repeated escalation  — max level / non-participant / terminal all rejected"
-  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+  (:require [resolver-sim.generators.yield.core :as gen-yield]
+            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [clojure.test :refer [deftest is]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -46,9 +47,7 @@
   "Distribution preset for escrow yield routing (matches `normalize-yield-preset`)."
   (gen/elements [:off :to-sender :to-recipient :split-50-50]))
 
-(def gen-yield-profile
-  "Registry profile ids resolvable via `yield.registry/resolve-yield-profile`."
-  (gen/elements [:aave-v3 :fixed-rate :none]))
+(def gen-yield-profile gen-yield/gen-yield-profile)
 
 (defn gen-snapshot
   "Generate a random module snapshot."

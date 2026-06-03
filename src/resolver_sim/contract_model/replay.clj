@@ -357,7 +357,8 @@
                  :states states
                  :events events
                  :agents agents
-                 :protocol protocol}))))
+                 :protocol protocol
+                 :world world}))))
         (if (= :deterministic-batch (execution-mode scenario))
           (let [[bucket rest-events] (group-same-time-bucket events)
                 base-world world

@@ -4,14 +4,14 @@ Reference Validation Suite v1 is currently a **deterministic public evidence har
 
 ## Status
 
-Public candidate, **v1.1 honest hybrid**.
+Public candidate, **v1.2 simulator-backed**.
 
 ## Evidence classification
 
-- 1 scenario is simulator-backed (001 governance-sandwich)
-- 6 scenarios are pinned derivations
+- All 7 scenarios are simulator-backed (replay + trace export + evidence invariant verification)
+- Evidence invariant IDs map to simulator canonical IDs in `src/resolver_sim/sim/reference_validation_evidence.clj` (see `docs/protocol/evidence-invariant-mapping.md`)
 
-Simulator-backed rows are produced only by `resolver-sim.sim.reference-validation` replay + trace export (see `manifest.edn`).
+Rows are produced only by `resolver-sim.sim.reference-validation` (see `manifest.edn`).
 
 ## Commands
 

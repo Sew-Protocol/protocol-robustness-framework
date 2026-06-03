@@ -3,7 +3,11 @@
 
 (def ^:private yield-provider-scenario-paths
   ["scenarios/yield/Y01_deposit-accrue-positive.json"
-   "scenarios/yield/Y02_negative-yield-mtm.json"])
+   "scenarios/yield/Y02_negative-yield-mtm.json"
+   "scenarios/yield/Y03_partial-liquidity-shortfall-affected.json"
+   "scenarios/yield/Y04_liquidity-shortfall-withdraw.json"
+   "scenarios/yield/Y05_shortfall-affected-recovery.json"
+   "scenarios/yield/Y06_liquidity-shortage-deposit-blocked.json"])
 
 (def ^:private yield-scenario-paths
   ["scenarios/S108_negative-yield-mild.json"

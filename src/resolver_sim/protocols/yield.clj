@@ -107,6 +107,19 @@
           world' (yield-risk/apply-market-shock world mid tok (:params event))]
       (with-held-sync world'))
 
+    "yield_claim_deferred"
+    (try
+      (let [oid (owner-id event)
+            mid (module-id world event)
+            tok (token-kw event)
+            world' (yield-ops/apply-yield-op world {:op/type :yield/claim-deferred
+                                                    :owner/id oid
+                                                    :module/id mid
+                                                    :token tok})]
+        (with-held-sync world'))
+      (catch Exception e
+        (err :yield-claim-deferred-failed {:message (.getMessage e)})))
+
     "time_advance"
     (ok world)
 
@@ -158,6 +171,7 @@
                         (into {} (map (fn [[oid p]]
                                          [oid (select-keys p [:status :principal :shares
                                                               :unrealized-yield :realized-yield
+                                                              :reclaimed-amount
                                                               :token :module/id :yield-loss :shortfall])])
                                       pos)))
      :yield-held (:yield/held-balances world)})

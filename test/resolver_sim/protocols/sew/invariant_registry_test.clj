@@ -4,6 +4,7 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.lifecycle :as lc]
+            [resolver-sim.protocols.sew.trace-metadata :as tm]
             [resolver-sim.protocols.sew.types :as t]))
 
 (def ^:private snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50}))
@@ -62,3 +63,24 @@
                   (assoc-in [:escrow-transfers 0 :escrow-state] :released)
                   (assoc-in [:dispute-levels 0] 1))]
     (is (:holds? (inv/dispute-level-bounded? world)))))
+
+(deftest escrow-state-in-graph-rejects-unknown-state
+  (let [world (assoc-in (sample-world) [:escrow-transfers 0 :escrow-state] :bogus)]
+    (is (not (:holds? (inv/escrow-state-in-graph? world))))))
+
+(deftest escrow-dispute-metadata-rejects-pending-with-timestamp
+  (let [world (-> (sample-world)
+                  (assoc-in [:dispute-timestamps 0] 1000))]
+    (is (not (:holds? (inv/escrow-dispute-metadata-consistent? world))))
+    (is (= :pending-with-dispute-metadata
+           (:reason (first (:violations (inv/escrow-dispute-metadata-consistent? world))))))))
+
+(deftest module-snapshot-immutable-detects-snapshot-change
+  (let [w0 (sample-world)
+        w1 (assoc-in w0 [:module-snapshots 0 :resolver-fee-bps] 999)]
+    (is (not (:holds? (inv/module-snapshot-immutable? w0 w1))))))
+
+(deftest trace-metadata-categories-cover-canonical-ids
+  (let [cats (set (keys tm/invariant-categories))]
+    (is (set/subset? inv/canonical-ids cats)
+        (str "uncategorized: " (sort (set/difference inv/canonical-ids cats))))))

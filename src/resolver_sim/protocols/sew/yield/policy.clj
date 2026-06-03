@@ -30,9 +30,10 @@
               [:released :to-sender]    [net 0]
               [:released :split-50-50]  [(quot net 2) (- net (quot net 2))]
               
-              ;; If refunded, sender usually gets it
+              ;; If refunded, sender usually gets it; to-recipient preset does not
+              ;; pay yield to recipient on refund (escrow returned to sender).
               [:refunded :to-sender]    [net 0]
-              [:refunded :to-recipient] [0 net]
+              [:refunded :to-recipient] [0 0]
               [:refunded :split-50-50]  [(quot net 2) (- net (quot net 2))]
 
               ;; Defaults for :off or other combinations
@@ -40,9 +41,9 @@
         (let [world' (-> world
                         (acct/record-fee token fee)
                         (cond-> (pos? sender-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/principal (:from et) sender-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/yield (:from et) sender-amt))
                         (cond-> (pos? recipient-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/principal (:to et) recipient-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
                         (acct/sub-held token yield)
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees

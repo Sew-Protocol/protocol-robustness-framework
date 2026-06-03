@@ -142,9 +142,13 @@ implementation via the registry.
 
 ## 2. Invariant Catalogue
 
-**37 canonical invariant IDs** are enforced across the Sew v1 model, defined in
-`protocols/sew/invariants.clj` under `canonical-ids`. They are organized into
-six groups.
+**52 canonical invariant IDs** (40 world-level, 12 transition-level) are enforced
+across the Sew v1 model, defined in `protocols/sew/invariants.clj` under
+`canonical-ids`. Registry tests in `test/resolver_sim/protocols/sew/invariant_registry_test.clj`
+ensure every ID is executed by `check-all` or `check-transition`.
+
+Reference-validation evidence IDs map to subsets of these; see
+`docs/protocol/evidence-invariant-mapping.md`.
 
 ### Accounting invariants
 
@@ -165,8 +169,12 @@ six groups.
 | ID | Meaning |
 |---|---|
 | `:terminal-states-unchanged` | `RELEASED`, `REFUNDED`, `RESOLVED` are absorbing; no transition out |
-| `:all-status-combinations-valid` | `SenderStatus` × `RecipientStatus` combination is a valid enum pair |
+| `:all-status-combinations-valid` | `SenderStatus` × `RecipientStatus` combination is valid; terminal escrows require both statuses `:none` |
+| `:persisted-escrow-state-valid` | Stored escrows never use `:none` or unknown `:escrow-state` |
+| `:escrow-state-in-graph` | Every `:escrow-state` is a node in `state-machine/allowed-transitions` |
+| `:escrow-dispute-metadata-consistent` | `:pending` has no dispute timestamp/level; `:disputed` has timestamp |
 | `:pending-settlement-consistent` | If `pendingSettlement.exists`, escrow is in `DISPUTED` state |
+| `:module-snapshot-immutable` | `:module-snapshots` for in-flight escrows do not change after create |
 | `:dispute-resolution-path` | Dispute resolves only through authorized, sequenced resolution path |
 | `:escalation-level-monotonic` | Escalation level is non-decreasing within a dispute |
 | `:no-withdrawal-during-dispute` | `withdrawEscrow` cannot be called while escrow is in `DISPUTED` state |

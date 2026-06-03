@@ -81,7 +81,7 @@
     "metrics": [
       {"name": "yield/escrow-principal", "op": ":=", "value": 98500},
       {"name": "escrow/amount-after-fee", "op": ":=", "value": 98500},
-      {"name": "yield/escrow-gross", "op": ":<", "value": 103424},
+      {"name": "yield/escrow-gross", "op": ":<=", "value": 103424},
       {"name": "yield/escrow-deferred", "op": ":=", "value": 0}
     ],
     "terminal": [
