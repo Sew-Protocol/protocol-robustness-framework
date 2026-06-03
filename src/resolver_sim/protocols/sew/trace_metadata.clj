@@ -352,6 +352,7 @@
   (case action
     "create_escrow"             :transition/creation
     "register_stake"            :transition/creation
+    "set_resolver_capacity"     :transition/creation
     "register_resolver_bond"    :transition/creation
     "register_senior_bond"      :transition/creation
     "delegate_to_senior"        :transition/creation

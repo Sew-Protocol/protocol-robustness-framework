@@ -105,6 +105,27 @@ For `:fixed-roll-sequence`, `:rolls` can be either:
 - a vector (shared sequence for all detection roll kinds), or
 - a map (independent per-kind sequences with optional `:default` fallback).
 
+### `:fixed-or` shorthand
+
+`:fixed-or` is an alias for a fixed-roll oracle fixture (mode keyword `:fixed-or`
+normalizes to `:fixed-roll-sequence`):
+
+```edn
+;; roll vector only
+:fixed-or [0.99 0.01 0.75]
+
+;; or full fixture fields (mode optional)
+:fixed-or {:rolls {:fraud-detection [0.99 0.01]}
+          :on-exhaustion :throw}
+
+;; legacy flat mode alias
+:oracle-mode :fixed-or
+:oracle-roll-sequence [0.99 0.01]
+```
+
+`:fixed-or` merges with `:oracle-fixture` when both are present (`:fixed-or` wins
+on overlapping keys).
+
 ### Notebook roll-trace metadata
 
 Enable trace output on a params file:

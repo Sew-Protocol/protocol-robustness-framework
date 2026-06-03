@@ -52,7 +52,7 @@
              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
              model-appeal-costs? appeal-bond-recovery-rate
              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-             oracle-roll-trace-enabled?]
+             fixed-or oracle-roll-trace-enabled?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -119,6 +119,7 @@
                          :oracle-mode oracle-mode
                          :oracle-roll-sequence oracle-roll-sequence
                          :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
+                         :fixed-or fixed-or
                          :oracle-roll-cursor (atom 0)
                          :oracle-roll-cursors (atom {})
                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?

@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.race-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -29,7 +30,7 @@
 (deftest same-block-ordering-race
   (let [buyer "0xBuyer"
         seller "0xSeller"
-        snap (t/make-module-snapshot {:appeal-window-duration 60})
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 60})
         ;; 1. release vs raise_dispute
         initial-race (lc/create-escrow (t/empty-world 1000) buyer "0xToken" seller 1000 {} snap)
         wf0 (:workflow-id initial-race)

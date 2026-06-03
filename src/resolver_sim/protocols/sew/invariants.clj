@@ -20,19 +20,16 @@
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.time.invariants :as time-inv]
             [resolver-sim.yield.invariants :as generic-yield-inv]
-            [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]))
+            [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]
+            [resolver-sim.protocols.sew.invariants.escrow :as escrow]
+            [resolver-sim.protocols.sew.invariants.solvency :as solvency]
+            [resolver-sim.protocols.sew.invariants.fees :as fees]
+            [resolver-sim.protocols.sew.invariants.state :as state]
+            [resolver-sim.protocols.sew.invariants.bond :as bond]
+            [resolver-sim.protocols.sew.invariants.settlement :as settlement]
+            [resolver-sim.protocols.sew.invariants.dispute :as dispute]))
 
-(defn cancellation-mutex?
-  "True when any escrow in :resolved, :released, or :refunded status
-   rejects any cancellation attempt."
-  [world]
-  (let [violations
-        (for [[wf et] (:escrow-transfers world)
-              :when (and (contains? #{:resolved :released :refunded} (:escrow-state et))
-                         (or (not= :none (:sender-status et))
-                             (not= :none (:recipient-status et))))]
-          {:workflow-id wf :state (:escrow-state et)})]
-    {:holds? (empty? violations) :violations (vec violations)}))
+(defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
 (def world-invariant-ids
   "Single-world invariants run by `check-all` on every replay step."
@@ -133,86 +130,8 @@
 ;; Invariant 1: Solvency
 ;; ---------------------------------------------------------------------------
 
-(defn- get-slash-appeal-bond-sum [world token]
-  (reduce + 0 (for [[slash-id ev] (:pending-fraud-slashes world {})
-                    :let [custody (get-in world [:appeal-bond-custody slash-id])
-                          bond-token (or (:token custody)
-                                         ;; Legacy fallback: look up via escrow-transfer token
-                                         (get-in world [:escrow-transfers (:workflow-id custody) :token]))]
-                    :when (= token bond-token)
-                    :let [amt (:appeal-bond-held ev 0)]]
-                amt)))
 
-(defn- get-escrow-afa-sum [world token live-states]
-  (reduce (fn [acc [_ et]]
-            (if (and (= (:token et) token)
-                     (contains? live-states (:escrow-state et)))
-              (+ acc (:amount-after-fee et))
-              acc))
-          0
-          (:escrow-transfers world)))
-
-(defn- get-bond-held-sum [world token]
-  (reduce + 0 (for [[wf agents] (:bond-balances world)
-                    [agent amt] agents
-                    :let [et (get-in world [:escrow-transfers wf])]
-                    :when (= (:token et) token)]
-                amt)))
-
-(defn- get-yield-held-sum [world token live-states]
-  (reduce (fn [acc [oid pos]]
-            (let [et (when (vector? oid) (get-in world [:escrow-transfers (second oid)]))]
-              (cond
-                ;; Active yield position in a live escrow or a resolver-owned position
-                (and (= (:token pos) token)
-                     (= (:status pos) :active)
-                     (or (and et (contains? live-states (:escrow-state et)))
-                         (t/resolver-yield-owner-id? oid)))
-                (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
-                ;; Escrow :unwinding — deferred remains in :total-held after finalize (live AFA gone).
-                ;; Resolver :unwinding — deferred is still inside the stake already in :total-held;
-                ;; do not add to yield-sum (would double-count with :resolver-stakes).
-                (and (= (:token pos) token)
-                     (= (:status pos) :unwinding)
-                     (not (t/resolver-yield-owner-id? oid)))
-                (+ acc (get-in pos [:shortfall :deferred-amount] 0))
-                :else acc)))
-          0
-          (:yield/positions world {})))
-
-(defn solvency-holds?
-  "True when total-held[token] exactly equals the sum of all internal liabilities.
-   Liabilities = [Live Escrow AFAs] + [Active Bonds] + [Resolver Stakes] + [Unwithdrawn Fees] + [Active Yield]
-   
-   The internal invariant is STRICT EQUALITY (=)."
-  [world token-balances]
-  (let [live-states   #{:pending :disputed}
-        all-tokens    (-> (set (keys (:total-held world)))
-                          (into (map :token (vals (:escrow-transfers world))))
-                          (into (keys (:total-bonds-posted world))))
-        violations
-        (for [token all-tokens
-              :let  [held       (get (:total-held world) token 0)
-                     escrow-sum (get-escrow-afa-sum world token live-states)
-                     bond-sum   (get-bond-held-sum world token)
-                     slash-bond-sum (get-slash-appeal-bond-sum world token)
-                     yield-sum  (get-yield-held-sum world token live-states)
-                     stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
-                     
-                     liabilities (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum)
-                     
-                     ext-bal    (when token-balances (get token-balances token 0))
-                     internal-ok? (= liabilities held)
-                     external-ok? (or (nil? ext-bal) (<= held ext-bal))]
-              :when (not (and internal-ok? external-ok?))]
-          {:token       token
-           :liabilities liabilities
-           :held        held
-           :ext-bal     ext-bal
-           :internal-ok? internal-ok?
-           :external-ok? external-ok?})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn solvency-holds? [world token-balances] (solvency/solvency-holds? world token-balances))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 2: Fee monotonicity
@@ -223,25 +142,9 @@
 ;; Tested as: applying any non-withdraw operation never reduces total-fees.
 ;; ---------------------------------------------------------------------------
 
-(defn fees-non-negative?
-  "True when all total-fees values are >= 0 (they should never go negative)."
-  [world]
-  (let [violations (for [[token amount] (:total-fees world)
-                         :when (neg? amount)]
-                     {:token token :amount amount})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn fees-non-negative? [world] (fees/fees-non-negative? world))
 
-(defn fee-increased-or-equal?
-  "True when every total-fees entry in world' is >= the corresponding entry
-   in world-before. Used to assert monotonicity across a single operation."
-  [world-before world-after]
-  (let [violations (for [[token before-amt] (:total-fees world-before)
-                         :let [after-amt (get (:total-fees world-after) token 0)]
-                         :when (< after-amt before-amt)]
-                     {:token token :before before-amt :after after-amt})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn fee-increased-or-equal? [world-before world-after] (fees/fee-increased-or-equal? world-before world-after))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 3: State irreversibility
@@ -250,21 +153,7 @@
 ;; in that state. No operation should change a terminal state.
 ;; ---------------------------------------------------------------------------
 
-(defn terminal-states-unchanged?
-  "True when every escrow that was terminal in world-before is still terminal
-   in world-after, and has the same state."
-  [world-before world-after]
-  (let [terminals #{:released :refunded :resolved}
-        violations
-        (for [[wf et-before] (:escrow-transfers world-before)
-              :when (contains? terminals (:escrow-state et-before))
-              :let  [et-after (get-in world-after [:escrow-transfers wf])]
-              :when (not= (:escrow-state et-before) (:escrow-state et-after))]
-          {:workflow-id wf
-           :before      (:escrow-state et-before)
-           :after       (:escrow-state et-after)})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn terminal-states-unchanged? [world-before world-after] (state/terminal-states-unchanged? world-before world-after))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 4: Bond boundedness
@@ -272,19 +161,7 @@
 ;; The slash amount for any (workflow, appellant) must not exceed the posted bond.
 ;; ---------------------------------------------------------------------------
 
-(defn bond-slash-bounded?
-  "True when :bond-slashed[wf] <= sum of original bonds posted for that workflow.
-   Uses :bond-balances + :bond-slashed as the accounting split."
-  [world]
-  (let [violations
-        (for [[wf slashed] (:bond-slashed world)
-              :let  [remaining (reduce + 0 (vals (get (:bond-balances world) wf {})))
-                     ;; Original posted = remaining + slashed
-                     original  (+ remaining slashed)]
-              :when (> slashed original)]
-          {:workflow-id wf :slashed slashed :original original})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn bond-slash-bounded? [world] (bond/bond-slash-bounded? world))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 5: No double-finalize
@@ -375,18 +252,7 @@
 ;; A pending settlement may only exist for an escrow in :disputed state.
 ;; ---------------------------------------------------------------------------
 
-(defn pending-settlement-consistency?
-  "True when every workflow-id with an existing pending-settlement has
-   escrow-state == :disputed."
-  [world]
-  (let [violations
-        (for [[wf pending] (:pending-settlements world)
-              :when (:exists pending)
-              :let  [state (t/escrow-state world wf)]
-              :when (not= :disputed state)]
-          {:workflow-id wf :state state})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn pending-settlement-consistency? [world] (settlement/pending-settlement-consistency? world))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 9: Dispute-timestamp consistency
@@ -396,17 +262,9 @@
 ;; permanently return false, preventing keeper actions.
 ;; ---------------------------------------------------------------------------
 
-(defn dispute-timestamp-consistency?
-  "True when every :disputed escrow has a dispute timestamp > 0."
-  [world]
-  (let [violations
-        (for [[wf et] (:escrow-transfers world)
-              :when (= :disputed (:escrow-state et))
-              :let  [ts (get-in world [:dispute-timestamps wf] 0)]
-              :when (not (pos? ts))]
-          {:workflow-id wf :timestamp ts})]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+(defn dispute-timestamp-consistency? [world] (dispute/dispute-timestamp-consistency? world))
+
+(defn dispute-level-bounded? [world] (dispute/dispute-level-bounded? world))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 10: No stale automatable escrows
@@ -537,29 +395,7 @@
 ;; (non-disputed escrows have no meaningful escalation round).
 ;; ---------------------------------------------------------------------------
 
-(defn dispute-level-bounded?
-  "True when every :dispute-levels entry is in [0, max-dispute-level], refers to
-   an existing escrow, and is absent while the escrow is still :pending (or :none).
-   Terminal escrows may retain a level entry after finalization."
-  [world]
-  (let [transfers (:escrow-transfers world {})
-        violations
-        (for [[wf level] (:dispute-levels world)
-              :let  [et    (get transfers wf)
-                     state (:escrow-state et)
-                     reason (cond
-                              (nil? et) :orphan-dispute-level
-                              (or (neg? level) (> level t/max-dispute-level))
-                              :level-out-of-range
-                              (contains? #{:pending :none} state)
-                              :dispute-level-on-non-disputed
-                              :else nil)]
-              :when reason]
-          (cond-> {:workflow-id wf :level level :reason reason}
-            et (assoc :escrow-state state)
-            (= reason :level-out-of-range) (assoc :max t/max-dispute-level)))]
-    {:holds?     (empty? violations)
-     :violations (vec violations)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 13: Escalation level monotonic (cross-world)
@@ -940,7 +776,8 @@
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [bond-refunds (get domain-map :bond/refund {})
                     total        (reduce + 0 (vals bond-refunds))
-                    posted       (reduce + 0 (vals (get-in world [:bond-balances wf] {})))]
+                    posted       (+ (reduce + 0 (vals (get-in world [:bond-balances wf] {})))
+                                    (get-in world [:bond-posted-by-workflow wf] 0))]
               :when (> total posted)]
           {:workflow-id wf :claims total :max posted})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -1133,18 +970,8 @@
                     released-after  (get (:total-released world-after) token 0)
                     refunded-before (get (:total-refunded world-before) token 0)
                     refunded-after  (get (:total-refunded world-after) token 0)
-                    claimable-before (reduce + 0
-                                             (for [[wf cmap] (:claimable world-before {})
-                                                   :let [et (get-in world-before [:escrow-transfers wf])]
-                                                   :when (= (:token et) token)
-                                                   [_ amt] cmap]
-                                               (or amt 0)))
-                    claimable-after  (reduce + 0
-                                             (for [[wf cmap] (:claimable world-after {})
-                                                   :let [et (get-in world-after [:escrow-transfers wf])]
-                                                   :when (= (:token et) token)
-                                                   [_ amt] cmap]
-                                               (or amt 0)))
+                    claimable-before (get-token-claimable-sum world-before token)
+                    claimable-after  (get-token-claimable-sum world-after token)
                     stake-before (if (= token :USDC)
                                    (reduce + 0 (vals (:resolver-stakes world-before {})))
                                    0)

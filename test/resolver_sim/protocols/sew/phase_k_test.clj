@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.phase-k-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -13,7 +14,7 @@
         seller "0xSeller"
         resolver "0xResolver"
         token "0xToken"
-        snap (t/make-module-snapshot {:dispute-resolver resolver 
+        snap (snap-fix/escrow-snapshot {:dispute-resolver resolver 
                                       :escrow-fee-bps 0
                                       :resolver-bond-bps 10000})]
     
@@ -56,11 +57,14 @@
         resolver "0xRes"
         gov "0xGov"
         token "0xToken"
-        snap (t/make-module-snapshot {:appeal-window-duration 86400}) ; 1 day
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 86400}) ; 1 day
         world (reg/register-stake world resolver 10000)
-        ;; Create escrow
-        {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 5000 {} snap)
-        ;; Propose
+        {:keys [world workflow-id]}
+        (let [{:keys [world workflow-id]}
+              (lc/create-escrow world buyer token seller 5000 {:custom-resolver resolver} snap)
+              world' (:world (lc/raise-dispute world workflow-id buyer))]
+          {:world (:world (res/execute-resolution world' workflow-id resolver true "0xhash" nil))
+           :workflow-id workflow-id})
         r-prop (res/propose-fraud-slash world workflow-id gov resolver 5000)
         world-prop (:world r-prop)]
     

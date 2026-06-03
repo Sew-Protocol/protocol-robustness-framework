@@ -38,6 +38,7 @@
    :oracle-mode                        (:oracle-mode params)
    :oracle-roll-sequence               (:oracle-roll-sequence params)
    :oracle-roll-on-exhaustion          (:oracle-roll-on-exhaustion params)
+   :fixed-or                            (:fixed-or params)
    :oracle-roll-trace-enabled?         (:oracle-roll-trace-enabled? params false)])
 
 (defn mean [vals]

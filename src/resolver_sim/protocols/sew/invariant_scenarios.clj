@@ -93,6 +93,7 @@
     ["S62_cross-token-isolation-under-dispute-load"     extended/s62-cross-token-isolation-under-dispute-load]
     ["S62_cross-token-fee-on-transfer-under-dispute-load" extended/s62-cross-token-fee-on-transfer-under-dispute-load]
     ["S62_cross-token-parallel-appeal-depths-under-dispute-load" extended/s62-cross-token-parallel-appeal-depths-under-dispute-load]
+    ["S62_resolver-capacity-concurrent-dispute-load"  extended/s62-resolver-capacity-concurrent-dispute-load]
     ["S63  frivolous-appeal-slashing"                   extended/s63]
     ["S64  minimal-bond-edge-case"                      extended/s64]
     ["S65  appeal-after-settlement-rejected"            extended/s65]
@@ -384,6 +385,22 @@
    {:scenario/type    :escalation-mechanism
     :adversary/type   :colluder
     :tests #{:challenge-chain :escalation-flow :multi-level-appeal}}
+
+   "s62-cross-token-isolation-under-dispute-load"
+   {:scenario/type :stress
+    :tests #{:cross-token :concurrent-disputes :ledger-isolation}}
+
+   "s62-cross-token-fee-on-transfer-under-dispute-load"
+   {:scenario/type :stress
+    :tests #{:fee-on-transfer :concurrent-disputes :ledger-isolation}}
+
+   "s62-cross-token-parallel-appeal-depths-under-dispute-load"
+   {:scenario/type :stress
+    :tests #{:cross-token :concurrent-disputes :escalation-isolation}}
+
+   "s62-resolver-capacity-concurrent-dispute-load"
+   {:scenario/type :stress
+    :tests #{:resolver-capacity :concurrent-disputes :dispute-flooding}}
 
    "s63-frivolous-appeal-slashing"
    {:scenario/type    :adversarial

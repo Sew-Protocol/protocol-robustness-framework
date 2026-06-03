@@ -20,7 +20,7 @@
       (let [fee-bps (or (:yield-protocol-fee-bps snap) 0)
             fee     (t/compute-fee yield fee-bps)
             net     (- yield fee)
-            preset  (:yield-preset settings :off)
+            preset  (t/normalize-yield-preset (:yield-preset settings :off))
             
             ;; Determine who gets the net yield based on outcome and preset
             [sender-amt recipient-amt]

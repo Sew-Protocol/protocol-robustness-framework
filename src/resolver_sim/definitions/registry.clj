@@ -257,7 +257,15 @@
     :claim/type :safety
     :claim/statement "When governance rejects a reversal-slash appeal after the timelock, the pending slash executes and reduces resolver stake."
     :claim/evidence-mode :support
-    :claim/related-invariants [:slash-status-consistent? :invariant/solvency]}})
+    :claim/related-invariants [:slash-status-consistent? :invariant/solvency]}
+
+   :claims/resolver-capacity-enforced
+   {:claim/id :claims/resolver-capacity-enforced
+    :claim/title "Resolver concurrent dispute capacity is enforced"
+    :claim/type :safety
+    :claim/statement "When a resolver is at max concurrent disputes, additional disputes on that resolver are rejected."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/solvency]}})
 
 (def claim-scenario-map
   {:claims/forking-l1-reversal
@@ -278,6 +286,9 @@
                  "S62_cross-token-fee-on-transfer-under-dispute-load"
                  "S62_cross-token-parallel-appeal-depths-under-dispute-load"]
     :falsifying []}
+   :claims/resolver-capacity-enforced
+   {:supporting ["S62_resolver-capacity-concurrent-dispute-load"]
+    :falsifying []}
    :claims/dr3-reversal-slash-disabled
    {:supporting ["S41_dr3-reversal-slash-disabled"]
     :falsifying []}
@@ -285,7 +296,7 @@
    {:supporting ["S42_resolver-buyer-bribery-loop"]
     :falsifying []}
    :claims/reversal-slash-track1
-   {:supporting ["S101_reversal-slash-track1-enabled"
+   {:supporting ["s101-reversal-slash-track1-enabled"
                  "S103_l2-reversal-slash-ids"]
     :falsifying []}
    :claims/reversal-slash-track2-reversed

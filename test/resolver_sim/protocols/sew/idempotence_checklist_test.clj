@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.idempotence-checklist-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -12,7 +13,7 @@
 
 (defn- base-world
   [appeal-window-duration]
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps 50
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50
                                       :max-dispute-duration 3600
                                       :appeal-window-duration appeal-window-duration})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000

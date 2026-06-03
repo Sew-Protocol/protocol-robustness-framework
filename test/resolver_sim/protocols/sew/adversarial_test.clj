@@ -16,7 +16,8 @@
      4. Runs check-all / check-transition to confirm no invariant is broken
 
    Invariant failure in a test = contract model bug."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types         :as t]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
             [resolver-sim.protocols.sew.resolution    :as res]
@@ -41,7 +42,7 @@
   "Standard module snapshot with 0 appeal window (immediate finalization)."
   ([] (base-snap {}))
   ([overrides]
-   (t/make-module-snapshot (merge {:max-dispute-duration   2592000
+   (snap-fix/escrow-snapshot (merge {:max-dispute-duration   2592000
                                    :appeal-window-duration 0
                                    :escrow-fee-bps         50}
                                   overrides))))

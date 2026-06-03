@@ -15,7 +15,8 @@
      - correct current-active counter at every checkpoint
      - escrow final states are correct
      - conservation-of-funds invariant throughout"
-  (:require [resolver-sim.protocols.sew.types      :as t]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.invariants :as inv]
@@ -32,7 +33,7 @@
 (def usdc     "0xUSDC")
 
 (def base-snapshot
-  (t/make-module-snapshot
+  (snap-fix/escrow-snapshot
    {:escrow-fee-bps            0
     :default-auto-release-delay 0
     :default-auto-cancel-delay  0

@@ -22,6 +22,17 @@
       (fixed/fixed-accrue world* module {:token token :dt remainder})
       world*)))
 
+(deftest test-liquid-lending-deposit-mints-shares-from-entry-index
+  (testing "Deposit mints shares = principal / entry share price (Model A)"
+    (let [world {:yield/indices {:aave-v3 {"USDC" 1.25}}
+                 :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}}
+          module {:module/id :aave-v3}
+          world' (liquid/deposit world module {:owner/id "user1" :amount 10000 :token "USDC"})
+          pos (get-in world' [:yield/positions "user1"])]
+      (is (= 8000.0 (:shares pos)))
+      (is (= 1.25 (:entry-index pos)))
+      (is (= 10000 (:principal pos))))))
+
 (deftest test-liquid-lending-accrual-math
   (testing "Liquid-lending index-based accrual (:aave-v3 module id)"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.0}}
@@ -118,4 +129,28 @@
           usdc' (acct/update-position-yield world pos-usdc 1.101)
           weth' (acct/update-position-yield world pos-weth 1.101)]
       (is (= 101 (:unrealized-yield usdc')))
-      (is (= 101 (:unrealized-yield weth'))))))
+      (is (= 101 (:unrealized-yield weth')))
+      (is (= 1101 (:current-value usdc')))
+      (is (= 1.101 (:current-index usdc'))))))
+
+(deftest test-update-position-yield-entry-index-share-minting
+  (testing "Shares minted as principal/entry-index; current-value = shares × current price"
+    (let [world {:yield/risk {:mod {:USDC {:loss-mode :none}}}}
+          pos {:owner/id :o :module/id :mod :token :USDC
+               :principal 10000 :shares 8000 :entry-index 1.25 :status :active
+               :unrealized-yield 0 :realized-yield 0}
+          pos' (acct/update-position-yield world pos 1.30)]
+      (is (= 10400 (:current-value pos')))
+      (is (= 400 (:unrealized-yield pos')))
+      (is (= 1.30 (:current-index pos'))))))
+
+(deftest test-update-position-yield-requires-world
+  (testing "1-arity rejects silent optimistic clamping without risk context"
+    (let [pos {:owner/id :o :module/id :mod :token :USDC
+               :principal 10000 :shares 10000 :entry-index 1.0 :status :active}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"world is required"
+                            (acct/update-position-yield pos 0.98))))))
+
+(deftest test-position-current-value
+  (is (= 9800.0 (acct/position-current-value {:shares 10000} 0.98))))

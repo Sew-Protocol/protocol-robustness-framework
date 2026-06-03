@@ -26,7 +26,7 @@
    :oracle-fixture (fn [m]
                      (and (map? m)
                           (contains? #{:stochastic :static-no-slash :static-always-detect
-                                       :fixed-roll-sequence}
+                                       :fixed-roll-sequence :fixed-or}
                                      (:mode m :stochastic))
                          (or (nil? (:rolls m))
                              (vector? (:rolls m))
@@ -41,7 +41,16 @@
                               (contains? #{:throw :repeat-last :cycle}
                                          (:on-exhaustion m)))))
    :oracle-mode (fn [x] (contains? #{:stochastic :static-no-slash :static-always-detect
-                                   :fixed-roll-sequence} x))
+                                   :fixed-roll-sequence :fixed-or} x))
+   :fixed-or (fn [x]
+               (or (vector? x)
+                   (and (map? x)
+                        (or (nil? (:mode x))
+                            (contains? #{:fixed-or :fixed-roll-sequence} (:mode x)))
+                        (or (nil? (:rolls x))
+                            (vector? (:rolls x))
+                            (and (map? (:rolls x))
+                                 (every? (fn [[_ v]] (vector? v)) (:rolls x)))))))
    :oracle-roll-sequence vector?
    :oracle-roll-on-exhaustion (fn [x] (contains? #{:throw :repeat-last :cycle} x))
    :oracle-roll-trace-enabled? boolean?
@@ -159,6 +168,7 @@
     :oracle-mode
     :oracle-roll-sequence
     :oracle-roll-on-exhaustion
+    :fixed-or
     :oracle-roll-trace-enabled?
     ;; Optional author metadata
     :author

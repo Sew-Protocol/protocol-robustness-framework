@@ -18,7 +18,8 @@
    :suites/dr3-critical
    :suites/governance-decay
    :suites/same-block-ordering
-   :suites/timelock-regression])
+   :suites/timelock-regression
+   :suites/equivalence-economic-stress])
 
 (defn- theory-fail-reason [r]
   (when-let [theory (:theory r)]

@@ -8,6 +8,7 @@
             [clojure.java.io :as io]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
+            [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariant-scenarios :as inv-sc]
             [clojure.string :as str]
@@ -18,8 +19,18 @@
             [resolver-sim.scenario.suites :as suites]
             [resolver-sim.sim.fixtures :as fixtures]))
 
+(defn- replay-fn-for-protocol
+  [protocol-id]
+  (let [protocol (preg/get-protocol (or protocol-id preg/default-protocol-id))]
+    (if (= "yield-v1" protocol-id)
+      #(replay/simple-replay protocol %)
+      (fn [scenario]
+        (if (= "sew-v1" protocol-id)
+          (sew/replay-with-sew-protocol scenario)
+          (replay/replay-with-protocol protocol scenario))))))
+
 (defn- sew-replay-fn []
-  (fn [scenario] (sew/replay-with-sew-protocol scenario)))
+  (replay-fn-for-protocol "sew-v1"))
 
 (defn- default-report-opts [opts]
   (merge {:outline-printer (fn [name result]
@@ -43,9 +54,13 @@
 
 (defn run-paths
   "Run scenario JSON files from `paths`. Each path becomes one entry.
-   Files are normalized before replay. Returns summary map."
+   Files are normalized before replay. Returns summary map.
+
+   opts may include `:protocol` (registry id, default sew-v1)."
   [paths opts]
-  (let [entries (mapv (fn [path]
+  (let [protocol-id (or (:protocol opts) preg/default-protocol-id)
+        replay-fn   (replay-fn-for-protocol protocol-id)
+        entries (mapv (fn [path]
                         (let [raw      (io-sc/load-scenario-file path)
                               scenario (normalize/normalize-scenario raw)
                               name     (or (:scenario-id scenario) path)]
@@ -55,7 +70,7 @@
                       paths)]
     (runner/run-collection
      {:entries   entries
-      :replay-fn (sew-replay-fn)}
+      :replay-fn replay-fn}
      (merge {:normalize? false :suite-id (:suite-id opts)} opts))))
 
 (defn run-scenario-file
@@ -111,7 +126,11 @@
   "Run a registered suite keyword (e.g. :yield-scenarios). Returns exit code."
   [suite-key opts]
   (if-let [paths (suites/suite-paths suite-key)]
-    (run-paths-and-report paths (assoc opts :suite-id suite-key))
+    (run-paths-and-report paths
+                          (assoc opts
+                                 :suite-id suite-key
+                                 :protocol (or (:protocol opts)
+                                               (suites/suite-protocol-id suite-key))))
     (do
       (println (str "Unknown suite: " suite-key
                     ". Known: " (str/join ", " (map name (suites/known-suite-keys)))))
@@ -152,20 +171,21 @@
      :protocol       — protocol id (default sew-v1)
      opts are forwarded to report/runner."
   [dispatch opts]
-  (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)]
+  (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)
+        dispatch*   (if (and (:suite dispatch) (not (:protocol dispatch)))
+                    (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
+                    dispatch)]
     (cond
-      (not= protocol-id preg/default-protocol-id)
-      (do (println (str "Scenario runner supports only " preg/default-protocol-id " for now."))
-          1)
+      (:fixture-suite dispatch*)
+      (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)
 
-      (:fixture-suite dispatch)
-      (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
+      (:suite dispatch*)
+      (run-named-suite-and-report (:suite dispatch*) opts)
 
-      (:suite dispatch)
-      (run-named-suite-and-report (:suite dispatch) opts)
-
-      (:scenario dispatch)
-      (run-scenario-file-and-report (:scenario dispatch) (:output-file dispatch) opts)
+      (:scenario dispatch*)
+      (run-scenario-file-and-report (:scenario dispatch*)
+                                    (:output-file dispatch*)
+                                    (assoc opts :protocol protocol-id))
 
       :else
       (run-registry-suite-and-report opts))))

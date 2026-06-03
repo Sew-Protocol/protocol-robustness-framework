@@ -95,3 +95,7 @@ reference-validation-v1-check:
 	$(MAKE) reference-validation-v1
 	$(MAKE) verify-reference-validation-v1
 	$(MAKE) report-reference-validation-v1
+
+.PHONY: refresh-reference-validation-v1
+refresh-reference-validation-v1:
+	clojure -M:reference-validation --refresh-expected

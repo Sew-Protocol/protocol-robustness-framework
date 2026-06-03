@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew.resolution-test
   "Tests for contract_model/resolution.clj."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.protocol       :as proto]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
@@ -18,7 +19,7 @@
 (defn- base-world
   "World with one :disputed escrow, block-time=1000, appeal-window as given."
   [appeal-window-duration]
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps        50
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps        50
                                       :max-dispute-duration  3600
                                       :appeal-window-duration appeal-window-duration})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000

@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.phase-l-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -15,7 +16,7 @@
         r1 "0xHonestSenior"
         token "0xToken"
         ;; Configure Phase L: 3-day challenge window + 20% bounty
-        snap (t/make-module-snapshot 
+        snap (snap-fix/escrow-snapshot 
                {:dispute-resolver r0 
                 :reversal-slash-bps 10000 ; 100%
                 :challenge-window-duration 259200

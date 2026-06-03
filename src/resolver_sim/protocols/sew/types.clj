@@ -10,6 +10,8 @@
       :total-held          {token-addr   nat-int}
       :total-fees          {token-addr   nat-int}
       :pending-settlements {workflow-id  PendingSettlement-map}
+      ;; Frozen at create_escrow — built via snapshot/make-escrow-snapshot or
+      ;; snapshot/snapshot-from-protocol-params (see docs/architecture/YIELD_AND_SNAPSHOT_MODULES.md).
       :module-snapshots    {workflow-id  ModuleSnapshot-map}
       :dispute-timestamps  {workflow-id  nat-int}   ; block.timestamp of raiseDispute
       :claimable           {workflow-id {addr nat-int}}
@@ -112,19 +114,38 @@
    :sender-status     (or sender-status :none)
    :recipient-status  (or recipient-status :none)})
 
+(defn normalize-yield-preset
+  "Coerce JSON/EDN yield-preset values to keywords.
+
+   Recognized distribution presets are normalized to kebab-case keywords.
+   Other values (e.g. a mis-labeled module id) are keywordized as-is so
+   `create-escrow` can still treat them as yield-enabled (not :off)."
+  [v]
+  (cond
+    (nil? v)     :off
+    (keyword? v) v
+    (string? v)  (keyword (str/replace v "_" "-"))
+    :else        (keyword (str v))))
+
+(defn yield-preset-yield-enabled?
+  "True when escrow principal should be deposited into the yield module."
+  [preset]
+  (not= (normalize-yield-preset preset) :off))
+
 (defn make-escrow-settings
   "Construct an EscrowSettings map (per-escrow settings, frozen at creation).
 
    :custom-resolver   — address or nil (overrides module resolver)
    :release-address   — address or nil (authorised to release; nil = sender only)
-   :yield-preset      — keyword (:off :to-sender etc.) default :off
+   :yield-preset      — keyword (:off :to-sender :to-recipient :split-50-50) or string alias
+   :yield_preset      — snake_case alias (JSON scenarios)
    :auto-release-time — 0 = use default
    :auto-cancel-time  — 0 = use default"
-  [{:keys [custom-resolver release-address yield-preset
+  [{:keys [custom-resolver release-address yield-preset yield_preset
            auto-release-time auto-cancel-time]}]
   {:custom-resolver   custom-resolver
    :release-address   release-address
-   :yield-preset      (or yield-preset :off)
+   :yield-preset      (normalize-yield-preset (or yield-preset yield_preset))
    :auto-release-time (or auto-release-time 0)
    :auto-cancel-time  (or auto-cancel-time 0)})
 

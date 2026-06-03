@@ -46,7 +46,7 @@
      2. appeal-bond-amount > 0  → absolute value
      3. fallback                → 100 (minimum viable bond)
 
-   NOTE: make-module-snapshot defaults appeal-bond-amount to 0 (an integer).
+   NOTE: ModuleSnapshot (make-escrow-snapshot) defaults appeal-bond-amount to 0 (an integer).
    In Clojure (or 0 100) = 0, so the fallback must use pos? not or."
   [afa snap]
   (cond

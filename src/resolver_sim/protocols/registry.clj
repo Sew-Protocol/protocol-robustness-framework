@@ -5,8 +5,9 @@
    from concrete protocols.")
 
 (def ^:private protocol-symbol-registry
-  {"sew-v1" 'resolver-sim.protocols.sew/protocol
-   "dummy"  'resolver-sim.protocols.dummy/protocol})
+  {"sew-v1"   'resolver-sim.protocols.sew/protocol
+   "yield-v1" 'resolver-sim.protocols.yield/protocol
+   "dummy"    'resolver-sim.protocols.dummy/protocol})
 
 (def ^:private invariant-runners
   {"sew-v1" 'resolver-sim.io.scenario-runner/run-registry-suite-and-report})

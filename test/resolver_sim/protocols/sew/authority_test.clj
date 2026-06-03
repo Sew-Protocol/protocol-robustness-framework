@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew.authority-test
   "Tests for contract_model/authority.clj."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.authority :as auth]))
@@ -12,14 +13,14 @@
 (def mod-addr "0xModule")
 
 (def base-snapshot
-  (t/make-module-snapshot {:escrow-fee-bps 50 :max-dispute-duration 3600}))
+  (snap-fix/escrow-snapshot {:escrow-fee-bps 50 :max-dispute-duration 3600}))
 
 (defn- world-with-escrow
   "World with one :disputed escrow, given optional settings overrides."
   ([] (world-with-escrow {}))
   ([settings-overrides]
    (let [snap (if (:resolution-module settings-overrides)
-                (t/make-module-snapshot
+                (snap-fix/escrow-snapshot
                  (merge {:escrow-fee-bps 50 :max-dispute-duration 3600}
                         (select-keys settings-overrides [:resolution-module])))
                 base-snapshot)
@@ -92,7 +93,7 @@
         original (t/get-snapshot w0 0)
         ;; Simulate governance changing a different escrow's snapshot
         w1       (assoc-in w0 [:module-snapshots 99]
-                            (t/make-module-snapshot {:escrow-fee-bps 999}))]
+                            (snap-fix/escrow-snapshot {:escrow-fee-bps 999}))]
     (is (auth/snapshot-frozen? w1 0 original)
         "escrow 0 snapshot unchanged by governance update to escrow 99")))
 

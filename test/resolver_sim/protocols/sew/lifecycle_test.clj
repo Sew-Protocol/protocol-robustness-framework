@@ -3,7 +3,8 @@
 
    Covers createEscrow, release, senderCancel, recipientCancel,
    autoCancelDisputedEscrow — happy paths and every revert condition."
-  (:require [clojure.test :refer [deftest is testing run-tests]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]))
 
@@ -14,10 +15,10 @@
 (def alice "0xAlice")
 (def bob   "0xBob")
 (def carol "0xCarol")
-(def usdc  "0xUSDC")
+(def usdc  :0xUSDC)
 
 (def base-snapshot
-  (t/make-module-snapshot
+  (snap-fix/escrow-snapshot
    {:escrow-fee-bps            50    ; 0.5%
     :default-auto-release-delay 0
     :default-auto-cancel-delay  0
@@ -83,7 +84,7 @@
     (is (= 1 (:workflow-id r1)) "second escrow gets workflow-id 1")))
 
 (deftest create-escrow-zero-fee
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps 0})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 0})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000 base-settings snap)
         et   (t/get-transfer (:world r) 0)]
     (is (= 1000 (:amount-after-fee et)) "no fee deducted when fee-bps=0")
@@ -110,20 +111,20 @@
     (is (= :cannot-set-both-auto-times (:error r)))))
 
 (deftest create-escrow-applies-default-auto-release
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps 0 :default-auto-release-delay 3600})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 0 :default-auto-release-delay 3600})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000 base-settings snap)
         et   (t/get-transfer (:world r) 0)]
     (is (= (+ 1000 3600) (:auto-release-time et))
         "auto-release-time = block-time + default-delay")))
 
 (deftest create-escrow-applies-default-auto-cancel
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps 0 :default-auto-cancel-delay 7200})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 0 :default-auto-cancel-delay 7200})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000 base-settings snap)
         et   (t/get-transfer (:world r) 0)]
     (is (= (+ 1000 7200) (:auto-cancel-time et)))))
 
 (deftest create-escrow-explicit-auto-times-override-defaults
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps 0 :default-auto-release-delay 3600})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 0 :default-auto-release-delay 3600})
         sett (t/make-escrow-settings {:auto-release-time 9999})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000 sett snap)
         et   (t/get-transfer (:world r) 0)]
@@ -140,7 +141,7 @@
   ;; After creation, modifying global config does NOT change the per-escrow snapshot.
   (let [w1    (world-with-one-escrow)
         ;; "change governance" — modify the snapshot reference outside the stored map
-        snap2 (t/make-module-snapshot {:escrow-fee-bps 999})
+        snap2 (snap-fix/escrow-snapshot {:escrow-fee-bps 999})
         w2    (assoc-in w1 [:module-snapshots 99] snap2)]  ; different id, shouldn't matter
     (is (= 50 (:escrow-fee-bps (t/get-snapshot w2 0)))
         "snapshot for workflow 0 is frozen at creation")))
