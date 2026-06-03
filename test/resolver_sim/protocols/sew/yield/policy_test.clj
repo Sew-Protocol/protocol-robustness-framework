@@ -14,6 +14,24 @@
 (defn- load-scenario [path]
   (scen-io/load-scenario-file path))
 
+(deftest test-json-string-yield-preset-routes-to-recipient-on-release
+  (testing "String yield-preset from JSON scenarios matches policy keywords"
+    (let [scenario {:initial-block-time 1000}
+          world (-> (proto/init-world sew/protocol scenario)
+                    (assoc-in [:yield/rates :fixed-rate "USDC"] 0.05))
+          snapshot (snap-fix/escrow-snapshot {:yield-generation-module :fixed-rate})
+          res1 (lc/create-escrow world "sender" "USDC" "recipient" 10000
+                                 (t/make-escrow-settings {:yield-preset "to-recipient"})
+                                 snapshot)
+          world1 (:world res1)
+          world2 (assoc world1 :block-time (+ 1000 31536000))
+          world3 (lc/accrue-yield world2 0)
+          res3 (lc/release world3 0 "sender" (fn [_ _ _] {:allowed? true}))
+          world4 (:world res3)]
+      (is (:ok res1))
+      (is (pos? (get-in world3 [:escrow-transfers 0 :accumulated-yield])))
+      (is (= 10500 (get-in world4 [:claimable 0 "recipient"]))))))
+
 (deftest test-fixed-yield-lifecycle
   (testing "Escrow with fixed-rate yield accrues correctly"
     (let [scenario {:initial-block-time 1000}

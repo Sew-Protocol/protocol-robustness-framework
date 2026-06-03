@@ -83,9 +83,13 @@
                                                         :module/id mid
                                                         :owner/id (t/escrow-yield-owner-id workflow-id)
                                                         :token (:token et)
-                                                        :dt dt})]
-            ;; Update last-accrual-time to now
-            (assoc-in world' [:escrow-transfers workflow-id :last-accrual-time] now))
+                                                        :dt dt})
+                oid    (t/escrow-yield-owner-id workflow-id)
+                pos    (get-in world' [:yield/positions oid])
+                accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))]
+            (-> world'
+                (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
+                (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued)))
           world))
       world)))
 
@@ -205,7 +209,7 @@
     (t/fail :amount-zero)
 
     (let [ymid (:yield-generation-module snapshot)
-          yield-enabled? (and ymid (not= (:yield-preset settings) :off))]
+          yield-enabled? (and ymid (t/yield-preset-yield-enabled? (:yield-preset settings)))]
       (and yield-enabled? (not (yield-module-available? world ymid token))))
     (t/fail :insufficient-module-liquidity)
 

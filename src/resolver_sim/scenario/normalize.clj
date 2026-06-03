@@ -37,6 +37,34 @@
            (mapv #(update % :error normalize-error-kw) errs))
     scenario))
 
+(defn- normalize-yield-preset-param
+  [v]
+  (cond
+    (nil? v)     :off
+    (keyword? v) v
+    (string? v)  (keyword (.replace ^String v "_" "-"))
+    :else        (keyword (str v))))
+
+(defn- normalize-event-params
+  [params]
+  (if-not (map? params)
+    params
+    (cond-> params
+      (contains? params :yield-preset)
+      (update :yield-preset normalize-yield-preset-param)
+      (contains? params :yield_preset)
+      (update :yield_preset normalize-yield-preset-param))))
+
+(defn- normalize-scenario-events
+  [scenario]
+  (if-let [events (:events scenario)]
+    (assoc scenario :events
+           (mapv #(cond-> %
+                    (:params %)
+                    (update :params normalize-event-params))
+                 events))
+    scenario))
+
 (defn normalize-scenario
   "Recursively normalize a loaded scenario to fix JSON deserialization issues."
   [x]
@@ -55,5 +83,5 @@
                         :else v))
                     x)]
     (if (map? normalized)
-      (normalize-expected-errors normalized)
+      (-> normalized normalize-expected-errors normalize-scenario-events)
       normalized)))

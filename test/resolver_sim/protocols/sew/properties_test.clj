@@ -42,6 +42,14 @@
 (def gen-time   (gen/large-integer* {:min 1 :max 9999}))
 (def gen-addr   (gen/elements ["0xAlice" "0xBob" "0xCarol" "0xDave"]))
 
+(def gen-yield-preset
+  "Distribution preset for escrow yield routing (matches `normalize-yield-preset`)."
+  (gen/elements [:off :to-sender :to-recipient :split-50-50]))
+
+(def gen-yield-profile
+  "Registry profile ids resolvable via `yield.registry/resolve-yield-profile`."
+  (gen/elements [:aave-v3 :fixed-rate :none]))
+
 (defn gen-snapshot
   "Generate a random module snapshot."
   []

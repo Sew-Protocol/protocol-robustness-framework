@@ -43,7 +43,7 @@
         "token": "USDC",
         "to": "0xseller",
         "amount": 5000,
-        "yield-preset": "aave-v3"
+        "yield-preset": "to-recipient"
       }
     }
   ],

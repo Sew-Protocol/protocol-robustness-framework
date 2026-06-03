@@ -50,8 +50,10 @@
 
 (defn solvency-holds?
   "True when total-held[token] exactly equals the sum of all internal liabilities.
-   Liabilities = [Live Escrow AFAs] + [Active Bonds] + [Resolver Stakes] + [Unwithdrawn Fees] + [Active Yield]
-   
+   Liabilities = [Live Escrow AFAs] + [Active Bonds] + [Slash Appeal Bonds]
+                 + [Yield component on live positions] + [USDC Resolver Stakes]
+   (protocol fees live in :total-fees, not :total-held).
+
    The internal invariant is STRICT EQUALITY (=)."
   [world token-balances]
   (let [live-states   #{:pending :disputed}

@@ -957,7 +957,7 @@
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 10000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                 :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                 :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
                 {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                  :params {:workflow-id 0}}
                 {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
@@ -987,7 +987,7 @@
                [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                  :params {:amount 10000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                 :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                 :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
                 {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                  :params {:workflow-id 0}}
                 {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
@@ -1245,7 +1245,7 @@
              [               {:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                :params {:amount 10000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-               :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+               :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
               {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
               {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
@@ -1256,9 +1256,9 @@
                :params {:workflow-id 0}}
               {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                :params {:workflow-id 0 :upheld? true}}
-              {:seq 7 :time 1200 :agent "gov" :action "execute_fraud_slash"
+              {:seq 7 :time 1241 :agent "keeper" :action "execute_pending_settlement"
                :params {:workflow-id 0}}
-              {:seq 8 :time 1250 :agent "keeper" :action "execute_pending_settlement"
+              {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
                :params {:workflow-id 0}}]))
         r-rejected
         (sew/replay-with-sew-protocol
@@ -1270,7 +1270,7 @@
              [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                :params {:amount 10000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-               :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+               :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
               {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
               {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
@@ -1285,8 +1285,8 @@
                :params {:workflow-id 0}}
               {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
                :params {:workflow-id 0}}]))
-        w-upheld   (get-in r-upheld [:trace 5 :world])
-        w-rejected (get-in r-rejected [:trace 7 :world])
+        w-upheld   (get-in r-upheld [:trace 6 :world])
+        w-rejected (get-in r-rejected [:trace 6 :world])
         assert-appeal-resolution-semantics
         (fn [world upheld?]
           ;; Helper to remove ambiguity around `upheld?` semantics using
@@ -1300,12 +1300,12 @@
                 "upheld?=false should forfeit appeal bond to insurance bucket")))]
     (is (= :pass (:outcome r-upheld)))
     (is (= :pass (:outcome r-rejected)))
-    (is (= :rejected (get-in r-upheld [:trace 7 :result])))
-    (is (= :slash-already-reversed (get-in r-upheld [:trace 7 :error])))
+    (is (= :rejected (get-in r-upheld [:trace 8 :result])))
+    (is (= :slash-already-reversed (get-in r-upheld [:trace 8 :error])))
     (assert-appeal-resolution-semantics w-upheld true)
     (assert-appeal-resolution-semantics w-rejected false)
     (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
-    (is (= 80 (get-in w-rejected [:appeal-bond-distributions-by-token :0xUSDC] 0)))
+    (is (= 80 (get-in w-rejected [:appeal-bond-distributions-by-token :USDC] 0)))
     (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
 
 (deftest test-replay-s35-profit-maximizer-governance-wins-appeal
