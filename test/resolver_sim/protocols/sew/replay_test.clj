@@ -1320,7 +1320,7 @@
                  [{:seq 0 :time 1000 :agent "resolver" :action "register_stake"
                    :params {:amount 10000}}
                   {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
-                   :params {:token "0xUSDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
+                   :params {:token "USDC" :to "0xBob" :amount 8000 :custom-resolver "0xResolver"}}
                   {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                    :params {:workflow-id 0}}
                   {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"

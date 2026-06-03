@@ -641,7 +641,7 @@
                      {:id "seller3"   :address "0xseller3"   :strategy "honest"}
                      {:id "resolver"  :address "0xresolver"  :role "resolver"}
                      {:id "keeper"    :address "0xkeeper"    :role "keeper"}]
-   :protocol-params dr3
+   :protocol-params (assoc dr3 :resolver-bond-bps 0)
    :notes "DRM maxConcurrentDisputes=2: third concurrent raise_dispute rejected; slot freed after wf0 settlement allows wf2 dispute."
    :expected-errors [{:seq 6 :action "raise_dispute" :error :resolver-capacity-exceeded}]
    :events
