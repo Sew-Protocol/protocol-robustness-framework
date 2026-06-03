@@ -10,7 +10,8 @@
      - resolver-capacity-invariant? holds throughout all paths
      - capacity freed and reusable after finalization
      - all-resolvers-full system liveness scenario"
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -26,7 +27,7 @@
 (def usdc     "0xUSDC")
 
 (def base-snapshot
-  (t/make-module-snapshot
+  (snap-fix/escrow-snapshot
    {:escrow-fee-bps            0
     :default-auto-release-delay 0
     :default-auto-cancel-delay  0
@@ -124,13 +125,12 @@
   (testing "dispute fails when resolver is at maxConcurrentDisputes"
     (let [w0 (-> (fresh-world)
                  (t/set-resolver-capacity resolver 1))
-          ;; open one escrow and dispute it to saturate capacity
+          ;; create both escrows before any dispute (create is not capacity-gated)
           w1 (make-escrow w0)
-          r1 (lc/raise-dispute w1 0 alice)
+          w2 (make-escrow w1)
+          r1 (lc/raise-dispute w2 0 alice)
           _  (is (:ok r1) "first dispute should succeed")
-          ;; open a second escrow
-          w2 (make-escrow (:world r1))
-          r2 (lc/raise-dispute w2 1 alice)]
+          r2 (lc/raise-dispute (:world r1) 1 alice)]
       (is (not (:ok r2)))
       (is (= :resolver-capacity-exceeded (:error r2)))))
 

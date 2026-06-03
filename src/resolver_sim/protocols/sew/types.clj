@@ -10,6 +10,8 @@
       :total-held          {token-addr   nat-int}
       :total-fees          {token-addr   nat-int}
       :pending-settlements {workflow-id  PendingSettlement-map}
+      ;; Frozen at create_escrow — built via snapshot/make-escrow-snapshot or
+      ;; snapshot/snapshot-from-protocol-params (see docs/architecture/YIELD_AND_SNAPSHOT_MODULES.md).
       :module-snapshots    {workflow-id  ModuleSnapshot-map}
       :dispute-timestamps  {workflow-id  nat-int}   ; block.timestamp of raiseDispute
       :claimable           {workflow-id {addr nat-int}}

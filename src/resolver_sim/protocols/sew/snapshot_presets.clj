@@ -2,7 +2,7 @@
   "Named reusable Sew ModuleSnapshot configurations for tests and scenarios.
 
    Prefer `preset->snapshot` / `preset->protocol-params` over ad hoc
-   `make-module-snapshot` calls in tests.
+   `make-escrow-snapshot` calls in tests (see `snapshot-fixtures` in test/).
 
    Yield stress belongs in `yield/presets`, `yield-config`, or runtime risk updates —
    not in Sew snapshot presets."

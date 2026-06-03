@@ -123,7 +123,6 @@
       (proto/accum-protocol-metrics protocol base tags event accepted? attack? world-before world-after)
       base)))
 
-
 (defn expectation-metric-keys [scenario]
   (when-let [metrics (get-in scenario [:expectations :metrics])]
     (into #{} (map #(theory/metric-key (:name %)) metrics))))

@@ -1,393 +1,220 @@
-{
-  "outcome": "fail",
-  "scenario-id": "s83-yield-accrual-reorg-race",
-  "events-processed": 3,
-  "halted-at-seq": 2,
-  "halt-reason": "invariant-violation",
-  "trace": [
-    {
-      "projection-hash": "PAsDZHxSnZuPKewgQS26ZuZsUCGo+zKiw1+sztHVtzI=",
-      "time": 1000,
-      "extra": {
-        "workflow-id": 0
-      },
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "entity-created"
-      ],
-      "world": {
-        "live-states": {
-          "0": "pending"
-        },
-        "total-fees": {
-          "USDC": 1500
-        },
-        "pending-count": 0,
-        "resolver-rotations": {},
-        "claimable": {},
-        "bond-balances": {},
-        "dispute-levels": {},
-        "escrow-count": 1,
-        "resolver-slash-total": {},
-        "dispute-resolvers": {
-          "0": "0xresolver"
-        },
-        "escrow-amounts": {
-          "0": 98500
-        },
-        "block-time": 1000,
-        "bond-distribution": {
-          "insurance": 0,
-          "protocol": 0,
-          "burned": 0
-        },
-        "total-held": {
-          "USDC": 98500
-        },
-        "resolver-stakes": {}
-      },
-      "result": "ok",
-      "action": "create_escrow",
-      "error": null,
-      "seq": 0,
-      "violations": null,
-      "trace-metadata": {
-        "type": "creation",
-        "path": "none"
-      },
-      "projection": {
-        "total-fees": {
-          "USDC": 1500
-        },
-        "dispute-levels": {},
-        "pending-settlements": {},
-        "block-time": 1000,
-        "escrow-transfers": {
-          "0": {
-            "escrow-state": "pending",
-            "recipient-status": "none",
-            "sender-status": "none",
-            "auto-cancel-time": 0,
-            "amount-after-fee": 98500,
-            "auto-release-time": 0,
-            "token": "USDC",
-            "initial-fee": 1500,
-            "from": "0xbuyer",
-            "dispute-resolver": "0xresolver",
-            "last-accrual-time": 1000,
-            "accumulated-yield": 0,
-            "to": "0xseller"
-          }
-        },
-        "total-held": {
-          "USDC": 98500
-        }
-      },
-      "id": "create_escrow",
-      "detail": null
-    },
-    {
-      "projection-hash": "YJf296ckis2417PVhPgRSbLJHXrRlITRh6VNHo7G9rE=",
-      "time": 1060,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "dispute-raised"
-      ],
-      "world": {
-        "live-states": {
-          "0": "disputed"
-        },
-        "total-fees": {
-          "USDC": 1500
-        },
-        "pending-count": 0,
-        "resolver-rotations": {},
-        "claimable": {},
-        "bond-balances": {},
-        "dispute-levels": {},
-        "escrow-count": 1,
-        "resolver-slash-total": {},
-        "dispute-resolvers": {
-          "0": "0xresolver"
-        },
-        "escrow-amounts": {
-          "0": 98500
-        },
-        "block-time": 1060,
-        "bond-distribution": {
-          "insurance": 0,
-          "protocol": 0,
-          "burned": 0
-        },
-        "total-held": {
-          "USDC": 98500
-        },
-        "resolver-stakes": {}
-      },
-      "result": "ok",
-      "action": "raise_dispute",
-      "error": null,
-      "seq": 1,
-      "violations": null,
-      "trace-metadata": {
-        "type": "state-change",
-        "path": "none"
-      },
-      "projection": {
-        "total-fees": {
-          "USDC": 1500
-        },
-        "dispute-levels": {},
-        "pending-settlements": {},
-        "block-time": 1060,
-        "escrow-transfers": {
-          "0": {
-            "escrow-state": "disputed",
-            "recipient-status": "none",
-            "sender-status": "raise-dispute",
-            "auto-cancel-time": 0,
-            "amount-after-fee": 98500,
-            "auto-release-time": 0,
-            "token": "USDC",
-            "initial-fee": 1500,
-            "from": "0xbuyer",
-            "dispute-resolver": "0xresolver",
-            "last-accrual-time": 1000,
-            "accumulated-yield": 0,
-            "to": "0xseller"
-          }
-        },
-        "total-held": {
-          "USDC": 98500
-        }
-      },
-      "id": "raise_dispute",
-      "detail": null
-    },
-    {
-      "projection-hash": "1JtbcDzO8gq3NNa2P6Xc428TYaphqau4aO3N0VJDvBA=",
-      "time": 2000000,
-      "extra": null,
-      "invariants-ok?": false,
-      "agent": "resolver",
-      "event-tags": [],
-      "world": {
-        "live-states": {
-          "0": "disputed"
-        },
-        "total-fees": {
-          "USDC": 1500
-        },
-        "pending-count": 0,
-        "resolver-rotations": {},
-        "claimable": {},
-        "bond-balances": {},
-        "dispute-levels": {},
-        "escrow-count": 1,
-        "resolver-slash-total": {},
-        "dispute-resolvers": {
-          "0": "0xresolver"
-        },
-        "escrow-amounts": {
-          "0": 98500
-        },
-        "block-time": 2000000,
-        "bond-distribution": {
-          "insurance": 0,
-          "protocol": 0,
-          "burned": 0
-        },
-        "total-held": {
-          "USDC": 98500
-        },
-        "resolver-stakes": {}
-      },
-      "result": "invariant-violated",
-      "action": "execute_resolution",
-      "error": null,
-      "seq": 2,
-      "violations": {
-        "bond-slash-bounded": {
-          "holds?": true,
-          "violations": []
-        },
-        "slash-epoch-cap-respected": {
-          "holds?": true,
-          "violations": []
-        },
-        "fraud-slash-executions-accounted": {
-          "holds?": true,
-          "violations": []
-        },
-        "all-status-combinations-valid": {
-          "holds?": true,
-          "violations": []
-        },
-        "dispute-resolution-path": {
-          "holds?": true,
-          "violations": []
-        },
-        "appeal-bond-conserved": {
-          "holds?": true,
-          "violations": []
-        },
-        "slash-distribution-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "bond-liquidity": {
-          "holds?": true,
-          "violations": []
-        },
-        "yield-exposure": {
-          "holds?": true,
-          "violations": null
-        },
-        "solvency": {
-          "holds?": true,
-          "violations": []
-        },
-        "fee-cap": {
-          "holds?": true,
-          "violations": []
-        },
-        "yield-position-consistency": {
-          "holds?": true,
-          "violations": null
-        },
-        "senior-coverage-not-exceeded": {
-          "holds?": true,
-          "violations": []
-        },
-        "no-stale-automatable-escrows": {
-          "holds?": true,
-          "violations": []
-        },
-        "fees-non-negative": {
-          "holds?": true,
-          "violations": []
-        },
-        "held-non-negative": {
-          "holds?": true,
-          "violations": []
-        },
-        "resolver-not-frozen-on-assign": {
-          "holds?": true,
-          "violations": []
-        },
-        "conservation-of-funds": {
-          "holds?": false,
-          "violations": [
-            {
-              "token": "USDC",
-              "held": 98749,
-              "released": 0,
-              "refunded": 0,
-              "accounted": 98749,
-              "deposited": 98500
-            }
-          ]
-        },
-        "resolver-capacity": {
-          "holds?": true,
-          "violations": []
-        },
-        "slash-status-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "no-auto-fraud-execute": {
-          "holds?": true,
-          "violations": []
-        },
-        "appeal-bond-custody-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "single-resolution-payout-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "pending-settlement-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "resolver-bond-mix-valid": {
-          "holds?": true,
-          "violations": []
-        },
-        "dispute-level-bounded": {
-          "holds?": true,
-          "violations": []
-        },
-        "dispute-timestamp-consistent": {
-          "holds?": true,
-          "violations": []
-        },
-        "reversal-slash-disabled": {
-          "holds?": true,
-          "violations": []
-        }
-      },
-      "trace-metadata": {
-        "type": "resolution",
-        "path": "standard"
-      },
-      "projection": {
-        "total-fees": {
-          "USDC": 1500
-        },
-        "dispute-levels": {},
-        "pending-settlements": {},
-        "block-time": 2000000,
-        "escrow-transfers": {
-          "0": {
-            "escrow-state": "disputed",
-            "recipient-status": "none",
-            "sender-status": "raise-dispute",
-            "auto-cancel-time": 0,
-            "amount-after-fee": 98500,
-            "auto-release-time": 0,
-            "token": "USDC",
-            "initial-fee": 1500,
-            "from": "0xbuyer",
-            "dispute-resolver": "0xresolver",
-            "last-accrual-time": 1000,
-            "accumulated-yield": 0,
-            "to": "0xseller"
-          }
-        },
-        "total-held": {
-          "USDC": 98500
-        }
-      },
-      "id": "execute_resolution",
-      "detail": null
-    }
-  ],
-  "metrics": {
-    "invariant-violations": 1,
-    "attack-attempts": 0,
-    "double-settlements": 0,
-    "pending-settlements-executed": 0,
-    "invalid-state-transitions": 0,
-    "reverts": 1,
-    "resolutions-executed": 0,
-    "rejected-attacks": 0,
-    "coalition-net-profit": 0,
-    "attack-successes": 0,
-    "funds-lost": 0,
-    "total-escrows": 1,
-    "invalid-guard-conditions": 0,
-    "disputes-triggered": 1,
-    "total-volume": 100000,
-    "invariant-results": {
-      "conservation-of-funds": "fail"
-    },
-    "negative-payoff-count": 0
-  },
-  "scenario-author": "@grifma"
-}
+{"description":"Generated trace: ",
+ "fee_bps":150,
+ "schema_version":"2",
+ "resolutions":
+ {"wf0":
+  {"outcome":"REFUND",
+   "finality":"FINAL",
+   "integrity":"FULLY_RECONCILED"}},
+ "cdrs_version":"0.2",
+ "steps":
+ [{"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":0,
+    "escrow_amount_after_fee":0,
+    "global_total_held":200000,
+    "global_total_fees":0,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"IDLE",
+   "seq":0,
+   "event_type":"REGISTER-STAKE",
+   "timestamp":1000,
+   "context_id":"global",
+   "attributes":
+   {"action":"register-stake",
+    "seq":0,
+    "type":"unknown",
+    "path":"none"},
+   "actor":"resolver"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":1,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":298500,
+    "global_total_fees":1500,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"ACTIVE",
+   "seq":1,
+   "event_type":"CREATE ESCROW",
+   "timestamp":1000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"create_escrow",
+    "seq":1,
+    "wf_alias":"wf0",
+    "to_role":"seller",
+    "amount":100000,
+    "type":"creation",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":4,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":298500,
+    "global_total_fees":1500,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"CHALLENGED",
+   "seq":2,
+   "event_type":"RAISE DISPUTE",
+   "timestamp":1060,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"raise_dispute",
+    "seq":2,
+    "wf_alias":"wf0",
+    "type":"state-change",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":4,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":298812,
+    "global_total_fees":1500,
+    "pending_settlement_exists":true,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"RECONCILING",
+   "seq":3,
+   "event_type":"RELEASE AS DISPUTE RESOLVER",
+   "timestamp":2000000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_resolution",
+    "seq":3,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"standard"},
+   "actor":"resolver"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":4,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":298812,
+    "global_total_fees":1500,
+    "pending_settlement_exists":true,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"RECONCILING",
+   "seq":4,
+   "event_type":"CANCEL AS DISPUTE RESOLVER",
+   "timestamp":2000000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_resolution",
+    "seq":4,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"standard"},
+   "actor":"resolver"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":4,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":298912,
+    "global_total_fees":1500,
+    "pending_settlement_exists":false,
+    "dispute_level":1,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"CHALLENGED",
+   "seq":5,
+   "event_type":"CHALLENGE RESOLUTION",
+   "timestamp":2000059,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"challenge_resolution",
+    "seq":5,
+    "wf_alias":"wf0",
+    "type":"escalation",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":3,
+    "escrow_amount_after_fee":98500,
+    "global_total_held":200100,
+    "global_total_fees":1812,
+    "pending_settlement_exists":false,
+    "dispute_level":1,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"SETTLED",
+   "seq":6,
+   "event_type":"EXECUTE PENDING SETTLEMENT",
+   "timestamp":2000060,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_pending_settlement",
+    "seq":6,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"delayed"},
+   "actor":"keeper"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"transfer-not-in-dispute",
+    "escrow_state":3,
+    "pending_settlement_exists":false,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"transfer-not-in-dispute"},
+   "state_bucket":"SETTLED",
+   "seq":7,
+   "event_type":"EXECUTE PENDING SETTLEMENT",
+   "timestamp":2000061,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_pending_settlement",
+    "seq":7,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"delayed"},
+   "actor":"keeper"}],
+ "expected_semantics":
+ {"resolution":
+  {"outcome":"refund",
+   "finality":"final",
+   "integrity":"fully-reconciled",
+   "beneficiary":"buyer",
+   "resolver":"resolver",
+   "authorized_resolver":true,
+   "pending_settlement_created":true,
+   "settlement_executed":true},
+  "participation":
+  {"dispute_initiator":"buyer",
+   "resolution_actor":"resolver",
+   "authorized_participant":true,
+   "settlement_actor":"keeper"},
+  "timing":
+  {"auto_cancel_triggered":false,
+   "within_resolution_window":true,
+   "within_settlement_window":true,
+   "pending_delay_seconds":60}},
+ "trace_kind":
+ ["dispute-resolution", "pending-settlement", "authorization"],
+ "step_count":8,
+ "metadata":
+ {"scenario_class":"baseline", "outcome_type":"normal-completion"},
+ "scenario_id":null}

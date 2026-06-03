@@ -1,16 +1,17 @@
 (ns resolver-sim.protocols.sew.accounting-test
   "Tests for contract_model/accounting.clj and invariants.clj."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.accounting :as ac]
             [resolver-sim.protocols.sew.invariants :as inv]))
 
-(def usdc "0xUSDC")
+(def usdc :0xUSDC)
 (def alice "0xAlice")
 (def bob   "0xBob")
 
-(def snap (t/make-module-snapshot {:escrow-fee-bps 50}))
+(def snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50}))
 
 (defn- base-world []
   (let [r (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
@@ -67,7 +68,7 @@
 
 (deftest post-appeal-bond-deducts-fee
   (let [w    (t/empty-world)
-        snap (t/make-module-snapshot {:appeal-bond-protocol-fee-bps 200}) ; 2%
+        snap (snap-fix/escrow-snapshot {:appeal-bond-protocol-fee-bps 200}) ; 2%
         w'   (ac/post-appeal-bond w 0 alice snap usdc 1000)]
     (is (= 980  (get-in w' [:bond-balances 0 alice] 0)) "net after 2% fee")
     (is (= 20   (get-in w' [:bond-fees usdc] 0))        "protocol fee recorded")))

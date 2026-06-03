@@ -89,13 +89,10 @@
                    (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
                    :USDC)
          held-available (get-in world [:total-held token] 0)
-         ;; Stake is not in :total-held until register_stake credits custody. Reduce held when
-         ;; the slash is backed by on-hand custody (terminal escrow or held >= slash amount).
+         ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
+         ;; after settlement has already drained :total-held for this token).
          sub-held?      (and (pos? actual)
-                             (or (when workflow-id
-                                   (let [state (t/escrow-state world workflow-id)]
-                                     (contains? #{:released :refunded :resolved} state)))
-                                 (>= held-available actual)))
+                             (>= held-available actual))
          world'  (-> world
                      (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)

@@ -186,7 +186,7 @@
                   settings (t/make-escrow-settings
                              {:custom-resolver cres
                               :release-address (:release-address p)
-                              :yield-preset (:yield-preset p)
+                              :yield-preset (or (:yield-preset p) (:yield_preset p))
                               :auto-release-time (:auto-release-time p)
                               :auto-cancel-time (:auto-cancel-time p)})
                   result   (lc/create-escrow world caller token to amount settings snapshot)]

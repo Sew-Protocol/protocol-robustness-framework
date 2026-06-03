@@ -191,6 +191,21 @@ contract_model/
 
 ---
 
+## Yield modules vs escrow snapshots
+
+Three different “module” factories exist; do not unify them. Full map:
+`docs/architecture/YIELD_AND_SNAPSHOT_MODULES.md`.
+
+| Layer | Factory | Use for |
+|-------|---------|---------|
+| Yield | `yield/modules/*/make-*-module` | World-registered transition graphs (`:yield/modules`) |
+| Sew escrow | `protocols/sew/snapshot/make-escrow-snapshot` | Per-escrow frozen terms (`:module-snapshots`) |
+| Resolution | `authority/make-*-resolution-module` | Resolver authorization stubs |
+
+Tests: `test/.../snapshot_fixtures.clj` (`escrow-snapshot`). Deprecated: `types/make-module-snapshot`.
+
+---
+
 ## File map (Highlights)
 
 | File | Role |
@@ -202,6 +217,10 @@ contract_model/
 | `scenario/theory.clj` | Game-theoretic claim falsification (v1.1) |
 | `scenario/expectations.clj` | Execution-level outcome validation (v1.1) |
 | `protocols/sew/invariant_runner.clj` | Sew-specific deterministic test runner |
+| `protocols/sew/snapshot.clj` | `make-escrow-snapshot`, `validate-snapshot`, `snapshot-from-protocol-params` |
+| `protocols/sew/snapshot_presets.clj` | Named Sew snapshot presets (`:sew.preset/*`) |
+| `yield/modules/*.clj` | Archetype factories (`make-liquid-lending-module`, etc.) |
+| `yield/presets.clj` | Named yield-config / stress presets |
 | `db/store.clj` | XTDB table ops + `summarise-batch` (pure) |
 | `sim/phase_*.clj` | One file per simulation phase; entry point `run-phase-*-sweep` |
 | `sim/fixtures.clj` | Fixture suite runner: `run-suite`, `list-suites`, `minimise-suite` |

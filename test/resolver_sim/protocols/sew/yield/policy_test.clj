@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.yield.policy-test
-  (:require [clojure.test :refer :all]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer :all]
             [resolver-sim.io.scenarios :as scen-io]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew :as sew]
@@ -19,7 +20,7 @@
           world (-> (proto/init-world sew/protocol scenario)
                     (assoc-in [:yield/rates :fixed-rate "USDC"] 0.05)) ; 5% APY
           
-          snapshot (t/make-module-snapshot {:yield-generation-module :fixed-rate})
+          snapshot (snap-fix/escrow-snapshot {:yield-generation-module :fixed-rate})
           res1  (lc/create-escrow world "sender" "USDC" "recipient" 10000 
                                  (t/make-escrow-settings {:yield-preset :to-recipient})
                                  snapshot)
@@ -115,7 +116,7 @@
           world0   (-> (proto/init-world sew/protocol scenario)
                        (yield-reg/apply-yield-config
                         {:modules {:aave-v3 {:tokens {"USDC" {:initial-index 1.0 :apy 0.05}}}}}))
-          snapshot (t/make-module-snapshot
+          snapshot (snap-fix/escrow-snapshot
                     {:yield-module-id :module/aave-yield
                      :yield-profile :aave-v3
                      :yield-archetype :yield.provider/liquid-lending

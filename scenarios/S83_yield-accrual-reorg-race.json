@@ -3,6 +3,7 @@
   "title": "Yield Accrual Reorg Race Around Pending Settlement Finality",
   "schema-version": "1.0",
   "purpose": "adversarial-robustness",
+  "description": "Competing resolutions at the same timestamp, challenge archives pending, keeper executes superseded settlement after deadline. Exercises yield accrual across resolution, challenge, and finalize paths.",
   "threat-tags": [
     "reorg",
     "timing-boundary",
@@ -26,6 +27,11 @@
       "role": "resolver"
     },
     {
+      "id": "resolver1",
+      "address": "0xresolver1",
+      "role": "resolver"
+    },
+    {
       "id": "keeper",
       "address": "0xkeeper",
       "role": "keeper"
@@ -35,7 +41,11 @@
     "yield-generation-module": "aave-v3",
     "resolver-fee-bps": 150,
     "appeal-window-duration": 60,
-    "max-dispute-duration": 2592000
+    "max-dispute-duration": 2592000,
+    "appeal-bond-bps": 500,
+    "escalation-resolvers": {
+      "1": "0xresolver1"
+    }
   },
   "yield-config": {
     "modules": {
@@ -49,9 +59,26 @@
       }
     }
   },
+  "expected-errors": [
+    {
+      "seq": 7,
+      "action": "execute_pending_settlement",
+      "error": "transfer-not-in-dispute"
+    }
+  ],
   "events": [
     {
       "seq": 0,
+      "time": 1000,
+      "agent": "resolver",
+      "action": "register-stake",
+      "params": {
+        "token": "USDC",
+        "amount": 200000
+      }
+    },
+    {
+      "seq": 1,
       "time": 1000,
       "agent": "buyer",
       "action": "create_escrow",
@@ -60,11 +87,11 @@
         "to": "0xseller",
         "amount": 100000,
         "custom-resolver": "0xresolver",
-        "yield_preset": "to-recipient"
+        "yield-preset": "to-recipient"
       }
     },
     {
-      "seq": 1,
+      "seq": 2,
       "time": 1060,
       "agent": "buyer",
       "action": "raise_dispute",
@@ -73,7 +100,7 @@
       }
     },
     {
-      "seq": 2,
+      "seq": 3,
       "time": 2000000,
       "agent": "resolver",
       "action": "execute_resolution",
@@ -84,7 +111,7 @@
       }
     },
     {
-      "seq": 3,
+      "seq": 4,
       "time": 2000000,
       "agent": "resolver",
       "action": "execute_resolution",
@@ -95,7 +122,7 @@
       }
     },
     {
-      "seq": 4,
+      "seq": 5,
       "time": 2000059,
       "agent": "buyer",
       "action": "challenge_resolution",
@@ -104,7 +131,7 @@
       }
     },
     {
-      "seq": 5,
+      "seq": 6,
       "time": 2000060,
       "agent": "keeper",
       "action": "execute_pending_settlement",
@@ -113,7 +140,7 @@
       }
     },
     {
-      "seq": 6,
+      "seq": 7,
       "time": 2000061,
       "agent": "keeper",
       "action": "execute_pending_settlement",

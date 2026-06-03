@@ -10,8 +10,19 @@
       (get-in event [:params :id])))
 
 (defn canonical-action
-  "Normalize action names by converting underscores to hyphens."
+  "Normalize action names by converting underscores to hyphens.
+   Accepts keyword or string :action (JSON scenarios use strings)."
   [event]
-  (-> (:action event)
-      name
-      (str/replace "_" "-")))
+  (let [a (:action event)]
+    (-> (cond
+          (keyword? a) (name a)
+          (string? a)  a
+          :else         (str a))
+        (str/replace "_" "-"))))
+
+(defn event-param
+  "Read a param from an event, accepting snake_case JSON aliases."
+  [event primary-key & alias-keys]
+  (let [params (:params event {})]
+    (or (get params primary-key)
+        (some #(get params %) alias-keys))))

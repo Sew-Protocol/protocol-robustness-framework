@@ -1,11 +1,12 @@
 (ns resolver-sim.protocols.sew.invariant-registry-test
-  (:require [clojure.set :as set]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.set :as set]
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.types :as t]))
 
-(def ^:private snap (t/make-module-snapshot {:escrow-fee-bps 50}))
+(def ^:private snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50}))
 
 (defn- sample-world []
   (:world (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" 1000

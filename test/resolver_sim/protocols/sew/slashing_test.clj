@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.slashing-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
@@ -7,17 +8,27 @@
             [resolver-sim.protocols.sew.registry   :as reg]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]))
 
+(defn- world-ready-for-fraud-slash-propose
+  "Escrow with custom resolver, raised dispute, and executed resolution."
+  [world buyer token seller resolver amount snap]
+  (let [{:keys [world workflow-id]}
+        (lc/create-escrow world buyer token seller amount {:custom-resolver resolver} snap)
+        world' (:world (lc/raise-dispute world workflow-id buyer))
+        world'' (:world (res/execute-resolution world' workflow-id resolver true "0xhash" nil))]
+    {:world world'' :workflow-id workflow-id}))
+
 (deftest slashing-logic-test
   (let [world (t/empty-world 1000)
         buyer "0xBuyer"
         seller "0xSeller"
         res "0xRes"
         gov "0xGov"
-        snap (t/make-module-snapshot {:appeal-window-duration 86400})]
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 86400})]
     
     (testing "Manual slash proposal is appealable"
       (let [world (reg/register-stake world res 1000)
-            {:keys [world workflow-id]} (lc/create-escrow world buyer "0xT" seller 1000 {} snap)
+            {:keys [world workflow-id]}
+            (world-ready-for-fraud-slash-propose world buyer "0xT" seller res 1000 snap)
             r-prop (res/propose-fraud-slash world workflow-id gov res 500)
             world-prop (:world r-prop)]
         
@@ -40,9 +51,10 @@
         seller "0xSeller"
         resolver-addr "0xRes"
         gov "0xGov"
-        snap (t/make-module-snapshot {:appeal-window-duration 10})
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
         world (reg/register-stake world resolver-addr 1000)
-        {:keys [world workflow-id]} (lc/create-escrow world buyer "0xT" seller 1000 {} snap)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world buyer "0xT" seller resolver-addr 1000 snap)
         world-prop (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 500)
                        :world)
         world-late (assoc world-prop :block-time 1011)
@@ -74,8 +86,10 @@
         resolver-addr "0xRes"
         gov "0xGov"
         non-gov "0xUser"
-        snap (t/make-module-snapshot {:appeal-window-duration 100})
-        {:keys [world workflow-id]} (lc/create-escrow (t/empty-world 1000) buyer "0xT" seller 1000 {} snap)
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+        world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "0xT" seller resolver-addr 1000 snap)
         agent-index {"gov"  {:id "gov" :address gov :role "governance"}
                      "user" {:id "user" :address non-gov :role "honest"}}
         ctx {:agent-index agent-index}
@@ -100,11 +114,12 @@
         gov "0xGov"
         buyer "0xBuyer"
         seller "0xSeller"
-        snap (t/make-module-snapshot {:appeal-window-duration 10})
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
         world0 (-> (t/empty-world 1000)
                    (assoc-in [:unavailability-stats :total-resolvers] 1)
                    (reg/register-stake resolver-addr 1000))
-        {:keys [world workflow-id]} (lc/create-escrow world0 buyer "USDC" seller 1000 {} snap)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
         world2 (assoc world1 :block-time 1011)
         r-exec (res/execute-fraud-slash world2 workflow-id)
@@ -146,11 +161,12 @@
         gov "0xGov"
         buyer "0xBuyer"
         seller "0xSeller"
-        snap (t/make-module-snapshot {:appeal-window-duration 100
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
                                       :appeal-bond-amount 75})
         world0 (-> (t/empty-world 1000)
                    (reg/register-stake resolver-addr 1000))
-        {:keys [world workflow-id]} (lc/create-escrow world0 buyer "USDC" seller 1000 {} snap)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
         world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
         world3 (-> (res/resolve-appeal world2 workflow-id gov true) :world)]
@@ -164,11 +180,12 @@
         gov "0xGov"
         buyer "0xBuyer"
         seller "0xSeller"
-        snap (t/make-module-snapshot {:appeal-window-duration 100
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
                                       :appeal-bond-amount 60})
         world0 (-> (t/empty-world 1000)
                    (reg/register-stake resolver-addr 1000))
-        {:keys [world workflow-id]} (lc/create-escrow world0 buyer "USDC" seller 1000 {} snap)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 100) :world)
         world2 (-> (res/appeal-slash world1 workflow-id resolver-addr) :world)
         world3 (-> (res/resolve-appeal world2 workflow-id gov false) :world)]
@@ -207,7 +224,7 @@
   (testing "Reversal slash can itself be appealed and reversed (Track 2 / manual path)"
     (let [l0-res  "0xL0Res"
           gov     "0xGov"
-          snap    (t/make-module-snapshot {:appeal-window-duration 200
+          snap    (snap-fix/escrow-snapshot {:appeal-window-duration 200
                                            :appeal-bond-amount 0})
           buyer   "0xBuyer"
           seller  "0xSeller"
@@ -297,6 +314,35 @@
           r (res/appeal-slash world workflow-id "0xL0Res" slash-id)]
       (is (false? (:ok r)))
       (is (= :slash-not-pending (:error r))))))
+
+(deftest propose-fraud-slash-guards-test
+  (let [buyer "0xBuyer"
+        seller "0xSeller"
+        resolver-addr "0xRes"
+        gov "0xGov"
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 100})
+        world0 (reg/register-stake (t/empty-world 1000) resolver-addr 1000)
+        {:keys [world workflow-id]}
+        (world-ready-for-fraud-slash-propose world0 buyer "0xT" seller resolver-addr 1000 snap)]
+    (testing "rejects propose before dispute path"
+      (let [{:keys [world workflow-id]}
+            (lc/create-escrow world0 buyer "0xT" seller 1000 {:custom-resolver resolver-addr} snap)
+            r (res/propose-fraud-slash world workflow-id gov resolver-addr 100)]
+        (is (false? (:ok r)))
+        (is (= :workflow-not-slashable (:error r)))))
+    (testing "rejects duplicate pending propose"
+      (let [r1 (res/propose-fraud-slash world workflow-id gov resolver-addr 100)
+            r2 (res/propose-fraud-slash (:world r1) workflow-id gov resolver-addr 50)]
+        (is (true? (:ok r1)))
+        (is (false? (:ok r2)))
+        (is (= :slash-already-pending (:error r2)))))
+    (testing "rejects wrong resolver address"
+      (let [r (res/propose-fraud-slash world workflow-id gov "0xOther" 100)]
+        (is (false? (:ok r)))
+        (is (= :slash-resolver-mismatch (:error r)))))
+    (testing "stores workflow-id on pending entry"
+      (let [r (res/propose-fraud-slash world workflow-id gov resolver-addr 100)]
+        (is (= workflow-id (get-in (:world r) [:pending-fraud-slashes workflow-id :workflow-id])))))))
 
 (deftest resolve-appeal-on-executed-slash-returns-cannot-reverse-executed-slash
   (let [resolver-addr "0xRes"

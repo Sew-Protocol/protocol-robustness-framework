@@ -278,6 +278,9 @@
                  "S62_cross-token-fee-on-transfer-under-dispute-load"
                  "S62_cross-token-parallel-appeal-depths-under-dispute-load"]
     :falsifying []}
+   :claims/resolver-capacity-enforced
+   {:supporting ["S62_resolver-capacity-concurrent-dispute-load"]
+    :falsifying []}
    :claims/dr3-reversal-slash-disabled
    {:supporting ["S41_dr3-reversal-slash-disabled"]
     :falsifying []}

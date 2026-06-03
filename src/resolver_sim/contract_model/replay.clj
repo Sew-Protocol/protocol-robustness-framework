@@ -19,6 +19,7 @@
              [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.contract-model.replay.analysis :as analysis]
              [resolver-sim.contract-model.replay.temporal :as temporal]
+             [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
              [resolver-sim.time.model        :as time-model]))

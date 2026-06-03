@@ -20,7 +20,8 @@
      12. Delayed resolver     — second resolution after finalization is rejected
      13. Conflicting actions  — escalation mid-pending clears it; execute-pending fails
      14. Repeated escalation  — max level / non-participant / terminal all rejected"
-  (:require [clojure.test :refer [deftest is]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -45,7 +46,7 @@
   "Generate a random module snapshot."
   []
   (gen/fmap (fn [[fee-bps dur]]
-              (t/make-module-snapshot {:escrow-fee-bps          fee-bps
+              (snap-fix/escrow-snapshot {:escrow-fee-bps          fee-bps
                                        :max-dispute-duration     dur
                                        :appeal-window-duration   0}))
             (gen/tuple gen-bps
@@ -58,7 +59,7 @@
 (defn make-base-world-with-escrow
   "Create a world with one :pending escrow. No custom resolver."
   [amount fee-bps block-time from to]
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
         w0   (t/empty-world block-time)
         r    (lc/create-escrow w0 from "0xUSDC" to amount
                                (t/make-escrow-settings {}) snap)]
@@ -69,7 +70,7 @@
    custom-resolver takes Priority-1 in authorized-resolver? — no escalation possible.
    Use make-disputed-world-for-escalation when multi-round resolution is needed."
   [amount fee-bps resolver-addr]
-  (let [snap (t/make-module-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
+  (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
         cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                (t/make-escrow-settings {:custom-resolver resolver-addr}) snap)
         dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]
@@ -84,10 +85,10 @@
    resolver. authorized-resolver? Priority-3 then naturally authorises the
    current round's resolver without any module callback.
 
-   snap-params      — full map passed to t/make-module-snapshot
+   snap-params      — full map passed to snap-fix/escrow-snapshot
    initial-resolver — address stored as et.dispute-resolver at level 0"
   [amount snap-params initial-resolver]
-  (let [snap (t/make-module-snapshot snap-params)
+  (let [snap (snap-fix/escrow-snapshot snap-params)
         cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                (t/make-escrow-settings {}) snap)
         ;; Set initial dispute-resolver on the transfer.
@@ -201,7 +202,7 @@
    [amount1 gen-amount
     amount2 gen-amount
     fee-bps gen-bps]
-   (let [snap (t/make-module-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
+   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
          w0   (t/empty-world 1000)
          r1   (lc/create-escrow w0 "0xAlice" "0xUSDC" "0xBob" amount1
                                 (t/make-escrow-settings {}) snap)]
@@ -233,7 +234,7 @@
    (if (= custom-addr other-addr)
      true
      (let [sett (t/make-escrow-settings {:custom-resolver custom-addr})
-           snap (t/make-module-snapshot {:escrow-fee-bps 0 :max-dispute-duration 3600})
+           snap (snap-fix/escrow-snapshot {:escrow-fee-bps 0 :max-dispute-duration 3600})
            cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob"
                                   1000 sett snap)
            dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))
@@ -256,7 +257,7 @@
   (prop/for-all
    [appeal-dur (gen/large-integer* {:min 100 :max 86400})
     time-delta (gen/large-integer* {:min 1 :max 99})]
-   (let [snap     (t/make-module-snapshot {:escrow-fee-bps        0
+   (let [snap     (snap-fix/escrow-snapshot {:escrow-fee-bps        0
                                            :appeal-window-duration appeal-dur
                                            :max-dispute-duration   200000})
          cr       (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" 1000
@@ -286,7 +287,7 @@
   (prop/for-all
    [amount  gen-amount
     fee-bps gen-bps]
-   (let [snap (t/make-module-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
+   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                 (t/make-escrow-settings {:custom-resolver "0xResolver"}) snap)]
      (when (:ok cr)
@@ -341,7 +342,7 @@
    [appeal-dur (gen/large-integer* {:min 100 :max 86400})
     amount     gen-amount
     fee-bps    gen-bps]
-   (let [snap (t/make-module-snapshot {:escrow-fee-bps         fee-bps
+   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps         fee-bps
                                        :max-dispute-duration   200000
                                        :appeal-window-duration appeal-dur})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
@@ -499,7 +500,7 @@
    [amount  gen-amount
     fee-bps gen-bps
     max-dur (gen/large-integer* {:min 100 :max 3600})]
-   (let [snap (t/make-module-snapshot {:escrow-fee-bps        fee-bps
+   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps        fee-bps
                                        :max-dispute-duration  max-dur
                                        :appeal-window-duration 0})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
@@ -545,7 +546,7 @@
    [amount     gen-amount
     fee-bps    gen-bps
     appeal-dur (gen/large-integer* {:min 100 :max 3600})]
-   (let [snap (t/make-module-snapshot {:escrow-fee-bps         fee-bps
+   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps         fee-bps
                                        :max-dispute-duration   10000
                                        :appeal-window-duration appeal-dur})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount

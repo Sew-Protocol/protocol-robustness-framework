@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.phase-m-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -12,7 +13,7 @@
         r0 "0xRes0"
         r1 "0xRes1"
         gov "0xGov"
-        snap (t/make-module-snapshot {:dispute-resolver r0 
+        snap (snap-fix/escrow-snapshot {:dispute-resolver r0 
                                       :reversal-slash-bps 10000
                                       :appeal-window-duration 86400
                                       :resolver-bond-bps 10000

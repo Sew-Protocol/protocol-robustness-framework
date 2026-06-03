@@ -1,5 +1,6 @@
 (ns resolver-sim.protocols.sew.governance-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -13,7 +14,7 @@
         malicious-r "0xMaliciousRes"
         gov "0xGov"
         token "0xToken"
-        snap (t/make-module-snapshot {:dispute-resolver honest-r 
+        snap (snap-fix/escrow-snapshot {:dispute-resolver honest-r 
                                       :escrow-fee-bps 50})
         
         ;; Register stakes
@@ -45,7 +46,7 @@
         seller "0xSeller"
         honest-r "0xHonestRes"
         token "0xToken"
-        snap (t/make-module-snapshot {:dispute-resolver honest-r
+        snap (snap-fix/escrow-snapshot {:dispute-resolver honest-r
                                       :escrow-fee-bps 50})
         world (reg/register-stake world honest-r 1000)
         {:keys [world workflow-id]} (lc/create-escrow world buyer token seller 1000 {} snap)

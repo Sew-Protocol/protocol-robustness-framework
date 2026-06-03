@@ -8,7 +8,8 @@
      - Invariant enforcement (solvency = not <=, terminal irreversibility)
      - Edge cases: time regression, unknown agent, overflow guard, duplicate seq
      - Escalation flows: full chain (0→1→2), mid-pending escalation, adversarial rejections"
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.contract-model.replay    :as replay]
             [resolver-sim.db.temporal              :as temporal]
             [resolver-sim.protocols.protocol :as proto]
@@ -154,7 +155,7 @@
   ;; step-level guard independently)
   (let [world0  (t/empty-world 2000)
         context {:agent-index {"alice" alice "resolver" resolver}
-                 :snapshot    (t/make-module-snapshot {:escrow-fee-bps 50})}
+                 :snapshot    (snap-fix/escrow-snapshot {:escrow-fee-bps 50})}
         event   {:seq 0 :time 999 :agent "alice" :action "advance_time" :params {}}
         result  (replay/process-step sew/protocol context world0 event)]
     (testing "rejected, not halted"
@@ -340,7 +341,7 @@
   ;; at the scenario level but IS here (we're testing process-step directly)
   (let [world0  (t/empty-world 1000)
         context {:agent-index {"alice" alice}
-                 :snapshot    (t/make-module-snapshot {:escrow-fee-bps 50})}
+                 :snapshot    (snap-fix/escrow-snapshot {:escrow-fee-bps 50})}
         event   {:seq 0 :time 1000 :agent "nobody" :action "create_escrow"
                  :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
         result  (replay/process-step sew/protocol context world0 event)]
@@ -901,13 +902,19 @@
                  :params {:amount 5000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                  :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                 :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                  :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0}}
                 ;; current=5000, pending-slash=1000, amount=4000 => current-amount=1000 (allowed)
-                {:seq 3 :time 1002 :agent "resolver" :action "withdraw_stake"
+                {:seq 6 :time 1231 :agent "resolver" :action "withdraw_stake"
                  :params {:amount 4000}}]))]
     (is (= :pass (:outcome r)))
-    (is (= :ok (get-in r [:trace 3 :result])))))
+    (is (= :ok (get-in r [:trace 6 :result])))))
 
 (deftest test-withdraw-stake-pending-slash-boundary-blocks-withdraw
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
@@ -921,14 +928,20 @@
                  :params {:amount 5000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                  :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                 :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                  :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
+                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0}}
                 ;; current=5000, pending-slash=1000, amount=4001 => current-amount=999 (blocked)
-                {:seq 3 :time 1002 :agent "resolver" :action "withdraw_stake"
+                {:seq 6 :time 1231 :agent "resolver" :action "withdraw_stake"
                  :params {:amount 4001}}]))]
     (is (= :pass (:outcome r)))
-    (is (= :rejected (get-in r [:trace 3 :result])))
-    (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 3 :error])))))
+    (is (= :rejected (get-in r [:trace 6 :result])))
+    (is (= :pending-slash-blocks-withdrawal (get-in r [:trace 6 :error])))))
 
 (deftest test-withdraw-stake-blocked-while-resolver-frozen
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
@@ -940,22 +953,29 @@
                  :params {:amount 5000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                  :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                 :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                  :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
-                ;; appeal window expired (1001 + 100)
-                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0}}
+                ;; fraud-slash appeal window expired (1130 + 100)
+                {:seq 6 :time 1240 :agent "alice" :action "execute_fraud_slash"
                  :params {:workflow-id 0}}
                 ;; still within freeze window: withdraw must be blocked
-                {:seq 4 :time 2000 :agent "resolver" :action "withdraw_stake"
+                {:seq 7 :time 2000 :agent "resolver" :action "withdraw_stake"
                  :params {:amount 100}}]))]
     (is (= :pass (:outcome r)))
-    (is (= :ok (get-in r [:trace 3 :result])))
-    (is (= :rejected (get-in r [:trace 4 :result])))
-    (is (= :resolver-frozen (get-in r [:trace 4 :error])))))
+    (is (= :ok (get-in r [:trace 6 :result])))
+    (is (= :rejected (get-in r [:trace 7 :result])))
+    (is (= :resolver-frozen (get-in r [:trace 7 :error])))))
 
 (deftest test-withdraw-stake-allows-at-unfreeze-boundary
   (let [gov {:id "gov" :type "governance" :address "0xGov"}
-        freeze-until (+ 1101 259200)
+        slash-execute-at 1240
+        freeze-until (+ slash-execute-at 259200)
         r (sew/replay-with-sew-protocol
            (sc :agents [alice bob resolver gov]
                :params (assoc default-params :appeal-window-duration 100)
@@ -964,16 +984,22 @@
                  :params {:amount 5000}}
                 {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                  :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-                {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
+                {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
+                 :params {:workflow-id 0}}
+                {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+                 :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+                {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
                  :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 1000}}
-                {:seq 3 :time 1101 :agent "alice" :action "execute_fraud_slash"
+                {:seq 5 :time 1230 :agent "alice" :action "execute_pending_settlement"
+                 :params {:workflow-id 0}}
+                {:seq 6 :time slash-execute-at :agent "alice" :action "execute_fraud_slash"
                  :params {:workflow-id 0}}
                 ;; exactly at freeze boundary: should be allowed
-                {:seq 4 :time freeze-until :agent "resolver" :action "withdraw_stake"
+                {:seq 7 :time freeze-until :agent "resolver" :action "withdraw_stake"
                  :params {:amount 100}}]))]
     (is (= :pass (:outcome r)))
-    (is (= :ok (get-in r [:trace 3 :result])))
-    (is (= :ok (get-in r [:trace 4 :result])))))
+    (is (= :ok (get-in r [:trace 6 :result])))
+    (is (= :ok (get-in r [:trace 7 :result])))))
 
 (deftest test-withdraw-escrow-liquidity-crunch-ordering-toggle-then-withdraw
   "Same timestamp ordering: if liquidity crunch is enabled first,
@@ -1216,12 +1242,18 @@
                :params {:amount 5000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-              {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
-               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
-              {:seq 3 :time 1002 :agent "resolver" :action "appeal_slash"
+              {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
-              {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
-               :params {:workflow-id 0 :upheld? true}}]))
+              {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+               :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+              {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
+              {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
+               :params {:workflow-id 0}}
+              {:seq 6 :time 1150 :agent "gov" :action "resolve_appeal"
+               :params {:workflow-id 0 :upheld? true}}
+              {:seq 7 :time 1230 :agent "alice" :action "execute_pending_settlement"
+               :params {:workflow-id 0}}]))
         r-rejected
         (sew/replay-with-sew-protocol
          (sc :agents [alice bob resolver gov]
@@ -1233,14 +1265,20 @@
                :params {:amount 5000}}
               {:seq 1 :time 1000 :agent "alice" :action "create_escrow"
                :params {:token "0xUSDC" :to "0xBob" :amount 3000 :custom-resolver "0xResolver"}}
-              {:seq 2 :time 1001 :agent "gov" :action "propose_fraud_slash"
-               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
-              {:seq 3 :time 1002 :agent "resolver" :action "appeal_slash"
+              {:seq 2 :time 1060 :agent "alice" :action "raise_dispute"
                :params {:workflow-id 0}}
-              {:seq 4 :time 1003 :agent "gov" :action "resolve_appeal"
-               :params {:workflow-id 0 :upheld? false}}]))
-        w-upheld   (get-in r-upheld [:trace 4 :world])
-        w-rejected (get-in r-rejected [:trace 4 :world])
+              {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
+               :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+              {:seq 4 :time 1130 :agent "gov" :action "propose_fraud_slash"
+               :params {:workflow-id 0 :resolver-addr "0xResolver" :amount 100}}
+              {:seq 5 :time 1140 :agent "resolver" :action "appeal_slash"
+               :params {:workflow-id 0}}
+              {:seq 6 :time 1150 :agent "gov" :action "resolve_appeal"
+               :params {:workflow-id 0 :upheld? false}}
+              {:seq 7 :time 1230 :agent "alice" :action "execute_pending_settlement"
+               :params {:workflow-id 0}}]))
+        w-upheld   (get-in r-upheld [:trace 6 :world])
+        w-rejected (get-in r-rejected [:trace 6 :world])
         assert-appeal-resolution-semantics
         (fn [world upheld?]
           ;; Helper to remove ambiguity around `upheld?` semantics using
@@ -1282,12 +1320,14 @@
                    :params {:workflow-id 0}}
                   {:seq 6 :time 1160 :agent "gov" :action "resolve_appeal"
                    :params {:workflow-id 0 :upheld? false}}
-                  {:seq 7 :time 1241 :agent "alice" :action "execute_pending_settlement"
+                  ;; Slash before settlement (matches S25 ordering).
+                  {:seq 7 :time 1255 :agent "alice" :action "execute_fraud_slash"
                    :params {:workflow-id 0}}
-                  {:seq 8 :time 1255 :agent "gov" :action "execute_fraud_slash"
+                  {:seq 8 :time 1260 :agent "alice" :action "execute_pending_settlement"
                    :params {:workflow-id 0}}]))
         w-appealed (get-in r [:trace 5 :world])
         w-resolved (get-in r [:trace 6 :world])
+        w-slashed  (get-in r [:trace 7 :world])
         w-final    (get-in r [:trace 8 :world])]
     (is (= :pass (:outcome r)))
     ;; Snapshot-level proxy checks for appealed->rejected path.
@@ -1295,6 +1335,6 @@
     ;; movement occurs at resolve_appeal; slash remains live until execution.
     (is (= 0 (get-in w-appealed [:claimable 0 "0xResolver"] 0)))
     (is (= 0 (get-in w-resolved [:claimable 0 "0xResolver"] 0)))
-    (is (= :released (get-in w-final [:live-states 0])))
-    (is (= 9500 (get-in w-final [:resolver-stakes "0xResolver"])))
-    (is (= 500 (get-in w-final [:resolver-slash-total "0xResolver"])))))
+    (is (= 9500 (get-in w-slashed [:resolver-stakes "0xResolver"])))
+    (is (= 500 (get-in w-slashed [:resolver-slash-total "0xResolver"])))
+    (is (= :released (get-in w-final [:escrow-transfers 0 :escrow-state])))))

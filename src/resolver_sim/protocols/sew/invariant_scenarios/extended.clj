@@ -513,7 +513,8 @@
     {:seq 5 :time 1300 :agent "keeper" :action "execute_pending_settlement"
     :params {:workflow-id 0}}]})
 
-;; Additional under-dispute-load scenarios to explicitly cover cross-token isolation and stress conditions.
+;; Concurrent cross-token disputes (S62 *-under-dispute-load): overlapping disputes across
+;; escrows/tokens/appeal depths — not high-volume resolver flooding (see capacity variant).
 
 (def s62-cross-token-isolation-under-dispute-load
   {:scenario-id "s62-cross-token-isolation-under-dispute-load"
@@ -530,7 +531,7 @@
             {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
             {:id "keeper" :address "0xkeeper" :role "keeper"}]
    :protocol-params kleros
-   :notes "Stress test: concurrent disputes across multiple tokens ensure no balance or state leakage between escrows under high dispute activity. Developers: check ledger isolation, accounting, and resolver routing under concurrent appeals."
+   :notes "Concurrent disputes across USDC, DAI, and USDT_FEE with interleaved resolution and settlement. Verifies ledger isolation and resolver routing — not DRM maxConcurrentDisputes saturation."
    :events
    [;; create three escrows on different tokens
     {:seq 0 :time 1000 :agent "buyer1" :action "create_escrow"
@@ -571,7 +572,7 @@
             {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
             {:id "keeper" :address "0xkeeper" :role "keeper"}]
    :protocol-params kleros
-   :notes "Under-dispute-load variant that mixes fee-on-transfer tokens (e.g., USDT_FEE) with normal tokens to verify ledger accounting under concurrent appeal activity. Developers: verify fee deductions, net recipient balances, and that fee logic is escrow-local."
+   :notes "Concurrent disputes on USDT_FEE (with challenge/escalation) and USDC. Verifies fee-on-transfer accounting stays escrow-local while another workflow settles."
    :events
    [;; create two escrows, one fee-on-transfer token and one normal token
     {:seq 0 :time 1000 :agent "buyerA" :action "create_escrow"
@@ -608,7 +609,7 @@
             {:id "watchdog" :address "0xwatchdog" :strategy "honest"}
             {:id "keeper" :address "0xkeeper" :role "keeper"}]
    :protocol-params kleros
-   :notes "Simultaneous disputes with differing appeal depths to ensure escalation paths remain escrow-local and do not interfere when several appeal-chains are active. Developers: verify jurisdiction/state transitions remain scoped to the escrow."
+   :notes "Parallel disputes with shallow (wf1) vs deep (wf0 challenge→escalate→L1) appeal paths on USDC and DAI. Verifies escalation/jurisdiction state stays escrow-local."
    :events
    [;; create two escrows (L0 resolver)
     {:seq 0 :time 1000 :agent "buyerX" :action "create_escrow" :params {:token "USDC" :to "0xsellerX" :amount 6000 :custom-resolver "0xl0"}}
@@ -626,6 +627,45 @@
     {:seq 8 :time 1200 :agent "resolver-l1" :action "execute_resolution" :params {:workflow-id 0 :is-release false :resolution-hash "0xhashX1"}}
     {:seq 9 :time 1300 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
     {:seq 10 :time 1310 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}]})
+
+(def s62-resolver-capacity-concurrent-dispute-load
+  {:scenario-id     "s62-resolver-capacity-concurrent-dispute-load"
+   :schema-version  "1.0"
+   :scenario-author "@grifma"
+   :initial-block-time 1000
+   :agents          [{:id "buyer0"    :address "0xbuyer0"    :strategy "honest"}
+                     {:id "buyer1"    :address "0xbuyer1"    :strategy "honest"}
+                     {:id "buyer2"    :address "0xbuyer2"    :strategy "honest"}
+                     {:id "seller1"   :address "0xseller1"   :strategy "honest"}
+                     {:id "seller2"   :address "0xseller2"   :strategy "honest"}
+                     {:id "seller3"   :address "0xseller3"   :strategy "honest"}
+                     {:id "resolver"  :address "0xresolver"  :role "resolver"}
+                     {:id "keeper"    :address "0xkeeper"    :role "keeper"}]
+   :protocol-params dr3
+   :notes "DRM maxConcurrentDisputes=2: third concurrent raise_dispute rejected; slot freed after wf0 settlement allows wf2 dispute."
+   :expected-errors [{:seq 6 :action "raise_dispute" :error :resolver-capacity-exceeded}]
+   :events
+   [{:seq 0 :time 1000 :agent "resolver" :action "set_resolver_capacity"
+     :params {:max-concurrent 2}}
+    {:seq 1 :time 1000 :agent "buyer0" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller1" :amount 2000 :custom-resolver "0xresolver"}}
+    {:seq 2 :time 1010 :agent "buyer1" :action "create_escrow"
+     :params {:token "DAI" :to "0xseller2" :amount 3000 :custom-resolver "0xresolver"}}
+    {:seq 3 :time 1020 :agent "buyer2" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller3" :amount 2500 :custom-resolver "0xresolver"}}
+    {:seq 4 :time 1060 :agent "buyer0" :action "raise_dispute" :params {:workflow-id 0}}
+    {:seq 5 :time 1070 :agent "buyer1" :action "raise_dispute" :params {:workflow-id 1}}
+    {:seq 6 :time 1080 :agent "buyer2" :action "raise_dispute" :params {:workflow-id 2}}
+    {:seq 7 :time 1140 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xh0"}}
+    {:seq 8 :time 1200 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 0}}
+    {:seq 9 :time 1210 :agent "buyer2" :action "raise_dispute" :params {:workflow-id 2}}
+    {:seq 10 :time 1270 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 1 :is-release false :resolution-hash "0xh1"}}
+    {:seq 11 :time 1280 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 2 :is-release true :resolution-hash "0xh2"}}
+    {:seq 12 :time 1320 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 1}}
+    {:seq 13 :time 1330 :agent "keeper" :action "execute_pending_settlement" :params {:workflow-id 2}}]})
 
 (def s63
   {:scenario-id     "s63-frivolous-appeal-slashing"

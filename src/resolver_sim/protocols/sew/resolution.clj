@@ -143,22 +143,31 @@
     (t/ok (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
             evidence-hash (assoc-in [:evidence-hashes workflow-id] evidence-hash)))))
 
+(defn- fraud-slash-workflow-eligible?
+  "Manual fraud slash requires the workflow to have entered the dispute path:
+   in-flight dispute, pending settlement after resolution, or a recorded decision."
+  [world workflow-id]
+  (let [wf-id (t/normalize-workflow-id workflow-id)]
+    (or (= :disputed (t/escrow-state world wf-id))
+        (:exists (t/get-pending world wf-id))
+        (seq (vals (get-in world [:previous-decisions wf-id] {}))))))
+
+(defn- active-manual-fraud-slash?
+  [world workflow-id]
+  (let [existing (get-in world [:pending-fraud-slashes (t/normalize-workflow-id workflow-id)])]
+    (and existing (#{:pending :appealed} (:status existing)))))
+
 (defn- handle-fraud-slashing
   "Create a PENDING fraud slash for a resolver.
-   
+
    Mirrors the corrected slashForFraud (Fix A): fraud slashes start as PENDING
-   with an appeal window, not immediately EXECUTED. This ensures resolvers have
-   procedural protection against incorrect fraud allegations.
-   
-   slash-id     — unique identifier (e.g. workflow-id or a generated key)
-   resolver     — the resolver being slashed
-   slash-amt    — amount to slash (in stake units)
-   appeal-window — seconds the resolver has to appeal"
-  [world slash-id resolver slash-amt appeal-window]
+   with an appeal window, not immediately EXECUTED."
+  [world slash-id workflow-id resolver slash-amt appeal-window]
   (let [now (:block-time world)]
     (assoc-in world [:pending-fraud-slashes slash-id]
               {:resolver         resolver
                :amount           slash-amt
+               :workflow-id      workflow-id
                :reason           :fraud
                :status           :pending
                :proposed-at      now
@@ -622,23 +631,41 @@
 (defn propose-fraud-slash
   "Governance (TIMELOCK) proposes a manual fraud slash for a resolver (Phase M).
    Mirrors: ResolverSlashingModuleV1.proposeSlash.
-   Marks status as :pending to allow for appeal."
+
+   Preconditions: workflow exists, entered dispute/resolution path, resolver matches
+   escrow dispute-resolver, positive amount, no other pending/appealed slash on workflow-id.
+   Timelock length uses :appeal-window-duration from the escrow module snapshot."
   [world workflow-id caller resolver-addr amount]
-  (if (or (nil? caller) (= "" caller))
-    (t/fail :missing-caller-context)
-    (if-not (t/valid-workflow-id? world workflow-id)
+  (let [wf-id (t/normalize-workflow-id workflow-id)]
+    (cond
+      (or (nil? caller) (= "" caller))
+      (t/fail :missing-caller-context)
+
+      (not (t/valid-workflow-id? world wf-id))
       (t/fail :invalid-workflow-id)
-      (let [snap (t/get-snapshot world workflow-id)
-            gov-delay (or (:appeal-window-duration snap) 259200)] ; 3 days default
-        (t/ok (assoc-in world [:pending-fraud-slashes workflow-id]
-                        {:resolver         resolver-addr
-                         :amount           amount
-                         :reason           :fraud
-                         :status           :pending
-                         :proposed-at      (:block-time world)
-                         :appeal-deadline  (+ (:block-time world) gov-delay)
-                         :appeal-bond-held 0
-                         :contest-deadline 0}))))))
+
+      (not (fraud-slash-workflow-eligible? world wf-id))
+      (t/fail :workflow-not-slashable)
+
+      (active-manual-fraud-slash? world wf-id)
+      (t/fail :slash-already-pending)
+
+      (or (nil? amount) (not (number? amount)) (<= amount 0))
+      (t/fail :invalid-slash-amount)
+
+      :else
+      (let [dispute-resolver (get-in world [:escrow-transfers wf-id :dispute-resolver])]
+        (cond
+          (or (nil? dispute-resolver) (= "" dispute-resolver))
+          (t/fail :invalid-resolver-addr)
+
+          (not= dispute-resolver resolver-addr)
+          (t/fail :slash-resolver-mismatch)
+
+          :else
+          (let [snap      (t/get-snapshot world wf-id)
+                gov-delay (or (:appeal-window-duration snap) 259200)]
+            (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay))))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.

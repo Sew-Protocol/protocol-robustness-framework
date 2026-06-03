@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.snapshot :as snap]
+            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [resolver-sim.protocols.sew.snapshot-presets :as presets]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.yield.presets :as yield-presets]
@@ -91,6 +92,10 @@
     (is (= :aave-v3 (:yield-profile snap)))
     (is (= :yield.provider/liquid-lending (:yield-archetype snap)))
     (is (= :yield.provider/liquid-lending (:yield-generation-module snap)))))
+
+(deftest test-snapshot-fixtures-baseline-helper
+  (is (= 50 (:escrow-fee-bps (snap-fix/baseline-snapshot))))
+  (is (= 0 (:escrow-fee-bps (snap-fix/zero-fee-snapshot)))))
 
 (deftest test-sew-preset-zero-fee
   (is (zero? (:escrow-fee-bps (presets/preset->snapshot :sew.preset/zero-fee)))))

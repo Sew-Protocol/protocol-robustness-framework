@@ -10,4 +10,7 @@
  :thresholds :thresholds/strict-baseline
  :traces [:traces/s59-fot-rounding-multi-hop-conservation
           :traces/s60-partial-withdraw-then-slash-ordering
-          :traces/s62-cross-token-isolation-under-dispute-load]}
+          :traces/s62-cross-token-isolation-under-dispute-load
+          :traces/s62-cross-token-fee-on-transfer-under-dispute-load
+          :traces/s62-cross-token-parallel-appeal-depths-under-dispute-load
+          :traces/s62-resolver-capacity-concurrent-dispute-load]}
