@@ -776,7 +776,8 @@
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [bond-refunds (get domain-map :bond/refund {})
                     total        (reduce + 0 (vals bond-refunds))
-                    posted       (reduce + 0 (vals (get-in world [:bond-balances wf] {})))]
+                    posted       (+ (reduce + 0 (vals (get-in world [:bond-balances wf] {})))
+                                    (get-in world [:bond-posted-by-workflow wf] 0))]
               :when (> total posted)]
           {:workflow-id wf :claims total :max posted})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -969,18 +970,8 @@
                     released-after  (get (:total-released world-after) token 0)
                     refunded-before (get (:total-refunded world-before) token 0)
                     refunded-after  (get (:total-refunded world-after) token 0)
-                    claimable-before (reduce + 0
-                                             (for [[wf cmap] (:claimable world-before {})
-                                                   :let [et (get-in world-before [:escrow-transfers wf])]
-                                                   :when (= (:token et) token)
-                                                   [_ amt] cmap]
-                                               (or amt 0)))
-                    claimable-after  (reduce + 0
-                                             (for [[wf cmap] (:claimable world-after {})
-                                                   :let [et (get-in world-after [:escrow-transfers wf])]
-                                                   :when (= (:token et) token)
-                                                   [_ amt] cmap]
-                                               (or amt 0)))
+                    claimable-before (get-token-claimable-sum world-before token)
+                    claimable-after  (get-token-claimable-sum world-after token)
                     stake-before (if (= token :USDC)
                                    (reduce + 0 (vals (:resolver-stakes world-before {})))
                                    0)

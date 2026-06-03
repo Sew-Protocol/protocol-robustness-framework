@@ -624,7 +624,8 @@
                                (assoc-in [:appeal-bond-custody slash-id]
                                          {:resolver caller :workflow-id workflow-id :amount bond-amount :token token})
                                (acct/add-held token bond-amount)
-                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount))
+                               (update-in [:total-bonds-posted token] (fnil + 0) bond-amount)
+                               (update-in [:bond-posted-by-workflow workflow-id] (fnil + 0) bond-amount))
                            world)]
          (t/ok (assoc-in world' [:pending-fraud-slashes slash-id :status] :appealed)))))))
 
@@ -706,7 +707,7 @@
            (t/ok (cond-> world-base
                   (pos? bond-held)
                   (-> (acct/sub-held bond-token bond-held)
-                      (update-in [:claimable wf-id resolver] (fnil + 0) bond-held))
+                      (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                   :always
                   (assoc-in [:pending-fraud-slashes slash-id :status] :reversed)))
 

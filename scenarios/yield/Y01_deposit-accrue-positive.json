@@ -1,0 +1,28 @@
+{
+  "scenario-id": "y01-deposit-accrue-positive",
+  "schema-version": "1.0",
+  "description": "Provider-only: deposit and one year accrual on liquid-lending module.",
+  "initial-block-time": 1000,
+  "agents": [{"id": "vault", "address": "0xVault"}],
+  "protocol-params": {"yield-profile": "aave-v3", "default-owner-id": "vault"},
+  "yield-config": {
+    "modules": {
+      "aave-v3": {
+        "tokens": {
+          "USDC": {"apy": 0.05, "liquidity-mode": "available"}
+        }
+      }
+    }
+  },
+  "options": {"minimal": true},
+  "events": [
+    {"seq": 0, "time": 1000, "agent": "vault", "action": "yield_deposit", "params": {"token": "USDC", "amount": 10000}},
+    {"seq": 1, "time": 31537000, "agent": "vault", "action": "yield_accrue", "params": {"token": "USDC", "dt": 31536000}}
+  ],
+  "expectations": {
+    "metrics": [
+      {"name": "yield/position-principal", "op": ":=", "value": 10000},
+      {"name": "yield/position-unrealized", "op": ":>", "value": 400}
+    ]
+  }
+}

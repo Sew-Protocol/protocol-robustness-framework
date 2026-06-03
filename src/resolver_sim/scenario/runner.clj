@@ -135,13 +135,19 @@
 (defn runner-opts-for-scenario
   "Default theory evaluation opts for a scenario map (fixture or JSON).
 
-   `:evaluate-theory?` defaults to `(boolean (:theory scenario))` but may be
-   overridden in `suite-opts` to force or suppress evaluation."
+   `:evaluate-theory?` defaults from scenario `:options` / `:flags`, then
+   `(boolean (:theory scenario))`, unless overridden in `suite-opts`."
   [scenario & [suite-opts]]
   (let [suite-opts (or suite-opts {})
+        from-scenario (get-in scenario [:options :flags :evaluate-theory?])
+        minimal?      (or (:minimal (get-in scenario [:options]))
+                          (= :minimal (get-in scenario [:options :profile])))
+        default-eval? (if (some? from-scenario)
+                        (boolean from-scenario)
+                        (and (not minimal?) (boolean (:theory scenario))))
         evaluate?  (if (contains? suite-opts :evaluate-theory?)
                      (:evaluate-theory? suite-opts)
-                     (boolean (:theory scenario)))]
+                     default-eval?)]
     (merge {:require-theory? false
             :strict-theory? false}
            suite-opts

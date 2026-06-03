@@ -19,7 +19,7 @@
                          (>= (:unrealized-yield pos 0) 0)))))
             positions)))
 
-(defn- position-custody-need
+(defn position-custody-need
   "Custody required for an active position at current mark.
 
    Under :mark-to-market, negative unrealized yield reduces economic value

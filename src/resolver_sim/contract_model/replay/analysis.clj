@@ -6,7 +6,8 @@
             [clojure.string                 :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.expectations :as expectations]
-            [resolver-sim.scenario.yield-metrics :as yield-metrics]))
+            [resolver-sim.scenario.yield-metrics :as yield-metrics]
+            [resolver-sim.scenario.yield-provider-metrics :as yield-provider-metrics]))
 
 (defn action->transition-id
   "Map an event action string/keyword to canonical transition semantic id.
@@ -62,10 +63,17 @@
      :unexpected (vec (sort-by (juxt :seq :action)
                                (filter #(contains? unexpected-set (rejected-entry-key %)) rejected)))}))
 
+(defn- merge-metrics-for-profile
+  [result scenario flags]
+  (case (:metrics-profile flags :sew-integrated)
+    :yield-provider (yield-provider-metrics/merge-provider-metrics result scenario)
+    (yield-metrics/merge-yield-metrics result)))
+
 (defn finalize-scenario-result
   "Apply yield metrics, expected-outcomes, and :expectations checks."
-  [scenario result]
-  (let [result'      (yield-metrics/merge-yield-metrics result)
+  ([scenario result] (finalize-scenario-result scenario result {}))
+  ([scenario result flags]
+   (let [result'      (merge-metrics-for-profile result scenario flags)
         outcomes     (expectations/analyze-expected-outcomes scenario (:trace result'))
         expect       (when (:expectations scenario)
                        (expectations/evaluate-expectations result' (:expectations scenario)))
@@ -82,4 +90,4 @@
                             :expectation-mismatch)
              :expectation-violations
              (vec (concat (:violations outcomes [])
-                          (:violations expect [])))))))
+                          (:violations expect []))))))))

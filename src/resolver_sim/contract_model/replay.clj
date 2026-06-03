@@ -20,6 +20,7 @@
              [resolver-sim.contract-model.replay.analysis :as analysis]
              [resolver-sim.contract-model.replay.temporal :as temporal]
              [resolver-sim.contract-model.replay.validation :as validation]
+             [resolver-sim.contract-model.replay.flags :as replay-flags]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
              [resolver-sim.time.model        :as time-model]))
@@ -70,7 +71,9 @@
 (defn- rejected-entry-key [x] (analysis/rejected-entry-key x))
 (defn- analyze-expected-errors [scenario trace] (analysis/analyze-expected-errors scenario trace))
 
-(defn finalize-scenario-result [scenario result] (analysis/finalize-scenario-result scenario result))
+(defn finalize-scenario-result
+  ([scenario result] (analysis/finalize-scenario-result scenario result {}))
+  ([scenario result flags] (analysis/finalize-scenario-result scenario result flags)))
 
 ;; ---------------------------------------------------------------------------
 ;; Temporal Instrumentation
@@ -124,8 +127,10 @@
 ;; ---------------------------------------------------------------------------
 
 (defn validate-scenario
-  ([scenario] (validation/validate-scenario scenario metrics/base-metrics))
-  ([scenario effective-metrics] (validation/validate-scenario scenario effective-metrics)))
+  ([scenario] (validation/validate-scenario scenario metrics/base-metrics {}))
+  ([scenario effective-metrics] (validation/validate-scenario scenario effective-metrics {}))
+  ([scenario effective-metrics opts]
+   (validation/validate-scenario scenario effective-metrics opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Metrics — accumulation
@@ -145,17 +150,21 @@
 (defn process-step
   "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
-  (let [event-time   (:time event)
+  (let [flags        (or (:replay-flags context) replay-flags/default-replay-flags)
+        temporal-on? (:temporal-enabled? flags false)
+        check-inv?   (:check-invariants? flags true)
+        event-time   (:time event)
         now          (:block-time world)
         time-before  {:block-ts now}
         rules        (effective-temporal-rules context)
-        temporal-failure (evaluate-temporal-rules rules
-                                                  {:event-time event-time
-                                                   :now now
-                                                   :world world
-                                                   :event event
-                                                   :context context
-                                                   :protocol protocol})]
+        temporal-failure (when temporal-on?
+                           (evaluate-temporal-rules rules
+                                                    {:event-time event-time
+                                                     :now now
+                                                     :world world
+                                                     :event event
+                                                     :context context
+                                                     :protocol protocol}))]
     (if temporal-failure
       (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
                         (proto/compute-projection protocol world)
@@ -201,9 +210,12 @@
             ok?        (:ok result)
             world-next (if (and ok? (:world result)) (:world result) world-t)
 
-            inv-single (when ok? (proto/check-invariants-single protocol world-next))
-            inv-trans  (when ok? (proto/check-invariants-transition protocol world-t world-next))
-            violated?  (and ok? (not (and (:ok? inv-single) (:ok? inv-trans))))
+            inv-single (when (and ok? check-inv?)
+                         (proto/check-invariants-single protocol world-next))
+            inv-trans  (when (and ok? check-inv?)
+                         (proto/check-invariants-transition protocol world-t world-next))
+            violated?  (and ok? check-inv?
+                            (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
                              (merge (when-not (:ok? inv-single) (:violations inv-single))
                                     (when-not (:ok? inv-trans)  (:violations inv-trans))))]
@@ -236,7 +248,9 @@
             :extra           (:extra result)
             :detail          (:detail result)
             :event-tags      event-tags
-            :invariants-ok?  (if ok? (and (:ok? inv-single) (:ok? inv-trans)) true)
+            :invariants-ok?  (if (and ok? check-inv?)
+                                (and (:ok? inv-single) (:ok? inv-trans))
+                                true)
             :violations      all-violations
             :trace-metadata  metadata
             :world           (proto/world-snapshot protocol final-world)
@@ -307,7 +321,8 @@
   (let [{:keys [expected-errors-set strict-expected-errors?
                 allow-open-entities? allow-open-disputes?
                 agents temporal-cfg temporal-enabled? agent-index
-                scenario]} options
+                scenario replay-flags]} options
+        check-inv? (:check-invariants? (or replay-flags replay-flags/default-replay-flags) true)
         supports-alias? (satisfies? proto/SimulationAdapter protocol)]
     (loop [world world
            events events
@@ -426,9 +441,13 @@
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
                 {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol})
-              (let [post-single (proto/check-invariants-single protocol (:world batch-result))
-                    post-trans  (proto/check-invariants-transition protocol base-world (:world batch-result))
-                    post-ok?    (and (:ok? post-single) (:ok? post-trans))
+              (let [post-single (when check-inv?
+                                  (proto/check-invariants-single protocol (:world batch-result)))
+                    post-trans  (when check-inv?
+                                  (proto/check-invariants-transition protocol base-world (:world batch-result)))
+                    post-ok?    (if check-inv?
+                                  (and (:ok? post-single) (:ok? post-trans))
+                                  true)
                     post-entry  {:seq             (str "batch-" batch-time)
                                  :time            batch-time
                                  :result          (if post-ok? :ok :invariant-violated)
@@ -496,40 +515,59 @@
               (recur new-world (rest events) new-trace new-metrics new-states new-alias-map))))))))
 
 (defn replay-with-protocol
-  "Replay a scenario map using tiered protocol implementations."
-  [protocol scenario]
-  (let [vocab              (if (satisfies? proto/EconomicModel protocol)
-                             (proto/metric-vocabulary protocol)
-                             #{})
-        effective-metrics  (into (into metrics/base-metrics vocab)
-                                 (or (metrics/expectation-metric-keys scenario) #{}))
-        validation (validate-scenario scenario effective-metrics)
-        temporal-cfg (:temporal-evidence scenario)
-        temporal-enabled? (boolean (:enabled? temporal-cfg))]
-    (if-not (:ok validation)
-      {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
-      (let [agents   (:agents scenario)
-            p-params (get scenario :protocol-params {})
-            context  (proto/build-execution-context protocol agents p-params)
-            agent-index (:agent-index context)
-            world0  (proto/init-world protocol scenario)
-            events  (sort-by :seq (:events scenario))
-            scenario-id (:scenario-id scenario)
-            expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
-            strict-expected-errors? (boolean (:strict-expected-errors? scenario false))]
-        (log/info! "scenario/start" {:id scenario-id})
-        (finalize-scenario-result
-         scenario
-         (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
-                              {:expected-errors-set expected-errors-set
-                               :strict-expected-errors? strict-expected-errors?
-                               :allow-open-entities? (:allow-open-entities? scenario)
-                               :allow-open-disputes? (:allow-open-disputes? scenario)
-                               :agents agents
-                               :temporal-cfg temporal-cfg
-                               :temporal-enabled? temporal-enabled?
-                               :agent-index agent-index
-                               :scenario scenario}))))))
+  "Replay a scenario map using tiered protocol implementations.
+
+   Optional third argument `replay-opts` may include `:flags` (see `replay.flags`).
+   Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
+  ([protocol scenario] (replay-with-protocol protocol scenario {}))
+  ([protocol scenario replay-opts]
+   (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
+         vocab              (if (satisfies? proto/EconomicModel protocol)
+                              (proto/metric-vocabulary protocol)
+                              #{})
+         effective-metrics  (into (into metrics/base-metrics vocab)
+                                  (or (metrics/expectation-metric-keys scenario) #{}))
+         validation         (validate-scenario scenario effective-metrics
+                                               {:strict-validation? (:strict-validation? flags)})
+         temporal-cfg       (:temporal-evidence scenario)
+         temporal-enabled?    (:temporal-enabled? flags)]
+     (if-not (:ok validation)
+       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
+       (let [agents   (:agents scenario)
+             p-params (get scenario :protocol-params {})
+             context  (-> (proto/build-execution-context protocol agents p-params)
+                          (assoc :replay-flags flags))
+             agent-index (:agent-index context)
+             world0  (proto/init-world protocol scenario)
+             events  (sort-by :seq (:events scenario))
+             scenario-id (:scenario-id scenario)
+             expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
+             strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
+             raw-result (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
+                                             {:expected-errors-set expected-errors-set
+                                              :strict-expected-errors? strict-expected-errors?
+                                              :allow-open-entities? (:allow-open-entities? scenario)
+                                              :allow-open-disputes? (:allow-open-disputes? scenario)
+                                              :agents agents
+                                              :temporal-cfg temporal-cfg
+                                              :temporal-enabled? temporal-enabled?
+                                              :agent-index agent-index
+                                              :scenario scenario
+                                              :replay-flags flags})]
+         (log/info! "scenario/start" {:id scenario-id})
+         (if (:evaluate-expectations? flags true)
+           (finalize-scenario-result scenario raw-result flags)
+           raw-result))))))
+
+(defn simple-replay
+  "Replay with library-style defaults: no temporal enforcement, no theory DSL, relaxed validation.
+
+   Merges `minimal-replay-flags` into `replay-opts` (caller flags override)."
+  [protocol scenario & [replay-opts]]
+  (replay-with-protocol protocol scenario
+                        (merge {:minimal true
+                                :flags replay-flags/minimal-replay-flags}
+                               replay-opts)))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

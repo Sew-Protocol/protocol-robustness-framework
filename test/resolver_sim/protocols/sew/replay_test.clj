@@ -1290,11 +1290,11 @@
         (fn [world upheld?]
           ;; Helper to remove ambiguity around `upheld?` semantics using
           ;; snapshot-visible effects (world snapshot omits pending-fraud-slashes).
-          ;; true  => APPEAL upheld  => bond refunded to resolver claimable
+          ;; true  => APPEAL upheld  => bond refunded to resolver via :bond/refund
           ;; false => APPEAL rejected => bond forfeited; tracked per-token in :appeal-bond-distributions-by-token
           (if upheld?
-            (is (pos? (get-in world [:claimable 0 "0xResolver"] 0))
-                "upheld?=true should refund appeal bond to resolver claimable")
+            (is (pos? (get-in world [:claimable-v2 0 :bond/refund "0xResolver"] 0))
+                "upheld?=true should refund appeal bond to resolver :bond/refund claimable")
             (is (pos? (reduce + 0 (vals (get world :appeal-bond-distributions-by-token {}))))
                 "upheld?=false should forfeit appeal bond to insurance bucket")))]
     (is (= :pass (:outcome r-upheld)))
@@ -1303,9 +1303,9 @@
     (is (= :slash-already-reversed (get-in r-upheld [:trace 7 :error])))
     (assert-appeal-resolution-semantics w-upheld true)
     (assert-appeal-resolution-semantics w-rejected false)
-    (is (= 70 (get-in w-upheld [:claimable 0 "0xResolver"] 0)))
+    (is (= 70 (get-in w-upheld [:claimable-v2 0 :bond/refund "0xResolver"] 0)))
     (is (= 80 (get-in w-rejected [:appeal-bond-distributions-by-token :USDC] 0)))
-    (is (= 0 (get-in w-rejected [:claimable 0 "0xResolver"] 0)))))
+    (is (= 0 (get-in w-rejected [:claimable-v2 0 :bond/refund "0xResolver"] 0)))))
 
 (deftest test-replay-s35-profit-maximizer-governance-wins-appeal
   "Dedicated replay test mirroring invariant scenario S35 exactly.

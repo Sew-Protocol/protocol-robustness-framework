@@ -173,7 +173,9 @@
     (is (= 75 (get-in world2 [:pending-fraud-slashes workflow-id :appeal-bond-held])))
     (is (= :reversed (get-in world3 [:pending-fraud-slashes workflow-id :status])))
     (is (= 0 (get-in world3 [:pending-fraud-slashes workflow-id :appeal-bond-held])))
-    (is (= 75 (get-in world3 [:claimable workflow-id resolver-addr] 0)))))
+    (is (= 75 (get-in world3 [:claimable-v2 workflow-id :bond/refund resolver-addr] 0)))
+    (is (= 0 (get-in world3 [:claimable workflow-id resolver-addr] 0))
+        "bond/refund is v2-native; legacy :claimable is not dual-written")))
 
 (deftest appeal-bond-custody-rejected-forfeits-to-insurance
   (let [resolver-addr "0xRes"

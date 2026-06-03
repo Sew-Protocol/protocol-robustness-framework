@@ -29,10 +29,17 @@
 (defn validate-scenario
   "Validate a scenario map for structural correctness before replay.
    Accepts an optional effective-metrics set used to validate metric references
-   in :expectations and :theory. Defaults to base-metrics (universal counters)."
-  ([scenario] (validate-scenario scenario metrics/base-metrics))
-  ([scenario effective-metrics]
-   (let [version     (str (:schema-version scenario))
+   in :expectations and :theory. Defaults to base-metrics (universal counters).
+
+   When `opts` includes `:strict-validation? false`, purpose/theory requirements
+   for enriched schemas are skipped (library-style scenarios)."
+  ([scenario] (validate-scenario scenario metrics/base-metrics {}))
+  ([scenario effective-metrics] (validate-scenario scenario effective-metrics {}))
+  ([scenario effective-metrics opts]
+   (let [strict?   (if (contains? opts :strict-validation?)
+                     (:strict-validation? opts)
+                     true)
+         version     (str (:schema-version scenario))
          agents      (:agents scenario)
          events      (sort-by :seq (:events scenario))
          known-ids   (set (map :id agents))
@@ -65,16 +72,16 @@
       {:ok false :error :blank-scenario-author
        :detail ":scenario-author must not be blank"}
 
-      ;; Purpose-based requirements are enforced for enriched schemas only
-      ;; (v1.1+). Legacy v1.0 scenario packs are intentionally tolerated.
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+      ;; Purpose-based requirements (enriched schemas only; skippable via flags).
+      (and strict?
+           (contains? (set (schema-profile/required-fields version)) :purpose)
            (schema-profile/requires-theory? (:purpose scenario))
            (not (:theory scenario)))
       {:ok false :error :theory-required
        :detail "purpose :theory-falsification requires a :theory block"}
 
-      ;; :adversarial-robustness scenarios must include :theory or meaningful :expectations
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
+      (and strict?
+           (contains? (set (schema-profile/required-fields version)) :purpose)
            (schema-profile/requires-theory-or-expectations? (:purpose scenario))
            (not (:theory scenario))
            (empty? (get-in scenario [:expectations :metrics]))
@@ -83,7 +90,6 @@
       {:ok false :error :adversarial-requires-analysis
        :detail "purpose :adversarial-robustness requires :theory or non-trivial :expectations"}
 
-      ;; Validate :theory structure when present
       (and (:theory scenario) (not (get-in scenario [:theory :claim-id])))
       {:ok false :error :theory-missing-claim-id
        :detail ":theory must include a :claim-id"}
@@ -92,8 +98,8 @@
       {:ok false :error :theory-missing-assumptions
        :detail ":theory must include an :assumptions vector (may be empty)"}
 
-      ;; :purpose :theory-falsification requires a direct metric disconfirmer (negative test).
-      (and (:theory scenario)
+      (and strict?
+           (:theory scenario)
            (contains? (set (schema-profile/required-fields version)) :purpose)
            (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
            (not (seq (get-in scenario [:theory :falsifies-if])))
@@ -101,9 +107,8 @@
       {:ok false :error :theory-falsification-requires-falsifies-if
        :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer), or :mechanism-only-negative-test? true with mechanism/equilibrium proxies"}
 
-      ;; :falsifies-if may be empty for regression/adversarial when mechanism-properties or
-      ;; equilibrium-concept are declared (mechanism-only theory blocks).
-      (and (:theory scenario)
+      (and strict?
+           (:theory scenario)
            (not (seq (get-in scenario [:theory :falsifies-if])))
            (empty? (get-in scenario [:theory :mechanism-properties]))
            (empty? (get-in scenario [:theory :equilibrium-concept])))
