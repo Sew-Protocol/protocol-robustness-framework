@@ -40,7 +40,11 @@
       (str/replace #"\.json$" "")))
 
 (defn- load-scenario [f]
-  (json/read-str (slurp f) :key-fn keyword))
+  (try
+    (json/read-str (slurp f) :key-fn keyword)
+    (catch Exception e
+      (println "WARN: skipping unreadable scenario" (.getPath ^java.io.File f) "-" (.getMessage e))
+      nil)))
 
 (defn- scenario-files []
   (->> (file-seq (io/file "scenarios"))
@@ -104,10 +108,10 @@
 
 (defn- generate! [{:keys [protocol-id]}]
   (let [scenarios (->> (scenario-files)
-                       (map (fn [f]
-                              (let [sc (load-scenario f)]
-                                {:id (or (:id sc) (:scenario-id sc) (scenario-id-from-file f))
-                                 :actions (scenario-actions sc)}))))
+                       (keep (fn [f]
+                               (when-let [sc (load-scenario f)]
+                                 {:id (or (:id sc) (:scenario-id sc) (scenario-id-from-file f))
+                                  :actions (scenario-actions sc)}))))
         coverage (transition-coverage scenarios)
         sm-doc (state-machine-markdown protocol-id)
         cov-doc (transition-coverage-markdown coverage)

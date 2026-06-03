@@ -13,10 +13,9 @@
                     :agents [{:id "buyer" :address "0xbuyer" :role "buyer" :strategy "honest"}
                              {:id "seller" :address "0xseller" :role "seller" :strategy "honest"}
                              {:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
-                    :events [{:seq 0 :time 900 :agent "buyer" :action "time_advance" :params {}}
-                             {:seq 1 :time 1000 :agent "buyer" :action "create_escrow" 
+                    :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
                               :params {:token "USDC" :to "0xseller" :amount 1000 :custom-resolver "0xresolver"}}
-                             {:seq 2 :time 1100 :agent "buyer" :action "release" :params {:workflow-id 0}}]
+                             {:seq 1 :time 1100 :agent "buyer" :action "release" :params {:workflow-id 0}}]
                     :protocol-params {:resolver-fee-bps 0}}
           result (sew/replay-with-sew-protocol scenario)
           _ (println (format "Full result: %s" result))

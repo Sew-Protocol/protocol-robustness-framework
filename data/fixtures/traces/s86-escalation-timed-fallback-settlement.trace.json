@@ -1,158 +1,145 @@
-{
-  "scenario-id": "s86-escalation-timed-fallback-settlement",
-  "outcome": "pass",
-  "trace": [
-    {
-      "projection-hash": "faKr5/QotwLl6WaJbu206UyQ4/r4n7pnLsc4Cu68Zds=",
-      "time": 1000,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "resolver",
-      "event-tags": [],
-      "result": "ok",
-      "action": "register-resolver-bond",
-      "error": null,
-      "seq": 0,
-      "violations": null,
-      "trace-metadata": {
-        "type": "unknown",
-        "path": "none"
-      },
-      "id": "unknown",
-      "detail": null
-    },
-    {
-      "projection-hash": "s6wwcdFNB8RqLaG0NDJj6XWUREds54Uyg8C65W+w1M4=",
-      "time": 1010,
-      "extra": {
-        "workflow-id": 0
-      },
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "entity-created"
-      ],
-      "result": "ok",
-      "action": "create_escrow",
-      "error": null,
-      "seq": 1,
-      "violations": null,
-      "trace-metadata": {
-        "type": "creation",
-        "path": "none"
-      },
-      "id": "create_escrow",
-      "detail": null
-    },
-    {
-      "projection-hash": "+LCWAQArcz2oKP1y8GiMQ+PMF5ou0DJ3Ec0xs7WUVlo=",
-      "time": 1060,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "dispute-raised"
-      ],
-      "result": "ok",
-      "action": "raise_dispute",
-      "error": null,
-      "seq": 2,
-      "violations": null,
-      "trace-metadata": {
-        "type": "state-change",
-        "path": "none"
-      },
-      "id": "raise_dispute",
-      "detail": null
-    },
-    {
-      "projection-hash": "iiuPTw07JXUO4SVUOjTHvL4fDH0ETPtCaZDylCf7pt0=",
-      "time": 1100,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "resolver",
-      "event-tags": [
-        "dispute-resolved"
-      ],
-      "result": "ok",
-      "action": "execute_resolution",
-      "error": null,
-      "seq": 3,
-      "violations": null,
-      "trace-metadata": {
-        "type": "resolution",
-        "path": "standard"
-      },
-      "id": "execute_resolution",
-      "detail": null
-    },
-    {
-      "projection-hash": "8eIJEJnQxdDjHKOh3IUk8fL7d7BgItgtZkJoTZANUOk=",
-      "expected-failure?": false,
-      "time": 1200,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [],
-      "result": "rejected",
-      "reject-phase": "dispatch",
-      "action": "escalate_dispute",
-      "reject-class": "escalation-not-configured",
-      "error": "escalation-not-configured",
-      "seq": 4,
-      "violations": null,
-      "trace-metadata": {
-        "type": "escalation",
-        "path": "none"
-      },
-      "id": "escalate_dispute",
-      "detail": null
-    },
-    {
-      "projection-hash": "AXayypJBsopAgTXWdBAykPOKO59U8H9I+dXLqYVEpe4=",
-      "expected-failure?": false,
-      "time": 2000,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [],
-      "result": "rejected",
-      "reject-phase": "dispatch",
-      "action": "time_advance",
-      "reject-class": "unknown-action",
-      "error": "unknown-action",
-      "seq": 5,
-      "violations": null,
-      "trace-metadata": {
-        "type": "unknown",
-        "path": "none"
-      },
-      "id": "unknown",
-      "detail": {
-        "action": "time_advance"
-      }
-    },
-    {
-      "projection-hash": "NLgXuoM7BsoF7gLx1q2EgSrs0ISlPenaMLImO9XZiw0=",
-      "time": 302000,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "settlement-executed"
-      ],
-      "result": "ok",
-      "action": "execute_pending_settlement",
-      "error": null,
-      "seq": 6,
-      "violations": null,
-      "trace-metadata": {
-        "type": "resolution",
-        "path": "delayed"
-      },
-      "id": "execute_pending_settlement",
-      "detail": null
-    }
-  ],
-  "scenario-author": "@grifma"
-}
+{"description":"Generated trace: ",
+ "fee_bps":150,
+ "schema_version":"2",
+ "resolutions":{},
+ "cdrs_version":"0.2",
+ "steps":
+ [{"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":0,
+    "escrow_amount_after_fee":0,
+    "global_total_held":0,
+    "global_total_fees":0,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"IDLE",
+   "seq":0,
+   "event_type":"REGISTER-RESOLVER-BOND",
+   "timestamp":1000,
+   "context_id":"global",
+   "attributes":
+   {"action":"register-resolver-bond",
+    "seq":0,
+    "type":"unknown",
+    "path":"none"},
+   "actor":"resolver"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"insufficient-resolver-stake",
+    "escrow_state":0,
+    "pending_settlement_exists":false,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"insufficient-resolver-stake"},
+   "state_bucket":"IDLE",
+   "seq":1,
+   "event_type":"CREATE ESCROW",
+   "timestamp":1010,
+   "context_id":"global",
+   "attributes":
+   {"action":"create_escrow",
+    "seq":1,
+    "to_role":"seller",
+    "amount":1000,
+    "type":"creation",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"invalid-workflow-id",
+    "escrow_state":0,
+    "pending_settlement_exists":false,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"invalid-workflow-id"},
+   "state_bucket":"IDLE",
+   "seq":2,
+   "event_type":"RAISE DISPUTE",
+   "timestamp":1060,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"raise_dispute",
+    "seq":2,
+    "wf_alias":"wf0",
+    "type":"state-change",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"invalid-workflow-id",
+    "escrow_state":4,
+    "pending_settlement_exists":true,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"invalid-workflow-id"},
+   "state_bucket":"IDLE",
+   "seq":3,
+   "event_type":"RELEASE AS DISPUTE RESOLVER",
+   "timestamp":1100,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_resolution",
+    "seq":3,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"standard"},
+   "actor":"resolver"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"invalid-workflow-id",
+    "escrow_state":0,
+    "pending_settlement_exists":false,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"invalid-workflow-id"},
+   "state_bucket":"IDLE",
+   "seq":4,
+   "event_type":"ESCALATE DISPUTE",
+   "timestamp":1200,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"escalate_dispute",
+    "seq":4,
+    "wf_alias":"wf0",
+    "type":"escalation",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"reverted":true,
+    "error":"invalid-workflow-id",
+    "escrow_state":0,
+    "pending_settlement_exists":false,
+    "accepted":false,
+    "state_changed":false,
+    "rejection_reason":"invalid-workflow-id"},
+   "state_bucket":"IDLE",
+   "seq":5,
+   "event_type":"EXECUTE PENDING SETTLEMENT",
+   "timestamp":302000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"execute_pending_settlement",
+    "seq":5,
+    "wf_alias":"wf0",
+    "type":"resolution",
+    "path":"delayed"},
+   "actor":"buyer"}],
+ "expected_semantics":{},
+ "trace_kind":["lifecycle", "escalation"],
+ "step_count":6,
+ "metadata":
+ {"scenario_class":"baseline", "outcome_type":"normal-completion"},
+ "scenario_id":null}

@@ -32,6 +32,7 @@
            ["Protocol Provenance"  "/notebooks/protocol_provenance"  "📋"]
            ["Invariant Failures"   "/notebooks/invariant_failures"   "🔍"]
            ["Workbench v2"         "/notebooks/workbench_v2"         "🔧"]
+           ["Yield scenarios"      "/notebooks/yield_scenarios_workbench" "📈"]
            ["Atlas of Robustness"  "/notebooks/atlas_artifact"       "📊"]]]
       [:a {:key   label :href href
            :style {:background "#1e293b" :border "1px solid #334155"

@@ -14,7 +14,14 @@
    
    Pass threshold: ≥80% of scenarios show evidence integrity maintained."
   (:require [resolver-sim.sim.engine :as engine]
-            [resolver-sim.stochastic.rng :as rng]))
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.protocols.protocol :as proto]
+            [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.protocols.sew.lifecycle :as lc]
+            [resolver-sim.protocols.sew.resolution :as res]
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]))
 
 ;; ---------------------------------------------------------------------------
 ;; E1: Evidence Deadline Enforcement
@@ -215,49 +222,66 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- run-e5-trial
-  "Single trial: is yield correctly credited during disputes?
-   
-   Sweep: escrow-yield-rate from 0% to 10% APY
-   Measure: Does yield accrue and settle correctly?
-   
-   Simplified model: yield accrues daily; must be split correctly."
-  [{:keys [yield-rate-apy seed]}]
-  (let [escrow 10000
-        dispute-duration-days 30  ; typical dispute window
-        daily-rate (/ yield-rate-apy 365.0)
-        accrued-yield (* escrow daily-rate dispute-duration-days)
-        ;; Both parties should get yield: buyer 50%, seller 50%
-        buyer-yield (/ accrued-yield 2)
-        seller-yield (/ accrued-yield 2)
-        total-credited (+ buyer-yield seller-yield)
-        ;; Check: total credited = accrued yield (within rounding)
-        correctly-credited? (< (Math/abs (- total-credited accrued-yield)) 1)]
+  "Single trial: disputed escrow accrues yield through resolution and splits correctly.
+
+   Sweep: fixed-rate APY from 0% to 10%.
+   Pass when held-delta-accounted holds and split-50-50 yield claimables match accrual."
+  [{:keys [yield-rate-apy]}]
+  (let [t0           1000
+        dt           (* 30 86400)
+        snap         (snap-fix/escrow-snapshot {:yield-generation-module :fixed-rate
+                                                :yield-protocol-fee-bps 0
+                                                :appeal-window-duration 0})
+        world0       (-> (proto/init-world sew/protocol {:initial-block-time t0})
+                         (assoc-in [:yield/rates :fixed-rate "USDC"] yield-rate-apy)
+                         (assoc-in [:yield/rates :fixed-rate :USDC] yield-rate-apy))
+        cr           (lc/create-escrow world0 "buyer" "USDC" "seller" 10000
+                                       (t/make-escrow-settings {:yield-preset :split-50-50
+                                                                :custom-resolver "0xresolver"})
+                                       snap)
+        w1           (assoc-in (:world cr) [:escrow-transfers 0 :dispute-resolver] "0xresolver")
+        rd           (lc/raise-dispute w1 0 "buyer")
+        w2           (assoc (:world rd) :block-time (+ t0 dt))
+        w-before     w2
+        rr           (res/execute-resolution w2 0 "0xresolver" true "0xe5" nil)
+        ok?          (:ok rr)
+        w-after      (:world rr)
+        expected     (long (quot (* 10000 yield-rate-apy dt) 31536000))
+        sender-yield (get-in w-after [:claimable-v2 0 :settlement/yield "buyer"] 0)
+        recip-yield  (get-in w-after [:claimable-v2 0 :settlement/yield "seller"] 0)
+        credited     (+ sender-yield recip-yield)
+        held-ok?     (:holds? (inv/held-delta-accounted? w-before w-after))
+        rounding-ok? (<= (Math/abs (- credited expected)) 1)
+        correctly-credited? (and ok? held-ok? rounding-ok?
+                                 (= :released (t/escrow-state w-after 0)))]
     {:yield-rate-apy yield-rate-apy
-     :accrued-yield accrued-yield
-     :buyer-yield buyer-yield
-     :seller-yield seller-yield
+     :expected-yield expected
+     :credited-yield credited
+     :held-delta-accounted? held-ok?
      :correctly-credited? correctly-credited?}))
 
 (defn run-e5-yield-accrual-during-dispute
   "Sweep yield-rate-apy from 0% to 10% (11 points).
-   
-   Pass: 100% of yield is correctly credited (no loss)"
+
+   Pass: 100% of trials credit yield with held-delta accounted."
   []
-  (let [rates (mapv #(* 0.01 %) (range 11))  ; 0%, 1%, ..., 10%
+  (let [rates (mapv #(* 0.01 %) (range 11))
         param-grid (mapv (fn [r] {:yield-rate-apy r :seed 42}) rates)
         results (engine/run-parameter-sweep param-grid run-e5-trial)
         credited-count (count (filter :correctly-credited? results))
         total-count (count results)
+        pass-rate (double (/ credited-count total-count))
         passed? (= credited-count total-count)]
     (engine/make-result
      {:benchmark-id "E5"
       :label "Yield Accrual During Dispute"
-      :hypothesis "Yield is correctly credited to both parties (100%)"
+      :hypothesis "Yield accrues through resolution with held-delta accounted (100%)"
       :passed? passed?
       :results results
       :summary {:total-trials total-count
-                :correctly-credited total-count
-                :pass-rate 1.0}})))
+                :correctly-credited credited-count
+                :pass-rate pass-rate
+                :threshold 1.0}})))
 
 ;; ---------------------------------------------------------------------------
 ;; E6: Evidence Availability Guarantee

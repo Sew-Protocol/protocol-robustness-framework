@@ -1,8 +1,8 @@
-(ns resolver-sim.notebooks.speds.core
+(ns resolver_sim.notebooks.speds.core
   "Sew Protocol Evidence Design System (SPEDS) v1.1
    Core Visual Primitives for Protocol Storytelling."
-  (:require [resolver-sim.notebooks.speds.tokens :as tokens]
-            [resolver-sim.notebooks.speds.config :as config]
+  (:require [resolver_sim.notebooks.speds.tokens :as tokens]
+            [resolver_sim.notebooks.speds.config :as config]
             [clojure.string :as str]))
 
 ;; ---

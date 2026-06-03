@@ -2,7 +2,7 @@
 
 Source of truth: scenario contract schema, canonical transition registry, and repository scenario examples.
 
-Definitions hash: `1082033428`
+Definitions hash: `1730484672`
 
 ## 1) Required top-level fields
 
@@ -31,13 +31,11 @@ Definitions hash: `1082033428`
 - `sender_cancel`
 - `recipient_cancel`
 - `auto_cancel_disputed`
-- `advance_time`
 
 ## 4) Canonical transition vocabulary
 
 | Transition ID | Label |
 |---|---|
-| `advance_time` | Advance time |
 | `auto_cancel_disputed` | Auto-cancel disputed |
 | `automate_timed_actions` | Automate timed actions |
 | `challenge_resolution` | Challenge resolution |
@@ -50,16 +48,16 @@ Definitions hash: `1082033428`
 | `register_stake` | Register stake |
 | `release` | Release |
 | `sender_cancel` | Sender cancel |
+| `submit_evidence` | Submit evidence |
 
 ## 5) Example scenarios (generated from repo)
 
 | File | Scenario ID | Schema version | Actions present |
 |---|---|---|---|
-| `S79_yield-negative-yield-dispute-refund-path.json` | `unknown` | `unknown` | `create_escrow`, `execute_resolution`, `raise_dispute` |
+| `S88_yield-accrual-efficiency.json` | `s88-yield-accrual-efficiency` | `1.0` | `create_escrow`, `release` |
+| `S108_negative-yield-mild.json` | `s108-negative-yield-mild` | `1.0` | `create_escrow`, `recipient-cancel`, `sender-cancel`, `set-yield-risk`, `trigger-accrue` |
+| `S79_yield-negative-yield-dispute-refund-path.json` | `unknown` | `unknown` | `create_escrow`, `execute_resolution`, `raise_dispute`, `register_stake`, `set-yield-risk`, `trigger-accrue` |
 | `S68_yield-aave-long-horizon-10y-monthly-accrual.json` | `unknown` | `unknown` | `create_escrow`, `release` |
-| `S59_fot-rounding-multi-hop-conservation.json` | `s59-fot-rounding-multi-hop-conservation` | `1.0` | `create_escrow`, `execute_resolution`, `raise_dispute` |
-| `S14_dr3-module-authorized.json` | `s14-dr3-module-authorized` | `1.0` | `create_escrow`, `execute_resolution`, `raise_dispute` |
-| `S63_replay-idempotence-same-trace-double-run.json` | `s63-replay-idempotence-same-trace-double-run` | `1.0` | `challenge_resolution`, `create_escrow`, `execute_pending_settlement`, `execute_resolution`, `raise_dispute` |
 
 ## 6) Authoring checklist
 

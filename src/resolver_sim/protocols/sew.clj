@@ -171,8 +171,9 @@
     (compat/canonical-action event)))
 
 (defmethod apply-action "create-escrow"
-  [{:keys [agent-index snapshot]} world event]
-  (let [p (:params event)]
+  [{:keys [agent-index]} world event]
+  (let [p (:params event)
+        snapshot (sew-snapshot/snapshot-from-protocol-params (:params world {}))]
     (actx/with-resolved-actor-and-unpaused
       agent-index world event
       (fn [caller]
@@ -294,11 +295,13 @@
             world            (update-in world [:total-principal-deposited token] (fnil + 0) amount)]
         (if yield-profile-id
           (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
-                world' (yield-proto/apply-op world {:op/type :yield/deposit
-                                                     :owner/id (str "resolver:" addr)
-                                                     :module/id module-id
-                                                     :amount amount
-                                                     :token token})]
+                world' (-> world
+                           (yield-proto/apply-op {:op/type :yield/deposit
+                                                  :owner/id (lc/resolver-yield-owner-id addr)
+                                                  :module/id module-id
+                                                  :amount amount
+                                                  :token token})
+                           (lc/init-resolver-yield-accrual-time addr))]
             (t/ok world'))
           (t/ok world))))))
 
@@ -331,17 +334,28 @@
           (t/fail :resolver-frozen)
 
           :else
-          (let [res (reg/withdraw-stake world resolver-addr amount)]
+          (let [full-withdraw? (= amount current)
+                world-accrued  (if yield-profile-id
+                                 (lc/accrue-resolver-yield world resolver-addr token)
+                                 world)
+                owner-id       (lc/resolver-yield-owner-id resolver-addr)
+                pos            (when yield-profile-id
+                                 (get-in world-accrued [:yield/positions owner-id]))
+                yield-amt      (when pos
+                                 (+ (:unrealized-yield pos 0) (:realized-yield pos 0)))
+                res            (reg/withdraw-stake world-accrued resolver-addr amount)]
             (if (:ok res)
               (let [world' (-> (:world res)
                                (acct/sub-held token amount)
                                (update-in [:total-withdrawn token] (fnil + 0) amount))]
-                (if yield-profile-id
+                (if (and yield-profile-id full-withdraw? (pos? yield-amt))
                   (let [{:keys [module-id]} (yield-proto/resolve-yield-profile yield-profile-id)
-                        world'' (yield-proto/apply-op world'
-                                                      {:op/type :yield/withdraw
-                                                       :owner/id (str "resolver:" resolver-addr)
-                                                       :module/id module-id})]
+                        world'' (-> world'
+                                    (acct/sub-held token yield-amt)
+                                    (update-in [:total-withdrawn token] (fnil + 0) yield-amt)
+                                    (yield-proto/apply-op {:op/type :yield/withdraw
+                                                           :owner/id owner-id
+                                                           :module/id module-id}))]
                     (t/ok world''))
                   (t/ok world')))
               res)))))))
@@ -377,7 +391,7 @@
                                   recipient (if (#{:released :resolved-release} state) (:to et) (:from et))]
                               (-> world'
                                   (acct/sub-held token reclaimed)
-                                  (acct/record-claimable-v2 escrow-id :settlement/principal recipient reclaimed)))
+                                  (acct/record-claimable-v2 escrow-id :settlement/yield recipient reclaimed)))
                             ;; Resolver stake: reclaimed deferred was already in :total-held via
                             ;; register-stake; closing the yield position is sufficient (no stake bump).
                             world')]
@@ -411,6 +425,18 @@
             token (:token p)
             token (when token (keyword token))]
         (acct/withdraw-fees world token)))))
+
+(defmethod apply-action "governance-update-fee"
+  [{:keys [agent-index]} world event]
+  (actx/with-governance-actor
+    agent-index event
+    governance-actor?
+    (fn [_addr _agent]
+      (let [p         (:params event)
+            fee-bps   (or (:fee-bps p) (:resolver-fee-bps p) (:escrow-fee-bps p))]
+        (if (nil? fee-bps)
+          (t/fail :missing-fee-bps)
+          (t/ok (update world :params assoc :resolver-fee-bps fee-bps)))))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
   [{:keys [agent-index]} world event]
@@ -525,10 +551,6 @@
   [_ctx world event]
   (res/execute-fraud-slash world (event-workflow-id event)
                            (event-slash-id event)))
-
-(defmethod apply-action "time_advance"
-  [_ctx world _event]
-  (t/ok world))
 
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]

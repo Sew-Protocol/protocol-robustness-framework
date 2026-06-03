@@ -31,15 +31,6 @@
     },
     {
       "seq": 1,
-      "time": 1060,
-      "agent": "buyer",
-      "action": "time_advance",
-      "params": {
-        "dt": 86400
-      }
-    },
-    {
-      "seq": 2,
       "time": 2000,
       "agent": "buyer",
       "action": "release",

@@ -82,17 +82,19 @@
        (filter #(.isFile ^java.io.File %))
        (filter #(str/ends-with? (.getName ^java.io.File %) ".json"))
        (take 5)
-       (map (fn [f]
-              (let [sc (json/read-str (slurp f) :key-fn keyword)]
-                {:file (.getName ^java.io.File f)
-                 :id (or (:scenario-id sc) (:id sc) "unknown")
-                 :schema-version (or (:schema-version sc) "unknown")
-                 :actions (->> (:events sc)
-                               (map :action)
-                               (filter some?)
-                               (map name)
-                               distinct
-                               sort)})))))
+       (keep (fn [f]
+               (try
+                 (let [sc (json/read-str (slurp f) :key-fn keyword)]
+                   {:file (.getName ^java.io.File f)
+                    :id (or (:scenario-id sc) (:id sc) "unknown")
+                    :schema-version (or (:schema-version sc) "unknown")
+                    :actions (->> (:events sc)
+                                  (map :action)
+                                  (filter some?)
+                                  (map name)
+                                  distinct
+                                  sort)})
+                 (catch Exception _ nil))))))
 
 (defn- load-coverage []
   (json/read-str (slurp "results/test-artifacts/coverage.json") :key-fn keyword))

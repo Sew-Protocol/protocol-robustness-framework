@@ -2,7 +2,7 @@
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as speds-data]))
+            [resolver_sim.notebooks.speds.data :as speds-data]))
 
 ;; # Evidence Explorer — Technical Audit Surface
 ;; ## Deep-Dive Trace Inspection for Verified Scenarios

@@ -1,11 +1,11 @@
-(ns resolver-sim.notebooks.speds.data
+(ns resolver_sim.notebooks.speds.data
   "SPEDS Phase 2: Artifact Ingestion & Finding Extraction.
    Logic for mapping simulation artifacts to visual narratives."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.config :as config]))
+            [resolver_sim.notebooks.speds.config :as config]))
 
 ;; ---
 ;; 1. Unified Artifact Ingestion

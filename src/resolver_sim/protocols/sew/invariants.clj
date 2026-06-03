@@ -17,6 +17,7 @@
      5. no-double-finalize           — each workflow-id finalizes at most once (structural guarantee)"
   (:require [clojure.set :as set]
             [resolver-sim.protocols.sew.types         :as t]
+            [resolver-sim.yield.accounting            :as yield-acct]
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.time.invariants :as time-inv]
             [resolver-sim.yield.invariants :as generic-yield-inv]
@@ -79,6 +80,7 @@
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
   #{:terminal-states-unchanged
+    :escrow-state-transition-valid
     :module-snapshot-immutable
     :time-non-decreasing
     :time-no-action-after-finality
@@ -156,6 +158,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn terminal-states-unchanged? [world-before world-after] (state/terminal-states-unchanged? world-before world-after))
+
+(defn escrow-state-transition-valid? [world-before world-after]
+  (state/escrow-state-transition-valid? world-before world-after))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 4: Bond boundedness
@@ -361,11 +366,19 @@
                        0)
 
                      ;; Expected immediately-claimable amount:
-                     ;;   shortfall → fulfilled-amount (deferred remainder stays in held)
+                     ;;   partial-yield shortfall → principal + net liquid yield (fee on yield leg)
+                     ;;   gross shortfall → fulfilled-amount only (deferred stays in held)
                      ;;   no yield  → net-afa exactly
                      ;;   yield but no shortfall → >= net-afa (yield also flows to claimable)
                      expected-claimable
                      (cond
+                       (and shortfall pos-after
+                            (yield-acct/partial-yield-shortfall? pos-after shortfall))
+                       (let [fee-bps (or (:yield-protocol-fee-bps snap) 0)
+                             liq     (long (:fulfilled-amount shortfall 0))
+                             net-liq (- liq (t/compute-fee liq fee-bps))]
+                         (+ (long (:principal pos-after 0)) net-liq))
+
                        shortfall (get shortfall :fulfilled-amount net-afa)
                        (nil? yield-mid) net-afa
                        :else net-afa)  ;; minimum — for yield-no-shortfall we check >=
@@ -745,11 +758,23 @@
                     total        (reduce + 0 (vals yield-claims))
                     owner-id     (t/escrow-yield-owner-id wf)
                     pos          (get-in world [:yield/positions owner-id])
+                    shortfall    (:shortfall pos)
+                    snap         (t/get-snapshot world wf)
+                    fee-bps      (or (:yield-protocol-fee-bps snap) 0)
+                    reclaimed    (:reclaimed-amount pos 0)
                     pos-yield    (+ (:realized-yield pos 0) (:unrealized-yield pos 0))
-                    ;; After settlement, yield is allocated to claimable; position is zeroed.
-                    max-yield    (if (= :settled (:status pos))
+                    max-yield    (cond
+                                   (pos? reclaimed)
+                                   total
+
+                                   (= :settled (:status pos))
                                    (max total pos-yield)
-                                   pos-yield)]
+
+                                   (yield-acct/partial-yield-shortfall? pos shortfall)
+                                   (let [liq (long (:fulfilled-amount shortfall 0))]
+                                     (- liq (t/compute-fee liq fee-bps)))
+
+                                   :else pos-yield)]
               :when (> total max-yield)]
           {:workflow-id wf :claims total :max max-yield})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -1408,6 +1433,8 @@
   [world-before world-after]
   (let [results {:terminal-states-unchanged
                  (terminal-states-unchanged? world-before world-after)
+                 :escrow-state-transition-valid
+                 (escrow-state-transition-valid? world-before world-after)
                  :module-snapshot-immutable
                  (module-snapshot-immutable? world-before world-after)
                  :time-non-decreasing

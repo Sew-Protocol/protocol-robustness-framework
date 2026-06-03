@@ -6,7 +6,7 @@
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
-#   ./scripts/test.sh yield-scenarios # yield JSON scenarios (path suite, same report shape)
+#   ./scripts/test.sh yield-scenarios # Sew+yield integration scenarios (alias for sew-yield-scenarios)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
@@ -373,75 +373,10 @@ run_equivalence_new() {
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
 
-  python - <<'PY'
-import json
-from pathlib import Path
-
-traces_dir = Path("data/fixtures/traces")
-out_path = Path("results/test-artifacts/equivalence-comparison-summary.json")
-
-traces = []
-for p in sorted(traces_dir.glob("*.trace.json")):
-    try:
-        obj = json.loads(p.read_text())
-    except Exception:
-        continue
-    comp = obj.get("comparison")
-    if not isinstance(comp, dict):
-        continue
-    traces.append({
-        "id": str(obj.get("scenario-id") or obj.get("id") or p.stem.replace('.trace', '')),
-        "path": str(p),
-        "comparison": comp,
-    })
-
-by_id = {t["id"]: t for t in traces}
-groups = {}
-for t in traces:
-    grp = str(t["comparison"].get("comparison_group", ""))
-    if not grp:
-        continue
-    groups.setdefault(grp, []).append(t)
-
-summary = {
-    "groups": {},
-    "group_count": len(groups),
-}
-
-for grp, members in groups.items():
-    rec = {
-        "members": [],
-        "pair_complete": False,
-        "reciprocal": False,
-        "expected_divergence": True,
-        "status": "incomplete",
-    }
-    ids = []
-    for m in members:
-        comp = m["comparison"]
-        member = {
-            "id": m["id"],
-            "variant": comp.get("variant"),
-            "counterfactual_of": comp.get("counterfactual_of"),
-            "path": m["path"],
-        }
-        rec["members"].append(member)
-        ids.append(m["id"])
-
-    if len(members) == 2:
-        rec["pair_complete"] = True
-        a, b = members[0], members[1]
-        a_cf = str(a["comparison"].get("counterfactual_of", ""))
-        b_cf = str(b["comparison"].get("counterfactual_of", ""))
-        rec["reciprocal"] = (a_cf == b["id"] and b_cf == a["id"])
-        rec["status"] = "expected-divergence-observed" if rec["reciprocal"] else "unexpected"
-
-    summary["groups"][grp] = rec
-
-out_path.parent.mkdir(parents=True, exist_ok=True)
-out_path.write_text(json.dumps(summary, indent=2))
-print(f"Wrote equivalence comparison summary: {out_path}")
-PY
+  python3 python/equivalence_pair_diff.py \
+    --traces-dir data/fixtures/traces \
+    --out results/test-artifacts/equivalence-comparison-summary.json \
+    --replay-dir results/test-artifacts/equivalence-pairs
 
   return $?
 }

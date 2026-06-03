@@ -84,3 +84,13 @@
   (let [cats (set (keys tm/invariant-categories))]
     (is (set/subset? inv/canonical-ids cats)
         (str "uncategorized: " (sort (set/difference inv/canonical-ids cats))))))
+
+(deftest escrow-state-transition-valid-rejects-circular-back-edge
+  (let [w0 (-> (sample-world)
+               (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
+               (assoc-in [:escrow-transfers 0 :sender-status] :raise-dispute)
+               (assoc-in [:dispute-timestamps 0] 1000))
+        w1 (assoc-in w0 [:escrow-transfers 0 :escrow-state] :pending)]
+    (is (not (:holds? (inv/escrow-state-transition-valid? w0 w1))))
+    (is (= [{:workflow-id 0 :from :disputed :to :pending}]
+           (:violations (inv/escrow-state-transition-valid? w0 w1))))))

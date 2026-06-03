@@ -111,6 +111,8 @@ Outputs:
 
 The report includes:
 - outcome + events processed
+- **projection-hash** match/mismatch (terminal replay step)
+- **first structural world divergence** (seq, action, field diff when traces differ)
 - key metric deltas
 - terminal-state count differences
 - a single headline line you can paste into research notes

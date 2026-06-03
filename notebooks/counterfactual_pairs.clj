@@ -6,7 +6,7 @@
 (ns notebooks.counterfactual-pairs
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.speds.data :as speds-data]
+            [resolver_sim.notebooks.speds.data :as speds-data]
             [resolver-sim.notebooks.common :as common]))
 
 (defn- canonical-sid [sid]

@@ -9,7 +9,7 @@
   [{:id "vault" :address "0xVault" :strategy "honest"}])
 
 (defn build-yield-scenario
-  "Build a minimal replay scenario for `yield-v1` / `simple-replay`.
+  "Build a minimal replay scenario for `yield-v1` / `replay-yield-scenario`.
 
    Options:
      :seed :scenario-id :profile :yield-config :events

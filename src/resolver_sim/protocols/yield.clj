@@ -1,14 +1,18 @@
 (ns resolver-sim.protocols.yield
   "Thin yield-provider SimulationAdapter — market layer only, no Sew escrow/dispute.
 
-   Use with `contract-model.replay/simple-replay` or explicit minimal flags.
-   Scenarios use schema 1.0, :yield-config, and yield-only event actions."
+   Replay via `contract-model.replay/replay-yield-scenario` (thin sequential runner).
+   Scenarios use schema 1.0, :yield-config, and yield-only event actions.
+
+   Simulated time: replay advances `:block-time` from each event `:time`; accrual
+   uses explicit `yield_accrue` `:dt` (must match the time delta from the prior event)."
   (:require [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.yield.protocols :as yield-proto]
             [resolver-sim.yield.ops :as yield-ops]
             [resolver-sim.yield.module :as ymodule]
             [resolver-sim.yield.risk :as yield-risk]
             [resolver-sim.yield.invariants :as yield-inv]
+            [resolver-sim.yield.invariants-transition :as yield-trans]
             [resolver-sim.yield.registry :as yreg]))
 
 (defn- action-name [event]
@@ -120,22 +124,14 @@
       (catch Exception e
         (err :yield-claim-deferred-failed {:message (.getMessage e)})))
 
-    "time_advance"
-    (ok world)
-
     (err :unknown-action {:action (:action event)})))
 
 (defn- check-yield-invariants [world]
-  (let [generic (yield-inv/check-all world)
-        exposure-ok? (yield-inv/check-yield-exposure
-                      world
-                      (fn [_ pos] (= (:status pos) :active))
-                      #(held-balance world %))
-        held (merge generic {:yield/exposure exposure-ok?})]
-    {:ok? (every? true? (vals held))
+  (let [results (yield-inv/check-all world)]
+    {:ok? (every? :holds? (vals results))
      :violations (into {}
-                       (keep (fn [[k v]] (when (false? v) {k v}))
-                             held))}))
+                       (keep (fn [[k r]] (when-not (:holds? r) {k r}))
+                             results))}))
 
 (deftype YieldProviderProtocol []
   proto/SimulationAdapter
@@ -162,8 +158,12 @@
   (check-invariants-single [_ world]
     (check-yield-invariants world))
 
-  (check-invariants-transition [_ _before _after]
-    {:ok? true :violations nil})
+  (check-invariants-transition [_ world-before world-after]
+    (let [results (yield-trans/check-all-transitions world-before world-after)]
+      {:ok? (every? :holds? (vals results))
+       :violations (into {}
+                         (keep (fn [[k r]] (when-not (:holds? r) {k r}))
+                               results))}))
 
   (world-snapshot [_ world]
     {:block-time (:block-time world)
@@ -171,9 +171,10 @@
                         (into {} (map (fn [[oid p]]
                                          [oid (select-keys p [:status :principal :shares
                                                               :unrealized-yield :realized-yield
-                                                              :reclaimed-amount
+                                                              :reclaimed-amount :current-index
                                                               :token :module/id :yield-loss :shortfall])])
                                       pos)))
+     :yield-indices (:yield/indices world)
      :yield-held (:yield/held-balances world)})
 
   (available-actions [_ _world _actor]

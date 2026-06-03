@@ -381,10 +381,9 @@
      [:div {:style {:color "#fbbf24" :font-size "12px" :font-weight "700" :margin-bottom "8px"}}
       "Scenario Coverage Gap"]
      (for [item ["S12 covers governance snapshot isolation (basic)"
-                 "No scenario tests mid-dispute governance upgrade"
                  "No scenario tests repeated pause abuse"
-                 "Claim :forward-only-upgrade-safe: NOT EVALUATED"
-                 "This section relies on design inspection, not replay"]]
+                 "Claim :forward-only-upgrade-safe: exercised by S111 + S12/S61/S84"
+                 "Mid-dispute fee upgrade replay validates snapshot isolation"]]
        [:div {:key item :style {:color "#fde68a" :font-size "11px" :margin-bottom "4px"}}
         (str "! " item)])]])
 
@@ -432,7 +431,7 @@
               "S78 Aave partial liquidity release"
               "S79 Aave partial liquidity dispute"
               "S80 Governance disable post-create"
-              "S81 Resolver yield accrual"
+              "S88 Resolver yield accrual"
               "S82 Shortfall recovery cycle"]]
        [:div {:key s :style {:color "#fde68a" :font-size "11px" :margin-bottom "3px"}}
         (str "> " s)])]))
@@ -455,8 +454,8 @@
   (sec/warn-box
    "Yield module isolation is namespace-scoped by (msg.sender, escrowId) at the smart contract
     level -- this cannot be validated by the Clojure simulation alone. The shortfall bound
-    (yield only, never principal) is tested in S78-S82 but the formal claim :partial-liquidity-
-    shortfall-bounded is :not-evaluated pending broader scenario coverage.")])
+    (yield only, never principal) is tested in S78-S82/S81 and claim :partial-liquidity-
+    shortfall-bounded is linked in sew-claims.edn.")])
 
 ;; ---------------------------------------------------------------------------
 ;; SEC-08: Adversarial Economic Analysis
@@ -648,10 +647,9 @@
                                     :font-size "11px" :margin-bottom "4px"}}
          (str (name t))])
       [:p {:style {:color "#64748b" :font-size "11px" :margin "8px 0 0 0"}}
-       "advance_time and automate_timed_actions are exercised indirectly in multi-step scenarios
-        but not as explicit first-class events in the current trace format. Time-advancing
-        adversarial attacks (deadline griefing, epoch racing) are partially covered by
-        S04, S17, S66, S74, S75 but not through the batch-automation path."]]))
+       "automate_timed_actions is not always a first-class event in traces. Simulated time
+        advances via each event :time; deadline griefing is partially covered by
+        S04, S17, S66, S74, S75 but not always through the batch-automation path."]]))
 
   (sec/content-box
    [:h3 {:style {:color "#9ca3af" :font-size "13px" :margin "0 0 12px 0"}}
@@ -680,7 +678,7 @@
                  "Repeated emergency pause abuse"
                  "Yield module provider failure cascade"
                  "Multi-chain escrow coordination"
-                 "Advance_time adversarial deadline attacks"
+                 "Adversarial deadline / epoch-racing attacks"
                  "Formal verification / model checking"
                  "Third-party sponsored appeal griefing"]]
        [:div {:key item :style {:color "#6b7280" :font-size "11px" :margin-bottom "4px"}}

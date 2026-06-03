@@ -73,15 +73,6 @@
     },
     {
       "seq": 5,
-      "time": 2000,
-      "agent": "buyer",
-      "action": "time_advance",
-      "params": {
-        "dt": 300000
-      }
-    },
-    {
-      "seq": 6,
       "time": 302000,
       "agent": "buyer",
       "action": "execute_pending_settlement",

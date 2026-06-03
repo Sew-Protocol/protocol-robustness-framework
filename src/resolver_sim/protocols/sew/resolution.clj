@@ -26,45 +26,10 @@
   "Internal: transition escrow to terminal state, release accounting.
    direction — :released (to recipient) or :refunded (to sender)."
   [world workflow-id direction]
-  (let [et        (t/get-transfer world workflow-id)
-        token     (:token et)
-        amt       (:amount-after-fee et)
-        fot-bps   (get-in world [:token-fot-bps token] 0)
-        net-amt   (- amt (t/compute-fee amt fot-bps))
-        resolver  (:dispute-resolver et)
-        snap      (t/get-snapshot world workflow-id)
-        mid       (:yield-generation-module snap)
-        recipient (if (= direction :released) (:to et) (:from et))
-        record-fn (if (= direction :released) acct/record-released acct/record-refunded)]
-    (let [owner-id (t/escrow-yield-owner-id workflow-id)
-          world-after-yield
-          (-> world
-              (lc/accrue-yield workflow-id)
-              (cond-> (and mid (contains? (:yield/modules world) mid))
-                (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                           :module/id mid
-                                           :owner/id owner-id})))
-          pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
-          pos-shortfall (:shortfall pos)
-          ;; Under a liquidity shortfall, only the fulfilled portion is immediately settleable.
-          ;; Deferred remainder stays in :total-held until claim-deferred closes it out.
-          settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
-          haircut-amt   (if pos-shortfall (:haircut-amount pos-shortfall 0) 0)
-          ;; Under shortfall, remove fulfilled + permanent haircut from held.
-          ;; Deferred amounts remain in held until claim-deferred.
-          sub-held-amt  (if pos-shortfall (+ settled-amt haircut-amt) amt)]
-      (-> world-after-yield
-          (yield-policy/apply-yield-policy workflow-id direction)
-          (acct/sub-held token sub-held-amt)
-          (record-fn token settled-amt)
-          ;; Track outbound FoT fee (difference between gross held and net claimable)
-          (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
-          (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
-          (t/decrement-resolver-capacity resolver)
-          (update :pending-settlements dissoc workflow-id)
-          (sm/apply-transition! workflow-id direction)
-          ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
-          (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none)))))
+  (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
+    (-> world
+        (lc/finalize-escrow-accounting workflow-id direction)
+        (t/decrement-resolver-capacity resolver))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: slashing helpers
@@ -226,14 +191,18 @@
 ;;   This function models the normal case (no concurrent escalation).
 ;; ---------------------------------------------------------------------------
 
+(defn- clear-stale-settlement-principal
+  "Remove abnormal :settlement/principal claimables while escrow is still :disputed.
+   Normal flow records principal only at finalize; stale entries can appear from
+   superseded pending write-sets or legacy regressions. Does not clear :settlement/yield."
+  [world workflow-id]
+  (acct/clear-claimable-v2-kind world workflow-id :settlement/principal))
+
 (defn- clear-pending-settlement [world workflow-id]
   (let [pending (t/get-pending world workflow-id)]
     (if (:exists pending)
       (-> world
-          ;; Pending replacement must clear stale settlement-principal claim effects
-          ;; before writing replacement effects. Cleanup is v2-native and does not
-          ;; infer claimants from legacy :claimable.
-          (acct/clear-claimable-v2-kind workflow-id :settlement/principal)
+          (clear-stale-settlement-principal workflow-id)
           (assoc-in [:pending-settlements workflow-id] t/empty-pending-settlement))
       world)))
 
@@ -348,6 +317,7 @@
   (let [pending (t/get-pending world workflow-id)]
     (if (:exists pending)
       (-> world
+          (clear-stale-settlement-principal workflow-id)
           (update-in [:superseded-pending-settlements workflow-id]
                      (fnil conj [])
                      {:pending pending

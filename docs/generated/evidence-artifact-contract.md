@@ -2,7 +2,7 @@
 
 Source of truth: current emitted artifacts under `results/test-artifacts`, CDRS schemas under `spec/`, and semantic registry hash.
 
-Definitions hash: `1082033428`
+Definitions hash: `1730484672`
 
 ## Canonical Artifact Set
 
@@ -65,6 +65,7 @@ Definitions hash: `1082033428`
 
 | Key |
 |---|
+| `comparator_config` |
 | `findings` |
 | `overall_status` |
 | `provenance` |
@@ -76,7 +77,9 @@ Definitions hash: `1082033428`
 
 | Key |
 |---|
+| `comparator_config` |
 | `generated-at` |
+| `hash` |
 | `id` |
 | `issue-count` |
 | `issues` |

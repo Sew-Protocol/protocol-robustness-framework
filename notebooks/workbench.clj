@@ -3,8 +3,8 @@
 (ns notebooks.workbench
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.speds.data :as speds-data]
-            [resolver-sim.notebooks.speds.config :as config]
+            [resolver_sim.notebooks.speds.data :as speds-data]
+            [resolver_sim.notebooks.speds.config :as config]
             [resolver-sim.notebooks.ui :as ui]))
 
 ;; # Sew Protocol — Adversarial Validation Workbench
@@ -46,7 +46,7 @@
     (if equivalence
       (let [groups (vals (:groups equivalence))
             total (count groups)
-            successful (count (filter #(= "expected-divergence-observed" (:status %)) groups))]
+            successful (count (filter #(= "divergence-confirmed" (:status %)) groups))]
         (if (> total 0) (* 100.0 (/ successful total)) 0.0))
       0.0)))
 

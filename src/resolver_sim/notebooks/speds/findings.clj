@@ -1,4 +1,4 @@
-(ns resolver-sim.notebooks.speds.findings
+(ns resolver_sim.notebooks.speds.findings
   "Findings-envelope generation for SPEDS.
    Canonical evidence artifact from trial outputs."
   (:require [clojure.data.json :as json]
@@ -6,10 +6,10 @@
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
             [resolver-sim.definitions.registry :as defs]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.semantics :as sem]
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.semantics :as sem]
             [resolver-sim.scenario.outcome-semantics :as ose]
-            [resolver-sim.notebooks.speds.config :as config]))
+            [resolver_sim.notebooks.speds.config :as config]))
 
 (def findings-path "results/test-artifacts/findings.json")
 

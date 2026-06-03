@@ -1,23 +1,15 @@
-(ns resolver-sim.notebooks.speds.story
+(ns resolver_sim.notebooks.speds.story
   "SPEDS Phase 3: Narrative Story Engines.
    Templates for automated 4-frame validation stories."
-  (:require [resolver-sim.notebooks.speds.core :as speds]
-            [resolver-sim.notebooks.speds.config :as config]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.findings :as findings]
-            [resolver-sim.notebooks.speds.tokens :as tokens]
-            [resolver-sim.notebooks.speds.story-data :as story-data]
+  (:require [resolver_sim.notebooks.speds.core :as speds]
+            [resolver_sim.notebooks.speds.config :as config]
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.findings :as findings]
+            [resolver_sim.notebooks.speds.tokens :as tokens]
+            [resolver_sim.notebooks.speds.story-data :as story-data]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [clojure.string :as str]))
 
-(def ^:private frame-registry
-  {:theory-falsification falsification-frame-specs
-   :deadline-boundary    deadline-frame-specs
-   :collusion            collusion-frame-specs
-   :economic-solvency    economic-solvency-frame-specs})
-
-(defn- get-frame-specs [family frame-ctx]
-  ((get frame-registry family deflection-frame-specs) frame-ctx))
 
 ;; ---
 ;; Internal Narrative Helpers
@@ -248,13 +240,6 @@
 ;; 1. The "Deflection" Story Engine
 ;; Optimized for proving resistance to specific attacks (S26, S42, etc.)
 
-(defn generate-deflection-story
-  "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
-  [scenario-id artifacts]
-  (let [story-data (story-data/build-story-data artifacts scenario-id)
-        family (story-family scenario-id (:scenario story-data))
-        frame-specs (get-frame-specs family story-data)]
-    (render-frame-specs frame-specs)))
 
 (defn generate-theory-falsification-story
   "Renders a theory-falsification multi-frame story from a scenario id,
@@ -386,3 +371,21 @@
        [:h4 {:style {:margin "0 0 10px 0"}} "Scientific Summary"]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6}} determinism-text]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6 :marginTop "8px"}} coverage-text]]]]))
+
+
+(defn- get-frame-specs [family frame-ctx]
+  (let [registry {:theory-falsification 'falsification-frame-specs
+                  :deadline-boundary    'deadline-frame-specs
+                  :collusion            'collusion-frame-specs
+                  :economic-solvency    'economic-solvency-frame-specs}
+        sym (get registry family 'deflection-frame-specs)
+        f (resolve sym)]
+    (f frame-ctx)))
+
+(defn generate-deflection-story
+  "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
+  [scenario-id artifacts]
+  (let [story-data (story-data/build-story-data artifacts scenario-id)
+        family (story-family scenario-id (:scenario story-data))
+        frame-specs (get-frame-specs family story-data)]
+    (render-frame-specs frame-specs)))

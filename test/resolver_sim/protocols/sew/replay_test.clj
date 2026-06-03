@@ -158,7 +158,7 @@
   (let [world0  (t/empty-world 2000)
         context {:agent-index {"alice" alice "resolver" resolver}
                  :snapshot    (snap-fix/escrow-snapshot {:escrow-fee-bps 50})}
-        event   {:seq 0 :time 999 :agent "alice" :action "advance_time" :params {}}
+        event   {:seq 0 :time 999 :agent "alice" :action "set-paused" :params {:paused? true}}
         result  (replay/process-step sew/protocol context world0 event)]
     (testing "rejected, not halted"
       (is (= :rejected (get-in result [:trace-entry :result])))
@@ -535,17 +535,15 @@
     (is (= :pass (get-in result [:second :outcome])))))
 
 ;; ---------------------------------------------------------------------------
-;; Section 14: advance_time no-op
+;; Section 14: simulated time from event :time only
 ;; ---------------------------------------------------------------------------
 
-(deftest test-advance-time-event
+(deftest test-block-time-follows-event-timestamps
   (let [r (sew/replay-with-sew-protocol
            (sc :events
                [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                   :params {:token "0xUSDC" :to "0xBob" :amount 1000}}
-                {:seq 1 :time 2000 :agent "alice" :action "advance_time"
-                  :params {}}
-                {:seq 2 :time 2000 :agent "alice" :action "sender_cancel"
+                {:seq 1 :time 2000 :agent "alice" :action "sender_cancel"
                   :params {:workflow-id 0}}]))]
     (is (= :pass (:outcome r)))
     (is (= 2000 (get-in r [:trace 1 :world :block-time])))))
@@ -1161,7 +1159,7 @@
                       :attack-attempts 0 :attack-successes 0 :rejected-attacks 0
                       :reverts 0 :invariant-violations 0 :invariant-results {}
                       :double-settlements 0 :invalid-state-transitions 0 :funds-lost 0}
-        event       {:seq 0 :time 1000 :agent "alice" :action "advance_time" :params {}}
+        event       {:seq 0 :time 1000 :agent "alice" :action "release" :params {:workflow-id 0}}
         ;; Synthetic violations: conservation-of-funds fails, solvency passes
         trace-entry {:result :ok
                      :world  {:total-held {} :block-time 1000}
@@ -1184,7 +1182,7 @@
                       :attack-attempts 0 :attack-successes 0 :rejected-attacks 0
                       :reverts 0 :invariant-violations 0 :invariant-results {}
                       :double-settlements 0 :invalid-state-transitions 0 :funds-lost 0}
-        event       {:seq 0 :time 1000 :agent "alice" :action "advance_time" :params {}}
+        event       {:seq 0 :time 1000 :agent "alice" :action "release" :params {:workflow-id 0}}
         trace-entry {:result :ok
                      :world  {:total-held {} :block-time 1000}
                      :violations {:conservation-of-funds {:holds? false :violations ["mismatch"]}

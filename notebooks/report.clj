@@ -30,7 +30,7 @@
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as speds-data]))
+            [resolver_sim.notebooks.speds.data :as speds-data]))
 
 (clerk/html (ui/notebook-navigation "Report Notebook"))
 

@@ -1,4 +1,4 @@
-(ns resolver-sim.notebooks.speds.config
+(ns resolver_sim.notebooks.speds.config
   "SPEDS Configuration: Centralized paths and protocol identifiers."
   (:require [clojure.string :as str]))
 

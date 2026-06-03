@@ -3,9 +3,9 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as speds-data]
-            [resolver-sim.notebooks.speds.config :as config]
-            [resolver-sim.notebooks.speds.story :as story]))
+            [resolver_sim.notebooks.speds.data :as speds-data]
+            [resolver_sim.notebooks.speds.config :as config]
+            [resolver_sim.notebooks.speds.story :as story]))
 
 ;; # Sew Protocol — Production Evidence Workbench
 ;; ## High-Assurance Protocol Robustness & Adversarial Telemetry

@@ -31,7 +31,10 @@
    #{:settlement-principal-boundary :settlement-yield-boundary :claimable-classification}
 
    "escalation-layer-protection"
-   #{:escalation-level-monotonic :dispute-level-bounded :dispute-resolution-path}})
+   #{:escalation-level-monotonic :dispute-level-bounded :dispute-resolution-path}
+
+   "yield-accrual-efficiency"
+   #{:held-delta-accounted :settlement-yield-boundary :conservation-of-funds}})
 
 (def all-evidence-ids
   (set (keys evidence-invariant->canonical)))

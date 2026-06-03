@@ -7,7 +7,8 @@ This checklist tracks operations that should be idempotent (or replay-idempotent
 | Surface | Expected idempotence contract | Status | Notes |
 |---|---|---|---|
 | `clear-claimable-v2-kind` | Repeated cleanup is a no-op; no negatives; no nil claimant keys | PASS | Implemented via `dissoc` in v2 ledger |
-| `clear-pending-settlement` | Repeated replacement clears stale principal effects and does not derive from legacy map | PASS | Uses v2 helper only |
+| `clear-pending-settlement` | Repeated replacement clears stale principal effects and does not derive from legacy map | PASS | Uses `clear-stale-settlement-principal` → `clear-claimable-v2-kind` |
+| `archive-pending-on-escalation` | Pending cancel clears stale principal; yield domain untouched | PASS | Same helper as pending replacement |
 | `execute-pending-settlement` | Finalize once; subsequent calls rejected | PASS | Terminal + pending guards |
 | `execute-fraud-slash` | Execute once; subsequent calls rejected | PASS | Status guards (`:executed`/`:appealed`/`:reversed`) |
 | `unfreeze-resolver` | Multiple calls converge to same state | PASS | Idempotent state overwrite |

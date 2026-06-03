@@ -55,9 +55,9 @@
            token "USDC"}}]
   [(yield-event 0 initial-time owner :yield/deposit
                 {:amount deposit-amount :token token})
-   (yield-event 1 (+ initial-time 1000) owner :yield/accrue
+   (yield-event 1 (+ initial-time accrue-dt) owner :yield/accrue
                 {:dt accrue-dt :token token})
-   (yield-event 2 (+ initial-time 2000) owner :yield/withdraw
+   (yield-event 2 (+ initial-time accrue-dt 1000) owner :yield/withdraw
                 {:token token :module-id module-id})])
 
 (defn shortfall-affected-seq
@@ -72,12 +72,13 @@
               :deposit-amount 10000
               :accrue-dt 31536000)]
     (if recover?
-      (into base
-            [(yield-event 3 (+ initial-time 3000) owner :set-yield-risk
-                           {:risk-params {:module-id "aave-v3" :token "USDC"
-                                          :liquidity-mode "available"}})
-             (yield-event 4 (+ initial-time 4000) owner :yield/claim-deferred
-                           {:token "USDC"})])
+      (let [t-after (+ initial-time 31536000 2000)]
+        (into base
+              [(yield-event 3 t-after owner :set-yield-risk
+                             {:risk-params {:module-id "aave-v3" :token "USDC"
+                                            :liquidity-mode "available"}})
+               (yield-event 4 (+ t-after 1000) owner :yield/claim-deferred
+                             {:token "USDC"})]))
       base)))
 
 (defn liquidity-shortage-seq

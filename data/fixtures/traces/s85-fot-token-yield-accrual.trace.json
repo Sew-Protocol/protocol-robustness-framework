@@ -1,73 +1,64 @@
-{
-  "scenario-id": "s85-fot-token-yield-accrual",
-  "outcome": "pass",
-  "trace": [
-    {
-      "projection-hash": "U3xC2qybBH4nyHhiFQtbwl3FW1Q5mC3olmPe7H7k4ys=",
-      "time": 1000,
-      "extra": {
-        "workflow-id": 0
-      },
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [
-        "entity-created"
-      ],
-      "result": "ok",
-      "action": "create_escrow",
-      "error": null,
-      "seq": 0,
-      "violations": null,
-      "trace-metadata": {
-        "type": "creation",
-        "path": "none"
-      },
-      "id": "create_escrow",
-      "detail": null
-    },
-    {
-      "projection-hash": "yHkU8fBKUS4NPDoiHsHyI1PWjd0bgERmGog7zherqz0=",
-      "expected-failure?": false,
-      "time": 1060,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [],
-      "result": "rejected",
-      "reject-phase": "dispatch",
-      "action": "time_advance",
-      "reject-class": "unknown-action",
-      "error": "unknown-action",
-      "seq": 1,
-      "violations": null,
-      "trace-metadata": {
-        "type": "unknown",
-        "path": "none"
-      },
-      "id": "unknown",
-      "detail": {
-        "action": "time_advance"
-      }
-    },
-    {
-      "projection-hash": "kkr0L+F5jOlHG2LIFGVGAImhfBlAC815l6x0YIZSQLA=",
-      "time": 2000,
-      "extra": null,
-      "invariants-ok?": true,
-      "agent": "buyer",
-      "event-tags": [],
-      "result": "ok",
-      "action": "release",
-      "error": null,
-      "seq": 2,
-      "violations": null,
-      "trace-metadata": {
-        "type": "economic",
-        "path": "none"
-      },
-      "id": "release",
-      "detail": null
-    }
-  ],
-  "scenario-author": "@grifma"
-}
+{"description":"Generated trace: ",
+ "fee_bps":100,
+ "schema_version":"2",
+ "resolutions":
+ {"wf0":
+  {"outcome":"RELEASE",
+   "finality":"FINAL",
+   "integrity":"FULLY_RECONCILED"}},
+ "cdrs_version":"0.2",
+ "steps":
+ [{"step_type":"protocol-transition",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":1,
+    "escrow_amount_after_fee":9950,
+    "global_total_held":9950,
+    "global_total_fees":50,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"ACTIVE",
+   "seq":0,
+   "event_type":"CREATE ESCROW",
+   "timestamp":1000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"create_escrow",
+    "seq":0,
+    "wf_alias":"wf0",
+    "to_role":"seller",
+    "amount":10000,
+    "type":"creation",
+    "path":"none"},
+   "actor":"buyer"},
+  {"step_type":"economic-effect",
+   "cdrs_version":"0.2",
+   "expected":
+   {"escrow_state":2,
+    "escrow_amount_after_fee":9950,
+    "global_total_held":0,
+    "global_total_fees":50,
+    "pending_settlement_exists":false,
+    "dispute_level":0,
+    "accepted":true,
+    "state_changed":true},
+   "state_bucket":"SETTLED",
+   "seq":1,
+   "event_type":"RELEASE",
+   "timestamp":2000,
+   "context_id":"wf0",
+   "attributes":
+   {"action":"release",
+    "seq":1,
+    "wf_alias":"wf0",
+    "type":"economic",
+    "path":"none"},
+   "actor":"buyer"}],
+ "expected_semantics":{},
+ "trace_kind":["lifecycle"],
+ "step_count":2,
+ "metadata":
+ {"scenario_class":"baseline", "outcome_type":"normal-completion"},
+ "scenario_id":null}

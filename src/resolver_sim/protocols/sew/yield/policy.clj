@@ -1,7 +1,8 @@
 (ns resolver-sim.protocols.sew.yield.policy
   "Sew-specific rules for yield distribution and fee capture."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.accounting :as acct]))
+            [resolver-sim.protocols.sew.accounting :as acct]
+            [resolver-sim.yield.accounting :as yield-acct]))
 
 (defn apply-yield-policy
   "Allocate realized yield to claimable balances and protocol fees based on policy.
@@ -14,7 +15,11 @@
         owner-id [:sew/escrow escrow-id]
         pos-key  [:yield/positions owner-id]
         position (get-in world pos-key)
-        yield    (+ (:realized-yield position 0) (:unrealized-yield position 0))]
+        shortfall (:shortfall position)
+        ;; Under partial-yield shortfall only the liquid (realized) leg is claimable now.
+        yield    (if (yield-acct/partial-yield-shortfall? position shortfall)
+                   (:realized-yield position 0)
+                   (+ (:realized-yield position 0) (:unrealized-yield position 0)))]
     (if (or (nil? position) (zero? yield))
       world
       (let [fee-bps (or (:yield-protocol-fee-bps snap) 0)
@@ -52,8 +57,8 @@
           (-> world'
               ;; If there's a shortfall, keep the position active for later recovery
               (cond->
-                (:shortfall position)
+                shortfall
                 (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
 
-                (not (:shortfall position))
+                (not shortfall)
                 (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0))))))))

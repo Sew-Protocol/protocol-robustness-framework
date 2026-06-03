@@ -20,6 +20,7 @@
     (show-notebook! "notebooks/telemetry.clj")
     (show-notebook! "notebooks/report.clj")
     (show-notebook! "notebooks/workbench_v2.clj")
+    (show-notebook! "notebooks/yield_scenarios_workbench.clj")
     (show-notebook! "notebooks/workbench_production.clj")
     (show-notebook! "notebooks/golden_artifact.clj")
     (show-notebook! "notebooks/atlas_artifact.clj")

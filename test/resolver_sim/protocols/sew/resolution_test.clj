@@ -114,6 +114,37 @@
     (is (:exists (t/get-pending w2 0))
         "pending remains valid after repeated replacements")))
 
+(deftest execute-resolution-clears-legacy-mirror-principal-on-pending-replacement
+  (let [w (-> (base-world 1800)
+              (assoc-in [:pending-settlements 0]
+                        (t/make-pending-settlement {:exists true
+                                                    :is-release true
+                                                    :appeal-deadline 2800
+                                                    :resolution-hash "0xold"}))
+              (assoc-in [:claimable-v2 0 :settlement/principal bob] 100)
+              (assoc-in [:claimable 0 bob] 100))
+        r (res/execute-resolution w 0 resolver false "0xnew" direct-resolver-fn)]
+    (is (true? (:ok r)))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob])))
+    (is (empty? (get-in (:world r) [:claimable 0] {}))
+        "legacy mirror cleared with v2 principal domain")))
+
+(deftest execute-resolution-pending-replacement-preserves-settlement-yield
+  (let [w (-> (base-world 1800)
+              (assoc-in [:pending-settlements 0]
+                        (t/make-pending-settlement {:exists true
+                                                    :is-release true
+                                                    :appeal-deadline 2800
+                                                    :resolution-hash "0xold"}))
+              (assoc-in [:claimable-v2 0 :settlement/principal bob] 100)
+              (assoc-in [:claimable-v2 0 :settlement/yield alice] 42)
+              (assoc-in [:claimable 0] {}))
+        r (res/execute-resolution w 0 resolver false "0xnew" direct-resolver-fn)]
+    (is (true? (:ok r)))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob])))
+    (is (= 42 (get-in (:world r) [:claimable-v2 0 :settlement/yield alice]))
+        "only :settlement/principal is cleared on pending replacement")))
+
 ;; ---------------------------------------------------------------------------
 ;; execute-resolution guards
 ;; ---------------------------------------------------------------------------
@@ -328,6 +359,16 @@
     (is (true? (:ok r)))
     (is (nil? (get-in (:world r) [:pending-settlements 0]))
         "pending settlement cleared when escalation proceeds")))
+
+(deftest escalate-dispute-clears-stale-principal-on-pending-cancel
+  (let [w (-> (disputed-world-with-pending)
+              (assoc-in [:claimable-v2 0 :settlement/principal bob] 100)
+              (assoc-in [:claimable 0 bob] 100))
+        r (res/escalate-dispute w 0 alice (make-escalation-fn senior-resolver))]
+    (is (true? (:ok r)))
+    (is (nil? (get-in (:world r) [:claimable-v2 0 :settlement/principal bob])))
+    (is (empty? (get-in (:world r) [:claimable 0] {}))
+        "escalation pending cancel clears stale principal like replacement")))
 
 (deftest escalate-dispute-not-participant
   (let [w (-> (base-world 0) (with-pending 0 true 5000))

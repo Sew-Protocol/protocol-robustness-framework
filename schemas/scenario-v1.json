@@ -118,8 +118,7 @@
               "release",
               "sender_cancel",
               "recipient_cancel",
-              "auto_cancel_disputed",
-              "advance_time"
+              "auto_cancel_disputed"
             ],
             "description": "Protocol action name. The Clojure replay engine dispatches on this field."
           },

@@ -12,6 +12,7 @@
 
    This namespace is pure — no I/O, no DB, no side effects."
   (:require [resolver-sim.scenario.projection :as proj]
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.yield.evidence :as ye]))
 
@@ -229,6 +230,7 @@
             {:keys [transitions token-deltas pending-lifecycle stake-flow]}
             (derive-transition-summaries trace world)
             shortfall-summary (derive-shortfall-summary world)
+            escrow-yield-outcomes (claim-outcome/outcomes-by-workflow world)
 
             coalition-addrs
             (into #{}
@@ -403,7 +405,8 @@
          :decisions decisions
          :raw-trace trace
          :funds-ledger-summary funds-ledger
-         :yield-evidence yield-evidence})))))
+         :yield-evidence yield-evidence
+         :escrow-yield-outcomes escrow-yield-outcomes})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection

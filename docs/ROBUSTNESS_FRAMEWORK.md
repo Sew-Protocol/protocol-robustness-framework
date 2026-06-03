@@ -142,7 +142,7 @@ implementation via the registry.
 
 ## 2. Invariant Catalogue
 
-**52 canonical invariant IDs** (40 world-level, 12 transition-level) are enforced
+**53 canonical invariant IDs** (40 world-level, 13 transition-level) are enforced
 across the Sew v1 model, defined in `protocols/sew/invariants.clj` under
 `canonical-ids`. Registry tests in `test/resolver_sim/protocols/sew/invariant_registry_test.clj`
 ensure every ID is executed by `check-all` or `check-transition`.
@@ -169,6 +169,7 @@ Reference-validation evidence IDs map to subsets of these; see
 | ID | Meaning |
 |---|---|
 | `:terminal-states-unchanged` | `RELEASED`, `REFUNDED`, `RESOLVED` are absorbing; no transition out |
+| `:escrow-state-transition-valid` | Every `:escrow-state` change is an edge in `allowed-transitions` (no backward/circular steps) |
 | `:all-status-combinations-valid` | `SenderStatus` × `RecipientStatus` combination is valid; terminal escrows require both statuses `:none` |
 | `:persisted-escrow-state-valid` | Stored escrows never use `:none` or unknown `:escrow-state` |
 | `:escrow-state-in-graph` | Every `:escrow-state` is a node in `state-machine/allowed-transitions` |
@@ -555,7 +556,9 @@ contract, `:pass?` semantics, and reporting boundaries.
 
 ```bash
 clojure -M:run -- --invariants
-clojure -M:run -- --invariants --suite yield-scenarios
+clojure -M:run -- --invariants --suite yield-provider-scenarios
+clojure -M:run -- --invariants --suite sew-yield-scenarios
+# legacy alias: --suite yield-scenarios → sew-yield-scenarios
 clojure -M:run -- --invariants --fixture-suite suites/all-invariants
 ```
 

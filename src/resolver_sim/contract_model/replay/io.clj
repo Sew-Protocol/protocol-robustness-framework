@@ -2,7 +2,7 @@
   "Serialization and IO helpers for replay engine.
 
    Decomposed from contract-model/replay to improve kernel modularity."
-  (:require [clojure.data.json :as json]))
+  (:require [resolver-sim.io.serialization :as serialization]))
 
 (defn kw->json-key [k]
   (if (keyword? k) (name k) (str k)))
@@ -13,5 +13,4 @@
 (defn result->json-str
   "Serialize a replay result to a JSON string."
   [result]
-  (let [serializable (dissoc result :protocol)]
-    (json/write-str serializable :key-fn kw->json-key :value-fn kw-val->str)))
+  (serialization/serialize-artifact (dissoc result :protocol)))

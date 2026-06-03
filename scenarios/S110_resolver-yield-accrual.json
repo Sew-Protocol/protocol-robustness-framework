@@ -1,6 +1,7 @@
 {
-  "scenario-id": "s81-resolver-yield-accrual",
+  "scenario-id": "s110-resolver-yield-accrual",
   "schema-version": "1.0",
+  "description": "Resolver stake accrues fixed-rate yield over one year and settles on full withdraw.",
   "initial-block-time": 1000,
   "agents": [
     {
@@ -31,17 +32,19 @@
       "agent": "resolver",
       "action": "register-stake",
       "params": {
+        "token": "USDC",
         "amount": 10000,
         "yield-profile-id": "fixed-rate"
       }
     },
     {
       "seq": 1,
-      "time": 31536000,
+      "time": 31537000,
       "agent": "resolver",
       "action": "withdraw-stake",
       "params": {
-        "amount": 1000
+        "token": "USDC",
+        "amount": 10000
       }
     }
   ],

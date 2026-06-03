@@ -4,7 +4,6 @@ Derived from scenario events in `scenarios/*.json` and canonical transition IDs 
 
 | Transition ID | Label | Covered by scenarios | Count |
 |---|---|---|---:|
-| `advance_time` | Advance time | _none_ | 0 |
 | `auto_cancel_disputed` | Auto-cancel disputed | s04-dispute-timeout-autocancel, s17-ieo-dispute-no-resolver-timeout, s24-resolver-stake-depletion-cascade, s60-partial-withdraw-then-slash-ordering | 4 |
 | `automate_timed_actions` | Automate timed actions | S75_auto-release-vs-dispute-race | 1 |
 | `challenge_resolution` | Challenge resolution | S76_sponsored-appeal-third-party-funding, S77_appeal-window-challenge-clears-pending-without-next-resolver, s41-dr3-reversal-slash-disabled, s42-resolver-buyer-bribery-loop, s46-reorg-idempotence, s63-replay-idempotence-same-trace-double-run | 6 |
@@ -18,4 +17,4 @@ Derived from scenario events in `scenarios/*.json` and canonical transition IDs 
 | `release` | Release | S68_yield-aave-long-horizon-10y-monthly-accrual, S69_yield-fixed-long-horizon-10y-quarterly-accrual, S73_yield-rounding-drift-repeated-small-accruals, S75_auto-release-vs-dispute-race, s01-baseline-happy-path, s08-state-machine-attack-gauntlet, s09-multi-escrow-solvency, s10-double-finalize-rejected, s16-ieo-create-release, s54-alias-poisoning-noncanonical-id-rejected, s55-alias-rebinding-after-create-blocked, s58-escalation-after-terminal-hard-reject, s61-governance-snapshot-mid-dispute-immutability, s64-force-refund-then-illegal-release-attempt, s67-reentrancy-callback | 15 |
 | `sender_cancel` | Sender cancel | s06-mutual-cancel | 1 |
 
-Definitions hash: `122658529`
+Definitions hash: `1730484672`

@@ -158,6 +158,7 @@
    :dispute-timestamp-consistent      :state-machine
    :dispute-level-bounded             :state-machine
    :terminal-states-unchanged         :state-machine
+   :escrow-state-transition-valid     :state-machine
    :escalation-level-monotonic        :state-machine
    :cancellation-mutex                :state-machine
    :module-snapshot-immutable         :governance
@@ -397,7 +398,6 @@
     "recipient_cancel"          :transition/state-change
     "automate_timed_actions"    :transition/maintenance
     "auto_cancel_disputed"      :transition/timeout
-    "advance_time"              :transition/maintenance
     :transition/unknown))
 
 ;; ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 (ns scripts.speds-generate-issues
-  (:require [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.findings :as findings]
-            [resolver-sim.notebooks.speds.issues :as issues]))
+  (:require [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.findings :as findings]
+            [resolver_sim.notebooks.speds.issues :as issues]))
 
 (defn -main []
   (let [artifacts (data/load-run-artifacts)

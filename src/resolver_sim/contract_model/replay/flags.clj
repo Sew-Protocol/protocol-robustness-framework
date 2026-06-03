@@ -2,8 +2,8 @@
   "Replay capability flags — opt-in orchestration for theory, temporal, and validation.
 
    Defaults preserve existing Sew invariant-suite behaviour. Use
-   `minimal-replay-flags` or `simple-replay` for yield-only and other
-   library-style scenarios.")
+   `replay-yield-scenario` for yield-v1; `minimal-replay-flags` / `simple-replay`
+   for other library-style scenarios.")
 
 (def default-replay-flags
   "Full replay: invariants on, expectations on, strict validation, temporal from scenario."

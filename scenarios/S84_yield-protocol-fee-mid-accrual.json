@@ -10,6 +10,11 @@
     {
       "id": "seller",
       "address": "0xseller"
+    },
+    {
+      "id": "governance",
+      "address": "0xgovernance",
+      "role": "governance"
     }
   ],
   "protocol-params": {
@@ -30,33 +35,15 @@
     },
     {
       "seq": 1,
-      "time": 1060,
-      "agent": "buyer",
-      "action": "time_advance",
-      "params": {
-        "dt": 3600
-      }
-    },
-    {
-      "seq": 2,
       "time": 2000,
-      "agent": "buyer",
+      "agent": "governance",
       "action": "governance_update_fee",
       "params": {
         "fee-bps": 500
       }
     },
     {
-      "seq": 3,
-      "time": 3000,
-      "agent": "buyer",
-      "action": "time_advance",
-      "params": {
-        "dt": 3600
-      }
-    },
-    {
-      "seq": 4,
+      "seq": 2,
       "time": 4000,
       "agent": "buyer",
       "action": "release",

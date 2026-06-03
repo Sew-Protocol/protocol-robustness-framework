@@ -50,6 +50,33 @@
   [from to]
   (contains? (get allowed-transitions from #{}) to))
 
+(defn- graph-nodes
+  [transitions]
+  (set (concat (keys transitions) (mapcat val transitions))))
+
+(defn transition-graph-acyclic?
+  "True when `allowed-transitions` has no directed cycles.
+
+   Escrow FSM must be acyclic: terminal states have no outgoing edges and live
+   states cannot return to earlier phases (no circular invalid_states)."
+  [transitions]
+  (let [nodes (graph-nodes transitions)
+        color (volatile! (into {} (map (fn [n] [n :white]) nodes)))]
+    (letfn [(dfs [n]
+              (case (@color n)
+                :gray true
+                :black false
+                (do
+                  (vswap! color assoc n :gray)
+                  (if (some dfs (get transitions n #{}))
+                    true
+                    (do (vswap! color assoc n :black) false)))))]
+      (not (some #(when (= :white (@color %)) (dfs %)) nodes)))))
+
+(def transition-graph-acyclic
+  "Authoritative graph is acyclic — enforced in `state-machine-test`."
+  (transition-graph-acyclic? allowed-transitions))
+
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers
 ;; ---------------------------------------------------------------------------

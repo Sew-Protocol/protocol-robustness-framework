@@ -1,6 +1,6 @@
-(ns resolver-sim.notebooks.speds.findings-comparator-test
+(ns resolver_sim.notebooks.speds.findings-comparator-test
   (:require [clojure.test :refer [deftest is testing]]
-            [resolver-sim.notebooks.speds.findings :as findings]))
+            [resolver_sim.notebooks.speds.findings :as findings]))
 
 (def ^:private sample-artifacts
   {:summary {:run-id "RUN-TEST"

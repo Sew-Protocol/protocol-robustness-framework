@@ -1,7 +1,7 @@
 (ns notebooks.dispute-artifact
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.story :as story]))
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.story :as story]))
 
 ;; # Sew Protocol — Technical Validation Story
 ;; ## Scenario S47b: Appeal Window +1s Boundary (Deadline Enforcement)
