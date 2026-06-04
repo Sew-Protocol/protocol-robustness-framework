@@ -805,9 +805,18 @@
                     claimed       (+ (reduce + 0 (vals resolver-fees))
                                      (reduce + 0 (vals protocol-fees)))
                     et            (get-in world [:escrow-transfers wf])
-                    fee           (:initial-fee et 0)
-                    appeal-fees   (reduce + 0 (vals (get (:bond-balances world) wf {})))
-                    max-fees      (+ fee appeal-fees)]
+                   raw-fee       (or (:initial-fee et) 0)
+                   fee           (cond
+                                   (number? raw-fee) raw-fee
+                                   (string? raw-fee) (try (Double/parseDouble raw-fee) (catch Exception _ 0))
+                                   :else 0)
+                   parse-num     (fn [x]
+                                   (cond
+                                     (number? x) x
+                                     (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
+                                     :else 0))
+                   appeal-fees   (reduce + 0 (map parse-num (vals (get (:bond-balances world) wf {}))))
+                   max-fees      (+ fee appeal-fees)]
               :when (> claimed max-fees)]
           {:workflow-id wf :claims claimed :max max-fees})]
     {:holds? (empty? violations) :violations (vec violations)}))
