@@ -176,7 +176,8 @@
     :oracle-effective
     ;; Optional author metadata
     :author
-    :author-id})
+    :author-id
+    :evidence-quality?})
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."
