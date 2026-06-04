@@ -819,8 +819,15 @@
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [bond-refunds (get domain-map :bond/refund {})
                     total        (reduce + 0 (vals bond-refunds))
-                    posted       (+ (reduce + 0 (vals (get-in world [:bond-balances wf] {})))
-                                    (get-in world [:bond-posted-by-workflow wf] 0))]
+                   ;; Coerce possible string values to numbers to avoid ClassCastException
+                   parse-num     (fn [x]
+                                   (cond
+                                     (number? x) x
+                                     (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
+                                     :else 0))
+                   posted-built  (vals (get-in world [:bond-balances wf] {}))
+                   posted-sum    (reduce + 0 (map parse-num posted-built))
+                   posted        (+ posted-sum (parse-num (get-in world [:bond-posted-by-workflow wf] 0)))]
               :when (> total posted)]
           {:workflow-id wf :claims total :max posted})]
     {:holds? (empty? violations) :violations (vec violations)}))
