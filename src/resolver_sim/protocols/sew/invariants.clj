@@ -122,12 +122,17 @@
      (get-token-claimable-v2-non-principal-sum world token)))
 
 (defn- get-distributed-sum [world token]
-  (let [bd               (:bond-distribution world {:insurance 0 :protocol 0})
-        retained         (:retained-slash-reserves world 0)
-        bond-fees        (get (:bond-fees world) token 0)
-        appeal-bond-dist (get (:appeal-bond-distributions-by-token world {}) token 0)]
+  (let [parse-num (fn [x]
+                    (cond
+                      (number? x) x
+                      (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
+                      :else 0))
+        bd               (:bond-distribution world {:insurance 0 :protocol 0})
+        retained         (parse-num (:retained-slash-reserves world 0))
+        bond-fees        (parse-num (get (:bond-fees world) token 0))
+        appeal-bond-dist (parse-num (get (:appeal-bond-distributions-by-token world {}) token 0))]
     (if (= token :USDC)
-      (+ (:insurance bd 0) (:protocol bd 0) retained bond-fees appeal-bond-dist)
+      (+ (parse-num (:insurance bd 0)) (parse-num (:protocol bd 0)) retained bond-fees appeal-bond-dist)
       (+ bond-fees appeal-bond-dist))))
 
 ;; ---------------------------------------------------------------------------
