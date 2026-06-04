@@ -1,4 +1,4 @@
-{:tasks
+ {:tasks
  {sim:run {:doc "Run a simulation with EDN params"
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
@@ -290,16 +290,27 @@
   evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
                      :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}
 
-
   clerk-build {:doc "Build static Clerk notebooks"
                :task (clojure "-M:build-clerk")}
   clerk-watch {:doc "Watch notebooks and rebuild"
                :task (shell "find src notebooks -name '*.clj' | entr -r bb clerk-build")}
 
-
   eastwood {:doc "eastwood"
             :task (shell "clj -M:eastwood")}
 
+
+  format:json
+    { :doc "Pretty print all JSON files in the repository"
+      :requires ([babashka.fs :as fs]
+            [cheshire.core :as json])
+      :task
+        (doseq [f (fs/glob "." "**/*.json")]
+        (let [fs-path (str f)]
+          (spit fs-path
+           (json/generate-string
+            (json/parse-string (slurp fs-path))
+            {:pretty true}))
+          (println "Formatted" fs-path)))}
 
   check {:doc "check"
          :task (do
