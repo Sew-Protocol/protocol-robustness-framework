@@ -37,14 +37,14 @@ jobs:
           ssh-keygen -t ed25519 -f test_key -N ''
           ls -l test_key*
 
+      - name: Sign manifest with ephemeral key
+        run: |
+          clojure -M -m resolver-sim.scripts.evidence sign ./test_key || true
+
       - name: Export evidence bundle (CI)
         run: |
           bb evidence:bundle results/ci-bundle || true
           ls -la results/ci-bundle || true
-
-      - name: Sign manifest with ephemeral key
-        run: |
-          clojure -M -m resolver-sim.scripts.evidence sign ./test_key || true
 
       - name: Upload test artifacts
         if: always()
