@@ -41,50 +41,64 @@
      :else v))
   ([_k v] (json-value v)))
 
+(def ^:private public-metadata-keys
+  [:description :scenario-title :scenario-family :scenario-purpose :purpose
+   :threat-tags :security-properties :threat-model :expected-outcome
+   :theory :expectations :notes :provenance])
+
+(defn- attach-public-metadata [doc scenario]
+  (reduce (fn [d k]
+            (if (contains? scenario k)
+              (assoc d k (get scenario k))
+              d))
+          doc
+          public-metadata-keys))
+
 (defn scenario->trace-document
   "Build a schema 1.1 trace document from an invariant scenario map."
   [scenario {:keys [title purpose threat-tags]}]
   (let [sid (:scenario-id scenario)]
-    (cond-> {:schema-version     "1.1"
-             :id                 (str "scenarios/" sid)
-             :title              (or title sid)
-             :purpose            (or purpose "regression")
-             :threat-tags        (vec (or threat-tags []))
-             :scenario-id        sid
-             :initial-block-time (:initial-block-time scenario 1000)
-             :agents             (mapv agent->trace-agent (:agents scenario []))
-             :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
-             :events             (:events scenario [])
-             :scenario-author    (:scenario-author scenario)}
-      (:expected-errors scenario)
-      (assoc :expected-errors
-             (mapv #(update % :error json-value) (:expected-errors scenario)))
-      (:strict-expected-errors? scenario)
-      (assoc :strict-expected-errors? true)
-      (:allow-open-disputes? scenario)
-      (assoc :allow-open-disputes? true)
-      (:notes scenario)
-      (assoc :notes (:notes scenario)))))
+    (-> (cond-> {:schema-version     "1.1"
+                 :id                 (str "scenarios/" sid)
+                 :title              (or title sid)
+                 :purpose            (or purpose "regression")
+                 :threat-tags        (vec (or threat-tags []))
+                 :scenario-id        sid
+                 :initial-block-time (:initial-block-time scenario 1000)
+                 :agents             (mapv agent->trace-agent (:agents scenario []))
+                 :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
+                 :events             (:events scenario [])
+                 :scenario-author    (:scenario-author scenario)}
+          (:expected-errors scenario)
+          (assoc :expected-errors
+                 (mapv #(update % :error json-value) (:expected-errors scenario)))
+          (:strict-expected-errors? scenario)
+          (assoc :strict-expected-errors? true)
+          (:allow-open-disputes? scenario)
+          (assoc :allow-open-disputes? true)
+          (:notes scenario)
+          (assoc :notes (:notes scenario)))
+        (attach-public-metadata scenario))))
 
 (defn scenario->public-json-document
   "Build scenarios/*.json document (schema 1.0) from an invariant scenario map."
   [scenario]
-  (let [sid (:scenario-id scenario)]
-    (cond-> {:schema-version     "1.0"
-             :scenario-id        sid
-             :initial-block-time (:initial-block-time scenario 1000)
-             :agents             (mapv agent->public-json-agent (:agents scenario []))
-             :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
-             :events             (:events scenario [])}
-      (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
-      (:expected-errors scenario)
-      (assoc :expected-errors
-             (mapv #(update % :error json-value) (:expected-errors scenario)))
-      (:strict-expected-errors? scenario)
-      (assoc :strict-expected-errors? true)
-      (:allow-open-disputes? scenario)
-      (assoc :allow-open-disputes? true)
-      (:provenance scenario) (assoc :provenance (:provenance scenario)))))
+  (let [sid (:scenario-id scenario)
+        base (cond-> {:schema-version     "1.0"
+                     :scenario-id        sid
+                     :initial-block-time (:initial-block-time scenario 1000)
+                     :agents             (mapv agent->public-json-agent (:agents scenario []))
+                     :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
+                     :events             (:events scenario [])}
+              (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
+              (:expected-errors scenario)
+              (assoc :expected-errors
+                     (mapv #(update % :error json-value) (:expected-errors scenario)))
+              (:strict-expected-errors? scenario)
+              (assoc :strict-expected-errors? true)
+              (:allow-open-disputes? scenario)
+              (assoc :allow-open-disputes? true))]
+    (attach-public-metadata base scenario)))
 
 (def default-export-metadata
   {"s18-dr3-kleros-l0-resolves"
@@ -130,7 +144,47 @@
    "s62-resolver-capacity-concurrent-dispute-load"
    {:title "Resolver Capacity Under Concurrent Dispute Load"
     :purpose "regression"
-    :threat-tags ["resolver-capacity" "dispute-flooding" "concurrent-disputes"]}})
+    :threat-tags ["resolver-capacity" "dispute-flooding" "concurrent-disputes"]}
+
+   "s26-forking-strategist-l1-reversal"
+   {:title "Forking Strategist: L1 Reversal"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s27-forking-strategist-l2-fork"
+   {:title "Forking Strategist: L2 Fork"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s28-forking-strategist-late-escalation-rejected"
+   {:title "Forking Strategist: Late Escalation Rejected"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s29-forking-strategist-seller-escalates"
+   {:title "Forking Strategist: Seller Escalates"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s30-forking-strategist-double-loss"
+   {:title "Forking Strategist: Double Loss"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s31-forking-strategist-all-levels-confirm"
+   {:title "Forking Strategist: All Levels Confirm"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s32-forking-strategist-premature-settlement-rejected"
+   {:title "Forking Strategist: Premature Settlement Rejected"
+    :purpose "adversarial-robustness"
+    :threat-tags ["forking-strategist" "appeal-escalation"]}
+
+   "s33-forking-strategist-two-escrow-fork-isolation"
+   {:title "Fork Isolation Across Two Disputed Escrows"
+    :purpose "adversarial-robustness"
+    :threat-tags ["fork-isolation" "state-isolation" "appeal-escalation"]}})
 
 (defn write-json-file
   [doc path]

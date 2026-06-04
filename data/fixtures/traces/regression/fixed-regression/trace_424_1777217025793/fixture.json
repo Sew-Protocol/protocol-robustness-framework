@@ -1,253 +1,243 @@
 {
-  "description": "Generated trace: phase-z-5-cascade-liveness",
-  "fee_bps": 100,
-  "schema_version": "1",
-  "resolutions": {
-    "wf0": {
-      "outcome": "REFUND",
-      "finality": "FINAL",
-      "integrity": "FULLY_RECONCILED"
+  "steps" : [ {
+    "timestamp" : 1000,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf0",
+    "event_type" : "CREATE ESCROW",
+    "expected" : {
+      "escrow_state" : 1,
+      "escrow_amount_after_fee" : 99000,
+      "global_total_held" : 99000,
+      "global_total_fees" : 1000,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
     },
-    "wf1": {
-      "outcome": "NO_OP",
-      "finality": "STALLED",
-      "integrity": "ACCOUNTING_MISMATCH"
+    "attributes" : {
+      "action" : "create_escrow",
+      "seq" : 0,
+      "wf_alias" : "wf0",
+      "to_role" : "0x0000000000000000000000000000000000001002",
+      "amount" : 100000,
+      "type" : "state-change",
+      "path" : "none"
     },
-    "wf2": {
-      "outcome": "NO_OP",
-      "finality": "STALLED",
-      "integrity": "ACCOUNTING_MISMATCH"
+    "state_bucket" : "ACTIVE",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 1010,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf1",
+    "event_type" : "CREATE ESCROW",
+    "expected" : {
+      "escrow_state" : 1,
+      "escrow_amount_after_fee" : 49500,
+      "global_total_held" : 148500,
+      "global_total_fees" : 1500,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "create_escrow",
+      "seq" : 1,
+      "wf_alias" : "wf1",
+      "to_role" : "0x0000000000000000000000000000000000001002",
+      "amount" : 50000,
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "state_bucket" : "ACTIVE",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 1020,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf2",
+    "event_type" : "CREATE ESCROW",
+    "expected" : {
+      "escrow_state" : 1,
+      "escrow_amount_after_fee" : 74250,
+      "global_total_held" : 222750,
+      "global_total_fees" : 2250,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "create_escrow",
+      "seq" : 2,
+      "wf_alias" : "wf2",
+      "to_role" : "0x0000000000000000000000000000000000001002",
+      "amount" : 75000,
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "state_bucket" : "ACTIVE",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 2000,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf0",
+    "event_type" : "RAISE DISPUTE",
+    "expected" : {
+      "escrow_state" : 4,
+      "escrow_amount_after_fee" : 99000,
+      "global_total_held" : 222750,
+      "global_total_fees" : 2250,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "raise_dispute",
+      "seq" : 3,
+      "wf_alias" : "wf0",
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "state_bucket" : "CHALLENGED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 2010,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf1",
+    "event_type" : "RAISE DISPUTE",
+    "expected" : {
+      "escrow_state" : 4,
+      "escrow_amount_after_fee" : 49500,
+      "global_total_held" : 222750,
+      "global_total_fees" : 2250,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "raise_dispute",
+      "seq" : 4,
+      "wf_alias" : "wf1",
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "state_bucket" : "CHALLENGED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 2020,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf2",
+    "event_type" : "RAISE DISPUTE",
+    "expected" : {
+      "escrow_state" : 4,
+      "escrow_amount_after_fee" : 74250,
+      "global_total_held" : 222750,
+      "global_total_fees" : 2250,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "raise_dispute",
+      "seq" : 5,
+      "wf_alias" : "wf2",
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "state_bucket" : "CHALLENGED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 7778001,
+    "step_type" : "protocol-transition",
+    "context_id" : "wf0",
+    "event_type" : "AUTO CANCEL DISPUTED",
+    "expected" : {
+      "escrow_state" : 3,
+      "escrow_amount_after_fee" : 99000,
+      "global_total_held" : 123750,
+      "global_total_fees" : 2250,
+      "pending_settlement_exists" : false,
+      "dispute_level" : 0
+    },
+    "attributes" : {
+      "action" : "auto_cancel_disputed",
+      "seq" : 6,
+      "wf_alias" : "wf0",
+      "type" : "state-change",
+      "path" : "timeout"
+    },
+    "state_bucket" : "SETTLED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 7778002,
+    "step_type" : "economic-effect",
+    "context_id" : "wf1",
+    "event_type" : "AUTO CANCEL DISPUTED",
+    "expected" : {
+      "reverted" : true,
+      "error" : "dispute-timeout-not-exceeded",
+      "escrow_state" : 4,
+      "pending_settlement_exists" : false
+    },
+    "attributes" : {
+      "action" : "auto_cancel_disputed",
+      "seq" : 7,
+      "wf_alias" : "wf1",
+      "type" : "revert",
+      "path" : "timeout"
+    },
+    "state_bucket" : "CHALLENGED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  }, {
+    "timestamp" : 7778003,
+    "step_type" : "economic-effect",
+    "context_id" : "wf2",
+    "event_type" : "AUTO CANCEL DISPUTED",
+    "expected" : {
+      "reverted" : true,
+      "error" : "dispute-timeout-not-exceeded",
+      "escrow_state" : 4,
+      "pending_settlement_exists" : false
+    },
+    "attributes" : {
+      "action" : "auto_cancel_disputed",
+      "seq" : 8,
+      "wf_alias" : "wf2",
+      "type" : "revert",
+      "path" : "timeout"
+    },
+    "state_bucket" : "CHALLENGED",
+    "actor" : "buyer",
+    "cdrs_version" : "0.1"
+  } ],
+  "fee_bps" : 100,
+  "step_count" : 9,
+  "resolutions" : {
+    "wf0" : {
+      "outcome" : "REFUND",
+      "finality" : "FINAL",
+      "integrity" : "FULLY_RECONCILED"
+    },
+    "wf1" : {
+      "outcome" : "NO_OP",
+      "finality" : "STALLED",
+      "integrity" : "ACCOUNTING_MISMATCH"
+    },
+    "wf2" : {
+      "outcome" : "NO_OP",
+      "finality" : "STALLED",
+      "integrity" : "ACCOUNTING_MISMATCH"
     }
   },
-  "cdrs_version": "0.1",
-  "steps": [
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 1,
-        "escrow_amount_after_fee": 99000,
-        "global_total_held": 99000,
-        "global_total_fees": 1000,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "ACTIVE",
-      "event_type": "CREATE ESCROW",
-      "timestamp": 1000,
-      "context_id": "wf0",
-      "attributes": {
-        "action": "create_escrow",
-        "seq": 0,
-        "wf_alias": "wf0",
-        "to_role": "0x0000000000000000000000000000000000001002",
-        "amount": 100000,
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 1,
-        "escrow_amount_after_fee": 49500,
-        "global_total_held": 148500,
-        "global_total_fees": 1500,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "ACTIVE",
-      "event_type": "CREATE ESCROW",
-      "timestamp": 1010,
-      "context_id": "wf1",
-      "attributes": {
-        "action": "create_escrow",
-        "seq": 1,
-        "wf_alias": "wf1",
-        "to_role": "0x0000000000000000000000000000000000001002",
-        "amount": 50000,
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 1,
-        "escrow_amount_after_fee": 74250,
-        "global_total_held": 222750,
-        "global_total_fees": 2250,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "ACTIVE",
-      "event_type": "CREATE ESCROW",
-      "timestamp": 1020,
-      "context_id": "wf2",
-      "attributes": {
-        "action": "create_escrow",
-        "seq": 2,
-        "wf_alias": "wf2",
-        "to_role": "0x0000000000000000000000000000000000001002",
-        "amount": 75000,
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 4,
-        "escrow_amount_after_fee": 99000,
-        "global_total_held": 222750,
-        "global_total_fees": 2250,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "CHALLENGED",
-      "event_type": "RAISE DISPUTE",
-      "timestamp": 2000,
-      "context_id": "wf0",
-      "attributes": {
-        "action": "raise_dispute",
-        "seq": 3,
-        "wf_alias": "wf0",
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 4,
-        "escrow_amount_after_fee": 49500,
-        "global_total_held": 222750,
-        "global_total_fees": 2250,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "CHALLENGED",
-      "event_type": "RAISE DISPUTE",
-      "timestamp": 2010,
-      "context_id": "wf1",
-      "attributes": {
-        "action": "raise_dispute",
-        "seq": 4,
-        "wf_alias": "wf1",
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 4,
-        "escrow_amount_after_fee": 74250,
-        "global_total_held": 222750,
-        "global_total_fees": 2250,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "CHALLENGED",
-      "event_type": "RAISE DISPUTE",
-      "timestamp": 2020,
-      "context_id": "wf2",
-      "attributes": {
-        "action": "raise_dispute",
-        "seq": 5,
-        "wf_alias": "wf2",
-        "type": "state-change",
-        "path": "none"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "protocol-transition",
-      "cdrs_version": "0.1",
-      "expected": {
-        "escrow_state": 3,
-        "escrow_amount_after_fee": 99000,
-        "global_total_held": 123750,
-        "global_total_fees": 2250,
-        "pending_settlement_exists": false,
-        "dispute_level": 0
-      },
-      "state_bucket": "SETTLED",
-      "event_type": "AUTO CANCEL DISPUTED",
-      "timestamp": 7778001,
-      "context_id": "wf0",
-      "attributes": {
-        "action": "auto_cancel_disputed",
-        "seq": 6,
-        "wf_alias": "wf0",
-        "type": "state-change",
-        "path": "timeout"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "economic-effect",
-      "cdrs_version": "0.1",
-      "expected": {
-        "reverted": true,
-        "error": "dispute-timeout-not-exceeded",
-        "escrow_state": 4,
-        "pending_settlement_exists": false
-      },
-      "state_bucket": "CHALLENGED",
-      "event_type": "AUTO CANCEL DISPUTED",
-      "timestamp": 7778002,
-      "context_id": "wf1",
-      "attributes": {
-        "action": "auto_cancel_disputed",
-        "seq": 7,
-        "wf_alias": "wf1",
-        "type": "revert",
-        "path": "timeout"
-      },
-      "actor": "buyer"
-    },
-    {
-      "step_type": "economic-effect",
-      "cdrs_version": "0.1",
-      "expected": {
-        "reverted": true,
-        "error": "dispute-timeout-not-exceeded",
-        "escrow_state": 4,
-        "pending_settlement_exists": false
-      },
-      "state_bucket": "CHALLENGED",
-      "event_type": "AUTO CANCEL DISPUTED",
-      "timestamp": 7778003,
-      "context_id": "wf2",
-      "attributes": {
-        "action": "auto_cancel_disputed",
-        "seq": 8,
-        "wf_alias": "wf2",
-        "type": "revert",
-        "path": "timeout"
-      },
-      "actor": "buyer"
-    }
-  ],
-  "step_count": 9,
-  "metadata": {
-    "trace_kind": "fixed_regression",
-    "scenario_type": "phase-z-5-cascade-liveness",
-    "issue_type": "issue\/liveness-failure",
-    "adversary_type": "adversarial-agent",
-    "reconciliation_status": "fully-reconciled",
-    "cdrs_note": "Scored 5 with categories clojure.lang.LazySeq@648b8f5"
+  "metadata" : {
+    "trace_kind" : "fixed_regression",
+    "scenario_type" : "phase-z-5-cascade-liveness",
+    "issue_type" : "issue/liveness-failure",
+    "adversary_type" : "adversarial-agent",
+    "reconciliation_status" : "fully-reconciled",
+    "cdrs_note" : "Scored 5 with categories clojure.lang.LazySeq@648b8f5"
   },
-  "scenario_id": "phase-z-5-cascade-liveness"
+  "schema_version" : "1",
+  "scenario_id" : "phase-z-5-cascade-liveness",
+  "cdrs_version" : "0.1",
+  "description" : "Generated trace: phase-z-5-cascade-liveness"
 }

@@ -323,7 +323,7 @@ unfavorable rounds for the opposing party.
 | `s30-forking-strategist-double-loss` | `:multi-step :adaptive` | Strategy that incurs two losses |
 | `s31-forking-strategist-all-levels-confirm` | `:multi-step :high-capital` | All levels confirm original outcome |
 | `s32-forking-strategist-premature-settlement-rejected` | `:multi-step` | Settlement during open appeal rejected |
-| `s33-forking-strategist-two-escrow-fork-isolation` | `:multi-step :capital-efficient` | Fork isolation across two escrows |
+| `s33-forking-strategist-two-escrow-fork-isolation` | `:multi-step :state-isolation` | Escalation of wf0 must not block, overwrite, or contaminate wf1 settlement (shared seller + L0) |
 
 #### `:colluder`
 

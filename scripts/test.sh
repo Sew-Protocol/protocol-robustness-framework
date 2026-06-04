@@ -82,6 +82,7 @@ run_unit() {
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
 (require '[resolver-sim.protocols.sew.replay-test])
+(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
 (require '[resolver-sim.scenario.expectations-test])
 (require '[resolver-sim.scenario.equilibrium-test])
 (require '[resolver-sim.sim.multi-epoch-test])
@@ -94,6 +95,7 @@ run_unit() {
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
+                'resolver-sim.protocols.sew.forking-strategist-expectations-test
                 'resolver-sim.protocols.sew.slashing-test
                 'resolver-sim.protocols.sew.phase-k-test
                 'resolver-sim.protocols.sew.phase-m-test

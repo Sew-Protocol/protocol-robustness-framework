@@ -1,643 +1,609 @@
 {
-  "run_at": "2026-04-15T17:40:32Z",
-  "git_sha": "31ba27b",
-  "git_branch": "ethereum",
-  "python_version": "3.12.10",
-  "passed": 33,
-  "total": 33,
-  "suite_elapsed_s": 0.56,
-  "summary": {
-    "total_escrows": 43,
-    "total_volume": 112701,
-    "disputes_triggered": 32,
-    "resolutions_executed": 27,
-    "pending_settlements_executed": 0,
-    "attack_attempts": 41,
-    "attack_successes": 9,
-    "reverts": 189,
-    "invariant_violations": 0,
-    "total_transactions": 327
+  "total" : 33,
+  "suite_elapsed_s" : 0.56,
+  "git_branch" : "ethereum",
+  "git_sha" : "31ba27b",
+  "python_version" : "3.12.10",
+  "run_at" : "2026-04-15T17:40:32Z",
+  "summary" : {
+    "disputes_triggered" : 32,
+    "reverts" : 189,
+    "total_transactions" : 327,
+    "resolutions_executed" : 27,
+    "attack_attempts" : 41,
+    "total_volume" : 112701,
+    "pending_settlements_executed" : 0,
+    "invariant_violations" : 0,
+    "attack_successes" : 9,
+    "total_escrows" : 43
   },
-  "scenarios": [
-    {
-      "name": "S01  baseline-happy-path",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 2,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 0,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S02  dr3-dispute-release",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 4000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S03  dr3-dispute-refund",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 4000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S04  dispute-timeout-autocancel",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 6,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 2000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 3,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S05  pending-settlement-execute",
-      "ok": true,
-      "elapsed": 0.03,
-      "steps": 21,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 6000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 18,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S06  mutual-cancel",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 1500,
-        "disputes_triggered": 0,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S07  unauthorized-resolver-rejected",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 4,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 3000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 1,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S08  state-machine-attack-gauntlet",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 9,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 2000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 7,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S09  multi-escrow-solvency",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 8,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 3,
-        "total_volume": 6000,
-        "disputes_triggered": 2,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S10  double-finalize-rejected",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 8,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 2,
-        "total_volume": 1000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 3,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S11  zero-fee-edge-case",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 1,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S12  governance-snapshot-isolation",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 2,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 10000,
-        "disputes_triggered": 0,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S13  pending-settlement-refund",
-      "ok": true,
-      "elapsed": 0.03,
-      "steps": 21,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 6000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 18,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S14  dr3-module-authorized",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S15  dr3-module-unauthorized-rejected",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 4,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 1,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S16  ieo-create-release",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 2,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 2000,
-        "disputes_triggered": 0,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S17  ieo-dispute-no-resolver-timeout",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 6,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 1000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 3,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S18  dr3-kleros-l0-resolves",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S19  dr3-kleros-escalate-l1-resolves",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 4,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S20  dr3-kleros-max-escalation-guard",
-      "ok": true,
-      "elapsed": 0.03,
-      "steps": 24,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 22,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S21  dr3-kleros-pending-cleared-on-escalation",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 13,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 4,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S22  status-leak-agree-cancel-over-dispute",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 3,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S23  preemptive-escalation-blocked",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 4,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S24  f1-liveness-extraction",
-      "ok": true,
-      "elapsed": 0.04,
-      "steps": 34,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 6,
-        "total_volume": 600,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 20,
-        "attack_successes": 7,
-        "reverts": 27,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S25  f2-appeal-window-race",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 17,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 500,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 1,
-        "attack_successes": 0,
-        "reverts": 14,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S26  f3-governance-sandwich",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 6,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 500,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 4,
-        "attack_successes": 2,
-        "reverts": 2,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S27  f4-escalation-loop-amplified",
-      "ok": true,
-      "elapsed": 0.06,
-      "steps": 60,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 500,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 14,
-        "attack_successes": 0,
-        "reverts": 57,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S28  f5-concurrent-status-desync",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 6,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "invariant_violations": 0,
-        "reverts": 1
-      }
-    },
-    {
-      "name": "S29  f6-resolver-cartel",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 10,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S30  f7-profit-threshold-strike",
-      "ok": true,
-      "elapsed": 0.01,
-      "steps": 2,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 100,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S31  f8-appeal-fee-amplification",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 13,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 4,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S32  f9-subthreshold-misresolution",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 10,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 5000,
-        "disputes_triggered": 1,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 1,
-        "invariant_violations": 0
-      }
-    },
-    {
-      "name": "S33  f10-cascade-escalation-drain",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 10,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 4,
-        "total_volume": 2000,
-        "disputes_triggered": 4,
-        "resolutions_executed": 2,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
+  "scenarios" : [ {
+    "name" : "S01  baseline-happy-path",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 2,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 0,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
     }
-  ]
+  }, {
+    "name" : "S02  dr3-dispute-release",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 4000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S03  dr3-dispute-refund",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 4000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S04  dispute-timeout-autocancel",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 6,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 3,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 2000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S05  pending-settlement-execute",
+    "ok" : true,
+    "elapsed" : 0.03,
+    "steps" : 21,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 18,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 6000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S06  mutual-cancel",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 0,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 1500,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S07  unauthorized-resolver-rejected",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 4,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 1,
+      "total_volume" : 3000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S08  state-machine-attack-gauntlet",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 9,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 7,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 2000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S09  multi-escrow-solvency",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 8,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 2,
+      "reverts" : 0,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 6000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 3
+    }
+  }, {
+    "name" : "S10  double-finalize-rejected",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 8,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 3,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 1000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 2
+    }
+  }, {
+    "name" : "S11  zero-fee-edge-case",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 1,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S12  governance-snapshot-isolation",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 2,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 0,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 10000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S13  pending-settlement-refund",
+    "ok" : true,
+    "elapsed" : 0.03,
+    "steps" : 21,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 18,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 6000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S14  dr3-module-authorized",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S15  dr3-module-unauthorized-rejected",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 4,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 1,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S16  ieo-create-release",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 2,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 0,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 2000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S17  ieo-dispute-no-resolver-timeout",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 6,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 3,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 1000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S18  dr3-kleros-l0-resolves",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S19  dr3-kleros-escalate-l1-resolves",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 4,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S20  dr3-kleros-max-escalation-guard",
+    "ok" : true,
+    "elapsed" : 0.03,
+    "steps" : 24,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 22,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S21  dr3-kleros-pending-cleared-on-escalation",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 13,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 4,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S22  status-leak-agree-cancel-over-dispute",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 3,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S23  preemptive-escalation-blocked",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 4,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S24  f1-liveness-extraction",
+    "ok" : true,
+    "elapsed" : 0.04,
+    "steps" : 34,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 27,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 20,
+      "total_volume" : 600,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 7,
+      "total_escrows" : 6
+    }
+  }, {
+    "name" : "S25  f2-appeal-window-race",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 17,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 14,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 1,
+      "total_volume" : 500,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S26  f3-governance-sandwich",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 6,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 2,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 4,
+      "total_volume" : 500,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 2,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S27  f4-escalation-loop-amplified",
+    "ok" : true,
+    "elapsed" : 0.06,
+    "steps" : 60,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 57,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 14,
+      "total_volume" : 500,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S28  f5-concurrent-status-desync",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 6,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "invariant_violations" : 0,
+      "reverts" : 1
+    }
+  }, {
+    "name" : "S29  f6-resolver-cartel",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 10,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S30  f7-profit-threshold-strike",
+    "ok" : true,
+    "elapsed" : 0.01,
+    "steps" : 2,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 100,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S31  f8-appeal-fee-amplification",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 13,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 4,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S32  f9-subthreshold-misresolution",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 10,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 1,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 5000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
+    }
+  }, {
+    "name" : "S33  f10-cascade-escalation-drain",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 10,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 4,
+      "reverts" : 0,
+      "resolutions_executed" : 2,
+      "attack_attempts" : 0,
+      "total_volume" : 2000,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 4
+    }
+  } ],
+  "passed" : 33
 }

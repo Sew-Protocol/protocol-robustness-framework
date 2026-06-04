@@ -140,7 +140,7 @@
 
    Returns a map with the same keys as batch/run-batch aggregate so that
    run-single-epoch can consume it without modification."
-  [paired-trials n-trials]
+  [paired-trials n-trials params]
   (let [profits-honest (map :profit-honest paired-trials)
         profits-malice (map :profit-malice paired-trials)
         mean-h         (mean profits-honest)
@@ -209,7 +209,7 @@
       :aggregate-malice — same aggregate (both strategies combined in one pool)}"
   [rng n-trials params]
   (let [paired-trials (vec (repeatedly n-trials #(run-paired-trial rng params)))
-        aggregate     (build-aggregate paired-trials n-trials)]
+        aggregate     (build-aggregate paired-trials n-trials params)]
     {:paired-trials    paired-trials
      :aggregate        aggregate
      :aggregate-malice aggregate}))

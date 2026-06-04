@@ -401,6 +401,31 @@ Output includes:
 
 ---
 
+## Monte Carlo oracle fixtures (`:oracle-fixture`, `:fixed-or`)
+
+MC-only controls for detection and appeal rolls (live replay ignores these).
+Not the same as invariant trace fixtures under `data/fixtures/traces/`.
+
+| Resource | Purpose |
+|----------|---------|
+| `data/params/PHASES.md` | Modes, `:fixed-or` shorthand, roll consumption order, `:oracle-roll-trace` |
+| `data/params/control-oracle-*.edn` | Checked-in control param files (load via `io/params`) |
+| `test/.../oracle_fixture_test.clj` | Validation, merge, control EDN loads, full-trial `resolve-dispute` trace |
+| `test/.../reproducibility_test.clj` | Static/fixed modes, per-kind cursors, exhaustion, trace shape |
+
+```bash
+# Run only oracle fixture unit tests
+clojure -M:test -e "(require '[clojure.test :as t] '[resolver-sim.stochastic.oracle-fixture-test]) (t/run-tests 'resolver-sim.stochastic.oracle-fixture-test)"
+
+# Load a control file in the REPL
+clojure -M -e "(require '[resolver-sim.io.params :as p]) (prn (:oracle-effective (p/validate-and-merge \"data/params/control-oracle-full-trial.edn\")))"
+```
+
+Trial output may include `:oracle-roll-trace` when `:oracle-roll-trace-enabled? true`.
+Batch aggregates include `:oracle-effective-mode`.
+
+---
+
 ## Scenario fixture parity (trace + public JSON)
 
 Invariant scenarios are authored in Clojure (`protocols/sew/invariant_scenarios/`).

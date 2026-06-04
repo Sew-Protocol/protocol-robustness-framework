@@ -1,42 +1,40 @@
 {
-  "run_at": "2026-04-15T17:40:31Z",
-  "git_sha": "31ba27b",
-  "git_branch": "ethereum",
-  "python_version": "3.12.10",
-  "passed": 1,
-  "total": 1,
-  "suite_elapsed_s": 0.05,
-  "summary": {
-    "total_escrows": 1,
-    "total_volume": 500,
-    "disputes_triggered": 1,
-    "resolutions_executed": 1,
-    "pending_settlements_executed": 0,
-    "attack_attempts": 4,
-    "attack_successes": 2,
-    "reverts": 2,
-    "invariant_violations": 0,
-    "total_transactions": 6
+  "total" : 1,
+  "suite_elapsed_s" : 0.05,
+  "git_branch" : "ethereum",
+  "git_sha" : "31ba27b",
+  "python_version" : "3.12.10",
+  "run_at" : "2026-04-15T17:40:31Z",
+  "summary" : {
+    "disputes_triggered" : 1,
+    "reverts" : 2,
+    "total_transactions" : 6,
+    "resolutions_executed" : 1,
+    "attack_attempts" : 4,
+    "total_volume" : 500,
+    "pending_settlements_executed" : 0,
+    "invariant_violations" : 0,
+    "attack_successes" : 2,
+    "total_escrows" : 1
   },
-  "scenarios": [
-    {
-      "name": "S26  f3-governance-sandwich",
-      "ok": true,
-      "elapsed": 0.05,
-      "steps": 6,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 500,
-        "disputes_triggered": 1,
-        "resolutions_executed": 1,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 4,
-        "attack_successes": 2,
-        "reverts": 2,
-        "invariant_violations": 0
-      }
+  "scenarios" : [ {
+    "name" : "S26  f3-governance-sandwich",
+    "ok" : true,
+    "elapsed" : 0.05,
+    "steps" : 6,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 2,
+      "resolutions_executed" : 1,
+      "attack_attempts" : 4,
+      "total_volume" : 500,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 2,
+      "total_escrows" : 1
     }
-  ]
+  } ],
+  "passed" : 1
 }

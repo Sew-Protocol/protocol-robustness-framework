@@ -185,6 +185,4 @@
         (throw (ex-info (format "Invalid param %s: %s" k v) {:param k :value v})))
       (when-not (optional-schema-keys k)
         (throw (ex-info (format "Missing required param %s" k) {:param k})))))
-  (detection/validate-oracle-params! scenario)
-  ;; Return the validated scenario for convenient chaining / equality checks in tests
-  scenario)
+  (detection/validate-oracle-params! scenario))
