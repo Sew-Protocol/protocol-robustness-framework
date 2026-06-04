@@ -119,7 +119,7 @@
                     :invariant inv-kw
                     :note      (cond
                                  step-fail?
-                                 "per-step invariant-results: fail"
+                                 "per-invariant result: fail"
 
                                  (not world-ok?)
                                  "final world check: fail"
