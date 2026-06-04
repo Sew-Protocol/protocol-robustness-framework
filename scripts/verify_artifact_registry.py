@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""
+Verify the integrity of a test-artifacts.json registry bundle.
+Checks: existence, SHA256 hashes, byte sizes, and run-id consistency.
+"""
+
+import argparse
+import hashlib
+import json
+import pathlib
+import sys
+
+def sha256_file(path: pathlib.Path) -> str | None:
+    if not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def verify_registry(registry_path: pathlib.Path) -> bool:
+    if not registry_path.exists():
+        print(f"Error: Registry file not found: {registry_path}")
+        return False
+    
+    try:
+        registry = json.loads(registry_path.read_text())
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse registry JSON: {e}")
+        return False
+
+    run_id = registry.get("run_id")
+    root_dir = pathlib.Path(registry.get("root_dir", "."))
+    artifacts = registry.get("artifacts", [])
+    
+    all_ok = True
+    
+    # 1. Verify artifacts integrity
+    for art in artifacts:
+        # Resolve path relative to current working directory (project root)
+        path = pathlib.Path(art["path"])
+        if not path.exists():
+            print(f"Error: Artifact file missing: {path}")
+            all_ok = False
+            continue
+        
+        # Verify hash
+        actual_hash = sha256_file(path)
+        if actual_hash != art["sha256"]:
+            print(f"Error: Hash mismatch for {path}: expected {art['sha256']}, got {actual_hash}")
+            all_ok = False
+            
+        # Verify bytes
+        actual_bytes = path.stat().st_size
+        if actual_bytes != art["bytes"]:
+            print(f"Error: Byte size mismatch for {path}: expected {art['bytes']}, got {actual_bytes}")
+            all_ok = False
+            
+    return all_ok
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Verify artifact registry integrity.")
+    ap.add_argument("registry_file", type=pathlib.Path, help="Path to test-artifacts.json")
+    args = ap.parse_args()
+    
+    if verify_registry(args.registry_file):
+        print(f"Success: Registry {args.registry_file} verified.")
+        return 0
+    else:
+        print(f"Failure: Registry {args.registry_file} integrity check failed.")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())

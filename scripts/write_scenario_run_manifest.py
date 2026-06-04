@@ -20,16 +20,32 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import pathlib
 import platform
 import re
 import subprocess
 import sys
+import tempfile
 
 SCENARIOS_DIR = pathlib.Path("scenarios")
 
 
 # ── file helpers ──────────────────────────────────────────────────────────────
+
+def write_atomic_json(path: pathlib.Path, data: dict):
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Write to temporary file in the same directory for atomic rename
+    fd, temp_path = tempfile.mkstemp(dir=path.parent, text=True)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, path)
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise e
 
 def sha256_file(path: pathlib.Path) -> str | None:
     if not path.exists():
@@ -391,8 +407,8 @@ def write_artifacts_to(
         },
     }
 
-    artifact_file.write_text(json.dumps(summary, indent=2))
-    run_manifest_file.write_text(json.dumps(run_manifest, indent=2))
+    write_atomic_json(artifact_file, summary)
+    write_atomic_json(run_manifest_file, run_manifest)
 
     rm_meta = artifact_meta(run_manifest_file) or {}
     entries = [
@@ -439,7 +455,7 @@ def write_artifacts_to(
         },
         "artifacts": entries,
     }
-    registry_file.write_text(json.dumps(registry, indent=2))
+    write_atomic_json(registry_file, registry)
 
 
 def main() -> int:
@@ -484,13 +500,31 @@ def main() -> int:
 
     # individual immutable record for this invocation
     write_artifacts_to(per_run_dir, args, run_id, created_at, git_sha, caps)
-    # mutable "latest" pointer for backward-compat with validate_artifact_registry.py
-    write_artifacts_to(latest_dir, args, run_id, created_at, git_sha, caps)
+    
+    # Verify the immutable registry
+    registry_file = per_run_dir / "test-artifacts.json"
+    result = subprocess.run([sys.executable, "scripts/verify_artifact_registry.py", str(registry_file)], check=False)
+    
+    if result.returncode == 0:
+        # Update "latest" symlink
+        if latest_dir.exists():
+            if latest_dir.is_symlink():
+                latest_dir.unlink()
+            else:
+                # If it's a directory, maybe move/backup or just delete?
+                # For now, remove the directory to symlink.
+                import shutil
+                shutil.rmtree(latest_dir)
+        
+        # Create relative symlink for portability
+        os.symlink(per_run_dir.name, latest_dir, target_is_directory=True)
+        print(f"[scenario-run-manifest] Verified & symlinked latest: {latest_dir} -> {per_run_dir}")
+    else:
+        print(f"[scenario-run-manifest] WARNING: Verification failed for {registry_file}. Latest symlink not updated.")
 
     print(f"[scenario-run-manifest] run_id={run_id} status={args.status} suite={args.suite}")
     print(f"[scenario-run-manifest] per-run : {per_run_dir}")
-    print(f"[scenario-run-manifest] latest  : {latest_dir}")
-    return 0
+    return result.returncode
 
 
 if __name__ == "__main__":
