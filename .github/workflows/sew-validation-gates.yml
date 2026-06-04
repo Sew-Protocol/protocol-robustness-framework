@@ -41,6 +41,11 @@ jobs:
         run: |
           clojure -M -m resolver-sim.scripts.evidence sign ./test_key || true
 
+      - name: Verify signature with public key
+        run: |
+          ssh-keygen -e -f test_key -m PEM > test_key.pub.pem || true
+          clojure -M -m resolver-sim.scripts.verify-signature test_key.pub.pem || true
+
       - name: Export evidence bundle (CI)
         run: |
           bb evidence:bundle results/ci-bundle || true
