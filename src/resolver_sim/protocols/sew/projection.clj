@@ -455,25 +455,30 @@
                         :withdrawn    (parse-num (get withdrawn token 0))
                         :bond-posted  (parse-num (get posted token 0))
                         :bond-slashed (parse-num (get slashed-by-token token 0))}]))
+        parse-num-top (fn [x]
+                        (cond
+                          (number? x) (long x)
+                          (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                          :else 0))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]
-                      (long amt)))
+                      (parse-num-top amt)))
         bond-locked-total
         (reduce + 0 (for [wf (vals (:bond-balances world {}))
                           amt (vals wf)]
-                      (long amt)))
-        bond-fees-total (reduce + 0 (map long (vals (:bond-fees world {}))))
+                      (parse-num-top amt)))
+        bond-fees-total (reduce + 0 (map parse-num-top (vals (:bond-fees world {}))))
         bond-distribution-total
         (let [d (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})]
-          (+ (long (:insurance d 0))
-             (long (:protocol d 0))
-             (long (:burned d 0))))
-        retained-total (long (:retained-slash-reserves world 0))
+          (+ (parse-num-top (:insurance d 0))
+             (parse-num-top (:protocol d 0))
+             (parse-num-top (:burned d 0))))
+        retained-total (parse-num-top (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
                              (for [{:keys [token accounted inflow]} (:violations conservation [])]
-                               [token (- (long accounted) (long (or inflow 0)))]))
+                               [token (- (parse-num-top accounted) (parse-num-top (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token
