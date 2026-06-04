@@ -135,12 +135,12 @@
    :task (let [key (first *command-line-args*)]
           (when-not (seq key)
             (throw (ex-info "Missing key path. Usage: bb evidence:sign <private-key-path>" {})))
-          (apply clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "sign" key))}
+          (clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "sign" key))}
 
   evidence:bundle
   {:doc "Export an evidence bundle for the focused/latest run. Usage: bb evidence:bundle [out-dir]"
    :task (let [outdir (or (first *command-line-args*) "results/evidence-bundle")]
-          (apply clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "bundle" outdir))}
+          (clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "bundle" outdir))}
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
 
