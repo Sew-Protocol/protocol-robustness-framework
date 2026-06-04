@@ -242,9 +242,14 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-         :let [claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
+         :let [parse-num (fn [x]
+                           (cond
+                             (number? x) (long x)
+                             (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                             :else 0))
+               claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
                et     (get-in world [:escrow-transfers wf])
-               max    (long (or (:amount-after-fee et) 0))]
+               max    (parse-num (or (:amount-after-fee et) 0))]
          :when (or (pos? claims) et)]
      {:workflow_id wf :claims claims :max max :headroom (- max claims)})))
 
@@ -275,9 +280,14 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-         :let [claims (reduce + 0 (vals (get domain-map :bond/refund {})))
-               posted (+ (reduce + 0 (vals (get-in world [:bond-balances wf] {})))
-                       (long (get-in world [:bond-posted-by-workflow wf] 0)))]
+         :let [parse-num (fn [x]
+                     (cond
+                       (number? x) x
+                       (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
+                       :else 0))
+               claims (reduce + 0 (vals (get domain-map :bond/refund {})))
+               posted (+ (reduce + 0 (map parse-num (vals (get-in world [:bond-balances wf] {}))))
+                       (parse-num (get-in world [:bond-posted-by-workflow wf] 0)))]
          :when (or (pos? claims) (pos? posted))]
      {:workflow_id wf :claims claims :max posted :headroom (- posted claims)})))
 
