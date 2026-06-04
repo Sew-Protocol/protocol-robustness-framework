@@ -15,8 +15,12 @@
              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
            (let [t0   (System/currentTimeMillis)
                  exit (try
-                        (clojure {:dir "." :extra-deps {}}
-                                 "-M:run" "--" "--invariants" "--scenario" scenario)
+                        (let [args (vec *command-line-args*)
+                                      level-idx (.indexOf args "--result-display-level")
+                                      level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                      cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                                 level-val (conj "--result-display-level" level-val))]
+                                 (apply clojure {:dir "." :extra-deps {}} cli-args))
                         0
                         (catch clojure.lang.ExceptionInfo e
                           (or (:exit (ex-data e)) 1)))
@@ -51,9 +55,16 @@
                    results (mapv (fn [scenario]
                                    (println (str "Running " scenario))
                                    (try
-                                     (clojure {:dir "." :extra-deps {}}
-                                              "-M:run" "--" "--invariants" "--scenario" scenario)
+                                     (let [args (vec *command-line-args*)
+                                     level-idx (.indexOf args "--result-display-level")
+                                     level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                     cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                                level-val (conj "--result-display-level" level-val))]
+                                                                         (try
+                                     (apply clojure {:dir "." :extra-deps {}} cli-args)
                                      {:scenario scenario :exit 0}
+                                     (catch clojure.lang.ExceptionInfo e
+                                       {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
                                      (catch clojure.lang.ExceptionInfo e
                                        {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
                                  scenarios)
