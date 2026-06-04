@@ -152,7 +152,7 @@
   "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
   (let [flags        (or (:replay-flags context) replay-flags/default-replay-flags)
-        temporal-on? (:temporal-enabled? flags false)
+        temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
         check-inv?   (:check-invariants? flags true)
         event-time   (:time event)
         now          (:block-time world)
