@@ -171,9 +171,8 @@
     (compat/canonical-action event)))
 
 (defmethod apply-action "create-escrow"
-  [{:keys [agent-index]} world event]
-  (let [p (:params event)
-        snapshot (sew-snapshot/snapshot-from-protocol-params (:params world {}))]
+  [{:keys [agent-index snapshot]} world event]
+  (let [p (:params event)]
     (actx/with-resolved-actor-and-unpaused
       agent-index world event
       (fn [caller]
