@@ -11,6 +11,18 @@
    :address address
    :type    (or role strategy "honest")})
 
+(defn- agent->public-json-agent
+  [{:keys [id address strategy role]}]
+  (cond-> {:id id :address address}
+    (or strategy role) (assoc :strategy (or strategy role "honest"))
+    role             (assoc :role role)))
+
+(defn scenario-id->public-json-filename
+  "Map s19-dr3-... → S19_dr3-....json (public scenarios/ naming)."
+  [scenario-id]
+  (when-let [[_ n rest] (re-matches #"^s(\d+[a-z]?)-(.+)$" scenario-id)]
+    (str "S" n "_" rest ".json")))
+
 (defn- stringify-escalation-keys
   [params]
   (if-let [ers (:escalation-resolvers params)]
@@ -47,11 +59,60 @@
       (:expected-errors scenario)
       (assoc :expected-errors
              (mapv #(update % :error json-value) (:expected-errors scenario)))
+      (:strict-expected-errors? scenario)
+      (assoc :strict-expected-errors? true)
+      (:allow-open-disputes? scenario)
+      (assoc :allow-open-disputes? true)
       (:notes scenario)
       (assoc :notes (:notes scenario)))))
 
+(defn scenario->public-json-document
+  "Build scenarios/*.json document (schema 1.0) from an invariant scenario map."
+  [scenario]
+  (let [sid (:scenario-id scenario)]
+    (cond-> {:schema-version     "1.0"
+             :scenario-id        sid
+             :initial-block-time (:initial-block-time scenario 1000)
+             :agents             (mapv agent->public-json-agent (:agents scenario []))
+             :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
+             :events             (:events scenario [])}
+      (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
+      (:expected-errors scenario)
+      (assoc :expected-errors
+             (mapv #(update % :error json-value) (:expected-errors scenario)))
+      (:strict-expected-errors? scenario)
+      (assoc :strict-expected-errors? true)
+      (:allow-open-disputes? scenario)
+      (assoc :allow-open-disputes? true)
+      (:provenance scenario) (assoc :provenance (:provenance scenario)))))
+
 (def default-export-metadata
-  {"s62-cross-token-isolation-under-dispute-load"
+  {"s18-dr3-kleros-l0-resolves"
+   {:title "DR3 Kleros: L0 Resolver Resolves"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s19-dr3-kleros-escalation-rejected-l0-resolves"
+   {:title "DR3 Kleros: Escalation Rejected, L0 Resolves"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s20-dr3-kleros-max-escalation-guard"
+   {:title "DR3 Kleros: Max Escalation Guard"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s21-dr3-kleros-pending-cleared-on-escalation"
+   {:title "DR3 Kleros: Pending Cleared On Escalation"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s23-preemptive-escalation-blocked"
+   {:title "Preemptive Escalation Blocked (No Pending Settlement)"
+    :purpose "adversarial-robustness"
+    :threat-tags ["escalation-abuse"]}
+
+   "s62-cross-token-isolation-under-dispute-load"
    {:title "Cross-Token Isolation Under Concurrent Disputes"
     :purpose "regression"
     :threat-tags ["cross-token-contamination" "accounting-integrity" "concurrent-disputes"]}
@@ -78,13 +139,17 @@
     (json/write doc w :key-fn name :value-fn json-value)))
 
 (defn export-scenario-files!
-  "Write trace + scenarios JSON for one scenario map."
-  [scenario & {:keys [metadata]}]
-  (let [sid      (:scenario-id scenario)
-        meta     (merge (get default-export-metadata sid {}) metadata)
-        doc      (scenario->trace-document scenario meta)
-        trace-p  (str "data/fixtures/traces/" sid ".trace.json")
-        scen-p   (str "scenarios/" (str/replace sid #"^s62-" "S62_") ".json")]
-    (write-json-file doc trace-p)
-    (write-json-file doc scen-p)
-    {:trace-path trace-p :scenario-path scen-p :scenario-id sid}))
+  "Write trace fixture and optional public scenarios/*.json for one scenario map."
+  [scenario & {:keys [metadata write-public-json?]}]
+  (let [sid         (:scenario-id scenario)
+        meta        (merge (get default-export-metadata sid {}) metadata)
+        trace-doc   (scenario->trace-document scenario meta)
+        trace-p     (str "data/fixtures/traces/" sid ".trace.json")
+        public-name (scenario-id->public-json-filename sid)
+        scen-p      (when (and write-public-json? public-name)
+                      (str "scenarios/" public-name))]
+    (write-json-file trace-doc trace-p)
+    (when scen-p
+      (write-json-file (scenario->public-json-document scenario) scen-p))
+    (cond-> {:trace-path trace-p :scenario-id sid}
+      scen-p (assoc :scenario-path scen-p))))

@@ -90,6 +90,7 @@ run_unit() {
 (require '[resolver-sim.protocols.sew.slashing-test])
 (require '[resolver-sim.protocols.sew.phase-k-test])
 (require '[resolver-sim.protocols.sew.phase-m-test])
+(require '[resolver-sim.io.scenario-fixture-parity-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
@@ -100,7 +101,8 @@ run_unit() {
                 'resolver-sim.scenario.equilibrium-test
                 'resolver-sim.sim.multi-epoch-test
                 'resolver-sim.sim.defection-test
-                'resolver-sim.sim.strategy-adaptation-test)]
+                'resolver-sim.sim.strategy-adaptation-test
+                'resolver-sim.io.scenario-fixture-parity-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?

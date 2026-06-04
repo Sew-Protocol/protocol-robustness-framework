@@ -49,6 +49,9 @@
    [nil "--fixture-suite SUITE" "Run a composed EDN fixture suite (e.g. suites/all-invariants; use with --invariants)"]
    [nil "--scenario PATH" "Path to a single scenario JSON file to run (requires --invariants)"]
    [nil "--output-file PATH" "Path to write the replay result JSON (requires --scenario)"]
+   [nil "--diff-traces" "Structural world diff between two replay JSON files"]
+   [nil "--baseline PATH" "Baseline replay JSON (use with --diff-traces)"]
+   [nil "--candidate PATH" "Candidate replay JSON (use with --diff-traces)"]
    [nil "--protocol ID" (str "Protocol to use for --invariants (default: " preg/default-protocol-id ")")
     :default preg/default-protocol-id]
    [nil  "--port PORT" "gRPC server port (used with --serve, default: 7070)"
@@ -72,7 +75,9 @@
         "  clojure -M:run -- --invariants           # S01–S100 invariant registry"
         "  clojure -M:run -- --invariants --suite yield-scenarios"
         "  clojure -M:run -- --invariants --fixture-suite suites/all-invariants"
-        "  clojure -M:run -- --invariants --scenario scenarios/S108_negative-yield-mild.json"]
+        "  clojure -M:run -- --invariants --scenario scenarios/S108_negative-yield-mild.json"
+        "  clojure -M:run -- --diff-traces --baseline results/a.json --candidate results/b.json"
+        "  clojure -M:diff-traces --baseline results/a.json --candidate results/b.json"]
        (clojure.string/join "\n")))
 
 (defn error-msg [errors]

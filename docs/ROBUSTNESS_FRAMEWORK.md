@@ -253,22 +253,27 @@ named scenarios** spanning four types:
 
 ### Edge-case scenarios
 
+> Kleros rows between `GENERATED-EDGE-CASE-SUMMARIES` markers are synced from
+> `invariant_scenarios/doc_summaries.clj` via `bb docs:scenarios`.
+
 | Scenario | What it validates |
 |---|---|
-| `s04-dispute-timeout-autocancel` | Resolver non-responsive; timeout auto-cancels dispute |
-| `s07-unauthorized-resolver-rejected` | Only the authorized resolver may call `resolve` |
-| `s08-state-machine-attack-gauntlet` | 12+ invalid transitions attempted; all rejected |
-| `s10-double-finalize-rejected` | Calling finalize twice on the same escrow is rejected |
-| `s11-zero-fee-edge-case` | Zero resolver fee does not break accounting |
-| `s12a/s12b-snapshot-isolation` | Fee-param change after escrow creation does not apply retroactively |
-| `s14-dr3-module-authorized` | Module-authorized resolution path accepted |
-| `s15-dr3-module-unauthorized-rejected` | Unauthorized module resolution rejected |
-| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute times out without resolver |
-| `s19-dr3-kleros-escalation-rejected-l0-resolves` | Escalation attempt rejected; L0 resolver already resolved |
-| `s20-dr3-kleros-max-escalation-guard` | Escalation beyond max level is rejected |
-| `s21-dr3-kleros-pending-cleared-on-escalation` | Pending settlement is cleared when escalation begins |
-| `s22-status-leak-agree-cancel-over-dispute` | Agree-cancel cannot override an open dispute |
-| `s23-preemptive-escalation-blocked` | Escalation before appeal window opens is blocked |
+| `s12a/s12b-snapshot-isolation` | Fee-param change after escrow creation does not apply retroactively (see `doc_summaries.clj` for s12a/s12b detail) |
+<!-- GENERATED-EDGE-CASE-SUMMARIES-START -->
+| `s04-dispute-timeout-autocancel` | Dispute expires without resolution; auto-cancel |
+| `s07-unauthorized-resolver-rejected` | Non-authorized resolver call is rejected |
+| `s08-state-machine-attack-gauntlet` | Invalid state transitions attempted; all correctly rejected |
+| `s10-double-finalize-rejected` | Attempt to finalize an already-finalized escrow is rejected |
+| `s11-zero-fee-edge-case` | Escrow with fee_bps=0; correct handling |
+| `s14-dr3-module-authorized` | DR3 module resolves with correct authority |
+| `s15-dr3-module-unauthorized-rejected` | DR3 module with wrong authority is rejected |
+| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute with no resolver; timeout resolution |
+| `s19-dr3-kleros-escalation-rejected-l0-resolves` | Preemptive escalation rejected (no pending settlement); L0 resolves; L1 blocked on terminal escrow |
+| `s20-dr3-kleros-max-escalation-guard` | Repeated preemptive escalations rejected; wrong-tier resolver rejected; dispute may stay open |
+| `s21-dr3-kleros-pending-cleared-on-escalation` | L0 resolves to pending; buyer escalates (clears pending); L1 resolves; keeper executes settlement |
+| `s22-status-leak-agree-cancel-over-dispute` | Regression: agree-to-cancel status cleared when dispute is raised |
+| `s23-preemptive-escalation-blocked` | Seller preemptive escalation rejected; L0 resolves; post-terminal escalation rejected |
+<!-- GENERATED-EDGE-CASE-SUMMARIES-END -->
 | `s46-reorg-idempotence` | Re-submitted event is idempotent (reorg safety) |
 | `s66-cooldown-boundary-reorg` | Cooldown window boundary is correctly enforced across reorg |
 

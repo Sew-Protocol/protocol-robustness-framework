@@ -23,10 +23,8 @@
 
   (detect-fraud? [_ _dispute-outcome params]
     (let [fraud-det-prob (:fraud-detection-probability params 0.0)
-          oracle-params (assoc params
-                               :oracle-roll-cursor (atom 0)
-                               :oracle-roll-cursors (atom {}))]
-      (< (det/oracle-roll oracle-params :fraud-detection) fraud-det-prob)))
+          oracle-params (det/prepare-oracle-params params)]
+      (det/roll-detect? (det/oracle-roll oracle-params :fraud-detection) fraud-det-prob)))
 
   (apply-penalties [_ detection-result _dispute-outcome params]
     (if (:fraud-detected? detection-result)
@@ -69,6 +67,12 @@
      :delay-weeks 0}))
 
 ;; Re-export stochastic detection API for sim layers and tests
+(def validate-oracle-params! det/validate-oracle-params!)
+(def prepare-oracle-params det/prepare-oracle-params)
+(def normalize-oracle-fixture det/normalize-oracle-fixture)
+(def oracle-roll-in-scope? det/oracle-roll-in-scope?)
+(def oracle-fixture-roll-kinds det/oracle-fixture-roll-kinds)
+(def roll-detect? det/roll-detect?)
 (def appeal-reversal-outcome det/appeal-reversal-outcome)
 (def reversal-slashed-live? det/reversal-slashed-live?)
 (def reversal-pending-live? det/reversal-pending-live?)

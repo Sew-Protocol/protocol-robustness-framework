@@ -82,9 +82,54 @@ def collect_theory_claim_ids(scenarios_dir: Path) -> set[str]:
     return found
 
 
+def load_sew_claims(path: Path) -> list[dict[str, Any]]:
+    """Load data/claims/sew-claims.edn via Clojure (EDN list of claim maps)."""
+    cmd = [
+        "clojure",
+        "-M",
+        "-e",
+        (
+            "(require '[clojure.data.json :as json] '[clojure.edn :as edn])"
+            f"(println (json/write-str (edn/read-string (slurp \"{path}\"))))"
+        ),
+    ]
+    try:
+        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        fail(f"could not load sew-claims EDN: {exc}")
+    txt = proc.stdout.strip().splitlines()
+    if not txt:
+        fail("empty sew-claims payload from Clojure")
+    payload = json.loads(txt[-1])
+    if not isinstance(payload, list):
+        fail("sew-claims.edn must be a vector of claim maps")
+    return payload
+
+
+def validate_sew_claims(scenarios_dir: Path, sew_claims_path: Path) -> None:
+    if not sew_claims_path.exists():
+        fail(f"sew-claims file missing: {sew_claims_path}")
+    scenario_files = {p.name for p in scenarios_dir.glob("*.json")}
+    claims = load_sew_claims(sew_claims_path)
+    for claim in claims:
+        cid = claim.get("claim/id") or claim.get("claim-id") or claim.get("id")
+        if not cid:
+            fail(f"sew-claims entry missing :claim/id: {claim}")
+        cid_s = normalize_claim_id(str(cid))
+        for ref in claim.get("validated-by") or []:
+            ref_s = str(ref).strip()
+            fname = Path(ref_s).name
+            if fname not in scenario_files:
+                fail(
+                    f"sew-claims claim '{cid_s}' references missing scenario file '{fname}' "
+                    f"(from '{ref_s}')"
+                )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenarios-dir", default="scenarios")
+    ap.add_argument("--sew-claims", default="data/claims/sew-claims.edn")
     ap.add_argument("--strict-theory-claims", action="store_true")
     args = ap.parse_args()
 
@@ -141,6 +186,8 @@ def main() -> int:
         if args.strict_theory_claims:
             fail(msg)
         warn(msg)
+
+    validate_sew_claims(scenarios_dir, Path(args.sew_claims))
 
     print("[claim-registry] PASS: claims/scenarios/invariants integrity checks succeeded")
     return 0

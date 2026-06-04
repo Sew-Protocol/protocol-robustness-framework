@@ -95,35 +95,33 @@
         bond-total      (+ appeal-bond resolver-bond)
         resolver-stake  (long (or resolver-stake-wei escrow-wei))
 
-        oracle-params   {:rng rng
-                         :fraud-detection-probability fraud-detection-probability
-                         :timeout-detection-probability timeout-detection-probability
-                         :reversal-detection-probability reversal-detection-probability
-                         :l2-detection-prob l2-detection-prob
-                         :fraud-slash-bps fraud-slash-bps
-                         :reversal-slash-bps reversal-slash-bps
-                         :timeout-slash-bps timeout-slash-bps
-                         :new-evidence-probability new-evidence-probability
-                         :freeze-on-detection? freeze-on-detection?
-                         :freeze-duration-days freeze-duration-days
-                         :appeal-window-days appeal-window-days
-                         :unstaking-delay-days unstaking-delay-days
-                         :slashing-detection-delay-weeks slashing-detection-delay-weeks
-                         :escalation-assumptions escalation-assumptions
-                         :escalation-assumption-band escalation-assumption-band
-                         :p-l1-reversal p-l1-reversal
-                         :p-l2-escalation p-l2-escalation
-                         :p-l2-reversal p-l2-reversal
-                         :has-kleros? has-kleros?
-                         :oracle-fixture oracle-fixture
-                         :oracle-mode oracle-mode
-                         :oracle-roll-sequence oracle-roll-sequence
-                         :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
-                         :fixed-or fixed-or
-                         :oracle-roll-cursor (atom 0)
-                         :oracle-roll-cursors (atom {})
-                         :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
-                         :oracle-roll-trace (atom [])}
+        oracle-params   (detection/prepare-oracle-params
+                         {:rng rng
+                          :fraud-detection-probability fraud-detection-probability
+                          :timeout-detection-probability timeout-detection-probability
+                          :reversal-detection-probability reversal-detection-probability
+                          :l2-detection-prob l2-detection-prob
+                          :fraud-slash-bps fraud-slash-bps
+                          :reversal-slash-bps reversal-slash-bps
+                          :timeout-slash-bps timeout-slash-bps
+                          :new-evidence-probability new-evidence-probability
+                          :freeze-on-detection? freeze-on-detection?
+                          :freeze-duration-days freeze-duration-days
+                          :appeal-window-days appeal-window-days
+                          :unstaking-delay-days unstaking-delay-days
+                          :slashing-detection-delay-weeks slashing-detection-delay-weeks
+                          :escalation-assumptions escalation-assumptions
+                          :escalation-assumption-band escalation-assumption-band
+                          :p-l1-reversal p-l1-reversal
+                          :p-l2-escalation p-l2-escalation
+                          :p-l2-reversal p-l2-reversal
+                          :has-kleros? has-kleros?
+                          :oracle-fixture oracle-fixture
+                          :oracle-mode oracle-mode
+                          :oracle-roll-sequence oracle-roll-sequence
+                          :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
+                          :fixed-or fixed-or
+                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?})
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?

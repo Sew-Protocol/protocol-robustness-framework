@@ -103,6 +103,12 @@ bb trace:compare \
   --baseline results/baseline.trace.json \
   --candidate results/candidate.trace.json \
   --out-dir results/trace-compare/example
+
+# Compare scenario replay at an older git commit vs HEAD
+bb sim:diff --baseline <commit-sha> --scenario data/fixtures/traces/s46a-settlement-before-escalation-window-edge.trace.json
+
+# Structural world diff (first divergence point; Clojure io/diff)
+bb trace:structural-diff --baseline results/a.json --candidate results/b.json
 ```
 
 Outputs:
@@ -392,6 +398,29 @@ Output includes:
 - Cumulative profit by strategy
 - Win rate statistics
 - Multi-epoch aggregated stats
+
+---
+
+## Scenario fixture parity (trace + public JSON)
+
+Invariant scenarios are authored in Clojure (`protocols/sew/invariant_scenarios/`).
+Checked-in `data/fixtures/traces/*.trace.json` and `scenarios/S*.json` must stay aligned
+with that source or CI fails.
+
+```bash
+# After editing a scenario map, refresh on-disk fixtures (only scenarios with an existing trace file)
+bb fixtures:sync
+# or: clojure -M:sync-trace-fixtures
+
+# Regenerate S01–S23 docs table from doc-summaries.clj
+bb docs:scenarios
+```
+
+Unit tests in `resolver-sim.io.scenario-fixture-parity-test` (included in `./scripts/test.sh unit`) check:
+
+- Every baseline S01–S23 id has a doc summary in `doc_summaries.clj`
+- Trace contract fields (`expected-errors`, `strict-expected-errors?`, `allow-open-disputes?`) match Clojure
+- Public JSON for strict-expected-errors scenarios matches the source
 
 ---
 

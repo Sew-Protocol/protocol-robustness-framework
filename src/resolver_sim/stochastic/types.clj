@@ -1,5 +1,6 @@
 (ns resolver-sim.stochastic.types
-  "Parameter schemas and types for the Sew Protocol dispute resolution simulation.")
+  "Parameter schemas and types for the Sew Protocol dispute resolution simulation."
+  (:require [resolver-sim.stochastic.detection :as detection]))
 
 ;; Scenario configuration schema
 (def scenario-schema
@@ -170,6 +171,7 @@
     :oracle-roll-on-exhaustion
     :fixed-or
     :oracle-roll-trace-enabled?
+    :oracle-effective
     ;; Optional author metadata
     :author
     :author-id})
@@ -183,4 +185,4 @@
         (throw (ex-info (format "Invalid param %s: %s" k v) {:param k :value v})))
       (when-not (optional-schema-keys k)
         (throw (ex-info (format "Missing required param %s" k) {:param k})))))
-  scenario)
+  (detection/validate-oracle-params! scenario))

@@ -1,6 +1,7 @@
 (ns resolver-sim.sim.batch
   "Batch runner: aggregate N trials into summary statistics."
   (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]))
@@ -120,6 +121,8 @@
     
     {:n-trials n-trials
      :strategy (or (:force-strategy params) (:strategy params :honest))
+     :oracle-effective-mode (:mode (:oracle-effective params)
+                                    (detection/normalize-oracle-fixture params))
      
      ; Honest profit statistics
      :honest-mean (double mean-honest)

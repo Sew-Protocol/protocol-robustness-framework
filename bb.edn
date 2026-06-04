@@ -5,7 +5,11 @@
   scenario:run
   {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path>"
    :task (let [arg          (first *command-line-args*)
-               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                              ;; deprecated alias (pre-2026-06 rename)
+                              "kleros/escalation-race"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
                scenario     (or (get scenario-map arg) arg)]
            (when-not scenario
              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
@@ -78,11 +82,15 @@
                output-idx   (.indexOf args "--output-file")
                raw-scenario (when (<= 0 scenario-idx)
                               (nth args (inc scenario-idx) nil))
-               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                              ;; deprecated alias (pre-2026-06 rename)
+                              "kleros/escalation-race"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
                scenario     (or (get scenario-map raw-scenario) raw-scenario)
                output-file  (or (when (<= 0 output-idx)
                                  (nth args (inc output-idx) nil))
-                               "results/evidence/kleros-escalation-race.result.json")]
+                               "results/evidence/kleros-preemptive-escalation-rejected-l0.result.json")]
            (when-not scenario
              (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
            (shell "mkdir -p results/evidence")
@@ -104,6 +112,12 @@
 
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
+
+  fixtures:sync {:doc "Sync trace.json + scenarios/*.json from Clojure invariant scenario source"
+                 :task (clojure {:dir "."} "-M:sync-trace-fixtures")}
+
+  docs:scenarios {:doc "Regenerate S01–S23 table in docs/scenarios.md from doc-summaries.clj"
+                  :task (clojure {:dir "."} "-M:generate-scenario-docs")}
 
   test {:doc "Run canonical validation gate (all targets via scripts/test.sh)"
         :task (shell "./scripts/test.sh all")}
@@ -135,12 +149,18 @@
   trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
                  :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
 
+  trace:structural-diff {:doc "Structural world diff between replay JSON files. Usage: bb trace:structural-diff --baseline a.json --candidate b.json"
+                         :task (apply shell "clojure -M:diff-traces" *command-line-args*)}
+
   trace:diff {:doc "Run two scenarios and compare their results. Usage: bb trace:diff <scenario-1> <scenario-2> <out-dir>"
               :task (let [s1 (first *command-line-args*)
                           s2 (second *command-line-args*)
                           od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
                       (apply shell "python3" "python/trace_compare.py"
                              "--scenario-a" s1 "--scenario-b" s2 "--out-dir" od))}
+
+  sim:diff {:doc "Compare scenario replay at baseline git commit vs HEAD. Usage: bb sim:diff --baseline <sha> --scenario <path>"
+            :task (apply shell "./scripts/sim_diff.sh" *command-line-args*)}
 
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}

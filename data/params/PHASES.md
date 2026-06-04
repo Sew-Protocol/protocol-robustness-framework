@@ -80,8 +80,14 @@ Key parameters:
 
 ## Oracle Fixtures and Notebook Tracing
 
+**MC-only:** `:oracle-fixture` affects the Monte Carlo dispute model (`stochastic/dispute`).
+Live replay (`protocols/sew/resolution`) does not read it; reversal slashing on-chain
+remains deterministic when a verdict is overturned.
+
 The stochastic dispute model supports oracle fixture overrides for deterministic
-experiments and notebook evidence capture.
+experiments and notebook evidence capture. Param files are validated at load time
+(`io/params` `validate-and-merge`): invalid `:scope`, unknown per-kind roll keys,
+conflicting legacy keys, and orphan `:oracle-roll-sequence` / `:oracle-mode` raise errors.
 
 ### Fixture modes
 
@@ -125,6 +131,35 @@ normalizes to `:fixed-roll-sequence`):
 
 `:fixed-or` merges with `:oracle-fixture` when both are present (`:fixed-or` wins
 on overlapping keys).
+
+Do not combine `:oracle-fixture {:mode :stochastic}` with a non-empty
+`:oracle-roll-sequence` — the sequence is ignored and load validation fails.
+
+### Roll consumption order (shared vector)
+
+When `:rolls` is a single vector, every in-scope detection kind draws from one queue
+in the order below (skipped steps do not consume a roll):
+
+1. `:reversal-detection` — after wrong verdict, appeal, and `decision-reversed?`
+2. `:pending-evidence` — after reversal slash, if `:new-evidence-probability` > 0
+3. `:fraud-detection` — malicious wrong verdict only
+4. `:timeout-detection` — lazy or malicious
+5. `:l1-detection` — any wrong verdict
+6. `:l2-detection` — appealed wrong verdict, if `:l2-detection-prob` > 0
+
+**Fixture-controlled when `:appeal` is in `:scope`:** `:l1-reversal`, `:l2-escalation`,
+`:l2-reversal` (compared to `:p-l1-reversal`, `:p-l2-escalation`, `:p-l2-reversal`).
+
+**Still trial `:rng` only:** verdict correctness and whether an appeal is filed.
+Script those via `:force-strategy` and `:appeal-probability-if-wrong`.
+
+Full scripted trial control: `data/params/control-oracle-full-trial.edn` (`:scope
+#{:detection :appeal}`). Detection-only: `control-oracle-fixed-roll-sequence.edn`.
+
+After load, params include `:oracle-effective` (canonical merged fixture). Trials call
+`prepare-oracle-params` for fresh cursors per dispute.
+
+Prefer per-kind `:rolls` maps so each mechanism has its own sequence.
 
 ### Notebook roll-trace metadata
 

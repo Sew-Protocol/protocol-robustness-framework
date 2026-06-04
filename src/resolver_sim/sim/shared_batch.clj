@@ -15,7 +15,8 @@
    Conservation invariant (checked in route-epoch downstream):
      (sum :profit-honest honest-slice) + (sum :profit-malice strategic-slice)
        == total profit attributed across all resolvers"
-  (:require [resolver-sim.stochastic.dispute :as dispute]
+  (:require [resolver-sim.stochastic.detection :as detection]
+            [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.stochastic.rng     :as rng]))
 
 ;; ---------------------------------------------------------------------------
@@ -156,6 +157,8 @@
 
     {:n-trials          n-trials
      :mode              :shared-world
+     :oracle-effective-mode (:mode (:oracle-effective params)
+                                  (detection/normalize-oracle-fixture params))
      :honest-mean       (double mean-h)
      :honest-std        (double (std-dev profits-honest mean-h))
      :honest-min        (if (seq sorted-h) (first sorted-h) 0)

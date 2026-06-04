@@ -66,6 +66,20 @@
         {}))
     (catch Exception _ {})))
 
+(defn scenario-golden-key
+  "Normalize a coverage/trace scenario id to a golden report trace-id key."
+  [scenario-id]
+  (-> (str scenario-id)
+      str/lower-case
+      (str/replace #"^scenarios/" "")
+      (str/replace #"_" "-")))
+
+(defn find-golden-report
+  "Look up a golden replay report for a scenario id."
+  [golden-reports scenario-id]
+  (when (and golden-reports scenario-id)
+    (get golden-reports (scenario-golden-key scenario-id))))
+
 (defn canonical-summary
   "Normalizes summary variants into stable keys used by notebooks/stories."
   [summary]
@@ -94,7 +108,8 @@
      :summary-canonical (canonical-summary summary)
      :coverage coverage
      :equivalence equivalence
-     :manifest manifest}))
+     :manifest manifest
+     :golden-reports (load-all-golden-reports)}))
 
 
 ;; ---

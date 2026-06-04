@@ -612,7 +612,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
            "time-non-decreasing"           ["S04" "S05" "S21"]
            "time-no-action-after-finality" ["S08" "S10"]
            "finalization-accounting-correct" ["S02" "S03" "S09" "S25"]
-           "escalation-level-monotonic"    ["S19" "S21" "S28" "S32"]
+           "escalation-level-monotonic"    ["S21" "S28" "S32"]
            "no-withdrawal-during-dispute"  ["S45"]
            "time-lock-integrity"           ["S66"]
            "token-tax-reconciliation"      ["S11"]

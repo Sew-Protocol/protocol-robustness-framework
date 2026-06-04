@@ -85,8 +85,72 @@
     ;; Safe fallback to maintain behavior for unknown strategies.
     (nearest-baseline-scenario scenarios scenario)))
 
+(defn- metric-long [v]
+  (cond
+    (number? v) (long v)
+    (string? v) (some->> v str/trim parse-long)
+    :else nil))
+
+(defn- numeric-metric-deltas
+  "Return {metric {:scenario n :baseline n :delta n}} for differing numeric metrics."
+  [scenario-report baseline-report]
+  (when (and scenario-report baseline-report)
+    (let [sm (:metrics scenario-report {})
+          bm (:metrics baseline-report {})]
+      (->> (set/union (keys sm) (keys bm))
+           (keep (fn [k]
+                   (let [sv (metric-long (get sm k))
+                         bv (metric-long (get bm k))]
+                     (when (and (some? sv) (some? bv) (not= sv bv))
+                       [k {:scenario sv :baseline bv :delta (- sv bv)}]))))
+           (sort-by (fn [[_ {:keys [delta]}]] (- (Math/abs (long delta)))))
+           (into {})))))
+
+(defn- top-metric-deltas [metric-deltas n]
+  (->> metric-deltas
+       (sort-by (fn [[_ v]] (- (Math/abs (long (:delta v))))))
+       (take n)
+       (map (fn [[k v]] (assoc v :metric (name k))))
+       vec))
+
+(defn- replay-delta-summary [scenario-report baseline-report]
+  (if (and scenario-report baseline-report)
+    (let [metric-deltas (numeric-metric-deltas scenario-report baseline-report)
+          outcome-match (= (:outcome scenario-report) (:outcome baseline-report))
+          hash-match (= (:final-state-hash scenario-report)
+                        (:final-state-hash baseline-report))]
+      {:replay_available true
+       :outcome_delta {:scenario (some-> (:outcome scenario-report) name)
+                       :baseline (some-> (:outcome baseline-report) name)
+                       :match outcome-match}
+       :final_state_hash_match hash-match
+       :metric_deltas metric-deltas
+       :top_metric_deltas (top-metric-deltas metric-deltas 5)})
+    {:replay_available false}))
+
+(defn- comparison-narrative
+  [{:keys [baseline-id tag-delta overlap replay-delta]}]
+  (let [base (str "Compared against baseline " baseline-id
+                  ": tag delta=" tag-delta ", overlap=" overlap ".")
+        replay (when (:replay_available replay-delta)
+                 (str " Replay outcome "
+                      (get-in replay-delta [:outcome_delta :scenario])
+                      " vs "
+                      (get-in replay-delta [:outcome_delta :baseline])
+                      (when (false? (:final_state_hash_match replay-delta))
+                        ", final-state-hash differs")
+                      (when-let [top (seq (:top_metric_deltas replay-delta))]
+                        (str ", metric deltas: "
+                             (str/join ", "
+                                       (map (fn [{:keys [metric delta]}]
+                                              (str metric " Δ=" (if (pos? delta) "+" "") delta))
+                                            top))))
+                      "."))]
+    (str base (or replay ""))))
+
 (defn- baseline-comparison [artifacts scenario comparator-config]
   (let [scenarios (or (get-in artifacts [:coverage :scenarios]) [])
+        golden-reports (or (:golden-reports artifacts) (data/load-all-golden-reports))
         strategy (or (:strategy comparator-config) :nearest-baseline-by-id)
         baseline (choose-baseline scenarios scenario strategy)
         scenario-tags (set (or (:threat-tags scenario) []))
@@ -94,18 +158,26 @@
         scenario-tag-count (count scenario-tags)
         baseline-tag-count (count baseline-tags)
         overlap-count (count (set/intersection scenario-tags baseline-tags))
-        enabled? (not= false (:enabled? comparator-config))]
+        enabled? (not= false (:enabled? comparator-config))
+        scenario-report (data/find-golden-report golden-reports (:id scenario))
+        baseline-report (when baseline (data/find-golden-report golden-reports (:id baseline)))
+        replay-delta (replay-delta-summary scenario-report baseline-report)
+        tag-delta (- scenario-tag-count baseline-tag-count)]
     {:baseline_scenario_id (or (:id baseline) "unavailable")
      :comparator_kind (-> strategy name (str/replace "-" "_"))
      :enabled? enabled?
+     :replay_delta replay-delta
      :delta_summary (if (and enabled? baseline)
-                      {:threat_tag_count_delta (- scenario-tag-count baseline-tag-count)
-                       :threat_tag_overlap_count overlap-count
-                       :purpose_delta {:scenario (name (ose/normalize-purpose (:purpose scenario)))
-                                       :baseline (name (ose/normalize-purpose (:purpose baseline)))}
-                       :narrative (str "Compared against baseline " (:id baseline)
-                                       ": tag delta=" (- scenario-tag-count baseline-tag-count)
-                                       ", overlap=" overlap-count ".")}
+                      (merge {:threat_tag_count_delta tag-delta
+                              :threat_tag_overlap_count overlap-count
+                              :purpose_delta {:scenario (name (ose/normalize-purpose (:purpose scenario)))
+                                              :baseline (name (ose/normalize-purpose (:purpose baseline)))}}
+                             replay-delta
+                             {:narrative (comparison-narrative
+                                          {:baseline-id (:id baseline)
+                                           :tag-delta tag-delta
+                                           :overlap overlap-count
+                                           :replay-delta replay-delta})})
                       {:narrative "No baseline scenario available in coverage artifact for automatic delta extraction."})
      :available? (boolean baseline)}))
 

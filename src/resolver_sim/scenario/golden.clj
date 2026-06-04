@@ -4,8 +4,11 @@
    Does not read or write golden EDN files — compares in-memory report maps.")
 
 (def replay-snapshot-keys
-  "Keys compared in every golden verify mode."
-  #{:suite-id :trace-id :final-state-hash :metrics :outcome})
+  "Keys compared in every golden verify mode.
+
+   :suite-id is stored in golden EDN for provenance but intentionally excluded
+   from comparison — the same trace may appear in multiple suites."
+  #{:trace-id :final-state-hash :metrics :outcome})
 
 (defn replay-golden-snapshot
   "Replay fields compared in every golden verify mode."
