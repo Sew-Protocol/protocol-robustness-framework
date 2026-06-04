@@ -441,15 +441,20 @@
                     acc))
                 {}
                 slashed)
+        parse-num (fn [x]
+                    (cond
+                      (number? x) (long x)
+                      (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                      :else 0))
         by-token
         (into {}
               (for [token tokens]
-                [token {:held         (long (get held token 0))
-                        :released     (long (get released token 0))
-                        :refunded     (long (get refunded token 0))
-                        :withdrawn    (long (get withdrawn token 0))
-                        :bond-posted  (long (get posted token 0))
-                        :bond-slashed (long (get slashed-by-token token 0))}]))
+                [token {:held         (parse-num (get held token 0))
+                        :released     (parse-num (get released token 0))
+                        :refunded     (parse-num (get refunded token 0))
+                        :withdrawn    (parse-num (get withdrawn token 0))
+                        :bond-posted  (parse-num (get posted token 0))
+                        :bond-slashed (parse-num (get slashed-by-token token 0))}]))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]
