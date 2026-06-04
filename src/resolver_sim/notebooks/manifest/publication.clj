@@ -21,12 +21,23 @@
 
 (defn sign-manifest
   "Sign the canonical manifest hash with an Ed25519 private key.
-  Returns {:hash h :signature sig-hex :public-key-path ...} or {:error ...}."
-  [manifest private-key-path & {:keys [password] :or {password nil}}]
+
+  If a registry map is provided, compute its canonical hash and inject it into
+  the manifest under :artifact-registry-sha before signing. This makes the
+  signature commit to the artifact registry by default.
+
+  Returns {:hash h :signature sig-hex :private-key-path ... :manifest manifest-with-registry}
+  or {:error ...}.
+  "
+  [manifest private-key-path & {:keys [registry password] :or {registry nil password nil}}]
   (try
-    (let [h   (manifest-hash manifest)
+    (let [manifest-with-registry (if registry
+                                   (let [reg-h (mhash/canonical-hash registry)]
+                                     (assoc manifest :artifact-registry-sha reg-h))
+                                   manifest)
+          h   (manifest-hash manifest-with-registry)
           sig (signing/sign-hash h private-key-path password)]
-      {:hash h :signature sig :private-key-path private-key-path})
+      {:hash h :signature sig :private-key-path private-key-path :manifest manifest-with-registry})
     (catch Exception e
       {:error (.getMessage e)})))
 
