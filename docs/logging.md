@@ -99,7 +99,10 @@ The telemetry notebook (`notebooks/telemetry.clj`) is intentionally treated as a
   - `test-run.v1`
   - `test-artifacts.v1`
   - `trace-end-projection.v1`
-  - `claimable-classification.v1`
+  - `claimable-classification.v2` (v1 retained for historical artifacts)
+    - `provenance` — `run_id`, `git_sha`, `produced_at`
+    - `terminal_observations` — `by_class`, `by_domain`, `boundaries`, `boundary_headroom`, `funds_ledger`, `scenario_highlights` (each highlight includes `workflows` per escrow)
+    - `observations_status` — `taxonomy-only` | `terminal-aggregated` | `single-scenario` (bb scenario run / `from-result` on evidence output)
 
 ### Preflight schema checks (fail-closed)
 

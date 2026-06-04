@@ -34,7 +34,7 @@
    3. :l2-reversal       — appeal-reversal-outcome (after L2 escalation)
 
    Detection scope (:detection in :scope):
-   4. :reversal-detection — reversal-slashed-live?
+   4. :reversal-detection — reversal-slashed-live? (MC oracle; not replay.clj)
    5. :pending-evidence   — reversal-pending-live?
    6. :fraud-detection    — detect-probabilistic-violations
    7. :timeout-detection  — detect-probabilistic-violations
@@ -82,6 +82,9 @@
     :rolls [0.1 0.9 ...]                  ; fixed mode
     :scope #{:detection}                  ; default detection-only
     :on-exhaustion :throw|:repeat-last|:cycle}
+
+   :on-exhaustion is MC-only (stochastic/dispute). replay.clj does not consume it.
+   For replay-comparable evidence, prefer :throw with fully specified :rolls.
 
    Flat aliases (normalized internally):
    - :oracle-mode :fixed-or               → :fixed-roll-sequence
@@ -179,10 +182,43 @@
     (cond-> (assoc params
                    :oracle-effective effective
                    :oracle-roll-cursor (atom 0)
-                   :oracle-roll-cursors (atom {}))
+                   :oracle-roll-cursors (atom {})
+                   :oracle-fixture/exhausted? (atom false))
       (and (:oracle-roll-trace-enabled? params)
            (nil? (:oracle-roll-trace params)))
       (assoc :oracle-roll-trace (atom [])))))
+
+(defn collect-oracle-fixture-warnings
+  "Warnings for MC oracle fixture configuration. Not used by replay.clj.
+
+   opts:
+     :evidence-quality? — when true (benchmark/regression artifacts), exhausted
+     :repeat-last is :error; configured-but-not-exhausted :repeat-last is :info."
+  [params & [{:keys [evidence-quality?]}]]
+  (let [effective (or (:oracle-effective params)
+                      (normalize-oracle-fixture params))
+        policy (:on-exhaustion effective :throw)
+        exhausted? (boolean (when-let [a (:oracle-fixture/exhausted? params)] @a))]
+    (cond-> []
+      (= policy :repeat-last)
+      (conj {:level (cond
+                      (and evidence-quality? exhausted?) :error
+                      exhausted? :warning
+                      :else :info)
+             :code :oracle-fixture-repeat-last
+             :message
+             (str "Oracle fixture uses :on-exhaustion :repeat-last (MC-only; "
+                  "not consumed by replay.clj)."
+                  (when exhausted?
+                    " Roll sequence exhausted; subsequent values repeat the last scripted roll.")
+                  (when (and evidence-quality? (not exhausted?))
+                    " Evidence-quality run: prefer :throw unless exploratory."))})
+
+      (and (= policy :cycle) exhausted?)
+      (conj {:level :info
+             :code :oracle-fixture-cycle-exhausted
+             :message
+             "Oracle roll sequence exhausted; subsequent values cycle (MC-only; not replay)."}))))
 
 (defn roll-detect?
   "True when uniform roll value is below threshold (Bernoulli with rate ≈ threshold)."
@@ -246,24 +282,79 @@
   (when (trace-enabled? params)
     (swap! (:oracle-roll-trace params) conj entry)))
 
+(defn- mark-fixture-exhausted!
+  [params on-exhaustion]
+  (when-let [flag (:oracle-fixture/exhausted? params)]
+    (reset! flag true))
+  params)
+
 (defn- trace-decision!
-  [params roll-kind roll-source roll-value threshold detected?]
-  (append-roll-trace!
-   params
-   {:roll/kind roll-kind
-    :roll/source roll-source
-    :roll/value (double roll-value)
-    :threshold (double threshold)
-    :detected? (boolean detected?)}))
+  [params roll-event threshold detected?]
+  (when (trace-enabled? params)
+    (append-roll-trace!
+     params
+     (merge (select-keys roll-event #{:roll/kind :roll/source :roll/value
+                                       :roll/index :roll/count :roll/exhausted?
+                                       :roll/on-exhaustion :roll/repeated-index
+                                       :roll/cycled-index})
+            {:threshold (double threshold)
+             :detected? (boolean detected?)}))))
 
 (defn- make-roll-event
-  [roll-kind source value]
-  {:roll/kind roll-kind
-   :roll/source source
-   :roll/value (double value)})
+  [roll-kind source value & [extra]]
+  (merge {:roll/kind roll-kind
+          :roll/source source
+          :roll/value (double value)}
+         extra))
+
+(defn- fixed-roll-event
+  "Build a fixed-roll-sequence event; marks exhaustion when index >= count."
+  [params roll-kind rolls* i n on-exhaustion]
+  (cond
+    (< i n)
+    (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* i)
+                     {:roll/index i :roll/count n})
+
+    (= on-exhaustion :throw)
+    (throw (ex-info "Oracle fixed roll sequence exhausted"
+                    {:roll-kind roll-kind
+                     :mode :fixed-roll-sequence
+                     :on-exhaustion on-exhaustion
+                     :requested-index i
+                     :roll-count n}))
+
+    (= on-exhaustion :repeat-last)
+    (let [last-idx (dec n)]
+      (mark-fixture-exhausted! params on-exhaustion)
+      (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* last-idx)
+                       {:roll/index i
+                        :roll/count n
+                        :roll/exhausted? true
+                        :roll/on-exhaustion on-exhaustion
+                        :roll/repeated-index last-idx}))
+
+    (= on-exhaustion :cycle)
+    (let [cidx (mod i n)]
+      (mark-fixture-exhausted! params on-exhaustion)
+      (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* cidx)
+                       {:roll/index i
+                        :roll/count n
+                        :roll/exhausted? true
+                        :roll/on-exhaustion on-exhaustion
+                        :roll/cycled-index cidx}))
+
+    :else
+    (throw (ex-info "Unsupported oracle fixture exhaustion policy"
+                    {:roll-kind roll-kind
+                     :mode :fixed-roll-sequence
+                     :on-exhaustion on-exhaustion}))))
 
 (defn oracle-roll-event
-  "Return a map {:roll/kind :roll/source :roll/value} for one oracle roll."
+  "Return a roll event map for one oracle draw.
+
+   Fixed-roll events may include :roll/index, :roll/count, :roll/exhausted?,
+   :roll/on-exhaustion, :roll/repeated-index, or :roll/cycled-index when the
+   sequence is past its end (:repeat-last / :cycle). MC-only — replay.clj ignores these."
   [params roll-kind]
   (let [{:keys [mode scope on-exhaustion rolls]} (normalize-oracle-fixture params)
         in-scope? (in-oracle-scope? scope roll-kind)]
@@ -299,29 +390,7 @@
           (when (zero? n)
             (throw (ex-info "Empty :oracle-fixture :rolls for :fixed-roll-sequence"
                             {:roll-kind roll-kind :mode mode :rolls rolls})))
-          (cond
-            (< i n)
-            (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* i))
-
-            (= on-exhaustion :throw)
-            (throw (ex-info "Oracle fixed roll sequence exhausted"
-                            {:roll-kind roll-kind
-                             :mode mode
-                             :on-exhaustion on-exhaustion
-                             :requested-index i
-                             :roll-count n}))
-
-            (= on-exhaustion :repeat-last)
-            (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* (dec n)))
-
-            (= on-exhaustion :cycle)
-            (make-roll-event roll-kind :fixed-roll-sequence (nth rolls* (mod i n)))
-
-            :else
-            (throw (ex-info "Unsupported oracle fixture exhaustion policy"
-                            {:roll-kind roll-kind
-                             :mode mode
-                             :on-exhaustion on-exhaustion}))))
+          (fixed-roll-event params roll-kind rolls* i n on-exhaustion))
 
         :stochastic
         (make-roll-event roll-kind :stochastic (rng/roll-double (:rng params)))
@@ -338,9 +407,9 @@
 
 (defn- appeal-threshold-roll
   [rng params roll-kind threshold]
-  (let [{:keys [roll/source roll/value]} (oracle-roll-event params roll-kind)
-        detected? (roll-detect? value threshold)]
-    (trace-decision! params roll-kind source value threshold detected?)
+  (let [roll-event (oracle-roll-event params roll-kind)
+        detected? (roll-detect? (:roll/value roll-event) threshold)]
+    (trace-decision! params roll-event threshold detected?)
     detected?))
 
 (defn appeal-reversal-outcome
@@ -386,8 +455,11 @@
      :decision-reversed? decision-reversed?}))
 
 (defn reversal-slashed-live?
-  "Track 1 (live replay): reversal slash when appeal overturns a wrong verdict
-   and oracle detection succeeds.
+  "Monte Carlo reversal-slash model: appeal overturns a wrong verdict and oracle
+   detection succeeds (oracle-roll-event, including fixture exhaustion policy).
+
+   Not used by replay.clj protocol replay; on-chain replay uses deterministic
+   reversal slashing in protocols/sew/resolution.
 
    Defaults :reversal-detection-probability to 1.0 to preserve historic
    deterministic behavior unless explicitly lowered."
@@ -397,20 +469,22 @@
              appealed?
              decision-reversed?
              (pos? (:reversal-slash-bps params 0)))
-      (let [{:keys [roll/source roll/value]} (oracle-roll-event params :reversal-detection)
-            detected? (roll-detect? value threshold)]
-        (trace-decision! params :reversal-detection source value threshold detected?)
+      (let [roll-event (oracle-roll-event params :reversal-detection)
+            detected? (roll-detect? (:roll/value roll-event) threshold)]
+        (trace-decision! params roll-event threshold detected?)
         detected?)
       false)))
 
 (defn reversal-pending-live?
-  "Track 2 (live replay): new evidence → pending slash (not counted in immediate loss)."
+  "Monte Carlo pending-slash model: new evidence after reversal slash (oracle-roll-event).
+
+   Not used by replay.clj; see protocols/sew/resolution for deterministic Track 2."
   [params {:keys [reversal-slashed?]}]
   (let [threshold (:new-evidence-probability params 0)]
     (if (and reversal-slashed? (pos? threshold))
-      (let [{:keys [roll/source roll/value]} (oracle-roll-event params :pending-evidence)
-            detected? (roll-detect? value threshold)]
-        (trace-decision! params :pending-evidence source value threshold detected?)
+      (let [roll-event (oracle-roll-event params :pending-evidence)
+            detected? (roll-detect? (:roll/value roll-event) threshold)]
+        (trace-decision! params roll-event threshold detected?)
         detected?)
       false)))
 
@@ -419,9 +493,9 @@
   [params {:keys [verdict-correct? appealed?]}]
   (let [threshold (:l2-detection-prob params 0)]
     (if (and appealed? (not verdict-correct?) (pos? threshold))
-      (let [{:keys [roll/source roll/value]} (oracle-roll-event params :l2-detection)
-            detected? (roll-detect? value threshold)]
-        (trace-decision! params :l2-detection source value threshold detected?)
+      (let [roll-event (oracle-roll-event params :l2-detection)
+            detected? (roll-detect? (:roll/value roll-event) threshold)]
+        (trace-decision! params roll-event threshold detected?)
         detected?)
       false)))
 
@@ -436,24 +510,24 @@
           (if (and (not verdict-correct?)
                    (> (:fraud probs) 0)
                    (= strategy :malicious))
-            (let [{:keys [roll/source roll/value]} (oracle-roll-event params :fraud-detection)
-                  detected? (roll-detect? value (:fraud probs))]
-              (trace-decision! params :fraud-detection source value (:fraud probs) detected?)
+            (let [roll-event (oracle-roll-event params :fraud-detection)
+                  detected? (roll-detect? (:roll/value roll-event) (:fraud probs))]
+              (trace-decision! params roll-event (:fraud probs) detected?)
               detected?)
             false)
           timeout-detected?
           (if (and (> (:timeout probs) 0)
                    (or (= strategy :lazy) (= strategy :malicious)))
-            (let [{:keys [roll/source roll/value]} (oracle-roll-event params :timeout-detection)
-                  detected? (roll-detect? value (:timeout probs))]
-              (trace-decision! params :timeout-detection source value (:timeout probs) detected?)
+            (let [roll-event (oracle-roll-event params :timeout-detection)
+                  detected? (roll-detect? (:roll/value roll-event) (:timeout probs))]
+              (trace-decision! params roll-event (:timeout probs) detected?)
               detected?)
             false)
           l1-slashed?
           (if (not verdict-correct?)
-            (let [{:keys [roll/source roll/value]} (oracle-roll-event params :l1-detection)
-                  detected? (roll-detect? value base-detection-prob)]
-              (trace-decision! params :l1-detection source value base-detection-prob detected?)
+            (let [roll-event (oracle-roll-event params :l1-detection)
+                  detected? (roll-detect? (:roll/value roll-event) base-detection-prob)]
+              (trace-decision! params roll-event base-detection-prob detected?)
               detected?)
             false)]
       {:fraud-detected? fraud-detected?
@@ -496,9 +570,9 @@
         reversal-detected? (roll-detect? (:roll/value reversal-roll) (:reversal probs))
         timeout-roll (oracle-roll-event params :timeout-detection)
         timeout-detected? (roll-detect? (:roll/value timeout-roll) (:timeout probs))]
-    (trace-decision! params :fraud-detection (:roll/source fraud-roll) (:roll/value fraud-roll) (:fraud probs) fraud-detected?)
-    (trace-decision! params :reversal-detection (:roll/source reversal-roll) (:roll/value reversal-roll) (:reversal probs) reversal-detected?)
-    (trace-decision! params :timeout-detection (:roll/source timeout-roll) (:roll/value timeout-roll) (:timeout probs) timeout-detected?)
+    (trace-decision! params fraud-roll (:fraud probs) fraud-detected?)
+    (trace-decision! params reversal-roll (:reversal probs) reversal-detected?)
+    (trace-decision! params timeout-roll (:timeout probs) timeout-detected?)
     {:fraud-detected? fraud-detected?
      :reversal-detected? reversal-detected?
      :timeout-detected? timeout-detected?}))

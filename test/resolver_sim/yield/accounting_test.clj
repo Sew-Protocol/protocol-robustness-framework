@@ -145,12 +145,22 @@
       (is (= 1.30 (:current-index pos'))))))
 
 (deftest test-update-position-yield-requires-world
-  (testing "1-arity rejects silent optimistic clamping without risk context"
+  (testing "2-arg and nil-world 3-arg reject silent optimistic clamping without risk context"
     (let [pos {:owner/id :o :module/id :mod :token :USDC
                :principal 10000 :shares 10000 :entry-index 1.0 :status :active}]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"world is required"
-                            (acct/update-position-yield pos 0.98))))))
+                            (acct/update-position-yield pos 0.98)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"world is required"
+                            (acct/update-position-yield nil pos 0.98)))
+      (try
+        (acct/update-position-yield pos 0.98)
+        (is false "expected ex-info")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= 'update-position-yield (:fn (ex-data e))))
+          (is (= pos (:position (ex-data e))))
+          (is (= 0.98 (:current-index (ex-data e)))))))))
 
 (deftest test-update-position-yield-optimistic-clamp
   (testing "Default loss mode clamps negative PnL to zero unrealized yield"

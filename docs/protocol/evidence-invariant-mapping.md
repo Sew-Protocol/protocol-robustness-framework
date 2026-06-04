@@ -20,7 +20,7 @@ The authoritative mapping lives in
 | `bounded-progress-under-load` | `:no-stale-automatable-escrows`, `:resolver-capacity` |
 | `liability-gated-withdrawal` | `:no-withdrawal-during-dispute`, `:bond-liquidity`, `:held-delta-accounted` |
 | `no-double-settlement` | `:single-resolution-payout-consistent`, `:cancellation-mutex`, `:pending-settlement-consistent`, `:terminal-states-unchanged` |
-| `pull-first-value-flow` | `:settlement-principal-boundary`, `:settlement-yield-boundary`, `:claimable-classification` |
+| `pull-first-value-flow` | `:settlement-principal-boundary`, `:settlement-yield-boundary`, `:liability-slash-boundary`, `:bond-boundary`, `:fee-boundary`, `:claimable-classification` |
 | `escalation-layer-protection` | `:escalation-level-monotonic`, `:dispute-level-bounded`, `:dispute-resolution-path` |
 
 Rejected illegal transitions are tracked as replay metrics (`:invalid-state-transitions`),

@@ -28,7 +28,9 @@
       :pending-settlement-consistent :terminal-states-unchanged}
 
    "pull-first-value-flow"
-   #{:settlement-principal-boundary :settlement-yield-boundary :claimable-classification}
+   #{:settlement-principal-boundary :settlement-yield-boundary
+     :liability-slash-boundary :bond-boundary :fee-boundary
+     :claimable-classification}
 
    "escalation-layer-protection"
    #{:escalation-level-monotonic :dispute-level-bounded :dispute-resolution-path}

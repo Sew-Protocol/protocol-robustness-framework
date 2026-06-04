@@ -44,7 +44,7 @@
    :schemas {:test-run "test-run.v1"
              :test-artifacts "test-artifacts.v1"
              :trace-end-projection "trace-end-projection.v1"
-             :claimable-classification "claimable-classification.v1"}})
+             :claimable-classification "claimable-classification.v2"}})
 
 (def ^:private required-trial-columns
   #{"_id" "batch_id" "protocol_id" "outcome" "invariants_ok" "divergence"})

@@ -47,14 +47,18 @@ To clear v2 claimables for a workflow and kind, use:
 
 This is idempotent and helps maintain clean accounting state.
 
-### Configuring Stochastic Processes
-When running stochastic simulations, you can configure behavior on data exhaustion (e.g., in `detection` or `types` configurations):
+### Configuring Stochastic Oracle Fixtures (MC-only)
+`:on-exhaustion` on `:oracle-fixture` is **not** used by `replay.clj`. For
+replay-comparable evidence, use `:throw` with fully specified `:rolls`.
 
 ```clojure
-{:on-exhaustion :repeat-last}
+;; Exploratory MC only — holds final scripted roll after exhaustion
+{:oracle-fixture {:mode :fixed-roll-sequence
+                   :rolls [0.1 0.9]
+                   :on-exhaustion :repeat-last}}
 ```
 
-This ensures that instead of throwing an error or cycling, the simulation repeats the last available value.
+See `docs/architecture/ORACLE_FIXTURE_EXHAUSTION.md`.
 
 ## Comparing Traces
 ...

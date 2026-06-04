@@ -6,7 +6,7 @@ scenario:run:family, or evidence:build invocation.
 Produces into results/test-artifacts/:
   test-run.json                 schema: test-run.v1
   test-summary.json             schema: test-summary.v2
-  claimable-classification.json schema: claimable-classification.v1
+  claimable-classification.json schema: claimable-classification.v2
   test-artifacts.json           schema: test-artifacts.v1
 
 Only artifacts produced by this invocation are registered.
@@ -185,49 +185,62 @@ def scenario_capabilities_summary(scenarios_dir: pathlib.Path) -> dict:
     }
 
 
-# ── static claimable classification (mirrors test.sh) ────────────────────────
+def resolve_scenario_path(scenario: str) -> pathlib.Path | None:
+    """Resolve bb scenario alias or path to an on-disk scenario JSON."""
+    raw = pathlib.Path(scenario)
+    if raw.is_file():
+        return raw
+    if not raw.suffix:
+        with_json = raw.with_suffix(".json")
+        if with_json.is_file():
+            return with_json
+    under = pathlib.Path("scenarios") / scenario
+    if under.is_file():
+        return under
+    with_json = under.with_suffix(".json")
+    if with_json.is_file():
+        return with_json
+    return None
 
-CLAIMABLE_CLASSIFICATION: dict = {
-    "schema_version": "claimable-classification.v1",
-    "shortfall_policy": {
-        "mode": "partial-liquidity-supported",
-        "allocation": "fulfilled-plus-deferred",
-        "rounding_policy": "floor-to-asset-decimals.v1",
-    },
-    "classes": {
-        "escrow_principal": {
-            "delivery_model": "pull",
-            "source": "settlement",
-            "recipient_type": "party",
-            "risk_class": "user-withdrawable",
-        },
-        "escrow_yield": {
-            "delivery_model": "pull",
-            "source": "yield",
-            "recipient_type": "party-or-protocol",
-            "risk_class": "yield-derived",
-            "shortfall_outcome": "may-be-partially-deferred",
-        },
-        "resolver_payment": {
-            "delivery_model": "pull",
-            "source": "dispute-resolution",
-            "recipient_type": "resolver",
-            "risk_class": "service-compensation",
-        },
-        "bond_refund": {
-            "delivery_model": "pull",
-            "source": "appeal-bond",
-            "recipient_type": "disputant",
-            "risk_class": "bond-return",
-        },
-        "protocol_fee": {
-            "delivery_model": "pull-or-governance-withdrawal",
-            "source": "fee",
-            "recipient_type": "protocol",
-            "risk_class": "protocol-revenue",
-        },
-    },
-}
+
+def emit_claimable_classification(
+    claimable_file: pathlib.Path,
+    run_id: str,
+    git_sha: str | None,
+    args: argparse.Namespace,
+) -> None:
+    """Write claimable-classification.v2 (replay scenario when path/result available)."""
+    cmd = [
+        "clojure",
+        "-M",
+        "-m",
+        "resolver-sim.io.claimable-classification-emitter",
+        str(claimable_file),
+    ]
+    passed = "1" if args.status == "pass" else "0"
+
+    if args.output_file and pathlib.Path(args.output_file).is_file():
+        cmd.extend(["from-result", args.output_file, run_id])
+        if git_sha:
+            cmd.append(git_sha)
+        cmd.append(passed)
+    elif args.suite in ("scenario", "evidence"):
+        scenario_path = resolve_scenario_path(args.scenario)
+        if scenario_path is not None:
+            cmd.extend(["single-scenario", str(scenario_path), run_id])
+            if git_sha:
+                cmd.append(git_sha)
+            cmd.append(passed)
+        else:
+            cmd.extend(["taxonomy-only", run_id])
+            if git_sha:
+                cmd.append(git_sha)
+    else:
+        cmd.extend(["taxonomy-only", run_id])
+        if git_sha:
+            cmd.append(git_sha)
+
+    subprocess.run(cmd, check=True)
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -315,6 +328,9 @@ def write_artifacts_to(
         "artifacts": artifacts_map,
     }
 
+    emit_claimable_classification(claimable_file, run_id, git_sha, args)
+    claimable_classification = json.loads(claimable_file.read_text())
+
     overall  = args.status
     decision = "PASS_CLEAN" if overall == "pass" else "REJECTED"
     summary: dict = {
@@ -351,7 +367,7 @@ def write_artifacts_to(
             "rounding_policy":                     "floor-to-asset-decimals.v1",
         },
         "claimable_classification": {
-            "schema_version": CLAIMABLE_CLASSIFICATION["schema_version"],
+            "schema_version": claimable_classification["schema_version"],
             "path":           str(claimable_file),
         },
         "status_counts": {
@@ -377,7 +393,6 @@ def write_artifacts_to(
 
     artifact_file.write_text(json.dumps(summary, indent=2))
     run_manifest_file.write_text(json.dumps(run_manifest, indent=2))
-    claimable_file.write_text(json.dumps(CLAIMABLE_CLASSIFICATION, indent=2))
 
     rm_meta = artifact_meta(run_manifest_file) or {}
     entries = [
@@ -394,7 +409,7 @@ def write_artifacts_to(
         ),
         mk_artifact_entry(
             "claimable-classification", "classification", str(claimable_file),
-            CLAIMABLE_CLASSIFICATION["schema_version"], "claimable-classification-emitter.v1",
+            claimable_classification["schema_version"], "claimable-classification-emitter.v2",
             ["test-run.v1"], {"test_run": "test-run.v1"},
         ),
     ]

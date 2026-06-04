@@ -81,8 +81,14 @@ Key parameters:
 ## Oracle Fixtures and Notebook Tracing
 
 **MC-only:** `:oracle-fixture` affects the Monte Carlo dispute model (`stochastic/dispute`).
-Live replay (`protocols/sew/resolution`) does not read it; reversal slashing on-chain
-remains deterministic when a verdict is overturned.
+Live replay (`contract_model/replay.clj`, `protocols/sew/resolution`) does not read it;
+reversal slashing in replay remains deterministic when a verdict is overturned.
+
+`:on-exhaustion` (`:throw`, `:repeat-last`, `:cycle`) controls stochastic oracle
+fixtures only. `:repeat-last` preserves MC trial continuity after scripted rolls
+are exhausted; it does not model replay determinism and is not validated by
+`replay-with-protocol`. For replay-comparable evidence, prefer `:throw` with fully
+specified `:rolls`. See `docs/architecture/ORACLE_FIXTURE_EXHAUSTION.md`.
 
 The stochastic dispute model supports oracle fixture overrides for deterministic
 experiments and notebook evidence capture. Param files are validated at load time
@@ -103,8 +109,14 @@ conflicting legacy keys, and orphan `:oracle-roll-sequence` / `:oracle-mode` rai
          :l2-detection [0.50]
          :default [0.90]}
  :scope #{:detection}
- :on-exhaustion :throw}
+ :on-exhaustion :throw}   ; default for evidence-quality runs
 ```
+
+| Use case | Recommended `:on-exhaustion` |
+|----------|------------------------------|
+| Regression / replay-comparable evidence | `:throw` |
+| Exploratory MC sweeps | `:repeat-last` acceptable |
+| Long MC with periodic script | `:cycle` |
 
 For `:fixed-roll-sequence`, `:rolls` can be either:
 
@@ -176,9 +188,15 @@ of entries:
 {:roll/kind :fraud-detection
  :roll/source :fixed-roll-sequence
  :roll/value 0.01
+ :roll/index 1
+ :roll/count 3
  :threshold 0.25
  :detected? true}
 ```
+
+After sequence exhaustion (`:repeat-last` / `:cycle`), entries also include
+`:roll/exhausted? true`, `:roll/on-exhaustion`, and `:roll/repeated-index` or
+`:roll/cycled-index`.
 
 This is intended for notebook analysis and evidence artifacts where you need to
 show exactly why a detection decision fired (or did not fire).

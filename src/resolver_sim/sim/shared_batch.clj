@@ -80,7 +80,8 @@
    :oracle-roll-sequence           (:oracle-roll-sequence params)
    :oracle-roll-on-exhaustion      (:oracle-roll-on-exhaustion params)
    :fixed-or                        (:fixed-or params)
-   :oracle-roll-trace-enabled?     (:oracle-roll-trace-enabled? params false)])
+   :oracle-roll-trace-enabled?     (:oracle-roll-trace-enabled? params false)
+   :evidence-quality?              (:evidence-quality? params false)])
 
 (defn run-paired-trial
   "Run one dispute with BOTH honest and malicious strategies on independent
@@ -159,6 +160,9 @@
      :mode              :shared-world
      :oracle-effective-mode (:mode (:oracle-effective params)
                                   (detection/normalize-oracle-fixture params))
+     :oracle-fixture-exhausted? (boolean (some :oracle-fixture/exhausted? paired-trials))
+     :oracle-fixture-warnings
+     (vec (distinct (mapcat :oracle-fixture/warnings paired-trials)))
      :honest-mean       (double mean-h)
      :honest-std        (double (std-dev profits-honest mean-h))
      :honest-min        (if (seq sorted-h) (first sorted-h) 0)

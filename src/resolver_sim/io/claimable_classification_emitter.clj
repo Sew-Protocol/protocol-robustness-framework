@@ -1,0 +1,146 @@
+(ns resolver-sim.io.claimable-classification-emitter
+  "Write claimable-classification.v2 evidence artifact (I/O shell)."
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.java.shell :as sh]
+            [clojure.string :as str]
+            [resolver-sim.io.scenario-runner :as scenario-runner]
+            [resolver-sim.protocols.sew.claimable-classification :as cc]))
+
+(def producer-id "claimable-classification-emitter.v2")
+
+(defn- write-json! [path doc]
+  (let [f (io/file path)]
+    (.mkdirs (.getParentFile f))
+    (spit f (json/write-str doc {:indent true}))))
+
+(defn- current-git-sha []
+  (try
+    (-> (sh/sh "git" "rev-parse" "HEAD")
+        :out
+        str/trim
+        not-empty)
+    (catch Exception _ nil)))
+
+(defn- provenance-block
+  [& {:keys [run-id git-sha override-sha]}]
+  (let [sha (or override-sha git-sha (current-git-sha))]
+    (cond-> {:producer producer-id
+             :produced_at (str (java.time.Instant/now))}
+      run-id (assoc :run_id run-id)
+      sha (assoc :git_sha sha))))
+
+(defn- emit-terminal-document!
+  [output-path {:keys [worlds contexts scope scenarios-passed observations-status
+                       run-id git-sha aggregation aggregation-note]}]
+  (write-json! output-path
+               (cc/build-document
+                :worlds worlds
+                :contexts contexts
+                :scope scope
+                :scenarios-passed scenarios-passed
+                :observations-status observations-status
+                :aggregation aggregation
+                :aggregation-note aggregation-note
+                :provenance (provenance-block :run-id run-id :git-sha git-sha))))
+
+(defn emit-taxonomy-only!
+  "Write taxonomy without replaying scenarios (scenario-manifest path)."
+  [output-path & {:keys [run-id git-sha]}]
+  (write-json! output-path
+               (cc/build-document
+                :observations-status "taxonomy-only"
+                :provenance (provenance-block :run-id run-id :git-sha git-sha))))
+
+(defn emit-from-registry-replay!
+  "Replay Sew invariant registry and write v2 with terminal observations."
+  [output-path & {:keys [run-id suite-id git-sha]}]
+  (let [summary  (scenario-runner/run-registry-suite {:suite-id (or suite-id :sew-invariants)})
+        contexts (cc/terminal-contexts-from-summary summary)
+        worlds   (mapv :world contexts)
+        passed   (count (filter :pass? (or (:results summary) (:entries summary))))]
+    (emit-terminal-document! output-path
+                             {:worlds worlds
+                              :contexts contexts
+                              :scope (str "sew-invariants-registry"
+                                          (when run-id (str "/" run-id)))
+                              :scenarios-passed passed
+                              :observations-status "terminal-aggregated"
+                              :run-id run-id
+                              :git-sha git-sha})
+    output-path))
+
+(defn emit-from-scenario-file!
+  "Replay one scenario JSON and write v2 with terminal observations."
+  [output-path scenario-path & {:keys [run-id git-sha scenarios-passed]}]
+  (let [summary  (scenario-runner/run-scenario-file scenario-path {:suite-id :bb-scenario-run})
+        contexts (cc/terminal-contexts-from-summary summary)
+        worlds   (mapv :world contexts)
+        passed   (or scenarios-passed (count (filter :pass? (:entries summary))))
+        sid      (or (:scenario-id (first contexts)) scenario-path)]
+    (emit-terminal-document! output-path
+                             {:worlds worlds
+                              :contexts contexts
+                              :scope (str "scenario/" sid)
+                              :scenarios-passed passed
+                              :observations-status "single-scenario"
+                              :aggregation "single-terminal-world"
+                              :aggregation-note "One scenario replay; workflows list per-escrow claimable breakdown."
+                              :run-id run-id
+                              :git-sha git-sha})
+    output-path))
+
+(defn emit-from-result-file!
+  "Load scenario-result JSON (evidence:build output) without replay."
+  [output-path result-path & {:keys [run-id git-sha scenarios-passed]}]
+  (let [result  (json/read-str (slurp result-path) :key-fn keyword)
+        context (cc/terminal-context-from-replay-result result)]
+    (when-not context
+      (throw (ex-info "scenario result has no terminal world in trace"
+                      {:path result-path})))
+    (emit-terminal-document! output-path
+                             {:worlds [(:world context)]
+                              :contexts [context]
+                              :scope (str "scenario-result/" (:scenario-id context))
+                              :scenarios-passed (or scenarios-passed (if (= :pass (:outcome context)) 1 0))
+                              :observations-status "single-scenario"
+                              :aggregation "single-terminal-world"
+                              :aggregation-note (str "Terminal world from " result-path "; no replay.")
+                              :run-id run-id
+                              :git-sha git-sha})
+    output-path))
+
+(defn- parse-int-or-nil [s]
+  (when (seq (str s))
+    (Integer/parseInt (str s))))
+
+(defn -main
+  [& args]
+  (let [output-path (or (first args) "results/test-artifacts/claimable-classification.json")
+        mode        (second args)]
+    (case mode
+      "taxonomy-only"
+      (emit-taxonomy-only! output-path
+                           :run-id (nth args 2 nil)
+                           :git-sha (nth args 3 nil))
+
+      "aggregated"
+      (emit-from-registry-replay! output-path
+                                  :run-id (nth args 2 nil)
+                                  :git-sha (nth args 3 nil))
+
+      "single-scenario"
+      (emit-from-scenario-file! output-path (nth args 2 nil)
+                                :run-id (nth args 3 nil)
+                                :git-sha (nth args 4 nil)
+                                :scenarios-passed (parse-int-or-nil (nth args 5 nil)))
+
+      "from-result"
+      (emit-from-result-file! output-path (nth args 2 nil)
+                              :run-id (nth args 3 nil)
+                              :git-sha (nth args 4 nil)
+                              :scenarios-passed (parse-int-or-nil (nth args 5 nil)))
+
+      ;; legacy: second arg was run-id
+      (emit-from-registry-replay! output-path :run-id mode :git-sha (nth args 2 nil)))
+    (println "Wrote claimable classification:" output-path)))

@@ -69,6 +69,8 @@
 ;; Re-export stochastic detection API for sim layers and tests
 (def validate-oracle-params! det/validate-oracle-params!)
 (def prepare-oracle-params det/prepare-oracle-params)
+(def collect-oracle-fixture-warnings det/collect-oracle-fixture-warnings)
+(def oracle-roll-event det/oracle-roll-event)
 (def normalize-oracle-fixture det/normalize-oracle-fixture)
 (def oracle-roll-in-scope? det/oracle-roll-in-scope?)
 (def oracle-fixture-roll-kinds det/oracle-fixture-roll-kinds)

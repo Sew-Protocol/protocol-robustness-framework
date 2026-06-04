@@ -403,8 +403,11 @@ Output includes:
 
 ## Monte Carlo oracle fixtures (`:oracle-fixture`, `:fixed-or`)
 
-MC-only controls for detection and appeal rolls (live replay ignores these).
+MC-only controls for detection and appeal rolls (`replay.clj` ignores these).
 Not the same as invariant trace fixtures under `data/fixtures/traces/`.
+
+`:on-exhaustion :repeat-last` is MC-only; see
+`docs/architecture/ORACLE_FIXTURE_EXHAUSTION.md`.
 
 | Resource | Purpose |
 |----------|---------|

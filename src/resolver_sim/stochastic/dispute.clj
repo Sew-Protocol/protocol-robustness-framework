@@ -52,7 +52,7 @@
              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
              model-appeal-costs? appeal-bond-recovery-rate
              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-             fixed-or oracle-roll-trace-enabled?]
+             fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -87,7 +87,8 @@
            model-appeal-costs? false
            ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
            appeal-bond-recovery-rate 0.5
-           oracle-roll-trace-enabled? false}}]
+           oracle-roll-trace-enabled? false
+           evidence-quality? false}}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
@@ -121,7 +122,8 @@
                           :oracle-roll-sequence oracle-roll-sequence
                           :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
                           :fixed-or fixed-or
-                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?})
+                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
+                          :evidence-quality? evidence-quality?})
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
@@ -281,6 +283,11 @@
      :slash-distributed     slash-distributed
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
+     :oracle-fixture/exhausted?
+     (boolean (when-let [a (:oracle-fixture/exhausted? oracle-params)] @a))
+     :oracle-fixture/warnings
+     (detection/collect-oracle-fixture-warnings
+      oracle-params {:evidence-quality? evidence-quality?})
      :strategy              strategy}))
 
 (defn multiple-disputes

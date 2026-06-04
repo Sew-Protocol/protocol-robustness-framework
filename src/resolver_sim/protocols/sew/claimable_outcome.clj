@@ -1,5 +1,5 @@
 (ns resolver-sim.protocols.sew.claimable-outcome
-  "Observed escrow_yield delivery outcomes for claimable-classification.v1."
+  "Observed escrow_yield delivery outcomes for claimable-classification.v2."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.yield.accounting :as yield-acct]))
 

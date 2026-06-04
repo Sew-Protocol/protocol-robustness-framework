@@ -55,6 +55,7 @@
    :oracle-roll-sequence vector?
    :oracle-roll-on-exhaustion (fn [x] (contains? #{:throw :repeat-last :cycle} x))
    :oracle-roll-trace-enabled? boolean?
+   :evidence-quality? boolean?
    :fraud-model (fn [x] (contains? #{:single-stage-ev :sequential-escalation :strict-all-tiers} x))
    :escalation-assumption-band (fn [x] (contains? #{:conservative :base :optimistic} x))
    :p-appeal-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
@@ -131,7 +132,8 @@
    :detection-type :fraud                 ; Phase H: :fraud (explicit), :timeout (automatic), :reversal (on appeal)
    :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
    :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
-   :oracle-roll-trace-enabled? false})
+   :oracle-roll-trace-enabled? false
+   :evidence-quality? false})
 
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.

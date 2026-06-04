@@ -58,7 +58,16 @@ def main() -> int:
     validate_schema_const(registry, "test-artifacts.v1", "test-artifacts")
     validate_schema_const(run, "test-run.v1", "test-run")
     validate_schema_const(summary, "test-summary.v2", "test-summary")
-    validate_schema_const(claim, "claimable-classification.v1", "claimable-classification")
+    claim_schema = claim.get("schema_version")
+    if claim_schema not in ("claimable-classification.v1", "claimable-classification.v2"):
+        fail(f"claimable-classification schema_version must be v1 or v2, got {claim_schema!r}")
+    obs_status = claim.get("observations_status")
+    if obs_status and obs_status not in (
+        "taxonomy-only",
+        "terminal-aggregated",
+        "single-scenario",
+    ):
+        fail(f"claimable-classification observations_status invalid: {obs_status!r}")
 
     if registry.get("run_id") != run.get("run_id"):
         fail("run_id mismatch between registry and run manifest")

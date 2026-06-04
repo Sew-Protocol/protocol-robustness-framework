@@ -624,6 +624,18 @@ run_monte_carlo() {
   return $mc_fail
 }
 
+emit_claimable_classification() {
+  require_clojure || return 0
+  echo "Emitting claimable-classification v2..."
+  if [ "${CLAIMABLE_CLASSIFICATION_TAXONOMY_ONLY:-0}" = "1" ]; then
+    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+      "$CLAIMABLE_CLASSIFICATION_FILE" taxonomy-only
+  else
+    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+      "$CLAIMABLE_CLASSIFICATION_FILE" aggregated "$RUN_ID"
+  fi
+}
+
 run_outcome_classification_report() {
   echo ""
   echo "Outcome classification report"
@@ -816,6 +828,7 @@ case "$MODE" in
 esac
 
 if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
+  emit_claimable_classification || true
   python - <<PY
 import csv, json, pathlib, datetime, subprocess
 csv_path = pathlib.Path("$ARTIFACT_DIR/.targets-${RUN_ID}.csv")
@@ -977,47 +990,20 @@ def scenario_capabilities_summary(scenarios_dir: pathlib.Path):
     }
 
 caps = scenario_capabilities_summary(pathlib.Path("scenarios"))
-claimable_classification = {
-  "schema_version": "claimable-classification.v1",
-  "shortfall_policy": {
-    "mode": "partial-liquidity-supported",
-    "allocation": "fulfilled-plus-deferred",
-    "rounding_policy": "floor-to-asset-decimals.v1"
-  },
-  "classes": {
-    "escrow_principal": {
-      "delivery_model": "pull",
-      "source": "settlement",
-      "recipient_type": "party",
-      "risk_class": "user-withdrawable"
+claimable_path = pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE")
+if claimable_path.exists():
+  claimable_classification = json.loads(claimable_path.read_text())
+else:
+  claimable_classification = {
+    "schema_version": "claimable-classification.v2",
+    "observations_status": "taxonomy-only",
+    "shortfall_policy": {
+      "mode": "partial-liquidity-supported",
+      "allocation": "fulfilled-plus-deferred",
+      "rounding_policy": "floor-to-asset-decimals.v1"
     },
-    "escrow_yield": {
-      "delivery_model": "pull",
-      "source": "yield",
-      "recipient_type": "party-or-protocol",
-      "risk_class": "yield-derived",
-      "shortfall_outcome": "may-be-partially-deferred"
-    },
-    "resolver_payment": {
-      "delivery_model": "pull",
-      "source": "dispute-resolution",
-      "recipient_type": "resolver",
-      "risk_class": "service-compensation"
-    },
-    "bond_refund": {
-      "delivery_model": "pull",
-      "source": "appeal-bond",
-      "recipient_type": "disputant",
-      "risk_class": "bond-return"
-    },
-    "protocol_fee": {
-      "delivery_model": "pull-or-governance-withdrawal",
-      "source": "fee",
-      "recipient_type": "protocol",
-      "risk_class": "protocol-revenue"
-    }
+    "classes": {}
   }
-}
 run_manifest = {
   "schema_version": "test-run.v1",
   "contract_version": "evidence-contract.v1",
@@ -1202,7 +1188,8 @@ out["force_refund_forward_only"] = force_refund_signal
 
 pathlib.Path("$ARTIFACT_FILE").write_text(json.dumps(out, indent=2))
 pathlib.Path("$RUN_MANIFEST_FILE").write_text(json.dumps(run_manifest, indent=2))
-pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
+if not claimable_path.exists():
+  pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
 
 def sha256_file(path: pathlib.Path):
     if not path.exists():
@@ -1267,7 +1254,7 @@ entries = [
   mk_artifact_entry("test-run", "run-manifest", "$RUN_MANIFEST_FILE", run_manifest.get("schema_version"),
                     "test-run-emitter.v1", [], {}),
   mk_artifact_entry("claimable-classification", "classification", "$CLAIMABLE_CLASSIFICATION_FILE", claimable_classification.get("schema_version"),
-                    "claimable-classification-emitter.v1", ["test-run.v1"],
+                    "claimable-classification-emitter.v2", ["test-run.v1"],
                     {"test_run": "test-run.v1"}),
   mk_artifact_entry("coverage", "coverage", "results/test-artifacts/coverage.json", "coverage.v1",
                     "coverage-emitter.v1", ["scenario.v1"],

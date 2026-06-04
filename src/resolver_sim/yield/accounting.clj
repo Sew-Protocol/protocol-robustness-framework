@@ -61,6 +61,14 @@
   [position current-share-price]
   (* (:shares position 0) (double current-share-price)))
 
+(defn- require-world-for-yield-update!
+  [world position current-index]
+  (when (nil? world)
+    (throw (ex-info "world is required for yield risk/loss-mode evaluation"
+                    {:fn 'update-position-yield
+                     :position position
+                     :current-index current-index}))))
+
 (defn update-position-yield
   "Update unrealized yield from shares and the current share price / index.
 
@@ -74,13 +82,10 @@
 
    `world` is required so loss-mode and token decimals resolve correctly."
   ([position current-index]
-   (throw (ex-info "world is required for yield risk/loss-mode evaluation"
-                   {:fn 'update-position-yield
-                    :position position
-                    :current-index current-index})))
+   (require-world-for-yield-update! nil position current-index))
   ([world position current-index]
-   (let [shares              (:shares position 0)
-         principal           (:principal position 0)
+   (require-world-for-yield-update! world position current-index)
+   (let [principal           (:principal position 0)
          token               (:token position)
          module-id           (:module/id position)
          decimals            (token-decimals world token)
