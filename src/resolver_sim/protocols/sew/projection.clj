@@ -427,13 +427,18 @@
         posted       (:total-bonds-posted world {})
         slashed      (:bond-slashed world {})
         escrows      (:escrow-transfers world {})
+        token-str    (fn [t]
+                       (cond
+                         (keyword? t) (name t)
+                         (string? t) t
+                         :else (str t)))
         tokens       (-> #{}
-                         (into (keys held))
-                         (into (keys released))
-                         (into (keys refunded))
-                         (into (keys withdrawn))
-                         (into (keys posted))
-                         (into (map :token (vals escrows))))
+                         (into (map token-str (keys held)))
+                         (into (map token-str (keys released)))
+                         (into (map token-str (keys refunded)))
+                         (into (map token-str (keys withdrawn)))
+                         (into (map token-str (keys posted)))
+                         (into (map #(token-str (:token %)) (vals escrows))))
         slashed-by-token
         (reduce (fn [acc [wf amt]]
                   (if-let [token (get-in escrows [wf :token])]
@@ -448,13 +453,20 @@
                       :else 0))
         by-token
         (into {}
-              (for [token tokens]
-                [token {:held         (parse-num (get held token 0))
-                        :released     (parse-num (get released token 0))
-                        :refunded     (parse-num (get refunded token 0))
-                        :withdrawn    (parse-num (get withdrawn token 0))
-                        :bond-posted  (parse-num (get posted token 0))
-                        :bond-slashed (parse-num (get slashed-by-token token 0))}]))
+              (for [token (sort tokens)
+                    :let [tok-kw (keyword token)]]
+                [token {:held         (+ (parse-num (get held token 0))
+                                         (parse-num (get held tok-kw 0)))
+                        :released     (+ (parse-num (get released token 0))
+                                         (parse-num (get released tok-kw 0)))
+                        :refunded     (+ (parse-num (get refunded token 0))
+                                         (parse-num (get refunded tok-kw 0)))
+                        :withdrawn    (+ (parse-num (get withdrawn token 0))
+                                         (parse-num (get withdrawn tok-kw 0)))
+                        :bond-posted  (+ (parse-num (get posted token 0))
+                                         (parse-num (get posted tok-kw 0)))
+                        :bond-slashed (+ (parse-num (get slashed-by-token token 0))
+                                         (parse-num (get slashed-by-token tok-kw 0)))}]))
         parse-num-top (fn [x]
                         (cond
                           (number? x) (long x)

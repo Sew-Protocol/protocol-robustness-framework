@@ -22,17 +22,29 @@
         not-empty)
     (catch Exception _ nil)))
 
+(defn- sha256-hex
+  [path]
+  (try
+    (let [digest (java.security.MessageDigest/getInstance "SHA-256")
+          bytes  (.digest digest (.getBytes (slurp path)))]
+      (apply str (map #(format "%02x" %) bytes)))
+    (catch Exception _ nil)))
+
 (defn- provenance-block
-  [& {:keys [run-id git-sha override-sha]}]
+  [& {:keys [run-id git-sha override-sha input-result-path]}]
   (let [sha (or override-sha git-sha (current-git-sha))]
     (cond-> {:producer producer-id
+             :classifier_version cc/classifier-version
              :produced_at (str (java.time.Instant/now))}
       run-id (assoc :run_id run-id)
-      sha (assoc :git_sha sha))))
+      sha (assoc :git_sha sha)
+      input-result-path
+      (assoc :input_result_path (str input-result-path)
+             :input_result_sha256 (sha256-hex input-result-path)))))
 
 (defn- emit-terminal-document!
   [output-path {:keys [worlds contexts scope scenarios-passed observations-status
-                       run-id git-sha aggregation aggregation-note]}]
+                       run-id git-sha aggregation aggregation-note input-result-path]}]
   (write-json! output-path
                (cc/build-document
                 :worlds worlds
@@ -42,7 +54,9 @@
                 :observations-status observations-status
                 :aggregation aggregation
                 :aggregation-note aggregation-note
-                :provenance (provenance-block :run-id run-id :git-sha git-sha))))
+                :provenance (provenance-block :run-id run-id
+                                              :git-sha git-sha
+                                              :input-result-path input-result-path))))
 
 (defn emit-taxonomy-only!
   "Write taxonomy without replaying scenarios (scenario-manifest path)."
@@ -94,7 +108,7 @@
   "Load scenario-result JSON (evidence:build output) without replay."
   [output-path result-path & {:keys [run-id git-sha scenarios-passed]}]
   (let [result  (json/read-str (slurp result-path) :key-fn keyword)
-        context (cc/terminal-context-from-replay-result result)]
+        context (cc/terminal-context-from-replay-result result :result-path result-path)]
     (when-not context
       (throw (ex-info "scenario result has no terminal world in trace"
                       {:path result-path})))
@@ -107,7 +121,8 @@
                               :aggregation "single-terminal-world"
                               :aggregation-note (str "Terminal world from " result-path "; no replay.")
                               :run-id run-id
-                              :git-sha git-sha})
+                              :git-sha git-sha
+                              :input-result-path result-path})
     output-path))
 
 (defn- parse-int-or-nil [s]

@@ -101,7 +101,7 @@ The telemetry notebook (`notebooks/telemetry.clj`) is intentionally treated as a
   - `trace-end-projection.v1`
   - `claimable-classification.v2` (v1 retained for historical artifacts)
     - `provenance` — `run_id`, `git_sha`, `produced_at`
-    - `terminal_observations` — `by_class`, `by_domain`, `boundaries`, `boundary_headroom`, `funds_ledger`, `scenario_highlights` (each highlight includes `workflows` per escrow)
+    - `terminal_observations` — `classified_claimable_total` / `terminal_value_total` (legacy `:claimable` sum), `coverage_status`, `coverage_matrix`, `by_class`, `by_domain`, `boundaries`, `boundary_headroom` (`workflows_tracked`), `funds_ledger` (`by_token` string keys only), `scenario_highlights`, `scenario_id` + `scenario_id_status`, `warnings`
     - `observations_status` — `taxonomy-only` | `terminal-aggregated` | `single-scenario` (bb scenario run / `from-result` on evidence output)
 
 ### Preflight schema checks (fail-closed)

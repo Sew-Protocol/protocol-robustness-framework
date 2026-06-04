@@ -4,18 +4,24 @@
    Distinct from the legacy invariant `:claimable-classification` (recipient/sender
    split on `:claimable`). This namespace describes :claimable-v2 domains, boundary
    invariants, and optional end-of-run observed balances."
-  (:require [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.projection :as proj]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.yield.accounting :as yield-acct]))
 
 (def schema-version "claimable-classification.v2")
+(def classifier-version "claimable-classification-emitter.v2.1")
 
 (def shortfall-policy
   {:mode "partial-liquidity-supported"
    :allocation "fulfilled-plus-deferred"
    :rounding_policy "floor-to-asset-decimals.v1"})
+
+(def deferred-amount-semantics
+  "Deferred shortfall / yield fulfillment is tracked off current pull-claimable balance until claimed.")
 
 (defn- domain-name
   [domain]
@@ -25,76 +31,184 @@
       (name domain))
     (str domain)))
 
+(defn- parse-amount
+  "Coerce trace/JSON amounts (number or string) to long."
+  [x]
+  (cond
+    (number? x) (long x)
+    (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+    :else 0))
+
+(defn- token-key-str
+  [token]
+  (cond
+    (keyword? token) (name token)
+    (string? token) token
+    :else (str token)))
+
 (defn- class-spec
-  [delivery-model source recipient-type risk-class domains & [extra]]
-  (merge {:delivery_model delivery-model
-           :source source
-           :recipient_type recipient-type
-           :risk_class risk-class
-           :claimable_v2_domains (mapv domain-name domains)}
-         extra))
+  [delivery-model source recipient-types risk-class domains & [extra]]
+  (let [v1 (:v1_class extra)
+        extra* (dissoc extra :v1_class)]
+    (merge {:delivery_model delivery-model
+            :source source
+            :recipient_types recipient-types
+            :risk_class risk-class
+            :claimable_v2_domains (mapv domain-name domains)
+            :v1_class v1
+            :v1_mapping (if v1
+                          {:status "mapped" :v1_class v1}
+                          {:status "new-in-v2"})}
+           extra*)))
 
 (def v2-classes
-  "Canonical fund classes aligned with :claimable-v2 domains and *-boundary invariants."
+  "Canonical fund classes aligned with :claimable-v2 domains and *-boundary invariants.
+
+   `:category` — settlement | incentive | bond | liability | reserve (for rollups)."
   {:settlement_principal
-   (class-spec "pull" "settlement" "party" "user-withdrawable"
-          [:settlement/principal]
-          {:boundary_invariant "settlement-principal-boundary"
-           :v1_class "escrow_principal"})
+   (class-spec "pull" "settlement" ["party"] "user-withdrawable"
+               [:settlement/principal]
+               {:category "settlement"
+                :boundary_invariant "settlement-principal-boundary"
+                :v1_class "escrow_principal"})
 
    :settlement_yield
-   (class-spec "pull" "yield" "party-or-protocol" "yield-derived"
-          [:settlement/yield]
-          {:boundary_invariant "settlement-yield-boundary"
-           :v1_class "escrow_yield"
-           :shortfall_outcome "may-be-partially-deferred"})
+   (class-spec "pull" "yield" ["party" "protocol"] "yield-derived"
+               [:settlement/yield]
+               {:category "settlement"
+                :boundary_invariant "settlement-yield-boundary"
+                :v1_class "escrow_yield"
+                :shortfall_outcome "may-be-partially-deferred"})
 
    :fees_resolver
-   (class-spec "pull" "dispute-resolution" "resolver" "service-compensation"
-          [:fees/resolver]
-          {:boundary_invariant "fee-boundary"
-           :v1_class "resolver_payment"})
+   (class-spec "pull" "dispute-resolution" ["resolver"] "service-compensation"
+               [:fees/resolver]
+               {:category "incentive"
+                :boundary_invariant "fee-boundary"
+                :v1_class "resolver_payment"})
 
    :fees_protocol
-   (class-spec "pull-or-governance-withdrawal" "fee" "protocol" "protocol-revenue"
-          [:fees/protocol]
-          {:boundary_invariant "fee-boundary"
-           :v1_class "protocol_fee"})
+   (class-spec "pull" "fee" ["protocol"] "protocol-revenue"
+               [:fees/protocol]
+               {:category "incentive"
+                :boundary_invariant "fee-boundary"
+                :authorized_withdrawer "protocol-governance"
+                :v1_class "protocol_fee"})
 
    :yield_protocol_fee
-   (class-spec "pull-or-governance-withdrawal" "yield" "protocol" "protocol-revenue"
-          [:yield/protocol-fee])
+   (class-spec "pull" "yield" ["protocol"] "protocol-revenue"
+               [:yield/protocol-fee]
+               {:category "incentive"
+                :authorized_withdrawer "protocol-governance"
+                :boundary_invariant nil
+                :boundary_reason "Yield protocol fee slice; fee-boundary applies to :fees/* domains."})
 
    :yield_resolver_incentive
-   (class-spec "pull" "yield" "resolver" "yield-derived-incentive"
-          [:yield/resolver-incentive]
-          {:v1_class "resolver_payment"})
+   (class-spec "pull" "yield" ["resolver"] "yield-derived-incentive"
+               [:yield/resolver-incentive]
+               {:category "incentive"
+                :boundary_invariant nil
+                :boundary_reason "Yield resolver incentive; no dedicated fee-boundary row."
+                :v1_class "resolver_payment"})
 
    :bond_refund
-   (class-spec "pull" "appeal-bond" "disputant" "bond-return"
-          [:bond/refund]
-          {:boundary_invariant "bond-boundary"
-           :v1_class "bond_refund"})
+   (class-spec "pull" "appeal-bond" ["disputant"] "bond-return"
+               [:bond/refund]
+               {:category "bond"
+                :boundary_invariant "bond-boundary"
+                :v1_class "bond_refund"})
 
    :bond_forfeit
-   (class-spec "pull" "appeal-bond" "protocol-or-pool" "bond-forfeit"
-          [:bond/forfeit])
+   (class-spec "pull" "appeal-bond" ["protocol" "pool"] "bond-forfeit"
+               [:bond/forfeit]
+               {:category "incentive"
+                :boundary_invariant nil
+                :boundary_reason "Bond forfeit inflow; bond-boundary covers refund path only."})
 
    :liability_slash_bounty
-   (class-spec "pull" "slash-distribution" "challenger-or-governance" "slash-bounty"
-          [:liability/slash-bounty]
-          {:boundary_invariant "liability-slash-boundary"})
+   (class-spec "pull" "slash-distribution" ["challenger" "governance"] "slash-bounty"
+               [:liability/slash-bounty]
+               {:category "incentive"
+                :boundary_invariant "liability-slash-boundary"})
 
    :liability_challenge_bounty
-   (class-spec "pull" "appeal-challenge" "challenger" "challenge-bounty"
-          [:liability/challenge-bounty])
+   (class-spec "pull" "appeal-challenge" ["challenger"] "challenge-bounty"
+               [:liability/challenge-bounty]
+               {:category "incentive"
+                :boundary_invariant nil
+                :boundary_reason "Challenge bounty; bounded by appeal lifecycle, no dedicated boundary row."})
+
+   :liability_slash_reserve
+   (class-spec "pull" "slash-pool" ["protocol" "pool"] "slash-reserve"
+               [:liability/slash]
+               {:category "incentive"
+                :boundary_invariant nil
+                :boundary_reason "Slash reserve inflow; pairs with liability-slash-boundary for bounty outflows."
+                :note "Insurance-pool slash reserves (shortfall repair inflow)"})
 
    :reserve_shortfall
-   (class-spec "pull" "shortfall-repair" "protocol-or-pool" "shortfall-reserve"
-          [:reserve/shortfall])})
+   (class-spec "pull" "shortfall-repair" ["protocol" "pool"] "shortfall-reserve"
+               [:reserve/shortfall]
+               {:category "reserve"
+                :boundary_invariant nil
+                :boundary_reason "Deferred shortfall repair; not current pull-claimable until fulfilled."})})
 
-(def all-v2-domains
-  (vec (sort (mapcat :claimable_v2_domains (vals v2-classes)))))
+(def canonical-v2-domains
+  "Full :claimable-v2 domain vocabulary (docs/v2/YIELD_ACCOUNTING_ARCHITECTURE.md + shortfall)."
+  ["bond/forfeit"
+   "bond/refund"
+   "fees/protocol"
+   "fees/resolver"
+   "liability/challenge-bounty"
+   "liability/slash"
+   "liability/slash-bounty"
+   "reserve/shortfall"
+   "settlement/principal"
+   "settlement/yield"
+   "yield/protocol-fee"
+   "yield/resolver-incentive"])
+
+(def all-v2-domains canonical-v2-domains)
+
+(defn class-ids-by-category
+  [category]
+  (vec (sort (for [[class-id spec] v2-classes
+                    :when (= category (:category spec))]
+                (name class-id)))))
+
+(defn- domains-present-in-worlds
+  [worlds]
+  (into #{}
+        (mapcat (fn [w]
+                  (map (fn [[domain _]] (domain-name domain))
+                       (mapcat seq (vals (or (:claimable-v2 w) {})))))
+                worlds)))
+
+(defn domain-universe
+  "Canonical domains plus any :claimable-v2 kinds observed in `worlds`."
+  [worlds]
+  (vec (sort (into (set canonical-v2-domains) (domains-present-in-worlds worlds)))))
+
+(defn- class-ids-set
+  [category]
+  (set (class-ids-by-category category)))
+
+(defn- subset-by-class
+  [by-class category]
+  (into {}
+        (for [[class-id row] by-class
+              :when (contains? (class-ids-set category) class-id)]
+          [class-id row])))
+
+(defn- sum-accrued-fees
+  "`:total-fees` accumulated in world (governance-withdrawable; not always in claimable-v2)."
+  [worlds]
+  (let [by-token (apply merge-with (fn [a b] (+ (parse-amount a) (parse-amount b)))
+                        {}
+                        (map #(or (:total-fees %) {}) worlds))]
+    {:total (reduce + 0 (map parse-amount (vals by-token)))
+     :by_token (update-vals by-token parse-amount)
+     :note "Accrued protocol fees via record-fee; parallel to :fees/protocol claimable domain."}))
 
 (defn- workflow-token
   [world workflow-id]
@@ -110,7 +224,7 @@
         (fn [inner [addr amt]]
           (if (nil? addr)
             inner
-            (let [n (long (or amt 0))]
+            (let [n (parse-amount amt)]
               (if (pos? n)
                 (-> inner
                     (update :total (fnil + 0) n)
@@ -147,7 +261,7 @@
   "Sum terminal-world claimable-v2 balances per domain across `worlds`."
   [worlds]
   (into {}
-        (for [domain all-v2-domains
+        (for [domain (domain-universe worlds)
               :let [domain-kw (keyword domain)
                     rows (map #(sum-domain-amounts % domain-kw) worlds)
                     merged (reduce (fn [acc row]
@@ -193,11 +307,11 @@
      (fn [inner [addr amt]]
        (if (nil? addr)
          inner
-         (let [n (long (or amt 0))]
+         (let [n (parse-amount amt)]
            (if (pos? n)
              (-> inner
                  (update :total (fnil + 0) n)
-                 (update-in [:by_token (or token :unknown)] (fnil + 0) n)
+                 (update-in [:by_token (token-key-str (or token :unknown))] (fnil + 0) n)
                  (update-in [:by_address (str addr)] (fnil + 0) n))
              inner))))
      {:total 0 :by_token {} :by_address {}}
@@ -206,7 +320,7 @@
 (defn- workflow-domain-breakdown
   [world workflow-id]
   (into {}
-        (for [domain all-v2-domains
+        (for [domain (domain-universe [world])
               :let [domain-kw (keyword domain)
                     row     (sum-domain-for-workflow world workflow-id domain-kw)
                     total   (:total row 0)]
@@ -220,9 +334,8 @@
         (for [[class-id {:keys [claimable_v2_domains]}] v2-classes
               :let [domain-keys (map keyword claimable_v2_domains)
                     total     (reduce + 0
-                                      (map #(long (or (:total (sum-domain-for-workflow
-                                                                 world workflow-id %))
-                                                      0))
+                                      (map #(parse-amount (:total (sum-domain-for-workflow
+                                                                   world workflow-id %)))
                                            domain-keys))]
               :when (pos? total)]
           [(name class-id) {:total_claimable total}])))
@@ -399,30 +512,129 @@
           [id {:min_headroom_across_worlds (when (seq min-headrooms)
                                              (apply min min-headrooms))
                :worlds_at_cap  (reduce + 0 (map :workflows_at_cap rows-by-id))
-               :worlds_tracked (reduce + 0 (map :workflows_tracked rows-by-id))
+               :workflows_tracked (reduce + 0 (map :workflows_tracked rows-by-id))
                :all_hold       (every? :holds rows-by-id)
                :sample_violations (vec (take 10 all-violations))}])))
 
-(defn- sum-by-token
-  [token-maps]
-  (apply merge-with + {} token-maps))
-
-(defn aggregate-funds-ledger
-  "Sum global custody buckets across terminal worlds (suite-level diagnostic)."
-  [worlds]
-  (when (seq worlds)
-    (let [views (map proj/funds-ledger-view worlds)]
-      {:aggregation "sum-across-terminal-worlds"
-       :worlds (count worlds)
-       :claimable_total (reduce + 0 (map #(get-in % [:global :claimable-total] 0) views))
-       :bond_locked_total (reduce + 0 (map #(get-in % [:global :bond-locked-total] 0) views))
-       :withdrawn_note "Per-token held/released/refunded/withdrawn summed across scenarios — not one physical ledger."
-       :by_token (sum-by-token (map :by-token views))})))
+(defn- merge-token-bucket-maps
+  "Sum per-token custody buckets; keys normalized to strings (no duplicate USDC/USDC)."
+  [maps]
+  (reduce
+   (fn [acc m]
+     (reduce (fn [a [tok buckets]]
+               (let [k (token-key-str tok)]
+                 (update a k
+                         (fn [existing]
+                           (merge-with (fn [x y] (+ (parse-amount x) (parse-amount y)))
+                                       (or existing {})
+                                       buckets)))))
+             acc
+             m))
+   {}
+   maps))
 
 (defn- total-claimable-all-classes
   [world]
   (reduce + 0
           (map :total_claimable (vals (aggregate-class-observations [world])))))
+
+(defn- legacy-claimable-total
+  "Sum of legacy `:claimable` map (terminal accounting; may persist after v2 cleared)."
+  [worlds]
+  (reduce + 0
+          (map #(get-in (proj/funds-ledger-view %) [:global :claimable-total] 0)
+               worlds)))
+
+(defn- classified-claimable-total
+  [worlds]
+  (reduce + 0 (map total-claimable-all-classes worlds)))
+
+(defn aggregate-funds-ledger
+  "Sum global custody buckets across terminal worlds (suite-level diagnostic)."
+  [worlds]
+  (when (seq worlds)
+    (let [views              (map proj/funds-ledger-view worlds)
+          legacy-total       (legacy-claimable-total worlds)
+          classified-total   (classified-claimable-total worlds)]
+      {:aggregation "sum-across-terminal-worlds"
+       :terminal_world_count (count worlds)
+       :terminal_value_total legacy-total
+       :classified_claimable_total classified-total
+       :unclassified_claimable_total (max 0 (- legacy-total classified-total))
+       :legacy_claimable_note
+       "terminal_value_total sums legacy :claimable; classified_* sums :claimable-v2 domains only."
+       :bond_locked_total (reduce + 0 (map #(get-in % [:global :bond-locked-total] 0) views))
+       :withdrawn_note "Per-token held/released/refunded/withdrawn summed across scenarios — not one physical ledger."
+       :by_token (merge-token-bucket-maps (map :by-token views))})))
+
+(defn- workflow-count-for-worlds
+  [worlds]
+  (reduce + 0 (map #(count (workflow-ids-for-world %)) worlds)))
+
+(defn- coverage-status-for-worlds
+  [worlds]
+  (let [by-class (aggregate-class-observations worlds)
+        exercised (count (filter #(pos? (get-in by-class [% :total_claimable] 0))
+                                 (map name (keys v2-classes))))]
+    (if (zero? exercised)
+      "taxonomy-emitted-no-nonzero-claimables"
+      (str exercised "-classes-with-nonzero-claimable"))))
+
+(defn- coverage-matrix
+  [worlds]
+  (into {}
+        (for [[class-id _] v2-classes]
+          (let [k (name class-id)
+                total (get-in (aggregate-class-observations worlds) [k :total_claimable] 0)]
+            [k {:exercised (pos? total)
+                :total_claimable (long total)}]))))
+
+(defn- observations-warnings
+  [{:keys [contexts legacy-total classified-total]}]
+  (vec
+   (remove
+    nil?
+    [(when-let [ctx (first contexts)]
+       (when (= "missing-from-result" (:scenario-id-status ctx))
+         {:code "scenario-id-missing"
+          :severity "warning"
+          :message "Scenario result did not expose :scenario-id; use scenario_result_path or fix result JSON."}))
+     (when (and (pos? legacy-total) (zero? classified-total))
+       {:code "legacy-claimable-without-v2-classification"
+        :severity "warning"
+        :message (str "terminal_value_total=" legacy-total
+                      " but classified_claimable_total=0; legacy :claimable may remain after settlement.")})
+     (when (pos? (- legacy-total classified-total))
+       {:code "unclassified-claimable-balance"
+        :severity "info"
+        :message (str "unclassified_claimable_total="
+                      (max 0 (- legacy-total classified-total)))})])))
+
+(defn scenario-id-from-result-path
+  [result-path]
+  (when (seq (str result-path))
+    (-> result-path
+        io/file
+        .getName
+        (str/replace #"\.result\.json$" "")
+        (str/replace #"\.json$" ""))))
+
+(defn resolve-scenario-identity
+  [result & {:keys [result-path]}]
+  (let [from-result (or (:scenario-id result)
+                        (:id result)
+                        (get-in result [:source :scenario-id])
+                        (get-in result [:scenario :id])
+                        (get-in result [:meta :scenario-id]))
+        from-path   (scenario-id-from-result-path result-path)]
+    {:scenario-id (or (some-> from-result str)
+                      from-path
+                      "unknown")
+     :scenario-id-status (cond
+                            from-result "from-result"
+                            from-path "derived-from-result-path"
+                            :else "missing-from-result")
+     :scenario-result-path (some-> result-path str)}))
 
 (defn- compact-by-class
   [class-obs]
@@ -441,7 +653,8 @@
      :total_claimable (total-claimable-all-classes world)
      :by_class (compact-by-class class-obs)
      :workflows (workflow-rows-for-world world :limit workflow-limit)
-     :funds_ledger {:claimable_total (get-in ledger [:global :claimable-total] 0)
+     :funds_ledger {:terminal_value_total (get-in ledger [:global :claimable-total] 0)
+                    :classified_claimable_total (total-claimable-all-classes world)
                     :bond_locked_total (get-in ledger [:global :bond-locked-total] 0)
                     :conservation_holds (get-in ledger [:conservation :holds?])}
      :boundaries_all_hold (every? :holds (vals bounds))}))
@@ -471,32 +684,64 @@
   [worlds & {:keys [scope scenarios_passed contexts highlight-limit workflow-limit
                    aggregation aggregation_note]}]
   (when (seq worlds)
-    (cond-> {:scope (or scope "terminal-worlds")
-             :scenario_count (count worlds)
-             :scenarios_passed scenarios_passed
-             :aggregation (or aggregation "sum-across-terminal-worlds")
-             :aggregation_note
-             (or aggregation_note
-                 (str "Totals sum claimable-v2 balances at each scenario's terminal "
-                      "world; scenarios_nonzero counts scenarios with any balance in class."))
-             :by_class (aggregate-class-observations worlds)
-             :by_domain (aggregate-domain-observations worlds)
-             :boundaries (boundary-observations worlds)
-             :boundary_headroom (aggregate-boundary-headroom worlds)
-             :funds_ledger (aggregate-funds-ledger worlds)
-             :escrow_yield_outcome_counts
-             (into {} (map (fn [[k v]] [(name k) v]) (escrow-yield-outcome-frequencies worlds)))}
-      (seq contexts)
-      (assoc :scenario_highlights
-             (scenario-highlights contexts
-                                  :limit highlight-limit
-                                  :workflow-limit workflow-limit)))))
+    (let [legacy-total     (legacy-claimable-total worlds)
+          classified-total (classified-claimable-total worlds)
+          first-ctx        (first contexts)]
+      (cond-> {:scope (or scope "terminal-worlds")
+              :scenario_count (if contexts (count contexts) (count worlds))
+              :terminal_world_count (count worlds)
+              :workflow_count (workflow-count-for-worlds worlds)
+              :scenarios_passed scenarios_passed
+              :coverage_status (coverage-status-for-worlds worlds)
+              :coverage_matrix (coverage-matrix worlds)
+              :classified_claimable_total classified-total
+              :terminal_value_total legacy-total
+              :unclassified_claimable_total (max 0 (- legacy-total classified-total))
+              :warnings (observations-warnings {:contexts contexts
+                                                  :legacy-total legacy-total
+                                                  :classified-total classified-total})
+              :aggregation (or aggregation "sum-across-terminal-worlds")
+              :aggregation_note
+              (or aggregation_note
+                  (str "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable."))
+              :by_class (aggregate-class-observations worlds)
+              :by_incentive_class (subset-by-class (aggregate-class-observations worlds)
+                                                    "incentive")
+              :by_domain (aggregate-domain-observations worlds)
+              :domains_discovered
+              (vec (sort (remove (set canonical-v2-domains)
+                                 (domains-present-in-worlds worlds))))
+              :accrued_fees (sum-accrued-fees worlds)
+              :boundaries (boundary-observations worlds)
+              :boundary_headroom (aggregate-boundary-headroom worlds)
+              :funds_ledger (aggregate-funds-ledger worlds)
+              :escrow_yield_outcome_counts
+              (into {} (map (fn [[k v]] [(name k) v]) (escrow-yield-outcome-frequencies worlds)))}
+        first-ctx
+        (assoc :scenario_id (:scenario-id first-ctx)
+               :scenario_id_status (:scenario-id-status first-ctx)
+               :scenario_result_path (:scenario-result-path first-ctx))
+
+        (seq contexts)
+        (assoc :scenario_highlights
+               (scenario-highlights contexts
+                                    :limit highlight-limit
+                                    :workflow-limit workflow-limit))))))
 
 (defn taxonomy-document
   "Static v2 classification (no replay)."
   []
   {:schema_version schema-version
+   :classifier_version classifier-version
    :shortfall_policy shortfall-policy
+   :deferred_amount_semantics deferred-amount-semantics
+   :canonical_domains canonical-v2-domains
+   :incentives_summary
+   {:category "incentive"
+    :class_ids (class-ids-by-category "incentive")
+    :domains (vec (sort (mapcat :claimable_v2_domains
+                                (filter #(= "incentive" (:category %))
+                                        (vals v2-classes)))))}
    :classes (update-vals v2-classes
                           (fn [m]
                             (update m :claimable_v2_domains vec)))})
@@ -523,11 +768,11 @@
     (assoc :observations_status observations-status)))
 
 (defn terminal-context-from-replay-result
-  [result]
+  [result & {:keys [result-path]}]
   (when-let [world (proj/terminal-world-from-result result)]
-    {:scenario-id (or (:scenario-id result) "unknown")
-     :outcome (:outcome result)
-     :world world}))
+    (merge (resolve-scenario-identity result :result-path result-path)
+           {:outcome (:outcome result)
+            :world world})))
 
 (defn- summary-entries
   [summary]
@@ -541,9 +786,18 @@
     (fn [entry]
       (when-let [res (:replay-result entry)]
         (when-let [world (proj/terminal-world-from-result res)]
-          {:scenario-id (or (:scenario-id res) (:scenario-id entry) (:name entry))
-           :outcome (:outcome res)
-           :world world})))
+          (let [sid (or (:scenario-id res)
+                        (:scenario-id entry)
+                        (some-> (:name entry) str))
+                status (cond
+                         (:scenario-id res) "from-result"
+                         (:scenario-id entry) "from-summary-entry"
+                         (:name entry) "from-summary-entry-name"
+                         :else "missing-from-result")]
+            {:scenario-id (or sid "unknown")
+             :scenario-id-status status
+             :outcome (:outcome res)
+             :world world}))))
     (summary-entries summary))))
 
 (defn terminal-worlds-from-summary

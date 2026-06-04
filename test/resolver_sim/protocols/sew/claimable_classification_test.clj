@@ -19,6 +19,20 @@
       (is (contains? domains "liability/slash-bounty"))
       (is (contains? domains "bond/refund")))))
 
+(deftest v2-taxonomy-includes-all-incentive-domains
+  (testing "incentive rollup covers fee, yield, liability, and bond-forfeit paths"
+    (let [incentive-domains (set (get-in (cc/taxonomy-document)
+                                         [:incentives_summary :domains]))]
+      (is (contains? incentive-domains "fees/resolver"))
+      (is (contains? incentive-domains "fees/protocol"))
+      (is (contains? incentive-domains "yield/resolver-incentive"))
+      (is (contains? incentive-domains "yield/protocol-fee"))
+      (is (contains? incentive-domains "liability/challenge-bounty"))
+      (is (contains? incentive-domains "liability/slash"))
+      (is (contains? incentive-domains "liability/slash-bounty"))
+      (is (contains? incentive-domains "bond/forfeit"))
+      (is (= 8 (count (cc/class-ids-by-category "incentive")))))))
+
 (deftest terminal-observations-from-s81
   (testing "partial liquidity scenario contributes settlement_yield totals"
     (let [r     (replay "scenarios/S81_escrow-yield-may-be-partially-deferred.json")
@@ -39,7 +53,9 @@
           ctx   [{:scenario-id "s81" :outcome :pass :world world}]
           obs   (cc/terminal-observations [world] :contexts ctx)]
       (is (map? (:funds_ledger obs)))
-      (is (pos? (get-in obs [:funds_ledger :claimable_total] 0)))
+      (is (pos? (get-in obs [:funds_ledger :terminal_value_total] 0)))
+      (is (= (count (keys (get-in obs [:funds_ledger :by_token])))
+             (count (set (keys (get-in obs [:funds_ledger :by_token]))))))
       (is (contains? (:boundary_headroom obs) "settlement-yield-boundary"))
       ;; Terminal snapshot may show negative headroom when claimable remains but max-yield is 0
       (is (number? (get-in obs [:boundary_headroom "settlement-yield-boundary"
@@ -62,6 +78,25 @@
       (is (contains? (set (map :workflow_id rows)) 0))
       (is (pos? (:total_claimable (first rows))))
       (is (contains? (:by_domain (first rows)) "settlement/yield")))))
+
+(deftest scenario-id-derived-from-result-path
+  (testing "from-result uses file stem when result JSON lacks scenario-id"
+    (let [result-path "results/evidence/kleros-preemptive-escalation-rejected-l0.result.json"
+          identity (cc/resolve-scenario-identity {} :result-path result-path)]
+      (is (= "kleros-preemptive-escalation-rejected-l0" (:scenario-id identity)))
+      (is (= "derived-from-result-path" (:scenario-id-status identity))))))
+
+(deftest funds-ledger-view-no-duplicate-token-keys
+  (testing "keyword and string token keys collapse to one USDC bucket"
+    (let [world {:total-held {:USDC 100}
+                 :total-released {"USDC" 50}
+                 :escrow-transfers {0 {:token :USDC}}
+                 :claimable {0 {"0x1" 0}}
+                 :claimable-v2 {}}
+          view (proj/funds-ledger-view world)]
+      (is (= 1 (count (:by-token view))))
+      (is (= 100 (get-in view [:by-token "USDC" :held])))
+      (is (= 50 (get-in view [:by-token "USDC" :released]))))))
 
 (deftest emit-from-scenario-file-integration
   (testing "emitter replays one scenario file"
