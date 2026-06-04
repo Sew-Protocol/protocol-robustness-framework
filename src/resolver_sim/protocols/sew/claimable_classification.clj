@@ -300,14 +300,24 @@
                claimed       (+ (reduce + 0 (vals resolver-fees))
                                 (reduce + 0 (vals protocol-fees)))
                et            (get-in world [:escrow-transfers wf])
-               max-fees      (+ (long (or (:initial-fee et) 0))
-                                (reduce + 0 (vals (get (:bond-balances world) wf {}))))]
+               parse-num     (fn [x]
+                               (cond
+                                 (number? x) (long x)
+                                 (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                                 :else 0))
+               max-fees      (+ (parse-num (or (:initial-fee et) 0))
+                                (reduce + 0 (map parse-num (vals (get (:bond-balances world) wf {})))))]
          :when (or (pos? claimed) et)]
      {:workflow_id wf :claims claimed :max max-fees :headroom (- max-fees claimed)})))
 
 (defn- liability-slash-utilization-rows
   [world]
-  (let [reserves (long (:retained-slash-reserves world 0))]
+  (let [parse-num (fn [x]
+                      (cond
+                        (number? x) (long x)
+                        (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                        :else 0))
+        reserves (parse-num (:retained-slash-reserves world 0))]
     (vec
      (for [[wf domain-map] (get-in world [:claimable-v2] {})
            :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
