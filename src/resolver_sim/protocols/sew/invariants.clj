@@ -744,7 +744,11 @@
               :let [principal-claims (get domain-map :settlement/principal {})
                     total            (reduce + 0 (vals principal-claims))
                     et               (get-in world [:escrow-transfers wf])
-                    afa              (:amount-after-fee et 0)]
+                   raw-afa         (or (:amount-after-fee et) 0)
+                   afa              (cond
+                                     (number? raw-afa) raw-afa
+                                     (string? raw-afa) (try (Double/parseDouble raw-afa) (catch Exception _ 0))
+                                     :else 0)]
               :when (> total afa)]
           {:workflow-id wf :claims total :max afa})]
     {:holds? (empty? violations) :violations (vec violations)}))
