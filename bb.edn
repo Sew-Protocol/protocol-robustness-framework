@@ -305,12 +305,12 @@
             [cheshire.core :as json])
       :task
         (doseq [f (fs/glob "." "**/*.json")]
-        (let [fs-path (str f)]
-          (spit fs-path
-           (json/generate-string
-            (json/parse-string (slurp fs-path))
-            {:pretty true}))
-          (println "Formatted" fs-path)))}
+        (let [fs-path (str f)
+              parsed (try (json/parse-string (slurp fs-path)) (catch Exception e (println "Skipping non-JSON file:" fs-path "->" (.getMessage e)) nil))]
+          (when parsed
+            (spit fs-path
+             (json/generate-string parsed {:pretty true}))
+            (println "Formatted" fs-path))))}
 
   check {:doc "check"
          :task (do
