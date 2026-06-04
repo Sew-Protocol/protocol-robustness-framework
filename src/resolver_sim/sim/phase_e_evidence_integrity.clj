@@ -21,7 +21,8 @@
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.invariants :as inv]
-            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]))
+            [resolver-sim.protocols.sew.snapshot :as snap]
+             [resolver-sim.protocols.sew.snapshot-presets :as presets]))
 
 ;; ---------------------------------------------------------------------------
 ;; E1: Evidence Deadline Enforcement
@@ -229,9 +230,10 @@
   [{:keys [yield-rate-apy]}]
   (let [t0           1000
         dt           (* 30 86400)
-        snap         (snap-fix/escrow-snapshot {:yield-generation-module :fixed-rate
-                                                :yield-protocol-fee-bps 0
-                                                :appeal-window-duration 0})
+        snap         (snap/make-escrow-snapshot (merge (presets/preset->protocol-params :sew.preset/baseline)
+                                                        {:yield-generation-module :fixed-rate
+                                                         :yield-protocol-fee-bps 0
+                                                         :appeal-window-duration 0}))
         world0       (-> (proto/init-world sew/protocol {:initial-block-time t0})
                          (assoc-in [:yield/rates :fixed-rate "USDC"] yield-rate-apy)
                          (assoc-in [:yield/rates :fixed-rate :USDC] yield-rate-apy))
