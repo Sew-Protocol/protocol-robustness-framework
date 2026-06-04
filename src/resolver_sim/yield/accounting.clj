@@ -82,7 +82,10 @@
 
    `world` is required so loss-mode and token decimals resolve correctly."
   ([position current-index]
-   (require-world-for-yield-update! nil position current-index))
+   (throw (ex-info "world is required"
+                   {:fn 'update-position-yield
+                    :position position
+                    :current-index current-index})))
   ([world position current-index]
    (require-world-for-yield-update! world position current-index)
    (let [principal           (:principal position 0)
