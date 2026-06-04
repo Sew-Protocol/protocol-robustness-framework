@@ -721,17 +721,22 @@
                        (into (keys (:total-principal-deposited world))))
         violations
         (for [token all-tokens
-              :let [principal   (get (:total-principal-deposited world) token 0)
-                    yield       (get (:total-yield-generated world) token 0)
-                    bonds       (get (:total-bonds-posted world) token 0)
+              :let [parse-num (fn [x]
+                                (cond
+                                  (number? x) x
+                                  (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
+                                  :else 0))
+                    principal   (parse-num (get (:total-principal-deposited world) token 0))
+                    yield       (parse-num (get (:total-yield-generated world) token 0))
+                    bonds       (parse-num (get (:total-bonds-posted world) token 0))
                     inflow      (+ principal yield bonds)
 
-                    held        (get (:total-held world) token 0)
-                    fees        (get (:total-fees world) token 0)
-                    withdrawn   (get (:total-withdrawn world) token 0)
-                    claimable   (get-token-claimable-sum world token)
-                    distributed (get-distributed-sum world token)
-                    fot-fees    (get-in world [:total-fot-fees token] 0)
+                    held        (parse-num (get (:total-held world) token 0))
+                    fees        (parse-num (get (:total-fees world) token 0))
+                    withdrawn   (parse-num (get (:total-withdrawn world) token 0))
+                    claimable   (parse-num (get-token-claimable-sum world token))
+                    distributed (parse-num (get-distributed-sum world token))
+                    fot-fees    (parse-num (get-in world [:total-fot-fees token] 0))
                     ;; slash-appeal-bonds are part of HELD if they exist
                     accounted   (+ held fees withdrawn claimable distributed fot-fees)]
               :when (not= accounted inflow)]
