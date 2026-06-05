@@ -38,6 +38,7 @@
                          (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
                 ;; Escrow :unwinding — deferred remains in :total-held after finalize (live AFA gone).
+                ;; Realized-yield is not added here because it is already accounted in :total-held via earlier steps.
                 ;; Resolver :unwinding — deferred is still inside the stake already in :total-held;
                 ;; do not add to yield-sum (would double-count with :resolver-stakes).
                 (and (= (:token pos) token)
