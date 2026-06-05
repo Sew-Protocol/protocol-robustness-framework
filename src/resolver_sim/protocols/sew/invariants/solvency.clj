@@ -27,7 +27,7 @@
                     :let [amt (:appeal-bond-held ev 0)]]
                 amt)))
 
-(defn- get-yield-held-sum [world token live-states]
+(defn get-yield-held-sum [world token live-states]
   (reduce (fn [acc [oid pos]]
             (let [et (when (vector? oid) (get-in world [:escrow-transfers (second oid)]))]
               (cond
