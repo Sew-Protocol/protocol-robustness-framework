@@ -708,9 +708,12 @@
       (mapcat identity
               (for [wf wfs]
          (let [et (t/get-transfer world wf)]
-           (cond-> []
-             ;; Pending actions
-             (= :pending (:escrow-state et))
+            (cond
+              ;; Terminal escrows produce no available actions (explicit boundary)
+              (t/terminal-state? world wf)
+              []
+
+              (= :pending (:escrow-state et))
              (into (cond-> []
                      (or (= actor (:from et)) (= actor (:to et)))
                      (conj {:action "raise-dispute" :params {:workflow-id wf}})

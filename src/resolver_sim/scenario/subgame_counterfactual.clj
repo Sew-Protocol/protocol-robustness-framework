@@ -301,7 +301,7 @@
      :utility-version   u-ver
      :utility-breakdown breakdown}))
 
-(defn- compute-utility
+(defn compute-utility
   "Canonical utility interface for Phase A.
    Returns {:defined? bool :value number|nil :utility-type kw :utility-version str}.
    pre-world is required for :resolver-reputation-v1 (slash detection baseline)."
@@ -386,7 +386,35 @@
       local-regret
       (+ local-regret (long (Math/floor (/ local-regret 2.0)))))))
 
-(defn- expand-strategic-tree
+(def ^:private stale-continuation-errors
+  "Error keywords from guard checks that indicate a continuation event from the
+   original trace does not apply in the forked world state.
+
+   Must be kept in sync with the error keywords returned by lifecycle and
+   resolution guard checks.  See `terminal-state?` in `sew.types` for the
+   authoritative terminal-state set."
+  #{:transfer-not-pending :transfer-not-in-dispute :invalid-workflow-id
+    :transfer-not-finalized :invalid-state-for-release
+    :invalid-state-for-refund})
+
+(defn- tag-stale-continuations
+  "Tag trace entries from continuation events (seq > 0) that were rejected due
+   to stale state.  Adds :fork/continuation true to every continuation entry and
+   :fork/stale-continuation true to those that were rejected with a state-mismatch
+   error.  Evidence consumers can use these flags to distinguish genuine protocol
+   failures from expected counterfactual fallout."
+  [trace]
+  (mapv (fn [entry]
+          (if (pos? (:seq entry 0))
+            (let [tagged (assoc entry :fork/continuation true)]
+              (if (and (= :rejected (:result entry))
+                       (contains? stale-continuation-errors (:error entry)))
+                (assoc tagged :fork/stale-continuation true)
+                tagged))
+            entry))
+        trace))
+
+(defn expand-strategic-tree
   "Phase 2: Expand strategic branches from a decision node.
    Forks the simulation for each alternative action and follows the original
    trace continuation where possible."
@@ -399,11 +427,13 @@
             result (replay/resume-from-snapshot
                     protocol agents p-params scenario-id world
                     (into [deviation-event] cont-events)
-                    [] {} options)]
+                    [] {} options)
+            tagged-trace (tag-stale-continuations (:trace result))]
         {:action           action-map
          :outcome          (:outcome result)
          :halt-reason      (:halt-reason result)
          :terminal-world   (:world result)
+         :trace            tagged-trace
          :terminal-utility (compute-utility (:world result) actor (:utility-spec options))}))))
 
 (defn- classify-row

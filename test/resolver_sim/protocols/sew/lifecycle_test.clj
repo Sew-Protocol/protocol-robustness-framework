@@ -6,7 +6,8 @@
   (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.protocols.sew.types     :as t]
-            [resolver-sim.protocols.sew.lifecycle :as lc]))
+            [resolver-sim.protocols.sew.lifecycle :as lc]
+            [resolver-sim.protocols.sew.resolution :as res]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared fixtures
@@ -283,3 +284,60 @@
         r (lc/auto-cancel-disputed-escrow w 0)]
     (is (false? (:ok r)))
     (is (= :dispute-timeout-not-exceeded (:error r)))))
+
+;; ---------------------------------------------------------------------------
+;; Fork-finality: terminal mutation rejection
+;;
+;; These tests verify that every lifecycle action rejects terminal escrows at
+;; the domain-function level, not only at the state-machine transition graph.
+;; They complement the absorbing-state tests in state_machine_test.clj.
+;; ---------------------------------------------------------------------------
+
+(deftest terminal-escrow-rejects-release
+  (testing "Terminal escrows reject release at lifecycle guard"
+    (doseq [terminal t/terminal-states]
+      (testing (str "from " terminal)
+        (let [w (assoc-in (world-with-one-escrow) [:escrow-transfers 0 :escrow-state] terminal)
+              r (lc/release w 0 alice (fn [_ _ _] {:allowed? true}))]
+          (is (false? (:ok r)))
+          (is (= :transfer-not-pending (:error r))))))))
+
+(deftest terminal-escrow-rejects-sender-cancel
+  (testing "Terminal escrows reject sender-cancel at lifecycle guard"
+    (doseq [terminal [:released :refunded :resolved]]
+      (testing (str "from " terminal)
+        (let [w (assoc-in (world-with-one-escrow) [:escrow-transfers 0 :escrow-state] terminal)
+              r (lc/sender-cancel w 0 alice nil)]
+          (is (false? (:ok r)))
+          (is (= :transfer-not-pending (:error r))))))))
+
+(deftest terminal-escrow-rejects-recipient-cancel
+  (testing "Terminal escrows reject recipient-cancel at lifecycle guard"
+    (doseq [terminal [:released :refunded :resolved]]
+      (testing (str "from " terminal)
+        (let [w (assoc-in (world-with-one-escrow) [:escrow-transfers 0 :escrow-state] terminal)
+              r (lc/recipient-cancel w 0 bob nil)]
+          (is (false? (:ok r)))
+          (is (= :transfer-not-pending (:error r))))))))
+
+(deftest terminal-escrow-rejects-raise-dispute
+  (testing "Terminal escrows reject raise-dispute at lifecycle guard"
+    (doseq [terminal [:released :refunded :resolved]]
+      (testing (str "from " terminal)
+        (let [w (assoc-in (world-with-one-escrow) [:escrow-transfers 0 :escrow-state] terminal)
+              r (lc/raise-dispute w 0 alice)]
+          (is (false? (:ok r)))
+          (is (= :transfer-not-pending (:error r))))))))
+
+(deftest terminal-escrow-rejects-execute-resolution
+  (testing "Terminal escrows reject execute-resolution at lifecycle guard"
+    (doseq [terminal [:released :refunded :resolved]]
+      (testing (str "from " terminal)
+        (let [w (-> (world-with-one-escrow)
+                    (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
+                    (assoc-in [:escrow-transfers 0 :sender-status] :raise-dispute)
+                    (assoc-in [:escrow-transfers 0 :dispute-resolver] "0xResolver")
+                    (assoc-in [:escrow-transfers 0 :escrow-state] terminal))
+              r (res/execute-resolution w 0 "0xResolver" true "0xhash" nil)]
+          (is (false? (:ok r)))
+          (is (= :transfer-not-in-dispute (:error r))))))))

@@ -4,7 +4,8 @@
 
 (def default-supported-failure-modes
   #{:partial-liquidity :withdraw-fails :negative-yield
-    :provider-paused :emergency-unwind-fails :deposit-fails})
+    :provider-paused :emergency-unwind-fails :deposit-fails
+    :oracle-stale :withdrawal-queue})
 
 (defn canonical-yield-evidence
   [{:keys [routing-by-workflow

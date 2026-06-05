@@ -343,8 +343,15 @@
              (json/generate-string parsed {:pretty true}))
             (println "Formatted" fs-path))))}
 
+  lint:terminal-states
+  {:doc "Flag inline terminal-state set literals that should reference t/terminal-states instead.
+         Scans src/ (not test/) for #{:released :refunded :resolved} patterns that are not
+         the authoritative definition in types.clj or the structural transition graph."
+   :task (shell "bash" "scripts/lint-terminal-states.sh")}
+
   check {:doc "check"
          :task (do
+                 (run 'lint:terminal-states)
                  (shell "clj -M:lint")
                  (shell "clj -M:eastwood"))}
 

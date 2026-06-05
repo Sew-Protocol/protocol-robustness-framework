@@ -8,6 +8,7 @@
   (:require [clojure.test :refer [deftest testing is are]]
             [resolver-sim.protocols.sew.runner    :as runner]
             [resolver-sim.protocols.sew           :as sew]
+            [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.dummy         :as dummy]
             [resolver-sim.db.sew                  :as sew-db]
             [resolver-sim.db.telemetry :as tel]))
@@ -128,7 +129,7 @@
     (testing "last event has a terminal state"
       (let [e (last events)]
         (is (= :sew/escrow-finalized (:event-type e)))
-        (is (#{:released :refunded :resolved} (:entity-state e)))))
+        (is (contains? t/terminal-states (:entity-state e)))))
 
     (testing "events share the same trial-id"
       (is (every? #(= "t-ev" (:trial-id %)) events)))

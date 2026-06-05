@@ -335,7 +335,7 @@
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
                      (seq (proto/open-entities protocol world)))]
           (if open
-            {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
+            {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol :last-valid-world world}
             (do
               (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :pass world metrics trace)
               (let [expected-error-analysis (analyze-expected-errors scenario trace)
@@ -442,7 +442,9 @@
             (if (:halted? batch-result)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
-                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol})
+                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol
+                 :last-valid-world base-world
+                 :invalid-world (:world batch-result)})
               (let [post-single (when check-inv?
                                   (proto/check-invariants-single protocol (:world batch-result)))
                     post-trans  (when check-inv?
@@ -479,7 +481,9 @@
                      :trace trace'
                      :metrics metrics''
                      :execution {:mode :deterministic-batch :batch-policy batch-commit-policy}
-                     :protocol protocol})))))
+                     :protocol protocol
+                     :last-valid-world base-world
+                     :invalid-world (:world batch-result)})))))
           (let [raw-event (first events)
                 event (if (and supports-alias? (seq id-alias-map))
                         (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
@@ -512,7 +516,17 @@
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
                 (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
-                {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :execution {:mode :sequential} :protocol protocol})
+                {:outcome :fail
+                 :scenario-id scenario-id
+                 :events-processed (count new-trace)
+                 :halted-at-seq (:seq event)
+                 :halt-reason :invariant-violation
+                 :trace new-trace
+                 :metrics new-metrics
+                 :execution {:mode :sequential}
+                 :protocol protocol
+                 :last-valid-world world  ; world before the invalid step
+                 :invalid-world (:world step)})  ; world that violated invariants
               (recur new-world (rest events) new-trace new-metrics new-states new-alias-map))))))))
 
 (defn replay-with-protocol

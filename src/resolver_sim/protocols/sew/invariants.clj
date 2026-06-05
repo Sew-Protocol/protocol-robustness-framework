@@ -164,6 +164,9 @@
 
 (defn terminal-states-unchanged? [world-before world-after] (state/terminal-states-unchanged? world-before world-after))
 
+(defn terminal-escrow-accounting-unchanged? [world-before world-after]
+  (state/terminal-escrow-accounting-unchanged? world-before world-after))
+
 (defn escrow-state-transition-valid? [world-before world-after]
   (state/escrow-state-transition-valid? world-before world-after))
 
@@ -335,14 +338,13 @@
    - No shortfall: delta-claimable >= net-afa (principal + yield both flow to claimable)
    - Shortfall (position :unwinding): delta-claimable = fulfilled-amount"
   [world-before world-after]
-  (let [terminals #{:released :refunded :resolved}
-        violations
+  (let [violations
         (for [[wf et-after] (:escrow-transfers world-after)
-              :when (contains? terminals (:escrow-state et-after))
+              :when (contains? t/terminal-states (:escrow-state et-after))
               :let  [et-before (get-in world-before [:escrow-transfers wf])
                      state-before (:escrow-state et-before)]
               ;; Only check escrows that JUST became terminal
-              :when (and state-before (not (contains? terminals state-before)))
+               :when (and state-before (not (contains? t/terminal-states state-before)))
               :let  [token      (:token et-after)
                      afa        (:amount-after-fee et-after)
                      fot-bps    (get-in world-after [:token-fot-bps token] 0)
@@ -1319,10 +1321,9 @@
    Detects double-resolution style corruption where both buyer and seller end up
    with positive claimable balances for the same workflow."
   [world]
-  (let [terminals #{:released :refunded :resolved}
-        violations
+  (let [violations
         (for [[wf et] (:escrow-transfers world {})
-              :when (contains? terminals (:escrow-state et))
+              :when (contains? t/terminal-states (:escrow-state et))
               :let [state         (:escrow-state et)
                     pending?      (:exists (t/get-pending world wf))
                     claimable-map (get-in world [:claimable wf] {})
@@ -1461,12 +1462,14 @@
    Must be called after every successful state transition in addition to check-all.
    Returns {:all-hold? bool :results {invariant-name result-map}}"
   [world-before world-after]
-  (let [results {:terminal-states-unchanged
-                 (terminal-states-unchanged? world-before world-after)
-                 :escrow-state-transition-valid
-                 (escrow-state-transition-valid? world-before world-after)
-                 :module-snapshot-immutable
-                 (module-snapshot-immutable? world-before world-after)
+   (let [results {:terminal-states-unchanged
+                  (terminal-states-unchanged? world-before world-after)
+                  :terminal-escrow-accounting-unchanged
+                  (terminal-escrow-accounting-unchanged? world-before world-after)
+                  :escrow-state-transition-valid
+                  (escrow-state-transition-valid? world-before world-after)
+                  :module-snapshot-immutable
+                  (module-snapshot-immutable? world-before world-after)
                  :time-non-decreasing
                  (time-inv/non-decreasing-time? world-before world-after)
                  :time-no-action-after-finality
@@ -1475,7 +1478,7 @@
                    :entities-before-fn (fn [w] (:escrow-transfers w {}))
                    :state-after-fn     (fn [w workflow-id]
                                          (get-in w [:escrow-transfers workflow-id :escrow-state]))
-                   :terminal-states    #{:released :refunded :resolved})
+                   :terminal-states    t/terminal-states)
                  :finalization-accounting-correct
                  (finalization-accounting-correct? world-before world-after)
                  :escalation-level-monotonic

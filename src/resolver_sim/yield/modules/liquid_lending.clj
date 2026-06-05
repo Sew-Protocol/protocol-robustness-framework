@@ -91,19 +91,26 @@
         (assoc-in world [:yield/positions oid] pos)))))
 
 (defn accrue [world module op]
-  (let [token     (normalize-token (:token op))
-        dt        (:dt op)
-        mid       (:module/id module)
-        old-index (or (get-in-token world [:yield/indices] mid token) 1.0)
-        apy       (or (get-in-token world [:yield/rates] mid token) 0.04)
-        apy       (if (fail-enabled? world mid token :negative-yield)
-                    (- (Math/abs (double apy)))
-                    apy)
-        seconds-per-year 31536000
-        new-index (* old-index (+ 1.0 (/ (* apy dt) seconds-per-year)))
-        world'    (-> world
-                      (assoc-in [:yield/indices mid token] new-index)
-                      (assoc-in [:yield/indices mid (name token)] new-index))]
+   (let [token     (normalize-token (:token op))
+         dt        (:dt op)
+         mid       (:module/id module)
+         stale?    (fail-enabled? world mid token :oracle-stale)
+         old-index (or (get-in-token world [:yield/indices] mid token) 1.0)
+         apy       (or (get-in-token world [:yield/rates] mid token) 0.04)
+         ;; :oracle-stale: use cached stale-apy, snapshotting on first accrual
+         stale-apy (when stale? (get-in-token world [:yield/risk] mid token :stale-apy))
+         apy       (if stale? (or stale-apy (double apy)) apy)
+         apy       (if (fail-enabled? world mid token :negative-yield)
+                     (- (Math/abs (double apy)))
+                     apy)
+         seconds-per-year 31536000
+         new-index (* old-index (+ 1.0 (/ (* apy dt) seconds-per-year)))
+         world'    (-> world
+                       (assoc-in [:yield/indices mid token] new-index)
+                       (assoc-in [:yield/indices mid (name token)] new-index)
+                       ;; Cache stale-apy snapshot on first accrual under :oracle-stale
+                       (cond-> (and stale? (not stale-apy))
+                         (assoc-in [:yield/risk mid (name token) :stale-apy] (double apy))))]
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid) (token= (:token pos) token) (= (:status pos) :active))
                 (let [old-yield (:unrealized-yield pos 0)
@@ -145,6 +152,19 @@
                        :liquidity-mode mode
                        :owner/id oid}))
 
+      ;; :withdrawal-queue — defer withdrawal, claim later via claim-deferred
+      (fail-enabled? world mid token :withdrawal-queue)
+      (let [current-index (or (get-in-token world [:yield/indices] mid token)
+                              (:entry-index pos 1.0))
+            updated-pos   (acct/update-position-yield world pos current-index)
+            queued-pos    (assoc updated-pos :status :queued)
+            queued-entry  {:owner/id oid :token token :principal (:principal updated-pos)
+                           :unrealized-yield (:unrealized-yield updated-pos 0)
+                           :queued-at (:block-time world 0)}]
+        (-> world
+            (assoc-in pos-key queued-pos)
+            (update-in [:yield/withdrawal-queue mid] (fnil conj []) queued-entry)))
+
       :else
       (let [current-index (or (get-in-token world [:yield/indices] mid token)
                               (:entry-index pos 1.0))
@@ -180,10 +200,23 @@
   (let [oid     (:owner/id op)
         pos-key [:yield/positions oid]
         pos     (get-in world pos-key)
-        mid     (:module/id module)]
-    (if (and pos (= (:status pos) :unwinding))
+        mid     (:module/id module)
+        status  (:status pos)]
+    (cond
+      ;; :withdrawal-queue positions are deferred, claim them normally
+      (= status :queued)
+      (let [current-index (or (get-in-token world [:yield/indices] mid (:token pos))
+                              (:entry-index pos 1.0))
+            claimed-pos   (-> pos
+                              (assoc :status :withdrawn)
+                              (assoc :realized-yield (:unrealized-yield pos 0))
+                              (assoc :unrealized-yield 0))]
+        (assoc-in world pos-key claimed-pos))
+
+      (= status :unwinding)
       (assoc-in world pos-key (acct/claim-deferred world mid pos))
-      world)))
+
+      :else world)))
 
 (defn emergency-unwind [world module op]
   (let [mid   (:module/id module)

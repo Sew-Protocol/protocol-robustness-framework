@@ -11,4 +11,4 @@
 (clerk/html
  (let [artifacts (data/load-run-artifacts)]
    [:div {:style {:background "#000" :padding "40px" :minHeight "100vh"}}
-    (story/generate-deflection-story "s26-forking-strategist-l1-reversal" artifacts)]))
+    (story/generate-story-by-family "s26-forking-strategist-l1-reversal" artifacts)]))

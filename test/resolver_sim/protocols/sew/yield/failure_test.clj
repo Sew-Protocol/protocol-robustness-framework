@@ -109,7 +109,40 @@
                    (liquid/emergency-unwind (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
                                                      #{:emergency-unwind-fails})
                                             module
-                                            {:token "USDC"}))))))
+                                            {:token "USDC"}))))
+    (testing ":oracle-stale freezes APY at activation snapshot"
+      (let [stable-world (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                   #{:oracle-stale})
+            w1 (liquid/accrue stable-world module {:token "USDC" :dt 31536000})
+            stale-apy (get-in w1 [:yield/risk :yield.provider/liquid-lending "USDC" :stale-apy])
+            ;; Change the configured rate after staleness activates
+            w2 (assoc-in w1 [:yield/rates :yield.provider/liquid-lending "USDC"] 0.20)
+            w3 (liquid/accrue w2 module {:token "USDC" :dt 31536000})]
+        (is (some? stale-apy) "stale-apy snapshot cached on first accrual")
+        (is (= 0.05 stale-apy) "stale-apy matches rate at activation")
+        ;; Rate change should be ignored: index after 2nd accrual uses stale-apy, not 0.20
+        (let [i1 (get-in w1 [:yield/indices :yield.provider/liquid-lending "USDC"])
+              i3 (get-in w3 [:yield/indices :yield.provider/liquid-lending "USDC"])]
+          ;; 0.05 over 1 year: index *= (1 + 0.05) = 1.05; with stale, second year also uses 0.05
+          (is (< 1.10 i3) "index grew using stale rate, not the updated 0.20 rate"))))
+    (testing ":withdrawal-queue defers withdrawal instead of failing"
+      (let [w' (liquid/withdraw (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                                          #{:withdrawal-queue})
+                                module
+                                {:owner/id "user1"})
+            pos (get-in w' [:yield/positions "user1"])]
+        (is (= :queued (:status pos)) "position enters queued state")
+        (is (zero? (:realized-yield pos)) "realized yield unchanged")
+        (is (zero? (:unrealized-yield pos)) "unrealized yield zeroed by update-position-yield")
+        (is (= 1 (count (get-in w' [:yield/withdrawal-queue :yield.provider/liquid-lending])))
+            "withdrawal added to queue")))
+    (testing ":withdrawal-queue claim-deferred processes queued position"
+      (let [w0 (assoc-in base-world [:yield/risk :yield.provider/liquid-lending "USDC" :failure-modes]
+                         #{:withdrawal-queue})
+            w1 (liquid/withdraw w0 module {:owner/id "user1"})
+            w2 (liquid/claim-deferred w1 module {:owner/id "user1"})
+            pos (get-in w2 [:yield/positions "user1"])]
+        (is (= :withdrawn (:status pos)) "queued position claimed successfully")))))
 
 (deftest test-yield-config-behavior-adapter
   (let [world (-> (proto/init-world sew/protocol {:scenario-id "x"})

@@ -11,4 +11,4 @@
 (clerk/html
  (let [artifacts (data/load-run-artifacts)]
    [:div {:style {:background "#000" :padding "40px" :minHeight "100vh"}}
-    (story/generate-deflection-story "scenarios/s47b-appeal-window-plus-one-rejected" artifacts)]))
+    (story/generate-story-by-family "scenarios/s47b-appeal-window-plus-one-rejected" artifacts)]))

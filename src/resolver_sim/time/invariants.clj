@@ -1,5 +1,6 @@
 (ns resolver-sim.time.invariants
-  "Cross-cutting temporal invariants for simulation traces/world transitions.")
+  "Cross-cutting temporal invariants for simulation traces/world transitions."
+  (:require [resolver-sim.protocols.sew.types :as t]))
 
 (defn non-decreasing-time?
   "Transition invariant: block-time must be monotonic non-decreasing."
@@ -17,7 +18,7 @@
                                :or   {entities-before-fn (fn [w] (:escrow-transfers w {}))
                                       state-after-fn     (fn [w entity-id]
                                                            (get-in w [:escrow-transfers entity-id :escrow-state]))
-                                      terminal-states    #{:released :refunded :resolved}}}]
+                                       terminal-states    t/terminal-states}}]
   (let [terminals terminal-states
         violations
         (for [[entity-id entity-before] (entities-before-fn world-before)
