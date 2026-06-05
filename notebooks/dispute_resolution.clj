@@ -33,7 +33,7 @@
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as speds-data]
+            [resolver_sim.notebooks.speds.data :as speds-data]
             [resolver-sim.protocols.sew.invariants :as invariants]
             [resolver-sim.protocols.sew.invariant-runner :as runner]
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]
@@ -71,24 +71,24 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (do
-  (require '[resolver-sim.notebooks.speds.data :as speds-data])
+  (require '[resolver_sim.notebooks.speds.data :as speds-data])
   (def test-summary (speds-data/load-summary)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (do
-  (require '[resolver-sim.notebooks.speds.data :as speds-data])
+  (require '[resolver_sim.notebooks.speds.data :as speds-data])
   (def coverage-data (speds-data/load-coverage)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def golden-reports
   (do
-    (require '[resolver-sim.notebooks.speds.data :as speds-data])
+    (require '[resolver_sim.notebooks.speds.data :as speds-data])
     (speds-data/load-all-golden-reports)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
   (do
-    (require '[resolver-sim.notebooks.speds.data :as speds-data])
+    (require '[resolver_sim.notebooks.speds.data :as speds-data])
     (map (fn [d]
            {:id          (or (:scenario-id d)
                              (str/replace (:_filename d) ".trace.json" ""))
@@ -612,7 +612,7 @@ Scenario S12 (governance snapshot isolation) provides deterministic regression c
            "time-non-decreasing"           ["S04" "S05" "S21"]
            "time-no-action-after-finality" ["S08" "S10"]
            "finalization-accounting-correct" ["S02" "S03" "S09" "S25"]
-           "escalation-level-monotonic"    ["S19" "S21" "S28" "S32"]
+           "escalation-level-monotonic"    ["S21" "S28" "S32"]
            "no-withdrawal-during-dispute"  ["S45"]
            "time-lock-integrity"           ["S66"]
            "token-tax-reconciliation"      ["S11"]

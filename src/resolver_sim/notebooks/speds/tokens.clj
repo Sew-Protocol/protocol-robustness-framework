@@ -1,4 +1,4 @@
-(ns resolver-sim.notebooks.speds.tokens)
+(ns resolver_sim.notebooks.speds.tokens)
 
 ;; VENS Design Tokens v1.1
 ;; "Mission Control" Specification
@@ -34,3 +34,22 @@
   {:hero    "0 0 30px rgba(122, 221, 220, 0.4)"
    :alert   "0 0 30px rgba(255, 152, 0, 0.6)"
    :success "0 0 30px rgba(3, 218, 198, 0.6)"})
+
+(def frame-styles
+  {:badge {:color (:sys/alert palette)
+           :border (str "1px solid " (:sys/alert palette))
+           :background "rgba(255,152,0,0.1)"
+           :padding "4px 12px"
+           :fontFamily (:font/mono typography)
+           :fontSize (:size/caption typography)
+           :fontWeight 800
+           :marginBottom "20px"}
+   :hero-title {:fontSize "42px"
+                :fontWeight (:weight/hero typography)
+                :lineHeight 0.9
+                :color (:text/high-vis typography)
+                :textShadow (:hero shadows)}
+   :caption {:fontSize (:size/body typography)
+             :marginTop "24px"
+             :color (:sys/primary palette)
+             :fontWeight (:weight/bold typography)}})

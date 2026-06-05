@@ -4,8 +4,7 @@
    Does not judge pass/fail — delegates to `scenario.runner` and `sim.fixtures`.
    Table output via `scenario.report/print-report`; legacy fixture detail via
    `sim.reporter` when `:report-format :fixture`."
-  (:require [clojure.data.json :as json]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.contract-model.replay :as replay]
@@ -17,13 +16,15 @@
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
             [resolver-sim.scenario.suites :as suites]
-            [resolver-sim.sim.fixtures :as fixtures]))
+            [resolver-sim.yield.invariant-catalog :as yield-inv-cat]
+            [resolver-sim.sim.fixtures :as fixtures]
+            [resolver-sim.io.serialization :as serialization]))
 
 (defn- replay-fn-for-protocol
   [protocol-id]
   (let [protocol (preg/get-protocol (or protocol-id preg/default-protocol-id))]
     (if (= "yield-v1" protocol-id)
-      #(replay/simple-replay protocol %)
+      #(replay/replay-yield-scenario protocol %)
       (fn [scenario]
         (if (= "sew-v1" protocol-id)
           (sew/replay-with-sew-protocol scenario)
@@ -63,9 +64,12 @@
         entries (mapv (fn [path]
                         (let [raw      (io-sc/load-scenario-file path)
                               scenario (normalize/normalize-scenario raw)
-                              name     (or (:scenario-id scenario) path)]
+                              scenario* (if (= "yield-v1" protocol-id)
+                                          (yield-inv-cat/enrich-expectations scenario)
+                                          scenario)
+                              name     (or (:scenario-id scenario*) path)]
                           {:name     (str name "  [" path "]")
-                           :scenario scenario
+                           :scenario scenario*
                            :source   :file}))
                       paths)]
     (runner/run-collection
@@ -82,8 +86,8 @@
   [output-path result]
   (when (and output-path (not= output-path "-"))
     (io/make-parents output-path)
-    (with-open [w (io/writer output-path)]
-      (json/write (dissoc result :protocol) w :indent true))))
+    (spit output-path (serialization/serialize-artifact (dissoc result :protocol)
+                                                        {:pretty? true}))))
 
 (defn run-registry-suite-and-report
   "Run invariant registry, print report, return exit code."
@@ -123,7 +127,7 @@
       1)))
 
 (defn run-named-suite-and-report
-  "Run a registered suite keyword (e.g. :yield-scenarios). Returns exit code."
+  "Run a registered suite keyword (e.g. :yield-provider-scenarios). Returns exit code."
   [suite-key opts]
   (if-let [paths (suites/suite-paths suite-key)]
     (run-paths-and-report paths
@@ -164,7 +168,7 @@
   "CLI dispatcher: full invariant suite, named suite, or single file.
 
    `dispatch` is a map with optional keys:
-     :suite          — path-list keyword (e.g. :yield-scenarios)
+     :suite          — path-list keyword (e.g. :yield-provider-scenarios, :sew-yield-scenarios)
      :fixture-suite  — EDN fixture keyword (e.g. :suites/all-invariants)
      :scenario       — file path
      :output-file    — JSON path when running a single scenario

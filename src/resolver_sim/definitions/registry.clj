@@ -83,7 +83,6 @@
    :sender_cancel {:label "Sender cancel"}
    :recipient_cancel {:label "Recipient cancel"}
    :auto_cancel_disputed {:label "Auto-cancel disputed"}
-   :advance_time {:label "Advance time"}
    :escalate_dispute {:label "Escalate dispute"}
    :register_stake {:label "Register stake"}
    :challenge_resolution {:label "Challenge resolution"}
@@ -135,11 +134,6 @@
                           :guards [:timeout-expired]
                           :actor-permissions [:keeper]
                           :pause-effect :blocked-when-paused}
-   :advance_time {:allowed-sources [:none :pending :disputed :released :refunded]
-                  :allowed-targets [:none :pending :disputed :released :refunded]
-                  :guards [:simulation-only]
-                  :actor-permissions [:system]
-                  :pause-effect :no-effect}
    :escalate_dispute {:allowed-sources [:disputed]
                       :allowed-targets [:disputed]
                       :guards [:pending-exists :appeal-window-open :max-level-not-reached]

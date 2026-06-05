@@ -6,7 +6,7 @@
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as data]))
+            [resolver_sim.notebooks.speds.data :as data]))
 
 (def base-scenario "scenarios/S83_yield-accrual-reorg-race.json")
 (def cf-scenario "scenarios/S74_appeal-deadline-boundary.json")

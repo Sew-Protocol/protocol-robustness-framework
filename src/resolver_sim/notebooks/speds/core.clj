@@ -1,8 +1,8 @@
-(ns resolver-sim.notebooks.speds.core
+(ns resolver_sim.notebooks.speds.core
   "Sew Protocol Evidence Design System (SPEDS) v1.1
    Core Visual Primitives for Protocol Storytelling."
-  (:require [resolver-sim.notebooks.speds.tokens :as tokens]
-            [resolver-sim.notebooks.speds.config :as config]
+  (:require [resolver_sim.notebooks.speds.tokens :as tokens]
+            [resolver_sim.notebooks.speds.config :as config]
             [clojure.string :as str]))
 
 ;; ---
@@ -143,3 +143,10 @@
                   :color (get-color :sys/primary) :opacity 0.6}}
     [:span footer-left]
     [:span footer-right]]])
+
+(defn render-carousel
+  "Renders a grid-based carousel of story frames."
+  [content-fn frame-specs {:keys [columns gap] :or {columns 2 gap "40px"}}]
+  [:div.frame-carousel {:style {:display "grid" :gridTemplateColumns (str "repeat(" columns ", 1fr)") :gap gap}}
+   (for [[idx specs] (map-indexed vector frame-specs)]
+     (content-fn (inc idx) (count frame-specs) specs))])

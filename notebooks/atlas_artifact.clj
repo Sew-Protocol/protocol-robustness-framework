@@ -1,7 +1,7 @@
 (ns notebooks.atlas-artifact
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.story :as story]))
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.story :as story]))
 
 ;; # Atlas of Protocol Robustness
 ;; ## Corpus-Wide Adversarial Coverage & Scenario Mapping

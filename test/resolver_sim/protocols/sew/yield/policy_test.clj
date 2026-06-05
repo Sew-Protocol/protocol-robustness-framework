@@ -9,7 +9,8 @@
             [resolver-sim.protocols.sew.yield.policy :as yield-policy]
             [resolver-sim.yield.registry :as yield-reg]
             [resolver-sim.yield.ops :as yield-ops]
-            [resolver-sim.contract-model.replay :as replay]))
+            [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]))
 
 (defn- load-scenario [path]
   (scen-io/load-scenario-file path))
@@ -50,7 +51,6 @@
           world4 (:world res3)]
       
       (is (:ok res1))
-      (println "ALL POSITIONS:" (:yield/positions world3))
       (let [pos (get-in world3 [:yield/positions [:sew/escrow 0]])]
         (is (= 10000 (:principal pos)))
         (is (= 500 (:unrealized-yield pos)))) 
@@ -167,6 +167,15 @@
       (is (= p1 p2))
       (is (= :released (get-in p1 [:escrow-transfers 0 :escrow-state])))
       (is (pos? (get-in p1 [:total-fees "USDC"]))))))
+
+(deftest test-yield-partial-liquidity-release-s81
+  (testing "S81 exercises may-be-partially-deferred through release and deferred recovery"
+    (let [scenario (load-scenario "scenarios/S81_escrow-yield-may-be-partially-deferred.json")
+          r        (replay/replay-with-protocol sew/protocol scenario)
+          w-release (:world (nth (:trace r) 1))]
+      (is (= :pass (:outcome r)))
+      (is (= :may-be-partially-deferred
+             (claim-outcome/escrow-yield-shortfall-outcome w-release 0))))))
 
 (deftest test-yield-partial-liquidity-dispute-resolution-s79
   (testing "Partial-liquidity profile under dispute resolution remains deterministic and invariant-safe"

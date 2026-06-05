@@ -1,0 +1,85 @@
+(ns resolver-sim.yield.invariant-catalog
+  "Canonical yield-provider invariant ids, descriptions, and suite defaults.")
+
+(def catalog
+  "Invariant id → metadata for docs, notebooks, and PRF pilot mapping."
+  {:yield/position-consistency
+   {:description "Principal, shares, and realized yield are non-negative; unrealized ≥ 0 unless :mark-to-market."
+    :prf-tags [:yield-accounting :accrual]}
+
+   :yield/exposure
+   {:description "Custody ledger (:yield/held-balances) covers all active position economic value."
+    :prf-tags [:solvency :liquidity]}
+
+   :yield/shortfall-splits
+   {:description "When :shortfall is present, fulfilled + deferred = basis-amount."
+    :prf-tags [:liquidity-shortfall :partial-withdrawal]}
+
+   :yield/status-fsm
+   {:description "Position status is one of :active, :unwinding, :withdrawn."
+    :prf-tags [:state-machine]}
+
+   :yield/realized-non-negative
+   {:description "Crystallized :realized-yield is never negative."
+    :prf-tags [:yield-accounting]}
+
+   :yield/partial-liquidity-principal
+   {:description "Under :partial-liquidity stress, unwinding positions keep principal intact; shortfall applies to yield leg only."
+    :prf-tags [:partial-liquidity :shortfall-affected]}
+
+   :yield/deferred-reclaim
+   {:description "Withdrawn positions have no open shortfall; reclaimed amounts are non-negative."
+    :prf-tags [:recovery :shortfall-affected]}
+
+   :yield/index-monotone
+   {:description "Liquidity index non-decreasing on accrue (non-increasing under :negative-yield)."
+    :prf-tags [:yield-accounting :accrual :index-precision]}
+
+   :yield/accrual-partition-bounded
+   {:description "Offline property: fragmented vs one-shot accrual within drift budget (see accrual-properties)."
+    :prf-tags [:index-precision :accrual]}})
+
+(def default-runtime-invariant-ids
+  "Checked on every successful replay step (yield-v1 adapter)."
+  [:yield/position-consistency
+   :yield/exposure
+   :yield/shortfall-splits
+   :yield/status-fsm
+   :yield/realized-non-negative
+   :yield/partial-liquidity-principal
+   :yield/deferred-reclaim])
+
+(def default-transition-invariant-ids
+  "Checked on each successful transition (yield-v1 adapter)."
+  [:yield/index-monotone])
+
+(def default-expectation-invariant-ids
+  "Merged into :expectations :invariants for :yield-provider-scenarios."
+  (vec (distinct (concat default-runtime-invariant-ids
+                        default-transition-invariant-ids))))
+
+(def scenario-extra-invariants
+  "Per scenario-id additions (unioned with defaults at load time)."
+  {"y03-partial-liquidity-shortfall-affected" [:yield/partial-liquidity-principal]
+   "y04-liquidity-shortfall-withdraw"         [:yield/shortfall-splits]
+   "y05-shortfall-affected-recovery"          [:yield/deferred-reclaim :yield/partial-liquidity-principal]
+   "y06-liquidity-shortage-deposit-blocked"   []
+   "y07-monthly-accrual-one-year"             [:yield/index-monotone]})
+
+(defn catalog-entry [inv-id]
+  (get catalog inv-id))
+
+(defn expectation-invariants-for-scenario
+  [scenario-id]
+  (let [extra (get scenario-extra-invariants scenario-id [])]
+    (vec (distinct (concat default-expectation-invariant-ids extra)))))
+
+(defn enrich-expectations
+  "Attach default :invariants to scenario :expectations (pure)."
+  [scenario]
+  (let [sid (:scenario-id scenario)
+        exp (or (:expectations scenario) {})
+        merged (vec (sort (into (set (expectation-invariants-for-scenario sid))
+                                (map #(if (keyword? %) % (keyword %))
+                                     (:invariants exp [])))))]
+    (assoc scenario :expectations (assoc exp :invariants merged))))

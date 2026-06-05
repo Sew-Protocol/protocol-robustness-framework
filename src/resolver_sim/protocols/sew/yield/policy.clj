@@ -1,7 +1,8 @@
 (ns resolver-sim.protocols.sew.yield.policy
   "Sew-specific rules for yield distribution and fee capture."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.accounting :as acct]))
+            [resolver-sim.protocols.sew.accounting :as acct]
+            [resolver-sim.yield.accounting :as yield-acct]))
 
 (defn apply-yield-policy
   "Allocate realized yield to claimable balances and protocol fees based on policy.
@@ -14,7 +15,11 @@
         owner-id [:sew/escrow escrow-id]
         pos-key  [:yield/positions owner-id]
         position (get-in world pos-key)
-        yield    (+ (:realized-yield position 0) (:unrealized-yield position 0))]
+        shortfall (:shortfall position)
+        ;; Under partial-yield shortfall only the liquid (realized) leg is claimable now.
+        yield    (if (yield-acct/partial-yield-shortfall? position shortfall)
+                   (:realized-yield position 0)
+                   (+ (:realized-yield position 0) (:unrealized-yield position 0)))]
     (if (or (nil? position) (zero? yield))
       world
       (let [fee-bps (or (:yield-protocol-fee-bps snap) 0)
@@ -30,9 +35,10 @@
               [:released :to-sender]    [net 0]
               [:released :split-50-50]  [(quot net 2) (- net (quot net 2))]
               
-              ;; If refunded, sender usually gets it
+              ;; If refunded, sender usually gets it; to-recipient preset does not
+              ;; pay yield to recipient on refund (escrow returned to sender).
               [:refunded :to-sender]    [net 0]
-              [:refunded :to-recipient] [0 net]
+              [:refunded :to-recipient] [0 0]
               [:refunded :split-50-50]  [(quot net 2) (- net (quot net 2))]
 
               ;; Defaults for :off or other combinations
@@ -40,9 +46,9 @@
         (let [world' (-> world
                         (acct/record-fee token fee)
                         (cond-> (pos? sender-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/principal (:from et) sender-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/yield (:from et) sender-amt))
                         (cond-> (pos? recipient-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/principal (:to et) recipient-amt))
+                          (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
                         (acct/sub-held token yield)
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees
@@ -51,8 +57,8 @@
           (-> world'
               ;; If there's a shortfall, keep the position active for later recovery
               (cond->
-                (:shortfall position)
+                shortfall
                 (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
 
-                (not (:shortfall position))
+                (not shortfall)
                 (update-in pos-key assoc :status :settled :realized-yield 0 :unrealized-yield 0))))))))

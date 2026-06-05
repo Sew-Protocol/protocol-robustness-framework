@@ -279,3 +279,10 @@
         (is (false? (:ok (sm/transition-to-released  w 0))))
         (is (false? (:ok (sm/transition-to-refunded  w 0))))
         (is (false? (:ok (sm/transition-to-resolved  w 0))))))))
+
+(deftest allowed-transitions-graph-is-acyclic
+  (is (true? sm/transition-graph-acyclic))
+  (is (false? (sm/valid-transition? :disputed :pending))
+      "backward edge would create circular invalid_states")
+  (is (false? (sm/valid-transition? :released :pending))
+      "terminal must not re-enter live states"))

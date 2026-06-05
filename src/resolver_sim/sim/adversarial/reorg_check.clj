@@ -12,16 +12,19 @@
      execution and assertions are fully implemented."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.runner :as runner]
+            [resolver-sim.protocols.sew.lifecycle :as lc]
+            [resolver-sim.protocols.sew.snapshot-presets :as snap-fix]
             [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.contract-model.replay :as replay]))
 
-(defn- random-event [rng workflow-ids agents]
+(defn- random-event [rng workflow-ids agents seq-num time]
   (let [actions ["execute_resolution" "challenge_resolution" "execute_pending_settlement"]
-        action  (rand-nth actions)
-        wf      (rand-nth (vec workflow-ids))
-        agent   (rand-nth agents)]
-    {:agent agent :action action :params {:workflow-id wf}}))
+        action  (nth actions (rng/sample-index rng (count actions)))
+        wf      (nth (vec workflow-ids) (rng/sample-index rng (count workflow-ids)))
+        agent   (nth agents (rng/sample-index rng (count agents)))]
+    {:seq seq-num :time time :agent agent :action action :params {:workflow-id wf}}))
 
 (defn run-reorg-trial
   "Run a single fork-and-merge trial.
@@ -32,21 +35,31 @@
       valid state even if Fork A events are presented as 'stale' (idempotence)."
   [rng-seed n-steps fork-depth]
   (let [rng (rng/make-rng rng-seed)
-        agents ["alice" "bob" "resolver0" "resolver1"]
-        ;; Step 1: Root generation
-        params {:escrow-size 10000 :resolver-fee-bps 150 :appeal-bond-bps 700}
-        ;; ... simulate some initial traffic to get a non-empty world ...
-        world-root (t/empty-world 1000)
-        ;; (Simplification: for now we use empty-world as root)
+        agents [{:id "alice" :address "0xAlice"} {:id "bob" :address "0xBob"} 
+                {:id "resolver0" :address "0xRes0"} {:id "resolver1" :address "0xRes1"}]
+        ;; Step 1: Realistic Root generation (pre-populated)
+        snap (snap-fix/preset->snapshot :sew.preset/baseline)
+        w0 (t/empty-world 1000)
+        cr (lc/create-escrow w0 "0xAlice" "0xUSDC" "0xBob" 5000 (t/make-escrow-settings {}) snap)
+        world-root (:world cr)
         
         ;; Step 2: Branching
-        branch-a-events (repeatedly n-steps #(random-event rng #{0 1} agents))
-        branch-b-events (repeatedly n-steps #(random-event rng #{0 1} agents))]
+        branch-a-events (map-indexed (fn [i _] (random-event rng ["0" "1"] (map :id agents) i (+ 1001 i))) (range n-steps))
+        branch-b-events (map-indexed (fn [i _] (random-event rng ["0" "1"] (map :id agents) i (+ 1001 i))) (range n-steps))
+
+        ;; Step 3: Replay
+        run-a (replay/replay-with-protocol (preg/get-protocol "sew-v1") 
+                                           {:schema-version "1.0" :scenario-id "fork-a" :agents agents :events branch-a-events})
+        run-b (replay/replay-with-protocol (preg/get-protocol "sew-v1") 
+                                           {:schema-version "1.0" :scenario-id "fork-b" :agents agents :events branch-b-events})
+        world-a (:world run-a)
+        world-b (:world run-b)]
     
-    ;; This is a skeleton for the full MC sweep.
-    ;; The core assertion is that inv/calculate-solvency-ratio stays 1.0.
-    {:solvency-ratio (inv/calculate-solvency-ratio world-root)
-     :idempotence-ok? true}))
+    {:solvency-ratio-a (inv/calculate-solvency-ratio world-a)
+     :solvency-ratio-b (inv/calculate-solvency-ratio world-b)
+     :idempotence-ok? (and (not= :fail (:outcome run-a)) (not= :fail (:outcome run-b)))
+     :events-processed-a (count (:trace run-a))
+     :events-processed-b (count (:trace run-b))}))
 
 (defn run-reorg-sweep [& {:keys [n-trials] :or {n-trials 1000}}]
   (println "\n=== Reorg & Fork Resilience Sweep ===")

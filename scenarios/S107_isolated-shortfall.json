@@ -1,30 +1,28 @@
 {
-  "scenario-id": "s107-isolated-shortfall",
-  "title": "Isolated yield module shortfall",
-  "schema-version": "1.0",
-  "purpose": "yield-robustness",
-  "description": "Tests shortfall logic in isolation from any protocol (like Sew).",
-  "initial-block-time": 1000,
-  "events": [
-    {
-      "seq": 0,
-      "time": 1000,
-      "action": "set-yield-risk",
-      "params": {
-        "module-id": "aave",
-        "token": "USDC",
-        "liquidity-mode": "shortfall",
-        "shortfall": {
-          "available-ratio": 0.5
-        }
+  "schema-version" : "1.0",
+  "initial-block-time" : 1000,
+  "scenario-author" : "@grifma",
+  "scenario-id" : "s107-isolated-shortfall",
+  "events" : [ {
+    "seq" : 0,
+    "time" : 1000,
+    "action" : "set-yield-risk",
+    "params" : {
+      "module-id" : "aave",
+      "token" : "USDC",
+      "liquidity-mode" : "shortfall",
+      "shortfall" : {
+        "available-ratio" : 0.5
       }
     }
-  ],
-  "provenance": {
-    "author": "Sew Protocol Simulation",
-    "author-id": "@grifma",
-    "created-at": "2026-05-30T16:31:25Z",
-    "source": "manual-migration"
+  } ],
+  "title" : "Isolated yield module shortfall",
+  "provenance" : {
+    "author" : "Sew Protocol Simulation",
+    "author-id" : "@grifma",
+    "created-at" : "2026-05-30T16:31:25Z",
+    "source" : "manual-migration"
   },
-  "scenario-author": "@grifma"
+  "description" : "Tests shortfall logic in isolation from any protocol (like Sew).",
+  "purpose" : "yield-robustness"
 }

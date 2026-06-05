@@ -1,13 +1,15 @@
-(ns resolver-sim.notebooks.speds.story
+(ns resolver_sim.notebooks.speds.story
   "SPEDS Phase 3: Narrative Story Engines.
    Templates for automated 4-frame validation stories."
-  (:require [resolver-sim.notebooks.speds.core :as speds]
-            [resolver-sim.notebooks.speds.config :as config]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.findings :as findings]
-            [resolver-sim.notebooks.speds.tokens :as tokens]
+  (:require [resolver_sim.notebooks.speds.core :as speds]
+            [resolver_sim.notebooks.speds.config :as config]
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.findings :as findings]
+            [resolver_sim.notebooks.speds.tokens :as tokens]
+            [resolver_sim.notebooks.speds.story-data :as story-data]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [clojure.string :as str]))
+
 
 ;; ---
 ;; Internal Narrative Helpers
@@ -22,10 +24,13 @@
 (defn- render-frame-specs
   "Renders a vector of frame specs with keys:
    :header :footer-left :footer-right :content"
-  [frame-specs]
-  [:div.frame-carousel {:style {:display "grid" :gridTemplateColumns "repeat(2, 1fr)" :gap "40px"}}
-   (for [[idx {:keys [header footer-left footer-right content]}] (map-indexed vector frame-specs)]
-     (apply render-story-frame (inc idx) (count frame-specs) header footer-left footer-right content))])
+  ([frame-specs] (render-frame-specs frame-specs {}))
+  ([frame-specs options]
+   (speds/render-carousel
+    (fn [idx total-frames {:keys [header footer-left footer-right content]}]
+      (apply render-story-frame idx total-frames header footer-left footer-right content))
+    frame-specs
+    options)))
 
 (defn- story-family
   [scenario-id scenario]
@@ -235,22 +240,6 @@
 ;; 1. The "Deflection" Story Engine
 ;; Optimized for proving resistance to specific attacks (S26, S42, etc.)
 
-(defn generate-deflection-story
-  "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
-  [scenario-id artifacts]
-  (let [ctx (data/generate-proof-context artifacts scenario-id)
-        scenario (data/find-scenario-by-id (:coverage artifacts) scenario-id)
-        family (story-family scenario-id scenario)
-        {:keys [trace-id git-sha hash title]} ctx
-        {:keys [replay-match-label]} (data/narrative-metrics artifacts)
-        frame-ctx {:trace-id trace-id :git-sha git-sha :hash hash :title title :replay-match-label replay-match-label}
-        frame-specs (case family
-                      :theory-falsification (falsification-frame-specs frame-ctx)
-                      :deadline-boundary    (deadline-frame-specs frame-ctx)
-                      :collusion            (collusion-frame-specs frame-ctx)
-                      :economic-solvency    (economic-solvency-frame-specs frame-ctx)
-                      (deflection-frame-specs frame-ctx))]
-    (render-frame-specs frame-specs)))
 
 (defn generate-theory-falsification-story
   "Renders a theory-falsification multi-frame story from a scenario id,
@@ -382,3 +371,21 @@
        [:h4 {:style {:margin "0 0 10px 0"}} "Scientific Summary"]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6}} determinism-text]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6 :marginTop "8px"}} coverage-text]]]]))
+
+
+(defn- get-frame-specs [family frame-ctx]
+  (let [registry {:theory-falsification 'falsification-frame-specs
+                  :deadline-boundary    'deadline-frame-specs
+                  :collusion            'collusion-frame-specs
+                  :economic-solvency    'economic-solvency-frame-specs}
+        sym (get registry family 'deflection-frame-specs)
+        f (resolve sym)]
+    (f frame-ctx)))
+
+(defn generate-deflection-story
+  "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
+  [scenario-id artifacts]
+  (let [story-data (story-data/build-story-data artifacts scenario-id)
+        family (story-family scenario-id (:scenario story-data))
+        frame-specs (get-frame-specs family story-data)]
+    (render-frame-specs frame-specs)))

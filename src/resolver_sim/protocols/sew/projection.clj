@@ -12,6 +12,7 @@
 
    This namespace is pure — no I/O, no DB, no side effects."
   (:require [resolver-sim.scenario.projection :as proj]
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.yield.evidence :as ye]))
 
@@ -229,6 +230,7 @@
             {:keys [transitions token-deltas pending-lifecycle stake-flow]}
             (derive-transition-summaries trace world)
             shortfall-summary (derive-shortfall-summary world)
+            escrow-yield-outcomes (claim-outcome/outcomes-by-workflow world)
 
             coalition-addrs
             (into #{}
@@ -403,7 +405,8 @@
          :decisions decisions
          :raw-trace trace
          :funds-ledger-summary funds-ledger
-         :yield-evidence yield-evidence})))))
+         :yield-evidence yield-evidence
+         :escrow-yield-outcomes escrow-yield-outcomes})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection
@@ -424,13 +427,18 @@
         posted       (:total-bonds-posted world {})
         slashed      (:bond-slashed world {})
         escrows      (:escrow-transfers world {})
+        token-str    (fn [t]
+                       (cond
+                         (keyword? t) (name t)
+                         (string? t) t
+                         :else (str t)))
         tokens       (-> #{}
-                         (into (keys held))
-                         (into (keys released))
-                         (into (keys refunded))
-                         (into (keys withdrawn))
-                         (into (keys posted))
-                         (into (map :token (vals escrows))))
+                         (into (map token-str (keys held)))
+                         (into (map token-str (keys released)))
+                         (into (map token-str (keys refunded)))
+                         (into (map token-str (keys withdrawn)))
+                         (into (map token-str (keys posted)))
+                         (into (map #(token-str (:token %)) (vals escrows))))
         slashed-by-token
         (reduce (fn [acc [wf amt]]
                   (if-let [token (get-in escrows [wf :token])]
@@ -438,34 +446,51 @@
                     acc))
                 {}
                 slashed)
+        parse-num (fn [x]
+                    (cond
+                      (number? x) (long x)
+                      (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                      :else 0))
         by-token
         (into {}
-              (for [token tokens]
-                [token {:held         (long (get held token 0))
-                        :released     (long (get released token 0))
-                        :refunded     (long (get refunded token 0))
-                        :withdrawn    (long (get withdrawn token 0))
-                        :bond-posted  (long (get posted token 0))
-                        :bond-slashed (long (get slashed-by-token token 0))}]))
+              (for [token (sort tokens)
+                    :let [tok-kw (keyword token)]]
+                [token {:held         (+ (parse-num (get held token 0))
+                                         (parse-num (get held tok-kw 0)))
+                        :released     (+ (parse-num (get released token 0))
+                                         (parse-num (get released tok-kw 0)))
+                        :refunded     (+ (parse-num (get refunded token 0))
+                                         (parse-num (get refunded tok-kw 0)))
+                        :withdrawn    (+ (parse-num (get withdrawn token 0))
+                                         (parse-num (get withdrawn tok-kw 0)))
+                        :bond-posted  (+ (parse-num (get posted token 0))
+                                         (parse-num (get posted tok-kw 0)))
+                        :bond-slashed (+ (parse-num (get slashed-by-token token 0))
+                                         (parse-num (get slashed-by-token tok-kw 0)))}]))
+        parse-num-top (fn [x]
+                        (cond
+                          (number? x) (long x)
+                          (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
+                          :else 0))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]
-                      (long amt)))
+                      (parse-num-top amt)))
         bond-locked-total
         (reduce + 0 (for [wf (vals (:bond-balances world {}))
                           amt (vals wf)]
-                      (long amt)))
-        bond-fees-total (reduce + 0 (map long (vals (:bond-fees world {}))))
+                      (parse-num-top amt)))
+        bond-fees-total (reduce + 0 (map parse-num-top (vals (:bond-fees world {}))))
         bond-distribution-total
         (let [d (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})]
-          (+ (long (:insurance d 0))
-             (long (:protocol d 0))
-             (long (:burned d 0))))
-        retained-total (long (:retained-slash-reserves world 0))
+          (+ (parse-num-top (:insurance d 0))
+             (parse-num-top (:protocol d 0))
+             (parse-num-top (:burned d 0))))
+        retained-total (parse-num-top (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
                              (for [{:keys [token accounted inflow]} (:violations conservation [])]
-                               [token (- (long accounted) (long (or inflow 0)))]))
+                               [token (- (parse-num-top accounted) (parse-num-top (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token

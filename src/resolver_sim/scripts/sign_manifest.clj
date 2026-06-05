@@ -33,15 +33,19 @@
       (System/exit 1))
     (println (str "Signing manifest: " (or (:run_id manifest) "unknown run-id")))
     (println (str "Key:              " key-path))
-    (let [result (pub/sign-manifest manifest key-path)]
-      (if (:error result)
-        (do (println (str "ERROR: " (:error result)))
-            (System/exit 1))
-        (let [run-dir  (:dir run)
-              paths    (cond-> [(write-sig! latest-dir result)]
-                         (and run-dir (not= run-dir latest-dir))
-                         (conj (write-sig! run-dir result)))]
-          (println (str "Hash:             " (:hash result)))
-          (println (str "Signature:        " (subs (:signature result) 0 16) "..."))
-          (doseq [p paths]
-            (println (str "Written:          " p))))))))
+    (let [registry (:registry run)]
+      (when (or (nil? registry) (empty? (:artifacts registry)))
+        (println "ERROR: No artifact registry found (test-artifacts.json). Run artifacts:index or evidence:bundle before signing.")
+        (System/exit 1))
+      (let [result (pub/sign-manifest manifest key-path :registry registry)]
+        (if (:error result)
+          (do (println (str "ERROR: " (:error result)))
+              (System/exit 1))
+          (let [run-dir  (:dir run)
+                paths    (cond-> [(write-sig! latest-dir result)]
+                           (and run-dir (not= run-dir latest-dir))
+                           (conj (write-sig! run-dir result)))]
+            (println (str "Hash:             " (:hash result)))
+            (println (str "Signature:        " (subs (:signature result) 0 16) "..."))
+            (doseq [p paths]
+              (println (str "Written:          " p))))))))

@@ -2,11 +2,10 @@
 
 Source of truth: `definitions.registry/transitions`, `definitions.registry/transition-metadata`, `results/test-artifacts/coverage.json`.
 
-Definitions hash: `1082033428`
+Definitions hash: `1730484672`
 
 | Transition ID | Label | Allowed sources | Allowed targets | Guards | Actor permissions | Pause effect | Coverage status | Hit count |
 |---|---|---|---|---|---|---|---|---:|
-| `advance_time` | Advance time | `none`, `pending`, `disputed`, `released`, `refunded` | `none`, `pending`, `disputed`, `released`, `refunded` | `simulation-only` | `system` | `no-effect` | missing | 0 |
 | `auto_cancel_disputed` | Auto-cancel disputed | `disputed` | `refunded` | `timeout-expired` | `keeper` | `blocked-when-paused` | missing | 0 |
 | `automate_timed_actions` | Automate timed actions | `pending`, `disputed` | `pending`, `released`, `refunded` | `deadline-eligible` | `keeper` | `blocked-when-paused` | missing | 0 |
 | `challenge_resolution` | Challenge resolution | `disputed` | `disputed` | `resolution-exists`, `challenge-window-open` | `challenger`, `watchdog` | `blocked-when-paused` | missing | 0 |
@@ -19,3 +18,4 @@ Definitions hash: `1082033428`
 | `register_stake` | Register stake | `none` | `none` | `stake-params-valid` | `resolver` | `blocked-when-paused` | missing | 0 |
 | `release` | Release | `pending` | `released` | `authorized-release` | `sender`, `authorized-release-address` | `blocked-when-paused` | missing | 0 |
 | `sender_cancel` | Sender cancel | `pending` | `pending` | `caller-is-sender` | `sender` | `blocked-when-paused` | missing | 0 |
+| `submit_evidence` | Submit evidence | `disputed` | `disputed` | `state-disputed` | `sender`, `recipient`, `challenger`, `watchdog` | `blocked-when-paused` | missing | 0 |

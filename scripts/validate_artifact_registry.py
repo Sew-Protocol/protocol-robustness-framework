@@ -33,6 +33,60 @@ def validate_schema_const(doc: dict, expected: str, label: str):
         fail(f"{label} schema_version mismatch: expected {expected}, got {actual}")
 
 
+def validate_claimable_v2_integrity(claim: dict, raw_text: str) -> None:
+    """Evidence-integrity checks for claimable-classification.v2 terminal observations."""
+    if claim.get("schema_version") != "claimable-classification.v2":
+        return
+
+    classes = claim.get("classes") or {}
+    for class_id, spec in classes.items():
+        if "recipient_type" in spec and "recipient_types" not in spec:
+            fail(f"claimable-classification.classes.{class_id} uses deprecated recipient_type")
+        if "delivery_model" in spec and "governance-withdrawal" in str(spec.get("delivery_model", "")):
+            fail(f"claimable-classification.classes.{class_id} mixes delivery_model with governance wording")
+
+    obs = claim.get("terminal_observations") or {}
+    fl = obs.get("funds_ledger") or {}
+    if "claimable_total" in fl:
+        fail("claimable-classification funds_ledger must not use deprecated claimable_total")
+    by_token = fl.get("by_token") or {}
+    if isinstance(by_token, dict):
+        keys = list(by_token.keys())
+        if len(keys) != len(set(keys)):
+            fail("claimable-classification funds_ledger.by_token has duplicate token keys after parse")
+
+    # Raw JSON must not contain duplicate keys in by_token (parser keeps last only).
+    if '"by_token"' in raw_text:
+        import re
+
+        blocks = re.findall(r'"by_token"\s*:\s*\{([^}]*)\}', raw_text, re.DOTALL)
+        for block in blocks:
+            token_keys = re.findall(r'"([A-Za-z0-9_-]+)"\s*:\s*\{', block)
+            if len(token_keys) != len(set(token_keys)):
+                fail(
+                    "claimable-classification raw JSON has duplicate keys in funds_ledger.by_token "
+                    f"(tokens={token_keys!r})"
+                )
+
+    for inv_id, row in (obs.get("boundary_headroom") or {}).items():
+        if isinstance(row, dict) and "worlds_tracked" in row:
+            fail(
+                f"claimable-classification boundary_headroom.{inv_id} uses deprecated worlds_tracked; "
+                "use workflows_tracked"
+            )
+
+    sid = obs.get("scenario_id")
+    status = obs.get("scenario_id_status")
+    if sid == "unknown" and status == "missing-from-result":
+        fail(
+            "claimable-classification scenario_id is unknown with missing-from-result; "
+            "derive from result path or fix result JSON"
+        )
+
+    if obs and "coverage_status" not in obs:
+        fail("claimable-classification terminal_observations missing coverage_status")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", default="results/test-artifacts/test-artifacts.json")
@@ -53,12 +107,22 @@ def main() -> int:
     registry = load_json(registry_p)
     run = load_json(run_p)
     summary = load_json(summary_p)
-    claim = load_json(claim_p)
+    claim_raw = claim_p.read_text()
+    claim = json.loads(claim_raw)
 
     validate_schema_const(registry, "test-artifacts.v1", "test-artifacts")
     validate_schema_const(run, "test-run.v1", "test-run")
     validate_schema_const(summary, "test-summary.v2", "test-summary")
-    validate_schema_const(claim, "claimable-classification.v1", "claimable-classification")
+    claim_schema = claim.get("schema_version")
+    if claim_schema not in ("claimable-classification.v1", "claimable-classification.v2"):
+        fail(f"claimable-classification schema_version must be v1 or v2, got {claim_schema!r}")
+    obs_status = claim.get("observations_status")
+    if obs_status and obs_status not in (
+        "taxonomy-only",
+        "terminal-aggregated",
+        "single-scenario",
+    ):
+        fail(f"claimable-classification observations_status invalid: {obs_status!r}")
 
     if registry.get("run_id") != run.get("run_id"):
         fail("run_id mismatch between registry and run manifest")
@@ -117,6 +181,8 @@ def main() -> int:
             fail(f"claimable-classification missing shortfall_policy.{k}")
     if sp.get("rounding_policy") != "floor-to-asset-decimals.v1":
         fail("claimable-classification shortfall_policy.rounding_policy must be floor-to-asset-decimals.v1")
+
+    validate_claimable_v2_integrity(claim, claim_raw)
 
     print("[artifact-registry] PASS: integrity + compatibility checks succeeded")
     return 0

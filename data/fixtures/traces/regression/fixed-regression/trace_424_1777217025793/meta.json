@@ -1,27 +1,24 @@
 {
-  "cdrs_version": "0.1",
-  "trace-id": "trace_424_1777217025793",
-  "trace-score": 5,
-  "categories": [
-    "cascade",
-    "liveness-fail"
-  ],
-  "issue\/type": "issue\/liveness-failure",
-  "metrics": {
-    "invariant-violations": 0,
-    "attack-attempts": 0,
-    "pending-settlements-executed": 0,
-    "reverts": 2,
-    "resolutions-executed": 0,
-    "attack-successes": 0,
-    "total-escrows": 3,
-    "disputes-triggered": 3,
-    "total-volume": 225000
+  "cdrs_version" : "0.1",
+  "trace-id" : "trace_424_1777217025793",
+  "trace-score" : 5,
+  "categories" : [ "cascade", "liveness-fail" ],
+  "issue/type" : "issue/liveness-failure",
+  "metrics" : {
+    "pending-settlements-executed" : 0,
+    "total-volume" : 225000,
+    "invariant-violations" : 0,
+    "attack-attempts" : 0,
+    "reverts" : 2,
+    "total-escrows" : 3,
+    "attack-successes" : 0,
+    "disputes-triggered" : 3,
+    "resolutions-executed" : 0
   },
-  "outcome": "pass",
-  "score-components": {
-    "attacker-profit": 0,
-    "invariant-violations": 0,
-    "liveness-failure": 1
+  "outcome" : "pass",
+  "score-components" : {
+    "attacker-profit" : 0,
+    "invariant-violations" : 0,
+    "liveness-failure" : 1
   }
 }

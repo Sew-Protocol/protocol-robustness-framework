@@ -15,7 +15,7 @@
    :options {:minimal true}
    :events [{:seq 0 :time 1000 :agent "vault" :action "yield_deposit"
              :params {:token "USDC" :amount 10000}}
-            {:seq 1 :time 2000 :agent "vault" :action "yield_accrue"
+            {:seq 1 :time 87400 :agent "vault" :action "yield_accrue"
              :params {:token "USDC" :dt 86400}}]})
 
 (deftest yield-protocol-satisfies-adapter
@@ -26,7 +26,7 @@
   (is (= yp/protocol (preg/get-protocol "yield-v1"))))
 
 (deftest simple-replay-deposit-accrue
-  (let [result (replay/simple-replay yp/protocol base-scenario)]
+  (let [result (replay/replay-yield-scenario base-scenario)]
     (is (= :pass (:outcome result)))
     (is (pos? (get-in result [:metrics :yield/position-unrealized])))))
 
@@ -38,7 +38,7 @@
                                   :params {:token "USDC" :dt 31536000}}]
                         :expectations {:metrics [{:name :yield/position-principal :op := :value 10000}
                                                  {:name :yield/position-unrealized :op :> :value 400}]})
-        result (replay/simple-replay yp/protocol scenario)]
+        result (replay/replay-yield-scenario scenario)]
     (is (= :pass (:outcome result)))))
 
 (deftest y02-negative-yield-step
@@ -56,5 +56,5 @@
                                                         :path ["yield-positions" "vault" "unrealized-yield"]
                                                         :op :<
                                                         :value 0}]})
-        result (replay/simple-replay yp/protocol scenario)]
+        result (replay/replay-yield-scenario scenario)]
     (is (= :pass (:outcome result)))))

@@ -13,7 +13,7 @@ Enriched/default reporting version: `1.1`
 
 | Version | Required fields |
 |---|---|
-| `1.1` | `id`, `title`, `purpose` |
+| `1.1` | `id`, `title`, `purpose`, `scenario-author` |
 
 ## Purpose-specific Validation Constraints
 

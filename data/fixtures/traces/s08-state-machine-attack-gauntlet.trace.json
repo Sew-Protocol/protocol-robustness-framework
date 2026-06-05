@@ -1,200 +1,110 @@
 {
-  "schema-version": "1.1",
-  "id": "scenarios/s08-state-machine-attack-gauntlet",
-  "title": "State Machine Attack Gauntlet",
-  "purpose": "adversarial-robustness",
-  "threat-tags": [
-    "state-machine-exhaustion",
-    "unauthorized-release",
-    "buyer-deviation"
-  ],
-  "scenario-id": "s08-state-machine-attack-gauntlet",
-  "initial-block-time": 1000,
-  "agents": [
-    {
-      "id": "buyer",
-      "address": "0xbuyer",
-      "type": "honest",
-      "strategy": "state-machine-exhaustion",
-      "scenario-role": "adversarial-buyer"
-    },
-    {
-      "id": "seller",
-      "address": "0xseller",
-      "type": "honest"
-    },
-    {
-      "id": "resolver",
-      "address": "0xresolver",
-      "type": "resolver"
+  "protocol-params" : {
+    "resolver-fee-bps" : 150,
+    "appeal-window-duration" : 0,
+    "max-dispute-duration" : 2592000
+  },
+  "schema-version" : "1.1",
+  "threat-tags" : [ ],
+  "initial-block-time" : 1000,
+  "scenario-author" : "@grifma",
+  "id" : "scenarios/s08-state-machine-attack-gauntlet",
+  "agents" : [ {
+    "id" : "buyer",
+    "address" : "0xbuyer",
+    "type" : "honest"
+  }, {
+    "id" : "seller",
+    "address" : "0xseller",
+    "type" : "honest"
+  }, {
+    "id" : "resolver",
+    "address" : "0xresolver",
+    "type" : "resolver"
+  } ],
+  "scenario-id" : "s08-state-machine-attack-gauntlet",
+  "events" : [ {
+    "seq" : 0,
+    "time" : 1000,
+    "agent" : "buyer",
+    "action" : "create_escrow",
+    "params" : {
+      "token" : "USDC",
+      "to" : "0xseller",
+      "amount" : 2000,
+      "custom-resolver" : "0xresolver"
     }
-  ],
-  "protocol-params": {
-    "resolver-fee-bps": 150,
-    "appeal-window-duration": 0,
-    "max-dispute-duration": 2592000
-  },
-  "events": [
-    {
-      "seq": 0,
-      "time": 1000,
-      "agent": "buyer",
-      "action": "create_escrow",
-      "params": {
-        "token": "USDC",
-        "to": "0xseller",
-        "amount": 2000,
-        "custom-resolver": "0xresolver"
-      }
-    },
-    {
-      "seq": 1,
-      "time": 1060,
-      "agent": "buyer",
-      "action": "execute_resolution",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0,
-        "is-release": true,
-        "resolution-hash": "0xh"
-      }
-    },
-    {
-      "seq": 2,
-      "time": 1120,
-      "agent": "buyer",
-      "action": "raise_dispute",
-      "params": {
-        "workflow-id": 0
-      }
-    },
-    {
-      "seq": 3,
-      "time": 1180,
-      "agent": "buyer",
-      "action": "release",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0
-      }
-    },
-    {
-      "seq": 4,
-      "time": 1240,
-      "agent": "buyer",
-      "action": "raise_dispute",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0
-      }
-    },
-    {
-      "seq": 5,
-      "time": 1300,
-      "agent": "resolver",
-      "action": "execute_resolution",
-      "params": {
-        "workflow-id": 0,
-        "is-release": true,
-        "resolution-hash": "0xauth"
-      }
-    },
-    {
-      "seq": 6,
-      "time": 1360,
-      "agent": "resolver",
-      "action": "execute_resolution",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0,
-        "is-release": true,
-        "resolution-hash": "0xdup"
-      }
-    },
-    {
-      "seq": 7,
-      "time": 1420,
-      "agent": "buyer",
-      "action": "raise_dispute",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0
-      }
-    },
-    {
-      "seq": 8,
-      "time": 1480,
-      "agent": "buyer",
-      "action": "release",
-      "adversarial?": true,
-      "params": {
-        "workflow-id": 0
-      }
+  }, {
+    "seq" : 1,
+    "time" : 1060,
+    "agent" : "buyer",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 0,
+      "is-release" : true,
+      "resolution-hash" : "0xh"
     }
-  ],
-  "theory": {
-    "claim-id": "claims/adversarial-buyer-no-profitable-deviation",
-    "claim": "An adversarial buyer with full knowledge of the state machine cannot extract funds or force an unauthorized release through any sequence of buyer-authorized protocol calls.",
-    "game-class": "extensive-form-game",
-    "mechanism-properties": [
-      "state-machine-integrity",
-      "unauthorized-extraction-resistance"
-    ],
-    "assumptions": [
-      "seller-is-passive",
-      "resolver-is-honest",
-      "gas-griefing-out-of-scope",
-      "state-machine-is-sole-arbiter"
-    ],
-    "falsifies-if": [
-      {
-        "metric": "attack-successes",
-        "op": ">",
-        "value": 0
-      },
-      {
-        "metric": "invariant-violations",
-        "op": ">",
-        "value": 0
-      }
-    ]
-  },
-  "payoff-model": {
-    "tracked": [
-      "attack-successes"
-    ],
-    "costs": {
-      "slashing": false,
-      "gas": false,
-      "opportunity-cost": false
-    },
-    "_note": "No cost model \u2014 attacker incurs no on-chain penalty for reverted calls in this model. If any attack-success occurs the cost model is irrelevant; the mechanism has failed."
-  },
-  "expectations": {
-    "metrics": [
-      {
-        "name": "attack-successes",
-        "op": ":=",
-        "value": 0
-      },
-      {
-        "name": "attack-attempts",
-        "op": ":>=",
-        "value": 6,
-        "_note": "Per-event adversarial? flag on seq 1,3,4,6,7,8 drives this count. Confirms all 6 adversarial calls were attempted."
-      },
-      {
-        "name": "rejected-attacks",
-        "op": ":>=",
-        "value": 6,
-        "_note": "All adversarial calls were rejected: attack-attempts == rejected-attacks. Scoped to adversarial events only, so more precise than reverts >= 6."
-      },
-      {
-        "name": "invariant-violations",
-        "op": ":=",
-        "value": 0
-      }
-    ]
-  },
-  "scenario-author": "@grifma"
+  }, {
+    "seq" : 2,
+    "time" : 1120,
+    "agent" : "buyer",
+    "action" : "raise_dispute",
+    "params" : {
+      "workflow-id" : 0
+    }
+  }, {
+    "seq" : 3,
+    "time" : 1180,
+    "agent" : "buyer",
+    "action" : "release",
+    "params" : {
+      "workflow-id" : 0
+    }
+  }, {
+    "seq" : 4,
+    "time" : 1240,
+    "agent" : "buyer",
+    "action" : "raise_dispute",
+    "params" : {
+      "workflow-id" : 0
+    }
+  }, {
+    "seq" : 5,
+    "time" : 1300,
+    "agent" : "resolver",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 0,
+      "is-release" : true,
+      "resolution-hash" : "0xauth"
+    }
+  }, {
+    "seq" : 6,
+    "time" : 1360,
+    "agent" : "resolver",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 0,
+      "is-release" : true,
+      "resolution-hash" : "0xdup"
+    }
+  }, {
+    "seq" : 7,
+    "time" : 1420,
+    "agent" : "buyer",
+    "action" : "raise_dispute",
+    "params" : {
+      "workflow-id" : 0
+    }
+  }, {
+    "seq" : 8,
+    "time" : 1480,
+    "agent" : "buyer",
+    "action" : "release",
+    "params" : {
+      "workflow-id" : 0
+    }
+  } ],
+  "title" : "s08-state-machine-attack-gauntlet",
+  "purpose" : "regression"
 }

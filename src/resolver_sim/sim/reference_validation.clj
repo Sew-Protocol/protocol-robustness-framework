@@ -2,7 +2,7 @@
   "Reference Validation Suite v1 — deterministic public evidence harness.
 
    Reads suites/reference-validation-v1/manifest.edn, runs simulator-backed
-   scenarios via replay + trace export, assembles pinned rows for the rest,
+   scenarios via replay + trace export, verifies evidence→canonical invariants,
    and writes actual/*.json for CI verification."
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
@@ -10,7 +10,8 @@
             [clojure.string :as str]
             [resolver-sim.io.scenarios :as scenarios]
             [resolver-sim.protocols.sew :as sew]
-            [resolver-sim.protocols.sew.io.trace-export :as trace-export])
+            [resolver-sim.protocols.sew.io.trace-export :as trace-export]
+            [resolver-sim.sim.reference-validation-evidence :as evidence])
   (:gen-class))
 
 (defn- suite-root []
@@ -51,17 +52,19 @@
 (defn- run-simulator-scenario
   [sc actual-dir]
   (let [{:keys [id trace-slug upgrade-path classification primary-threat
-                expectations-passed invariants-passed claim-id]} sc
+                expectations-passed invariants-passed claim-id invariant-ids]} sc
         scenario-path (:simulator/scenario-path sc)
         trace-rel (str "actual/traces/" trace-slug ".trace.json")
         trace-path (str actual-dir "/traces/" trace-slug ".trace.json")
         scenario (scenarios/load-scenario-file scenario-path)
         result (sew/replay-with-sew-protocol scenario)]
-    (when (= :invalid (:outcome result))
-      (throw (ex-info "reference-validation simulator scenario invalid"
+    (when (not= :pass (:outcome result))
+      (throw (ex-info "reference-validation simulator scenario did not pass"
                       {:scenario-id id
                        :path scenario-path
+                       :outcome (:outcome result)
                        :halt-reason (:halt-reason result)})))
+    (evidence/verify-evidence-invariants! result (or invariant-ids []))
     (trace-export/write-fixture-file
      (trace-export/export-trace-fixture result scenario)
      trace-path)
@@ -74,7 +77,7 @@
        :expectations_failed 0
        :expectations_passed expectations-passed
        :invariants_failed 0
-       :invariants_passed invariants-passed
+       :invariants_passed (or invariants-passed (count (or invariant-ids [])))
        :primary_claim (name claim-id)
        :primary_threat primary-threat
        :simulator_backed true
@@ -84,38 +87,23 @@
        :trace_path trace-rel
        :upgrade_path upgrade-path})))
 
-(defn- run-pinned-scenario
-  [sc]
-  {:scenario_id (:id sc)
-   :classification (kw-str (:classification sc))
-   :confidence "provisional"
-   :evidence_type "pinned-derivation"
-   :expectations_failed 0
-   :expectations_passed (:expectations-passed sc)
-   :invariants_failed 0
-   :invariants_passed (:invariants-passed sc)
-   :primary_claim (name (:claim-id sc))
-   :primary_threat (:primary-threat sc)
-   :simulator_backed false
-   :source_artifact (:pinned/source-artifact sc)
-   :status "pass"
-   :trace_hash nil
-   :trace_path nil
-   :upgrade_path (:upgrade-path sc)})
-
 (defn- build-scenario-results [manifest actual-dir]
   {:suite_id (:suite/id manifest)
-   :results (mapv (fn [sc]
-                    (if (:simulator/scenario-path sc)
-                      (run-simulator-scenario sc actual-dir)
-                      (run-pinned-scenario sc)))
+   :results (mapv #(run-simulator-scenario % actual-dir)
                   (:scenarios manifest))})
 
 (defn- build-invariants [manifest]
-  {:suite_id (:suite/id manifest)
-   :invariants (mapv (fn [{:keys [id scenarios]}]
-                       {:invariant_id id :scenarios scenarios :status "pass"})
-                     (:invariants manifest))})
+  (let [scenario-by-id (into {} (map (fn [sc] [(:id sc) sc]) (:scenarios manifest)))]
+    {:suite_id (:suite/id manifest)
+     :invariants
+     (mapv
+      (fn [{:keys [id scenarios]}]
+        (let [paths (keep #(get-in scenario-by-id [% :simulator/scenario-path]) scenarios)]
+          {:invariant_id id
+           :scenarios scenarios
+           :status (if (seq paths) "pass" "fail")
+           :simulator_backed (boolean (seq paths))}))
+      (:invariants manifest))}))
 
 (defn- build-evidence-matrix [manifest scenario-results]
   (let [result-by-id (into {} (map (fn [r] [(:scenario_id r) r]) (:results scenario-results)))
@@ -161,8 +149,7 @@
     (:economic-checks manifest))})
 
 (defn- build-summary [manifest actual-dir results]
-  (let [sim-backed (count (filter :simulator_backed results))
-        pinned (count (remove :simulator_backed results))
+  (let [sim-backed (count results)
         hashes {:scenario_results (sha256-file (str actual-dir "/scenario-results.json"))
                 :invariants (sha256-file (str actual-dir "/invariants.json"))
                 :economic_results (sha256-file (str actual-dir "/economic-results.json"))
@@ -171,7 +158,7 @@
      :failed 0
      :inconclusive 0
      :passed (count results)
-     :pinned_derivation_count pinned
+     :pinned_derivation_count 0
      :placeholder_count 0
      :result_hashes hashes
      :scenario_count (count results)
@@ -225,7 +212,7 @@
       {:ok? true
        :suite-id (:suite/id manifest)
        :scenario-count (count (:results scenario-results))
-       :simulator-backed (count (filter :simulator_backed results))})))
+       :simulator-backed (count results)})))
 
 (defn -main
   [& args]

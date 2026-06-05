@@ -1,6 +1,7 @@
 (ns resolver-sim.sim.batch
   "Batch runner: aggregate N trials into summary statistics."
   (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]))
@@ -39,7 +40,8 @@
    :oracle-roll-sequence               (:oracle-roll-sequence params)
    :oracle-roll-on-exhaustion          (:oracle-roll-on-exhaustion params)
    :fixed-or                            (:fixed-or params)
-   :oracle-roll-trace-enabled?         (:oracle-roll-trace-enabled? params false)])
+   :oracle-roll-trace-enabled?         (:oracle-roll-trace-enabled? params false)
+   :evidence-quality?                  (:evidence-quality? params false)])
 
 (defn mean [vals]
   (if (empty? vals) 0 (double (/ (reduce + vals) (count vals)))))
@@ -120,7 +122,15 @@
     
     {:n-trials n-trials
      :strategy (or (:force-strategy params) (:strategy params :honest))
-     
+     :oracle-effective-mode (:mode (:oracle-effective params)
+                                    (detection/normalize-oracle-fixture params))
+     :oracle-fixture-exhausted? (boolean (some :oracle-fixture/exhausted? results))
+     :oracle-fixture-warnings
+     (vec (distinct (mapcat :oracle-fixture/warnings results)))
+     :oracle-fixture-warning-errors
+     (count (filter #(= :error (:level %))
+                    (mapcat :oracle-fixture/warnings results)))
+
      ; Honest profit statistics
      :honest-mean (double mean-honest)
      :honest-std (double (std-dev profits-honest mean-honest))

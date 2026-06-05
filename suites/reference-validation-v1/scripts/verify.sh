@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
 ACTUAL="$ROOT/actual"
 EXPECTED="$ROOT/expected"
 
@@ -13,6 +14,12 @@ print(json.dumps(obj, separators=(",",":"), sort_keys=True))
 PY
 }
 
+report_json_diff() {
+  local expected_file="$1"
+  local actual_file="$2"
+  python3 "$REPO_ROOT/python/json_diff_report.py" "$expected_file" "$actual_file" || true
+}
+
 files=(summary scenario-results invariants economic-results evidence-matrix)
 for base in "${files[@]}"; do
   [[ -f "$ACTUAL/$base.json" ]] || { echo "FAIL missing actual file: $base.json"; exit 1; }
@@ -21,7 +28,11 @@ for base in "${files[@]}"; do
 
   a="$(canon "$ACTUAL/$base.json")"
   e="$(canon "$EXPECTED/$base.json")"
-  [[ "$a" == "$e" ]] || { echo "FAIL canonical content mismatch: $base.json"; exit 1; }
+  if [[ "$a" != "$e" ]]; then
+    echo "FAIL canonical content mismatch: $base.json"
+    report_json_diff "$EXPECTED/$base.json" "$ACTUAL/$base.json"
+    exit 1
+  fi
 
   ACTUAL_HASH=$(sha256sum "$ACTUAL/$base.json" | awk '{print $1}')
   EXPECTED_HASH=$(tr -d '[:space:]' < "$EXPECTED/$base.sha256")
@@ -34,6 +45,12 @@ done
 
 A_TRACE=$(sha256sum "$ACTUAL/traces/001-governance-sandwich.trace.json" | awk '{print $1}')
 E_TRACE=$(tr -d '[:space:]' < "$EXPECTED/traces/001-governance-sandwich.trace.sha256")
-[[ "$A_TRACE" == "$E_TRACE" ]] || { echo "FAIL simulator trace hash mismatch"; exit 1; }
+if [[ "$A_TRACE" != "$E_TRACE" ]]; then
+  echo "FAIL simulator trace hash mismatch"
+  report_json_diff \
+    "$EXPECTED/traces/001-governance-sandwich.trace.json" \
+    "$ACTUAL/traces/001-governance-sandwich.trace.json"
+  exit 1
+fi
 
 echo "PASS verify-reference-validation-v1"

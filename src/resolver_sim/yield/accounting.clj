@@ -34,14 +34,17 @@
 
 (defn floor-to-asset-decimals
   "Floor numeric amount to token precision (base units).
-   For integer-denominated base units this is a no-op, but centralizing this
-   function guarantees one deterministic rounding policy for all materialization
-   boundaries."
+
+   Amounts are already in base units (integer token atoms). The `decimals`
+   argument is reserved for future fractional-base-unit support; today it is
+   unused but kept so all materialization boundaries share one rounding API."
   [amount _decimals]
   (long (Math/floor (double (max 0 amount)))))
 
 (defn floor-to-asset-decimals-signed
-  "Floor numeric amount to token precision while preserving sign."
+  "Floor numeric amount to token precision while preserving sign.
+
+   See `floor-to-asset-decimals` — `decimals` is reserved and currently unused."
   [amount _decimals]
   (long (Math/floor (double amount))))
 
@@ -58,6 +61,14 @@
   [position current-share-price]
   (* (:shares position 0) (double current-share-price)))
 
+(defn- require-world-for-yield-update!
+  [world position current-index]
+  (when (nil? world)
+    (throw (ex-info "world is required for yield risk/loss-mode evaluation"
+                    {:fn 'update-position-yield
+                     :position position
+                     :current-index current-index}))))
+
 (defn update-position-yield
   "Update unrealized yield from shares and the current share price / index.
 
@@ -71,39 +82,38 @@
 
    `world` is required so loss-mode and token decimals resolve correctly."
   ([position current-index]
-   (throw (ex-info "world is required for yield risk/loss-mode evaluation"
+   (throw (ex-info "world is required"
                    {:fn 'update-position-yield
                     :position position
                     :current-index current-index})))
   ([world position current-index]
-   (let [shares              (:shares position 0)
-         principal           (:principal position 0)
+   (require-world-for-yield-update! world position current-index)
+   (let [principal           (:principal position 0)
          token               (:token position)
          module-id           (:module/id position)
          decimals            (token-decimals world token)
          risk                (risk-map world module-id token)
          loss-mode           (risk/effective-loss-mode risk)
          current-share-price (double current-index)
-         current-value       (position-current-value position current-share-price)
+         current-value       (long (Math/floor (position-current-value position current-share-price)))
          pnl                 (- current-value principal)
          unrealized          (if (= loss-mode :mark-to-market)
                                (floor-to-asset-decimals-signed pnl decimals)
-                               (floor-to-asset-decimals (max 0 pnl) decimals))]
+                               (floor-to-asset-decimals pnl decimals))]
      (assoc position
             :current-index current-index
-            :current-value (long (Math/floor current-value))
+            :current-value current-value
             :unrealized-yield unrealized))))
 
 (defn realize-yield
   "Move unrealized yield to realized-yield. Usually called during crystallization."
   ([position]
    (realize-yield nil position))
-  ([world position]
-  (let [token       (:token position)
-        unrealized  (:unrealized-yield position 0)]
-    (-> position
-        (update :realized-yield + unrealized)
-        (assoc :unrealized-yield 0)))))
+  ([_world position]
+   (let [unrealized (:unrealized-yield position 0)]
+     (-> position
+         (update :realized-yield + unrealized)
+         (assoc :unrealized-yield 0)))))
 
 (defn apply-liquidity-stress
   "Calculates potential shortfall and haircuts based on world risk parameters.
@@ -140,6 +150,16 @@
                                 :fulfilled-amount 0
                                 :deferred-amount amount
                                 :haircut-amount 0}})))
+
+(defn partial-yield-shortfall?
+  "True when shortfall stress applied only to the yield leg (partial-liquidity).
+
+   Identified by basis-amount strictly below position principal."
+  [position shortfall]
+  (and position shortfall
+       (let [basis (long (or (:basis-amount shortfall) 0))
+             principal (long (or (:principal position) 0))]
+         (and (pos? principal) (< basis principal)))))
 
 (defn apply-liquidity-stress-for-withdraw
   "Apply liquidity stress at withdrawal.

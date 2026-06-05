@@ -52,7 +52,7 @@
              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
              model-appeal-costs? appeal-bond-recovery-rate
              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-             fixed-or oracle-roll-trace-enabled?]
+             fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -87,7 +87,8 @@
            model-appeal-costs? false
            ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
            appeal-bond-recovery-rate 0.5
-           oracle-roll-trace-enabled? false}}]
+           oracle-roll-trace-enabled? false
+           evidence-quality? false}}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
@@ -95,35 +96,34 @@
         bond-total      (+ appeal-bond resolver-bond)
         resolver-stake  (long (or resolver-stake-wei escrow-wei))
 
-        oracle-params   {:rng rng
-                         :fraud-detection-probability fraud-detection-probability
-                         :timeout-detection-probability timeout-detection-probability
-                         :reversal-detection-probability reversal-detection-probability
-                         :l2-detection-prob l2-detection-prob
-                         :fraud-slash-bps fraud-slash-bps
-                         :reversal-slash-bps reversal-slash-bps
-                         :timeout-slash-bps timeout-slash-bps
-                         :new-evidence-probability new-evidence-probability
-                         :freeze-on-detection? freeze-on-detection?
-                         :freeze-duration-days freeze-duration-days
-                         :appeal-window-days appeal-window-days
-                         :unstaking-delay-days unstaking-delay-days
-                         :slashing-detection-delay-weeks slashing-detection-delay-weeks
-                         :escalation-assumptions escalation-assumptions
-                         :escalation-assumption-band escalation-assumption-band
-                         :p-l1-reversal p-l1-reversal
-                         :p-l2-escalation p-l2-escalation
-                         :p-l2-reversal p-l2-reversal
-                         :has-kleros? has-kleros?
-                         :oracle-fixture oracle-fixture
-                         :oracle-mode oracle-mode
-                         :oracle-roll-sequence oracle-roll-sequence
-                         :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
-                         :fixed-or fixed-or
-                         :oracle-roll-cursor (atom 0)
-                         :oracle-roll-cursors (atom {})
-                         :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
-                         :oracle-roll-trace (atom [])}
+        oracle-params   (detection/prepare-oracle-params
+                         {:rng rng
+                          :fraud-detection-probability fraud-detection-probability
+                          :timeout-detection-probability timeout-detection-probability
+                          :reversal-detection-probability reversal-detection-probability
+                          :l2-detection-prob l2-detection-prob
+                          :fraud-slash-bps fraud-slash-bps
+                          :reversal-slash-bps reversal-slash-bps
+                          :timeout-slash-bps timeout-slash-bps
+                          :new-evidence-probability new-evidence-probability
+                          :freeze-on-detection? freeze-on-detection?
+                          :freeze-duration-days freeze-duration-days
+                          :appeal-window-days appeal-window-days
+                          :unstaking-delay-days unstaking-delay-days
+                          :slashing-detection-delay-weeks slashing-detection-delay-weeks
+                          :escalation-assumptions escalation-assumptions
+                          :escalation-assumption-band escalation-assumption-band
+                          :p-l1-reversal p-l1-reversal
+                          :p-l2-escalation p-l2-escalation
+                          :p-l2-reversal p-l2-reversal
+                          :has-kleros? has-kleros?
+                          :oracle-fixture oracle-fixture
+                          :oracle-mode oracle-mode
+                          :oracle-roll-sequence oracle-roll-sequence
+                          :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
+                          :fixed-or fixed-or
+                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
+                          :evidence-quality? evidence-quality?})
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
@@ -283,6 +283,11 @@
      :slash-distributed     slash-distributed
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
+     :oracle-fixture/exhausted?
+     (boolean (when-let [a (:oracle-fixture/exhausted? oracle-params)] @a))
+     :oracle-fixture/warnings
+     (detection/collect-oracle-fixture-warnings
+      oracle-params {:evidence-quality? evidence-quality?})
      :strategy              strategy}))
 
 (defn multiple-disputes

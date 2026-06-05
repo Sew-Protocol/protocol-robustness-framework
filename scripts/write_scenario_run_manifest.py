@@ -6,7 +6,7 @@ scenario:run:family, or evidence:build invocation.
 Produces into results/test-artifacts/:
   test-run.json                 schema: test-run.v1
   test-summary.json             schema: test-summary.v2
-  claimable-classification.json schema: claimable-classification.v1
+  claimable-classification.json schema: claimable-classification.v2
   test-artifacts.json           schema: test-artifacts.v1
 
 Only artifacts produced by this invocation are registered.
@@ -20,16 +20,32 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import pathlib
 import platform
 import re
 import subprocess
 import sys
+import tempfile
 
 SCENARIOS_DIR = pathlib.Path("scenarios")
 
 
 # ── file helpers ──────────────────────────────────────────────────────────────
+
+def write_atomic_json(path: pathlib.Path, data: dict):
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Write to temporary file in the same directory for atomic rename
+    fd, temp_path = tempfile.mkstemp(dir=path.parent, text=True)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, path)
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise e
 
 def sha256_file(path: pathlib.Path) -> str | None:
     if not path.exists():
@@ -185,49 +201,62 @@ def scenario_capabilities_summary(scenarios_dir: pathlib.Path) -> dict:
     }
 
 
-# ── static claimable classification (mirrors test.sh) ────────────────────────
+def resolve_scenario_path(scenario: str) -> pathlib.Path | None:
+    """Resolve bb scenario alias or path to an on-disk scenario JSON."""
+    raw = pathlib.Path(scenario)
+    if raw.is_file():
+        return raw
+    if not raw.suffix:
+        with_json = raw.with_suffix(".json")
+        if with_json.is_file():
+            return with_json
+    under = pathlib.Path("scenarios") / scenario
+    if under.is_file():
+        return under
+    with_json = under.with_suffix(".json")
+    if with_json.is_file():
+        return with_json
+    return None
 
-CLAIMABLE_CLASSIFICATION: dict = {
-    "schema_version": "claimable-classification.v1",
-    "shortfall_policy": {
-        "mode": "partial-liquidity-supported",
-        "allocation": "fulfilled-plus-deferred",
-        "rounding_policy": "floor-to-asset-decimals.v1",
-    },
-    "classes": {
-        "escrow_principal": {
-            "delivery_model": "pull",
-            "source": "settlement",
-            "recipient_type": "party",
-            "risk_class": "user-withdrawable",
-        },
-        "escrow_yield": {
-            "delivery_model": "pull",
-            "source": "yield",
-            "recipient_type": "party-or-protocol",
-            "risk_class": "yield-derived",
-            "shortfall_outcome": "may-be-partially-deferred",
-        },
-        "resolver_payment": {
-            "delivery_model": "pull",
-            "source": "dispute-resolution",
-            "recipient_type": "resolver",
-            "risk_class": "service-compensation",
-        },
-        "bond_refund": {
-            "delivery_model": "pull",
-            "source": "appeal-bond",
-            "recipient_type": "disputant",
-            "risk_class": "bond-return",
-        },
-        "protocol_fee": {
-            "delivery_model": "pull-or-governance-withdrawal",
-            "source": "fee",
-            "recipient_type": "protocol",
-            "risk_class": "protocol-revenue",
-        },
-    },
-}
+
+def emit_claimable_classification(
+    claimable_file: pathlib.Path,
+    run_id: str,
+    git_sha: str | None,
+    args: argparse.Namespace,
+) -> None:
+    """Write claimable-classification.v2 (replay scenario when path/result available)."""
+    cmd = [
+        "clojure",
+        "-M",
+        "-m",
+        "resolver-sim.io.claimable-classification-emitter",
+        str(claimable_file),
+    ]
+    passed = "1" if args.status == "pass" else "0"
+
+    if args.output_file and pathlib.Path(args.output_file).is_file():
+        cmd.extend(["from-result", args.output_file, run_id])
+        if git_sha:
+            cmd.append(git_sha)
+        cmd.append(passed)
+    elif args.suite in ("scenario", "evidence"):
+        scenario_path = resolve_scenario_path(args.scenario)
+        if scenario_path is not None:
+            cmd.extend(["single-scenario", str(scenario_path), run_id])
+            if git_sha:
+                cmd.append(git_sha)
+            cmd.append(passed)
+        else:
+            cmd.extend(["taxonomy-only", run_id])
+            if git_sha:
+                cmd.append(git_sha)
+    else:
+        cmd.extend(["taxonomy-only", run_id])
+        if git_sha:
+            cmd.append(git_sha)
+
+    subprocess.run(cmd, check=True)
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -315,6 +344,9 @@ def write_artifacts_to(
         "artifacts": artifacts_map,
     }
 
+    emit_claimable_classification(claimable_file, run_id, git_sha, args)
+    claimable_classification = json.loads(claimable_file.read_text())
+
     overall  = args.status
     decision = "PASS_CLEAN" if overall == "pass" else "REJECTED"
     summary: dict = {
@@ -351,7 +383,7 @@ def write_artifacts_to(
             "rounding_policy":                     "floor-to-asset-decimals.v1",
         },
         "claimable_classification": {
-            "schema_version": CLAIMABLE_CLASSIFICATION["schema_version"],
+            "schema_version": claimable_classification["schema_version"],
             "path":           str(claimable_file),
         },
         "status_counts": {
@@ -375,9 +407,8 @@ def write_artifacts_to(
         },
     }
 
-    artifact_file.write_text(json.dumps(summary, indent=2))
-    run_manifest_file.write_text(json.dumps(run_manifest, indent=2))
-    claimable_file.write_text(json.dumps(CLAIMABLE_CLASSIFICATION, indent=2))
+    write_atomic_json(artifact_file, summary)
+    write_atomic_json(run_manifest_file, run_manifest)
 
     rm_meta = artifact_meta(run_manifest_file) or {}
     entries = [
@@ -394,7 +425,7 @@ def write_artifacts_to(
         ),
         mk_artifact_entry(
             "claimable-classification", "classification", str(claimable_file),
-            CLAIMABLE_CLASSIFICATION["schema_version"], "claimable-classification-emitter.v1",
+            claimable_classification["schema_version"], "claimable-classification-emitter.v2",
             ["test-run.v1"], {"test_run": "test-run.v1"},
         ),
     ]
@@ -424,7 +455,7 @@ def write_artifacts_to(
         },
         "artifacts": entries,
     }
-    registry_file.write_text(json.dumps(registry, indent=2))
+    write_atomic_json(registry_file, registry)
 
 
 def main() -> int:
@@ -469,13 +500,31 @@ def main() -> int:
 
     # individual immutable record for this invocation
     write_artifacts_to(per_run_dir, args, run_id, created_at, git_sha, caps)
-    # mutable "latest" pointer for backward-compat with validate_artifact_registry.py
-    write_artifacts_to(latest_dir, args, run_id, created_at, git_sha, caps)
+    
+    # Verify the immutable registry
+    registry_file = per_run_dir / "test-artifacts.json"
+    result = subprocess.run([sys.executable, "scripts/verify_artifact_registry.py", str(registry_file)], check=False)
+    
+    if result.returncode == 0:
+        # Update "latest" symlink
+        if latest_dir.exists():
+            if latest_dir.is_symlink():
+                latest_dir.unlink()
+            else:
+                # If it's a directory, maybe move/backup or just delete?
+                # For now, remove the directory to symlink.
+                import shutil
+                shutil.rmtree(latest_dir)
+        
+        # Create relative symlink for portability
+        os.symlink(per_run_dir.name, latest_dir, target_is_directory=True)
+        print(f"[scenario-run-manifest] Verified & symlinked latest: {latest_dir} -> {per_run_dir}")
+    else:
+        print(f"[scenario-run-manifest] WARNING: Verification failed for {registry_file}. Latest symlink not updated.")
 
     print(f"[scenario-run-manifest] run_id={run_id} status={args.status} suite={args.suite}")
     print(f"[scenario-run-manifest] per-run : {per_run_dir}")
-    print(f"[scenario-run-manifest] latest  : {latest_dir}")
-    return 0
+    return result.returncode
 
 
 if __name__ == "__main__":

@@ -18,20 +18,39 @@
   (to-json-data [this]
     (mapv to-json-data this))
 
+  clojure.lang.Keyword
+  (to-json-data [this]
+    (name this))
+
+  clojure.lang.Symbol
+  (to-json-data [this]
+    (str this))
+
   ;; Generic fallback for other records or types
   clojure.lang.IRecord
   (to-json-data [this]
     (into {} (map (fn [[k v]] [k (to-json-data v)]) this)))
 
-  ;; Handle specific types that might cause JSON serialization issues
   java.lang.Object
   (to-json-data [this]
-    (if (instance? clojure.lang.IRecord this)
+    (cond
+      (fn? this) (str "fn:" (.getName (class this)))
+      (instance? clojure.lang.IRecord this)
       (into {} (map (fn [[k v]] [k (to-json-data v)]) this))
-      (str this)))
+      :else (str this)))
 
   nil
   (to-json-data [this] nil))
 
-(defn serialize-artifact [artifact]
-  (json/write-str (to-json-data artifact)))
+(defn- json-key [k]
+  (if (keyword? k) (name k) (str k)))
+
+(defn serialize-artifact
+  "JSON string for artifacts that may contain yield module ops (fns), records, etc."
+  ([artifact]
+   (serialize-artifact artifact {}))
+  ([artifact {:keys [pretty?]}]
+   (let [data (to-json-data artifact)]
+     (if pretty?
+       (json/write-str data :key-fn json-key :indent true)
+       (json/write-str data :key-fn json-key)))))

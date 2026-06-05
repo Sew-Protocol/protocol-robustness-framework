@@ -1,4 +1,4 @@
-(ns resolver-sim.notebooks.speds.semantics
+(ns resolver_sim.notebooks.speds.semantics
   "SPEDS-local semantic mappings built on top of shared outcome semantics."
   (:require [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.outcome-semantics :as ose]))

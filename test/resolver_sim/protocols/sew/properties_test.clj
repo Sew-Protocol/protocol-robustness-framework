@@ -20,7 +20,8 @@
      12. Delayed resolver     — second resolution after finalization is rejected
      13. Conflicting actions  — escalation mid-pending clears it; execute-pending fails
      14. Repeated escalation  — max level / non-participant / terminal all rejected"
-  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+  (:require [resolver-sim.generators.yield.core :as gen-yield]
+            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [clojure.test :refer [deftest is]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -46,9 +47,7 @@
   "Distribution preset for escrow yield routing (matches `normalize-yield-preset`)."
   (gen/elements [:off :to-sender :to-recipient :split-50-50]))
 
-(def gen-yield-profile
-  "Registry profile ids resolvable via `yield.registry/resolve-yield-profile`."
-  (gen/elements [:aave-v3 :fixed-rate :none]))
+(def gen-yield-profile gen-yield/gen-yield-profile)
 
 (defn gen-snapshot
   "Generate a random module snapshot."
@@ -156,8 +155,8 @@
    [amount   gen-amount
     fee-bps  gen-bps
     block-t  gen-time]
-   (when-let [{:keys [world]}
-              (make-base-world-with-escrow amount fee-bps block-t "0xAlice" "0xBob")]
+   (when-some [res (make-base-world-with-escrow amount fee-bps block-t "0xAlice" "0xBob")]
+     (let [{:keys [world]} res]
      (and
       (:all-hold? (inv/check-all world))
       (let [r2 (lc/sender-cancel world 0 "0xAlice" nil)]
@@ -185,8 +184,9 @@
 (def prop-irreversibility
   (prop/for-all
    [amount gen-amount]
-   (when-let [{:keys [world]} (make-base-world-with-escrow amount 50 1000 "0xAlice" "0xBob")]
-     (let [rr (lc/release world 0 "0xAlice" (fn [_ _ _] {:allowed? true :reason-code 0}))]
+   (when-some [res (make-base-world-with-escrow amount 50 1000 "0xAlice" "0xBob")]
+     (let [{:keys [world]} res
+           rr (lc/release world 0 "0xAlice" (fn [_ _ _] {:allowed? true :reason-code 0}))]
        (when (:ok rr)
          (let [w-released (:world rr)]
            (and
@@ -194,7 +194,7 @@
             (:all-hold? (inv/check-transition world w-released))
             (false? (:ok (lc/raise-dispute w-released 0 "0xAlice")))
             (false? (:ok (lc/release w-released 0 "0xAlice"
-                                     (fn [_ _ _] {:allowed? true :reason-code 0})))))))))))
+                                     (fn [_ _ _] {:allowed? true :reason-code 0}))))))))))
 
 (deftest property-irreversibility
   (let [result (tc/quick-check num-trials prop-irreversibility)]
@@ -324,8 +324,9 @@
   (prop/for-all
    [amount  gen-amount
     fee-bps gen-bps]
-   (when-let [{:keys [world]} (make-disputed-world amount fee-bps "0xResolver")]
-     (let [esc-fn       (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
+   (when-some [res (make-disputed-world amount fee-bps "0xResolver")]
+     (let [{:keys [world]} res
+           esc-fn       (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
            level-before (t/dispute-level world 0)
            er           (res/escalate-dispute world 0 "0xAlice" esc-fn)]
        (when (:ok er)
@@ -398,8 +399,8 @@
    (let [snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   3600
                       :appeal-window-duration appeal-dur}]
-     (when-let [{:keys [world]}
-                (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res]
        (let [;; Round 0 → 1
              er1 (res/escalate-dispute world 0 "0xAlice"
                                        (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"}))
@@ -464,8 +465,8 @@
          snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   3600
                       :appeal-window-duration appeal-dur}]
-     (when-let [{:keys [world]}
-                (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res]
        ;; Phase 1: apply esc-count escalations, checking invariants at each step
        (let [{:keys [ok world violations]}
              (run-escalation-sequence world resolvers esc-count)]
@@ -612,8 +613,8 @@
    (let [snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   10000
                       :appeal-window-duration appeal-dur}]
-     (when-let [{:keys [world]}
-                (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res]
        (let [w-disp  world
              ;; Resolver submits → creates pending settlement
              rr      (res/execute-resolution w-disp 0 "0xRes0" true "0xhash" nil)
@@ -666,39 +667,39 @@
     fee-bps gen-bps]
    (let [snap-params {:escrow-fee-bps       fee-bps
                       :max-dispute-duration 3600}]
-     (when-let [{:keys [world]}
-                (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
-             ;; Escalate to level 1, then level 2 (max)
-             er1    (res/escalate-dispute world 0 "0xAlice" esc-fn)
-             er2    (when (:ok er1) (res/escalate-dispute (:world er1) 0 "0xAlice" esc-fn))
-             w-max  (when (:ok er2) (:world er2))]
-         (when (and (:ok er1) (:ok er2) w-max)
-           (let [;; (a) Escalation at max level — same participant, same fn
-                 at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
-                 ;; (b) Non-participant escalation attempt
-                 non-part  (res/escalate-dispute w-max 0 "0xCarol" esc-fn)
-                 ;; Finalize the dispute (final-round → immediate)
-                 rr        (res/execute-resolution w-max 0 "0xSenior" true "0xhash" nil)
-                 w-final   (when (:ok rr) (:world rr))
-                 ;; (c) Escalation after terminal state
-                 after-fin (when w-final
-                             (res/escalate-dispute w-final 0 "0xAlice" esc-fn))]
-             (when (and at-max non-part (:ok rr) after-fin)
-               (and
-                ;; (a) Max-level rejection
-                (false? (:ok at-max))
-                (= :escalation-not-allowed (:error at-max))
-                ;; (b) Non-participant rejection
-                (false? (:ok non-part))
-                (= :not-participant (:error non-part))
-                ;; (c) Terminal-state rejection
-                (false? (:ok after-fin))
-                (= :transfer-not-in-dispute (:error after-fin))
-                ;; Invariants hold at max level and after final resolution
-                (:all-hold? (inv/check-all w-max))
-                (:all-hold? (inv/check-all w-final))
-                (:all-hold? (inv/check-transition w-max w-final)))))))))))
+     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res]
+         (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
+               ;; Escalate to level 1, then level 2 (max)
+               er1    (res/escalate-dispute world 0 "0xAlice" esc-fn)
+               er2    (when (:ok er1) (res/escalate-dispute (:world er1) 0 "0xAlice" esc-fn))
+               w-max  (when (:ok er2) (:world er2))]
+           (when (and (:ok er1) (:ok er2) w-max)
+             (let [;; (a) Escalation at max level — same participant, same fn
+                   at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
+                   ;; (b) Non-participant escalation attempt
+                   non-part  (res/escalate-dispute w-max 0 "0xCarol" esc-fn)
+                   ;; Finalize the dispute (final-round → immediate)
+                   rr        (res/execute-resolution w-max 0 "0xSenior" true "0xhash" nil)
+                   w-final   (when (:ok rr) (:world rr))
+                   ;; (c) Escalation after terminal state
+                   after-fin (when w-final
+                               (res/escalate-dispute w-final 0 "0xAlice" esc-fn))]
+               (when (and at-max non-part (:ok rr) after-fin)
+                 (and
+                  ;; (a) Max-level rejection
+                  (false? (:ok at-max))
+                  (= :escalation-not-allowed (:error at-max))
+                  ;; (b) Non-participant rejection
+                  (false? (:ok non-part))
+                  (= :not-participant (:error non-part))
+                  ;; (c) Terminal-state rejection
+                  (false? (:ok after-fin))
+                  (= :transfer-not-in-dispute (:error after-fin))
+                  ;; Invariants hold at max level and after final resolution
+                  (:all-hold? (inv/check-all w-max))
+                  (:all-hold? (inv/check-all w-final))
+                  (:all-hold? (inv/check-transition w-max w-final)))))))))))))))
 
 (deftest property-adversarial-repeated-escalation
   (let [result (tc/quick-check num-trials prop-adversarial-repeated-escalation)]

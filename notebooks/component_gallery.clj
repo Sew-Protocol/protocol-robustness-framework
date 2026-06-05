@@ -1,7 +1,7 @@
 (ns notebooks.component-gallery
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.speds.core :as speds]
-            [resolver-sim.notebooks.speds.tokens :as tokens]))
+            [resolver_sim.notebooks.speds.core :as speds]
+            [resolver_sim.notebooks.speds.tokens :as tokens]))
 
 ;; # SPEDS v1.1 — Component Gallery
 ;; ### A living visual regression suite for the Protocol Evidence Design System.

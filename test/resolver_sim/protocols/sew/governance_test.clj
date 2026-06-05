@@ -4,7 +4,10 @@
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.registry   :as reg]))
+            [resolver-sim.protocols.sew.registry   :as reg]
+            [resolver-sim.io.scenarios             :as scen-io]
+            [resolver-sim.protocols.sew            :as sew]
+            [resolver-sim.contract-model.replay      :as replay]))
 
 (deftest governance-sandwich-test
   (let [world (t/empty-world 1000)
@@ -62,3 +65,11 @@
     (is (true? (:idempotent? r2)))
     (is (empty? (get-in w2 [:resolver-rotations workflow-id] []))
         "same-target rotations should not append audit events")))
+
+(deftest governance-fee-upgrade-forward-only-replay
+  (testing "Mid-dispute governance fee upgrade does not alter in-flight escrow economics"
+    (let [scenario (scen-io/load-scenario-file
+                    "scenarios/S111_governance-upgrade-mid-dispute-forward-only.json")
+          result   (replay/replay-with-protocol sew/protocol scenario)]
+      (is (= :pass (:outcome result)))
+      (is (zero? (get-in result [:metrics :invariant-violations]))))))

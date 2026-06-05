@@ -1,102 +1,102 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "CDRS Event v0.2",
-  "description": "A single step in a dispute resolution protocol execution (CDRS v0.2). Adds accepted, state_changed, and rejection_reason to v0.1 fields.",
-  "type": "object",
-  "required": ["cdrs_version", "event_type", "step_type", "context_id", "actor", "timestamp", "state_bucket"],
-  "additionalProperties": true,
-  "properties": {
-    "seq": {
-      "type": "integer",
-      "description": "Deterministic sequence number"
+  "$schema" : "http://json-schema.org/draft-07/schema#",
+  "title" : "CDRS Event v0.2",
+  "description" : "A single step in a dispute resolution protocol execution (CDRS v0.2). Adds accepted, state_changed, and rejection_reason to v0.1 fields.",
+  "type" : "object",
+  "required" : [ "cdrs_version", "event_type", "step_type", "context_id", "actor", "timestamp", "state_bucket" ],
+  "additionalProperties" : true,
+  "properties" : {
+    "seq" : {
+      "type" : "integer",
+      "description" : "Deterministic sequence number"
     },
-    "cdrs_version": {
-      "type": "string",
-      "const": "0.2"
+    "timestamp" : {
+      "type" : "integer",
+      "description" : "Block time at the point of this step"
     },
-    "event_type": {
-      "type": "string",
-      "description": "Semantic name of the action (e.g. DISPUTE RAISED)"
+    "step_type" : {
+      "type" : "string",
+      "enum" : [ "protocol-transition", "economic-effect", "environmental-change" ]
     },
-    "step_type": {
-      "type": "string",
-      "enum": ["protocol-transition", "economic-effect", "environmental-change"]
+    "context_id" : {
+      "type" : "string",
+      "description" : "Unique identifier for the dispute context (e.g. wf0)"
     },
-    "context_id": {
-      "type": "string",
-      "description": "Unique identifier for the dispute context (e.g. wf0)"
+    "event_type" : {
+      "type" : "string",
+      "description" : "Semantic name of the action (e.g. DISPUTE RAISED)"
     },
-    "actor": {
-      "type": "string",
-      "description": "ID or address of the acting party"
-    },
-    "timestamp": {
-      "type": "integer",
-      "description": "Block time at the point of this step"
-    },
-    "state_bucket": {
-      "type": "string",
-      "enum": ["IDLE", "ACTIVE", "CHALLENGED", "RECONCILING", "SETTLED"]
-    },
-    "attributes": {
-      "type": "object",
-      "description": "Flexible protocol-specific data",
-      "additionalProperties": true
-    },
-    "expected": {
-      "type": "object",
-      "description": "Expected values for TraceEquivalence.t.sol to assert",
-      "additionalProperties": true,
-      "properties": {
-        "accepted": {
-          "type": "boolean",
-          "description": "Whether the action was accepted (:ok result). MUST be present in v0.2 steps."
+    "expected" : {
+      "type" : "object",
+      "description" : "Expected values for TraceEquivalence.t.sol to assert",
+      "additionalProperties" : true,
+      "properties" : {
+        "rejection_reason" : {
+          "type" : "string",
+          "description" : "Error keyword when accepted is false. Absent when accepted is true."
         },
-        "state_changed": {
-          "type": "boolean",
-          "description": "Whether the world state changed. Equal to accepted for all SEW actions."
+        "global_total_fees" : {
+          "type" : "integer",
+          "description" : "Expected sum of all collected fees"
         },
-        "rejection_reason": {
-          "type": "string",
-          "description": "Error keyword when accepted is false. Absent when accepted is true."
+        "global_total_held" : {
+          "type" : "integer",
+          "description" : "Expected sum of all token balances held by the protocol"
         },
-        "reverted": {
-          "type": "boolean",
-          "description": "Legacy v0.1 field — true when action was rejected"
+        "accepted" : {
+          "type" : "boolean",
+          "description" : "Whether the action was accepted (:ok result). MUST be present in v0.2 steps."
         },
-        "error": {
-          "type": "string",
-          "description": "Legacy v0.1 field — error keyword (same value as rejection_reason)"
+        "error" : {
+          "type" : "string",
+          "description" : "Legacy v0.1 field — error keyword (same value as rejection_reason)"
         },
-        "escrow_state": {
-          "type": "integer",
-          "description": "Expected EscrowState enum value (0–5)",
-          "minimum": 0,
-          "maximum": 5
+        "escrow_state" : {
+          "type" : "integer",
+          "description" : "Expected EscrowState enum value (0–5)",
+          "minimum" : 0,
+          "maximum" : 5
         },
-        "escrow_amount_after_fee": {
-          "type": "integer",
-          "description": "Expected escrow amount after fee deduction"
+        "dispute_level" : {
+          "type" : "integer",
+          "description" : "Expected dispute escalation level after the step",
+          "minimum" : 0
         },
-        "global_total_held": {
-          "type": "integer",
-          "description": "Expected sum of all token balances held by the protocol"
+        "pending_settlement_exists" : {
+          "type" : "boolean",
+          "description" : "Whether a pending settlement exists for this escrow after the step"
         },
-        "global_total_fees": {
-          "type": "integer",
-          "description": "Expected sum of all collected fees"
+        "escrow_amount_after_fee" : {
+          "type" : "integer",
+          "description" : "Expected escrow amount after fee deduction"
         },
-        "pending_settlement_exists": {
-          "type": "boolean",
-          "description": "Whether a pending settlement exists for this escrow after the step"
+        "state_changed" : {
+          "type" : "boolean",
+          "description" : "Whether the world state changed. Equal to accepted for all SEW actions."
         },
-        "dispute_level": {
-          "type": "integer",
-          "description": "Expected dispute escalation level after the step",
-          "minimum": 0
+        "reverted" : {
+          "type" : "boolean",
+          "description" : "Legacy v0.1 field — true when action was rejected"
         }
       },
-      "required": ["accepted", "state_changed"]
+      "required" : [ "accepted", "state_changed" ]
+    },
+    "attributes" : {
+      "type" : "object",
+      "description" : "Flexible protocol-specific data",
+      "additionalProperties" : true
+    },
+    "state_bucket" : {
+      "type" : "string",
+      "enum" : [ "IDLE", "ACTIVE", "CHALLENGED", "RECONCILING", "SETTLED" ]
+    },
+    "actor" : {
+      "type" : "string",
+      "description" : "ID or address of the acting party"
+    },
+    "cdrs_version" : {
+      "type" : "string",
+      "const" : "0.2"
     }
   }
 }

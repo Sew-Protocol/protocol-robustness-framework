@@ -142,9 +142,13 @@ implementation via the registry.
 
 ## 2. Invariant Catalogue
 
-**37 canonical invariant IDs** are enforced across the Sew v1 model, defined in
-`protocols/sew/invariants.clj` under `canonical-ids`. They are organized into
-six groups.
+**53 canonical invariant IDs** (40 world-level, 13 transition-level) are enforced
+across the Sew v1 model, defined in `protocols/sew/invariants.clj` under
+`canonical-ids`. Registry tests in `test/resolver_sim/protocols/sew/invariant_registry_test.clj`
+ensure every ID is executed by `check-all` or `check-transition`.
+
+Reference-validation evidence IDs map to subsets of these; see
+`docs/protocol/evidence-invariant-mapping.md`.
 
 ### Accounting invariants
 
@@ -165,8 +169,13 @@ six groups.
 | ID | Meaning |
 |---|---|
 | `:terminal-states-unchanged` | `RELEASED`, `REFUNDED`, `RESOLVED` are absorbing; no transition out |
-| `:all-status-combinations-valid` | `SenderStatus` × `RecipientStatus` combination is a valid enum pair |
+| `:escrow-state-transition-valid` | Every `:escrow-state` change is an edge in `allowed-transitions` (no backward/circular steps) |
+| `:all-status-combinations-valid` | `SenderStatus` × `RecipientStatus` combination is valid; terminal escrows require both statuses `:none` |
+| `:persisted-escrow-state-valid` | Stored escrows never use `:none` or unknown `:escrow-state` |
+| `:escrow-state-in-graph` | Every `:escrow-state` is a node in `state-machine/allowed-transitions` |
+| `:escrow-dispute-metadata-consistent` | `:pending` has no dispute timestamp/level; `:disputed` has timestamp |
 | `:pending-settlement-consistent` | If `pendingSettlement.exists`, escrow is in `DISPUTED` state |
+| `:module-snapshot-immutable` | `:module-snapshots` for in-flight escrows do not change after create |
 | `:dispute-resolution-path` | Dispute resolves only through authorized, sequenced resolution path |
 | `:escalation-level-monotonic` | Escalation level is non-decreasing within a dispute |
 | `:no-withdrawal-during-dispute` | `withdrawEscrow` cannot be called while escrow is in `DISPUTED` state |
@@ -244,22 +253,27 @@ named scenarios** spanning four types:
 
 ### Edge-case scenarios
 
+> Kleros rows between `GENERATED-EDGE-CASE-SUMMARIES` markers are synced from
+> `invariant_scenarios/doc_summaries.clj` via `bb docs:scenarios`.
+
 | Scenario | What it validates |
 |---|---|
-| `s04-dispute-timeout-autocancel` | Resolver non-responsive; timeout auto-cancels dispute |
-| `s07-unauthorized-resolver-rejected` | Only the authorized resolver may call `resolve` |
-| `s08-state-machine-attack-gauntlet` | 12+ invalid transitions attempted; all rejected |
-| `s10-double-finalize-rejected` | Calling finalize twice on the same escrow is rejected |
-| `s11-zero-fee-edge-case` | Zero resolver fee does not break accounting |
-| `s12a/s12b-snapshot-isolation` | Fee-param change after escrow creation does not apply retroactively |
-| `s14-dr3-module-authorized` | Module-authorized resolution path accepted |
-| `s15-dr3-module-unauthorized-rejected` | Unauthorized module resolution rejected |
-| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute times out without resolver |
-| `s19-dr3-kleros-escalation-rejected-l0-resolves` | Escalation attempt rejected; L0 resolver already resolved |
-| `s20-dr3-kleros-max-escalation-guard` | Escalation beyond max level is rejected |
-| `s21-dr3-kleros-pending-cleared-on-escalation` | Pending settlement is cleared when escalation begins |
-| `s22-status-leak-agree-cancel-over-dispute` | Agree-cancel cannot override an open dispute |
-| `s23-preemptive-escalation-blocked` | Escalation before appeal window opens is blocked |
+| `s12a/s12b-snapshot-isolation` | Fee-param change after escrow creation does not apply retroactively (see `doc_summaries.clj` for s12a/s12b detail) |
+<!-- GENERATED-EDGE-CASE-SUMMARIES-START -->
+| `s04-dispute-timeout-autocancel` | Dispute expires without resolution; auto-cancel |
+| `s07-unauthorized-resolver-rejected` | Non-authorized resolver call is rejected |
+| `s08-state-machine-attack-gauntlet` | Invalid state transitions attempted; all correctly rejected |
+| `s10-double-finalize-rejected` | Attempt to finalize an already-finalized escrow is rejected |
+| `s11-zero-fee-edge-case` | Escrow with fee_bps=0; correct handling |
+| `s14-dr3-module-authorized` | DR3 module resolves with correct authority |
+| `s15-dr3-module-unauthorized-rejected` | DR3 module with wrong authority is rejected |
+| `s17-ieo-dispute-no-resolver-timeout` | IEO dispute with no resolver; timeout resolution |
+| `s19-dr3-kleros-escalation-rejected-l0-resolves` | Preemptive escalation rejected (no pending settlement); L0 resolves; L1 blocked on terminal escrow |
+| `s20-dr3-kleros-max-escalation-guard` | Repeated preemptive escalations rejected; wrong-tier resolver rejected; dispute may stay open |
+| `s21-dr3-kleros-pending-cleared-on-escalation` | L0 resolves to pending; buyer escalates (clears pending); L1 resolves; keeper executes settlement |
+| `s22-status-leak-agree-cancel-over-dispute` | Regression: agree-to-cancel status cleared when dispute is raised |
+| `s23-preemptive-escalation-blocked` | Seller preemptive escalation rejected; L0 resolves; post-terminal escalation rejected |
+<!-- GENERATED-EDGE-CASE-SUMMARIES-END -->
 | `s46-reorg-idempotence` | Re-submitted event is idempotent (reorg safety) |
 | `s66-cooldown-boundary-reorg` | Cooldown window boundary is correctly enforced across reorg |
 
@@ -309,7 +323,7 @@ unfavorable rounds for the opposing party.
 | `s30-forking-strategist-double-loss` | `:multi-step :adaptive` | Strategy that incurs two losses |
 | `s31-forking-strategist-all-levels-confirm` | `:multi-step :high-capital` | All levels confirm original outcome |
 | `s32-forking-strategist-premature-settlement-rejected` | `:multi-step` | Settlement during open appeal rejected |
-| `s33-forking-strategist-two-escrow-fork-isolation` | `:multi-step :capital-efficient` | Fork isolation across two escrows |
+| `s33-forking-strategist-two-escrow-fork-isolation` | `:multi-step :state-isolation` | Escalation of wf0 must not block, overwrite, or contaminate wf1 settlement (shared seller + L0) |
 
 #### `:colluder`
 
@@ -547,7 +561,9 @@ contract, `:pass?` semantics, and reporting boundaries.
 
 ```bash
 clojure -M:run -- --invariants
-clojure -M:run -- --invariants --suite yield-scenarios
+clojure -M:run -- --invariants --suite yield-provider-scenarios
+clojure -M:run -- --invariants --suite sew-yield-scenarios
+# legacy alias: --suite yield-scenarios → sew-yield-scenarios
 clojure -M:run -- --invariants --fixture-suite suites/all-invariants
 ```
 

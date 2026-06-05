@@ -1,5 +1,6 @@
 (ns resolver-sim.stochastic.types
-  "Parameter schemas and types for the Sew Protocol dispute resolution simulation.")
+  "Parameter schemas and types for the Sew Protocol dispute resolution simulation."
+  (:require [resolver-sim.stochastic.detection :as detection]))
 
 ;; Scenario configuration schema
 (def scenario-schema
@@ -54,6 +55,7 @@
    :oracle-roll-sequence vector?
    :oracle-roll-on-exhaustion (fn [x] (contains? #{:throw :repeat-last :cycle} x))
    :oracle-roll-trace-enabled? boolean?
+   :evidence-quality? boolean?
    :fraud-model (fn [x] (contains? #{:single-stage-ev :sequential-escalation :strict-all-tiers} x))
    :escalation-assumption-band (fn [x] (contains? #{:conservative :base :optimistic} x))
    :p-appeal-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
@@ -130,7 +132,8 @@
    :detection-type :fraud                 ; Phase H: :fraud (explicit), :timeout (automatic), :reversal (on appeal)
    :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
    :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
-   :oracle-roll-trace-enabled? false})
+   :oracle-roll-trace-enabled? false
+   :evidence-quality? false})
 
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.
@@ -170,9 +173,11 @@
     :oracle-roll-on-exhaustion
     :fixed-or
     :oracle-roll-trace-enabled?
+    :oracle-effective
     ;; Optional author metadata
     :author
-    :author-id})
+    :author-id
+    :evidence-quality?})
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."
@@ -183,4 +188,4 @@
         (throw (ex-info (format "Invalid param %s: %s" k v) {:param k :value v})))
       (when-not (optional-schema-keys k)
         (throw (ex-info (format "Missing required param %s" k) {:param k})))))
-  scenario)
+  (detection/validate-oracle-params! scenario))

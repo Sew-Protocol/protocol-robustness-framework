@@ -621,6 +621,9 @@
   {:scenario-id     "s23-preemptive-escalation-blocked"
    :schema-version  "1.0"
    :scenario-author "@grifma"
+   :strict-expected-errors? true
+   :expected-errors [{:seq 2 :action "escalate_dispute" :error :no-resolution-to-appeal}
+                     {:seq 4 :action "escalate_dispute" :error :transfer-not-in-dispute}]
    :initial-block-time 1000
    :agents          [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
                      {:id "seller"     :address "0xseller" :strategy "honest"}

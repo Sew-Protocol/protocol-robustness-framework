@@ -18,9 +18,11 @@
   (merge types/default-params scenario))
 
 (defn validate-and-merge
-  "Load, validate, and merge with defaults."
+  "Load, validate (including effective oracle-fixture), and merge with defaults."
   [path]
-  (let [scenario (load-edn path)
-        merged (merge-defaults scenario)]
-    (types/validate-scenario merged)
-    merged))
+  (-> path load-edn merge-defaults types/validate-scenario))
+
+(defn validate-scenario
+  "Validate an in-memory scenario map (same checks as validate-and-merge)."
+  [scenario]
+  (-> scenario merge-defaults types/validate-scenario))

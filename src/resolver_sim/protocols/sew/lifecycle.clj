@@ -19,6 +19,8 @@
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.economics.payoffs            :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
+            [resolver-sim.yield.registry              :as yield-reg]
+            [resolver-sim.yield.accounting            :as yield-acct]
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
 
 ;; ---------------------------------------------------------------------------
@@ -93,6 +95,38 @@
           world))
       world)))
 
+(defn resolver-yield-owner-id
+  "Canonical yield position owner id for resolver stake."
+  [resolver-addr]
+  (str "resolver:" resolver-addr))
+
+(defn init-resolver-yield-accrual-time
+  "Anchor resolver yield accrual clock at the current block time."
+  [world resolver-addr]
+  (assoc-in world [:resolver-yield-accrual-times resolver-addr] (:block-time world)))
+
+(defn accrue-resolver-yield
+  "Advance yield for a resolver staking position by elapsed time since last accrual."
+  [world resolver-addr token]
+  (let [profile-id (reg/get-resolver-yield-profile world resolver-addr)]
+    (if profile-id
+      (let [{:keys [module-id]} (yield-reg/resolve-yield-profile profile-id)
+            owner-id (resolver-yield-owner-id resolver-addr)
+            now      (:block-time world)
+            last     (get-in world [:resolver-yield-accrual-times resolver-addr] now)
+            dt       (- now last)
+            tok      (if (keyword? token) token (keyword token))]
+        (if (pos? dt)
+          (-> world
+              (yield-ops/apply-yield-op {:op/type :yield/accrue
+                                         :module/id module-id
+                                         :owner/id owner-id
+                                         :token tok
+                                         :dt dt})
+              (assoc-in [:resolver-yield-accrual-times resolver-addr] now))
+          world))
+      world)))
+
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
 ;; ---------------------------------------------------------------------------
@@ -128,35 +162,50 @@
         ;; Use net-amt when no yield module is involved or no shortfall occurred.
         pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
         pos-shortfall (:shortfall pos)
-        settled-amt   (if pos-shortfall (:fulfilled-amount pos-shortfall 0) net-amt)
-        ;; Sub-held:
-        ;; - no-shortfall: remove gross afa (amt) so FoT accounting holds
-        ;; - liquidity shortfall: fulfilled only (deferred remains in :total-held)
-        ;; - crystallized haircut: fulfilled + haircut when held still carries the loss
-        ;;   (mark-to-market accrual may have already reduced :total-held to economic value)
+        partial-yield? (and pos pos-shortfall
+                            (yield-acct/partial-yield-shortfall? pos pos-shortfall))
+        ;; Partial-yield shortfall: principal is immediate; liquid yield is settled in policy.
+        principal-immediate (if partial-yield? (:principal pos 0) net-amt)
+        settled-amt   (if pos-shortfall
+                        (if partial-yield?
+                          principal-immediate
+                          (:fulfilled-amount pos-shortfall 0))
+                        net-amt)
+        world-after-policy
+        (yield-policy/apply-yield-policy world-after-yield workflow-id direction)
+        ;; Sub-held (computed after policy so accrual-in-held is reconciled):
+        ;; - no-shortfall: remove gross afa (amt)
+        ;; - partial-yield shortfall: held after policy minus deferred obligation
+        ;; - gross shortfall: fulfilled only (deferred remains in :total-held)
         sub-held-amt  (if pos-shortfall
                         (let [fulfilled (:fulfilled-amount pos-shortfall 0)
                               deferred  (:deferred-amount pos-shortfall 0)
                               haircut   (:haircut-amount pos-shortfall 0)
-                              held      (get-in world-after-yield [:total-held token] 0)]
+                              held      (get-in world-after-policy [:total-held token] 0)]
                           (cond
+                            partial-yield?
+                            (- held deferred)
+
                             (pos? deferred) fulfilled
                             (>= held (+ fulfilled haircut)) (+ fulfilled haircut)
                             :else fulfilled))
                         amt)]
-    (-> world-after-yield
-        (yield-policy/apply-yield-policy workflow-id direction)
-        ;; Sub-held — see sub-held-amt above
+    (-> world-after-policy
         (acct/sub-held token sub-held-amt)
         (record-fn token settled-amt)
         ;; Track outbound FoT fee (difference between gross held and net claimable)
         (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
-        ;; Claimable is the immediately-settled portion (net of any shortfall)
+        ;; Principal claimable — liquid yield uses :settlement/yield via apply-yield-policy
         (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
         (update :pending-settlements dissoc workflow-id)
         (sm/apply-transition! workflow-id direction)
         ;; Reset dispute/cancel statuses — must be :none in terminal states (cancellation-mutex)
         (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))))
+
+(defn finalize-escrow-accounting
+  "Shared finalize accounting for release/refund and resolution paths."
+  [world workflow-id direction]
+  (finalize world workflow-id direction))
 
 ;;
 ;; Mirrors: BaseEscrow.createEscrow

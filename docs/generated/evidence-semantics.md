@@ -2,17 +2,17 @@
 
 Source of truth: `src/resolver_sim/definitions/registry.clj`, `src/resolver_sim/scenario/outcome_semantics.clj`.
 
-Definitions hash: `1082033428`
+Definitions hash: `1730484672`
 
 ## Statuses
 
 | Status ID | Label | Story Family Mapping |
 |---|---|---|
-| `falsified` | Claim falsified | `theory-falsification` |
-| `inconclusive` | Inconclusive | `scenario-deep-dive` |
+| `falsified` | Falsified by this replay | `theory-falsification` |
+| `inconclusive` | Inconclusive: evidence incomplete or invalid | `scenario-deep-dive` |
 | `not-applicable` | Not applicable | `scenario-deep-dive` |
-| `not-evaluated` | Not evaluated | `scenario-deep-dive` |
-| `not-falsified` | Claim not falsified | `scenario-deep-dive` |
+| `not-evaluated` | Not evaluated: no theory block | `scenario-deep-dive` |
+| `not-falsified` | Not falsified in this replay | `scenario-deep-dive` |
 
 ## Severities
 

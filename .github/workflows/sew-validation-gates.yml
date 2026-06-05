@@ -32,12 +32,38 @@ jobs:
       - name: Run canonical suite
         run: ./scripts/test.sh all
 
+      - name: Generate ephemeral Ed25519 key for CI signing
+        run: |
+          ssh-keygen -t ed25519 -f test_key -N ''
+          ls -l test_key*
+
+      - name: Sign manifest with ephemeral key
+        run: |
+          clojure -M -m resolver-sim.scripts.evidence sign ./test_key || true
+
+      - name: Verify signature with public key
+        run: |
+          ssh-keygen -e -f test_key -m PEM > test_key.pub.pem || true
+          clojure -M -m resolver-sim.scripts.verify-signature test_key.pub.pem || true
+
+      - name: Export evidence bundle (CI)
+        run: |
+          bb evidence:bundle results/ci-bundle || true
+          ls -la results/ci-bundle || true
+
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-artifacts
           path: results/test-artifacts/
+
+      - name: Upload evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-bundle
+          path: results/ci-bundle/
 
   coverage-gates:
     runs-on: ubuntu-latest

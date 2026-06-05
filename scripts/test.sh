@@ -6,7 +6,7 @@
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
-#   ./scripts/test.sh yield-scenarios # yield JSON scenarios (path suite, same report shape)
+#   ./scripts/test.sh yield-scenarios # Sew+yield integration scenarios (alias for sew-yield-scenarios)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
@@ -82,6 +82,7 @@ run_unit() {
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
 (require '[resolver-sim.protocols.sew.replay-test])
+(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
 (require '[resolver-sim.scenario.expectations-test])
 (require '[resolver-sim.scenario.equilibrium-test])
 (require '[resolver-sim.sim.multi-epoch-test])
@@ -90,9 +91,11 @@ run_unit() {
 (require '[resolver-sim.protocols.sew.slashing-test])
 (require '[resolver-sim.protocols.sew.phase-k-test])
 (require '[resolver-sim.protocols.sew.phase-m-test])
+(require '[resolver-sim.io.scenario-fixture-parity-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
+                'resolver-sim.protocols.sew.forking-strategist-expectations-test
                 'resolver-sim.protocols.sew.slashing-test
                 'resolver-sim.protocols.sew.phase-k-test
                 'resolver-sim.protocols.sew.phase-m-test
@@ -100,7 +103,8 @@ run_unit() {
                 'resolver-sim.scenario.equilibrium-test
                 'resolver-sim.sim.multi-epoch-test
                 'resolver-sim.sim.defection-test
-                'resolver-sim.sim.strategy-adaptation-test)]
+                'resolver-sim.sim.strategy-adaptation-test
+                'resolver-sim.io.scenario-fixture-parity-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -373,75 +377,10 @@ run_equivalence_new() {
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
 
-  python - <<'PY'
-import json
-from pathlib import Path
-
-traces_dir = Path("data/fixtures/traces")
-out_path = Path("results/test-artifacts/equivalence-comparison-summary.json")
-
-traces = []
-for p in sorted(traces_dir.glob("*.trace.json")):
-    try:
-        obj = json.loads(p.read_text())
-    except Exception:
-        continue
-    comp = obj.get("comparison")
-    if not isinstance(comp, dict):
-        continue
-    traces.append({
-        "id": str(obj.get("scenario-id") or obj.get("id") or p.stem.replace('.trace', '')),
-        "path": str(p),
-        "comparison": comp,
-    })
-
-by_id = {t["id"]: t for t in traces}
-groups = {}
-for t in traces:
-    grp = str(t["comparison"].get("comparison_group", ""))
-    if not grp:
-        continue
-    groups.setdefault(grp, []).append(t)
-
-summary = {
-    "groups": {},
-    "group_count": len(groups),
-}
-
-for grp, members in groups.items():
-    rec = {
-        "members": [],
-        "pair_complete": False,
-        "reciprocal": False,
-        "expected_divergence": True,
-        "status": "incomplete",
-    }
-    ids = []
-    for m in members:
-        comp = m["comparison"]
-        member = {
-            "id": m["id"],
-            "variant": comp.get("variant"),
-            "counterfactual_of": comp.get("counterfactual_of"),
-            "path": m["path"],
-        }
-        rec["members"].append(member)
-        ids.append(m["id"])
-
-    if len(members) == 2:
-        rec["pair_complete"] = True
-        a, b = members[0], members[1]
-        a_cf = str(a["comparison"].get("counterfactual_of", ""))
-        b_cf = str(b["comparison"].get("counterfactual_of", ""))
-        rec["reciprocal"] = (a_cf == b["id"] and b_cf == a["id"])
-        rec["status"] = "expected-divergence-observed" if rec["reciprocal"] else "unexpected"
-
-    summary["groups"][grp] = rec
-
-out_path.parent.mkdir(parents=True, exist_ok=True)
-out_path.write_text(json.dumps(summary, indent=2))
-print(f"Wrote equivalence comparison summary: {out_path}")
-PY
+  python3 python/equivalence_pair_diff.py \
+    --traces-dir data/fixtures/traces \
+    --out results/test-artifacts/equivalence-comparison-summary.json \
+    --replay-dir results/test-artifacts/equivalence-pairs
 
   return $?
 }
@@ -685,6 +624,18 @@ run_monte_carlo() {
   return $mc_fail
 }
 
+emit_claimable_classification() {
+  require_clojure || return 0
+  echo "Emitting claimable-classification v2..."
+  if [ "${CLAIMABLE_CLASSIFICATION_TAXONOMY_ONLY:-0}" = "1" ]; then
+    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+      "$CLAIMABLE_CLASSIFICATION_FILE" taxonomy-only
+  else
+    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+      "$CLAIMABLE_CLASSIFICATION_FILE" aggregated "$RUN_ID"
+  fi
+}
+
 run_outcome_classification_report() {
   echo ""
   echo "Outcome classification report"
@@ -877,6 +828,7 @@ case "$MODE" in
 esac
 
 if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
+  emit_claimable_classification || true
   python - <<PY
 import csv, json, pathlib, datetime, subprocess
 csv_path = pathlib.Path("$ARTIFACT_DIR/.targets-${RUN_ID}.csv")
@@ -1038,47 +990,20 @@ def scenario_capabilities_summary(scenarios_dir: pathlib.Path):
     }
 
 caps = scenario_capabilities_summary(pathlib.Path("scenarios"))
-claimable_classification = {
-  "schema_version": "claimable-classification.v1",
-  "shortfall_policy": {
-    "mode": "partial-liquidity-supported",
-    "allocation": "fulfilled-plus-deferred",
-    "rounding_policy": "floor-to-asset-decimals.v1"
-  },
-  "classes": {
-    "escrow_principal": {
-      "delivery_model": "pull",
-      "source": "settlement",
-      "recipient_type": "party",
-      "risk_class": "user-withdrawable"
+claimable_path = pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE")
+if claimable_path.exists():
+  claimable_classification = json.loads(claimable_path.read_text())
+else:
+  claimable_classification = {
+    "schema_version": "claimable-classification.v2",
+    "observations_status": "taxonomy-only",
+    "shortfall_policy": {
+      "mode": "partial-liquidity-supported",
+      "allocation": "fulfilled-plus-deferred",
+      "rounding_policy": "floor-to-asset-decimals.v1"
     },
-    "escrow_yield": {
-      "delivery_model": "pull",
-      "source": "yield",
-      "recipient_type": "party-or-protocol",
-      "risk_class": "yield-derived",
-      "shortfall_outcome": "may-be-partially-deferred"
-    },
-    "resolver_payment": {
-      "delivery_model": "pull",
-      "source": "dispute-resolution",
-      "recipient_type": "resolver",
-      "risk_class": "service-compensation"
-    },
-    "bond_refund": {
-      "delivery_model": "pull",
-      "source": "appeal-bond",
-      "recipient_type": "disputant",
-      "risk_class": "bond-return"
-    },
-    "protocol_fee": {
-      "delivery_model": "pull-or-governance-withdrawal",
-      "source": "fee",
-      "recipient_type": "protocol",
-      "risk_class": "protocol-revenue"
-    }
+    "classes": {}
   }
-}
 run_manifest = {
   "schema_version": "test-run.v1",
   "contract_version": "evidence-contract.v1",
@@ -1263,7 +1188,8 @@ out["force_refund_forward_only"] = force_refund_signal
 
 pathlib.Path("$ARTIFACT_FILE").write_text(json.dumps(out, indent=2))
 pathlib.Path("$RUN_MANIFEST_FILE").write_text(json.dumps(run_manifest, indent=2))
-pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
+if not claimable_path.exists():
+  pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
 
 def sha256_file(path: pathlib.Path):
     if not path.exists():
@@ -1328,7 +1254,7 @@ entries = [
   mk_artifact_entry("test-run", "run-manifest", "$RUN_MANIFEST_FILE", run_manifest.get("schema_version"),
                     "test-run-emitter.v1", [], {}),
   mk_artifact_entry("claimable-classification", "classification", "$CLAIMABLE_CLASSIFICATION_FILE", claimable_classification.get("schema_version"),
-                    "claimable-classification-emitter.v1", ["test-run.v1"],
+                    "claimable-classification-emitter.v2", ["test-run.v1"],
                     {"test_run": "test-run.v1"}),
   mk_artifact_entry("coverage", "coverage", "results/test-artifacts/coverage.json", "coverage.v1",
                     "coverage-emitter.v1", ["scenario.v1"],

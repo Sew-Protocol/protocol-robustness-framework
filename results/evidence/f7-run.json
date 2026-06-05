@@ -1,42 +1,40 @@
 {
-  "run_at": "2026-04-15T17:40:31Z",
-  "git_sha": "31ba27b",
-  "git_branch": "ethereum",
-  "python_version": "3.12.10",
-  "passed": 1,
-  "total": 1,
-  "suite_elapsed_s": 0.02,
-  "summary": {
-    "total_escrows": 1,
-    "total_volume": 100,
-    "disputes_triggered": 1,
-    "resolutions_executed": 0,
-    "pending_settlements_executed": 0,
-    "attack_attempts": 0,
-    "attack_successes": 0,
-    "reverts": 0,
-    "invariant_violations": 0,
-    "total_transactions": 2
+  "total" : 1,
+  "suite_elapsed_s" : 0.02,
+  "git_branch" : "ethereum",
+  "git_sha" : "31ba27b",
+  "python_version" : "3.12.10",
+  "run_at" : "2026-04-15T17:40:31Z",
+  "summary" : {
+    "disputes_triggered" : 1,
+    "reverts" : 0,
+    "total_transactions" : 2,
+    "resolutions_executed" : 0,
+    "attack_attempts" : 0,
+    "total_volume" : 100,
+    "pending_settlements_executed" : 0,
+    "invariant_violations" : 0,
+    "attack_successes" : 0,
+    "total_escrows" : 1
   },
-  "scenarios": [
-    {
-      "name": "S30  f7-profit-threshold-strike",
-      "ok": true,
-      "elapsed": 0.02,
-      "steps": 2,
-      "outcome": "pass",
-      "halt_reason": null,
-      "metrics": {
-        "total_escrows": 1,
-        "total_volume": 100,
-        "disputes_triggered": 1,
-        "resolutions_executed": 0,
-        "pending_settlements_executed": 0,
-        "attack_attempts": 0,
-        "attack_successes": 0,
-        "reverts": 0,
-        "invariant_violations": 0
-      }
+  "scenarios" : [ {
+    "name" : "S30  f7-profit-threshold-strike",
+    "ok" : true,
+    "elapsed" : 0.02,
+    "steps" : 2,
+    "outcome" : "pass",
+    "halt_reason" : null,
+    "metrics" : {
+      "disputes_triggered" : 1,
+      "reverts" : 0,
+      "resolutions_executed" : 0,
+      "attack_attempts" : 0,
+      "total_volume" : 100,
+      "pending_settlements_executed" : 0,
+      "invariant_violations" : 0,
+      "attack_successes" : 0,
+      "total_escrows" : 1
     }
-  ]
+  } ],
+  "passed" : 1
 }

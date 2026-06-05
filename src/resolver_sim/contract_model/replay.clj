@@ -20,6 +20,7 @@
              [resolver-sim.contract-model.replay.analysis :as analysis]
              [resolver-sim.contract-model.replay.temporal :as temporal]
              [resolver-sim.contract-model.replay.validation :as validation]
+             [resolver-sim.contract-model.replay.yield :as yield-replay]
              [resolver-sim.contract-model.replay.flags :as replay-flags]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
@@ -151,7 +152,7 @@
   "Apply one scenario event using tiered Protocol implementations."
   [protocol context world event]
   (let [flags        (or (:replay-flags context) replay-flags/default-replay-flags)
-        temporal-on? (:temporal-enabled? flags false)
+        temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
         check-inv?   (:check-invariants? flags true)
         event-time   (:time event)
         now          (:block-time world)
@@ -357,7 +358,8 @@
                  :states states
                  :events events
                  :agents agents
-                 :protocol protocol}))))
+                 :protocol protocol
+                 :world world}))))
         (if (= :deterministic-batch (execution-mode scenario))
           (let [[bucket rest-events] (group-same-time-bucket events)
                 base-world world
@@ -505,7 +507,6 @@
                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)
                 new-states (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
-            (tap> {:scenario-id scenario-id :seq (:seq event) :world world :entry entry})
             (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
             (if (:halted? step)
               (do
@@ -559,15 +560,24 @@
            (finalize-scenario-result scenario raw-result flags)
            raw-result))))))
 
+(defn replay-yield-scenario
+  "Thin sequential replay for `yield-v1` (see `replay.yield`)."
+  ([scenario] (yield-replay/replay-yield-scenario scenario))
+  ([protocol scenario] (yield-replay/replay-yield-scenario protocol scenario)))
+
 (defn simple-replay
   "Replay with library-style defaults: no temporal enforcement, no theory DSL, relaxed validation.
 
-   Merges `minimal-replay-flags` into `replay-opts` (caller flags override)."
+   For `yield-v1`, delegates to `replay-yield-scenario` (thin runner). Other protocols
+   use `replay-with-protocol` with `minimal-replay-flags`. Caller `replay-opts` apply
+   only on the generic path."
   [protocol scenario & [replay-opts]]
-  (replay-with-protocol protocol scenario
-                        (merge {:minimal true
-                                :flags replay-flags/minimal-replay-flags}
-                               replay-opts)))
+  (if (= "yield-v1" (proto/protocol-id protocol))
+    (yield-replay/replay-yield-scenario protocol scenario)
+    (replay-with-protocol protocol scenario
+                          (merge {:minimal true
+                                  :flags replay-flags/minimal-replay-flags}
+                                 replay-opts))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

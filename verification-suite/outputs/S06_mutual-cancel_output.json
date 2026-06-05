@@ -1,1 +1,252 @@
-{"outcome":"pass","scenario-id":"s06-mutual-cancel","events-processed":3,"trace":[{"projection-hash":"yt4ESgw8mQluOFTxtTO6TIBeFZNDTiwcIRUgpwAfZpY=","time":1000,"extra":{"workflow-id":0},"invariants-ok?":true,"agent":"buyer","event-tags":["entity-created"],"world":{"live-states":{"0":"pending"},"total-fees":{"USDC":22},"pending-count":0,"resolver-rotations":{},"claimable":{},"bond-balances":{},"dispute-levels":{},"escrow-count":1,"dispute-resolvers":{"0":null},"escrow-amounts":{"0":1478},"block-time":1000,"bond-distribution":{"insurance":0,"protocol":0,"burned":0},"total-held":{"USDC":1478},"resolver-stakes":{}},"result":"ok","action":"create_escrow","error":null,"seq":0,"violations":null,"trace-metadata":{"type":"creation","path":"none"},"projection":{"total-fees":{"USDC":22},"dispute-levels":{},"pending-settlements":{},"block-time":1000,"escrow-transfers":{"0":{"escrow-state":"pending","recipient-status":"none","sender-status":"none","auto-cancel-time":0,"amount-after-fee":1478,"auto-release-time":0,"token":"USDC","initial-fee":22,"from":"0xbuyer","dispute-resolver":null,"to":"0xseller"}},"total-held":{"USDC":1478}},"detail":null},{"projection-hash":"mdrmTcT2vcvqId0wmbFFKDEquG4QfXU78pMWdEDSlYw=","time":1060,"extra":null,"invariants-ok?":true,"agent":"buyer","event-tags":[],"world":{"live-states":{"0":"pending"},"total-fees":{"USDC":22},"pending-count":0,"resolver-rotations":{},"claimable":{},"bond-balances":{},"dispute-levels":{},"escrow-count":1,"dispute-resolvers":{"0":null},"escrow-amounts":{"0":1478},"block-time":1060,"bond-distribution":{"insurance":0,"protocol":0,"burned":0},"total-held":{"USDC":1478},"resolver-stakes":{}},"result":"rejected","action":"sender_cancel","error":"invalid-workflow-id","seq":1,"violations":null,"trace-metadata":{"type":"state-change","path":"none"},"projection":{"total-fees":{"USDC":22},"dispute-levels":{},"pending-settlements":{},"block-time":1060,"escrow-transfers":{"0":{"escrow-state":"pending","recipient-status":"none","sender-status":"none","auto-cancel-time":0,"amount-after-fee":1478,"auto-release-time":0,"token":"USDC","initial-fee":22,"from":"0xbuyer","dispute-resolver":null,"to":"0xseller"}},"total-held":{"USDC":1478}},"detail":null},{"projection-hash":"Njndd6Nk1CzOr3fCKSdIfWH5hIokQ0gbNzcz8RqggFc=","time":1120,"extra":null,"invariants-ok?":true,"agent":"seller","event-tags":[],"world":{"live-states":{"0":"pending"},"total-fees":{"USDC":22},"pending-count":0,"resolver-rotations":{},"claimable":{},"bond-balances":{},"dispute-levels":{},"escrow-count":1,"dispute-resolvers":{"0":null},"escrow-amounts":{"0":1478},"block-time":1120,"bond-distribution":{"insurance":0,"protocol":0,"burned":0},"total-held":{"USDC":1478},"resolver-stakes":{}},"result":"rejected","action":"recipient_cancel","error":"invalid-workflow-id","seq":2,"violations":null,"trace-metadata":{"type":"state-change","path":"none"},"projection":{"total-fees":{"USDC":22},"dispute-levels":{},"pending-settlements":{},"block-time":1120,"escrow-transfers":{"0":{"escrow-state":"pending","recipient-status":"none","sender-status":"none","auto-cancel-time":0,"amount-after-fee":1478,"auto-release-time":0,"token":"USDC","initial-fee":22,"from":"0xbuyer","dispute-resolver":null,"to":"0xseller"}},"total-held":{"USDC":1478}},"detail":null}],"metrics":{"invariant-violations":0,"attack-attempts":0,"double-settlements":0,"pending-settlements-executed":0,"invalid-state-transitions":0,"reverts":2,"resolutions-executed":0,"rejected-attacks":0,"attack-successes":0,"funds-lost":0,"total-escrows":1,"disputes-triggered":0,"total-volume":1500,"invariant-results":{}},"agents":[{"id":"buyer","address":"0xbuyer","strategy":"honest"},{"id":"seller","address":"0xseller","strategy":"honest"}]}
+{
+  "outcome" : "pass",
+  "scenario-id" : "s06-mutual-cancel",
+  "events-processed" : 3,
+  "trace" : [ {
+    "seq" : 0,
+    "agent" : "buyer",
+    "projection-hash" : "yt4ESgw8mQluOFTxtTO6TIBeFZNDTiwcIRUgpwAfZpY=",
+    "event-tags" : [ "entity-created" ],
+    "detail" : null,
+    "error" : null,
+    "action" : "create_escrow",
+    "time" : 1000,
+    "trace-metadata" : {
+      "type" : "creation",
+      "path" : "none"
+    },
+    "invariants-ok?" : true,
+    "projection" : {
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "dispute-levels" : { },
+      "pending-settlements" : { },
+      "block-time" : 1000,
+      "escrow-transfers" : {
+        "0" : {
+          "token" : "USDC",
+          "escrow-state" : "pending",
+          "initial-fee" : 22,
+          "auto-cancel-time" : 0,
+          "auto-release-time" : 0,
+          "recipient-status" : "none",
+          "sender-status" : "none",
+          "from" : "0xbuyer",
+          "amount-after-fee" : 1478,
+          "dispute-resolver" : null,
+          "to" : "0xseller"
+        }
+      },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "extra" : {
+      "workflow-id" : 0
+    },
+    "violations" : null,
+    "world" : {
+      "dispute-resolvers" : {
+        "0" : null
+      },
+      "escrow-count" : 1,
+      "bond-balances" : { },
+      "pending-count" : 0,
+      "claimable" : { },
+      "bond-distribution" : {
+        "insurance" : 0,
+        "protocol" : 0,
+        "burned" : 0
+      },
+      "block-time" : 1000,
+      "resolver-rotations" : { },
+      "live-states" : {
+        "0" : "pending"
+      },
+      "resolver-stakes" : { },
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "escrow-amounts" : {
+        "0" : 1478
+      },
+      "dispute-levels" : { },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "result" : "ok"
+  }, {
+    "seq" : 1,
+    "agent" : "buyer",
+    "projection-hash" : "mdrmTcT2vcvqId0wmbFFKDEquG4QfXU78pMWdEDSlYw=",
+    "event-tags" : [ ],
+    "detail" : null,
+    "error" : "invalid-workflow-id",
+    "action" : "sender_cancel",
+    "time" : 1060,
+    "trace-metadata" : {
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "invariants-ok?" : true,
+    "projection" : {
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "dispute-levels" : { },
+      "pending-settlements" : { },
+      "block-time" : 1060,
+      "escrow-transfers" : {
+        "0" : {
+          "token" : "USDC",
+          "escrow-state" : "pending",
+          "initial-fee" : 22,
+          "auto-cancel-time" : 0,
+          "auto-release-time" : 0,
+          "recipient-status" : "none",
+          "sender-status" : "none",
+          "from" : "0xbuyer",
+          "amount-after-fee" : 1478,
+          "dispute-resolver" : null,
+          "to" : "0xseller"
+        }
+      },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "extra" : null,
+    "violations" : null,
+    "world" : {
+      "dispute-resolvers" : {
+        "0" : null
+      },
+      "escrow-count" : 1,
+      "bond-balances" : { },
+      "pending-count" : 0,
+      "claimable" : { },
+      "bond-distribution" : {
+        "insurance" : 0,
+        "protocol" : 0,
+        "burned" : 0
+      },
+      "block-time" : 1060,
+      "resolver-rotations" : { },
+      "live-states" : {
+        "0" : "pending"
+      },
+      "resolver-stakes" : { },
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "escrow-amounts" : {
+        "0" : 1478
+      },
+      "dispute-levels" : { },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "result" : "rejected"
+  }, {
+    "seq" : 2,
+    "agent" : "seller",
+    "projection-hash" : "Njndd6Nk1CzOr3fCKSdIfWH5hIokQ0gbNzcz8RqggFc=",
+    "event-tags" : [ ],
+    "detail" : null,
+    "error" : "invalid-workflow-id",
+    "action" : "recipient_cancel",
+    "time" : 1120,
+    "trace-metadata" : {
+      "type" : "state-change",
+      "path" : "none"
+    },
+    "invariants-ok?" : true,
+    "projection" : {
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "dispute-levels" : { },
+      "pending-settlements" : { },
+      "block-time" : 1120,
+      "escrow-transfers" : {
+        "0" : {
+          "token" : "USDC",
+          "escrow-state" : "pending",
+          "initial-fee" : 22,
+          "auto-cancel-time" : 0,
+          "auto-release-time" : 0,
+          "recipient-status" : "none",
+          "sender-status" : "none",
+          "from" : "0xbuyer",
+          "amount-after-fee" : 1478,
+          "dispute-resolver" : null,
+          "to" : "0xseller"
+        }
+      },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "extra" : null,
+    "violations" : null,
+    "world" : {
+      "dispute-resolvers" : {
+        "0" : null
+      },
+      "escrow-count" : 1,
+      "bond-balances" : { },
+      "pending-count" : 0,
+      "claimable" : { },
+      "bond-distribution" : {
+        "insurance" : 0,
+        "protocol" : 0,
+        "burned" : 0
+      },
+      "block-time" : 1120,
+      "resolver-rotations" : { },
+      "live-states" : {
+        "0" : "pending"
+      },
+      "resolver-stakes" : { },
+      "total-fees" : {
+        "USDC" : 22
+      },
+      "escrow-amounts" : {
+        "0" : 1478
+      },
+      "dispute-levels" : { },
+      "total-held" : {
+        "USDC" : 1478
+      }
+    },
+    "result" : "rejected"
+  } ],
+  "metrics" : {
+    "pending-settlements-executed" : 0,
+    "total-volume" : 1500,
+    "invariant-violations" : 0,
+    "attack-attempts" : 0,
+    "reverts" : 2,
+    "rejected-attacks" : 0,
+    "total-escrows" : 1,
+    "attack-successes" : 0,
+    "disputes-triggered" : 0,
+    "double-settlements" : 0,
+    "invariant-results" : { },
+    "resolutions-executed" : 0,
+    "funds-lost" : 0,
+    "invalid-state-transitions" : 0
+  },
+  "agents" : [ {
+    "id" : "buyer",
+    "address" : "0xbuyer",
+    "strategy" : "honest"
+  }, {
+    "id" : "seller",
+    "address" : "0xseller",
+    "strategy" : "honest"
+  } ]
+}

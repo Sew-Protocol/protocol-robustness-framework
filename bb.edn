@@ -1,18 +1,31 @@
-{:tasks
+ {:tasks
  {sim:run {:doc "Run a simulation with EDN params"
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
   scenario:run
-  {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path>"
+  {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
    :task (let [arg          (first *command-line-args*)
-               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                              ;; deprecated alias (pre-2026-06 rename)
+                              "kleros/escalation-race"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
                scenario     (or (get scenario-map arg) arg)]
            (when-not scenario
              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
            (let [t0   (System/currentTimeMillis)
                  exit (try
-                        (clojure {:dir "." :extra-deps {}}
-                                 "-M:run" "--" "--invariants" "--scenario" scenario)
+                        (let [args (vec *command-line-args*)
+                                      ;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
+                                      alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                      level-idx (.indexOf args "--result-display-level")
+                                      level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                      alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                      alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                      chosen (or level-val alias-val)
+                                      cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                                 chosen (conj "--result-display-level" chosen))]
+                                 (apply clojure {:dir "." :extra-deps {}} cli-args))
                         0
                         (catch clojure.lang.ExceptionInfo e
                           (or (:exit (ex-data e)) 1)))
@@ -47,9 +60,20 @@
                    results (mapv (fn [scenario]
                                    (println (str "Running " scenario))
                                    (try
-                                     (clojure {:dir "." :extra-deps {}}
-                                              "-M:run" "--" "--invariants" "--scenario" scenario)
+                                     (let [args (vec *command-line-args*)
+                                     alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                     level-idx (.indexOf args "--result-display-level")
+                                     level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                     alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                     alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                     chosen (or level-val alias-val)
+                                     cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                                chosen (conj "--result-display-level" chosen))]
+                                                                         (try
+                                     (apply clojure {:dir "." :extra-deps {}} cli-args)
                                      {:scenario scenario :exit 0}
+                                     (catch clojure.lang.ExceptionInfo e
+                                       {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
                                      (catch clojure.lang.ExceptionInfo e
                                        {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
                                  scenarios)
@@ -78,11 +102,15 @@
                output-idx   (.indexOf args "--output-file")
                raw-scenario (when (<= 0 scenario-idx)
                               (nth args (inc scenario-idx) nil))
-               scenario-map {"kleros/escalation-race" "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+               scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                              ;; deprecated alias (pre-2026-06 rename)
+                              "kleros/escalation-race"
+                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
                scenario     (or (get scenario-map raw-scenario) raw-scenario)
                output-file  (or (when (<= 0 output-idx)
                                  (nth args (inc output-idx) nil))
-                               "results/evidence/kleros-escalation-race.result.json")]
+                               "results/evidence/kleros-preemptive-escalation-rejected-l0.result.json")]
            (when-not scenario
              (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
            (shell "mkdir -p results/evidence")
@@ -102,8 +130,25 @@
                     "--duration-ms"  (str dur))
              (when-not (zero? exit) (System/exit exit))))}
 
+  evidence:sign
+  {:doc "Sign the focused or latest run manifest after ensuring artifact registry exists. Usage: bb evidence:sign <path-to-private-key>"
+   :task (let [key (first *command-line-args*)]
+          (when-not (seq key)
+            (throw (ex-info "Missing key path. Usage: bb evidence:sign <private-key-path>" {})))
+          (clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "sign" key))}
+
+  evidence:bundle
+  {:doc "Export an evidence bundle for the focused/latest run. Usage: bb evidence:bundle [out-dir]"
+   :task (let [outdir (or (first *command-line-args*) "results/evidence-bundle")]
+          (clojure {:dir "." :extra-deps {}} "-M" "-m" "resolver-sim.scripts.evidence" "bundle" outdir))}
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
+
+  fixtures:sync {:doc "Sync trace.json + scenarios/*.json from Clojure invariant scenario source"
+                 :task (clojure {:dir "."} "-M:sync-trace-fixtures")}
+
+  docs:scenarios {:doc "Regenerate S01–S23 table in docs/scenarios.md from doc-summaries.clj"
+                  :task (clojure {:dir "."} "-M:generate-scenario-docs")}
 
   test {:doc "Run canonical validation gate (all targets via scripts/test.sh)"
         :task (shell "./scripts/test.sh all")}
@@ -135,13 +180,18 @@
   trace:compare {:doc "Compare baseline vs candidate trace JSON and emit markdown+json report"
                  :task (apply shell "python3" "python/trace_compare.py" *command-line-args*)}
 
+  trace:structural-diff {:doc "Structural world diff between replay JSON files. Usage: bb trace:structural-diff --baseline a.json --candidate b.json"
+                         :task (apply shell "clojure -M:diff-traces" *command-line-args*)}
+
   trace:diff {:doc "Run two scenarios and compare their results. Usage: bb trace:diff <scenario-1> <scenario-2> <out-dir>"
               :task (let [s1 (first *command-line-args*)
                           s2 (second *command-line-args*)
                           od (or (nth *command-line-args* 2 nil) "results/trace-compare/diff")]
-                      (shell "clojure -M:run -- --invariants --scenario" s1 "--output-file" "results/diff-1.json")
-                      (shell "clojure -M:run -- --invariants --scenario" s2 "--output-file" "results/diff-2.json")
-                      (shell "python3 python/trace_compare.py --baseline results/diff-1.json --candidate results/diff-2.json --out-dir" od))}
+                      (apply shell "python3" "python/trace_compare.py"
+                             "--scenario-a" s1 "--scenario-b" s2 "--out-dir" od))}
+
+  sim:diff {:doc "Compare scenario replay at baseline git commit vs HEAD. Usage: bb sim:diff --baseline <sha> --scenario <path>"
+            :task (apply shell "./scripts/sim_diff.sh" *command-line-args*)}
 
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
@@ -271,16 +321,27 @@
   evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
                      :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}
 
-
   clerk-build {:doc "Build static Clerk notebooks"
                :task (clojure "-M:build-clerk")}
   clerk-watch {:doc "Watch notebooks and rebuild"
                :task (shell "find src notebooks -name '*.clj' | entr -r bb clerk-build")}
 
-
   eastwood {:doc "eastwood"
             :task (shell "clj -M:eastwood")}
 
+
+  format:json
+    { :doc "Pretty print all JSON files in the repository"
+      :requires ([babashka.fs :as fs]
+            [cheshire.core :as json])
+      :task
+        (doseq [f (fs/glob "." "**/*.json")]
+        (let [fs-path (str f)
+              parsed (try (json/parse-string (slurp fs-path)) (catch Exception e (println "Skipping non-JSON file:" fs-path "->" (.getMessage e)) nil))]
+          (when parsed
+            (spit fs-path
+             (json/generate-string parsed {:pretty true}))
+            (println "Formatted" fs-path))))}
 
   check {:doc "check"
          :task (do

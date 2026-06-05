@@ -1,7 +1,7 @@
 (ns speds-generate-comparator-shadow
   (:require [clojure.string :as str]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.issues :as issues]))
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.issues :as issues]))
 
 (defn- parse-strategy [s]
   (keyword (str/trim s)))

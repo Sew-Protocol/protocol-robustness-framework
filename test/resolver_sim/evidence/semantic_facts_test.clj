@@ -6,7 +6,7 @@
   (let [artifacts {:coverage {:scenarios [{:id "scenarios/S68"
                                            :purpose "adversarial-robustness"
                                            :threat-tags [:conservation :solvency]
-                                           :transitions [:advance_time :release]
+                                           :transitions [:create_escrow :release]
                                            :expectations {:invariants [:invariant/solvency]}
                                            :invariant-results {:invariant/solvency :fail}}]}}
         findings-bundle {:run {:run_id "RUN-1"}

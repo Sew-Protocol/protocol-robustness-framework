@@ -9,7 +9,8 @@
    falsification) and expectation evaluation (execution correctness) are
    separate concerns that may have different failure semantics."
   (:require [clojure.string :as str]
-            [resolver-sim.scenario.theory :as theory]))
+            [resolver-sim.scenario.theory :as theory]
+            [resolver-sim.yield.invariants :as yield-inv]))
 
 ;; ---------------------------------------------------------------------------
 ;; Key-relaxed world lookup
@@ -81,21 +82,16 @@
 ;; Invariant evaluation
 ;; ---------------------------------------------------------------------------
 
+(defn- yield-invariant-registered? [inv-kw]
+  (contains? (set (yield-inv/registered-ids)) inv-kw))
+
 (defn evaluate-invariants
   "Check named invariants from :expectations/:invariants against the replay result.
 
    Lookup strategy:
-   1. Per-invariant map: result[:metrics :invariant-results] is a map of
-      {inv-kw :fail} for any invariant that violated at least once.
-      If the named invariant is present → :fail.
-      If it is absent from the map AND violations = 0 → :pass.
-      If it is absent AND violations > 0 → conservative fail (another
-      invariant fired but this named one is unconfirmed).
-   2. Aggregate fallback: if :invariant-violations > 0 and the named
-      invariant is not in the per-invariant map, fail conservatively —
-      we know something broke but can't confirm which invariant.
-   3. Pass: :invariant-violations = 0 means no invariant fired; all
-      named invariants pass.
+   1. Per-step map: result[:metrics :invariant-results] {inv-kw :fail}.
+   2. Final world: for registered yield invariants, re-run on trace end world.
+   3. Aggregate fallback when other invariants fired but this one is unconfirmed.
 
    Returns {:ok? bool :violations [v-map]}"
   [result named-invariants]
@@ -103,25 +99,32 @@
     {:ok? true :violations []}
     (let [inv-map        (get-in result [:metrics :invariant-results] {})
           agg-violations (get-in result [:metrics :invariant-violations] 0)
+          last-world     (get (last (:trace result)) :world)
           violations     (atom [])]
       (doseq [inv-name named-invariants]
-        (let [inv-kw (if (keyword? inv-name) inv-name (keyword (str inv-name)))
-              status (cond
-                       ;; Named result available — precise
-                       (contains? inv-map inv-kw)
-                       (get inv-map inv-kw)
-
-                       ;; Not in per-invariant map; use aggregate fallback
-                       (pos? agg-violations)
-                       :fail
-
-                       :else :pass)]
-          (when (= status :fail)
+        (let [inv-kw     (if (keyword? inv-name) inv-name (keyword (str inv-name)))
+              step-fail? (and (contains? inv-map inv-kw)
+                              (= :fail (get inv-map inv-kw)))
+              world-ok?  (if (and last-world (yield-invariant-registered? inv-kw))
+                             (yield-inv/holds? inv-kw last-world)
+                             true)
+              fail?      (or step-fail?
+                             (not world-ok?)
+                             (and (pos? agg-violations)
+                                  (not (contains? inv-map inv-kw))
+                                  (not (yield-invariant-registered? inv-kw))))]
+          (when fail?
             (swap! violations conj
                    {:type      :invariant-failed
                     :invariant inv-kw
-                    :note      (if (contains? inv-map inv-kw)
+                    :note      (cond
+                                 step-fail?
                                  "per-invariant result: fail"
+
+                                 (not world-ok?)
+                                 "final world check: fail"
+
+                                 :else
                                  (str "aggregate fallback: "
                                       agg-violations " violation(s) in run"))}))))
       {:ok? (empty? @violations)

@@ -131,9 +131,6 @@
       "set-paused"
       (str "protocol " (if (get params :paused? true) "PAUSED" "UNPAUSED"))
 
-      "time-advance"
-      "(time advance)"
-
       "automate-timed-actions"
       (str (wf-lbl wf) "  auto-timed-check")
 

@@ -1,15 +1,15 @@
-(ns resolver-sim.notebooks.speds.issues
+(ns resolver_sim.notebooks.speds.issues
   "Issue-contract generation for SPEDS.
    Converts trial artifacts into deterministic issue bundles used by story rendering."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.speds.data :as data]
-            [resolver-sim.notebooks.speds.findings :as findings]
-            [resolver-sim.notebooks.speds.semantics :as sem]
+            [resolver_sim.notebooks.speds.data :as data]
+            [resolver_sim.notebooks.speds.findings :as findings]
+            [resolver_sim.notebooks.speds.semantics :as sem]
             [resolver-sim.scenario.outcome-semantics :as ose]
-            [resolver-sim.notebooks.speds.config :as config]))
+            [resolver_sim.notebooks.speds.config :as config]))
 
 (def issues-path "results/test-artifacts/issues.json")
 (def comparator-shadow-path "results/test-artifacts/comparator-shadow.json")

@@ -103,7 +103,9 @@
                  :n-trials 1000
                  :n-seeds 1
                  :parallelism :auto}]
-      (is (= valid (types/validate-scenario valid)))))
+      (let [out (types/validate-scenario valid)]
+        (is (= valid (dissoc out :oracle-effective)))
+        (is (map? (:oracle-effective out))))))
   
   (testing "Invalid fee-bps fails"
     (let [invalid {:resolver-fee-bps -100}]

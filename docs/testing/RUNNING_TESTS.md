@@ -103,6 +103,12 @@ bb trace:compare \
   --baseline results/baseline.trace.json \
   --candidate results/candidate.trace.json \
   --out-dir results/trace-compare/example
+
+# Compare scenario replay at an older git commit vs HEAD
+bb sim:diff --baseline <commit-sha> --scenario data/fixtures/traces/s46a-settlement-before-escalation-window-edge.trace.json
+
+# Structural world diff (first divergence point; Clojure io/diff)
+bb trace:structural-diff --baseline results/a.json --candidate results/b.json
 ```
 
 Outputs:
@@ -111,6 +117,8 @@ Outputs:
 
 The report includes:
 - outcome + events processed
+- **projection-hash** match/mismatch (terminal replay step)
+- **first structural world divergence** (seq, action, field diff when traces differ)
 - key metric deltas
 - terminal-state count differences
 - a single headline line you can paste into research notes
@@ -390,6 +398,57 @@ Output includes:
 - Cumulative profit by strategy
 - Win rate statistics
 - Multi-epoch aggregated stats
+
+---
+
+## Monte Carlo oracle fixtures (`:oracle-fixture`, `:fixed-or`)
+
+MC-only controls for detection and appeal rolls (`replay.clj` ignores these).
+Not the same as invariant trace fixtures under `data/fixtures/traces/`.
+
+`:on-exhaustion :repeat-last` is MC-only; see
+`docs/architecture/ORACLE_FIXTURE_EXHAUSTION.md`.
+
+| Resource | Purpose |
+|----------|---------|
+| `data/params/PHASES.md` | Modes, `:fixed-or` shorthand, roll consumption order, `:oracle-roll-trace` |
+| `data/params/control-oracle-*.edn` | Checked-in control param files (load via `io/params`) |
+| `test/.../oracle_fixture_test.clj` | Validation, merge, control EDN loads, full-trial `resolve-dispute` trace |
+| `test/.../reproducibility_test.clj` | Static/fixed modes, per-kind cursors, exhaustion, trace shape |
+
+```bash
+# Run only oracle fixture unit tests
+clojure -M:test -e "(require '[clojure.test :as t] '[resolver-sim.stochastic.oracle-fixture-test]) (t/run-tests 'resolver-sim.stochastic.oracle-fixture-test)"
+
+# Load a control file in the REPL
+clojure -M -e "(require '[resolver-sim.io.params :as p]) (prn (:oracle-effective (p/validate-and-merge \"data/params/control-oracle-full-trial.edn\")))"
+```
+
+Trial output may include `:oracle-roll-trace` when `:oracle-roll-trace-enabled? true`.
+Batch aggregates include `:oracle-effective-mode`.
+
+---
+
+## Scenario fixture parity (trace + public JSON)
+
+Invariant scenarios are authored in Clojure (`protocols/sew/invariant_scenarios/`).
+Checked-in `data/fixtures/traces/*.trace.json` and `scenarios/S*.json` must stay aligned
+with that source or CI fails.
+
+```bash
+# After editing a scenario map, refresh on-disk fixtures (only scenarios with an existing trace file)
+bb fixtures:sync
+# or: clojure -M:sync-trace-fixtures
+
+# Regenerate S01–S23 docs table from doc-summaries.clj
+bb docs:scenarios
+```
+
+Unit tests in `resolver-sim.io.scenario-fixture-parity-test` (included in `./scripts/test.sh unit`) check:
+
+- Every baseline S01–S23 id has a doc summary in `doc_summaries.clj`
+- Trace contract fields (`expected-errors`, `strict-expected-errors?`, `allow-open-disputes?`) match Clojure
+- Public JSON for strict-expected-errors scenarios matches the source
 
 ---
 

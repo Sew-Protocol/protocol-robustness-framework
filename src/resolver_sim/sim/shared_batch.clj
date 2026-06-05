@@ -15,7 +15,8 @@
    Conservation invariant (checked in route-epoch downstream):
      (sum :profit-honest honest-slice) + (sum :profit-malice strategic-slice)
        == total profit attributed across all resolvers"
-  (:require [resolver-sim.stochastic.dispute :as dispute]
+  (:require [resolver-sim.stochastic.detection :as detection]
+            [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.stochastic.rng     :as rng]))
 
 ;; ---------------------------------------------------------------------------
@@ -79,7 +80,8 @@
    :oracle-roll-sequence           (:oracle-roll-sequence params)
    :oracle-roll-on-exhaustion      (:oracle-roll-on-exhaustion params)
    :fixed-or                        (:fixed-or params)
-   :oracle-roll-trace-enabled?     (:oracle-roll-trace-enabled? params false)])
+   :oracle-roll-trace-enabled?     (:oracle-roll-trace-enabled? params false)
+   :evidence-quality?              (:evidence-quality? params false)])
 
 (defn run-paired-trial
   "Run one dispute with BOTH honest and malicious strategies on independent
@@ -139,7 +141,7 @@
 
    Returns a map with the same keys as batch/run-batch aggregate so that
    run-single-epoch can consume it without modification."
-  [paired-trials n-trials]
+  [paired-trials n-trials params]
   (let [profits-honest (map :profit-honest paired-trials)
         profits-malice (map :profit-malice paired-trials)
         mean-h         (mean profits-honest)
@@ -156,6 +158,11 @@
 
     {:n-trials          n-trials
      :mode              :shared-world
+     :oracle-effective-mode (:mode (:oracle-effective params)
+                                  (detection/normalize-oracle-fixture params))
+     :oracle-fixture-exhausted? (boolean (some :oracle-fixture/exhausted? paired-trials))
+     :oracle-fixture-warnings
+     (vec (distinct (mapcat :oracle-fixture/warnings paired-trials)))
      :honest-mean       (double mean-h)
      :honest-std        (double (std-dev profits-honest mean-h))
      :honest-min        (if (seq sorted-h) (first sorted-h) 0)
@@ -206,7 +213,7 @@
       :aggregate-malice — same aggregate (both strategies combined in one pool)}"
   [rng n-trials params]
   (let [paired-trials (vec (repeatedly n-trials #(run-paired-trial rng params)))
-        aggregate     (build-aggregate paired-trials n-trials)]
+        aggregate     (build-aggregate paired-trials n-trials params)]
     {:paired-trials    paired-trials
      :aggregate        aggregate
      :aggregate-malice aggregate}))

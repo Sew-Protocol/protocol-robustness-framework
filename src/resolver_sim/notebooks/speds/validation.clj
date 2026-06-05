@@ -1,4 +1,4 @@
-(ns resolver-sim.notebooks.speds.validation
+(ns resolver_sim.notebooks.speds.validation
   "Lightweight SPEDS validation helpers for consistency checks."
   (:require [clojure.string :as str]
             [clojure.java.io :as io]))

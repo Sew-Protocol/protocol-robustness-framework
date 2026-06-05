@@ -109,8 +109,8 @@
    Also updates the legacy :claimable map for temporary backward compatibility."
   [world workflow-id domain addr amount]
   (let [world' (update-in world [:claimable-v2 workflow-id domain addr] (fnil + 0) amount)]
-    ;; Maintain dual-write to legacy map for principal-like settlements
-    (if (= domain :settlement/principal)
+    ;; Maintain dual-write to legacy map for settlement claimables (withdraw path)
+    (if (#{:settlement/principal :settlement/yield} domain)
       (update-in world' [:claimable workflow-id addr] (fnil + 0) amount)
       world')))
 

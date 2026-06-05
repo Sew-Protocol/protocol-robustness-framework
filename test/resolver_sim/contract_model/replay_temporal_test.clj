@@ -5,6 +5,12 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.io.trace-export :as trace-export]))
 
+(defn- temporal-step-context
+  "Execution context with temporal enforcement enabled (direct process-step tests)."
+  [scenario]
+  (assoc (proto/build-execution-context sew/protocol (:agents scenario) {})
+         :replay-flags {:temporal-enabled? true}))
+
 (deftest advance-world-time-helper
   (testing "advances only when event-time is in the future"
     (let [w {:block-time 1000}
@@ -29,8 +35,8 @@
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
                           :block-time 2000)
-          context  (proto/build-execution-context sew/protocol (:agents scenario) {})
-          event    {:seq 0 :time 1999 :agent "alice" :action "advance_time" :params {}}
+          context  (temporal-step-context scenario)
+          event    {:seq 0 :time 1999 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :time-regression (get-in step [:trace-entry :error])))
@@ -48,8 +54,8 @@
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
                           :block-time 2000)
-          context  (proto/build-execution-context sew/protocol (:agents scenario) {})
-          event    {:seq 0 :agent "alice" :action "advance_time" :params {}}
+          context  (temporal-step-context scenario)
+          event    {:seq 0 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :invalid-event-time (get-in step [:trace-entry :error])))
@@ -67,18 +73,18 @@
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
                           :block-time 2000)
-          context  (assoc (proto/build-execution-context sew/protocol (:agents scenario) {})
+          context  (assoc (temporal-step-context scenario)
                           :temporal-rules
-                          [{:id :custom-no-advance-time
+                          [{:id :custom-no-set-paused
                             :check (fn [{:keys [event]}]
-                                     (if (= "advance_time" (:action event))
+                                     (if (= "set-paused" (:action event))
                                        {:ok? false :error :custom-time-rule}
                                        {:ok? true}))}])
-          event    {:seq 0 :time 2001 :agent "alice" :action "advance_time" :params {}}
+          event    {:seq 0 :time 2001 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :custom-time-rule (get-in step [:trace-entry :error])))
-      (is (= :custom-no-advance-time (get-in step [:trace-entry :temporal-rule-id]))))))
+      (is (= :custom-no-set-paused (get-in step [:trace-entry :temporal-rule-id]))))))
 
 (deftest temporal-rule-order-first-failure-wins
   (testing "when multiple temporal rules fail, first failing rule is emitted"
@@ -90,13 +96,13 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario) :block-time 2000)
-          context  (assoc (proto/build-execution-context sew/protocol (:agents scenario) {})
+          context  (assoc (temporal-step-context scenario)
                           :temporal-rules
                           [{:id :rule-first
                             :check (fn [_] {:ok? false :error :first-error})}
                            {:id :rule-second
                             :check (fn [_] {:ok? false :error :second-error})}])
-          event    {:seq 0 :time 2001 :agent "alice" :action "advance_time" :params {}}
+          event    {:seq 0 :time 2001 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :first-error (get-in step [:trace-entry :error])))
@@ -120,6 +126,7 @@
                                       :escalation-resolvers {"0" "0xl0"}
                                       :appeal-window-duration 60
                                       :max-dispute-duration 2592000}
+                    :options {:flags {:temporal-enabled? true}}
                     :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
                               :params {:token "USDC" :to "0xseller" :amount 6000}}
                              {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
@@ -153,6 +160,7 @@
                                       :escalation-resolvers {"0" "0xl0"}
                                       :appeal-window-duration 60
                                       :max-dispute-duration 2592000}
+                    :options {:flags {:temporal-enabled? true}}
                     :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
                               :params {:token "USDC" :to "0xseller" :amount 6000}}
                              {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"

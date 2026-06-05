@@ -145,12 +145,43 @@
       (is (= 1.30 (:current-index pos'))))))
 
 (deftest test-update-position-yield-requires-world
-  (testing "1-arity rejects silent optimistic clamping without risk context"
+  (testing "2-arg and nil-world 3-arg reject silent optimistic clamping without risk context"
     (let [pos {:owner/id :o :module/id :mod :token :USDC
                :principal 10000 :shares 10000 :entry-index 1.0 :status :active}]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"world is required"
-                            (acct/update-position-yield pos 0.98))))))
+                            (acct/update-position-yield pos 0.98)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"world is required"
+                            (acct/update-position-yield nil pos 0.98)))
+      (try
+        (acct/update-position-yield pos 0.98)
+        (is false "expected ex-info")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= 'update-position-yield (:fn (ex-data e))))
+          (is (= pos (:position (ex-data e))))
+          (is (= 0.98 (:current-index (ex-data e)))))))))
+
+(deftest test-update-position-yield-optimistic-clamp
+  (testing "Default loss mode clamps negative PnL to zero unrealized yield"
+    (let [world {:yield/risk {:mod {:USDC {:loss-mode :none}}}}
+          pos {:owner/id :o :module/id :mod :token :USDC
+               :principal 10000 :shares 10000 :entry-index 1.0 :status :active
+               :unrealized-yield 500 :realized-yield 0}
+          pos' (acct/update-position-yield world pos 0.98)]
+      (is (= 0 (:unrealized-yield pos')))
+      (is (= 9800 (:current-value pos')))
+      (is (neg? (- (:current-value pos') (:principal pos')))))))
+
+(deftest test-update-position-yield-current-value-invariant
+  (testing "Unrealized yield equals floored current-value minus principal"
+    (let [world {:yield/risk {:mod {:USDC {:loss-mode :mark-to-market}}}}
+          pos {:owner/id :o :module/id :mod :token :USDC
+               :principal 1000 :shares 1001 :entry-index 1.0 :status :active
+               :unrealized-yield 0 :realized-yield 0}
+          pos' (acct/update-position-yield world pos 1.0009)]
+      (is (= (- (:current-value pos') (:principal pos'))
+             (:unrealized-yield pos'))))))
 
 (deftest test-position-current-value
   (is (= 9800.0 (acct/position-current-value {:shares 10000} 0.98))))

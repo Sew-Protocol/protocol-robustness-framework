@@ -64,8 +64,8 @@
          (temporal/record-temporal-run!
           nil
           {:run {:run-id "r3" :batch-id :b3 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-time 1300}
-           :steps [{:step-index 1 :action :advance_time :result :ok :block-time 1301}
-                   {:step-index 2 :action :advance_time :result :ok :block-time 1300}]
+           :steps [{:step-index 1 :action :create_escrow :result :ok :block-time 1301}
+                   {:step-index 2 :action :release :result :ok :block-time 1300}]
            :invariants [{:step-index 1 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1301}
                         {:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1300}]})))))
 
