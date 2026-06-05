@@ -11,6 +11,8 @@
             [clojure.string :as str]))
 
 
+(declare generate-deflection-story)
+
 ;; ---
 ;; Internal Narrative Helpers
 

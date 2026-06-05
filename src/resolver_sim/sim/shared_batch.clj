@@ -17,7 +17,9 @@
        == total profit attributed across all resolvers"
   (:require [resolver-sim.stochastic.detection :as detection]
             [resolver-sim.stochastic.dispute :as dispute]
-            [resolver-sim.stochastic.rng     :as rng]))
+            [resolver-sim.stochastic.rng     :as rng]
+            [resolver-sim.sim.batch-integration :as integration]
+            [resolver-sim.sim.common-kwargs  :refer [common-kwargs]]))
 
 ;; ---------------------------------------------------------------------------
 ;; Statistics helpers (subset of batch.clj; kept local to avoid circular deps)
@@ -46,42 +48,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Paired trial generation
 ;; ---------------------------------------------------------------------------
-
-(defn- common-kwargs
-  "Extract the shared keyword args passed to resolve-dispute from params map."
-  [params]
-  [:l2-detection-prob              (:l2-detection-prob params 0)
-   :slashing-detection-delay-weeks (:slashing-detection-delay-weeks params 0)
-   :allow-slashing?                (:allow-slashing? params true)
-   :resolver-bond-bps              (:resolver-bond-bps params 0)
-   :fraud-detection-probability    (:fraud-detection-probability params 0.0)
-   :fraud-slash-bps                (:fraud-slash-bps params 0)
-   :reversal-detection-probability (:reversal-detection-probability params 1.0)
-   :reversal-slash-bps             (:reversal-slash-bps params 0)
-   :resolver-stake-wei             (:resolver-stake-wei params)
-   :new-evidence-probability       (:new-evidence-probability params 0.0)
-   :timeout-detection-probability  (:timeout-detection-probability params 0.0)
-   :timeout-slash-bps              (:timeout-slash-bps params 200)
-   :unstaking-delay-days           (:unstaking-delay-days params 14)
-   :freeze-on-detection?           (:freeze-on-detection? params true)
-   :freeze-duration-days           (:freeze-duration-days params 3)
-   :appeal-window-days             (:appeal-window-days params 7)
-   :fraud-model                    (:fraud-model params :single-stage-ev)
-   :escalation-assumptions         (:escalation-assumptions params)
-   :escalation-assumption-band     (:escalation-assumption-band params :base)
-   :p-appeal-wrong                 (:p-appeal-wrong params)
-   :p-l1-reversal                  (:p-l1-reversal params)
-   :p-l2-escalation                (:p-l2-escalation params)
-   :p-l2-reversal                  (:p-l2-reversal params)
-   :has-kleros?                    (:has-kleros? params)
-   :fraud-success-rate             (:fraud-success-rate params 0.0)
-   :oracle-fixture                 (:oracle-fixture params)
-   :oracle-mode                    (:oracle-mode params)
-   :oracle-roll-sequence           (:oracle-roll-sequence params)
-   :oracle-roll-on-exhaustion      (:oracle-roll-on-exhaustion params)
-   :fixed-or                        (:fixed-or params)
-   :oracle-roll-trace-enabled?     (:oracle-roll-trace-enabled? params false)
-   :evidence-quality?              (:evidence-quality? params false)])
 
 (defn run-paired-trial
   "Run one dispute with BOTH honest and malicious strategies on independent
@@ -139,8 +105,8 @@
 (defn build-aggregate
   "Compute aggregate statistics from a vector of paired trial results.
 
-   Returns a map with the same keys as batch/run-batch aggregate so that
-   run-single-epoch can consume it without modification."
+   Produces the same key set as batch/run-batch so that callers
+   (run-single-epoch, etc.) can consume it without modification."
   [paired-trials n-trials params]
   (let [profits-honest (map :profit-honest paired-trials)
         profits-malice (map :profit-malice paired-trials)
@@ -154,15 +120,22 @@
         escalation-count   (count (filter :escalated? paired-trials))
         fraud-slashed      (count (filter #(= (:slashing-reason %) :fraud) paired-trials))
         reversal-slashed   (count (filter #(= (:slashing-reason %) :reversal) paired-trials))
-        timeout-slashed    (count (filter #(= (:slashing-reason %) :timeout) paired-trials))]
+        timeout-slashed    (count (filter #(= (:slashing-reason %) :timeout) paired-trials))
+        l2-detected-count  (count (filter :l2-detected? paired-trials))
+        frozen-count       (count (filter :frozen? paired-trials))
+        escaped-count      (count (filter :escaped? paired-trials))]
 
     {:n-trials          n-trials
      :mode              :shared-world
+     :strategy (or (:force-strategy params) (:strategy params :honest))
      :oracle-effective-mode (:mode (:oracle-effective params)
-                                  (detection/normalize-oracle-fixture params))
+                                   (detection/normalize-oracle-fixture params))
      :oracle-fixture-exhausted? (boolean (some :oracle-fixture/exhausted? paired-trials))
      :oracle-fixture-warnings
      (vec (distinct (mapcat :oracle-fixture/warnings paired-trials)))
+     :oracle-fixture-warning-errors
+     (count (filter #(= :error (:level %))
+                    (mapcat :oracle-fixture/warnings paired-trials)))
      :honest-mean       (double mean-h)
      :honest-std        (double (std-dev profits-honest mean-h))
      :honest-min        (if (seq sorted-h) (first sorted-h) 0)
@@ -184,14 +157,22 @@
                           Double/POSITIVE_INFINITY)
      :appeal-rate       (double (/ appeal-count n-trials))
      :escalation-rate   (double (/ escalation-count n-trials))
+     :l2-detection-rate (double (/ l2-detected-count n-trials))
      :slash-rate        (double (/ total-slashed n-trials))
      :fraud-slash-rate  (double (/ fraud-slashed n-trials))
      :reversal-slash-rate (double (/ reversal-slashed n-trials))
      :timeout-slash-rate  (double (/ timeout-slashed n-trials))
-     ;; These keys are used by run-single-epoch from aggregate-malice
      :fraud-slashed-count    fraud-slashed
      :reversal-slashed-count reversal-slashed
-     :timeout-slashed-count  timeout-slashed}))
+     :timeout-slashed-count  timeout-slashed
+     :frozen-rate       (double (/ frozen-count n-trials))
+     :escaped-rate      (double (/ escaped-count n-trials))
+     :adjusted-strategy (:adjusted-strategy params (or (:force-strategy params) (:strategy params :honest)))
+     :bribery-enabled (boolean (and (:bribe-cost-ratio params)
+                                    (:fraud-slash-bps params)
+                                    (> (:fraud-slash-bps params) 0)))
+     :bribery-cost (when (:bribe-cost-ratio params)
+                     (integration/calculate-bribery-cost params))}))
 
 (defn run-shared-batch
   "Run n-trials disputes generating PAIRED honest and malicious outcomes.

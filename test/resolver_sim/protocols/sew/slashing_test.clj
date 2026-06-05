@@ -317,6 +317,72 @@
       (is (false? (:ok r)))
       (is (= :slash-not-pending (:error r))))))
 
+(deftest reversal-slash-zero-bps-is-noop
+  (testing "handle-reversal-slashing is a no-op when reversal-slash-bps is 0"
+    (let [{:keys [world workflow-id steps]}
+          (rev-fx/build-reversal-world {:snapshot {:reversal-slash-bps 0}})
+          after-l0 (:after-l0 steps)
+          slash-id (str workflow-id "-reversal-0")]
+      (is (nil? (get-in world [:pending-fraud-slashes slash-id]))
+          "no slash entry created")
+      (is (= (reg/get-stake after-l0 "0xL0Res")
+             (reg/get-stake world "0xL0Res"))
+          "L0 resolver stake unchanged after reversal"))))
+
+(deftest reversal-slash-after-fraud-slash
+  (testing "Reversal slash reads current stake at reversal time (Solidity semantics)"
+    (let [gov "0xGov"
+          r0 "0xRes0"
+          r1 "0xRes1"
+          buyer "0xBuyer"
+          seller "0xSeller"
+          snap (snap-fix/escrow-snapshot {:dispute-resolver r0
+                                         :reversal-slash-bps 2500
+                                         :appeal-window-duration 2000000
+                                         :challenge-window-duration 2000000
+                                         :max-dispute-level 2
+                                         :escrow-fee-bps 0
+                                         :resolver-bond-bps 10000})
+          world0 (-> (t/empty-world 1000)
+                     (reg/register-stake r0 10000)
+                     (reg/register-stake r1 5000))
+          {:keys [world workflow-id]}
+          (lc/create-escrow world0 buyer "USDC" seller 8000 {} snap)
+          after-raise (:world (lc/raise-dispute world workflow-id buyer))
+          after-l0 (:world (res/execute-resolution after-raise workflow-id r0 true "0xhash" nil))
+
+          ;; Reduce L0's stake via fraud slash before escalation.
+          ;; Advance time past the slash timelock, then reset for challenge window.
+          world-slashed (-> (res/propose-fraud-slash after-l0 workflow-id gov r0 5000) :world
+                            (assoc :block-time 3000001)
+                            (res/execute-fraud-slash workflow-id)
+                            :world
+                            (assoc :block-time 1000))
+
+          ;; Escalate and reverse
+          esc-fn (fn [_ _ _ _] {:ok true :new-resolver r1})
+          after-escalation (:world (res/challenge-resolution world-slashed workflow-id buyer esc-fn))
+          after-l1 (:world (res/execute-resolution after-escalation workflow-id r1 false "0xhash2" nil))
+          slash-id (str workflow-id "-reversal-0")
+          slash (get-in after-l1 [:pending-fraud-slashes slash-id])]
+      (is (some? slash) "reversal slash entry exists")
+      ;; basis-amount reads current stake at reversal time, not original stake at decision
+      (is (= 5000 (:basis-amount slash)) "basis-amount is remaining stake after fraud slash")
+      ;; 2500 bps = 25% of 5000 remaining stake = 1250
+      (is (= 1250 (:amount slash)) "slash amount is 25% of remaining stake")
+      (is (= 3750 (reg/get-stake after-l1 r0)) "L0 stake reduced from 5000 → 3750"))))
+
+(deftest reversal-slash-without-challenger
+  (testing "handle-reversal-slashing handles nil challenger gracefully"
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
+          world-no-challenger (update world :challengers dissoc workflow-id)
+          slash-id (str workflow-id "-reversal-0")
+          slash (get-in world-no-challenger [:pending-fraud-slashes slash-id])]
+      (is (some? slash) "reversal slash entry exists despite nil challenger")
+      (is (= :executed (:status slash)) "slash executed normally")
+      (is (= "0xL0Res" (:resolver slash)))
+      (is (pos? (reg/get-stake world-no-challenger "0xL0Res")) "stake deduction still occurs"))))
+
 (deftest propose-fraud-slash-guards-test
   (let [buyer "0xBuyer"
         seller "0xSeller"

@@ -54,45 +54,63 @@
              {}
              snapshot->mc-keys))
 
-;; ── Scenario → MC param bridge ────────────────────────────────────────────────
+;; ── Scenario protocol-params → MC param bridge ────────────────────────────────
 
-(def protocol-params->mc-keys
-  "Mapping of invariant scenario :protocol-params keys to their MC param
-   equivalents. Only fields that exist in both the scenario protocol-params
-   map and the MC param vocabulary are listed."
-  {:resolver-fee-bps                :fee-bps
-   :appeal-bond-bps                 :bond-bps
-   :reversal-slash-bps              :reversal-slash-bps
-   :resolver-bond-bps               :resolver-bond-bps
-   :reversal-detection-probability  :reversal-detection-probability})
+(defn protocol-params->mc-overrides
+  "Extract MC-settable fields from scenario :protocol-params as a flat override map.
+   Uses 1:1 key mapping — keys that exist in protocol-params AND are consumed
+   by the MC engine pass through unchanged.  Keys absent from protocol-params
+   are skipped (their value comes from types/default-params).
+
+   Override chain (rightmost wins):
+     types/default-params
+       ← protocol-params->mc-overrides(:protocol-params)
+       ← scenario :mc-params
+       ← runtime CLI options"
+  [pp]
+  (let [pp (or pp {})]
+    (cond-> {}
+      (:resolver-fee-bps pp)
+      (assoc :resolver-fee-bps (:resolver-fee-bps pp))
+
+      (:fraud-slash-bps pp)
+      (assoc :fraud-slash-bps (:fraud-slash-bps pp))
+
+      (:timeout-slash-bps pp)
+      (assoc :timeout-slash-bps (:timeout-slash-bps pp))
+
+      (:reversal-slash-bps pp)
+      (assoc :reversal-slash-bps (:reversal-slash-bps pp))
+
+      (:fraud-detection-probability pp)
+      (assoc :fraud-detection-probability (:fraud-detection-probability pp))
+
+      (:timeout-detection-probability pp)
+      (assoc :timeout-detection-probability (:timeout-detection-probability pp))
+
+      (:reversal-detection-probability pp)
+      (assoc :reversal-detection-probability (:reversal-detection-probability pp)))))
 
 (defn scenario->mc-params
-  "Build an MC param map from an invariant scenario map.
+  "Build a complete MC param map from a scenario's :protocol-params
+   and optional :mc-params.
 
-   Merges two sources (latter wins):
+   Layers (rightmost wins):
+     1. types/default-params          — full 35+ key baseline
+     2. protocol-params->mc-overrides — 7 fields mapped 1:1 from :protocol-params
+     3. scenario :mc-params           — explicit MC-only override map
 
-     1. Shared fields derived from :protocol-params that have MC
-        equivalents (see protocol-params->mc-keys).
-     2. The optional :mc-params map.
-
-   Does NOT produce a complete MC param set. Callers must merge the
-   result with default-params or a base MC param map for fields not
-   covered by either source.
+   The result is a complete MC param set ready for batch/run-batch.
+   No separate merge with default-params is needed.
 
    Example:
-
-     (merge types/default-params
-            (params/scenario->mc-params scenario))"
+     (params/scenario->mc-params scenario)"
   [scenario]
-  (let [pp (:protocol-params scenario {})
-        mc (:mc-params scenario {})
-        shared (reduce-kv (fn [m pp-key mc-key]
-                            (if (contains? pp pp-key)
-                              (assoc m mc-key (get pp pp-key))
-                              m))
-                          {}
-                          protocol-params->mc-keys)]
-    (merge shared mc)))
+  (let [pp (:protocol-params scenario)
+        mc (:mc-params scenario)]
+    (merge types/default-params
+           (protocol-params->mc-overrides pp)
+           mc)))
 
 (defn merge-snap
   "Merge a replay ModuleSnapshot into a base MC param map.

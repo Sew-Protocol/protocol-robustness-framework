@@ -18,6 +18,10 @@
             [resolver-sim.scenario.summary :as scenario-summary]
             [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.sim.reporter :as reporter]
+            [resolver-sim.sim.batch :as batch]
+            [resolver-sim.stochastic.params :as stoch-params]
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.protocols.sew.invariant-scenarios :as sew-scenarios]
             [clojure.pprint :as pp]))
 
 (def ^:private golden-schema-version "2.0")
@@ -365,3 +369,53 @@
                                                  :suite/prevents]))))
                {}
                manifest)))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; MC batch runner: drives scenario protocol-params → stochastic batch analysis
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn- lookup-scenario
+  "Find a scenario map by its :scenario-id string in the Sew invariant scenario registry."
+  [scenario-id]
+  (some #(let [s (second %)]
+           (when (= scenario-id (:scenario-id s)) s))
+        sew-scenarios/all-scenarios))
+
+(defn scenario->mc-params
+  "Compute a complete MC param map from a scenario.
+   Override chain: default-params ← protocol-params ← :mc-params."
+  [scenario]
+  (stoch-params/scenario->mc-params scenario))
+
+(defn run-mc-batch-for-scenario
+  "Run an MC batch using a scenario's :protocol-params as the shared source.
+
+   Looks up the scenario by :scenario-id in the invariant scenario registry,
+   derives MC params via scenario->mc-params, and runs batch/run-batch.
+
+   Override chain (rightmost wins):
+     types/default-params
+       ← protocol-params->mc-overrides(:protocol-params)
+       ← scenario :mc-params
+       ← {:n-trials n-trials :rng-seed rng-seed :scenario-id scenario-id}
+
+   Returns the aggregate stats map from batch/run-batch."
+  [scenario-id & {:keys [n-trials rng-seed]
+                  :or   {n-trials 1000
+                         rng-seed  42}}]
+  (if-let [scenario (lookup-scenario scenario-id)]
+    (let [params (merge (scenario->mc-params scenario)
+                        {:n-trials    n-trials
+                         :rng-seed    rng-seed
+                         :scenario-id scenario-id})
+          rng    (rng/make-rng rng-seed)]
+      (batch/run-batch rng (:n-trials params) params))
+    (throw (ex-info "Scenario not found" {:scenario-id scenario-id}))))
+
+(defn run-mc-batch-for-scenarios
+  "Run MC batches for a collection of scenario-ids. Returns a vector of [scenario-id aggregate]."
+  [scenario-ids & {:keys [n-trials rng-seed]
+                   :or   {n-trials 1000
+                          rng-seed  42}}]
+  (mapv (fn [sid] [sid (run-mc-batch-for-scenario sid :n-trials n-trials :rng-seed rng-seed)])
+        scenario-ids))
