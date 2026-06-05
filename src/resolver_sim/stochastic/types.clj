@@ -23,8 +23,12 @@
    :fraud-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
    :reversal-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :reversal-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :oracle-fixture (fn [m]
+    :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
+    :l1-honest-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :l1-lazy-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :l1-collusive-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :l1-unknown-strategy-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :oracle-fixture (fn [m]
                      (and (map? m)
                           (contains? #{:stochastic :static-no-slash :static-always-detect
                                        :fixed-roll-sequence :fixed-or}
@@ -40,7 +44,10 @@
                           (or (nil? (:scope m)) (set? (:scope m)))
                           (or (nil? (:on-exhaustion m))
                               (contains? #{:throw :repeat-last :cycle}
-                                         (:on-exhaustion m)))))
+                                         (:on-exhaustion m)))
+                          (or (nil? (:on-unknown-roll-kind m))
+                              (contains? #{:throw :stochastic}
+                                         (:on-unknown-roll-kind m)))))
    :oracle-mode (fn [x] (contains? #{:stochastic :static-no-slash :static-always-detect
                                    :fixed-roll-sequence :fixed-or} x))
    :fixed-or (fn [x]
@@ -113,6 +120,10 @@
    :reversal-detection-probability 1.0          ; Keep historical deterministic reversal behavior
    :reversal-slash-bps 0                        ; Phase I: reversal slashing disabled (0 bps)
    :timeout-slash-bps 200                       ; Phase I: timeout penalty (2% = 200 bps, from contracts)
+   :l1-honest-detection-probability 0.01        ; L1 false-positive catch rate for honest resolvers
+   :l1-lazy-detection-probability 0.02          ; L1 catch rate for lazy resolvers
+   :l1-collusive-detection-probability 0.05     ; L1 catch rate for collusive resolvers
+   :l1-unknown-strategy-detection-probability 0.0 ; L1 catch rate for unrecognized strategies
    :fraud-model :single-stage-ev                ; legacy default for backward compatibility
    :escalation-assumption-band :base            ; for :sequential-escalation mode
    :p-appeal-wrong 0.40
@@ -177,7 +188,11 @@
     ;; Optional author metadata
     :author
     :author-id
-    :evidence-quality?})
+    :evidence-quality?
+    :l1-honest-detection-probability
+    :l1-lazy-detection-probability
+    :l1-collusive-detection-probability
+    :l1-unknown-strategy-detection-probability})
 
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."

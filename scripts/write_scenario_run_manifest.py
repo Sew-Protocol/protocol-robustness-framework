@@ -507,18 +507,17 @@ def main() -> int:
     
     if result.returncode == 0:
         # Update "latest" symlink
-        if latest_dir.exists():
+        if latest_dir.exists() or latest_dir.is_symlink():
             if latest_dir.is_symlink():
                 latest_dir.unlink()
             else:
-                # If it's a directory, maybe move/backup or just delete?
-                # For now, remove the directory to symlink.
                 import shutil
                 shutil.rmtree(latest_dir)
         
-        # Create relative symlink for portability
-        os.symlink(per_run_dir.name, latest_dir, target_is_directory=True)
-        print(f"[scenario-run-manifest] Verified & symlinked latest: {latest_dir} -> {per_run_dir}")
+        # Create relative symlink: results/test-artifacts -> runs/<per_run_dir.name>
+        target = pathlib.Path("runs") / per_run_dir.name
+        latest_dir.symlink_to(target, target_is_directory=True)
+        print(f"[scenario-run-manifest] Verified & symlinked latest: {latest_dir} -> {target}")
     else:
         print(f"[scenario-run-manifest] WARNING: Verification failed for {registry_file}. Latest symlink not updated.")
 

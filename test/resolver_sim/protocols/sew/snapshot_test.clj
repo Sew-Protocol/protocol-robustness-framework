@@ -99,3 +99,11 @@
 
 (deftest test-sew-preset-zero-fee
   (is (zero? (:escrow-fee-bps (presets/preset->snapshot :sew.preset/zero-fee)))))
+
+(deftest test-sew-preset-moderate-dispute
+  (let [snap (presets/preset->snapshot :sew.preset/moderate-dispute)]
+    (is (= 14400 (:appeal-window-duration snap)) "4-hour appeal window")
+    (is (= 250 (:appeal-bond-bps snap)))
+    (is (= 1500 (:resolver-bond-bps snap)))
+    (is (= 500 (:reversal-slash-bps snap)))
+    (is (= 50 (:escrow-fee-bps snap)) "base fee preserved")))

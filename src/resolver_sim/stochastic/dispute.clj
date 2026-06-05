@@ -43,16 +43,16 @@
   [rng escrow-wei fee-bps bond-bps slash-mult strategy
    appeal-prob-correct appeal-prob-wrong detection-prob
    & {:keys [senior-resolver-skill resolver-bond-bps resolver-stake-wei l2-detection-prob
-             slashing-detection-delay-weeks allow-slashing?
-             unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
-             detection-type timeout-detection-probability reversal-detection-probability
-             fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
-             new-evidence-probability
-             fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
-             p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
-             model-appeal-costs? appeal-bond-recovery-rate
-             oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-             fixed-or oracle-roll-trace-enabled? evidence-quality?]
+              slashing-detection-delay-weeks allow-slashing?
+              unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
+              detection-type timeout-detection-probability reversal-detection-probability
+              fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
+              new-evidence-probability
+              fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
+              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+              model-appeal-costs? appeal-bond-recovery-rate
+              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
+              fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -71,24 +71,15 @@
            timeout-slash-bps 200
            new-evidence-probability 0.0
            resolver-stake-wei nil
-           ;; MC-1: escrow-diversion upside for malicious resolvers.
-           ;; 0.0 = original model (no upside); 0.22 = calibrated to adversarial suite.
            fraud-success-rate 0.0
-            ;; Fraud payoff model:
-            ;; :single-stage-ev       -> legacy scalar fraud-success-rate shortcut
-            ;; :sequential-escalation -> appeal/escalation-aware survival probability
-            ;; :strict-all-tiers      -> escrow loss only if L1 and L2 both fail
-            ;;                          (assumes appeal/escalation always pursued)
-            fraud-model :single-stage-ev
-            escalation-assumptions econ/default-escalation-assumptions
-            escalation-assumption-band :base
-           ;; MC-4: model appeal-bond recovery for honest resolvers.
-           ;; false = original model; true = resolver earns fraction of failed challenge bond.
+           fraud-model :single-stage-ev
+           escalation-assumptions econ/default-escalation-assumptions
+           escalation-assumption-band :base
            model-appeal-costs? false
-           ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
            appeal-bond-recovery-rate 0.5
            oracle-roll-trace-enabled? false
-           evidence-quality? false}}]
+           evidence-quality? false}
+      :as all-kw-args}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
@@ -97,33 +88,14 @@
         resolver-stake  (long (or resolver-stake-wei escrow-wei))
 
         oracle-params   (detection/prepare-oracle-params
-                         {:rng rng
-                          :fraud-detection-probability fraud-detection-probability
-                          :timeout-detection-probability timeout-detection-probability
-                          :reversal-detection-probability reversal-detection-probability
-                          :l2-detection-prob l2-detection-prob
-                          :fraud-slash-bps fraud-slash-bps
-                          :reversal-slash-bps reversal-slash-bps
-                          :timeout-slash-bps timeout-slash-bps
-                          :new-evidence-probability new-evidence-probability
-                          :freeze-on-detection? freeze-on-detection?
-                          :freeze-duration-days freeze-duration-days
-                          :appeal-window-days appeal-window-days
-                          :unstaking-delay-days unstaking-delay-days
-                          :slashing-detection-delay-weeks slashing-detection-delay-weeks
-                          :escalation-assumptions escalation-assumptions
-                          :escalation-assumption-band escalation-assumption-band
-                          :p-l1-reversal p-l1-reversal
-                          :p-l2-escalation p-l2-escalation
-                          :p-l2-reversal p-l2-reversal
-                          :has-kleros? has-kleros?
-                          :oracle-fixture oracle-fixture
-                          :oracle-mode oracle-mode
-                          :oracle-roll-sequence oracle-roll-sequence
-                          :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
-                          :fixed-or fixed-or
-                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
-                          :evidence-quality? evidence-quality?})
+                         (merge {:rng rng}
+                                (dissoc all-kw-args
+                                        :senior-resolver-skill
+                                        :fraud-success-rate
+                                        :fraud-model
+                                        :model-appeal-costs?
+                                        :appeal-bond-recovery-rate
+                                        :detection-type)))
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?

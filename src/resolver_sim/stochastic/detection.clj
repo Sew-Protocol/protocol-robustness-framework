@@ -43,9 +43,16 @@
 
    Verdict correctness and whether an appeal is filed still use trial :rng.
    Prefer per-kind :rolls maps over a shared vector."
-  [:l1-reversal :l2-escalation :l2-reversal
-   :reversal-detection :pending-evidence
-   :fraud-detection :timeout-detection :l1-detection :l2-detection])
+   [:l1-reversal :l2-escalation :l2-reversal
+    :reversal-detection :pending-evidence
+    :fraud-detection :timeout-detection :l1-detection :l2-detection])
+
+(def default-slash-bps
+  "Canonical defaults for slash-bps parameter fallbacks.
+   Matches default-params in types.clj."
+  {:fraud   0
+   :reversal 0
+   :timeout 200})
 
 (defn- normalize-oracle-mode
   "Mode aliases. :fixed-or is shorthand for :fixed-roll-sequence."
@@ -96,13 +103,15 @@
         legacy-on-exhaustion (:oracle-roll-on-exhaustion params)
         fixture (merge (:oracle-fixture params {})
                      (fixture-from-fixed-or (:fixed-or params)))
-        mode (normalize-oracle-mode (or (:mode fixture) legacy-mode :stochastic))
+         mode (normalize-oracle-mode (or (:mode fixture) legacy-mode :stochastic))
         scope (or (:scope fixture) #{:detection})
         on-exhaustion (or (:on-exhaustion fixture) legacy-on-exhaustion :throw)
+        on-unknown-roll-kind (or (:on-unknown-roll-kind fixture) :throw)
         rolls (or (:rolls fixture) legacy-rolls [])]
     {:mode mode
      :scope scope
      :on-exhaustion on-exhaustion
+     :on-unknown-roll-kind on-unknown-roll-kind
      :rolls rolls}))
 
 (defn- orphan-legacy-oracle-keys
@@ -145,10 +154,19 @@
                            :allowed (conj (vec oracle-fixture-roll-kinds) :default)})))
         (when (empty? v)
           (throw (ex-info "oracle-fixture :rolls sequence must be non-empty"
-                          {:roll-kind k})))))
+                          {:roll-kind k})))
+        (doseq [val v]
+          (when (not (<= 0.0 (double val) 1.0))
+            (throw (ex-info "oracle-fixture per-kind roll value out of [0,1] range"
+                            {:roll-kind k :roll-value val}))))))
     (when (and (= mode :fixed-roll-sequence) (vector? rolls) (empty? rolls))
       (throw (ex-info "oracle-fixture :fixed-roll-sequence requires non-empty :rolls"
                       {:rolls rolls})))
+    (when (and (= mode :fixed-roll-sequence) (vector? rolls) (seq rolls))
+      (doseq [val rolls]
+        (when (not (<= 0.0 (double val) 1.0))
+          (throw (ex-info "oracle-fixture roll value out of [0,1] range"
+                          {:roll-value val})))))
     (when-let [orphans (seq (orphan-legacy-oracle-keys params effective))]
       (throw (ex-info "Orphan oracle legacy keys ignored by effective fixture"
                       {:orphan-keys orphans
@@ -234,15 +252,16 @@
   (let [l1-malicious (double (or slashing-detection-prob
                                  (:slashing-detection-probability params)
                                  0.1))]
-    {:fraud (double (or (:fraud-detection-probability params)
+    {     :fraud (double (or (:fraud-detection-probability params)
                         l1-malicious
                         0.0))
      :timeout (double (:timeout-detection-probability params 0.0))
      :reversal (double (:reversal-detection-probability params 1.0))
-     :l1-honest 0.01
-     :l1-lazy 0.02
+     :l1-honest (double (:l1-honest-detection-probability params 0.01))
+     :l1-lazy (double (:l1-lazy-detection-probability params 0.02))
      :l1-malicious l1-malicious
-     :l1-collusive 0.05}))
+     :l1-collusive (double (:l1-collusive-detection-probability params 0.05))
+     :l1-unknown (double (:l1-unknown-strategy-detection-probability params 0.0))}))
 
 (defn- l1-base-detection-prob
   [strategy probs]
@@ -251,7 +270,7 @@
     :lazy (:l1-lazy probs)
     :malicious (:l1-malicious probs)
     :collusive (:l1-collusive probs)
-    0.0))
+    (:l1-unknown probs 0.0)))
 
 (defn- valid-roll-seq?
   [xs]
@@ -356,7 +375,9 @@
    :roll/on-exhaustion, :roll/repeated-index, or :roll/cycled-index when the
    sequence is past its end (:repeat-last / :cycle). MC-only — replay.clj ignores these."
   [params roll-kind]
-  (let [{:keys [mode scope on-exhaustion rolls]} (normalize-oracle-fixture params)
+  (let [{:keys [mode scope on-exhaustion on-unknown-roll-kind rolls]}
+        (or (:oracle-effective params)
+            (normalize-oracle-fixture params))
         in-scope? (in-oracle-scope? scope roll-kind)]
     (if (not in-scope?)
       (make-roll-event roll-kind :stochastic (rng/roll-double (:rng params)))
@@ -385,12 +406,21 @@
                         (throw (ex-info "Missing :oracle-roll-cursor for :fixed-roll-sequence fixture"
                                         {:roll-kind roll-kind :mode mode})))
                       (swap! shared-cursor inc)))
-              i (dec idx)
               n (count rolls*)]
-          (when (zero? n)
-            (throw (ex-info "Empty :oracle-fixture :rolls for :fixed-roll-sequence"
-                            {:roll-kind roll-kind :mode mode :rolls rolls})))
-          (fixed-roll-event params roll-kind rolls* i n on-exhaustion))
+          (if (zero? n)
+            (case on-unknown-roll-kind
+              :throw
+              (throw (ex-info "Empty per-kind :rolls sequence for :fixed-roll-sequence"
+                              {:roll-kind roll-kind :mode mode :rolls rolls
+                               :on-unknown-roll-kind on-unknown-roll-kind}))
+              :stochastic
+              (make-roll-event roll-kind :stochastic (rng/roll-double (:rng params)))
+              (throw (ex-info "Unsupported :on-unknown-roll-kind policy"
+                              {:roll-kind roll-kind
+                               :on-unknown-roll-kind on-unknown-roll-kind
+                               :supported #{:throw :stochastic}})))
+            (let [i (dec idx)]
+              (fixed-roll-event params roll-kind rolls* i n on-exhaustion))))
 
         :stochastic
         (make-roll-event roll-kind :stochastic (rng/roll-double (:rng params)))
@@ -549,10 +579,10 @@
   "Slash amount in wei. Reversal uses stake basis (live); other reasons use bond basis."
   [reason params {:keys [bond-total resolver-stake slash-mult timeout-detected?]}]
   (case reason
-    :reversal (payoffs/calculate-reversal-slash resolver-stake (:reversal-slash-bps params 0))
-    :fraud    (long (* bond-total (/ (:fraud-slash-bps params 0) 10000.0)))
+    :reversal (payoffs/calculate-reversal-slash resolver-stake (:reversal-slash-bps params (:reversal default-slash-bps)))
+    :fraud    (long (* bond-total (/ (:fraud-slash-bps params (:fraud default-slash-bps)) 10000.0)))
     :timeout  (if timeout-detected?
-                (long (* bond-total (/ (:timeout-slash-bps params 200) 10000.0)))
+                (long (* bond-total (/ (:timeout-slash-bps params (:timeout default-slash-bps)) 10000.0)))
                 (long (* bond-total slash-mult)))
     nil 0))
 
@@ -597,30 +627,3 @@
         freeze-duration (:freeze-duration-days params 3)
         appeal-window (:appeal-window-days params 7)]
     (max 0 (- unstaking-delay freeze-duration appeal-window))))
-
-(defn detection-result->penalty
-  [detection params]
-  (cond
-    (:fraud-detected? detection)
-    {:penalty-applied? true
-     :slash-reason :fraud
-     :slash-bps (:fraud-slash-bps params 5000)
-     :frozen? (:freeze-on-detection? params true)}
-
-    (:reversal-detected? detection)
-    {:penalty-applied? true
-     :slash-reason :reversal
-     :slash-bps (:reversal-slash-bps params 2500)
-     :frozen? false}
-
-    (:timeout-detected? detection)
-    {:penalty-applied? true
-     :slash-reason :timeout
-     :slash-bps (:timeout-slash-bps params 200)
-     :frozen? false}
-
-    :else
-    {:penalty-applied? false
-     :slash-reason nil
-     :slash-bps 0
-     :frozen? false}))

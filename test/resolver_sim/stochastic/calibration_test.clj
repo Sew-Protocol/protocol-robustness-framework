@@ -40,6 +40,7 @@
             [resolver-sim.stochastic.dispute   :as dispute]
             [resolver-sim.stochastic.rng       :as rng]
             [resolver-sim.stochastic.params    :as params]
+            [resolver-sim.protocols.sew.snapshot :as snap]
             [resolver-sim.protocols.sew.types  :as t]
             [resolver-sim.economics.payoffs    :as payoffs]
             [resolver-sim.oracle.detection     :as oracle]))
@@ -240,50 +241,56 @@
 ;; ── 7. Param bridge (MC-6) ───────────────────────────────────────────────────
 
 (deftest param-bridge-known-fields
-  (testing "from-snap maps all known snapshot fields"
-    (let [snap {:resolver-fee-bps        150
-                :appeal-bond-bps         700
-                :fraud-slash-bps         5000
-                :reversal-slash-bps      2500
-                :timeout-slash-bps        200
-                :resolver-bond-bps       1000
-                :l2-detection-prob        0.3
-                :slashing-detection-prob  0.1
-                :fraud-success-rate       0.22
-                :fraud-detection-prob     0.15
-                :reversal-detection-prob  0.05
-                :timeout-detection-prob   0.08
-                :unknown-field           :ignored}
+  (testing "from-snap maps only fields that exist in a real ModuleSnapshot"
+    (let [snap {:escrow-fee-bps                150
+                :appeal-bond-bps               700
+                :reversal-slash-bps            2500
+                :resolver-bond-bps             1000
+                :reversal-detection-probability 0.25
+                :unknown-field                 :ignored}
           out  (params/from-snap snap)]
       (is (= 150  (:fee-bps out)))
       (is (= 700  (:bond-bps out)))
-      (is (= 5000 (:fraud-slash-bps out)))
       (is (= 2500 (:reversal-slash-bps out)))
-      (is (= 200  (:timeout-slash-bps out)))
       (is (= 1000 (:resolver-bond-bps out)))
-      (is (= 0.3  (:l2-detection-prob out)))
-      (is (= 0.1  (:detection-prob out)))
-      (is (= 0.22 (:fraud-success-rate out)))
-      (is (= 0.15 (:fraud-detection-probability out)))
-      (is (= 0.05 (:reversal-detection-probability out)))
-      (is (= 0.08 (:timeout-detection-probability out)))
-      (is (nil?   (:unknown-field out)) "unknown fields must be dropped"))))
+      (is (= 0.25 (:reversal-detection-probability out)))
+      (is (nil?   (:unknown-field out)) "unknown fields must be dropped")
+      (is (nil?   (:fraud-slash-bps out)) "MC-only field must not appear")
+      (is (nil?   (:timeout-slash-bps out)) "MC-only field must not appear")
+      (is (nil?   (:fraud-success-rate out)) "MC-only field must not appear")
+      (is (nil?   (:fraud-model out)) "MC-only field must not appear"))))
 
 (deftest param-bridge-partial-snap
   (testing "from-snap handles partial snapshots without error"
-    (let [snap {:resolver-fee-bps 200}
+    (let [snap {:escrow-fee-bps 200}
           out  (params/from-snap snap)]
       (is (= 200 (:fee-bps out)))
-      (is (nil? (:bond-bps out))))))
+      (is (nil? (:bond-bps out)))
+      (is (nil? (:reversal-slash-bps out)) "partial snap drops unset keys"))))
 
 (deftest param-bridge-merge-snap-overrides
-  (testing "merge-snap overrides base fields with snap values"
-    (let [base {:fee-bps 100 :detection-prob 0.05 :other 99}
-          snap {:resolver-fee-bps 150 :slashing-detection-prob 0.1}
+  (testing "merge-snap overrides base fields with snapshot values"
+    (let [base {:fee-bps 100 :reversal-slash-bps 2000 :other 99}
+          snap {:escrow-fee-bps 150 :reversal-slash-bps 2500}
           out  (params/merge-snap base snap)]
-      (is (= 150 (:fee-bps out))     "snap value should override base")
-      (is (= 0.1 (:detection-prob out)) "snap value should override base")
-      (is (= 99  (:other out))       "non-overridden base fields should be kept"))))
+      (is (= 150 (:fee-bps out))     "snap value overrides base")
+      (is (= 2500 (:reversal-slash-bps out)) "snap value overrides base")
+      (is (= 99  (:other out))       "non-overridden base fields kept"))))
+
+(deftest from-snap-real-snapshot
+  (testing "from-snap works with a real snapshot from snapshot-from-protocol-params"
+    (let [snap (snap/snapshot-from-protocol-params
+                {:resolver-fee-bps 150 :appeal-bond-bps 700
+                 :resolver-bond-bps 1000 :reversal-slash-bps 2500
+                 :reversal-detection-probability 0.25})
+          out (params/from-snap snap)]
+      (is (= 150 (:fee-bps out)))
+      (is (= 700 (:bond-bps out)))
+      (is (= 1000 (:resolver-bond-bps out)))
+      (is (= 2500 (:reversal-slash-bps out)))
+      (is (= 0.25 (:reversal-detection-probability out)))
+      (is (nil? (:fraud-slash-bps out)) "MC-only field not produced from snapshot")
+      (is (nil? (:timeout-slash-bps out)) "MC-only field not produced from snapshot"))))
 
 ;; ── 8. Appeal economics (MC-4) ───────────────────────────────────────────────
 
@@ -487,15 +494,15 @@
           (str "at 10% detection, malice should dominate: honest=" ev-honest " malice=" ev-malice)))))
 
 (deftest param-bridge-sequential-fields
-  (testing "from-snap maps sequential fraud model fields including has-kleros?"
-    (let [snap {:fraud-model :sequential-escalation
-                :escalation-assumption-band :base
-                :p-appeal-wrong 0.40
-                :p-l1-reversal 0.85
-                :has-kleros? false
-                :p-l2-escalation 0.70
-                :p-l2-reversal 0.95}
-          out  (params/from-snap snap)]
+  (testing "scenario->mc-params passes through sequential fraud model fields from :mc-params"
+    (let [scenario {:mc-params {:fraud-model :sequential-escalation
+                                :escalation-assumption-band :base
+                                :p-appeal-wrong 0.40
+                                :p-l1-reversal 0.85
+                                :has-kleros? false
+                                :p-l2-escalation 0.70
+                                :p-l2-reversal 0.95}}
+          out  (params/scenario->mc-params scenario)]
       (is (= :sequential-escalation (:fraud-model out)))
       (is (= :base (:escalation-assumption-band out)))
       (is (= 0.40 (:p-appeal-wrong out)))
