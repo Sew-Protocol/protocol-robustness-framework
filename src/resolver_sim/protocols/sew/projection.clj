@@ -14,18 +14,15 @@
   (:require [resolver-sim.scenario.projection :as proj]
             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.yield.evidence :as ye]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
 ;; ---------------------------------------------------------------------------
 
-(def ^:private terminal-escrow-states
-  "Sew escrow states from which no further transitions are possible."
-  #{:released :refunded :cancelled :timeout})
-
 (defn- terminal-state? [state]
-  (contains? terminal-escrow-states (keyword (or state ""))))
+  (contains? t/terminal-states (keyword (or state ""))))
 
 (defn- escalation-event? [action]
   (boolean (re-find #"escalat" (str (or action "")))))

@@ -40,10 +40,10 @@
           status (get-in world [:yield/module-status mid] :active)
           mode   (get-in world [:yield/risk mid token :liquidity-mode] :available)]
       (and (= status :active)
-           (not (contains? #{:shortfall :frozen :paused} mode))))))
+           (not (contains? yield-acct/liquidity-modes mode))))))
 
 (defn- resolver-available? [world resolver]
-  (if (or (nil? resolver) (= resolver "0x0000000000000000000000000000000000000000"))
+  (if (or (nil? resolver) (= resolver t/zero-address))
     true
     (let [capacity-ok? (not (t/resolver-at-capacity? world resolver))
           freeze-expiry (get-in world [:resolver-frozen-until resolver] 0)
@@ -517,8 +517,8 @@
           resolver        (:dispute-resolver et)
           slash-amt       (:amount-after-fee et)
           token           (:token et)
-          has-resolver?   (and resolver
-                               (not= resolver "0x0000000000000000000000000000000000000000"))
+           has-resolver?   (and resolver
+                                (not= resolver t/zero-address))
           
           ;; Ensure finalize, slash, and distribution are handled 
           ;; as a single, atomic state transition to satisfy invariants.

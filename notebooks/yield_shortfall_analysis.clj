@@ -1,5 +1,5 @@
+^{:nextjournal.clerk/visibility {:code :show :result :show}}
 (ns notebooks.yield-shortfall-analysis
-  {:nextjournal.clerk/visibility {:code :show :result :show}}
   "General analysis notebook for yield module shortfall resilience.
    
    This notebook demonstrates how to instrument and analyze liquidity
@@ -74,9 +74,9 @@ This scenario demonstrates how a module's policy engine autonomously handles a s
 ")
 
 (def scenario-s107
-  {:scenario-id \"s107-isolated-shortfall\"
+  {:scenario-id "s107-isolated-shortfall"
    :events [
-     {:seq 0 :action \"set-yield-risk\" 
-      :params {:module-id \"aave\" :token \"USDC\" :liquidity-mode \"shortfall\" 
+     {:seq 0 :action "set-yield-risk"
+      :params {:module-id "aave" :token "USDC" :liquidity-mode "shortfall"
                :shortfall {:available-ratio 0.5}}}]})
 

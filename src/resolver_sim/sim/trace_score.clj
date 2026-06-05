@@ -1,7 +1,8 @@
 (ns resolver-sim.sim.trace-score
   "Pure trace scoring for replay results (no I/O).
 
-   Used by simulation phases and by io/trace-score for persistence workflows.")
+   Used by simulation phases and by io/trace-score for persistence workflows."
+  (:require [resolver-sim.protocols.sew.types :as t]))
 
 (defn- classify-issue
   [result]
@@ -23,7 +24,7 @@
         proj       (:projection last-entry)]
     (when proj
       (let [transfers (vals (:escrow-transfers proj {}))]
-        (boolean (some #(#{:pending :disputed} (:escrow-state %)) transfers))))))
+        (boolean (some #(contains? t/live-states (:escrow-state %)) transfers))))))
 
 (defn score-result
   "Compute :trace-score for a replay-with-protocol result map."

@@ -9,6 +9,10 @@
 
 (def ^:private default-asset-decimals 18)
 
+(def liquidity-modes
+  "Liquidity-mode keywords that block new deposits."
+  #{:shortfall :frozen :paused})
+
 (defn- normalize-token [token]
   (cond
     (keyword? token) token

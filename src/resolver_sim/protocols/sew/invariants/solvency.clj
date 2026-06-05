@@ -15,7 +15,7 @@
   (reduce + 0 (for [[wf agents] (:bond-balances world)
                     [agent amt] agents
                     :let [et (get-in world [:escrow-transfers wf])]
-                    :when (= (= (:token et) token))]
+                     :when (= (:token et) token)]
                 amt)))
 
 (defn- get-slash-appeal-bond-sum [world token]

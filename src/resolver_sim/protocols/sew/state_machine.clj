@@ -201,11 +201,10 @@
   (let [et    (t/get-transfer world workflow-id)
         token (:token et)
         held  (get-in world [:total-held token] 0)
-        live-states #{:pending :disputed}
         other-live  (reduce (fn [acc [wf e]]
-                              (if (and (not= wf workflow-id)
-                                       (= (:token e) token)
-                                       (contains? live-states (:escrow-state e)))
+                               (if (and (not= wf workflow-id)
+                                        (= (:token e) token)
+                                        (contains? t/live-states (:escrow-state e)))
                                 (+ acc (:amount-after-fee e))
                                 acc))
                             0
@@ -323,13 +322,13 @@
 
     ;; :pending — AGREE_TO_CANCEL is valid; RAISE_DISPUTE is not
     (= :pending escrow-state)
-    (and (contains? #{:none :agree-to-cancel} sender-status)
-         (contains? #{:none :agree-to-cancel} recipient-status))
+    (and (contains? (disj t/sender-statuses :raise-dispute) sender-status)
+         (contains? (disj t/sender-statuses :raise-dispute) recipient-status))
 
     ;; :disputed — exactly one party has RAISE_DISPUTE; neither has AGREE_TO_CANCEL
     (= :disputed escrow-state)
-    (and (contains? #{:none :raise-dispute} sender-status)
-         (contains? #{:none :raise-dispute} recipient-status)
+    (and (contains? (disj t/sender-statuses :agree-to-cancel) sender-status)
+         (contains? (disj t/sender-statuses :agree-to-cancel) recipient-status)
          (not= :agree-to-cancel sender-status)
          (not= :agree-to-cancel recipient-status)
          ;; At least one party must have raised the dispute

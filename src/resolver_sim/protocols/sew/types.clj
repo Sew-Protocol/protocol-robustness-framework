@@ -76,13 +76,18 @@
    :released  #{}
    :refunded  #{}})
 
+(def live-states
+  "Escrow states that are not yet terminal — can still transition.
+   Complement of terminal-states."
+  #{:pending :disputed})
+
 (def sender-statuses
   "SenderStatus enum values."
   #{:none :agree-to-cancel :raise-dispute})
 
 (def recipient-statuses
-  "RecipientStatus enum values."
-  #{:none :agree-to-cancel :raise-dispute})
+  "RecipientStatus enum values — identical to sender-statuses."
+  sender-statuses)
 
 (def resolution-outcomes
   "ResolutionOutcome enum values."
@@ -205,6 +210,11 @@
 ;; Maximum escalation round — mirrors DecentralizedResolutionModule.MAX_ROUND.
 ;; Round 0 = initial resolver, 1 = senior resolver, 2 = external (Kleros).
 (def ^:const max-dispute-level 2)
+
+(def zero-address
+  "Canonical zero-address sentinel — used as 'no resolver assigned' marker
+   and for unconditional resolver-available checks."
+  "0x0000000000000000000000000000000000000000")
 
 (defn empty-world
   "Create an empty world-state map at a given block time."

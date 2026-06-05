@@ -42,7 +42,7 @@
 ;; :shortfall blocks new deposits (pool under stress) but NOT withdrawals —
 ;; withdrawals apply a haircut via apply-liquidity-stress instead.
 (defn- deposit-blocked? [m]
-  (contains? #{:shortfall :frozen :paused} m))
+  (contains? acct/liquidity-modes m))
 
 (defn- withdraw-blocked? [m]
   (contains? #{:frozen :paused} m))
