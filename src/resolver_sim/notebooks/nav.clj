@@ -88,6 +88,7 @@
    {:label "Workbench"  :path "notebooks/workbench_v2.clj"      :icon "🔧"}
    {:label "Atlas"      :path "notebooks/atlas_artifact.clj"    :icon "📊"}
    {:label "Demos"      :path "notebooks/demo_adversarial_escalation.clj" :icon "🎬"}
+   {:label "Yield Demo" :path "notebooks/yield_provider_demo.clj"        :icon "💧"}
    {:label "SPE Tree"   :path "notebooks/subgame_counterfactual_workbench.clj" :icon "🌳"}])
 
 (defn top-nav-bar
