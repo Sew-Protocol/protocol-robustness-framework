@@ -57,17 +57,16 @@
 
    The internal invariant is STRICT EQUALITY (=)."
   [world token-balances]
-  (let [live-states   #{:pending :disputed}
-        all-tokens    (-> (set (keys (:total-held world)))
+  (let [all-tokens    (-> (set (keys (:total-held world)))
                           (into (map :token (vals (:escrow-transfers world))))
                           (into (keys (:total-bonds-posted world))))
         violations
         (for [token all-tokens
               :let  [held       (get (:total-held world) token 0)
-                     escrow-sum (get-escrow-afa-sum world token live-states)
+                      escrow-sum (get-escrow-afa-sum world token t/live-states)
                      bond-sum   (get-bond-held-sum world token)
                      slash-bond-sum (get-slash-appeal-bond-sum world token)
-                     yield-sum  (get-yield-held-sum world token live-states)
+                      yield-sum  (get-yield-held-sum world token t/live-states)
                      stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
                      
                      liabilities (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum)
