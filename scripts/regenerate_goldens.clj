@@ -17,9 +17,10 @@
    :suites/equivalence-money-path-integrity
    :suites/dr3-critical
    :suites/governance-decay
-   :suites/same-block-ordering
-   :suites/timelock-regression
-   :suites/equivalence-economic-stress])
+    :suites/same-block-ordering
+    :suites/timelock-regression
+    :suites/equivalence-economic-stress
+    :suites/forking-strategist])
 
 (defn- theory-fail-reason [r]
   (when-let [theory (:theory r)]

@@ -297,8 +297,8 @@
             (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (:block-time world)))
             (t/fail :resolver-frozen)
 
-            (and resolver (pos? bond-bps)
-                 (or (zero? stake) (not (reg/can-handle-escrow? world resolver afa))))
+            (and resolver (pos? bond-bps) (pos? stake)
+                 (not (reg/can-handle-escrow? world resolver afa)))
             (t/fail :insufficient-resolver-stake)
 
             :else
