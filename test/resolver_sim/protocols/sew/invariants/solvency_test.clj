@@ -109,6 +109,16 @@
 (deftest test-missing-keys
   (let [world (make-world)]
     (is (= 0 (sut/get-yield-held-sum world :USDC t/live-states)))))
+
+(deftest test-solvency-holds
+  (let [escrow-id :wf-1
+        oid [:sew/escrow escrow-id]
+        pos (make-position :token :USDC :status :active :realized-yield 50 :unrealized-yield 30)
+        et (make-escrow-transfer :token :USDC :escrow-state :pending :amount-after-fee 500)
+        world (make-world :positions {oid pos}
+                          :escrow-transfers {escrow-id et})
+        world (assoc world :total-held {:USDC 580} :resolver-stakes {})]
+    (is (:holds? (sut/solvency-holds? world nil)))))
 (ns resolver-sim.protocols.sew.invariants.solvency-test
   (:require [clojure.test :refer :all]
             [resolver-sim.protocols.sew.types :as t]
