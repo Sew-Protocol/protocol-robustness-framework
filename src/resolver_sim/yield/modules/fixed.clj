@@ -1,7 +1,8 @@
 (ns resolver-sim.yield.modules.fixed
   "Fixed-rate yield module implementation."
   (:require [resolver-sim.yield.model :as model]
-            [resolver-sim.yield.accounting :as acct]))
+            [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.yield.market-state :as market-state]))
 
 (defn- normalize-token [token]
   (cond
@@ -24,10 +25,13 @@
 (defn fixed-accrue [world module op]
   (let [{:keys [token dt]} op
         mid (:module/id module)
-        apy (get-in world [:yield/rates mid token] 0.05)
+        ms (market-state/get-market-state world mid token (:block-time world))
+        apy (:apy ms 0.05)
         seconds-per-year 31536000
         old-index (or (get-in world [:yield/indices mid token]) 1.0)
-        new-index (+ old-index (/ (* apy dt) seconds-per-year))
+        new-index (if-let [fixed-index (:index ms)]
+                    fixed-index
+                    (+ old-index (/ (* apy dt) seconds-per-year)))
         world' (assoc-in world [:yield/indices mid token] new-index)]
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid)

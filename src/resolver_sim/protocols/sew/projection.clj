@@ -443,51 +443,41 @@
                     acc))
                 {}
                 slashed)
-        parse-num (fn [x]
-                    (cond
-                      (number? x) (long x)
-                      (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                      :else 0))
         by-token
         (into {}
               (for [token (sort tokens)
                     :let [tok-kw (keyword token)]]
-                [token {:held         (+ (parse-num (get held token 0))
-                                         (parse-num (get held tok-kw 0)))
-                        :released     (+ (parse-num (get released token 0))
-                                         (parse-num (get released tok-kw 0)))
-                        :refunded     (+ (parse-num (get refunded token 0))
-                                         (parse-num (get refunded tok-kw 0)))
-                        :withdrawn    (+ (parse-num (get withdrawn token 0))
-                                         (parse-num (get withdrawn tok-kw 0)))
-                        :bond-posted  (+ (parse-num (get posted token 0))
-                                         (parse-num (get posted tok-kw 0)))
-                        :bond-slashed (+ (parse-num (get slashed-by-token token 0))
-                                         (parse-num (get slashed-by-token tok-kw 0)))}]))
-        parse-num-top (fn [x]
-                        (cond
-                          (number? x) (long x)
-                          (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                          :else 0))
+                [token {:held         (+ (t/safe-parse-long (get held token 0))
+                                          (t/safe-parse-long (get held tok-kw 0)))
+                         :released     (+ (t/safe-parse-long (get released token 0))
+                                          (t/safe-parse-long (get released tok-kw 0)))
+                         :refunded     (+ (t/safe-parse-long (get refunded token 0))
+                                          (t/safe-parse-long (get refunded tok-kw 0)))
+                         :withdrawn    (+ (t/safe-parse-long (get withdrawn token 0))
+                                          (t/safe-parse-long (get withdrawn tok-kw 0)))
+                         :bond-posted  (+ (t/safe-parse-long (get posted token 0))
+                                          (t/safe-parse-long (get posted tok-kw 0)))
+                         :bond-slashed (+ (t/safe-parse-long (get slashed-by-token token 0))
+                                          (t/safe-parse-long (get slashed-by-token tok-kw 0)))}]))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]
-                      (parse-num-top amt)))
+                      (t/safe-parse-long amt)))
         bond-locked-total
         (reduce + 0 (for [wf (vals (:bond-balances world {}))
                           amt (vals wf)]
-                      (parse-num-top amt)))
-        bond-fees-total (reduce + 0 (map parse-num-top (vals (:bond-fees world {}))))
+                      (t/safe-parse-long amt)))
+        bond-fees-total (reduce + 0 (map t/safe-parse-long (vals (:bond-fees world {}))))
         bond-distribution-total
         (let [d (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})]
-          (+ (parse-num-top (:insurance d 0))
-             (parse-num-top (:protocol d 0))
-             (parse-num-top (:burned d 0))))
-        retained-total (parse-num-top (:retained-slash-reserves world 0))
+          (+ (t/safe-parse-long (:insurance d 0))
+             (t/safe-parse-long (:protocol d 0))
+             (t/safe-parse-long (:burned d 0))))
+        retained-total (t/safe-parse-long (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
                              (for [{:keys [token accounted inflow]} (:violations conservation [])]
-                               [token (- (parse-num-top accounted) (parse-num-top (or inflow 0)))]))
+                               [token (- (t/safe-parse-long accounted) (t/safe-parse-long (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token

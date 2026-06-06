@@ -188,6 +188,7 @@
                         :temporal-rule-id (:rule-id temporal-failure)
                         :extra           nil
                         :event-tags      tags
+                        :invariant-phase :temporal-rule
                         :invariants-ok?  true
                         :violations      nil
                         :world           (proto/world-snapshot protocol world)
@@ -249,11 +250,12 @@
             :extra           (:extra result)
             :detail          (:detail result)
             :event-tags      event-tags
-            :invariants-ok?  (if (and ok? check-inv?)
-                                (and (:ok? inv-single) (:ok? inv-trans))
-                                true)
-            :violations      all-violations
-            :trace-metadata  metadata
+             :invariant-phase :post-event
+             :invariants-ok?  (if (and ok? check-inv?)
+                                 (and (:ok? inv-single) (:ok? inv-trans))
+                                 true)
+             :violations      all-violations
+             :trace-metadata  metadata
             :world           (proto/world-snapshot protocol final-world)
             :projection      proj
             :projection-hash ph}

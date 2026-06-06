@@ -1,15 +1,26 @@
 (ns resolver-sim.sim.waterfall
   "Waterfall stress testing for coverage adequacy
-   
+    
    The waterfall mechanism is a three-phase slashing order that protects
    the system when resolver bonds are depleted:
-   
-   Phase 1: Slash resolver's own bond first (50% per slash, 100% per epoch cap)
+    
+   Phase 1: Slash resolver's own bond first (50% per slash, 20% per epoch cap)
    Phase 2: If exhausted, slash senior's coverage pool (10% per epoch cap)
    Phase 3: If coverage exhausted, unmet obligations tracked
-   
+    
    This module simulates the waterfall under various stress conditions to
-   determine minimum senior coverage requirements.")
+   determine minimum senior coverage requirements.
+    
+   Two execution modes:
+   - Deterministic (`process-slash-event`): all events are processed at full
+     slash-amount; no probability. Tests pool depth capacity.
+   - Probabilistic (`probabilistic-process-slash-pool`): each event is filtered
+     through Monte Carlo dispute resolution; slash frequency and amount reflect
+     real detection probabilities. Tests pool robustness."
+  (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.dispute :as dispute]))
+
+(declare aggregate-waterfall-metrics)
 
 (defn calculate-slash-amount
   "Calculate actual slash amount given bond and slash rate (in basis points)
@@ -34,7 +45,9 @@
              :new-resolver updated-resolver-state}"
   [resolver slash-amount]
   (let [bond-before (:bond-remaining resolver 0)
-        amount-slashed (min bond-before slash-amount)
+        per-slash-cap (/ bond-before 2.0)
+        capped-slash (min slash-amount per-slash-cap)
+        amount-slashed (min bond-before capped-slash)
         shortage (- slash-amount amount-slashed)
         bond-after (max 0 (- bond-before amount-slashed))
         is-exhausted (zero? bond-after)]
@@ -148,12 +161,12 @@
       :seniors updated-map
       :event-result {:junior-paid double
                      :senior-paid double
-                     :unmet double}
+                     :unmet-obligation double}
       :metrics {...}}"
   [event resolvers seniors]
   (let [resolver-id (:resolver-id event)
         resolver (get resolvers resolver-id)
-        senior-id (:senior-id event)  ; May be nil
+        senior-id (or (:senior-id event) (:senior-delegation resolver))
         senior (when senior-id (get seniors senior-id))]
     
     (if (nil? resolver)
@@ -162,7 +175,7 @@
        :seniors seniors
        :event-result {:junior-paid 0
                       :senior-paid 0
-                      :unmet (:slash-amount event)
+                      :unmet-obligation (:slash-amount event)
                       :error :resolver-not-found}}
       
       ;; Process waterfall slash
@@ -172,7 +185,7 @@
                      (:slash-amount event))
             
             updated-resolvers (assoc resolvers resolver-id (:junior result))
-            updated-seniors (if senior
+            updated-seniors (if (and senior-id (:senior result))
                              (assoc seniors senior-id (:senior result))
                              seniors)]
         
@@ -184,6 +197,170 @@
                        :reason (:reason event)
                        :resolver-id resolver-id
                        :senior-id senior-id}}))))
+
+;; ---
+;; Per-epoch cap enforcement
+;; ---
+
+(def junior-epoch-cap-pct 0.20)
+(def senior-epoch-cap-pct 0.10)
+
+(defn- total-slashed-in-epoch
+  "Sum of all slashes applied to a resolver in a given epoch."
+  [resolver epoch]
+  (->> (:slash-history resolver [])
+       (filter #(= (:epoch %) epoch))
+       (map :amount)
+       (reduce + 0.0)))
+
+(defn- apply-per-epoch-cap
+  "Cap slash-amount to respect the per-epoch cap.
+   Returns reduced slash amount (0 if cap already exceeded)."
+  [resolver slash-amount epoch cap-rate initial-bond]
+  (let [already (total-slashed-in-epoch resolver epoch)
+        max-allowed (* initial-bond cap-rate)
+        remaining (- max-allowed already)]
+    (max 0.0 (min (double slash-amount) (double remaining)))))
+
+;; ---
+;; Probabilistic waterfall — Monte Carlo powered
+;; ---
+
+(defn draw-lognormal
+  "Sample from a lognormal distribution using Box-Muller transform."
+  [rng-inst mu sigma]
+  (let [u1 (max 1e-10 (rng/next-double rng-inst))
+        u2 (rng/next-double rng-inst)
+        z  (* (Math/sqrt (* -2.0 (Math/log u1))) (Math/cos (* 2.0 Math/PI u2)))]
+    (Math/exp (+ mu (* sigma z)))))
+
+(defn draw-escrow-size
+  "Draw a random escrow amount from the distribution spec.
+   Distribution spec: {:type :lognormal :mean N :std N}"
+  [rng-inst dist]
+  (let [mu   (Math/log (:mean dist 10000))
+        sigma (/ (:std dist 5000) (:mean dist 10000))]
+    (long (max 1 (draw-lognormal rng-inst mu sigma)))))
+
+(defn draw-strategy
+  "Draw a resolver strategy from a weighted mix.
+   Mix spec: {:honest 0.80 :malicious 0.05 ...}
+   Weights must sum to approximately 1.0 (±0.001 tolerance).
+   Throws if validation fails — catches stale param files early.
+   Sorts pairs by ascending weight so low-roll mass falls on
+   low-probability strategies first."
+  [rng-inst mix]
+  (let [total (reduce + (vals mix))]
+    (when (< 0.001 (Math/abs (- total 1.0)))
+      (throw (ex-info (str "Strategy mix weights must sum to 1.0, got " total)
+                      {:mix mix :total total})))
+    (let [roll (rng/next-double rng-inst)
+          pairs (sort-by second (map (fn [[k v]] [k v]) mix))]
+      (loop [[[strat pct] & rest] pairs
+             cumulative 0.0]
+        (let [next-cum (+ cumulative pct)]
+          (if (or (nil? strat) (< roll next-cum))
+            (or strat :honest)
+            (recur rest next-cum)))))))
+
+(defn probabilistic-process-slash-pool
+  "Run N dispute trials through the waterfall using full MC economics.
+   
+   Each trial calls resolve-dispute to determine if and how much the resolver
+   is slashed.  Only slashed disputes affect the pool — detection probability,
+   slash severity, and escrow variance are all reflected in the result.
+   
+   Per-epoch caps (20% junior, 10% senior of initial bond) are enforced
+   so that no resolver loses more than the protocol allows per epoch.
+   
+   Args:
+     rng       — PRNG (SplittableRandom)
+     pool      — {:juniors {...} :seniors {...}} from initialize-waterfall-pool
+     params    — parameter map with MC keys:
+                 :escrow-distribution, :strategy-mix, :resolver-fee-bps,
+                 :appeal-bond-bps, :slash-multiplier,
+                 :appeal-probability-if-correct, :appeal-probability-if-wrong,
+                 :slashing-detection-probability, :reversal-detection-probability,
+                 :timeout-slash-bps, :fraud-slash-bps
+     n-trials  — number of disputes to simulate
+   
+   Returns:
+     Same shape as deterministic reduce:
+     {:resolvers {...} :seniors {...} :events [event-result ...]}
+     plus :metrics and :dispute-summary"
+  [rng-inst pool params n-trials]
+  (let [n-juniors (count (:juniors pool))
+        n-per-senior (/ n-juniors (max 1 (:n-seniors params 5)))
+        mc-kwargs {:fraud-slash-bps (:fraud-slash-bps params 50)
+                   :reversal-detection-probability (:reversal-detection-probability params 0.02)
+                   :timeout-slash-bps (:timeout-slash-bps params 25)}
+        result (reduce
+                (fn [state trial-idx]
+                  ;; Fork per-trial RNG so escrow/strategy draws don't shift
+                  ;; dispute resolution rolls across trials.  Each trial is
+                  ;; reproducible independently of neighboring trials.
+                  (let [trial-rng (rng/make-rng (rng/seed-from-index
+                                                  (:base-seed params 42) trial-idx))
+                        junior-idx (mod trial-idx n-juniors)
+                        senior-idx (int (/ junior-idx n-per-senior))
+                        resolver-id (str "j" senior-idx "_" (mod junior-idx n-per-senior))
+                        senior-id   (str "s" senior-idx)
+                        epoch       (int (/ trial-idx n-juniors))
+
+                        resolver (get (:resolvers state) resolver-id)
+                        initial-bond (or (:initial-bond resolver) (:bond-remaining resolver 0) 0.0)
+
+                        escrow-wei (draw-escrow-size trial-rng (:escrow-distribution params))
+                        strategy   (draw-strategy trial-rng (:strategy-mix params))
+
+                        outcome (dispute/resolve-dispute
+                                 trial-rng escrow-wei
+                                 (:resolver-fee-bps params 150)
+                                 (:appeal-bond-bps params 50)
+                                 (:slash-multiplier params 2.5)
+                                 strategy
+                                 (:appeal-probability-if-correct params 0.3)
+                                 (:appeal-probability-if-wrong params 0.7)
+                                 (:slashing-detection-probability params 0.10)
+                                 mc-kwargs)
+
+                        bond-loss (:bond-loss outcome 0)]
+
+                    (if (and (:slashed? outcome) (pos? bond-loss))
+                      (let [;; Per-epoch cap on senior side
+                            senior (get (:seniors state) senior-id)
+                            senior-bond (get-in senior [:initial-bond] (get-in senior [:bond-amount] 0))
+                            capped-loss (apply-per-epoch-cap resolver bond-loss epoch
+                                                             junior-epoch-cap-pct initial-bond)
+                            {:keys [resolvers seniors event-result]}
+                            (process-slash-event
+                             {:resolver-id resolver-id
+                              :senior-id senior-id
+                              :slash-amount capped-loss
+                              :reason (:slashing-reason outcome)
+                              :epoch epoch
+                              :escrow-wei escrow-wei
+                              :strategy strategy}
+                             (:resolvers state)
+                             (:seniors state))]
+                        {:resolvers resolvers
+                         :seniors seniors
+                         :events (conj (:events state)
+                                       (assoc event-result
+                                              :escrow-wei escrow-wei
+                                              :strategy strategy
+                                              :slashed? true))})
+                      ;; Not slashed or no bond loss: pool unchanged, record dispute
+                      (update state :events conj
+                              {:slashed? false
+                               :reason (:slashing-reason outcome)
+                               :strategy strategy
+                               :escrow-wei escrow-wei}))))
+                {:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
+                (range n-trials))
+        slash-events (filter :slashed? (:events result))
+        metrics (aggregate-waterfall-metrics (:resolvers result) (:seniors result) slash-events)]
+    (assoc result :metrics metrics)))
 
 (defn aggregate-waterfall-metrics
   "Aggregate waterfall metrics across all slashing events
@@ -291,6 +468,7 @@
                     :is-senior? true
                     :bond-amount (double senior-bond)
                     :utilization-factor (double util-factor)
+                    :initial-bond (double senior-bond)
                     :coverage-used 0.0
                     :slash-history []
                     :epoch 0}]))
@@ -301,6 +479,7 @@
                   [(str "j" s "_" j)
                    {:resolver-id (str "j" s "_" j)
                     :is-senior? false
+                    :initial-bond (double junior-bond)
                     :bond-remaining (double junior-bond)
                     :senior-delegation (str "s" s)
                     :is-exhausted? false

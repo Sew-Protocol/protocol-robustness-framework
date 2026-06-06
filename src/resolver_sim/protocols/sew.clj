@@ -30,7 +30,9 @@
             [resolver-sim.yield.module                   :as yield-module]
             [resolver-sim.yield.risk                     :as yield-risk]
             [resolver-sim.protocols.sew.compat           :as compat]
-            [resolver-sim.protocols.sew.action-context   :as actx]))
+            [resolver-sim.protocols.sew.action-context   :as actx]
+            [resolver-sim.yield.expectations             :as yield-exp]
+            [resolver-sim.yield.evidence                 :as yield-evi]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -553,7 +555,9 @@
 
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]
-  (t/ok (lc/accrue-yield world (event-workflow-id event))))
+  (let [wf (event-workflow-id event)]
+    (println (str "[sew] DEBUG: Triggering accrue for workflow: " wf))
+    (t/ok (lc/accrue-yield world wf))))
 
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
@@ -582,9 +586,11 @@
 
 (defn- run-single-invariants [world]
   (let [scenario-id (get-in world [:params :scenario-id])
-        r (inv/check-all world scenario-id)]
-    {:ok?        (:all-hold? r)
-     :violations (when-not (:all-hold? r) (:results r))}))
+        r (inv/check-all world scenario-id)
+        exp-res (yield-exp/check-expectations world)]
+    {:ok?        (and (:all-hold? r) (:ok? exp-res))
+     :violations (cond-> (if (:all-hold? r) {} (:results r))
+                   (not (:ok? exp-res)) (assoc :expectations (:results exp-res)))}))
 
 (defn- run-transition-invariants [world-before world-after]
   (let [r (inv/check-transition world-before world-after)]
@@ -617,14 +623,7 @@
    :claimable           (:claimable world {})
    :claimable-v2        (:claimable-v2 world {})
    :bond-balances       (:bond-balances world {})
-   :yield-positions     (when-let [pos (:yield/positions world)]
-                          (into {} (map (fn [[oid p]]
-                                          [oid (select-keys p [:status :principal :shares
-                                                               :entry-index :current-index :current-value
-                                                               :unrealized-yield :realized-yield
-                                                               :yield-loss :shortfall :reclaimed-amount
-                                                               :token :module/id])])
-                                        pos)))})
+   :yield-evidence      (yield-evi/get-evidence world)})
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending

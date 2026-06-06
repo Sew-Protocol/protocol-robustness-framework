@@ -10,7 +10,9 @@
    Morpho-like (coarse), etc., without encoding protocol-specific internals."
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.loss :as loss]))
+            [resolver-sim.yield.loss :as loss]
+            [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.yield.liquidity :as liquidity]))
 
 (defn- normalize-token [token]
   (cond
@@ -30,10 +32,16 @@
       v)))
 
 (defn- liquidity-mode [world module-id token]
-  (or (get-in-token world [:yield/risk] module-id token :liquidity-mode) :available))
+  (let [ms (market-state/get-market-state world module-id token (:block-time world))]
+    (if (< (double (:available-ratio ms 1.0)) 1.0)
+      :shortfall
+      :available)))
 
 (defn- module-status [world module-id]
-  (get-in world [:yield/module-status module-id] :active))
+  ;; We pick an arbitrary token (first in config or nil) for module-level status
+  ;; since market-state is token-oriented but status is often module-wide.
+  (let [ms (market-state/get-market-state world module-id nil (:block-time world))]
+    (:module-state ms)))
 
 (defn- failure-modes [world module-id token]
   (set (or (get-in-token world [:yield/risk] module-id token :failure-modes)
@@ -91,26 +99,31 @@
         (assoc-in world [:yield/positions oid] pos)))))
 
 (defn accrue [world module op]
-   (let [token     (normalize-token (:token op))
-         dt        (:dt op)
-         mid       (:module/id module)
-         stale?    (fail-enabled? world mid token :oracle-stale)
-         old-index (or (get-in-token world [:yield/indices] mid token) 1.0)
-         apy       (or (get-in-token world [:yield/rates] mid token) 0.04)
-         ;; :oracle-stale: use cached stale-apy, snapshotting on first accrual
-         stale-apy (when stale? (get-in-token world [:yield/risk] mid token :stale-apy))
-         apy       (if stale? (or stale-apy (double apy)) apy)
-         apy       (if (fail-enabled? world mid token :negative-yield)
-                     (- (Math/abs (double apy)))
-                     apy)
-         seconds-per-year 31536000
-         new-index (* old-index (+ 1.0 (/ (* apy dt) seconds-per-year)))
-         world'    (-> world
-                       (assoc-in [:yield/indices mid token] new-index)
-                       (assoc-in [:yield/indices mid (name token)] new-index)
-                       ;; Cache stale-apy snapshot on first accrual under :oracle-stale
-                       (cond-> (and stale? (not stale-apy))
-                         (assoc-in [:yield/risk mid (name token) :stale-apy] (double apy))))]
+  (let [token     (normalize-token (:token op))
+        dt        (:dt op)
+        mid       (:module/id module)
+        _ (println (str "[liquid-lending] DEBUG: Enter accrue for " mid "/" token))
+        ms        (market-state/get-market-state world mid (or token :global) (:block-time world))
+        stale?    (fail-enabled? world mid token :oracle-stale)
+        old-index (or (get-in-token world [:yield/indices] mid token) 1.0)
+        apy       (:apy ms 0.04)
+        ;; :oracle-stale: use cached stale-apy, snapshotting on first accrual
+        stale-apy (when stale? (get-in-token world [:yield/risk] mid token :stale-apy))
+        apy       (if stale? (or stale-apy (double apy)) apy)
+        apy       (if (fail-enabled? world mid token :negative-yield)
+                    (- (Math/abs (double apy)))
+                    apy)
+        seconds-per-year 31536000
+        ;; Precedence: index-schedule > apy growth
+        new-index (if-let [fixed-index (:index ms)]
+                    fixed-index
+                    (* old-index (+ 1.0 (/ (* apy dt) seconds-per-year))))
+        world'    (-> world
+                      (assoc-in [:yield/indices mid token] new-index)
+                      (assoc-in [:yield/indices mid (name token)] new-index)
+                      ;; Cache stale-apy snapshot on first accrual under :oracle-stale
+                      (cond-> (and stale? (not stale-apy))
+                        (assoc-in [:yield/risk mid (name token) :stale-apy] (double apy))))]
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid) (token= (:token pos) token) (= (:status pos) :active))
                 (let [old-yield (:unrealized-yield pos 0)
@@ -180,8 +193,8 @@
                :shortfall (loss/intrinsic-carry-shortfall (:principal updated-pos 0)
                                                           gross-amount
                                                           current-index)}
-              (acct/apply-liquidity-stress-for-withdraw world mid token gross-amount
-                                                        (:principal updated-pos 0)))
+              (liquidity/apply-withdrawal-policy world mid token gross-amount
+                                                 (:principal updated-pos 0)))
             {:keys [fulfilled shortfall]} shortfall-result
             shortfall' (when shortfall
                          (assoc shortfall :as-of-index current-index))

@@ -123,7 +123,8 @@
    - num-attempts: How many times attacker can try
    
    Returns: How many attacks affordable with budget recycling"
-  [initial-budget bribe-per-attempt detection-rate recovery-rate num-attempts]
+  [initial-budget bribe-per-attempt detection-rate recovery-rate num-attempts
+   & {:keys [rng] :or {rng nil}}]
   
   (loop [attempts 0
          remaining-budget initial-budget
@@ -135,7 +136,8 @@
        :remaining-budget remaining-budget
        :recycling-advantage (/ (* bribe-per-attempt successful-attacks) initial-budget)}
       
-      (let [detected? (< (rand) detection-rate)
+           (let [detected? (if rng (< (.nextDouble rng) detection-rate)
+                              (< (rand) detection-rate))
             recovered (if detected? (* bribe-per-attempt recovery-rate) 0)
             new-budget (- remaining-budget bribe-per-attempt)
             final-budget (+ new-budget recovered)]

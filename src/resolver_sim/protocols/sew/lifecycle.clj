@@ -74,12 +74,15 @@
   "Calculate and update accrued yield for an escrow based on time delta."
   [world workflow-id]
   (let [snap (t/get-snapshot world workflow-id)
-        mid  (:yield-generation-module snap)]
+        mid  (:yield-generation-module snap)
+        et    (t/get-transfer world workflow-id)
+        _ (println (str "[sew/lifecycle] DEBUG: accrue-yield wf=" workflow-id ", mid=" mid ", et=" et))]
     (if (and mid (contains? (:yield/modules world) mid))
       (let [et    (t/get-transfer world workflow-id)
             now   (:block-time world)
             last  (:last-accrual-time et now)
-            dt    (- now last)]
+            dt    (- now last)
+            _ (println (str "[sew/lifecycle] DEBUG: accrue-yield mid=" mid ", now=" now ", last=" last ", dt=" dt))]
         (if (pos? dt)
           (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
                                                         :module/id mid

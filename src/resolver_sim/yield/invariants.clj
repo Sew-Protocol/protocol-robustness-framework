@@ -16,18 +16,24 @@
               0))))
 
 (defn check-position-consistency
-  "Principal/shares/realized ≥ 0; unrealized ≥ 0 unless :mark-to-market."
+  "Principal/shares/realized >= 0; unrealized >= 0 unless :mark-to-market.
+   Returns {:holds? bool :violations [{:owner-id :issues [...]}]}."
   [world]
-  (let [positions (:yield/positions world {})]
-    (every? (fn [pos]
+  (let [violations
+        (into []
+          (keep
+            (fn [[oid pos]]
               (let [risk (get-in world [:yield/risk (:module/id pos) (:token pos)] {})
-                    mtm? (= :mark-to-market (risk/effective-loss-mode risk))]
-                (and (>= (:principal pos 0) 0)
-                     (>= (:shares pos 0) 0)
-                     (>= (:realized-yield pos 0) 0)
-                     (or mtm?
-                         (>= (:unrealized-yield pos 0) 0)))))
-            positions)))
+                    mtm? (= :mark-to-market (risk/effective-loss-mode risk))
+                    issues (cond-> []
+                            (neg? (:principal pos 0)) (conj :negative-principal)
+                            (neg? (:shares pos 0)) (conj :negative-shares)
+                            (neg? (:realized-yield pos 0)) (conj :negative-realized-yield)
+                            (and (not mtm?) (neg? (:unrealized-yield pos 0))) (conj :negative-unrealized-yield))]
+                (when (seq issues)
+                  {:owner-id oid :issues issues})))
+          (:yield/positions world {})))]
+    {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn check-realized-non-negative
   [world]
@@ -136,19 +142,29 @@
       (assoc :yield/indices (:yield-indices world)))))
 
 (defn holds?
-  "Run a single invariant check; returns boolean."
+  "Run a single invariant check; returns boolean.
+   Handles functions that return {:holds? bool :violations [...]} as well as
+   raw boolean (backward compatible)."
   [inv-id world]
   (if-let [f (get check-fns inv-id)]
-    (boolean (f (normalize-world-for-check world)))
+    (let [result (f (normalize-world-for-check world))]
+      (boolean (if (map? result) (:holds? result) result)))
     (throw (ex-info "Unknown yield invariant" {:invariant inv-id :known (registered-ids)}))))
 
 (defn run-invariants
-  "Run invariant checks; returns {inv-id {:holds? bool}}."
+  "Run invariant checks; returns {inv-id {:holds? bool :violations [...]}}.
+   If the invariant function returns structured {:holds? ... :violations ...},
+   those violations are preserved; otherwise they default to nil."
   [world inv-ids]
   (let [world* (normalize-world-for-check world)]
     (into {}
           (for [id inv-ids]
-            [id (inv-result (holds? id world*))]))))
+            (let [f (get check-fns id)
+                  raw (when f (f world*))
+                  structured? (map? raw)]
+              [id (if structured?
+                    (assoc raw :holds? (boolean (:holds? raw)))
+                    (inv-result raw))])))))
 
 (defn check-all
   "Default runtime set for yield-v1 (see `invariant-catalog/default-runtime-invariant-ids`)."

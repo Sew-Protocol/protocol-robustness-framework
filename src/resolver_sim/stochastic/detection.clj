@@ -193,6 +193,14 @@
 (defn prepare-oracle-params
   "Attach :oracle-effective (when absent), fresh roll cursors, and optional trace atom.
 
+   IMPORTANT: Cursors are RESET to 0 on every call (each trial starts from the
+   first fixture roll). This means :fixed-roll-sequence patterns are per-trial,
+   not per-batch — roll 1 repeats trial after trial, roll 2 repeats on the
+   second detection check in every trial, etc.
+   
+   To persist cursors across a batch, call prepare-oracle-params ONCE and reuse
+   the returned params map across trials, or manage cursors externally.
+
    Call after validate-oracle-params! / validate-scenario for REPL and trial runners."
   [params]
   (let [effective (or (:oracle-effective params)

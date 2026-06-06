@@ -171,6 +171,67 @@
     (println (format "\n💾 Multi-epoch results saved to: %s" run-dir))
     result))
 
+(defn run-probabilistic-waterfall-simulation
+  "Run probabilistic waterfall with MC dispute economics.
+   
+   Each dispute trial calls resolve-dispute with the full stochastic model,
+   so slash amount, frequency, and reason reflect probabilistic detection,
+   variable escrow sizes, and strategy-dependent behavior.
+   
+   Per-epoch caps (20% junior / 10% senior) are enforced per the contract invariant."
+  [params output-dir]
+  (let [scenario-id   (:scenario-id params "unnamed")
+        scenario-name (:scenario-name params scenario-id)
+        run-dir       (results/create-run-directory output-dir (str scenario-name "-probabilistic-waterfall"))
+        rng-inst      (rng/make-rng (:rng-seed params 42))
+        pool          (waterfall/initialize-waterfall-pool params)
+
+        _ (println (format "\n🌊 Running probabilistic waterfall: %s" scenario-name))
+        _ (println (format "   Mode: Monte Carlo dispute resolution"))
+        _ (println (format "   Threshold: Coverage adequacy must be ≥80%% to pass"))
+        _ (println "")
+        _ (println (format "   Seniors: %d | Juniors: %d"
+                           (:n-seniors params 5)
+                           (* (:n-seniors params 5) (:n-juniors-per-senior params 10))))
+        _ (println (format "   Trials: %d | Detection prob: %.1f%%"
+                           (:n-trials params 1000)
+                           (* 100 (:slashing-detection-probability params 0.10))))
+
+        n-trials (get params :n-trials 1000)
+
+        result (waterfall/probabilistic-process-slash-pool
+                rng-inst pool params n-trials)
+
+        metrics (:metrics result)
+        adequacy (:coverage-adequacy-score metrics)
+        pass?    (>= adequacy 80.0)]
+
+    (println (format "\n   Slashed disputes: %d / %d (%.1f%%)"
+                     (:total-slashes metrics) n-trials
+                     (if (zero? n-trials) 0.0 (* 100.0 (/ (:total-slashes metrics) n-trials)))))
+    (println (format "   Juniors exhausted: %.1f%%" (:juniors-exhausted-pct metrics)))
+    (println (format "   Coverage used: %.1f%%" (:seniors-coverage-used-avg-pct metrics)))
+    (println (format "   Adequacy score: %.1f%% (scale: 0–100)" adequacy))
+    (println "")
+    (if pass?
+      (println (format "   Status: ✅ PASS (%.1f%% ≥ 80%% threshold)" adequacy))
+      (println (format "   Status: ❌ FAIL (%.1f%% < 80%% threshold)" adequacy)))
+    (println "")
+    (when (< adequacy 80.0)
+      (println "   Recommendations:")
+      (println "   • Increase senior bond amounts or utilization-factor")
+      (println "   • Reduce detection probability sensitivity")
+      (println "   • Validate assumptions with higher fraud rates"))
+
+    (results/write-edn (format "%s/summary.edn" run-dir) (select-keys result [:events :metrics]))
+    (results/write-run-metadata (format "%s/metadata.edn" run-dir)
+                                {:scenario-id scenario-id
+                                 :type :probabilistic-waterfall
+                                 :params params
+                                 :result metrics})
+    (println (format "\n💾 Results saved to: %s" run-dir))
+    metrics))
+
 (defn run-waterfall-simulation [params output-dir]
   (let [scenario-id   (:scenario-id params "unnamed")
         scenario-name (:scenario-name params scenario-id)
@@ -206,16 +267,20 @@
                            (range n-fraud-events))
 
         result  (reduce (fn [state event]
-                          (waterfall/process-slash-event event (:resolvers state) (:seniors state)))
+                          (let [{:keys [resolvers seniors event-result]}
+                                (waterfall/process-slash-event event
+                                                               (:resolvers state)
+                                                               (:seniors state))]
+                            {:resolvers resolvers
+                             :seniors seniors
+                             :events (conj (:events state) event-result)}))
                         {:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
                         slash-events)
 
         metrics (waterfall/aggregate-waterfall-metrics
                  (:resolvers result)
                  (:seniors result)
-                 (mapv :event-result
-                       (map (fn [e] (waterfall/process-slash-event e (:juniors pool) (:seniors pool)))
-                            slash-events)))
+                 (:events result))
 
         summary {:scenario-id scenario-id
                  :scenario-name scenario-name
@@ -348,7 +413,8 @@
    :phase-x         ["\n💥 Running Phase X: Burst Concurrency Exploit"
                      (fn [_ _] (burst-concurrency/run-phase-x-sweep))]
    :governance-impact [nil run-governance-impact-simulation]
-   :waterfall         [nil run-waterfall-simulation]
+    :waterfall              [nil run-waterfall-simulation]
+    :probabilistic-waterfall [nil run-probabilistic-waterfall-simulation]
    :multi-epoch       [nil run-multi-epoch-simulation]
    :sweep             [nil run-sweep]
    :adversarial       [nil (fn [p _] (adversarial/run-adversarial-search p))]

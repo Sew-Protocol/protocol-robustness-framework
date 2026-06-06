@@ -10,6 +10,16 @@
 (defn resolve-dispute
   "Resolve one dispute with given parameters and strategy.
 
+   RNG consumption per call (in order):
+     1. Verdict correctness  — 1× next-double (honest=0, lazy=1, mal=1, coll=1)
+     2. Appeal roll          — 1× next-double
+     3. Oracle rolls         — N× roll-double  (detection, reversal, l1/l2 phases)
+     4. Escrow-size (caller) — var. next-double (not part of this function)
+   
+   Changes to earlier draws (verdict, appeal) shift all downstream oracle
+   rolls for that trial.  For fully scripted trials use :fixed-or with
+   :scope :detection (oracle) and manage strategy/appeal externally.
+
    Phase D adds slashing reason tracking (timeout/reversal/fraud).
    Reasons are deterministically derived from existing state.
    Phase G adds slashing delays and control baseline support.
@@ -237,22 +247,23 @@
         (when slashed-detected?
           (payoffs/calculate-slashing-distribution bond-loss 0))]
 
-    {:dispute-correct?      verdict-correct?
-     :appeal-triggered?     appealed?
-     :l2-detected?          l2-slashed?
-     :escalated?            escalated?
-     :escalation-level      escalation-level
-     :slashed?              slashed-detected?
-     :frozen?               frozen?
-     :escaped?              escaped?
-     :slashing-pending?     slashing-pending?
-     :slashing-delay-weeks  delay-weeks
-     :slashing-reason       slash-reason
-     :profit-honest         profit-honest
-     :profit-malice         profit-malice
-     :fraud-upside          fraud-upside
-     :fraud-survival-prob   fraud-success-prob  ; probability that fraud outcome survives escalation
-     :slash-distributed     slash-distributed
+     {:dispute-correct?      verdict-correct?
+      :appeal-triggered?     appealed?
+      :l2-detected?          l2-slashed?
+      :escalated?            escalated?
+      :escalation-level      escalation-level
+      :slashed?              slashed-detected?
+      :frozen?               frozen?
+      :escaped?              escaped?
+      :slashing-pending?     slashing-pending?
+      :slashing-delay-weeks  delay-weeks
+      :slashing-reason       slash-reason
+      :bond-loss             (long (max 0 bond-loss))
+      :profit-honest         profit-honest
+      :profit-malice         profit-malice
+      :fraud-upside          fraud-upside
+      :fraud-survival-prob   fraud-success-prob
+      :slash-distributed     slash-distributed
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
      :oracle-fixture/exhausted?

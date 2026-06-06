@@ -30,6 +30,20 @@
             [resolver-sim.protocols.sew.snapshot :as snapshot]))
 
 ;; ---------------------------------------------------------------------------
+;; Safe numeric coercion (shared across invariants, projection, classification)
+;; ---------------------------------------------------------------------------
+
+(defn safe-parse-long
+  "Coerce a value to long, handling JSON-deserialized strings.
+   Uses Long/parseLong for exact integer parsing — avoids Double/parseDouble
+   which loses precision for uint256-scale values (> 2^53)."
+  [x]
+  (cond
+    (number? x) (long x)
+    (string? x) (try (Long/parseLong x) (catch Exception _ 0))
+    :else 0))
+
+;; ---------------------------------------------------------------------------
 ;; Semantic ID Phantom Types
 ;; ---------------------------------------------------------------------------
 
