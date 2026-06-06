@@ -22,6 +22,7 @@
  :slashing-detection-probability 0.10
  :fraud-detection-probability 0.25
  :fraud-slash-bps 5000
+ :new-evidence-probability 0.05
  :reversal-detection-probability 0.25
  :reversal-slash-bps 2500
  :timeout-slash-bps 200

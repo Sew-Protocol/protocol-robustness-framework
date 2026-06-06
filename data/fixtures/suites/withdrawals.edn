@@ -7,5 +7,6 @@
  :protocol   :protocol/baseline
  :state      :states/minimal-world
  :thresholds :thresholds/strict-baseline
- :traces [:traces/s114-withdraw-fees-governance
-          :traces/s115-claim-deferred-yield-recovery]}
+  :traces [:traces/s114-withdraw-fees-governance
+           :traces/s115-claim-deferred-yield-recovery
+           :traces/s118-withdraw-while-paused]}

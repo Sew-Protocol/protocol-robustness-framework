@@ -18,7 +18,7 @@
    :reversal-detection-probability     (:reversal-detection-probability params 1.0)
    :reversal-slash-bps                 (:reversal-slash-bps params 0)
    :resolver-stake-wei                 (:resolver-stake-wei params)
-   :new-evidence-probability           (:new-evidence-probability params 0.0)
+    :new-evidence-probability           (:new-evidence-probability params 0.0)  ; 0.0 disables pending-evidence entirely; >0 gates an oracle roll
    :timeout-detection-probability      (:timeout-detection-probability params 0.0)
    :timeout-slash-bps                  (:timeout-slash-bps params 200)
    :unstaking-delay-days               (:unstaking-delay-days params 14)

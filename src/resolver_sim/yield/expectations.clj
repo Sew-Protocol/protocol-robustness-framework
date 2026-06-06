@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.expectations
   "World-level expectation checkers for yield scenarios."
   (:require [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.yield.evidence :as yield-evi]
             [resolver-sim.protocols.sew.types :as t]))
 
 (defn- check-yield-expectation [world exp terminal?]
@@ -52,6 +53,20 @@
                           true)]
       (and escrows-done? yields-done?))))
 
+(defn- check-loss-expectation [world exp terminal?]
+  (let [tokens (keys (:total-principal-deposited world {}))
+        actual-loss (reduce + (map #(yield-evi/sum-recognized-losses world %) tokens))
+        min-loss (:min-recognized-principal-loss exp 0)
+        max-loss (:max-recognized-principal-loss exp Double/MAX_VALUE)]
+    (cond
+      (> actual-loss max-loss)
+      {:holds? false :error :loss-too-high :actual actual-loss :expected max-loss}
+      
+      (and terminal? (< actual-loss min-loss))
+      {:holds? false :error :loss-too-low :actual actual-loss :expected min-loss}
+      
+      :else {:holds? true})))
+
 (defn check-expectations
   "Check all yield expectations for the current world state."
   [world]
@@ -61,8 +76,10 @@
       {:ok? true}
       (let [y-res  (when (:yield exp) (check-yield-expectation world (:yield exp) terminal?))
             pl-res (when (:partial-liquidity exp) (check-partial-liquidity-expectation world (:partial-liquidity exp) terminal?))
+            l-res  (when (:losses exp) (check-loss-expectation world (:losses exp) terminal?))
             results (cond-> {}
                       y-res (assoc :yield y-res)
-                      pl-res (assoc :partial-liquidity pl-res))]
+                      pl-res (assoc :partial-liquidity pl-res)
+                      l-res (assoc :losses l-res))]
         {:ok? (every? :holds? (vals results))
          :results results}))))

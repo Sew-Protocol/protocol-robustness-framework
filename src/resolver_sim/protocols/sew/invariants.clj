@@ -29,7 +29,8 @@
             [resolver-sim.protocols.sew.invariants.state :as state]
             [resolver-sim.protocols.sew.invariants.bond :as bond]
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
-            [resolver-sim.protocols.sew.invariants.dispute :as dispute]))
+            [resolver-sim.protocols.sew.invariants.dispute :as dispute]
+            [resolver-sim.yield.evidence :as yield-evi]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -708,7 +709,7 @@
 
 (defn conservation-of-funds?
   "True when every unit of inflow is accounted for in one of the state partitions.
-   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted]
+   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted] - [Recognized Losses]
    Accounted = [Physical Held] + [Actual Withdrawn] + [Claimable Entitlements] + [Distributed Slashes]
    
    These partitions are mutually exclusive."
@@ -721,9 +722,10 @@
                :let [principal   (t/safe-parse-long (get (:total-principal-deposited world) token 0))
                      yield       (t/safe-parse-long (get (:total-yield-generated world) token 0))
                      bonds       (t/safe-parse-long (get (:total-bonds-posted world) token 0))
-                    inflow      (+ principal yield bonds)
+                     losses      (yield-evi/sum-recognized-losses world token)
+                     inflow      (- (+ principal yield bonds) losses)
 
-                    held        (t/safe-parse-long (get (:total-held world) token 0))
+                     held        (t/safe-parse-long (get (:total-held world) token 0))
                      fees        (t/safe-parse-long (get (:total-fees world) token 0))
                      withdrawn   (t/safe-parse-long (get (:total-withdrawn world) token 0))
                      claimable   (t/safe-parse-long (get-token-claimable-sum world token))

@@ -105,6 +105,7 @@
      {:benchmark-id "C1"
       :label "Bribery Cost Model"
       :hypothesis "Bribery remains unprofitable at realistic cost levels (≥80%)"
+      :class :analytic
       :passed? passed?
       :results results
       :summary {:total-trials total-count

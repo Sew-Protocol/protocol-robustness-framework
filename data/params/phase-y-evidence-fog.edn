@@ -1,5 +1,6 @@
 {:scenario-id "phase-y-evidence-fog"
  :description "Phase Y: Evidence fog and attention budget constraint"
+ :accuracy-threshold 0.75
  :rng-seed 42
 
  :escrow-distribution

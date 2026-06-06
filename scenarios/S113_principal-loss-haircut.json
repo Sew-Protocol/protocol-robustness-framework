@@ -35,10 +35,11 @@
     "expectations": {
       "partial-liquidity": {
         "expected-shortfall": { "min": 0, "max": 0 }
+      },
+      "losses": {
+        "min-recognized-principal-loss": 2500,
+        "max-recognized-principal-loss": 2500
       }
-    },
-    "expected-failures": {
-      "S113_principal-loss-haircut": ["solvency", "conservation-of-funds"]
     }
   },
   "events" : [ {

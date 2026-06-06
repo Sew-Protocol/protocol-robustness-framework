@@ -518,7 +518,7 @@
 
    Not used by replay.clj; see protocols/sew/resolution for deterministic Track 2."
   [params {:keys [reversal-slashed?]}]
-  (let [threshold (:new-evidence-probability params 0)]
+  (let [threshold (:new-evidence-probability params 0.0)]
     (if (and reversal-slashed? (pos? threshold))
       (let [roll-event (oracle-roll-event params :pending-evidence)
             detected? (roll-detect? (:roll/value roll-event) threshold)]

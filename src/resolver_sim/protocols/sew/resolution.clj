@@ -59,7 +59,14 @@
       Same evidence as prior level — deterministic immediate slash (not appealable).
 
    2. Manual Track (proposeSlash):
-      New evidence submitted — slash is :pending with appeal window (governance path)."
+       New evidence submitted — slash is :pending with appeal window (governance path).
+
+   Limitation: Track 2 :pending reversal slashes are NOT automatically resolved
+   when the escrow finalizes.  If a pending reversal slash outlives the escrow
+   (appeal window expires without resolution), the entry remains in
+   :pending-fraud-slashes indefinitely.  This is a state inconsistency — the
+   slash cannot execute because the escrow is no longer :disputed, but the entry
+   is never garbage-collected."
   [world workflow-id current-is-release]
   (let [level (t/dispute-level world workflow-id)]
     (if-not (pos? level)
@@ -241,13 +248,10 @@
           ;; if isFinalRound (currentRound >= MAX_ROUND) → shouldExecute = true
           ;; (no appeal window, decision is immediately final)
           final-round?   (t/final-round? world workflow-id)
-          ;; DR3 Sync: handle resolver bond staking (record for now)
-          bond-bps       (:resolver-bond-bps snap 0)
-          et             (t/get-transfer world workflow-id)
-          afa            (:amount-after-fee et)
-          bond-amt       (t/compute-fee afa bond-bps)
-          
-          ;; Phase K: handle reversal slashing
+          ;; Phase K: handle reversal slashing (Track 1 auto-slash OR Track 2 pending).
+          ;; Called BEFORE the final-round check below so that the prior resolver's
+          ;; stake is deducted before the current decision is recorded — the current
+          ;; resolver cannot be slashed for their own decision.
           world'         (handle-reversal-slashing world workflow-id is-release)
           
           ;; Record current decision for future reversal checks
@@ -645,7 +649,11 @@
    not that the slash is upheld.
    - appeal-upheld? = true  -> slash is reversed and cannot be executed.
    - appeal-upheld? = false -> appeal is rejected; slash returns to pending.
-   Mirrors: ResolverSlashingModuleV1.resolveAppeal"
+   Mirrors: ResolverSlashingModuleV1.resolveAppeal
+
+   3-arity calls default slash-id to workflow-id (integer).  For reversal slashes
+   (which use level-scoped string slash-ids like \"0-reversal-0\"), the 4-arity
+   version with explicit slash-id MUST be used."
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id caller appeal-upheld? slash-id]

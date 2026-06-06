@@ -1,6 +1,7 @@
 {:scenario-id "phase-o-high-fraud"
  :description "Phase O: Market Exit Cascade - high fraud baseline"
  :rng-seed 42
+ :spike-ratio-threshold 0.70
  
  :escrow-distribution
  {:type :lognormal

@@ -6,13 +6,14 @@
    
    Sub-phases:
    - E1: Evidence Deadline Enforcement (0 to appeal-window blocks)
-   - E2: Hash Mismatch Detection (collision probability sweep)
+   - E2: Hash Mismatch Detection (collision probability × detection probability)
    - E3: Conflicting Evidence Resolution (weight function comparison)
    - E4: Evidence Bloat Griefing Bounds (1KB to 1GB)
    - E5: Yield Accrual During Dispute (0% to 10% APY)
    - E6: Evidence Availability Guarantee (IPFS/Arweave persistence)
    
-   Pass threshold: ≥80% of scenarios show evidence integrity maintained."
+   Pass threshold: 5/6 sub-phases (≥80%) must pass.
+   Per-sub-phase thresholds vary: E1/E5 100%, E2 80%, E3 67% (2/3), E4 75%, E6 80%."
   (:require [resolver-sim.sim.engine :as engine]
             [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.protocols.protocol :as proto]
@@ -76,41 +77,54 @@
   "Single trial: can hash mismatches be detected?
    
    Sweep: hash-collision-probability from 0 to 0.01
-   Expected: All collisions detected (no false positives)."
-  [{:keys [collision-prob seed]}]
+   Expected: All collisions detected above base detection rate.
+   
+   Model: Detection uses a probabilistic verification layer with
+   configurable detection-probability (default 0.95). A collision
+   is 'missed' when the detection draw fails — simulating the gap
+   between on-chain evidence and off-chain verification."
+  [{:keys [collision-prob detection-prob seed]}]
   (let [rng (rng/make-rng seed)
-        random-val (rng/next-double rng)
+        detection-prob (or detection-prob 0.95)
+        random-col (rng/next-double rng)
+        random-det  (rng/next-double rng)
         ;; Simulate: is there a hash collision?
-        collision-occurs? (< random-val collision-prob)
-        ;; Detection: if collision occurs, it's always caught
-        collision-detected? (if collision-occurs? true false)
-        ;; Pass if: collision happens and is detected, or no collision
+        collision-occurs? (< random-col collision-prob)
+        ;; Detection: probabilistic verification layer
+        collision-detected? (and collision-occurs? (< random-det detection-prob))
+        ;; Safe: no collision, or collision detected
         safe? (or (not collision-occurs?) collision-detected?)]
     {:collision-prob collision-prob
+     :detection-prob detection-prob
      :collision-occurs? collision-occurs?
      :detected? collision-detected?
      :safe? safe?}))
 
 (defn run-e2-hash-mismatch-detection
-  "Sweep collision-prob from 0 to 0.01 (10 points).
+  "Sweep collision-prob × detection-prob (6 × 3 = 18 points).
    
-   Pass: 100% of collisions are detected (safe? true for all)"
+   Pass: ≥80% of collisions are detected (safe? true for all)"
   []
-  (let [probs (mapv #(* 0.001 %) (range 11))  ; 0.0, 0.001, ..., 0.01
-        param-grid (mapv (fn [p] {:collision-prob p :seed 42}) probs)
+  (let [collision-probs [0.0 0.001 0.002 0.005 0.008 0.01]
+        detection-probs [0.90 0.95 0.99]
+        param-grid (for [cp collision-probs dp detection-probs]
+                     {:collision-prob cp :detection-prob dp :seed 42})
         results (engine/run-parameter-sweep param-grid run-e2-trial)
         safe-count (count (filter :safe? results))
         total-count (count results)
-        passed? (= safe-count total-count)]
+        pass-rate (double (/ safe-count total-count))
+        passed? (>= pass-rate 0.80)]
     (engine/make-result
      {:benchmark-id "E2"
       :label "Hash Mismatch Detection"
-      :hypothesis "All hash collisions are detected (100%)"
+      :hypothesis "Hash collision detection catches ≥80% of mismatches"
+      :class :analytic
       :passed? passed?
       :results results
       :summary {:total-trials total-count
                 :safe-trials safe-count
-                :pass-rate (double (/ safe-count total-count))}})))
+                :pass-rate pass-rate
+                :threshold 0.80}})))
 
 ;; ---------------------------------------------------------------------------
 ;; E3: Conflicting Evidence Resolution

@@ -15,8 +15,7 @@
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.contract-model.replay.metrics :as metrics]
-             [resolver-sim.contract-model.replay.io      :as replay-io]
-             [resolver-sim.contract-model.replay.validation :as validation]
+              [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.contract-model.replay.analysis :as analysis]
              [resolver-sim.contract-model.replay.temporal :as temporal]
              [resolver-sim.contract-model.replay.validation :as validation]
@@ -31,8 +30,8 @@
 ;; JSON serialisation helpers (Generic)
 ;; ---------------------------------------------------------------------------
 
-(defn- kw->json-key [k] (replay-io/kw->json-key k))
-(defn- kw-val->str [_k v] (replay-io/kw-val->str _k v))
+(defn- kw->json-key [k] (if (keyword? k) (name k) (str k)))
+(defn- kw-val->str [_k v] (if (keyword? v) (name v) v))
 
 ;; ---------------------------------------------------------------------------
 ;; Agent Validation (Generic)
@@ -637,7 +636,7 @@
 (defn result->json-str
   "Serialize a replay result to a JSON string."
   [result]
-  (replay-io/result->json-str result))
+  ((requiring-resolve 'resolver-sim.io.serialization/serialize-artifact) (dissoc result :protocol)))
 
 ;; ---------------------------------------------------------------------------
 ;; Verification & Determinism

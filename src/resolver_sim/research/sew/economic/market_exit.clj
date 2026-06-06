@@ -28,11 +28,11 @@
 
 (defn apply-resolver-exits
   "Remove resolvers based on exit probability
-  
+
   Returns: {:remaining, :exited-count, :exit-rate, :honest-remaining}"
-  [resolvers exit-prob-fn]
+  [rng resolvers exit-prob-fn]
   (let [initial (count resolvers)
-        remaining (filter (fn [r] (> (rand) (exit-prob-fn r))) resolvers)
+        remaining (filter (fn [r] (> (rng/next-double rng) (exit-prob-fn r))) resolvers)
         exited (- initial (count remaining))
         exit-rate (if (zero? initial) 0.0 (double (/ exited initial)))
         honest-remaining (count (filter #(= :honest (:strategy %)) remaining))]
@@ -48,8 +48,9 @@
   Returns: {:epoch, :honest-remaining, :pool-size, :honest-ratio, :remaining}"
   [rng epoch resolvers params expected-profit]
   
-  (let [;; Run disputes
-        batch-result (batch/run-batch rng (:n-trials-per-epoch params 500) params)
+  (let [[rng-exit rng-batch] (rng/split-rng rng)
+        ;; Run disputes
+        batch-result (batch/run-batch rng-batch (:n-trials-per-epoch params 500) params)
         avg-profit (:avg-profit batch-result 150.0)
         
         ;; Calculate exit probs
@@ -58,7 +59,7 @@
         
         ;; Apply exits
         {:keys [remaining exited-count exit-rate honest-remaining]}
-        (apply-resolver-exits resolvers exit-prob-fn)
+        (apply-resolver-exits rng-exit resolvers exit-prob-fn)
         
         pool-size (count remaining)
         honest-ratio (if (zero? pool-size) 0.0 (double (/ honest-remaining pool-size)))]
@@ -76,7 +77,7 @@
 
 (defn run-market-exit-cascade-scenario
   "Run one scenario over 10 epochs"
-  [params scenario]
+  [rng params scenario]
   
   (let [scenario-name (:name scenario)
         gov-eff (:governance-effectiveness scenario)
@@ -95,14 +96,13 @@
         adjusted-params (assoc params
                          :fraud-rate (* (:fraud-rate params 0.1) fraud-mult))
         
-        rng (rng/make-rng 42)
-        
-        ;; Run 10 epochs
-        results (loop [epoch 1, resolvers initial-resolvers, epochs []]
+        ;; Run 10 epochs — split RNG for each epoch
+        results (loop [epoch 1, rng rng, resolvers initial-resolvers, epochs []]
                  (if (> epoch 10)
                    epochs
-                   (let [result (run-one-epoch rng epoch resolvers adjusted-params expected-profit)]
-                     (recur (inc epoch)
+                   (let [[rng-epoch rng-rest] (rng/split-rng rng)
+                         result (run-one-epoch rng-epoch epoch resolvers adjusted-params expected-profit)]
+                     (recur (inc epoch) rng-rest
                            (:remaining result)
                            (conj epochs result)))))]
     
@@ -136,9 +136,12 @@
         _ (println "\n📊 Running Phase O: Market Exit Cascade Analysis")
         _ (println "   Testing 4 cascading failure modes over 10 epochs\n")
         
+        rng-seed  (or (:rng-seed params) 42)
+        rng-scenarios (rng/make-rng rng-seed)
         results (mapv (fn [scenario]
-                       (let [_ (println (format "   Testing: %s..." (:name scenario)))
-                             result (run-market-exit-cascade-scenario params scenario)
+                       (let [[rng-scenario rng-scenarios] (rng/split-rng rng-scenarios)
+                             _ (println (format "   Testing: %s..." (:name scenario)))
+                             result (run-market-exit-cascade-scenario rng-scenario params scenario)
                              _ (println (format "     → Final honest ratio: %.1f%%"
                                               (* 100 (:final-honest-ratio result))))]
                          result))
@@ -196,10 +199,12 @@
                          (/ breakeven current-d))))
       (println "   ─────────────────────────────────────────────────────────────────────\n"))
 
-    (engine/make-result
-     {:benchmark-id "O"
-      :label        "Market Exit Cascade"
-      :hypothesis   "Honest resolver ratio stays >= 70% under governance failure + fraud spike"
-      :passed?      (>= spike-ratio 0.70)
-      :results      results
-      :summary      {:finding finding :spike-ratio spike-ratio}})))
+    (let [spike-threshold (double (or (:spike-ratio-threshold params) 0.70))]
+      (engine/make-result
+       {:benchmark-id "O"
+        :label        "Market Exit Cascade"
+        :hypothesis   (format "Honest resolver ratio stays >= %.0f%% under governance failure + fraud spike" (* 100 spike-threshold))
+        :class        :analytic
+        :passed?      (>= spike-ratio spike-threshold)
+        :results      results
+         :summary      {:finding finding :spike-ratio spike-ratio :threshold spike-threshold}}))))

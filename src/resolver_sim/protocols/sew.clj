@@ -404,8 +404,8 @@
 
 (defmethod apply-action "withdraw-escrow"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
-    agent-index event
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
     (fn [addr]
       (acct/withdraw-escrow world (event-workflow-id event) addr))))
 
@@ -421,14 +421,16 @@
 
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index]} world event]
-  (actx/with-governance-actor
-    agent-index event
-    governance-actor?
-    (fn [_addr _agent]
-      (let [p     (:params event)
-            token (:token p)
-            token (when token (keyword token))]
-        (acct/withdraw-fees world token)))))
+  (if (:paused? world)
+    (t/fail :protocol-paused)
+    (actx/with-governance-actor
+      agent-index event
+      governance-actor?
+      (fn [_addr _agent]
+        (let [p     (:params event)
+              token (:token p)
+              token (when token (keyword token))]
+          (acct/withdraw-fees world token))))))
 
 (defmethod apply-action "governance-update-fee"
   [{:keys [agent-index]} world event]

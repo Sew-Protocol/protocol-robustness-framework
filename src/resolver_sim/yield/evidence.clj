@@ -31,6 +31,17 @@
                       [oid (extract-position-evidence oid pos ms)]))
                   positions))))
 
+(defn sum-recognized-losses
+  "Sum all recognized principal losses for a token across all positions."
+  [world token]
+  (let [positions (:yield/positions world {})
+        losses (keep (fn [[_ pos]]
+                       (when-let [sf (:shortfall pos)]
+                         (when (#{:principal-loss :negative-carry-loss} (:reason sf))
+                           (:haircut-amount sf 0))))
+                     positions)]
+    (reduce + 0 losses)))
+
 (defn canonical-yield-evidence
   "Produces a canonical yield evidence summary for projection."
   [m]

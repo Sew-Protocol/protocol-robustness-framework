@@ -7,8 +7,7 @@
             [clojure.string :as str]))
 
 (def ^:private allowlist
-  #{"resolver-sim.protocols.sew"
-    "resolver-sim.protocols.sew.io.trace-export"})
+  #{})
 
 (def ^:private rules
   [{:prefix "resolver-sim.sim."
@@ -18,7 +17,7 @@
    {:prefix "resolver-sim.contract-model."
     :forbidden ["resolver-sim.db." "resolver-sim.io." "resolver-sim.sim."]}
    {:prefix "resolver-sim.protocols.sew."
-    :forbidden ["resolver-sim.io." "resolver-sim.sim."]}
+    :forbidden ["resolver-sim.db." "resolver-sim.io." "resolver-sim.sim."]}
    {:prefix "resolver-sim.io."
     :forbidden ["resolver-sim.db."]}
    {:prefix "resolver-sim.db."

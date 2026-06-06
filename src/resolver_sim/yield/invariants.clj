@@ -23,13 +23,23 @@
         (into []
           (keep
             (fn [[oid pos]]
-              (let [risk (get-in world [:yield/risk (:module/id pos) (:token pos)] {})
+              (let [mid (:module/id pos)
+                    tok (:token pos)
+                    risk (get-in world [:yield/risk mid tok] {})
+                    sf   (:shortfall pos)
+                    sf-model (get-in world [:yield/shortfall-models mid tok])
                     mtm? (= :mark-to-market (risk/effective-loss-mode risk))
+                    
+                    ;; If principal-loss model and recoverable=false, 
+                    ;; we expect negative unrealized/principal.
+                    authorized-impairment? (and (= (:type sf-model) :principal-loss)
+                                                (not (:recoverable sf-model true)))
+                    
                     issues (cond-> []
-                            (neg? (:principal pos 0)) (conj :negative-principal)
+                            (and (not authorized-impairment?) (neg? (:principal pos 0))) (conj :negative-principal)
                             (neg? (:shares pos 0)) (conj :negative-shares)
                             (neg? (:realized-yield pos 0)) (conj :negative-realized-yield)
-                            (and (not mtm?) (neg? (:unrealized-yield pos 0))) (conj :negative-unrealized-yield))]
+                            (and (not mtm?) (not authorized-impairment?) (neg? (:unrealized-yield pos 0))) (conj :negative-unrealized-yield))]
                 (when (seq issues)
                   {:owner-id oid :issues issues})))
           (:yield/positions world {})))]

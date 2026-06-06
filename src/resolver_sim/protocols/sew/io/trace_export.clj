@@ -16,7 +16,6 @@
             [resolver-sim.protocols.sew.projection :as sew-proj]
             [resolver-sim.protocols.sew.diff  :as diff]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.io.scenarios          :as scenarios]
             [resolver-sim.protocols.sew.trace-metadata     :as meta])
   (:gen-class))
 
@@ -420,7 +419,7 @@
     (println "Usage: trace-export <scenario-json> <output-fixture-json>")
     (System/exit 1))
   (let [[scenario-path output-path] args
-        scenario (scenarios/load-scenario-file scenario-path)
+        scenario ((requiring-resolve 'resolver-sim.io.scenarios/load-scenario-file) scenario-path)
         result   (sew/replay-with-sew-protocol scenario)]
     (if (= :invalid (:outcome result))
       (do

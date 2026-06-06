@@ -25,9 +25,6 @@
     "max-dispute-duration" : 2592000,
     "appeal-window-duration" : 60
   },
-  "expected-failures": {
-    "S182_fraud-slash-reversal": ["bond-slash-bounded", "escrow-dispute-metadata-consistent", "slash-epoch-cap-respected", "fraud-slash-executions-accounted", "all-status-combinations-valid", "dispute-resolution-path", "settlement-yield-boundary", "appeal-bond-conserved", "fee-boundary", "slash-distribution-consistent", "bond-liquidity", "liability-slash-boundary", "yield-exposure", "solvency", "fee-cap", "yield-position-consistency", "bond-boundary", "senior-coverage-not-exceeded", "no-stale-automatable-escrows", "fees-non-negative", "held-non-negative", "resolver-not-frozen-on-assign", "conservation-of-funds", "settlement-principal-boundary", "resolver-capacity", "slash-status-consistent", "no-auto-fraud-execute", "shortfall-fidelity", "appeal-bond-custody-consistent", "single-resolution-payout-consistent", "pending-settlement-consistent", "persisted-escrow-state-valid", "resolver-bond-mix-valid", "dispute-level-bounded", "dispute-timestamp-consistent", "reversal-slash-disabled", "escrow-state-in-graph", "cancellation-mutex", "migration-parity"]
-  },
   "expected-outcome" : {
     "workflow-0" : "slashed-then-reversed"
   },
