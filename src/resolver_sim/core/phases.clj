@@ -204,6 +204,14 @@
 
         metrics (:metrics result)
         adequacy (:coverage-adequacy-score metrics)
+
+        ;; Fixture-health: flag oracle exhaustion so stale calibrations
+        ;; don't produce misleading results.  Exhaustion means the fixed
+        ;; roll sequence was too short for at least one trial; repeat-last
+        ;; masks this silently.
+        exhausted-events (filter :oracle-exhausted? (:events result))
+        fixture-exhausted? (seq exhausted-events)
+        fixture-warnings (distinct (mapcat :oracle-warnings exhausted-events))
         pass?    (>= adequacy 80.0)]
 
     (println (format "\n   Slashed disputes: %d / %d (%.1f%%)"
@@ -213,11 +221,20 @@
     (println (format "   Coverage used: %.1f%%" (:seniors-coverage-used-avg-pct metrics)))
     (println (format "   Adequacy score: %.1f%% (scale: 0–100)" adequacy))
     (println "")
-    (if pass?
-      (println (format "   Status: ✅ PASS (%.1f%% ≥ 80%% threshold)" adequacy))
-      (println (format "   Status: ❌ FAIL (%.1f%% < 80%% threshold)" adequacy)))
+    (when fixture-exhausted?
+      (println (format "   ⚠️  ORACLE FIXTURE EXHAUSTED — %d/%d trials affected"
+                       (count exhausted-events) (count (:events result))))
+      (doseq [w (take 3 fixture-warnings)]
+        (println (str "       " (:message w))))
+      (println "   Results are INVALID for evidence runs. Increase fixture roll count."))
     (println "")
-    (when (< adequacy 80.0)
+    (if fixture-exhausted?
+      (println (format "   Status: ⚠️  INVALID (fixture exhausted — results unreliable)"))
+      (if pass?
+        (println (format "   Status: ✅ PASS (%.1f%% ≥ 80%% threshold)" adequacy))
+        (println (format "   Status: ❌ FAIL (%.1f%% < 80%% threshold)" adequacy))))
+    (println "")
+    (when (and (not fixture-exhausted?) (< adequacy 80.0))
       (println "   Recommendations:")
       (println "   • Increase senior bond amounts or utilization-factor")
       (println "   • Reduce detection probability sensitivity")

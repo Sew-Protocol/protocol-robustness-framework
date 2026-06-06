@@ -1,0 +1,169 @@
+(ns resolver-sim.financial.loss
+  "Pure classification of financial loss modes.
+
+   A financial loss mode exists when a protocol, escrow, module, vault, or
+   settlement path can no longer satisfy, or may no longer be able to
+   satisfy, the value obligations implied by prior commitments.
+
+   Loss is NOT merely 'someone lost money'. It is a lifecycle state that may
+   be provisional, pending, realized, or irrecoverable.
+
+   Key design invariant: shortfall does NOT imply realized user loss. A
+   shortfall during an open recovery window is :loss-risk or
+   :loss-pending-finality, not :loss-realized. Loss is only realized when
+   financial finality has occurred and the shortfall has not been cured.
+
+   Loss lifecycle:
+     :normal              → no obligations at risk
+     :loss-risk           → active risk, no obligations yet impaired
+     :loss-pending-finality → obligations impaired, finality not yet reached
+     :loss-realized       → obligations impaired, financial finality reached
+     :loss-irrecoverable  → obligations permanently unmet, no recovery path"
+  (:require [resolver-sim.financial.finality :as finality]
+            [resolver-sim.protocols.sew.types :as t]))
+
+;; ── Loss status lifecycle ───────────────────────────────────────────────────
+
+(def loss-statuses
+  "Ordered lifecycle states for financial loss classification."
+  [:normal :loss-risk :loss-pending-finality :loss-realized :loss-irrecoverable])
+
+(defn- loss-ordinal
+  [status]
+  (case status
+    :normal 0 :loss-risk 1 :loss-pending-finality 2
+    :loss-realized 3 :loss-irrecoverable 4))
+
+;; ── Shortfall quantification ─────────────────────────────────────────────────
+
+(defn shortfall-total
+  "Aggregate shortfall across all yield positions for a given token.
+   Returns {:fulfilled N :deferred N :haircut N :positions-with-shortfall N}."
+  [world token]
+  (let [positions (vals (get world :yield/positions {}))
+        token-pos (filter #(= token (:token %)) positions)
+        with-sf   (filter :shortfall token-pos)]
+    {:fulfilled-total         (reduce + 0 (map #(get-in % [:shortfall :fulfilled-amount] 0) with-sf))
+     :deferred-total          (reduce + 0 (map #(get-in % [:shortfall :deferred-amount] 0) with-sf))
+     :haircut-total           (reduce + 0 (map #(get-in % [:shortfall :haircut-amount] 0) with-sf))
+     :positions-with-shortfall (count with-sf)}))
+
+;; ── Loss classifier ──────────────────────────────────────────────────────────
+
+(defn classify-loss
+  "Classify the financial loss status for the current world.
+
+   Reads yield positions, escrow states, slashing entries, and
+   claimable balances to determine whether obligations are normal,
+   at risk, pending finality, realized, or irrecoverable.
+
+   Parameters:
+     world        — current world state
+     token        — asset token (e.g., :USDC)
+     opts         — optional map with:
+       :resolve-financial-finality?  — if true, checks financial finality
+                                       to distinguish loss-pending from
+                                       loss-realized (default true)
+       :max-irrecoverable-ratio       — if total held + claimable is below
+                                       this fraction of total obligations,
+                                       classify as :loss-irrecoverable
+
+   Returns:
+     {:loss/status                         :loss-pending-finality
+      :loss/scope                          :yield-module
+      :loss/token                          :USDC
+      :loss/shortfall {:fulfilled N :deferred N :haircut N}
+      :loss/user-realized?                 false
+      :loss/protocol-realized?             false
+      :loss/reason                         :partial-liquidity
+      :financial-phase                     :recoverable
+      :financially-final?                  false}"
+  ([world token] (classify-loss world token {}))
+  ([world token {:keys [resolve-financial-finality? max-irrecoverable-ratio]
+                 :or   {resolve-financial-finality? true
+                        max-irrecoverable-ratio     0.2}}]
+   (let [shortfall  (shortfall-total world token)
+         has-sf?    (pos? (:positions-with-shortfall shortfall))
+         fin        (when resolve-financial-finality?
+                      (let [escrows (get world :escrow-transfers {})]
+                        (if (seq (keys escrows))
+                          ;; Financially final only when ALL workflows are final
+                          (let [results (map (fn [[wf _]]
+                                              (finality/classify-financial-finality world wf))
+                                            escrows)
+                                all-final? (every? :financially-final? results)]
+                            {:financially-final? all-final?
+                             :financial/phase   (if all-final? :financially-final
+                                                 (apply max-key :financially-final? results))})
+                          {:financially-final? true  ;; no escrows = trivially final
+                           :financial/phase :financially-final})))
+         ff-final?  (if fin (:financially-final? fin) false)
+         ff-phase   (if fin (:financial/phase fin) :provisional)]
+
+     (cond
+       ;; No shortfall — normal
+       (not has-sf?)
+       {:loss/status              :normal
+        :loss/scope               :yield-module
+        :loss/token               token
+        :loss/shortfall           shortfall
+        :loss/user-realized?      false
+        :loss/protocol-realized?  false
+        :loss/reason              nil
+        :financial-phase          ff-phase
+        :financially-final?       ff-final?}
+
+       ;; Shortfall exists but financial finality not yet reached
+       (not ff-final?)
+       {:loss/status              :loss-pending-finality
+        :loss/scope               :yield-module
+        :loss/token               token
+        :loss/shortfall           shortfall
+        :loss/user-realized?      false
+        :loss/protocol-realized?  false
+        :loss/reason              :partial-liquidity
+        :financial-phase          ff-phase
+        :financially-final?       false}
+
+       ;; Shortfall + financial finality + still deferred → realized loss
+       (and ff-final? (pos? (:deferred-total shortfall)))
+       (let [max-loss? (try (let [held    (get-in world [:total-held token] 0)
+                                  claim   (get-in world [:claimable token] 0)
+                                  ratio   (if (zero? (:deferred-total shortfall))
+                                           1.0
+                                           (/ (+ held claim) (:deferred-total shortfall)))]
+                              (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio)))
+                            (catch Exception _ false))]
+         {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
+          :loss/scope               :yield-module
+          :loss/token               token
+          :loss/shortfall           shortfall
+          :loss/user-realized?      true
+          :loss/protocol-realized?  true
+          :loss/reason              (if max-loss? :irrecoverable-shortfall :partial-liquidity)
+          :financial-phase          ff-phase
+          :financially-final?       true})
+
+       ;; Fallback (shortfall present, financially final, but deferred is 0?)
+       :else
+       {:loss/status              :normal
+        :loss/scope               :yield-module
+        :loss/token               token
+        :loss/shortfall           shortfall
+        :loss/user-realized?      false
+        :loss/protocol-realized?  false
+        :loss/reason              :shortfall-resolved
+        :financial-phase          ff-phase
+        :financially-final?       ff-final?}))))
+
+;; ── Convenience predicates ───────────────────────────────────────────────────
+
+(defn loss-active?
+  "True when the loss status is beyond :normal."
+  [loss-classification]
+  (not= :normal (:loss/status loss-classification)))
+
+(defn loss-realized?
+  "True when loss has been realized (or is irrecoverable)."
+  [loss-classification]
+  (and (loss-active? loss-classification) (:loss/user-realized? loss-classification)))

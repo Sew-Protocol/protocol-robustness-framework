@@ -11,11 +11,13 @@
    re-used here.
 
    This namespace is pure — no I/O, no DB, no side effects."
-  (:require [resolver-sim.scenario.projection :as proj]
-            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
-            [resolver-sim.protocols.sew.invariants :as inv]
-            [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.yield.evidence :as ye]))
+   (:require [resolver-sim.scenario.projection :as proj]
+             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
+             [resolver-sim.protocols.sew.invariants :as inv]
+             [resolver-sim.protocols.sew.types :as t]
+             [resolver-sim.yield.evidence :as ye]
+             [resolver-sim.financial.finality :as ff]
+             [resolver-sim.financial.loss :as fl]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
@@ -400,10 +402,21 @@
          :protocol-params p-params
          :scenario-id scenario-id
          :decisions decisions
-         :raw-trace trace
-         :funds-ledger-summary funds-ledger
-         :yield-evidence yield-evidence
-         :escrow-yield-outcomes escrow-yield-outcomes})))))
+          :raw-trace trace
+          :funds-ledger-summary funds-ledger
+          :yield-evidence yield-evidence
+          :escrow-yield-outcomes escrow-yield-outcomes
+
+          ;; ── Financial finality & loss classifiers (additive, pure read-only) ──
+          :financial-finality
+          (when (seq (keys escrows))
+            (into {}
+                  (map (fn [[wf _]]
+                         [wf (ff/combine-finality world wf)]))
+                  escrows))
+
+          :financial-loss
+          (fl/classify-loss world :USDC {:resolve-financial-finality? true})})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection

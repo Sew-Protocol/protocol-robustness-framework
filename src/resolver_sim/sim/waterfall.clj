@@ -291,9 +291,20 @@
   [rng-inst pool params n-trials]
   (let [n-juniors (count (:juniors pool))
         n-per-senior (/ n-juniors (max 1 (:n-seniors params 5)))
-        mc-kwargs {:fraud-slash-bps (:fraud-slash-bps params 50)
-                   :reversal-detection-probability (:reversal-detection-probability params 0.02)
-                   :timeout-slash-bps (:timeout-slash-bps params 25)}
+        mc-kwargs (merge
+                   {:fraud-slash-bps (:fraud-slash-bps params 50)
+                    :reversal-detection-probability (:reversal-detection-probability params 0.02)
+                    :timeout-slash-bps (:timeout-slash-bps params 25)}
+                   ;; Forward oracle fixture params so resolve-dispute can detect
+                   ;; exhaustion (needed for :repeat-last / :cycle policy checks)
+                   (when-let [f (:oracle-fixture params)]
+                     {:oracle-fixture f})
+                   (when (:oracle-mode params)
+                     {:oracle-mode (:oracle-mode params)})
+                   (when (:oracle-roll-on-exhaustion params)
+                     {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
+                   (when (:oracle-scope params)
+                     {:oracle-scope (:oracle-scope params)}))
         result (reduce
                 (fn [state trial-idx]
                   ;; Fork per-trial RNG so escrow/strategy draws don't shift
@@ -324,7 +335,9 @@
                                  (:slashing-detection-probability params 0.10)
                                  mc-kwargs)
 
-                        bond-loss (:bond-loss outcome 0)]
+                        bond-loss (:bond-loss outcome 0)
+                        oracle-exhausted? (boolean (:oracle-fixture/exhausted? outcome))
+                        oracle-warnings   (or (:oracle-fixture/warnings outcome) [])]
 
                     (if (and (:slashed? outcome) (pos? bond-loss))
                       (let [;; Per-epoch cap on senior side
@@ -349,13 +362,17 @@
                                        (assoc event-result
                                               :escrow-wei escrow-wei
                                               :strategy strategy
-                                              :slashed? true))})
+                                              :slashed? true
+                                              :oracle-exhausted? oracle-exhausted?
+                                              :oracle-warnings oracle-warnings))})
                       ;; Not slashed or no bond loss: pool unchanged, record dispute
                       (update state :events conj
                               {:slashed? false
                                :reason (:slashing-reason outcome)
                                :strategy strategy
-                               :escrow-wei escrow-wei}))))
+                               :escrow-wei escrow-wei
+                               :oracle-exhausted? oracle-exhausted?
+                               :oracle-warnings oracle-warnings}))))
                 {:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
                 (range n-trials))
         slash-events (filter :slashed? (:events result))

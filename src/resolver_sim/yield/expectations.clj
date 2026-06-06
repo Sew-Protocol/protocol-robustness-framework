@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.expectations
-  "Validate data-driven yield and partial-liquidity expectations."
-  (:require [resolver-sim.yield.accounting :as acct]))
+  "World-level expectation checkers for yield scenarios."
+  (:require [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.protocols.sew.types :as t]))
 
 (defn- check-yield-expectation [world exp terminal?]
   (let [total-yield (reduce + (vals (:total-yield-generated world {})))
@@ -44,7 +45,7 @@
   (let [transfers (:escrow-transfers world)
         positions (:yield/positions world)]
     (let [escrows-done? (if (seq transfers)
-                          (every? #(contains? #{:released :refunded :resolved} (:escrow-state (val %))) transfers)
+                          (every? #(contains? t/terminal-states (:escrow-state (val %))) transfers)
                           true)
           yields-done?  (if (seq positions)
                           (not-any? #(= (:status (val %)) :unwinding) positions)
