@@ -303,29 +303,6 @@
                                                   :workflows workflows}))))]]
           [(name class-id) (public-observation merged)])))
 
-(def boundary-checks
-  "Boundary invariants and their corresponding utilization-row generators.
-   Each entry embeds both the invariant check function (`:fn`) and the row-computation
-   function (`:rows`, pointer to the *-utilization-rows fn), so the two never drift."
-  [{:id "settlement-principal-boundary"
-    :fn  inv/settlement-principal-boundary?
-    :rows principal-utilization-rows}
-   {:id "settlement-yield-boundary"
-    :fn  inv/settlement-yield-boundary?
-    :rows yield-utilization-rows}
-   {:id "liability-slash-boundary"
-    :fn  inv/liability-slash-boundary?
-    :rows liability-slash-utilization-rows}
-   {:id "bond-boundary"
-    :fn  inv/bond-boundary?
-    :rows bond-utilization-rows}
-   {:id "fee-boundary"
-    :fn  inv/fee-boundary?
-    :rows fee-utilization-rows}])
-
-(def ^:private default-highlight-limit 15)
-(def ^:private default-workflows-per-highlight 10)
-
 (defn- sum-domain-for-workflow
   [world workflow-id domain]
   (let [addr-map (get-in world [:claimable-v2 workflow-id domain] {})
@@ -444,7 +421,31 @@
      (for [[wf domain-map] (get-in world [:claimable-v2] {})
            :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
            :when (pos? claims)]
-       {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))))
+        {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))))
+
+(def boundary-checks
+  "Boundary invariants and their corresponding utilization-row generators.
+   Each entry embeds both the invariant check function (`:fn`) and the row-computation
+   function (`:rows`, pointer to the *-utilization-rows fn), so the two never drift.
+   Defined here, after all *-utilization-rows functions, so the fn pointers resolve."
+  [{:id "settlement-principal-boundary"
+    :fn  inv/settlement-principal-boundary?
+    :rows principal-utilization-rows}
+   {:id "settlement-yield-boundary"
+    :fn  inv/settlement-yield-boundary?
+    :rows yield-utilization-rows}
+   {:id "liability-slash-boundary"
+    :fn  inv/liability-slash-boundary?
+    :rows liability-slash-utilization-rows}
+   {:id "bond-boundary"
+    :fn  inv/bond-boundary?
+    :rows bond-utilization-rows}
+   {:id "fee-boundary"
+    :fn  inv/fee-boundary?
+    :rows fee-utilization-rows}])
+
+(def ^:private default-highlight-limit 15)
+(def ^:private default-workflows-per-highlight 10)
 
 (defn- workflow-boundary-snapshot
   [world workflow-id]
@@ -690,7 +691,7 @@
      :scenario_count (if contexts (count contexts) (count worlds))
      :terminal_world_count (count worlds)
      :workflow_count (workflow-count-for-worlds worlds)
-     :scenarios_passed scenarios_passed
+      :scenarios_passed scenarios-passed
      :coverage_status (coverage-status-for-worlds worlds)
      :coverage_matrix (coverage-matrix worlds)
      :classified_claimable_total classified-total
@@ -701,7 +702,7 @@
                                        :classified-total classified-total})
      :aggregation (or aggregation "sum-across-terminal-worlds")
      :aggregation_note
-     (or aggregation_note
+      (or aggregation-note
          (str "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable."))
      ;; For single-scenario output, only emit classes with nonzero claimable
      :by_class (if single-scenario? (compact-by-class all-classes) all-classes)
@@ -738,8 +739,8 @@
                    aggregation aggregation_note]}]
   (when (seq worlds)
     (let [first-ctx (first contexts)
-          base      (base-observations worlds contexts scenarios-passed
-                                        aggregation aggregation-note)]
+          base      (base-observations worlds contexts scenarios_passed
+                                        aggregation aggregation_note)]
       (cond-> base
         first-ctx (merge (single-scenario-section first-ctx))
         (seq contexts) (merge (scenario-highlights-section contexts

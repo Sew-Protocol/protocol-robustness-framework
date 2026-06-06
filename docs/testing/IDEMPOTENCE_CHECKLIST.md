@@ -14,7 +14,9 @@ Do not conflate these — they solve different problems:
 Deterministic invariant scenarios (S46-style) rely on business-logic idempotence.  
 External log replay should supply optional `event-id` (and `hop-id` for escalate/challenge) to activate replay-boundary dedupe.
 
-Reference scenario: `scenarios/S64_replay-event-id-dedupe.json`.
+Reference scenarios: `S64_replay-event-id-dedupe.json`, `S65_spe-fork-event-id-inheritance.json`, `S116_superseded-pending-repeated-keeper.json`, `S117_challenge-resolution-dedupe.json`.
+
+Per-action dedupe key reference: `docs/replay/REPLAY_SENSITIVE_ACTIONS.md`.
 
 ---
 
@@ -31,7 +33,7 @@ Reference scenario: `scenarios/S64_replay-event-id-dedupe.json`.
 | `rotate-dispute-resolver` | Same target rotation should not create duplicate audit events | PASS | Business-logic `:idempotent?` flag; replay dedupe when `event-id` present |
 | `escalate_dispute` / `challenge_resolution` | Replay-idempotent under duplicate ingestion (same logical tx) | PASS* | *When `event-id` present; otherwise business guards apply |
 | `replay-sensitive-actions` (8 actions) | Replay dedupe when `event-id` present | PASS* | See `sew/replay-sensitive-actions` |
-| superseded pending fallback | Repeated keeper execution over superseded history cannot re-finalize | PARTIAL | Guarded by terminal/pending logic; add explicit regression tests for superseded cases |
+| superseded pending fallback | Repeated keeper execution over superseded history cannot re-finalize | PASS | Guarded by terminal/pending logic; verified by `checklist-superseded-pending-single-finalization` test + S116 fixture |
 | SPE fork continuations (`cont-events`) | Main-line tail replayed after deviation | PASS | Uses `:world-checkpoints` + normalized replay events; `:event-identity :inherit-from-main-trace` |
 
 ---
@@ -92,4 +94,4 @@ Stale continuation rejections are tagged `:fork/stale-continuation` (business gu
 2. ~~**Fork world completeness**~~ — `:world-checkpoints` on replay results; SPE uses checkpoints.
 3. ~~**Audit-grade trace consistency**~~ — exported traces surface `:extra {:idempotency ...}` via `attributes.idempotency` and `metadata.idempotency`.
 4. ~~**Policy enforcement**~~ — optional `:require-event-id?` replay flag (`:external-log-replay-flags` preset) for external-log ingestion paths.
-5. **Superseded-pending regression** — explicit fixture for repeated keeper calls over superseded history.
+5. ~~**Superseded-pending regression** — explicit fixture for repeated keeper calls over superseded history.~~

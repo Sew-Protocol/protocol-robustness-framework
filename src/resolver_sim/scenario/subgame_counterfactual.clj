@@ -42,6 +42,11 @@
    :event-identity :inherit-from-main-trace
    ;; Fork world checkpoints carry :idempotency/applied only for events already
    ;; processed before the fork point — not for downstream continuations.
+   ;; :idempotency-state :reset-at-fork is an alternate mode that clears
+   ;; :idempotency/applied at fork (starts with empty dedupe set for all
+   ;; continuation events). Not yet implemented — only :inherit-checkpoint
+   ;; is wired. Enable when you need to re-evaluate idempotent actions on
+   ;; the fork path as if they had never been seen.
    :idempotency-state :inherit-checkpoint})
 
 (def ^:private default-utility-spec

@@ -9,7 +9,7 @@ It determines if an agent's chosen action is optimal by simulating all legal alt
 
 The expansion relies on two foundational systems:
 
-1.  **Branching Replay Kernel**: Allows the simulation to "fork" from any intermediate world state (snapshot) and execute a continuation path using the existing replay engine.
+1.  **Branching Replay Kernel**: Allows the simulation to "fork" from any intermediate world state (`:world-checkpoints` captured during replay) and execute a continuation path using the existing replay engine. Checkpoints are full world-state maps keyed by event `:seq`, recorded before each event is applied. The `:decision-nodes-only` retention policy keeps only strategic decision points (`raise_dispute`, `escalate_dispute`, `execute_resolution`) to reduce memory; `:retain-all` keeps every checkpoint for debugging.
 2.  **Dynamic Action Enumeration**: Leverages the `available-actions` method in `SimulationAdapter`, enabling the protocol to report all legal moves for a given agent in the current state.
 
 ### Execution Workflow

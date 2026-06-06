@@ -409,7 +409,7 @@
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))
-                                            (update :world-checkpoints assoc (:seq event) working-world))))
+                                            (update :world-checkpoints assoc (:seq event) working-world)))
                                       (let [step (process-step protocol context working-world event)
                                             entry0 (:trace-entry step)
                                             expected-failure? (and (= :rejected (:result entry0))
@@ -444,7 +444,7 @@
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))
-                                            (update :world-checkpoints assoc (:seq event) working-world))))))
+                                            (update :world-checkpoints assoc (:seq event) working-world)))))))
                               {:world base-world
                                :trace trace
                                :metrics metrics'
@@ -457,7 +457,7 @@
             (if (:halted? batch-result)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
-                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol})
+                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
                                   (proto/check-invariants-single protocol (:world batch-result)))
                     post-trans  (when check-inv?
@@ -495,7 +495,9 @@
                      :trace trace'
                      :metrics metrics''
                      :execution {:mode :deterministic-batch :batch-policy batch-commit-policy}
-                     :protocol protocol})))))
+                     :protocol protocol
+                     :world-checkpoints (:world-checkpoints batch-result)
+                     :last-valid-world (:world batch-result)})))))
           (let [raw-event (first events)
                 event (if (and supports-alias? (seq id-alias-map))
                         (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]

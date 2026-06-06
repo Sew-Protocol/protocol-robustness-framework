@@ -765,8 +765,13 @@
 
     :else
     (let [old-resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])
-          same-resolver? (= old-resolver new-resolver)]
-      (if same-resolver?
+          same-resolver? (= old-resolver new-resolver)
+          last-rotation (last (get-in world [:resolver-rotations workflow-id]))
+          same-rotation? (and (not same-resolver?)
+                              (some? last-rotation)
+                              (= (:from last-rotation) old-resolver)
+                              (= (:to last-rotation) new-resolver))]
+      (if (or same-resolver? same-rotation?)
         (assoc (t/ok world)
                :old-resolver old-resolver
                :new-resolver new-resolver

@@ -131,7 +131,8 @@ scenario authoring.
 ## 5. Fork-replay for counterfactual evaluation
 
 The `resume-from-snapshot` primitive in `replay.clj` allows the
-framework to **fork** a simulation from any world-state snapshot:
+framework to **fork** a simulation from any `:world-checkpoints` entry
+(full world-state map captured before each event during replay):
 
 ```clojure
 (resume-from-snapshot protocol agents params scenario-id world
