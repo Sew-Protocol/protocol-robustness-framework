@@ -33,4 +33,11 @@
  ;; Small run for calibration speed
  :n-epochs           10
  :n-trials-per-epoch 200
- :rng-seed           42}
+ :rng-seed           42
+  ; Audit thresholds — override defaults in audit.clj
+  :audit-thresholds
+  {:dominance-threshold 1.2
+   :max-malice-equity-share 0.3
+   :tail-fraction 0.2
+   :malice-survival-threshold 0.5}
+}

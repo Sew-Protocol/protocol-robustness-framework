@@ -365,14 +365,16 @@
      :epoch-callback   — (fn [epoch-n summary]) invoked after each epoch
 
    Returns {:result run-result :audit audit-result :manifest manifest}."
-  [params params-file & {:keys [seed n-epochs n-trials audit-opts epoch-callback]}]
-  (let [seed'     (or seed (:rng-seed params 42))
-        n-epochs' (or n-epochs (:n-epochs params 10))
-        n-trials' (or n-trials (:n-trials-per-epoch params 500))
-        rng-inst  (@(requiring-resolve 'resolver-sim.stochastic.rng/make-rng) seed')
-        run-fn    @(requiring-resolve 'resolver-sim.sim.multi-epoch/run-multi-epoch)
-        result    (run-fn rng-inst n-epochs' n-trials' params (or epoch-callback (constantly nil)))
-        audit-res (analyze-multi-epoch result (or audit-opts {}))
+   [params params-file & {:keys [seed n-epochs n-trials audit-opts epoch-callback]}]
+   (let [seed'         (or seed (:rng-seed params 42))
+         n-epochs'     (or n-epochs (:n-epochs params 10))
+         n-trials'     (or n-trials (:n-trials-per-epoch params 500))
+         rng-inst      (@(requiring-resolve 'resolver-sim.stochastic.rng/make-rng) seed')
+         run-fn        @(requiring-resolve 'resolver-sim.sim.multi-epoch/run-multi-epoch)
+         result        (run-fn rng-inst n-epochs' n-trials' params (or epoch-callback (constantly nil)))
+         params-audit  (:audit-thresholds params {})
+         merged-opts   (merge params-audit (or audit-opts {}))
+         audit-res     (analyze-multi-epoch result merged-opts)
         mfst      (make-manifest result params params-file seed')]
     {:result  result
      :audit   audit-res
