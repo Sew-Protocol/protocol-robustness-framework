@@ -129,6 +129,7 @@
    with an appeal window, not immediately EXECUTED."
   [world slash-id workflow-id resolver slash-amt appeal-window]
   (let [now (:block-time world)]
+    (println (str "[sew/resolution] DEBUG: handle-fraud-slashing now=" now ", appeal-window=" appeal-window))
     (assoc-in world [:pending-fraud-slashes slash-id]
               {:resolver         resolver
                :amount           slash-amt

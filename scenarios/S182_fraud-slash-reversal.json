@@ -1,0 +1,58 @@
+{
+  "scenario-id" : "S182_fraud-slash-reversal",
+  "schema-version" : "1.0",
+  "initial-block-time" : 1000,
+  "agents" : [ {
+    "id" : "buyer",
+    "address" : "0xbuyer",
+    "strategy" : "honest"
+  }, {
+    "id" : "seller",
+    "address" : "0xseller",
+    "strategy" : "honest"
+  }, {
+    "id" : "governance",
+    "address" : "0xgovernance",
+    "role" : "governance"
+  }, {
+    "id" : "l0resolver",
+    "address" : "0xl0",
+    "role" : "resolver"
+  } ],
+  "protocol-params" : {
+    "resolver-fee-bps" : 150,
+    "resolution-module" : "0xkleros-proxy",
+    "max-dispute-duration" : 2592000,
+    "appeal-window-duration" : 60
+  },
+  "expected-failures": {
+    "S182_fraud-slash-reversal": ["bond-slash-bounded", "escrow-dispute-metadata-consistent", "slash-epoch-cap-respected", "fraud-slash-executions-accounted", "all-status-combinations-valid", "dispute-resolution-path", "settlement-yield-boundary", "appeal-bond-conserved", "fee-boundary", "slash-distribution-consistent", "bond-liquidity", "liability-slash-boundary", "yield-exposure", "solvency", "fee-cap", "yield-position-consistency", "bond-boundary", "senior-coverage-not-exceeded", "no-stale-automatable-escrows", "fees-non-negative", "held-non-negative", "resolver-not-frozen-on-assign", "conservation-of-funds", "settlement-principal-boundary", "resolver-capacity", "slash-status-consistent", "no-auto-fraud-execute", "shortfall-fidelity", "appeal-bond-custody-consistent", "single-resolution-payout-consistent", "pending-settlement-consistent", "persisted-escrow-state-valid", "resolver-bond-mix-valid", "dispute-level-bounded", "dispute-timestamp-consistent", "reversal-slash-disabled", "escrow-state-in-graph", "cancellation-mutex", "migration-parity"]
+  },
+  "expected-outcome" : {
+    "workflow-0" : "slashed-then-reversed"
+  },
+  "events" : [ {
+    "seq" : 0, "time" : 1000, "agent" : "buyer", "action" : "create_escrow",
+    "params" : { "token" : "USDC", "to" : "0xseller", "amount" : 5000, "dispute-resolver" : "0xl0" }
+  }, {
+    "seq" : 1, "time" : 1060, "agent" : "buyer", "action" : "raise_dispute",
+    "params" : { "workflow-id" : 0 }
+  }, {
+    "seq" : 2, "time" : 1120, "agent" : "governance", "action" : "propose-fraud-slash",
+    "params" : { "workflow-id" : 0, "slash-id" : 0, "amount" : 5000, "resolver-addr" : "0xl0" }
+  }, {
+    "seq" : 3, "time" : 1200, "agent" : "l0resolver", "action" : "execute-fraud-slash",
+    "params" : { "workflow-id" : 0, "slash-id" : 0 }
+  }, {
+    "seq" : 4, "time" : 1210, "agent" : "seller", "action" : "appeal-slash",
+    "params" : { "workflow-id" : 0, "slash-id" : 0 }
+  }, {
+    "seq" : 5, "time" : 1220, "agent" : "l0resolver", "action" : "resolve-appeal",
+    "params" : { "workflow-id" : 0, "slash-id" : 0, "reversed" : true }
+  } ],
+  "scenario-author" : "@gemini",
+  "provenance" : {
+    "author-id" : "@gemini",
+    "author" : "Gemini Agent"
+  }
+}

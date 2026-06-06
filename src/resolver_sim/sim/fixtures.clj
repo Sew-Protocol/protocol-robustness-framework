@@ -110,9 +110,9 @@
                                    (Monte Carlo metric; skipped in replay context)
      :min-detection-rate N  — fails if detection-rate falls below N
                                (Monte Carlo metric; skipped in replay context)
-
-   When :expected-outcome is :fail, strict solvency is not applied (invariant
-   violation is an expected trace outcome)."
+     :max-held-delta N  — fails if per-step held-delta exceeds N
+                           (reserved for token-pathology scenarios;
+                            requires metric implementation)"
   [result thresholds & {:keys [expected-outcome]}]
   (let [violations (atom [])
         metrics    (:metrics result {})]
@@ -130,6 +130,13 @@
         (when (< rate min-detection)
           (swap! violations conj {:type :detection-rate-below-minimum
                                   :detail (str "detection-rate " rate " < " min-detection)}))))
+    (when-let [max-delta (:max-held-delta thresholds)]
+      (let [held-before (get metrics :total-held-before 0)
+            held-after  (get metrics :total-held-after 0)
+            delta       (Math/abs (- held-after held-before))]
+        (when (> delta max-delta)
+          (swap! violations conj {:type :held-delta-exceeded
+                                  :detail (str "|held-after - held-before| = " delta " > " max-delta)}))))
     {:ok? (empty? @violations)
      :violations @violations}))
 

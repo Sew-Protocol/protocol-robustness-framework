@@ -30,11 +30,14 @@
     (string? v) (keyword v)
     :else v))
 
+(defn- normalize-seq [v]
+  (if (string? v) (Integer/parseInt v) v))
+
 (defn- normalize-expected-errors
   [scenario]
   (if-let [errs (:expected-errors scenario)]
     (assoc scenario :expected-errors
-           (mapv #(update % :error normalize-error-kw) errs))
+           (mapv #(-> % (update :error normalize-error-kw) (update :seq normalize-seq)) errs))
     scenario))
 
 (defn- normalize-yield-preset-param
@@ -60,6 +63,7 @@
   (if-let [events (:events scenario)]
     (assoc scenario :events
            (mapv #(cond-> %
+                    :always (update :seq normalize-seq)
                     (:params %)
                     (update :params normalize-event-params))
                  events))

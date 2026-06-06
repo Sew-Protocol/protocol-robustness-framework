@@ -27,12 +27,20 @@
     (or (get params primary-key)
         (some #(get params %) alias-keys))))
 
+(defn- normalize-id [v]
+  (cond
+    (string? v) v
+    (keyword? v) (name v)
+    :else v))
+
 (defn event-id
-  "Optional logical event identifier used for replay dedupe."
+  "Optional logical event identifier used for replay dedupe.
+   Normalized to string for type-stable dedupe key comparison."
   [event]
-  (event-param event :event-id :event_id))
+  (normalize-id (event-param event :event-id :event_id)))
 
 (defn hop-id
-  "Optional escalation-hop scope for replay dedupe (escalate/challenge)."
+  "Optional escalation-hop scope for replay dedupe (escalate/challenge).
+   Normalized to string for type-stable dedupe key comparison."
   [event]
-  (event-param event :hop-id :hop_id))
+  (normalize-id (event-param event :hop-id :hop_id)))

@@ -145,7 +145,7 @@
       {:ok? true :violations []}
       (let [violations
             (for [{:keys [seq action expect]} expected
-                  :let [entry (get by-seq seq)
+                  :let [entry (get-relaxed by-seq seq)
                         want  (keyword (or expect "ok"))
                         got   (:result entry)]
                   :when (or (nil? entry)
@@ -193,7 +193,8 @@
 
     ;; 2. Step terminal checks
     (doseq [t (:step-terminal expectations)]
-      (let [entry  (first (filter #(= (:seq t) (:seq %)) trace))
+      (let [seq-t  (if (string? (:seq t)) (Integer/parseInt (:seq t)) (:seq t))
+            entry  (first (filter #(= seq-t (:seq %)) trace))
             world  (:world entry)
             path   (normalize-path (:path t))
             actual (get-in-relaxed world path)]

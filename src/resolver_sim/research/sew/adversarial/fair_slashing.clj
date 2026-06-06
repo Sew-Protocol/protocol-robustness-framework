@@ -80,26 +80,27 @@
 (defn run-scenario
   "Run n-trials for a single parameter combination.
    Returns {:params params :preservation-rate float :pass? bool}"
-  [params n-trials seed]
+  [params n-trials seed preservation-floor]
   (let [d-rng          (rng/make-rng seed)
         fraud-outcomes (for [_ (range n-trials)]
-                         (simulate-false-positive-slash params d-rng))
+                          (simulate-false-positive-slash params d-rng))
         timeout-outcomes (for [_ (range n-trials)]
-                           (simulate-timeout-contest params d-rng))
+                            (simulate-timeout-contest params d-rng))
         all-outcomes   (concat fraud-outcomes timeout-outcomes)
         preserved      (count (filter #{:capital-preserved} all-outcomes))
         total          (count all-outcomes)
         rate           (double (/ preserved total))]
     {:params            params
      :preservation-rate rate
-     :pass?             (>= rate 0.80)}))
+     :pass?             (>= rate preservation-floor)}))
 
 (defn run-sweep
   "Run the full Phase AE parameter sweep.
 
    Returns a seq of scenario results."
-  [{:keys [n-trials base-seed resolver-stake-usd]
-    :or   {n-trials 1000 base-seed 42 resolver-stake-usd 10000}}]
+  [{:keys [n-trials base-seed resolver-stake-usd pass-threshold expected-preservation-floor]
+    :or   {n-trials 1000 base-seed 42 resolver-stake-usd 10000
+           pass-threshold 0.80 expected-preservation-floor 0.80}}]
   (let [appeal-windows    [86400 259200 604800]
         appeal-bonds      [0 50 100 200]
         p-correct-vals    [0.70 0.80 0.90 0.99]
@@ -117,7 +118,7 @@
                         :p-correct-appeal       p-correct-appeal
                         :timeout-contest-window timeout-contest
                         :resolver-stake-usd     resolver-stake-usd}]]
-      (run-scenario params n-trials seed))))
+      (run-scenario params n-trials seed expected-preservation-floor))))
 
 ;; ---------------------------------------------------------------------------
 ;; Report
@@ -125,7 +126,7 @@
 
 (defn summarize-sweep
   "Summarize sweep results into a high-level report."
-  [results]
+  [results pass-threshold]
   (let [total       (count results)
         passing     (count (filter :pass? results))
         pass-rate   (double (/ passing total))
@@ -134,7 +135,8 @@
     {:total-scenarios    total
      :passing-scenarios  passing
      :overall-pass-rate  pass-rate
-     :hypothesis-holds?  (>= pass-rate 0.80)
+     :pass-threshold     pass-threshold
+     :hypothesis-holds?  (>= pass-rate pass-threshold)
      :worst-preservation (:preservation-rate worst-case)
      :worst-params       (:params worst-case)
      :best-preservation  (:preservation-rate best-case)
@@ -144,23 +146,32 @@
   "Entry point: run the full Phase AE fair-slashing sweep and return a summary."
   ([] (run-phase-ae {}))
   ([opts]
-   (proto/print-phase-header
-    {:benchmark-id "AE"
-     :label        "Fair Slashing — Capital Preservation"
-     :hypothesis   "Resolver capital preserved in >=80% of false-positive slash scenarios"})
-   (let [results (run-sweep opts)
-         summary (summarize-sweep results)]
-     (proto/print-phase-footer
-      {:benchmark-id  "AE"
-       :passed?       (:hypothesis-holds? summary)
-       :summary-lines [(format "Pass rate: %.0f%%  (%d / %d scenarios)"
-                               (* 100 (:overall-pass-rate summary))
-                               (:passing-scenarios summary)
-                               (:total-scenarios summary))]})
-     (proto/make-result
+   (let [pass-threshold (double (or (:pass-threshold opts) 0.80))
+         preservation-floor (double (or (:expected-preservation-floor opts) 0.80))]
+     (proto/print-phase-header
       {:benchmark-id "AE"
        :label        "Fair Slashing — Capital Preservation"
-       :hypothesis   "Resolver capital preserved in >=80% of false-positive slash scenarios"
-       :passed?      (:hypothesis-holds? summary)
-       :results      results
-       :summary      summary}))))
+       :hypothesis   (format "Resolver capital preserved in >=%.0f%% of false-positive slash scenarios"
+                             (* 100 preservation-floor))
+       :pass-threshold pass-threshold
+       :preservation-floor preservation-floor})
+     (let [results (run-sweep (assoc opts
+                                     :pass-threshold pass-threshold
+                                     :expected-preservation-floor preservation-floor))
+           summary (summarize-sweep results pass-threshold)]
+       (proto/print-phase-footer
+        {:benchmark-id  "AE"
+         :passed?       (:hypothesis-holds? summary)
+         :summary-lines [(format "Pass rate: %.0f%%  (%d / %d scenarios)  (threshold: %.0f%%)"
+                                 (* 100 (:overall-pass-rate summary))
+                                 (:passing-scenarios summary)
+                                 (:total-scenarios summary)
+                                 (* 100 pass-threshold))]})
+       (proto/make-result
+        {:benchmark-id "AE"
+         :label        "Fair Slashing — Capital Preservation"
+         :hypothesis   (format "Resolver capital preserved in >=%.0f%% of false-positive slash scenarios"
+                               (* 100 preservation-floor))
+         :passed?      (:hypothesis-holds? summary)
+         :results      results
+         :summary      summary})))))
