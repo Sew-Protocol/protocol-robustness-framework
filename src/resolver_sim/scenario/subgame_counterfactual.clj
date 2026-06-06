@@ -36,7 +36,13 @@
   {:frozen [:pre-state-snapshot :block-time :available-actors :environment-params]
    :variable [:node-action :downstream-actions :state-evolution]
    :ordering-mode :preserve
-   :exogenous-events :fixed})
+   :exogenous-events :fixed
+   ;; Continuation events inherit :params (including optional event-id) from the
+   ;; main-line trace. Deviation events (seq 0) do not receive synthetic ids.
+   :event-identity :inherit-from-main-trace
+   ;; Fork world checkpoints carry :idempotency/applied only for events already
+   ;; processed before the fork point — not for downstream continuations.
+   :idempotency-state :inherit-checkpoint})
 
 (def ^:private default-utility-spec
   {:type :terminal-realized-v1
@@ -397,6 +403,20 @@
     :transfer-not-finalized :invalid-state-for-release
     :invalid-state-for-refund})
 
+(defn- fork-world-at-seq
+  "Return the replay-complete world checkpoint immediately before `node` executes.
+   Falls back to the lean trace snapshot when checkpoints are unavailable."
+  [world-checkpoints node pre-entry]
+  (or (get world-checkpoints (:seq node))
+      (:world pre-entry)))
+
+(defn- continuation-replay-events
+  "Normalize main-line trace tail entries into bare replay events for fork replay."
+  [remaining-trace-entries]
+  (mapv (fn [entry]
+          (replay/trace-entry->replay-event entry))
+        remaining-trace-entries))
+
 (defn- tag-stale-continuations
   "Tag trace entries from continuation events (seq > 0) that were rejected due
    to stale state.  Adds :fork/continuation true to every continuation entry and
@@ -418,15 +438,15 @@
   "Phase 2: Expand strategic branches from a decision node.
    Forks the simulation for each alternative action and follows the original
    trace continuation where possible."
-  [protocol agents p-params scenario-id world actor remaining-events options]
-  (let [available (proto/available-actions protocol world actor)]
+  [protocol agents p-params scenario-id fork-world actor remaining-trace-entries options]
+  (let [available (proto/available-actions protocol fork-world actor)
+        cont-events (continuation-replay-events remaining-trace-entries)]
     (for [{:keys [action params] :as action-map} available]
-      (let [deviation-event {:seq 0 :time (:block-time world) :agent actor :action action :params params}
-            ;; Adjust seq for continuation events
-            cont-events     (map-indexed (fn [i e] (assoc e :seq (inc i))) remaining-events)
+      (let [deviation-event {:seq 0 :time (:block-time fork-world) :agent actor :action action :params params}
+            cont-events'    (map-indexed (fn [i e] (assoc e :seq (inc i))) cont-events)
             result (replay/resume-from-snapshot
-                    protocol agents p-params scenario-id world
-                    (into [deviation-event] cont-events)
+                    protocol agents p-params scenario-id fork-world
+                    (into [deviation-event] cont-events')
                     [] {} options)
             tagged-trace (tag-stale-continuations (:trace result))]
         {:action           action-map
@@ -446,7 +466,7 @@
 
 (defn- node->table-row
   [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec
-           strategy-profile backward-induction-ctx
+           strategy-profile backward-induction-ctx world-checkpoints
            protocol agents protocol-params scenario-id] :as row-ctx}
    {:keys [agent address action] :as node}
    spe-config]
@@ -457,6 +477,7 @@
         actor          (or address agent)
         node-type      (get node-type-by-action action)
         pre-world      (:world pre-entry)
+        fork-world     (fork-world-at-seq world-checkpoints node pre-entry)
         chosen-world   (:world chosen-entry)
         ;; Phase F: subgame boundary classification
         subgame-class  (classify-subgame-node node pre-world)
@@ -464,9 +485,9 @@
         
         ;; Phase 2: Dynamic Tree Expansion
         tree-expansion? (boolean (get spe-config :enable-tree-expansion? false))
-        dynamic-branches (when (and tree-expansion? pre-world protocol)
+        dynamic-branches (when (and tree-expansion? fork-world protocol)
                            (expand-strategic-tree
-                            protocol agents protocol-params scenario-id pre-world actor
+                            protocol agents protocol-params scenario-id fork-world actor
                             (drop (inc idx) raw-trace)
                             spe-config))
 
@@ -657,7 +678,7 @@
     :off-path-coverage map                           (Phase J)
     :counterexamples [...]                           (Phase I)
     :requires [...]}"
-  [{:keys [raw-trace decisions terminal-world spe-config
+  [{:keys [raw-trace decisions terminal-world spe-config world-checkpoints
             protocol agents protocol-params scenario-id]}]
   (let [decision-nodes (->> decisions
                             (sort-by (juxt :seq :agent :action))
@@ -751,6 +772,7 @@
                         :replay-boundary replay-boundary
                         :utility-spec utility-spec
                         :strategy-profile strategy-profile
+                        :world-checkpoints (or world-checkpoints {})
                         :protocol protocol
                         :agents agents
                         :protocol-params protocol-params

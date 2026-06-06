@@ -22,6 +22,7 @@
              [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.contract-model.replay.yield :as yield-replay]
              [resolver-sim.contract-model.replay.flags :as replay-flags]
+             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
              [resolver-sim.time.model        :as time-model]))
@@ -318,6 +319,13 @@
 
 (defn- expectation-metric-keys [scenario] (metrics/expectation-metric-keys scenario))
 
+(defn trace-entry->replay-event
+  "Strip trace metadata; return the minimal replay event shape.
+   Used by counterfactual fork replay so continuation steps do not carry
+   stale :world / :result fields from the main-line trace."
+  [entry]
+  (select-keys entry [:seq :time :agent :action :params]))
+
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."
   [protocol context scenario-id events world trace metrics options]
@@ -332,6 +340,7 @@
            trace trace
            metrics metrics
            states {(:seq (first events) 0) (proto/world-snapshot protocol world)}
+           world-checkpoints {}
            id-alias-map {}]
       (if (empty? events)
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
@@ -361,7 +370,8 @@
                  :events events
                  :agents agents
                  :protocol protocol
-                 :world world}))))
+                 :world world
+                 :world-checkpoints world-checkpoints}))))
         (if (= :deterministic-batch (execution-mode scenario))
           (let [[bucket rest-events] (group-same-time-bucket events)
                 base-world world
@@ -398,7 +408,8 @@
                                         (-> acc
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
-                                            (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))))
+                                            (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))
+                                            (update :world-checkpoints assoc (:seq event) working-world))))
                                       (let [step (process-step protocol context working-world event)
                                             entry0 (:trace-entry step)
                                             expected-failure? (and (= :rejected (:result entry0))
@@ -432,11 +443,13 @@
                                                                    (:id-alias-map acc)))
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
-                                            (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))))))))
+                                            (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))
+                                            (update :world-checkpoints assoc (:seq event) working-world))))))
                               {:world base-world
                                :trace trace
                                :metrics metrics'
                                :states states
+                               :world-checkpoints world-checkpoints
                                :claimed-domains {}
                                :halted? false
                                :id-alias-map id-alias-map}
@@ -471,6 +484,7 @@
                          trace'
                          metrics''
                          (:states batch-result)
+                         (:world-checkpoints batch-result)
                          (:id-alias-map batch-result))
                   (do
                     (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) metrics'' trace')
@@ -487,6 +501,7 @@
                         (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
                           (if (:ok res) (:event res) raw-event))
                         raw-event)
+                checkpoints' (assoc world-checkpoints (:seq event) world)
                 step (process-step protocol context world event)
                 entry0 (:trace-entry step)
                 alias-key (:save-id-as raw-event)
@@ -523,8 +538,9 @@
                  :metrics new-metrics
                  :execution {:mode :sequential}
                  :protocol protocol
-                 :last-valid-world world})
-              (recur new-world (rest events) new-trace new-metrics new-states new-alias-map))))))))
+                 :last-valid-world world
+                 :world-checkpoints checkpoints'})
+              (recur new-world (rest events) new-trace new-metrics new-states checkpoints' new-alias-map))))))))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations.
@@ -565,11 +581,14 @@
                                               :temporal-enabled? temporal-enabled?
                                               :agent-index agent-index
                                               :scenario scenario
-                                              :replay-flags flags})]
+                                              :replay-flags flags})
+             trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
+                             (:world-checkpoint-policy flags)
+                             raw-result)]
          (log/info! "scenario/start" {:id scenario-id})
          (if (:evaluate-expectations? flags true)
-           (finalize-scenario-result scenario raw-result flags)
-           raw-result))))))
+           (finalize-scenario-result scenario trimmed-result flags)
+           trimmed-result))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
@@ -595,11 +614,12 @@
   [protocol agents p-params scenario-id world events trace metrics options]
   (let [context  (proto/build-execution-context protocol agents p-params)
         agent-index (:agent-index context)
+        metrics' (if (seq metrics) metrics (metrics/zero-metrics protocol))
         expected-errors-set (set (map expected-error-key (:expected-errors (:scenario options) [])))
         strict-expected-errors? (boolean (:strict-expected-errors? (:scenario options) false))
         temporal-cfg (:temporal-evidence (:scenario options))
         temporal-enabled? (boolean (:enabled? temporal-cfg))]
-    (run-simulation-loop protocol context scenario-id events world trace metrics
+    (run-simulation-loop protocol context scenario-id events world trace metrics'
                          (merge {:expected-errors-set expected-errors-set
                                  :strict-expected-errors? strict-expected-errors?
                                  :allow-open-entities? true

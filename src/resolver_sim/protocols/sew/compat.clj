@@ -26,3 +26,13 @@
   (let [params (:params event {})]
     (or (get params primary-key)
         (some #(get params %) alias-keys))))
+
+(defn event-id
+  "Optional logical event identifier used for replay dedupe."
+  [event]
+  (event-param event :event-id :event_id))
+
+(defn hop-id
+  "Optional escalation-hop scope for replay dedupe (escalate/challenge)."
+  [event]
+  (event-param event :hop-id :hop_id))

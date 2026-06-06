@@ -51,6 +51,7 @@
     (when world
       {:trace trace
        :world world
+       :world-checkpoints (:world-checkpoints result {})
        :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
@@ -193,7 +194,7 @@
    1-arity form is provided for backward compatibility; protocol defaults to nil."
   ([result] (trace-end-projection nil result))
   ([protocol result]
-  (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
+  (when-let [{:keys [trace world metrics agents halt-reason world-checkpoints]} (build-trace-context result)]
       (let [live-states  (get world :live-states {})
             scenario-id  (get-in world [:params :scenario-id] "unknown")
             p-params     (get world :params {})
@@ -403,6 +404,7 @@
          :scenario-id scenario-id
          :decisions decisions
           :raw-trace trace
+          :world-checkpoints world-checkpoints
           :funds-ledger-summary funds-ledger
           :yield-evidence yield-evidence
           :escrow-yield-outcomes escrow-yield-outcomes

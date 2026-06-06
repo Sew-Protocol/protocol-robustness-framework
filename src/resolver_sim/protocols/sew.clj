@@ -74,8 +74,7 @@
 (defn- event-id
   "Optional logical event identifier used for replay dedupe."
   [event]
-  (or (get-in event [:params :event-id])
-      (get-in event [:params :event_id])))
+  (compat/event-id event))
 
 (def replay-sensitive-actions
   "Actions that should be replay-idempotent when a logical event-id is provided."
@@ -88,9 +87,14 @@
     "resolve-appeal"
     "execute-fraud-slash"})
 
-(defn- replay-sensitive?
+(defn replay-sensitive-action?
+  "True when `event` is subject to replay-boundary dedupe when event-id is present."
   [event]
   (contains? replay-sensitive-actions (compat/canonical-action event)))
+
+(defn- replay-sensitive?
+  [event]
+  (replay-sensitive-action? event))
 
 (defn- dedupe-op-key
   "Build a stable dedupe key for replay-sensitive events."
@@ -99,8 +103,7 @@
         sid (event-slash-id event)
         eid (event-id event)
         action (compat/canonical-action event)
-        explicit-hop (or (get-in event [:params :hop-id])
-                         (get-in event [:params :hop_id]))
+        explicit-hop (compat/hop-id event)
         hop-level (when (and (nil? explicit-hop)
                              (contains? #{"escalate-dispute" "challenge-resolution"} action))
                     (t/dispute-level world wf))
@@ -687,10 +690,19 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (let [eid (event-id event)]
-      (if (and eid (replay-sensitive? event))
+    (let [flags       (:replay-flags context {})
+          require-id? (:require-event-id? flags false)
+          eid         (event-id event)]
+      (cond
+        (and require-id? (replay-sensitive? event) (nil? eid))
+        {:ok false :error :missing-event-id
+         :detail {:action (:action event) :seq (:seq event)}}
+
+        (and eid (replay-sensitive? event))
         (idem/apply-once world (dedupe-op-key world event)
                          (fn [w] (apply-action context w event)))
+
+        :else
         (apply-action context world event))))
 
   (check-invariants-single [_ world]

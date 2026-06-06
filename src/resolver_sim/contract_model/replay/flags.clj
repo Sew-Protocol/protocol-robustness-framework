@@ -7,20 +7,30 @@
 
 (def default-replay-flags
   "Full replay: invariants on, expectations on, strict validation, temporal from scenario."
-  {:check-invariants?     true
-   :evaluate-expectations? true
-   :evaluate-theory?      nil
-   :temporal-enabled?     nil
-   :strict-validation?    true
-   :metrics-profile       :sew-integrated})
+  {:check-invariants?        true
+   :evaluate-expectations?    true
+   :evaluate-theory?         nil
+   :temporal-enabled?        nil
+   :strict-validation?       true
+   :metrics-profile          :sew-integrated
+   :world-checkpoint-policy  :decision-nodes-only
+   :require-event-id?        false})
 
 (def minimal-replay-flags
   "Library-style replay: no temporal enforcement, no theory DSL, relaxed validation."
   (assoc default-replay-flags
-         :evaluate-theory?      false
-         :temporal-enabled?     false
-         :strict-validation?    false
-         :metrics-profile       :yield-provider))
+         :evaluate-theory?         false
+         :temporal-enabled?        false
+         :strict-validation?       false
+         :metrics-profile          :yield-provider
+         :world-checkpoint-policy  :omit
+         :require-event-id?        false))
+
+(def external-log-replay-flags
+  "External log / chain-ingestion replay: require event-id on replay-sensitive actions."
+  (assoc default-replay-flags
+         :require-event-id? true
+         :world-checkpoint-policy :retain-all))
 
 (defn- flag-lookup
   [scenario replay-opts k default]
@@ -67,7 +77,13 @@
              :metrics-profile
              (keyword (name (or (flag-lookup scenario replay-opts :metrics-profile
                                               (if minimal? :yield-provider :sew-integrated))
-                                :sew-integrated)))}))))
+                                :sew-integrated)))
+             :world-checkpoint-policy
+             (keyword (name (or (flag-lookup scenario replay-opts :world-checkpoint-policy
+                                              (if minimal? :omit :decision-nodes-only))
+                                :decision-nodes-only)))
+             :require-event-id?
+             (boolean (flag-lookup scenario replay-opts :require-event-id? false))}))))
 
 (defn runner-opts-from-flags
   "Map replay flags to `scenario.runner` theory opts."
