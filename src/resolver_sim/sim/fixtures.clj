@@ -120,16 +120,16 @@
                (not= expected-outcome :fail)
                (pos? (get metrics :invariant-violations 0)))
       (swap! violations conj {:type :solvency-violation :detail "Strict solvency check failed"}))
-    (when-let [max-profit (:max-resolver-profit-ev thresholds)]
-      (when-let [profit (get metrics :resolver-profit-ev)]
-        (when (> profit max-profit)
-          (swap! violations conj {:type :profit-ev-exceeded
-                                  :detail (str "resolver-profit-ev " profit " > " max-profit)}))))
-    (when-let [min-detection (:min-detection-rate thresholds)]
-      (when-let [rate (get metrics :detection-rate)]
-        (when (< rate min-detection)
-          (swap! violations conj {:type :detection-rate-below-minimum
-                                  :detail (str "detection-rate " rate " < " min-detection)}))))
+    (let [max-profit (:max-resolver-profit-ev thresholds)
+          profit (get metrics :resolver-profit-ev)]
+      (when (and max-profit profit (> profit max-profit))
+        (swap! violations conj {:type :profit-ev-exceeded
+                                :detail (str "resolver-profit-ev " profit " > " max-profit)})))
+    (let [min-detection (:min-detection-rate thresholds)
+          rate (get metrics :detection-rate)]
+      (when (and min-detection rate (< rate min-detection))
+        (swap! violations conj {:type :detection-rate-below-minimum
+                                :detail (str "detection-rate " rate " < " min-detection)})))
     (when-let [max-delta (:max-held-delta thresholds)]
       (let [held-before (get metrics :total-held-before 0)
             held-after  (get metrics :total-held-after 0)
