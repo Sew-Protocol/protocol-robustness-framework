@@ -693,21 +693,20 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (attr/with-attribution {:action (:action event) :agent (:agent event)}
-      (let [flags       (:replay-flags context {})
-            require-id? (:require-event-id? flags false)
-            eid         (event-id event)]
-        (cond
-          (and require-id? (replay-sensitive? event) (nil? eid))
-          {:ok false :error :missing-event-id
-           :detail {:action (:action event) :seq (:seq event)}}
+    (let [flags       (:replay-flags context {})
+          require-id? (:require-event-id? flags false)
+          eid         (event-id event)]
+      (cond
+        (and require-id? (replay-sensitive? event) (nil? eid))
+        {:ok false :error :missing-event-id
+         :detail {:action (:action event) :seq (:seq event)}}
 
-          (and eid (replay-sensitive? event))
-          (idem/apply-once world (dedupe-op-key world event)
-                           (fn [w] (apply-action context w event)))
+        (and eid (replay-sensitive? event))
+        (idem/apply-once world (dedupe-op-key world event)
+                         (fn [w] (apply-action context w event)))
 
-          :else
-          (apply-action context world event)))))
+        :else
+        (apply-action context world event))))
 
   (check-invariants-single [_ world]
     (run-single-invariants world))

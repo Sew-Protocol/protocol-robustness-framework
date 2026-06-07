@@ -1348,8 +1348,7 @@
   ([world] (check-all world nil nil))
   ([world scenario-id] (check-all world scenario-id nil))
   ([world scenario-id token-balances]
-   (attr/with-attribution {:invariant-phase :check-all :scenario-id scenario-id}
-     (let [expected-failures-raw (or (get-in world [:params :expected-failures scenario-id]) 
+   (let [expected-failures-raw (or (get-in world [:params :expected-failures scenario-id]) 
                                    (get-in world [:params :expected-failures (keyword scenario-id)]) 
                                    #{})
          expected-failures (set (map keyword expected-failures-raw))
@@ -1408,7 +1407,7 @@
           all-hold? (every? #(:holds? %) (vals results))]
       {:all-hold? all-hold?
        :results   results
-       :unused-expected-failures (seq unused-expected)}))))
+       :unused-expected-failures (seq unused-expected)})))
 
 
 

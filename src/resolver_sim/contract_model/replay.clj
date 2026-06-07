@@ -57,14 +57,12 @@
 (defn sew-check-invariants-single
   "Bridge to proto/check-invariants-single using SewProtocol."
   [world]
-  (attr/with-attribution {:invariant-check :single}
-    (proto/check-invariants-single (preg/get-protocol "sew-v1") world)))
+  (proto/check-invariants-single (preg/get-protocol "sew-v1") world))
 
 (defn sew-check-invariants-transition
   "Bridge to proto/check-invariants-transition using SewProtocol."
   [world-before world-after]
-  (attr/with-attribution {:invariant-check :transition}
-    (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after)))
+  (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after))
 
 ;; ---------------------------------------------------------------------------
 ;; Analysis & Result Interpretation
@@ -216,11 +214,9 @@
             world-next (if (and ok? (:world result)) (:world result) world-t)
 
             inv-single (when (and ok? check-inv?)
-                         (attr/with-attribution {:invariant-check :single}
-                           (proto/check-invariants-single protocol world-next)))
+                         (proto/check-invariants-single protocol world-next))
             inv-trans  (when (and ok? check-inv?)
-                         (attr/with-attribution {:invariant-check :transition}
-                           (proto/check-invariants-transition protocol world-t world-next)))
+                         (proto/check-invariants-transition protocol world-t world-next))
             violated?  (and ok? check-inv?
                             (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
@@ -463,11 +459,9 @@
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
                 {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
-                                  (attr/with-attribution {:invariant-check :single}
-                                    (proto/check-invariants-single protocol (:world batch-result))))
+                                  (proto/check-invariants-single protocol (:world batch-result)))
                     post-trans  (when check-inv?
-                                  (attr/with-attribution {:invariant-check :transition}
-                                    (proto/check-invariants-transition protocol base-world (:world batch-result))))
+                                  (proto/check-invariants-transition protocol base-world (:world batch-result)))
                     post-ok?    (if check-inv?
                                   (and (:ok? post-single) (:ok? post-trans))
                                   true)
@@ -579,22 +573,21 @@
              scenario-id (:scenario-id scenario)
              expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
              strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
-             raw-result (attr/with-attribution {:scenario-id scenario-id}
-                          (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
-                                               {:expected-errors-set expected-errors-set
-                                                :strict-expected-errors? strict-expected-errors?
-                                                :allow-open-entities? (:allow-open-entities? scenario)
-                                                :allow-open-disputes? (:allow-open-disputes? scenario)
-                                                :agents agents
-                                                :temporal-cfg temporal-cfg
-                                                :temporal-enabled? temporal-enabled?
-                                                :agent-index agent-index
-                                                :scenario scenario
-                                                :replay-flags flags}))
+             raw-result (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
+                                             {:expected-errors-set expected-errors-set
+                                              :strict-expected-errors? strict-expected-errors?
+                                              :allow-open-entities? (:allow-open-entities? scenario)
+                                              :allow-open-disputes? (:allow-open-disputes? scenario)
+                                              :agents agents
+                                              :temporal-cfg temporal-cfg
+                                              :temporal-enabled? temporal-enabled?
+                                              :agent-index agent-index
+                                              :scenario scenario
+                                              :replay-flags flags})
              trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                              (:world-checkpoint-policy flags)
                              raw-result)]
-         (log/info! "scenario/start" {:id scenario-id :attribution attr/*attribution*})
+         (log/info! "scenario/start" {:id scenario-id})
          (if (:evaluate-expectations? flags true)
            (finalize-scenario-result scenario trimmed-result flags)
            trimmed-result))))))

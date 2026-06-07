@@ -3,7 +3,9 @@
    gate that controls Track 2 pending-evidence reversal slashing."
   (:require [clojure.test :refer :all]
             [resolver-sim.stochastic.detection :as detection]
-            [resolver-sim.stochastic.rng :as rng]))
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.stochastic.types :as st-types]
+            [resolver-sim.io.params :as io-params]))
 
 (deftest reversal-pending-live?-zero-threshold-disabled
   (is (false? (detection/reversal-pending-live?
@@ -45,3 +47,20 @@
         result (detection/reversal-pending-live? params {:reversal-slashed? true})]
     (is (true? result)
         "oracle-roll-trace-enabled? should not affect reversal-pending-live? outcome")))
+
+(deftest new-evidence-probability-integration
+  (testing "schema validator rejects out-of-range values"
+    (let [schema-fn (get st-types/scenario-schema :new-evidence-probability)]
+      (is (schema-fn 0.0) "0.0 is valid")
+      (is (schema-fn 0.05) "0.05 is valid")
+      (is (schema-fn 1.0) "1.0 is valid")
+      (is (not (schema-fn -0.1)) "-0.1 is invalid")
+      (is (not (schema-fn 1.5)) "1.5 is invalid")
+      (is (not (schema-fn "0.5")) "string is invalid")))
+
+  (testing "params EDN files have differentiated values"
+    (let [baseline   (io-params/load-edn "data/params/phase-n-baseline.edn")
+          high-fraud (io-params/load-edn "data/params/phase-n-high-fraud.edn")]
+      (is (< (get baseline :new-evidence-probability 0)
+             (get high-fraud :new-evidence-probability 0))
+          "high-fraud new-evidence-probability should exceed baseline"))))

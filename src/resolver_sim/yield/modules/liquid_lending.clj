@@ -146,15 +146,14 @@
         token   (normalize-token (:token pos))
         status  (module-status world mid)
         mode    (liquidity-mode world mid token)]
-    (attr/with-attribution {:owner-id oid :token token :module-id mid}
-      (cond
-        (nil? pos)
-        world
+    (cond
+      (nil? pos)
+      world
 
-        ;; Retry/idempotency guard: once a position is crystallized, withdrawing
-        ;; again must be a no-op so liquidity stress is never applied twice.
-        (not= (:status pos) :active)
-        world
+      ;; Retry/idempotency guard: once a position is crystallized, withdrawing
+      ;; again must be a no-op so liquidity stress is never applied twice.
+      (not= (:status pos) :active)
+      world
 
         (or (= status :paused)
             (withdraw-blocked? mode)
@@ -208,7 +207,7 @@
                                 (assoc :realized-yield realized-yield)
                                 (assoc :unrealized-yield 0)
                                 (assoc :shortfall shortfall'))]
-          (assoc-in world pos-key crystallized))))))
+          (assoc-in world pos-key crystallized)))))
 
 (defn claim-deferred [world module op]
   (let [oid     (:owner/id op)
