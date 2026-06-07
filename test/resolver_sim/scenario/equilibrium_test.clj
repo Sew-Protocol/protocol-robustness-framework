@@ -334,7 +334,7 @@
           result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)]
       (is (= :fail (:status result)))
-      (is (= 2 (count (get-in result [:observed :spe-violations]))))))
+      (is (= 1 (count (get-in result [:observed :spe-violations]))))))
 
   (testing "SPE determinism: identical projection reruns produce identical regret table"
     (let [proj {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}

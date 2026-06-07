@@ -816,12 +816,21 @@
                                                         row    (node->table-row
                                                                  (assoc row-ctx :backward-induction-ctx bi-ctx)
                                                                  node spe-config)]
-                                                    {:rows         (conj rows (assoc row :memoization-hit? false))
-                                                     :processed-seqs (conj processed-seqs (long (:seq node)))}))
+                                                    (if (> (:local-regret row) threshold)
+                                                      (reduced {:rows (conj rows (assoc row :memoization-hit? false :short-circuited? true))})
+                                                      {:rows         (conj rows (assoc row :memoization-hit? false))
+                                                       :processed-seqs (conj processed-seqs (long (:seq node)))})))
                                                 {:rows [] :processed-seqs #{}}
                                                 eval-nodes))]
-                           (vec (sort-by :node-index bi-rows)))
-                         (mapv cached-row decision-nodes))
+                           (vec (sort-by :node-index (:rows bi-rows))))
+                         (:rows
+                          (reduce (fn [{:keys [rows]} node]
+                                    (let [row (cached-row node)]
+                                      (if (> (:local-regret row) threshold)
+                                        (reduced {:rows (conj rows (assoc row :short-circuited? true))})
+                                        {:rows (conj rows row)})))
+                                  {:rows []}
+                                  decision-nodes)))
             rows       (mapv (fn [r]
                                (assoc r :bundle-regret
                                       (compute-bundle-regret (:local-regret r) max-depth)))
@@ -837,15 +846,18 @@
                                   :evaluated 0}
                                  rows)
             evaluated-count (:evaluated class-counts 0)
+            short-circuited? (some :short-circuited? rows)
             exceed-count (count (filter identity
-                                        (for [{:keys [bundle-regret chosen-utility]} rows
+                                        (for [{:keys [bundle-regret chosen-utility short-circuited?]} rows
                                               :when (some? bundle-regret)]
-                                          (regret-exceeds-epsilon? bundle-regret chosen-utility epsilon-abs epsilon-rel))))
+                                          (or short-circuited? (regret-exceeds-epsilon? bundle-regret chosen-utility epsilon-abs epsilon-rel)))))
             pass?      (and (pos? evaluated-count)
                             (some? max-regret)
+                            (not short-circuited?)
                             (<= max-regret threshold)
                             (zero? exceed-count))
             status     (cond
+                         short-circuited? :fail
                          (zero? evaluated-count) :inconclusive
                          pass? :pass
                          :else :fail)

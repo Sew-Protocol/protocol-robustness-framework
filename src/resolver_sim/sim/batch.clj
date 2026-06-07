@@ -117,27 +117,38 @@
                      (integration/calculate-bribery-cost params))}))
 
 (defn run-batch
-  "Run N trials with given parameters and return aggregated stats.
-   Phase E1: Add Kleros backstop (L2 detection) metrics.
-   Phase G: Add slashing delay support and control baseline support.
-   Phase DR2: Add resolver-bond-bps for reputation+slashing model."
+  "Run N trials with given parameters and return aggregated stats with early-stopping."
   [rng n-trials params]
   (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
-        results
-        (repeatedly n-trials
-          #(apply dispute/resolve-dispute
-             rng (:escrow-size params 10000)
-             (:resolver-fee-bps params)
-             (:appeal-bond-bps params)
-             (:slash-multiplier params)
-             strategy
-             (:appeal-probability-if-correct params)
-             (:appeal-probability-if-wrong params)
-             (:slashing-detection-probability params)
-             (common-kwargs params)))]
-    (build-aggregate results n-trials params)))
+        min-trials    (get params :min-trials 10)
+        pass-threshold 0.8]
+    (loop [i 0
+           results []
+           passes 0]
+      (if (or (= i n-trials)
+              (and (>= i min-trials)
+                   (or (>= (/ passes (max 1 i)) pass-threshold)
+                       (<= (/ (- i passes) (max 1 i)) (- 1.0 pass-threshold)))))
+        (let [final-results results
+              agg (build-aggregate final-results i params)]
+          (if (< i n-trials)
+            (assoc agg :early-stop? true :trials-run i)
+            agg))
+        (let [res (apply dispute/resolve-dispute
+                         rng (:escrow-size params 10000)
+                         (:resolver-fee-bps params)
+                         (:appeal-bond-bps params)
+                         (:slash-multiplier params)
+                         strategy
+                         (:appeal-probability-if-correct params)
+                         (:appeal-probability-if-wrong params)
+                         (:slashing-detection-probability params)
+                         (common-kwargs params))]
+          (recur (inc i)
+                 (conj results res)
+                 (if (:ok? res) (inc passes) passes)))))))
 
 (defn run-batch-with-attribution
   "Run N trials and return both aggregate stats and per-trial results.

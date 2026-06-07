@@ -12,6 +12,7 @@
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.loss :as loss]
             [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.yield.evidence :as ye]
             [resolver-sim.yield.liquidity :as liquidity]
             [resolver-sim.util.attribution :as attr]))
 
@@ -207,7 +208,16 @@
                                 (assoc :realized-yield realized-yield)
                                 (assoc :unrealized-yield 0)
                                 (assoc :shortfall shortfall'))]
-          (assoc-in world pos-key crystallized)))))
+          (cond-> (assoc-in world pos-key crystallized)
+            shortfall'
+              (ye/emit-shortfall-event :yield.shortfall/deferred-created oid
+                {:deferred-amount (:deferred-amount shortfall 0)
+                  :haircut-amount (:haircut-amount shortfall 0)
+                  :fulfilled-amount (:fulfilled-amount shortfall 0)
+                  :basis-amount (:basis-amount shortfall 0)
+                  :available-ratio (:available-ratio shortfall 1.0)
+                  :shortfall-kind (name (or (:reason shortfall) :unknown))}))
+          ))))
 
 (defn claim-deferred [world module op]
   (let [oid     (:owner/id op)
@@ -227,7 +237,22 @@
         (assoc-in world pos-key claimed-pos))
 
       (= status :unwinding)
-      (assoc-in world pos-key (acct/claim-deferred world mid pos))
+      
+      (let [old-pos pos
+          new-pos (acct/claim-deferred world mid pos)
+          reclaimed (:reclaimed-amount new-pos 0)]
+        (cond-> (assoc-in world pos-key new-pos)
+          (pos? reclaimed)
+          (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed oid
+            { :reclaimed-amount reclaimed
+              :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})))
+
+
+
+
+
+
+
 
       :else world)))
 

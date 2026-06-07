@@ -31,6 +31,17 @@
                       [oid (extract-position-evidence oid pos ms)]))
                   positions))))
 
+
+(defn emit-shortfall-event
+  "Record a shortfall lifecycle event in world state.
+   Returns updated world with event appended to :yield/events."
+  [world event-type position-id event-data]
+  (update world :yield/events (fnil conj [])
+          (merge {:event/type event-type
+                  :event/time (:block-time world 0)
+                  :position/id position-id}
+                 event-data)))
+
 (defn sum-recognized-losses
   "Sum all recognized principal losses for a token across all positions."
   [world token]
