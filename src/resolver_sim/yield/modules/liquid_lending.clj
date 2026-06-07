@@ -194,8 +194,11 @@
                  :shortfall (loss/intrinsic-carry-shortfall (:principal updated-pos 0)
                                                             gross-amount
                                                             current-index)}
-                (liquidity/apply-withdrawal-policy world mid token gross-amount
-                                                   (:principal updated-pos 0)))
+                (let [res (liquidity/apply-withdrawal-policy world mid token gross-amount
+                                                               (:principal updated-pos 0))]
+                  (if (nil? res)
+                    {:fulfilled gross-amount :shortfall nil}
+                    res)))
               {:keys [fulfilled shortfall]} shortfall-result
               shortfall' (when shortfall
                            (assoc shortfall :as-of-index current-index))

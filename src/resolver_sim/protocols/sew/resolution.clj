@@ -224,7 +224,8 @@
    resolution-hash     — bytes32 (opaque string in the model)
    resolution-module-fn — (fn [wf caller] → {:authorized? bool}) or nil"
   [world workflow-id caller is-release resolution-hash resolution-module-fn]
-  (attr/with-attribution {:workflow-id workflow-id}
+  (let [ctx (attr/make-context {:workflow-id workflow-id})]
+    (attr/log-annotated! :debug "Submitting resolution" ctx {:caller caller})
     (cond
       (not (t/valid-workflow-id? world workflow-id))
       (t/fail :invalid-workflow-id)
@@ -579,6 +580,9 @@
        (nil? pending)
        (t/fail :no-pending-slash)
 
+       (nil? (:status pending))
+       (t/fail :invalid-slash-state)
+
        (not= :pending (:status pending))
        (t/fail :slash-not-pending)
 
@@ -659,11 +663,12 @@
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id caller appeal-upheld? slash-id]
-   (attr/with-attribution {:workflow-id _workflow-id :slash-id slash-id}
-     (let [pending (get-in world [:pending-fraud-slashes slash-id])]
-       (cond
-         (or (nil? caller) (= "" caller))
-         (t/fail :missing-caller-context)
+   (let [ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
+         pending (get-in world [:pending-fraud-slashes slash-id])]
+     (attr/log-annotated! :debug "Resolving appeal" ctx {:appeal-upheld? appeal-upheld?})
+     (cond
+       (or (nil? caller) (= "" caller))
+       (t/fail :missing-caller-context)
 
        (nil? pending)
        (t/fail :no-pending-slash)
