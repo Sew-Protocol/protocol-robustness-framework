@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.phase-f-economic-parameters
+(ns resolver-sim.research.sew.analytic.phase-f-economic-parameters
   "Phase F: Economic Parameter Validation
   
    Tests hypothesis: Safe parameter zones exist where malicious EV remains

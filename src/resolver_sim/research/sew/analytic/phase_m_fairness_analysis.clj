@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.phase-m-fairness-analysis
+(ns resolver-sim.research.sew.analytic.phase-m-fairness-analysis
   "Phase M: Fairness Analysis
   
    Tests hypothesis: Protocol is procedurally fair — any party can exercise

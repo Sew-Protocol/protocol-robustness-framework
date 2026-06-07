@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.phase-c-corruption-economics
+(ns resolver-sim.research.sew.analytic.phase-c-corruption-economics
   "Phase C: Corruption Economics
   
    Tests hypothesis: Cost-of-corruption always exceeds potential profit

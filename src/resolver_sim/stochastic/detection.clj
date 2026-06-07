@@ -261,10 +261,9 @@
                                  (:slashing-detection-probability params)
                                  0.1))]
     {     :fraud (double (or (:fraud-detection-probability params)
-                        l1-malicious
-                        0.0))
+                         l1-malicious
+                         0.0))
      :timeout (double (:timeout-detection-probability params 0.0))
-     :reversal (double (:reversal-detection-probability params 1.0))
      :l1-honest (double (:l1-honest-detection-probability params 0.01))
      :l1-lazy (double (:l1-lazy-detection-probability params 0.02))
      :l1-malicious l1-malicious
@@ -605,11 +604,11 @@
         fraud-roll (oracle-roll-event params :fraud-detection)
         fraud-detected? (roll-detect? (:roll/value fraud-roll) (:fraud probs))
         reversal-roll (oracle-roll-event params :reversal-detection)
-        reversal-detected? (roll-detect? (:roll/value reversal-roll) (:reversal probs))
+        reversal-detected? (roll-detect? (:roll/value reversal-roll) (:reversal-detection-probability params 1.0))
         timeout-roll (oracle-roll-event params :timeout-detection)
         timeout-detected? (roll-detect? (:roll/value timeout-roll) (:timeout probs))]
     (trace-decision! params fraud-roll (:fraud probs) fraud-detected?)
-    (trace-decision! params reversal-roll (:reversal probs) reversal-detected?)
+    (trace-decision! params reversal-roll (:reversal-detection-probability params 1.0) reversal-detected?)
     (trace-decision! params timeout-roll (:timeout probs) timeout-detected?)
     {:fraud-detected? fraud-detected?
      :reversal-detected? reversal-detected?

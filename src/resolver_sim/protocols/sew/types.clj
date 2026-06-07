@@ -183,13 +183,6 @@
    :auto-release-time (or auto-release-time 0)
    :auto-cancel-time  (or auto-cancel-time 0)})
 
-(defn make-module-snapshot
-  "Deprecated alias for `snapshot/make-escrow-snapshot`. Prefer that name in new code.
-
-   See `resolver-sim.protocols.sew.snapshot` for validation and presets."
-  [params]
-  (snapshot/make-escrow-snapshot params))
-
 (defn make-pending-settlement
   "Construct a PendingSettlement map.
 

@@ -302,3 +302,9 @@ Phase I closes a critical gap between the simulation model and the actual DR3 co
 The 213-point swing in malice profitability (from +14 to -199) represents the difference between a system that requires constant governance vigilance and one that automatically prevents fraud.
 
 **Recommendation: Activate Phase I immediately.** The code is production-ready, the findings are clear, and the security improvement is substantial.
+
+---
+
+*This document is archived. Claims herein (including "production-ready" and "92% confidence")
+predate the June 2026 research-grade audit and should not be cited without qualification.*
+

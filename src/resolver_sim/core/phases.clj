@@ -40,10 +40,10 @@
             [resolver-sim.research.sew.economic.dispute-clustering       :as dispute-clustering]
             [resolver-sim.research.sew.economic.burst-concurrency       :as burst-concurrency]
             [resolver-sim.sim.adversarial               :as adversarial]
-            [resolver-sim.sim.phase-f-economic-parameters :as phase-f]
-            [resolver-sim.sim.phase-c-corruption-economics :as phase-c]
-            [resolver-sim.sim.phase-e-evidence-integrity :as phase-e]
-            [resolver-sim.sim.phase-m-fairness-analysis :as phase-m]
+            [resolver-sim.research.sew.analytic.phase-f-economic-parameters :as phase-f]
+            [resolver-sim.research.sew.analytic.phase-c-corruption-economics :as phase-c]
+            [resolver-sim.research.sew.analytic.phase-e-evidence-integrity :as phase-e]
+            [resolver-sim.research.sew.analytic.phase-m-fairness-analysis :as phase-m]
             [resolver-sim.stochastic.rng                :as rng]))
 
 ;; ---------------------------------------------------------------------------

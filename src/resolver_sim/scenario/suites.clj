@@ -4,7 +4,7 @@
    Suite naming:
      :yield-provider-scenarios — standalone `yield-v1` (scenarios/yield/Y*)
      :sew-yield-scenarios       — Sew escrow + yield integration (scenarios/S*)
-     :yield-scenarios           — deprecated alias for :sew-yield-scenarios")
+     :yield-scenarios           — removed June 2026; use :sew-yield-scenarios")
 
 (def ^:private yield-provider-scenario-paths
   ["scenarios/yield/Y01_deposit-accrue-positive.json"
@@ -32,10 +32,6 @@
    "scenarios/S109_negative-yield-severe-repair.json"
    "scenarios/S110_resolver-yield-accrual.json"])
 
-(def suite-aliases
-  "Deprecated suite keywords → canonical keys."
-  {:yield-scenarios :sew-yield-scenarios})
-
 (def suites
   "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}."
   {:sew-yield-scenarios      {:paths yield-scenario-paths
@@ -44,9 +40,9 @@
                               :protocol-id "yield-v1"}})
 
 (defn resolve-suite-key
-  "Map deprecated suite keywords to canonical keys."
+  "Resolve suite keyword (identity — no remaining deprecated aliases)."
   [suite-key]
-  (get suite-aliases suite-key suite-key))
+  suite-key)
 
 (defn suite-protocol-id
   "Protocol registry id for a named path suite (default sew-v1)."
@@ -59,4 +55,4 @@
   (get-in suites [(resolve-suite-key suite-key) :paths]))
 
 (defn known-suite-keys []
-  (vec (sort (concat (keys suites) (keys suite-aliases)))))
+  (vec (sort (keys suites))))

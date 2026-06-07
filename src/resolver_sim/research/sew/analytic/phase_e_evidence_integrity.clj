@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.phase-e-evidence-integrity
+(ns resolver-sim.research.sew.analytic.phase-e-evidence-integrity
   "Phase E: Evidence Integrity
   
    Tests hypothesis: Evidence layer does not introduce fund loss or enable

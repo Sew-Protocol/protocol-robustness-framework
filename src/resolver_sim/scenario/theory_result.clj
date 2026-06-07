@@ -10,9 +10,9 @@
     :falsification-status, :evidence-completeness, :grounded?,
     :assumption-status, :declared-assumptions, :theory-eval-profile
 
-  Set :include-legacy-derived-top-levels? true only for old consumers (deprecated).
+   (Legacy flat copies removed June 2026 — use :diagnostics only.)
 
-  See docs/CDRS-v1.1-THEORY-SCHEMA.md — Claim boundaries & Theory result contract."
+   See docs/CDRS-v1.1-THEORY-SCHEMA.md — Claim boundaries & Theory result contract."
   (:require [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.equilibrium-result :as eq-result]
             [resolver-sim.scenario.theory-eval :as theory-eval]))
@@ -34,10 +34,6 @@
    :declared-assumptions
    :theory-eval-profile
    :metric-status])
-
-(def legacy-top-level-derived-keys
-  "Deprecated flat copies of :diagnostics (opt-in via :include-legacy-derived-top-levels?)."
-  derived-diagnostic-keys)
 
 (defn result-status
   "Canonical gate status for fixtures and outcome-semantics."
@@ -208,44 +204,26 @@
   (update result :diagnostics merge
           (select-keys derived derived-diagnostic-keys)))
 
-(defn attach-legacy-derived-top-levels
-  "Copy derived fields to top level for backward compatibility (Phase 1 default)."
-  [result derived]
-  (merge result
-         (select-keys derived
-                      [:claim-status
-                       :falsification-status
-                       :evidence-completeness
-                       :grounded?
-                       :assumption-status
-                       :declared-assumptions
-                       :theory-eval-profile
-                       :status
-                       :falsified?])))
-
 (defn attach-three-way-model
   "Finalize metric-track result: canonical :status + nested :diagnostics.
 
+  (Legacy flat copies removed June 2026 — use :diagnostics only.)
+
   opts:
-    :include-legacy-derived-top-levels? — default false (deprecated flat copies)
     :theory — theory block for assumption fields"
   [result opts & {:keys [theory]}]
   (let [opts'     (theory-eval/resolve-theory-eval-opts opts)
-        legacy?   (true? (:include-legacy-derived-top-levels? opts'))
         derived   (derive-interpretation result opts' theory)
         warnings  (cond-> (vec (or (get-in result [:diagnostics :warnings]) []))
                     (:optimistic-warning derived)
-                    (conj (:optimistic-warning derived)))
-        with-dx   (cond-> (-> result
-                              (attach-derived-diagnostics derived)
-                              (assoc :theory-result-schema-version theory-result-schema-version
-                                     :status (:status derived)
-                                     :falsified? (:falsified? derived)))
-                     (seq warnings)
-                     (assoc-in [:diagnostics :warnings] warnings))]
-    (if legacy?
-      (attach-legacy-derived-top-levels with-dx derived)
-      with-dx)))
+                    (conj (:optimistic-warning derived)))]
+    (cond-> (-> result
+                (attach-derived-diagnostics derived)
+                (assoc :theory-result-schema-version theory-result-schema-version
+                       :status (:status derived)
+                       :falsified? (:falsified? derived)))
+      (seq warnings)
+      (assoc-in [:diagnostics :warnings] warnings))))
 
 (defn summarize
   "Compact map for reports, goldens, and notebooks.
