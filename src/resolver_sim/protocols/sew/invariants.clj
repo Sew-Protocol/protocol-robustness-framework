@@ -29,7 +29,9 @@
             [resolver-sim.protocols.sew.invariants.state :as state]
             [resolver-sim.protocols.sew.invariants.bond :as bond]
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
-            [resolver-sim.protocols.sew.invariants.dispute :as dispute]))
+            [resolver-sim.protocols.sew.invariants.dispute :as dispute]
+            [resolver-sim.yield.evidence :as yield-evi]
+            [resolver-sim.util.attribution :as attr]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -73,13 +75,13 @@
     :yield-exposure
     :shortfall-fidelity
     :migration-parity
-    :claimable-classification
     :single-resolution-payout-consistent
     :fraud-slash-executions-accounted})
 
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
   #{:terminal-states-unchanged
+    :terminal-escrow-accounting-unchanged
     :escrow-state-transition-valid
     :module-snapshot-immutable
     :time-non-decreasing
@@ -122,17 +124,12 @@
      (get-token-claimable-v2-non-principal-sum world token)))
 
 (defn- get-distributed-sum [world token]
-  (let [parse-num (fn [x]
-                    (cond
-                      (number? x) x
-                      (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
-                      :else 0))
-        bd               (:bond-distribution world {:insurance 0 :protocol 0})
-        retained         (parse-num (:retained-slash-reserves world 0))
-        bond-fees        (parse-num (get (:bond-fees world) token 0))
-        appeal-bond-dist (parse-num (get (:appeal-bond-distributions-by-token world {}) token 0))]
+  (let [bd               (:bond-distribution world {:insurance 0 :protocol 0})
+        retained         (t/safe-parse-long (:retained-slash-reserves world 0))
+        bond-fees        (t/safe-parse-long (get (:bond-fees world) token 0))
+        appeal-bond-dist (t/safe-parse-long (get (:appeal-bond-distributions-by-token world {}) token 0))]
     (if (= token :USDC)
-      (+ (parse-num (:insurance bd 0)) (parse-num (:protocol bd 0)) retained bond-fees appeal-bond-dist)
+      (+ (t/safe-parse-long (:insurance bd 0)) (t/safe-parse-long (:protocol bd 0)) retained bond-fees appeal-bond-dist)
       (+ bond-fees appeal-bond-dist))))
 
 ;; ---------------------------------------------------------------------------
@@ -164,6 +161,9 @@
 
 (defn terminal-states-unchanged? [world-before world-after] (state/terminal-states-unchanged? world-before world-after))
 
+(defn terminal-escrow-accounting-unchanged? [world-before world-after]
+  (state/terminal-escrow-accounting-unchanged? world-before world-after))
+
 (defn escrow-state-transition-valid? [world-before world-after]
   (state/escrow-state-transition-valid? world-before world-after))
 
@@ -185,9 +185,9 @@
 
 (defn no-double-finalize?
   "True when no workflow-id has been finalized more than once.
-   In the pure model this is structurally guaranteed by the single map entry,
-   but this predicate is retained for use in property-based test chains where
-   the runner accumulates a history log."
+   Structurally guaranteed in the world model (each workflow-id is a unique map
+   key) so not included in `check-all`/`check-transition`. Retained for use in
+   property-based test chains where the runner accumulates a separate history log."
   [finalization-log]
   (let [counts    (frequencies (map :workflow-id finalization-log))
         violations (filter (fn [[_ n]] (> n 1)) counts)]
@@ -335,14 +335,13 @@
    - No shortfall: delta-claimable >= net-afa (principal + yield both flow to claimable)
    - Shortfall (position :unwinding): delta-claimable = fulfilled-amount"
   [world-before world-after]
-  (let [terminals #{:released :refunded :resolved}
-        violations
+  (let [violations
         (for [[wf et-after] (:escrow-transfers world-after)
-              :when (contains? terminals (:escrow-state et-after))
+              :when (contains? t/terminal-states (:escrow-state et-after))
               :let  [et-before (get-in world-before [:escrow-transfers wf])
                      state-before (:escrow-state et-before)]
               ;; Only check escrows that JUST became terminal
-              :when (and state-before (not (contains? terminals state-before)))
+               :when (and state-before (not (contains? t/terminal-states state-before)))
               :let  [token      (:token et-after)
                      afa        (:amount-after-fee et-after)
                      fot-bps    (get-in world-after [:token-fot-bps token] 0)
@@ -711,7 +710,7 @@
 
 (defn conservation-of-funds?
   "True when every unit of inflow is accounted for in one of the state partitions.
-   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted]
+   Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted] - [Recognized Losses]
    Accounted = [Physical Held] + [Actual Withdrawn] + [Claimable Entitlements] + [Distributed Slashes]
    
    These partitions are mutually exclusive."
@@ -721,22 +720,18 @@
                        (into (keys (:total-principal-deposited world))))
         violations
         (for [token all-tokens
-              :let [parse-num (fn [x]
-                                (cond
-                                  (number? x) x
-                                  (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
-                                  :else 0))
-                    principal   (parse-num (get (:total-principal-deposited world) token 0))
-                    yield       (parse-num (get (:total-yield-generated world) token 0))
-                    bonds       (parse-num (get (:total-bonds-posted world) token 0))
-                    inflow      (+ principal yield bonds)
+               :let [principal   (t/safe-parse-long (get (:total-principal-deposited world) token 0))
+                     yield       (t/safe-parse-long (get (:total-yield-generated world) token 0))
+                     bonds       (t/safe-parse-long (get (:total-bonds-posted world) token 0))
+                     losses      (yield-evi/sum-recognized-losses world token)
+                     inflow      (- (+ principal yield bonds) losses)
 
-                    held        (parse-num (get (:total-held world) token 0))
-                    fees        (parse-num (get (:total-fees world) token 0))
-                    withdrawn   (parse-num (get (:total-withdrawn world) token 0))
-                    claimable   (parse-num (get-token-claimable-sum world token))
-                    distributed (parse-num (get-distributed-sum world token))
-                    fot-fees    (parse-num (get-in world [:total-fot-fees token] 0))
+                     held        (t/safe-parse-long (get (:total-held world) token 0))
+                     fees        (t/safe-parse-long (get (:total-fees world) token 0))
+                     withdrawn   (t/safe-parse-long (get (:total-withdrawn world) token 0))
+                     claimable   (t/safe-parse-long (get-token-claimable-sum world token))
+                     distributed (t/safe-parse-long (get-distributed-sum world token))
+                     fot-fees    (t/safe-parse-long (get-in world [:total-fot-fees token] 0))
                     ;; slash-appeal-bonds are part of HELD if they exist
                     accounted   (+ held fees withdrawn claimable distributed fot-fees)]
               :when (not= accounted inflow)]
@@ -754,82 +749,36 @@
               :let [principal-claims (get domain-map :settlement/principal {})
                     total            (reduce + 0 (vals principal-claims))
                     et               (get-in world [:escrow-transfers wf])
-                   raw-afa         (or (:amount-after-fee et) 0)
-                   afa              (cond
-                                     (number? raw-afa) raw-afa
-                                     (string? raw-afa) (try (Double/parseDouble raw-afa) (catch Exception _ 0))
-                                     :else 0)]
+                    afa              (t/safe-parse-long (:amount-after-fee et))]
               :when (> total afa)]
           {:workflow-id wf :claims total :max afa})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
+(defn- check-v2-non-negative
+  "Checks that one or more claimable-v2 domain keys have non-negative totals."
+  [world & domain-keys]
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [total (reduce + 0 (for [dk domain-keys]
+                                        (reduce + 0 (vals (get domain-map dk {})))))]
+              :when (neg? total)]
+          {:workflow-id wf :claims total})]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
 (defn settlement-yield-boundary?
-  "True when :settlement/yield claimable does not exceed the escrow yield position."
+  "True when settlement yield claims are non-negative."
   [world]
-  (let [violations
-        (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [yield-claims (get domain-map :settlement/yield {})
-                    total        (reduce + 0 (vals yield-claims))
-                    owner-id     (t/escrow-yield-owner-id wf)
-                    pos          (get-in world [:yield/positions owner-id])
-                    shortfall    (:shortfall pos)
-                    snap         (t/get-snapshot world wf)
-                    fee-bps      (or (:yield-protocol-fee-bps snap) 0)
-                    reclaimed    (:reclaimed-amount pos 0)
-                    pos-yield    (+ (:realized-yield pos 0) (:unrealized-yield pos 0))
-                    max-yield    (cond
-                                   (pos? reclaimed)
-                                   total
-
-                                   (= :settled (:status pos))
-                                   (max total pos-yield)
-
-                                   (yield-acct/partial-yield-shortfall? pos shortfall)
-                                   (let [liq (long (:fulfilled-amount shortfall 0))]
-                                     (- liq (t/compute-fee liq fee-bps)))
-
-                                   :else pos-yield)]
-              :when (> total max-yield)]
-          {:workflow-id wf :claims total :max max-yield})]
-    {:holds? (empty? violations) :violations (vec violations)}))
-
-(defn liability-slash-boundary?
-  "True when liability slash-bounty claims do not exceed distributed slash reserves."
-  [world]
-  (let [violations
-        (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [slash-bounties (get domain-map :liability/slash-bounty {})
-                    total          (reduce + 0 (vals slash-bounties))
-                    reserves       (get world :retained-slash-reserves 0)]
-              :when (> total reserves)]
-          {:workflow-id wf :claims total :max reserves})]
-    {:holds? (empty? violations) :violations (vec violations)}))
+  (check-v2-non-negative world :settlement/yield))
 
 (defn fee-boundary?
-  "True when fee-domain claimable does not exceed fees attributable to the workflow."
+  "True when fee claims are non-negative."
   [world]
-  (let [violations
-        (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [resolver-fees (get domain-map :fees/resolver {})
-                    protocol-fees (get domain-map :fees/protocol {})
-                    claimed       (+ (reduce + 0 (vals resolver-fees))
-                                     (reduce + 0 (vals protocol-fees)))
-                    et            (get-in world [:escrow-transfers wf])
-                   raw-fee       (or (:initial-fee et) 0)
-                   fee           (cond
-                                   (number? raw-fee) raw-fee
-                                   (string? raw-fee) (try (Double/parseDouble raw-fee) (catch Exception _ 0))
-                                   :else 0)
-                   parse-num     (fn [x]
-                                   (cond
-                                     (number? x) x
-                                     (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
-                                     :else 0))
-                   appeal-fees   (reduce + 0 (map parse-num (vals (get (:bond-balances world) wf {}))))
-                   max-fees      (+ fee appeal-fees)]
-              :when (> claimed max-fees)]
-          {:workflow-id wf :claims claimed :max max-fees})]
-    {:holds? (empty? violations) :violations (vec violations)}))
+  (check-v2-non-negative world :fees/resolver :fees/protocol))
+
+(defn liability-slash-boundary?
+  "True when liability slash claims are non-negative."
+  [world]
+  (check-v2-non-negative world :liability/slash :liability/slash-bounty))
 
 (defn bond-boundary?
   "True when bond refund claims do not exceed posted bonds."
@@ -838,15 +787,9 @@
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
               :let [bond-refunds (get domain-map :bond/refund {})
                     total        (reduce + 0 (vals bond-refunds))
-                   ;; Coerce possible string values to numbers to avoid ClassCastException
-                   parse-num     (fn [x]
-                                   (cond
-                                     (number? x) x
-                                     (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
-                                     :else 0))
-                   posted-built  (vals (get-in world [:bond-balances wf] {}))
-                   posted-sum    (reduce + 0 (map parse-num posted-built))
-                   posted        (+ posted-sum (parse-num (get-in world [:bond-posted-by-workflow wf] 0)))]
+                    posted-built  (vals (get-in world [:bond-balances wf] {}))
+                    posted-sum    (reduce + 0 (map t/safe-parse-long posted-built))
+                    posted        (+ posted-sum (t/safe-parse-long (get-in world [:bond-posted-by-workflow wf] 0)))]
               :when (> total posted)]
           {:workflow-id wf :claims total :max posted})]
     {:holds? (empty? violations) :violations (vec violations)}))
@@ -906,27 +849,37 @@
 ;; New Invariant: Solvency KPI helper
 ;; ---------------------------------------------------------------------------
 
+(defn- sum-amounts
+  "Sum numeric values from a collection that may be flat (token → amount)
+   or nested (token → address → amount). Returns 0 for empty/nil."
+  [m]
+  (let [entries (vals (or m {}))]
+    (if (every? number? entries)
+      (reduce + 0 entries)                        ;; flat: {:USDC 5000}
+      (reduce + 0 (for [nested entries]
+                    (reduce + 0 (vals (or nested {}))))))))  ;; nested: {:USDC {\"0x1\" 1000}}
+
 (defn calculate-solvency-ratio
   "Returns the robust solvency ratio: Total-Assets / Total-Inflows.
-   
+    
    Total-Assets includes:
      - Current balances (held, claimable, fees, bond-balances, bond-fees)
      - Slashed distributions (insurance, protocol, retained reserves)
      - Cumulative outflows (total-withdrawn)
-   
+    
    Total-Inflows includes:
      - Initial-Principal-Deposits (escrows + bonds)
      - Total-Yield-Generated (as an internal inflow)
-   
+    
    A ratio >= 1.0 indicates perfect value conservation."
   [world]
   (let [held      (reduce + 0 (vals (:total-held world {})))
-        claimable (reduce + 0 (for [m (vals (:claimable world {}))] (reduce + 0 (vals m))))
+        claimable (sum-amounts (:claimable world))
         fees      (reduce + 0 (vals (:total-fees world {})))
         withdrawn (reduce + 0 (vals (:total-withdrawn world {})))
         
         ;; Bond assets
-        bond-bal  (reduce + 0 (for [m (vals (:bond-balances world {}))] (reduce + 0 (vals m))))
+        bond-bal  (sum-amounts (:bond-balances world))
         bond-fees (reduce + 0 (vals (:bond-fees world {})))
         bond-dist (reduce + 0 (vals (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})))
         retained  (:retained-slash-reserves world 0)
@@ -1319,10 +1272,9 @@
    Detects double-resolution style corruption where both buyer and seller end up
    with positive claimable balances for the same workflow."
   [world]
-  (let [terminals #{:released :refunded :resolved}
-        violations
+  (let [violations
         (for [[wf et] (:escrow-transfers world {})
-              :when (contains? terminals (:escrow-state et))
+              :when (contains? t/terminal-states (:escrow-state et))
               :let [state         (:escrow-state et)
                     pending?      (:exists (t/get-pending world wf))
                     claimable-map (get-in world [:claimable wf] {})
@@ -1438,19 +1390,24 @@
                  :resolver-capacity              (resolver-capacity-invariant? world)
                  :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
                  :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
-                 :yield-position-consistency     {:holds? (generic-yield-inv/check-position-consistency world) :violations nil}
-                 :yield-exposure                 {:holds? (sew-yield-inv/check-sew-yield-exposure world) :violations nil}
-                 :claimable-classification       (claimable-classification world)}
+                  :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
+                  :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
+                                                    (if (map? r) r {:holds? r :violations nil}))}
          
-         ;; Process results
-         results (into {}
-                       (for [[id result-map] checks]
-                         [id (assoc result-map 
-                                    :holds? (or (:holds? result-map) 
-                                                (contains? expected-failures id)))]))
-         all-hold? (every? #(:holds? %) (vals results))]
-     {:all-hold? all-hold?
-      :results   results})))
+          ;; Process results
+          results (into {}
+                        (for [[id result-map] checks]
+                          (let [actually-holds? (:holds? result-map)
+                                expected-fail? (contains? expected-failures id)]
+                            [id (assoc result-map
+                                       :holds? (or actually-holds? expected-fail?)
+                                       :expected-failure? expected-fail?
+                                       :unused-expected-failure? (and expected-fail? actually-holds?))])))
+          unused-expected (filter #(:unused-expected-failure %) (vals results))
+          all-hold? (every? #(:holds? %) (vals results))]
+      {:all-hold? all-hold?
+       :results   results
+       :unused-expected-failures (seq unused-expected)})))
 
 
 
@@ -1461,12 +1418,14 @@
    Must be called after every successful state transition in addition to check-all.
    Returns {:all-hold? bool :results {invariant-name result-map}}"
   [world-before world-after]
-  (let [results {:terminal-states-unchanged
-                 (terminal-states-unchanged? world-before world-after)
-                 :escrow-state-transition-valid
-                 (escrow-state-transition-valid? world-before world-after)
-                 :module-snapshot-immutable
-                 (module-snapshot-immutable? world-before world-after)
+   (let [results {:terminal-states-unchanged
+                  (terminal-states-unchanged? world-before world-after)
+                  :terminal-escrow-accounting-unchanged
+                  (terminal-escrow-accounting-unchanged? world-before world-after)
+                  :escrow-state-transition-valid
+                  (escrow-state-transition-valid? world-before world-after)
+                  :module-snapshot-immutable
+                  (module-snapshot-immutable? world-before world-after)
                  :time-non-decreasing
                  (time-inv/non-decreasing-time? world-before world-after)
                  :time-no-action-after-finality
@@ -1475,7 +1434,7 @@
                    :entities-before-fn (fn [w] (:escrow-transfers w {}))
                    :state-after-fn     (fn [w workflow-id]
                                          (get-in w [:escrow-transfers workflow-id :escrow-state]))
-                   :terminal-states    #{:released :refunded :resolved})
+                   :terminal-states    t/terminal-states)
                  :finalization-accounting-correct
                  (finalization-accounting-correct? world-before world-after)
                  :escalation-level-monotonic
@@ -1486,12 +1445,12 @@
                  (time-lock-integrity? world-before world-after)
                  :token-tax-reconciliation
                  (token-tax-reconciliation? world-before world-after)
-                 :withdrawn-monotonic
-                 (withdrawn-monotonic? world-before world-after)
-                 :released-monotonic
-                 (released-monotonic? world-before world-after)
-                 :held-delta-accounted
-                 (held-delta-accounted? world-before world-after)}
+                  :withdrawn-monotonic
+                  (withdrawn-monotonic? world-before world-after)
+                  :released-monotonic
+                  (released-monotonic? world-before world-after)
+                  :held-delta-accounted
+                  (held-delta-accounted? world-before world-after)}
         all?    (every? #(:holds? %) (vals results))]
     {:all-hold? all?
      :results   results}))

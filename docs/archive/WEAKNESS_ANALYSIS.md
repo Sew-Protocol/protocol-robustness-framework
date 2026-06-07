@@ -895,3 +895,9 @@ claim-strength correspondence table.
   per-trace `projection` data from `scenario/projection.clj`.
 - The mechanism proxies are evaluated at end-of-run only. A stronger claim would require
   every epoch to satisfy these properties (time-series monotonic check).
+
+---
+
+*This document is archived. Claims herein (including "production-ready" and "92% confidence")
+predate the June 2026 research-grade audit and should not be cited without qualification.*
+

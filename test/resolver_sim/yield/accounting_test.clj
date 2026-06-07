@@ -90,7 +90,7 @@
           module {:module/id :fixed-rate}
           dt 31536000
           n 365
-          ;; fixed-accrue rounds each op via integer division, so per-step error <= 1 unit
+          ;; index-based accrual keeps cumulative rounding error well below 1 unit per step
           max-rounding-drift n
           world {:yield/rates {:fixed-rate {token 0.05}}
                  :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
@@ -185,3 +185,68 @@
 
 (deftest test-position-current-value
   (is (= 9800.0 (acct/position-current-value {:shares 10000} 0.98))))
+
+(deftest test-liquid-lending-accrue-negative-yield-mark-to-market
+  (testing "Liquid-lending negative APY produces negative unrealized under mark-to-market"
+    (let [world {:yield/indices {:aave-v3 {"USDC" 1.0}}
+                 :yield/rates   {:aave-v3 {"USDC" -0.05}}
+                 :yield/risk    {:aave-v3 {"USDC" {:loss-mode :mark-to-market}}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :active :unrealized-yield 0 :realized-yield 0}}}
+          world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})
+          pos     (get-in world' [:yield/positions "user1"])]
+      (is (< (:current-index pos) 1.0)
+          (str "Expected index below 1.0 after negative APY, got " (:current-index pos)))
+      (is (< (:current-value pos) (:principal pos))
+          (str "Expected current-value < principal, got " (:current-value pos)))
+      (is (neg? (:unrealized-yield pos))
+          (str "Expected negative unrealized-yield under mark-to-market, got " (:unrealized-yield pos))))))
+
+(deftest test-liquid-lending-accrue-negative-yield-clamped-under-none
+  (testing "Liquid-lending negative APY clamps unrealized to zero under :none loss-mode"
+    (let [world {:yield/indices {:aave-v3 {"USDC" 1.0}}
+                 :yield/rates   {:aave-v3 {"USDC" -0.05}}
+                 :yield/risk    {:aave-v3 {"USDC" {:loss-mode :none}}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :active :unrealized-yield 0 :realized-yield 0}}}
+          world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})
+          pos     (get-in world' [:yield/positions "user1"])]
+      (is (< (:current-index pos) 1.0))
+      (is (= 0 (:unrealized-yield pos))
+          (str "Expected unrealized clamped to 0 under :none loss-mode, got " (:unrealized-yield pos)))
+      (is (< (:current-value pos) (:principal pos))
+          (str "current-value=" (:current-value pos) " < principal=" (:principal pos))))))
+
+(deftest test-fixed-accrue-negative-apy-mark-to-market
+  (testing "Fixed-rate negative APY produces negative unrealized under mark-to-market"
+    (let [world {:yield/rates {:fixed-rate {"USDC" -0.05}}
+                 :yield/risk  {:fixed-rate {"USDC" {:loss-mode :mark-to-market}}}
+                 :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
+                                                           :module/id :fixed-rate :token "USDC"
+                                                           :principal 1000 :shares 1000 :entry-index 1.0
+                                                           :status :active :unrealized-yield 0 :realized-yield 0}}}
+          world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})
+          pos     (get-in world' [:yield/positions [:sew/escrow "user1"]])]
+      (is (< (:current-index pos) 1.0))
+      (is (neg? (:unrealized-yield pos))
+          (str "Expected negative unrealized under mark-to-market, got " (:unrealized-yield pos)))
+      (is (= (- (:current-value pos) (:principal pos))
+             (:unrealized-yield pos))))))
+
+(deftest test-fixed-accrue-negative-apy-clamped-under-none
+  (testing "Fixed-rate negative APY clamps unrealized to zero under :none loss-mode"
+    (let [world {:yield/rates {:fixed-rate {"USDC" -0.05}}
+                 :yield/risk  {:fixed-rate {"USDC" {:loss-mode :none}}}
+                 :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
+                                                           :module/id :fixed-rate :token "USDC"
+                                                           :principal 1000 :shares 1000 :entry-index 1.0
+                                                           :status :active :unrealized-yield 0 :realized-yield 0}}}
+          world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})
+          pos     (get-in world' [:yield/positions [:sew/escrow "user1"]])]
+      (is (< (:current-index pos) 1.0))
+      (is (= 0 (:unrealized-yield pos))
+          (str "Expected unrealized clamped to 0 under :none, got " (:unrealized-yield pos)))
+      (is (= (:current-value pos) 950)
+          (str "Expected current-value 950, got " (:current-value pos))))))

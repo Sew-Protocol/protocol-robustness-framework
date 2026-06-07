@@ -27,6 +27,10 @@
    {:description "Under :partial-liquidity stress, unwinding positions keep principal intact; shortfall applies to yield leg only."
     :prf-tags [:partial-liquidity :shortfall-affected]}
 
+
+   :yield/value-conservation
+   {:description "Total position value = claimable + deferred + loss within rounding tolerance (1 base unit)."
+    :prf-tags [:yield-accounting :conservation :shortfall-affected]}
    :yield/deferred-reclaim
    {:description "Withdrawn positions have no open shortfall; reclaimed amounts are non-negative."
     :prf-tags [:recovery :shortfall-affected]}
@@ -46,6 +50,7 @@
    :yield/shortfall-splits
    :yield/status-fsm
    :yield/realized-non-negative
+   :yield/value-conservation
    :yield/partial-liquidity-principal
    :yield/deferred-reclaim])
 

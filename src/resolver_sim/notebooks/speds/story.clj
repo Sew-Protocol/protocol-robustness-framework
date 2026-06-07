@@ -11,6 +11,43 @@
             [clojure.string :as str]))
 
 
+(declare generate-story-by-family)
+
+;; ---
+;; Shared Frame Partials
+;; Reusable building blocks that eliminate duplication across story families.
+
+(defn- frame-badge [label color-hex]
+  [:div.status-badge
+   {:style {:color color-hex :borderColor color-hex
+            :background (str color-hex "1a")
+            :padding "4px 12px" :border (str "1px solid " color-hex)
+            :fontFamily (:font/mono tokens/typography)
+            :fontSize "12px" :fontWeight 800 :marginBottom "20px"}}
+   label])
+
+(defn- verified-closing-frame
+  "Standard VERIFIED closing frame shared by all story families.
+   h2-content is the per-family heading (Hiccup children, e.g. 'RESEARCH EVIDENCE BUNDLE').
+   Pass :claim-id to include a replay-alignment claim, :cta for an optional CTA button."
+  [{:keys [replay-match-label hash]} h2-content & {:keys [claim-id cta]}]
+  {:header "STATUS: VERIFIED"
+   :footer-left (str "REPLAY: " replay-match-label)
+   :footer-right "CERT: BUNDLE_v1.1"
+   :claims (if claim-id
+             [{:claim-id claim-id :value replay-match-label
+               :source-artifact "summary" :source-path [:summary :replay_match_pct]}]
+             [])
+   :content
+   (cond-> [[:div {:style {:marginBottom "20px"}}
+             (speds/v-inv :finality :ok)]
+            [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}}
+             hash]
+            [:h2 {:style {:fontSize "30px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}}
+             h2-content]]
+     cta (conj [:div {:style {:marginTop "24px" :padding "12px" :background "#03DAC6" :color "#020617" :textAlign "center" :fontWeight 900 :fontSize "14px"}}
+                cta]))})
+
 ;; ---
 ;; Internal Narrative Helpers
 
@@ -23,7 +60,9 @@
 
 (defn- render-frame-specs
   "Renders a vector of frame specs with keys:
-   :header :footer-left :footer-right :content"
+   :header :footer-left :footer-right :content
+   options: passed through to render-carousel
+   (:layout :grid|:single|:row, :columns n, :gap size)"
   ([frame-specs] (render-frame-specs frame-specs {}))
   ([frame-specs options]
    (speds/render-carousel
@@ -53,7 +92,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :threat-detected :value "THREAT_DETECTED" :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-    [[:div.status-badge {:style {:color "#FF9800" :borderColor "#FF9800" :background "rgba(255,152,0,0.1)" :padding "4px 12px" :border "1px solid #FF9800" :fontFamily "JetBrains Mono" :fontSize "12px" :fontWeight 800 :marginBottom "20px"}} "THREAT_DETECTED"]
+     [(frame-badge "THREAT_DETECTED" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial sweep identified a critical state-space vulnerability."]]}
@@ -79,19 +118,10 @@
      [:div {:style {:marginTop "20px"}}
       (speds/v-inv :solvency :ok)]
      [:h2 {:style {:fontSize "52px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "ATTACK" [:br] "DEFLECTED"]]}
-   {:header "STATUS: VERIFIED"
-    :footer-left (str "REPLAY: " replay-match-label)
-    :footer-right "CERT: BUNDLE_v1.1"
-    :claims [{:claim-id :replay-alignment :value replay-match-label :source-artifact "summary" :source-path [:summary :replay_match_pct]}]
-    :content
-    [[:div {:style {:marginBottom "20px"}}
-      (speds/v-inv :finality :ok)]
-     [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}}
-      hash]
-     [:h2 {:style {:fontSize "32px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "SIGNED" [:br] "DETERMINISTIC" [:br] "EVIDENCE"]
-
-     [:div {:style {:marginTop "24px" :padding "12px" :background "#03DAC6" :color "#020617" :textAlign "center" :fontWeight 900 :fontSize "14px"}}
-      "VERIFY DETERMINISTIC REPLAY"]]}])
+   (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                           ["SIGNED" [:br] "DETERMINISTIC" [:br] "EVIDENCE"]
+                           :claim-id :replay-alignment
+                            :cta "VERIFY DETERMINISTIC REPLAY")])
 
 (defn- deadline-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -100,7 +130,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :deadline-scenario :value title :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-    [[:div.status-badge {:style {:color "#FF9800" :borderColor "#FF9800" :background "rgba(255,152,0,0.1)" :padding "4px 12px" :border "1px solid #FF9800" :fontFamily "JetBrains Mono" :fontSize "12px" :fontWeight 800 :marginBottom "20px"}} "BOUNDARY_TEST"]
+      [(frame-badge "BOUNDARY_TEST" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Temporal boundary checks verify post-deadline actions are deterministically rejected."]]}
@@ -118,16 +148,9 @@
     :content
     [[:div {:style {:marginBottom "20px"}} (speds/v-inv :deadline :fail)]
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#FF9800"}} "LATE APPEAL" [:br] "REJECTED"]]}
-   {:header "STATUS: VERIFIED"
-    :footer-left (str "REPLAY: " replay-match-label)
-    :footer-right "CERT: BUNDLE_v1.1"
-    :claims [{:claim-id :deadline-replay-alignment :value replay-match-label :source-artifact "summary" :source-path [:summary :replay_match_pct]}]
-    :content
-    [[:div {:style {:marginBottom "20px"}}
-      (speds/v-inv :finality :ok)]
-     [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}}
-      hash]
-     [:h2 {:style {:fontSize "32px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "DETERMINISTIC" [:br] "DEADLINE" [:br] "ENFORCEMENT"]]}])
+   (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                           ["DETERMINISTIC" [:br] "DEADLINE" [:br] "ENFORCEMENT"]
+                             :claim-id :deadline-replay-alignment)])
 
 (defn- falsification-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -136,7 +159,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :hypothesis :value title :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-    [[:div.status-badge {:style {:color "#FF9800" :borderColor "#FF9800" :background "rgba(255,152,0,0.1)" :padding "4px 12px" :border "1px solid #FF9800" :fontFamily "JetBrains Mono" :fontSize "12px" :fontWeight 800 :marginBottom "20px"}} "THEORY_FALSIFICATION"]
+     [(frame-badge "THEORY_FALSIFICATION" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} "HYPOTHESIS" [:br] "UNDER TEST"]
      [:p {:style {:fontSize "15px" :marginTop "20px" :color "#7ADDDC" :fontWeight 700}}
       "Assumption is stress-tested under adversarial conditions to detect model boundaries."]]}
@@ -157,14 +180,9 @@
      [:h2 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#FF9800"}} "MODEL LIMIT" [:br] "LOCATED"]
      [:p {:style {:fontSize "14px" :marginTop "16px" :color "#FF9800" :fontWeight 700}}
       "Negative result is treated as falsification evidence, not protocol marketing output."]]}
-   {:header "STATUS: VERIFIED"
-    :footer-left (str "REPLAY: " replay-match-label)
-    :footer-right "CERT: BUNDLE_v1.1"
-    :claims [{:claim-id :falsification-replay :value replay-match-label :source-artifact "summary" :source-path [:summary :replay_match_pct]}]
-    :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :finality :ok)]
-     [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}} hash]
-     [:h2 {:style {:fontSize "30px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "RESEARCH" [:br] "EVIDENCE" [:br] "BUNDLE"]]}])
+   (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                           ["RESEARCH" [:br] "EVIDENCE" [:br] "BUNDLE"]
+                            :claim-id :falsification-replay)])
 
 (defn- collusion-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -172,7 +190,7 @@
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
     :content
-    [[:div.status-badge {:style {:color "#FF9800" :borderColor "#FF9800" :background "rgba(255,152,0,0.1)" :padding "4px 12px" :border "1px solid #FF9800" :fontFamily "JetBrains Mono" :fontSize "12px" :fontWeight 800 :marginBottom "20px"}} "COALITION_FORMATION"]
+     [(frame-badge "COALITION_FORMATION" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial actors form a coalition to siphon funds via fraudulent verdicts."]]}
@@ -193,13 +211,8 @@
     [(speds/v-res "Collusion Guard")
      [:div {:style {:marginTop "20px"}} (speds/v-inv :solvency :ok)]
      [:h2 {:style {:fontSize "50px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "BRIBERY" [:br] "DEFLECTED"]]}
-   {:header "STATUS: VERIFIED"
-    :footer-left (str "REPLAY: " replay-match-label)
-    :footer-right "CERT: BUNDLE_v1.1"
-    :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :finality :ok)]
-     [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}} hash]
-     [:h2 {:style {:fontSize "30px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "EQUILIBRIUM" [:br] "RESTORED"]]}])
+    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                            ["EQUILIBRIUM" [:br] "RESTORED"])])
 
 (defn- economic-solvency-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -207,7 +220,7 @@
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
     :content
-    [[:div.status-badge {:style {:color "#7ADDDC" :borderColor "#7ADDDC" :background "rgba(122,221,220,0.1)" :padding "4px 12px" :border "1px solid #7ADDDC" :fontFamily "JetBrains Mono" :fontSize "12px" :fontWeight 800 :marginBottom "20px"}} "ECONOMIC_ROBUSTNESS"]
+     [(frame-badge "ECONOMIC_ROBUSTNESS" (get tokens/palette :sys/primary))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Yield conservation and solvency invariants are stress-tested under volatility."]]}
@@ -228,13 +241,8 @@
       (speds/v-inv :solvency :ok)
       (speds/v-inv :conservation :ok)]
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "SOLVENCY" [:br] "GUARANTEED"]]}
-   {:header "STATUS: VERIFIED"
-    :footer-left (str "REPLAY: " replay-match-label)
-    :footer-right "CERT: BUNDLE_v1.1"
-    :content
-    [[:div {:style {:marginBottom "20px"}} (speds/v-inv :finality :ok)]
-     [:div {:style {:fontFamily "JetBrains Mono" :fontSize "12px" :opacity 0.8 :wordBreak "break-all" :marginBottom "20px"}} hash]
-     [:h2 {:style {:fontSize "30px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "DETERMINISTIC" [:br] "SOLVENCY" [:br] "BUNDLE"]]}])
+    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                            ["DETERMINISTIC" [:br] "SOLVENCY" [:br] "BUNDLE"])])
 
 ;; ---
 ;; 1. The "Deflection" Story Engine
@@ -247,9 +255,9 @@
   ([artifacts]
    (let [scn (some #(when (= :theory-falsification (ose/normalize-purpose (:purpose %))) %) (or (get-in artifacts [:coverage :scenarios]) []))
          scenario-id (or (:id scn) (:default-theory-falsification-scenario-id config/profile))]
-     (generate-deflection-story scenario-id artifacts)))
+      (generate-story-by-family scenario-id artifacts)))
   ([scenario-id artifacts]
-   (generate-deflection-story scenario-id artifacts)))
+   (generate-story-by-family scenario-id artifacts)))
 
 (defn generate-run-overview
   "Overview panel designed for reviewer/public status context."
@@ -306,12 +314,12 @@
          (when (seq baseline-note)
            [:p {:style {:fontSize "11px" :color "#94a3b8" :marginBottom "10px"}}
             baseline-note])
-          (generate-deflection-story (:scenario_id f) artifacts)]))])))
+           (generate-story-by-family (:scenario_id f) artifacts)]))])))
 
 (defn generate-scenario-deep-dive
   "Deep-dive mode, typically selected from issue list."
   [scenario-id artifacts]
-  (generate-deflection-story scenario-id artifacts))
+  (generate-story-by-family scenario-id artifacts))
 
 (defn generate-story
   "Unified renderer entrypoint.
@@ -373,19 +381,41 @@
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6 :marginTop "8px"}} coverage-text]]]]))
 
 
-(defn- get-frame-specs [family frame-ctx]
-  (let [registry {:theory-falsification 'falsification-frame-specs
-                  :deadline-boundary    'deadline-frame-specs
-                  :collusion            'collusion-frame-specs
-                  :economic-solvency    'economic-solvency-frame-specs}
-        sym (get registry family 'deflection-frame-specs)
-        f (resolve sym)]
-    (f frame-ctx)))
+(defmulti frame-specs-for-family
+  "Returns a vector of frame spec maps for the given story family.
+   New families can be added from any namespace via defmethod."
+  (fn [family _frame-ctx] family))
+
+(defmethod frame-specs-for-family :deflection [_ frame-ctx]
+  (deflection-frame-specs frame-ctx))
+
+(defmethod frame-specs-for-family :deadline-boundary [_ frame-ctx]
+  (deadline-frame-specs frame-ctx))
+
+(defmethod frame-specs-for-family :theory-falsification [_ frame-ctx]
+  (falsification-frame-specs frame-ctx))
+
+(defmethod frame-specs-for-family :collusion [_ frame-ctx]
+  (collusion-frame-specs frame-ctx))
+
+(defmethod frame-specs-for-family :economic-solvency [_ frame-ctx]
+  (economic-solvency-frame-specs frame-ctx))
+
+(defmethod frame-specs-for-family :default [_ frame-ctx]
+  (deflection-frame-specs frame-ctx))
+
+(defn generate-story-by-family
+  "Generates a multi-frame narrative for a scenario, dispatching on
+   the story family determined from scenario metadata.
+   This is the canonical entry point for SPEDS story generation."
+  [scenario-id artifacts]
+  (let [ctx (story-data/build-story-data artifacts scenario-id)
+        family (story-family scenario-id (:scenario ctx))
+        frame-specs (frame-specs-for-family family ctx)]
+    (render-frame-specs frame-specs)))
 
 (defn generate-deflection-story
-  "Generates a 4-frame 'Attack vs Defense' narrative from a scenario ID."
+  "Deprecated alias for generate-story-by-family. Retained for
+   backward compatibility with existing notebooks."
   [scenario-id artifacts]
-  (let [story-data (story-data/build-story-data artifacts scenario-id)
-        family (story-family scenario-id (:scenario story-data))
-        frame-specs (get-frame-specs family story-data)]
-    (render-frame-specs frame-specs)))
+  (generate-story-by-family scenario-id artifacts))

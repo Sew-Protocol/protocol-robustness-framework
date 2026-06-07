@@ -37,12 +37,16 @@ Reference points:
 | `world_view` | `:world-view` |
 | `workflow_id` | `:workflow-id` |
 | `is_release` | `:is-release` |
+| `event_id` | `:event-id` |
+| `hop_id` | `:hop-id` |
 
 Rule:
 - `snake_case -> kebab-case keyword` on parse.
 - `kebab-case keyword -> snake_case` on stream.
 
 Keyword values are also normalized to snake_case strings on wire.
+
+Accessors: `protocols/sew/compat` provides `wf-id`, `event-id`, `hop-id`, and `event-param` with snake_case aliases.
 
 ---
 
@@ -58,6 +62,52 @@ Canonical Clojure replay scenario shape (`replay.clj`):
 
 Event core fields:
 - `:seq`, `:time`, `:agent`, `:action`, `:params`
+
+Replay results may include:
+- `:world-checkpoints` — `{seq → full-world}` captured immediately before each event is dispatched; used by SPE fork replay. Default retention is `:decision-nodes-only` (strategic action seqs only); override via `:flags {:world-checkpoint-policy :retain-all|:omit}`.
+
+Exported trace fixtures (`trace-export`) surface replay idempotence on each step:
+- `attributes.idempotency` — `no-op-duplicate` or `applied-once` when `:extra {:idempotency ...}` is present
+- `attributes.event_id` / `attributes.hop_id` — from scenario params when provided
+- `metadata.idempotency` — summary of deduped step seqs when any no-op duplicates occurred
+
+---
+
+## Replay idempotence params (optional)
+
+Optional params in `:params` for external log / reorg replay:
+
+| Param | Required? | Purpose |
+|---|---|---|
+| `event-id` | Optional in deterministic scenarios; recommended for external log replay | Logical transaction identifier; activates replay-boundary dedupe for `replay-sensitive-actions` |
+| `hop-id` | Optional | Disambiguates escalation hops when the same `event-id` legitimately appears at multiple levels |
+
+When `event-id` is absent, duplicate events are handled by **business-logic guards** (may reject rather than no-op). See `docs/testing/IDEMPOTENCE_CHECKLIST.md`.
+
+Dedupe op-key (Sew): `[:sew :replay-dedupe action agent workflow-id slash-id hop-scope event-id]`
+
+Implementation: `protocols/sew.clj` (`dispatch-action` → `contract-model.idempotency/apply-once`).
+
+**External-log ingestion:** set `:flags {:require-event-id? true}` or use `external-log-replay-flags`. Replay-sensitive actions without `event-id` are rejected with `:missing-event-id` (deterministic scenarios without ids are unaffected when the flag is off).
+
+Reference scenario: `scenarios/S64_replay-event-id-dedupe.json`.
+Fork + continuation reference: `scenarios/S65_spe-fork-event-id-inheritance.json`.
+
+---
+
+## Fork replay boundary (SPE counterfactuals)
+
+Counterfactual evaluation (`scenario/subgame_counterfactual.clj`) forks via `replay/resume-from-snapshot`:
+
+| Dimension | Default policy |
+|---|---|
+| Fork world source | `:world-checkpoints` at decision `:seq` |
+| Continuation event shape | `replay/trace-entry->replay-event` (strips trace metadata) |
+| Event identity | `:inherit-from-main-trace` — continuations keep main-line `:params` including `event-id` |
+| Idempotency state | `:inherit-checkpoint` — `:idempotency/applied` reflects only pre-fork events |
+| Stale continuations | Tagged `:fork/stale-continuation` when business guards reject |
+
+Tree expansion is opt-in: `:enable-tree-expansion? true` in SPE config.
 
 ---
 

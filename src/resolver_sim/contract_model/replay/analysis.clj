@@ -6,6 +6,7 @@
             [clojure.string                 :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.expectations :as expectations]
+            [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.scenario.yield-metrics :as yield-metrics]
             [resolver-sim.scenario.yield-provider-metrics :as yield-provider-metrics]))
 
@@ -74,20 +75,27 @@
   ([scenario result] (finalize-scenario-result scenario result {}))
   ([scenario result flags]
    (let [result'      (merge-metrics-for-profile result scenario flags)
-        outcomes     (expectations/analyze-expected-outcomes scenario (:trace result'))
-        expect       (when (:expectations scenario)
-                       (expectations/evaluate-expectations result' (:expectations scenario)))
-        outcomes-ok? (:ok? outcomes true)
-        expect-ok?   (or (nil? expect) (:ok? expect))
-        checks-ok?   (and outcomes-ok? expect-ok?)]
-    (cond-> (assoc result'
-              :expected-outcomes outcomes
-              :expectations expect)
-      (and (= (:outcome result') :pass) (not checks-ok?))
-      (assoc :outcome :fail
-             :halt-reason (if (not outcomes-ok?)
-                            :expected-outcome-mismatch
-                            :expectation-mismatch)
-             :expectation-violations
-             (vec (concat (:violations outcomes [])
-                          (:violations expect []))))))))
+         outcomes     (expectations/analyze-expected-outcomes scenario (:trace result'))
+         expect       (when (:expectations scenario)
+                        (expectations/evaluate-expectations result' (:expectations scenario)))
+
+         ;; BRIDGE: Apply theory evaluation
+         result''     (theory-result/attach-three-way-model result' 
+                                                            (:theory-eval-opts scenario {})
+                                                            :theory (:theory scenario))
+
+         outcomes-ok? (:ok? outcomes true)
+         expect-ok?   (or (nil? expect) (:ok? expect))
+         theory-ok?   (or (nil? (:falsified? result'')) (not (:falsified? result'')))
+         checks-ok?   (and outcomes-ok? expect-ok? theory-ok?)]
+     (cond-> (assoc result''
+               :expected-outcomes outcomes
+               :expectations expect)
+       (and (= (:outcome result'') :pass) (not checks-ok?))
+       (assoc :outcome :fail
+              :halt-reason (cond (not outcomes-ok?) :expected-outcome-mismatch
+                                 (not expect-ok?)   :expectation-mismatch
+                                 (not theory-ok?)   :theory-falsified)
+              :expectation-violations
+              (vec (concat (:violations outcomes [])
+                           (:violations expect []))))))))

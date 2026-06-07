@@ -30,6 +30,20 @@
             [resolver-sim.protocols.sew.snapshot :as snapshot]))
 
 ;; ---------------------------------------------------------------------------
+;; Safe numeric coercion (shared across invariants, projection, classification)
+;; ---------------------------------------------------------------------------
+
+(defn safe-parse-long
+  "Coerce a value to long, handling JSON-deserialized strings.
+   Uses Long/parseLong for exact integer parsing — avoids Double/parseDouble
+   which loses precision for uint256-scale values (> 2^53)."
+  [x]
+  (cond
+    (number? x) (long x)
+    (string? x) (try (Long/parseLong x) (catch Exception _ 0))
+    :else 0))
+
+;; ---------------------------------------------------------------------------
 ;; Semantic ID Phantom Types
 ;; ---------------------------------------------------------------------------
 
@@ -61,13 +75,33 @@
   "EscrowState enum values."
   #{:none :pending :released :refunded :disputed :resolved})
 
+(def allowed-transitions
+  "Authoritative EscrowState → #{reachable states} transition graph.
+   Mirrors BaseEscrow.sol call sites and StateManagementLibrary.sol guards.
+   States with #{} outgoing edges are terminal (absorbing).
+
+   :resolved — defined in enum and library; no production call site currently
+               reaches it.  Guards in transition-to-resolved enforce that
+               accounting is settled before it may be entered."
+  {:none      #{:pending}
+   :pending   #{:disputed :released :refunded}
+   :disputed  #{:released :refunded :resolved}
+   :resolved  #{}
+   :released  #{}
+   :refunded  #{}})
+
+(def live-states
+  "Escrow states that are not yet terminal — can still transition.
+   Complement of terminal-states."
+  #{:pending :disputed})
+
 (def sender-statuses
   "SenderStatus enum values."
   #{:none :agree-to-cancel :raise-dispute})
 
 (def recipient-statuses
-  "RecipientStatus enum values."
-  #{:none :agree-to-cancel :raise-dispute})
+  "RecipientStatus enum values — identical to sender-statuses."
+  sender-statuses)
 
 (def resolution-outcomes
   "ResolutionOutcome enum values."
@@ -149,13 +183,6 @@
    :auto-release-time (or auto-release-time 0)
    :auto-cancel-time  (or auto-cancel-time 0)})
 
-(defn make-module-snapshot
-  "Deprecated alias for `snapshot/make-escrow-snapshot`. Prefer that name in new code.
-
-   See `resolver-sim.protocols.sew.snapshot` for validation and presets."
-  [params]
-  (snapshot/make-escrow-snapshot params))
-
 (defn make-pending-settlement
   "Construct a PendingSettlement map.
 
@@ -190,6 +217,11 @@
 ;; Maximum escalation round — mirrors DecentralizedResolutionModule.MAX_ROUND.
 ;; Round 0 = initial resolver, 1 = senior resolver, 2 = external (Kleros).
 (def ^:const max-dispute-level 2)
+
+(def zero-address
+  "Canonical zero-address sentinel — used as 'no resolver assigned' marker
+   and for unconditional resolver-available checks."
+  "0x0000000000000000000000000000000000000000")
 
 (defn empty-world
   "Create an empty world-state map at a given block time."
@@ -353,10 +385,16 @@
   (let [wf-id (normalize-workflow-id workflow-id)]
     (get-in world [:escrow-transfers wf-id :escrow-state])))
 
+(def terminal-states
+  "Set of terminal (absorbing) escrow states derived from allowed-transitions.
+   Single authoritative source — all downstream code MUST reference this def
+   instead of inlining the literal set."
+  (into #{} (keep (fn [[k v]] (when (empty? v) k))) allowed-transitions))
+
 (defn terminal-state?
   "True if the escrow is in an absorbing (terminal) state."
   [world workflow-id]
-  (contains? #{:released :refunded :resolved} (escrow-state world workflow-id)))
+  (contains? terminal-states (escrow-state world workflow-id)))
 
 (defn valid-workflow-id?
   "True if workflow-id exists in escrow-transfers."

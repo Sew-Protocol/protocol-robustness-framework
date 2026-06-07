@@ -39,7 +39,8 @@
         best (eval-params start 500)]
     (loop [cur best i 0]
       (if (>= i n-iter) cur
-        (let [k (rand-nth [:resolver-fee-bps :resolver-bond-bps :slash-multiplier :slashing-detection-probability])
+        (let [keys-vec [:resolver-fee-bps :resolver-bond-bps :slash-multiplier :slashing-detection-probability]
+              k (nth keys-vec (rng/sample-index rng (count keys-vec)))
               v (get pte k [0 1])
               delta (* (- (second v) (first v)) 0.1 (- (rng/next-double rng) 0.5))
               curr-v (get (:params cur) k 0)

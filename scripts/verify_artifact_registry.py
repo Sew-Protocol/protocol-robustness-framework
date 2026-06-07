@@ -30,8 +30,6 @@ def verify_registry(registry_path: pathlib.Path) -> bool:
         print(f"Error: Failed to parse registry JSON: {e}")
         return False
 
-    run_id = registry.get("run_id")
-    root_dir = pathlib.Path(registry.get("root_dir", "."))
     artifacts = registry.get("artifacts", [])
     
     all_ok = True

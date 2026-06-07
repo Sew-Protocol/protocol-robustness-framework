@@ -107,6 +107,23 @@ message Event {
   // For other protocols: any action string their dispatch-action accepts.
   string action = 4;
   // params is an open map; fields vary by action and protocol.
+  //
+  // Common optional fields (used by Sew Protocol):
+  //   event_id (string) — logical transaction identifier; gates replay-boundary
+  //     dedupe for the 8 replay-sensitive actions (execute-resolution,
+  //     execute-pending-settlement, escalate-dispute, challenge-resolution,
+  //     rotate-dispute-resolver, propose-fraud-slash, resolve-appeal,
+  //     execute-fraud-slash). Without event_id, the event passes through to
+  //     business-logic guards only. When :require-event-id? flag is on,
+  //     sensitive actions without event_id are rejected.
+  //   hop_id (int or string) — escalation hop scope for escalate-dispute and
+  //     challenge-resolution. Disambiguates the same event_id appearing at
+  //     multiple escalation levels. When omitted, the current dispute level
+  //     from world state is used as the hop scope.
+  //   workflow_id (int) — target escrow index (required for action targeting).
+  //   slash_id (string or int) — scope for fraud/reversal slash operations.
+  //     Distinct from workflow_id when a workflow has multiple independent
+  //     slash operations (e.g., reversal slashes at multiple levels).
   google.protobuf.Struct params = 5;
 }
 

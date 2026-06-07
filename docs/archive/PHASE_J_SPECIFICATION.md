@@ -480,3 +480,9 @@ Total: < 50 lines of changes to existing files
 - WEAKNESS_SUMMARY.txt (all 11 gaps with Phase J mapping)
 - WEAKNESS_PRIORITIZATION_MATRIX.txt (effort vs. impact)
 
+
+---
+
+*This document is archived. Claims herein (including "production-ready" and "92% confidence")
+predate the June 2026 research-grade audit and should not be cited without qualification.*
+

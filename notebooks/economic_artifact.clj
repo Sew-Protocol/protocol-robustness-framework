@@ -12,4 +12,4 @@
  (let [artifacts (data/load-run-artifacts)
        scenario-id "scenarios/s09-multi-escrow-solvency"]
    [:div {:style {:background "#000" :padding "40px" :minHeight "100vh"}}
-    (story/generate-deflection-story scenario-id artifacts)]))
+    (story/generate-story-by-family scenario-id artifacts)]))

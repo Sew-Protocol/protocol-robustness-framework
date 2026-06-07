@@ -2,6 +2,24 @@
 
 This checklist tracks operations that should be idempotent (or replay-idempotent), current status, and hardening plan.
 
+## Two idempotence models
+
+Do not conflate these — they solve different problems:
+
+| Model | When it applies | Mechanism | Typical outcome on duplicate |
+|---|---|---|---|
+| **Business-logic** | Deterministic scenarios without `event-id` | State guards in lifecycle/resolution | **Reject** (`:no-resolution-to-challenge`, terminal-state guards, etc.) |
+| **Replay-boundary** | External log / reorg replay with `event-id` | `contract-model.idempotency/apply-once` in `sew/dispatch-action` | **No-op** (`:extra {:idempotency :no-op-duplicate}`) |
+
+Deterministic invariant scenarios (S46-style) rely on business-logic idempotence.  
+External log replay should supply optional `event-id` (and `hop-id` for escalate/challenge) to activate replay-boundary dedupe.
+
+Reference scenarios: `S64_replay-event-id-dedupe.json`, `S65_spe-fork-event-id-inheritance.json`, `S116_superseded-pending-repeated-keeper.json`, `S117_challenge-resolution-dedupe.json`.
+
+Per-action dedupe key reference: `docs/replay/REPLAY_SENSITIVE_ACTIONS.md`.
+
+---
+
 ## Current checklist
 
 | Surface | Expected idempotence contract | Status | Notes |
@@ -12,47 +30,68 @@ This checklist tracks operations that should be idempotent (or replay-idempotent
 | `execute-pending-settlement` | Finalize once; subsequent calls rejected | PASS | Terminal + pending guards |
 | `execute-fraud-slash` | Execute once; subsequent calls rejected | PASS | Status guards (`:executed`/`:appealed`/`:reversed`) |
 | `unfreeze-resolver` | Multiple calls converge to same state | PASS | Idempotent state overwrite |
-| `rotate-dispute-resolver` | Same target rotation should not create duplicate audit events | GAP | Currently appends repeated identical rotation records |
-| `escalate_dispute` / `challenge_resolution` | Replay-idempotent under duplicate ingestion (same logical tx) | GAP | Business action is non-idempotent by design; dedupe needed at replay boundary |
-| superseded pending fallback | Repeated keeper execution over superseded history cannot re-finalize | PARTIAL | Guarded by terminal/pending logic; add explicit regression tests for superseded cases |
+| `rotate-dispute-resolver` | Same target rotation should not create duplicate audit events | PASS | Business-logic `:idempotent?` flag; replay dedupe when `event-id` present |
+| `escalate_dispute` / `challenge_resolution` | Replay-idempotent under duplicate ingestion (same logical tx) | PASS* | *When `event-id` present; otherwise business guards apply |
+| `replay-sensitive-actions` (8 actions) | Replay dedupe when `event-id` present | PASS* | See `sew/replay-sensitive-actions` |
+| superseded pending fallback | Repeated keeper execution over superseded history cannot re-finalize | PASS | Guarded by terminal/pending logic; verified by `checklist-superseded-pending-single-finalization` test + S116 fixture |
+| SPE fork continuations (`cont-events`) | Main-line tail replayed after deviation | PASS | Uses `:world-checkpoints` + normalized replay events; `:event-identity :inherit-from-main-trace` |
 
-## Shared helper direction
+---
 
-To minimize repetition and standardize behavior, add a shared helper module for idempotent transitions:
+## Shared helper module
 
-- Namespace proposal: `resolver-sim.contract-model.idempotency` (protocol-agnostic)
-- Core helper (shape):
-  - `apply-once`:
-    - input: `world`, `op-key`, `apply-fn`
-    - behavior:
-      - if `op-key` already seen in `[:idempotency/applied]`, return unchanged world with `:idempotent/no-op`
-      - else apply `apply-fn`, then mark `op-key` as applied
-- Companion helper:
-  - `noop-if` to short-circuit duplicate semantic transitions (e.g., same resolver rotation)
+Namespace: `resolver-sim.contract-model.idempotency` (protocol-agnostic)
 
-Suggested `op-key` patterns (built in protocol adapters):
+- `apply-once` — apply `apply-fn` at most once per `op-key`; records keys in `:idempotency/applied`
+- `applied?` / `mark-applied` / `ensure-not-duplicate`
+
+Dedupe op-key shape (built in `sew/dedupe-op-key`):
+
+```clojure
+[:sew :replay-dedupe action agent workflow-id slash-id hop-scope event-id]
+```
+
+Suggested patterns from the original checklist still apply:
 
 - `[:rotate workflow-id new-resolver at-time]`
 - `[:escalate workflow-id level caller event-id]`
 - `[:challenge workflow-id level caller event-id]`
 - `[:settle workflow-id pending-hash]`
 
-`event-id` can be optional in deterministic scenarios and mandatory in external log replay.
+`hop-scope` is explicit `hop-id` when provided, otherwise current dispute level for escalate/challenge.
 
-## Phased plan
+---
 
-1. **Immediate hardening**
-   - Add no-op guard to `rotate-dispute-resolver` when `new-resolver == old-resolver`.
-   - Add explicit tests for superseded-pending repeated keeper calls.
+## Replay params (interface contract)
 
-2. **Replay-boundary dedupe**
-   - Introduce optional `event-id` in replay events.
-   - Use shared `contract-model.idempotency/apply-once` for `escalate_dispute` and `challenge_resolution` when `event-id` is present.
+Optional event params (kebab-case internal, snake_case on wire):
 
-3. **Audit-grade trace consistency**
-   - Emit explicit no-op trace metadata for deduped operations.
-   - Add fixture scenarios with intentional duplicate events to prove deterministic convergence.
+| Param | Purpose |
+|---|---|
+| `event-id` / `event_id` | Logical transaction identifier; gates replay-boundary dedupe |
+| `hop-id` / `hop_id` | Escalation hop scope when the same `event-id` spans multiple levels |
 
-4. **Policy enforcement**
-   - Require idempotence contract for new state transitions in PR checklist.
-   - Add quick CI target for idempotence checklist test namespace.
+See `docs/interface-contract.md` for wire mapping.
+
+---
+
+## Fork replay (SPE counterfactuals)
+
+Counterfactual fork replay (`subgame-counterfactual/expand-strategic-tree`):
+
+- Fork world: full state from `:world-checkpoints` at decision `:seq` (not lean trace snapshots)
+- Continuation events: normalized via `replay/trace-entry->replay-event`
+- Event identity: `:event-identity :inherit-from-main-trace` (continuations keep main-line `:params`)
+- Idempotency: `:idempotency-state :inherit-checkpoint` (only pre-fork `:idempotency/applied` keys)
+
+Stale continuation rejections are tagged `:fork/stale-continuation` (business guards, not dedupe).
+
+---
+
+## Phased plan (updated)
+
+1. ~~**Replay-boundary dedupe**~~ — implemented for `replay-sensitive-actions` when `event-id` present.
+2. ~~**Fork world completeness**~~ — `:world-checkpoints` on replay results; SPE uses checkpoints.
+3. ~~**Audit-grade trace consistency**~~ — exported traces surface `:extra {:idempotency ...}` via `attributes.idempotency` and `metadata.idempotency`.
+4. ~~**Policy enforcement**~~ — optional `:require-event-id?` replay flag (`:external-log-replay-flags` preset) for external-log ingestion paths.
+5. ~~**Superseded-pending regression** — explicit fixture for repeated keeper calls over superseded history.~~

@@ -100,7 +100,7 @@
 
 (defn test-scenario-y
   "Run a specific Phase Y scenario multiple times."
-  [scenario-label n-resolvers n-disputes budget complexity-add trials seed]
+  [scenario-label n-resolvers n-disputes budget complexity-add trials seed accuracy-threshold]
   (println (format "📋 %s" scenario-label))
   (let [rng (rng/make-rng seed)
         results (repeatedly trials #(simulate-epoch-y n-resolvers n-disputes budget complexity-add rng))
@@ -109,8 +109,8 @@
                      n-disputes n-resolvers (/ (* 3.0 n-disputes) n-resolvers)))
     (println (format "   Budget: %d units, Complexity add: +%d" budget complexity-add))
     (println (format "   Avg accuracy: %.1f%%" (* 100 avg-accuracy)))
-    (let [passed? (>= avg-accuracy 0.75)]
-      (println (format "   Status: %s" (if passed? "✅ PASS" "❌ FAIL")))
+    (let [passed? (>= avg-accuracy accuracy-threshold)]
+      (println (format "   Status: %s (threshold: %.0f%%)" (if passed? "✅ PASS" "❌ FAIL") (* 100 accuracy-threshold)))
       {:scenario scenario-label :avg-accuracy avg-accuracy :class (if passed? "A" "C")})))
 
 ;; ============ Full Phase Y Run ============
@@ -127,11 +127,12 @@
   (let [n-resolvers        (:n-resolvers params 30)
         seed               (:rng-seed params 42)
         budget-per-resolver (:budget-per-resolver params 20)
+        accuracy-threshold (double (or (:accuracy-threshold params) 0.75))
         budget-floor       50
         below-floor?       (< budget-per-resolver budget-floor)]
 
     (println "\n📊 PHASE Y: EVIDENCE FOG & ATTENTION BUDGET TESTING")
-    (println "   Hypothesis: >75% correctness survives budget caps + attacker complexity escalation")
+    (println (format "   Hypothesis: >%.0f%% correctness survives budget caps + attacker complexity escalation" (* 100 accuracy-threshold)))
     (when below-floor?
       (println (format "   ⚠️  budget-per-resolver=%d < floor=%d (Phase 5 safety sweep)"
                        budget-per-resolver budget-floor))
@@ -139,36 +140,36 @@
     (println "")
 
     (let [r1 (test-scenario-y "TEST 1: Baseline (light load, ample budget)" 
-                             n-resolvers 20 20 0 100 seed)
+                              n-resolvers 20 20 0 100 seed accuracy-threshold)
           r2 (test-scenario-y "TEST 2: High Fog (15% ambiguous/hard)" 
-                             n-resolvers 30 20 0 100 (+ seed 1)) ;; In current code, sample-dispute-type handles the mix
+                              n-resolvers 30 20 0 100 (+ seed 1) accuracy-threshold)
           r3 (test-scenario-y "TEST 3: Attacker Fog (High complexity +10)" 
-                             n-resolvers 30 20 10 100 (+ seed 2))
+                              n-resolvers 30 20 10 100 (+ seed 2) accuracy-threshold)
           r4 (test-scenario-y "TEST 4: Load Spike (100 disputes)" 
-                             n-resolvers 100 20 0 100 (+ seed 3))
+                              n-resolvers 100 20 0 100 (+ seed 3) accuracy-threshold)
           r5 (test-scenario-y "TEST 5: Extreme Load (200 disputes)" 
-                             n-resolvers 200 20 0 100 (+ seed 4))
+                              n-resolvers 200 20 0 100 (+ seed 4) accuracy-threshold)
 
           all-results [r1 r2 r3 r4 r5]
           class-a (count (filter #(= "A" (:class %)) all-results))
           class-c (count (filter #(= "C" (:class %)) all-results))
 
           min-accuracy (apply min (map :avg-accuracy all-results))
-          hypothesis-holds? (>= min-accuracy 0.75)]
+          hypothesis-holds? (>= min-accuracy accuracy-threshold)]
 
       (println "\n═══════════════════════════════════════════════════")
       (println "📋 PHASE Y SUMMARY")
       (println "═══════════════════════════════════════════════════")
       (println (format "   Robust (A): %d  Fragile (C): %d" class-a class-c))
-      (println (format "   Min accuracy across scenarios: %.1f%% (threshold: ≥75%%)" (* 100 min-accuracy)))
+      (println (format "   Min accuracy across scenarios: %.1f%% (threshold: ≥%.0f%%)" (* 100 min-accuracy) (* 100 accuracy-threshold)))
       (println (format "   Hypothesis holds? %s" (if hypothesis-holds? "✅ YES — system robust" "❌ NO — attention design needed")))
       (println "")
       (if hypothesis-holds?
-        (do (println "   ✅ PASS: Minimum accuracy exceeds 75%% threshold")
+        (do (println (format "   ✅ PASS: Minimum accuracy exceeds %.0f%% threshold" (* 100 accuracy-threshold)))
             (println "   Confidence impact: +8% (evidence fog not a critical risk)")
             (println "   Interpretation: Attention budget mechanism is adequate under tested loads")
             (println "   Recommendation: No changes needed; monitor under production load"))
-        (do (println (format "   ❌ FAIL: Minimum accuracy %.1f%% < 75%% threshold" (* 100 min-accuracy)))
+        (do (println (format "   ❌ FAIL: Minimum accuracy %.1f%% < %.0f%% threshold" (* 100 min-accuracy) (* 100 accuracy-threshold)))
             (println "   Interpretation: ❌ CRITICAL — attention budget is insufficient")
             (println "   Min accuracy reached: " (format "%.1f%%" (* 100 min-accuracy)))
             (println "   Confidence impact: 0% (issue found; no progress without mitigation)")
@@ -183,14 +184,15 @@
       (proto/make-result
        {:benchmark-id          "Y"
         :label                 "Evidence Fog & Attention Budget"
-        :hypothesis            ">75% correctness survives budget caps + attacker complexity escalation"
+        :hypothesis            (format ">%.0f%% correctness survives budget caps + attacker complexity escalation" (* 100 accuracy-threshold))
+        :class                 :analytic
         :passed?               hypothesis-holds?
         :results               all-results
-        :summary               {:class-a class-a :class-c class-c :min-accuracy min-accuracy}
+        :summary               {:class-a class-a :class-c class-c :min-accuracy min-accuracy :threshold accuracy-threshold}
         :budget-floor-warning  (when below-floor?
                                  {:budget-per-resolver budget-per-resolver
                                   :budget-floor        budget-floor
-                                  :note                "75%-accuracy claim only validated at budget >= floor"})}))))
+                                  :note                (format "%.0f%%-accuracy claim only validated at budget >= floor" (* 100 accuracy-threshold))})}))))
 
 ;; ============ Phase Y Safety Margin Sweep ============
 
@@ -201,25 +203,26 @@
    Returns: {:safe-budget-threshold int :results [{:budget :accuracy :safe?}]
              :min-safe-budget int}"
   [params]
-  (println "\n🔍 Phase Y Safety Margin Sweep: budget-per-resolver vs correctness")
-  (println "   Scenario: 200 disputes, 30 resolvers, 50 trials per budget level")
-  (println "")
+  (let [accuracy-threshold (double (or (:accuracy-threshold params) 0.75))]
+    (println "\n🔍 Phase Y Safety Margin Sweep: budget-per-resolver vs correctness")
+    (println (format "   Scenario: 200 disputes, 30 resolvers, 50 trials per budget level (threshold: %.0f%%)" (* 100 accuracy-threshold)))
+    (println "")
 
-  (let [n-resolvers (:n-resolvers params 30)
-        n-disputes  200
-        seed        (:rng-seed params 42)
-        trials      50
-        budgets     [5 10 15 20 25 30 40 50 75 100]
+    (let [n-resolvers (:n-resolvers params 30)
+          n-disputes  200
+          seed        (:rng-seed params 42)
+          trials      50
+          budgets     [5 10 15 20 25 30 40 50 75 100]
 
-        results
-        (vec (for [budget budgets]
-               (let [rng (rng/make-rng (+ seed budget))
-                     accuracy-readings
-                     (vec (repeatedly trials
-                                      #(let [r (simulate-epoch-y n-resolvers n-disputes budget 0 rng)]
-                                         (/ (double (:correct r)) (:total r)))))
-                     avg-accuracy (/ (apply + accuracy-readings) (double trials))
-                     safe?        (>= avg-accuracy 0.75)]
+          results
+          (vec (for [budget budgets]
+                 (let [rng (rng/make-rng (+ seed budget))
+                       accuracy-readings
+                       (vec (repeatedly trials
+                                        #(let [r (simulate-epoch-y n-resolvers n-disputes budget 0 rng)]
+                                           (/ (double (:correct r)) (:total r)))))
+                       avg-accuracy (/ (apply + accuracy-readings) (double trials))
+                       safe?        (>= avg-accuracy accuracy-threshold)]
                  (println (format "   budget=%3d  accuracy=%.1f%%  %s"
                                   budget (* 100.0 avg-accuracy)
                                   (if safe? "✅" "❌")))
@@ -233,9 +236,9 @@
     (println "")
     (if threshold
       (println (format "   ✅ Minimum safe budget: %d units/resolver" threshold))
-      (println "   ❌ No tested budget achieves ≥75%% correctness at 200 disputes"))
+      (println (format "   ❌ No tested budget achieves ≥%.0f%% correctness at 200 disputes" (* 100 accuracy-threshold))))
     (println "")
 
-    {:safe-budget-threshold threshold
-     :min-safe-budget       threshold
-     :results               results}))
+     {:safe-budget-threshold threshold
+      :min-safe-budget       threshold
+      :results               results})))

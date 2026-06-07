@@ -37,8 +37,8 @@ def _decode(data: bytes) -> Any:
 # Client
 # ---------------------------------------------------------------------------
 
-_ENGINE_SVC = "simulation.engine.SimulationEngine"
-_ADVISORY_SVC = "simulation.engine.AdvisoryService"
+_ENGINE_SVC = "simulation.proto.SimulationEngine"
+_ADVISORY_SVC = "simulation.proto.AdvisoryService"
 
 
 class SimulationClient:
@@ -60,7 +60,7 @@ class SimulationClient:
             assert r["result"] == "ok"
     """
 
-    def __init__(self, host: str = "localhost", port: int = 7070, timeout: int = 30):
+    def __init__(self, host: str = "127.0.0.1", port: int = 7070, timeout: int = 30):
         self._channel = grpc.insecure_channel(f"{host}:{port}")
         self._timeout = timeout
         

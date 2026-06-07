@@ -11,9 +11,14 @@
    Same-timestamp events (event-time == block-time) are a no-op:
    world is unchanged and scenario-step is NOT incremented.
    This models same-block semantics — multiple actions at the same
-   timestamp share a single time context without stepping the counter."
+   timestamp share a single time context without stepping the counter.
+
+   Throws when :block-time is nil (uninitialized world)."
   [world event-time]
-  (let [now (:block-time world)
+  (let [now (or (:block-time world)
+                (throw (ex-info "advance-world-time: world has no :block-time"
+                                {:error/type :missing-block-time
+                                 :world world})))
         delta (- event-time now)]
     (if (pos? delta)
       (let [step (inc (get-in world [:time :scenario-step] 0))]

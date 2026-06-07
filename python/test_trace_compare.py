@@ -34,7 +34,6 @@ class TraceCompareTests(unittest.TestCase):
         ]
         result = diff_traces(trace_a, trace_b)
         self.assertIsNotNone(result)
-        assert result is not None
         self.assertEqual(result["divergence_at"], 1)
         self.assertEqual(result["action"], "dispute")
 

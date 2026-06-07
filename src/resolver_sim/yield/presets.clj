@@ -26,7 +26,21 @@
      {:tokens
       {"USDC" {:failure-modes #{:partial-liquidity}
                :shortfall {:available-ratio 0.5
-                           :reason :liquidity-shortfall}}}}}}})
+                           :reason :liquidity-shortfall}}}}}}
+
+   :yield.preset/oracle-stale-aave
+   {:modules
+    {:aave-v3
+     {:tokens
+      {"USDC" {:apy 0.05
+               :failure-modes #{:oracle-stale}}}}}}
+
+   :yield.preset/withdrawal-queue-aave
+   {:modules
+    {:aave-v3
+     {:tokens
+      {"USDC" {:apy 0.05
+               :failure-modes #{:withdrawal-queue}}}}}}})
 
 (defn preset->yield-config
   "Return the yield-config map for a preset id, or nil if unknown."

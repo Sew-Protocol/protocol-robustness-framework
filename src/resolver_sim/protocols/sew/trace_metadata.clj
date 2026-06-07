@@ -514,7 +514,7 @@
       (= :pending state)   "ACTIVE"
       (and (= :disputed state) (:exists pending)) "RECONCILING"
       (= :disputed state)  "CHALLENGED"
-      (contains? #{:released :refunded :resolved} state) "SETTLED"
+      (contains? t/terminal-states state) "SETTLED"
       :else "IDLE")))
 
 (defn resolution-semantics
@@ -571,7 +571,7 @@
 
      :resolution/finality
      (cond
-       (contains? #{:released :refunded :resolved} state) :final
+       (contains? t/terminal-states state) :final
        (and (= :disputed state) pending)                  :appealable
        (= :disputed state)                                :stalled
        :else                                              :stalled)
@@ -585,20 +585,20 @@
 
      :resolution/participation
      (cond
-       (contains? #{:released :refunded :resolved} state) :full-participation
+       (contains? t/terminal-states state) :full-participation
        (and (= :disputed state) pending)                  :partial-participation
        (= :disputed state)                                :no-participation
        :else                                              :no-participation)
 
      :resolution/timing
      (cond
-       (contains? #{:released :refunded :resolved} state) :within-deadline
+       (contains? t/terminal-states state) :within-deadline
        (= :disputed state)                                :delayed
        :else                                              :deadline-breached)
 
      :resolution/integrity
      (cond
-       (contains? #{:released :refunded :resolved} state) :fully-reconciled
+       (contains? t/terminal-states state) :fully-reconciled
        (and (= :disputed state) pending)                  :missing-effects
        (= :disputed state)                                :accounting-mismatch
        :else                                              :leakage)}))

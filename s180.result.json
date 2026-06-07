@@ -1,0 +1,3296 @@
+{
+  "diagnostics": {
+    "claim-status": "evaluated",
+    "falsification-status": "not-falsified",
+    "evidence-completeness": "complete",
+    "grounded?": "true",
+    "assumption-status": "not-declared",
+    "declared-assumptions": [],
+    "theory-eval-profile": "regression"
+  },
+  "execution": {
+    "mode": "sequential",
+    "batch-policy": null
+  },
+  "source": {
+    "scenario-id": "s180",
+    "run-id": "s180-run"
+  },
+  "states": {
+    "0": {
+      "live-states": {
+        "0": "pending"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "0",
+      "claimable-v2": {},
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {},
+      "dispute-levels": {},
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": null
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1000",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "pending",
+          "recipient-status": "none",
+          "sender-status": "none",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "1": {
+      "live-states": {
+        "0": "disputed"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "0",
+      "claimable-v2": {},
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {},
+      "dispute-levels": {},
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": null
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1060",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "2": {
+      "live-states": {
+        "0": "disputed"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "1",
+      "claimable-v2": {},
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {},
+      "dispute-levels": {},
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": null
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1120",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "3": {
+      "live-states": {
+        "0": "disputed"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "0",
+      "claimable-v2": {
+        "0": null
+      },
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0"
+        }
+      },
+      "dispute-levels": {
+        "0": "1"
+      },
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": "0xl1"
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1130",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl1",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "4": {
+      "live-states": {
+        "0": "disputed"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "1",
+      "claimable-v2": {
+        "0": null
+      },
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0"
+        }
+      },
+      "dispute-levels": {
+        "0": "1"
+      },
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": "0xl1"
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1190",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl1",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "5": {
+      "live-states": {
+        "0": "disputed"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "0",
+      "claimable-v2": {
+        "0": null
+      },
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0",
+          "0xseller": "0"
+        }
+      },
+      "dispute-levels": {
+        "0": "2"
+      },
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": "0xl2"
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1200",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl2",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "resolver-stakes": {}
+    },
+    "6": {
+      "live-states": {
+        "0": "released"
+      },
+      "total-fees": {
+        "USDC": "75"
+      },
+      "pending-count": "0",
+      "claimable-v2": {
+        "0": {
+          "principal": {
+            "0xseller": "4925"
+          }
+        }
+      },
+      "appeal-bond-distributions-by-token": {},
+      "resolver-rotations": {},
+      "yield-evidence": {},
+      "claimable": {
+        "0": {
+          "0xseller": "4925"
+        }
+      },
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0",
+          "0xseller": "0"
+        }
+      },
+      "dispute-levels": {
+        "0": "2"
+      },
+      "escrow-count": "1",
+      "resolver-slash-total": {},
+      "dispute-resolvers": {
+        "0": "0xl2"
+      },
+      "escrow-amounts": {
+        "0": "4925"
+      },
+      "block-time": "1260",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "released",
+          "recipient-status": "none",
+          "sender-status": "none",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl2",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "0"
+      },
+      "resolver-stakes": {}
+    }
+  },
+  "events-processed": "7",
+  "events": "()",
+  "version": "1.0",
+  "trace": [
+    {
+      "projection-hash": "uUfJCWNrYI1aZLT4bN55ewaGC1\/9eH\/QZeHOUyutNtc=",
+      "invariant-phase": "post-event",
+      "time": "1000",
+      "time-after": {
+        "block-ts": "1000"
+      },
+      "extra": {
+        "workflow-id": "0"
+      },
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": "5000"
+      },
+      "invariants-ok?": "true",
+      "agent": "buyer",
+      "event-tags": [
+        "entity-created"
+      ],
+      "world": {
+        "live-states": {
+          "0": "pending"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "0",
+        "claimable-v2": {},
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {},
+        "dispute-levels": {},
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": null
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1000",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "pending",
+            "recipient-status": "none",
+            "sender-status": "none",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "create_escrow",
+      "error": null,
+      "seq": "0",
+      "violations": null,
+      "trace-metadata": {
+        "type": "creation",
+        "path": "none"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {},
+        "pending-settlements": {},
+        "block-time": "1000",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "pending",
+            "recipient-status": "none",
+            "sender-status": "none",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "create_escrow",
+      "time-before": {
+        "block-ts": "1000"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "DtgApW04aTAmXdHXlnNELiF1jfPyaiRUAzl6+vjBTKs=",
+      "invariant-phase": "post-event",
+      "time": "1060",
+      "time-after": {
+        "block-ts": "1060"
+      },
+      "extra": null,
+      "params": {
+        "workflow-id": "0"
+      },
+      "invariants-ok?": "true",
+      "agent": "buyer",
+      "event-tags": [
+        "dispute-raised"
+      ],
+      "world": {
+        "live-states": {
+          "0": "disputed"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "0",
+        "claimable-v2": {},
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {},
+        "dispute-levels": {},
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": null
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1060",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "raise_dispute",
+      "error": null,
+      "seq": "1",
+      "violations": null,
+      "trace-metadata": {
+        "type": "state-change",
+        "path": "none"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {},
+        "pending-settlements": {},
+        "block-time": "1060",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "raise_dispute",
+      "time-before": {
+        "block-ts": "1000"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "qdjgmhznG9JM19FRUwg6dH6h1vBamXlhRWebJkjlTsY=",
+      "invariant-phase": "post-event",
+      "time": "1120",
+      "time-after": {
+        "block-ts": "1120"
+      },
+      "extra": null,
+      "params": {
+        "workflow-id": "0",
+        "is-release": "true",
+        "resolution-hash": "0xl0hash"
+      },
+      "invariants-ok?": "true",
+      "agent": "l0resolver",
+      "event-tags": [
+        "dispute-resolved"
+      ],
+      "world": {
+        "live-states": {
+          "0": "disputed"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "1",
+        "claimable-v2": {},
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {},
+        "dispute-levels": {},
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": null
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1120",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "execute_resolution",
+      "error": null,
+      "seq": "2",
+      "violations": null,
+      "trace-metadata": {
+        "type": "resolution",
+        "path": "standard"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {},
+        "pending-settlements": {
+          "0": {
+            "exists": "true",
+            "is-release": "true",
+            "appeal-deadline": "1180",
+            "resolution-hash": "0xl0hash"
+          }
+        },
+        "block-time": "1120",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": null,
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "execute_resolution",
+      "time-before": {
+        "block-ts": "1060"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "7pmG5EIyKgr2dLePKBtzjc8N0WKBmH8bfFBoPuObT3k=",
+      "invariant-phase": "post-event",
+      "time": "1130",
+      "time-after": {
+        "block-ts": "1130"
+      },
+      "extra": {
+        "new-level": "1",
+        "new-resolver": "0xl1"
+      },
+      "params": {
+        "workflow-id": "0"
+      },
+      "invariants-ok?": "true",
+      "agent": "buyer",
+      "event-tags": [],
+      "world": {
+        "live-states": {
+          "0": "disputed"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "0",
+        "claimable-v2": {
+          "0": null
+        },
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {
+          "0": {
+            "0xbuyer": "0"
+          }
+        },
+        "dispute-levels": {
+          "0": "1"
+        },
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": "0xl1"
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1130",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl1",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "escalate_dispute",
+      "error": null,
+      "seq": "3",
+      "violations": null,
+      "trace-metadata": {
+        "type": "escalation",
+        "path": "none"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {
+          "0": "1"
+        },
+        "pending-settlements": {},
+        "block-time": "1130",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl1",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "escalate_dispute",
+      "time-before": {
+        "block-ts": "1120"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "zdEbRbJULl7w0PHll5ihkdljeTW8phpfF\/BVq7dAF04=",
+      "invariant-phase": "post-event",
+      "time": "1190",
+      "time-after": {
+        "block-ts": "1190"
+      },
+      "extra": null,
+      "params": {
+        "workflow-id": "0",
+        "is-release": "false",
+        "resolution-hash": "0xl1hash"
+      },
+      "invariants-ok?": "true",
+      "agent": "l1resolver",
+      "event-tags": [
+        "dispute-resolved"
+      ],
+      "world": {
+        "live-states": {
+          "0": "disputed"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "1",
+        "claimable-v2": {
+          "0": null
+        },
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {
+          "0": {
+            "0xbuyer": "0"
+          }
+        },
+        "dispute-levels": {
+          "0": "1"
+        },
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": "0xl1"
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1190",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl1",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "execute_resolution",
+      "error": null,
+      "seq": "4",
+      "violations": null,
+      "trace-metadata": {
+        "type": "resolution",
+        "path": "standard"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {
+          "0": "1"
+        },
+        "pending-settlements": {
+          "0": {
+            "exists": "true",
+            "is-release": "false",
+            "appeal-deadline": "1250",
+            "resolution-hash": "0xl1hash"
+          }
+        },
+        "block-time": "1190",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl1",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "execute_resolution",
+      "time-before": {
+        "block-ts": "1130"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "gEYbtxucJLC8doNaYEMuhI5kij4Eh\/XcrOGzBzJ5hRQ=",
+      "invariant-phase": "post-event",
+      "time": "1200",
+      "time-after": {
+        "block-ts": "1200"
+      },
+      "extra": {
+        "new-level": "2",
+        "new-resolver": "0xl2"
+      },
+      "params": {
+        "workflow-id": "0"
+      },
+      "invariants-ok?": "true",
+      "agent": "seller",
+      "event-tags": [],
+      "world": {
+        "live-states": {
+          "0": "disputed"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "0",
+        "claimable-v2": {
+          "0": null
+        },
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {},
+        "bond-balances": {
+          "0": {
+            "0xbuyer": "0",
+            "0xseller": "0"
+          }
+        },
+        "dispute-levels": {
+          "0": "2"
+        },
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": "0xl2"
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1200",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl2",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "4925"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "escalate_dispute",
+      "error": null,
+      "seq": "5",
+      "violations": null,
+      "trace-metadata": {
+        "type": "escalation",
+        "path": "none"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {
+          "0": "2"
+        },
+        "pending-settlements": {},
+        "block-time": "1200",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "disputed",
+            "recipient-status": "none",
+            "sender-status": "raise-dispute",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl2",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "4925"
+        }
+      },
+      "id": "escalate_dispute",
+      "time-before": {
+        "block-ts": "1190"
+      },
+      "detail": null
+    },
+    {
+      "projection-hash": "MUcdkjCC0GHKy3conWbPvQ9HuaDwWxh4ctitqQTiEQM=",
+      "invariant-phase": "post-event",
+      "time": "1260",
+      "time-after": {
+        "block-ts": "1260"
+      },
+      "extra": null,
+      "params": {
+        "workflow-id": "0",
+        "is-release": "true",
+        "resolution-hash": "0xl2hash"
+      },
+      "invariants-ok?": "true",
+      "agent": "l2resolver",
+      "event-tags": [
+        "dispute-resolved"
+      ],
+      "world": {
+        "live-states": {
+          "0": "released"
+        },
+        "total-fees": {
+          "USDC": "75"
+        },
+        "pending-count": "0",
+        "claimable-v2": {
+          "0": {
+            "principal": {
+              "0xseller": "4925"
+            }
+          }
+        },
+        "appeal-bond-distributions-by-token": {},
+        "resolver-rotations": {},
+        "yield-evidence": {},
+        "claimable": {
+          "0": {
+            "0xseller": "4925"
+          }
+        },
+        "bond-balances": {
+          "0": {
+            "0xbuyer": "0",
+            "0xseller": "0"
+          }
+        },
+        "dispute-levels": {
+          "0": "2"
+        },
+        "escrow-count": "1",
+        "resolver-slash-total": {},
+        "dispute-resolvers": {
+          "0": "0xl2"
+        },
+        "escrow-amounts": {
+          "0": "4925"
+        },
+        "block-time": "1260",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "released",
+            "recipient-status": "none",
+            "sender-status": "none",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl2",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "bond-distribution": {
+          "insurance": "0",
+          "protocol": "0",
+          "burned": "0"
+        },
+        "total-held": {
+          "USDC": "0"
+        },
+        "resolver-stakes": {}
+      },
+      "result": "ok",
+      "action": "execute_resolution",
+      "error": null,
+      "seq": "6",
+      "violations": null,
+      "trace-metadata": {
+        "type": "resolution",
+        "path": "standard"
+      },
+      "projection": {
+        "total-fees": {
+          "USDC": "75"
+        },
+        "dispute-levels": {
+          "0": "2"
+        },
+        "pending-settlements": {},
+        "block-time": "1260",
+        "escrow-transfers": {
+          "0": {
+            "escrow-state": "released",
+            "recipient-status": "none",
+            "sender-status": "none",
+            "auto-cancel-time": "0",
+            "amount-after-fee": "4925",
+            "auto-release-time": "0",
+            "token": "USDC",
+            "initial-fee": "75",
+            "from": "0xbuyer",
+            "dispute-resolver": "0xl2",
+            "last-accrual-time": "1000",
+            "accumulated-yield": "0",
+            "to": "0xseller"
+          }
+        },
+        "total-held": {
+          "USDC": "0"
+        }
+      },
+      "id": "execute_resolution",
+      "time-before": {
+        "block-ts": "1200"
+      },
+      "detail": null
+    }
+  ],
+  "theory-result-schema-version": "1.2",
+  "outcome": "pass",
+  "expected-error-analysis": {
+    "ok?": "true",
+    "matched": [],
+    "missing": [],
+    "unexpected": []
+  },
+  "world": {
+    "token-liquidity-crunch": [],
+    "total-fees": {
+      "USDC": "75"
+    },
+    "yield-rates": {},
+    "challengers": {
+      "0": {
+        "0": "0xbuyer",
+        "1": "0xseller"
+      }
+    },
+    "superseded-pending-settlements": {
+      "0": [
+        {
+          "pending": {
+            "exists": "true",
+            "is-release": "true",
+            "appeal-deadline": "1180",
+            "resolution-hash": "0xl0hash"
+          },
+          "superseded-at": "1130",
+          "level": "0"
+        },
+        {
+          "pending": {
+            "exists": "true",
+            "is-release": "false",
+            "appeal-deadline": "1250",
+            "resolution-hash": "0xl1hash"
+          },
+          "superseded-at": "1200",
+          "level": "1"
+        }
+      ]
+    },
+    "total-released": {
+      "USDC": "4925"
+    },
+    "claimable-v2": {
+      "0": {
+        "principal": {
+          "0xseller": "4925"
+        }
+      }
+    },
+    "paused?": "false",
+    "next-workflow-id": "1",
+    "last-escalation-block-time": {
+      "0": "1200"
+    },
+    "resolver-epoch-slashed": {},
+    "time": {
+      "block-ts": "1260",
+      "scenario-step": "6"
+    },
+    "total-refunded": {},
+    "params": {
+      "resolver-fee-bps": "150",
+      "resolution-module": "0xkleros-proxy",
+      "escalation-resolvers": {
+        "0": "0xl0",
+        "1": "0xl1",
+        "2": "0xl2"
+      },
+      "appeal-window-duration": "60",
+      "max-dispute-duration": "2592000",
+      "scenario-id": "s180",
+      "yield-generation-module": null
+    },
+    "resolver-frozen-until": {},
+    "claimable": {
+      "0": {
+        "0xseller": "4925"
+      }
+    },
+    "resolver-bonds": {},
+    "bond-balances": {
+      "0": {
+        "0xbuyer": "0",
+        "0xseller": "0"
+      }
+    },
+    "dispute-timestamps": {
+      "0": "1060"
+    },
+    "bond-fees": {
+      "USDC": "0"
+    },
+    "resolver-unavailable": [],
+    "circuit-breaker": {
+      "active?": "false",
+      "last-trigger": "0",
+      "cooldown": "3600",
+      "threshold-bps": "3000"
+    },
+    "dispute-levels": {
+      "0": "2"
+    },
+    "unavailability-stats": {
+      "total-resolvers": "0",
+      "unavailable-count": "0",
+      "last-update": "1000"
+    },
+    "modules": {
+      "liquid-lending": {
+        "id": "liquid-lending",
+        "type": "liquid-lending",
+        "capabilities": [
+          "withdraw",
+          "claim-deferred",
+          "deposit",
+          "accrue",
+          "emergency-unwind"
+        ],
+        "type": "shares",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+          "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+          "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+        }
+      },
+      "aave-v3": {
+        "id": "aave-v3",
+        "type": "aave-v3-like",
+        "capabilities": [
+          "withdraw",
+          "claim-deferred",
+          "deposit",
+          "accrue",
+          "emergency-unwind"
+        ],
+        "type": "shares",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+          "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+          "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+        }
+      },
+      "aave-v3-derisk": {
+        "id": "aave-v3-derisk",
+        "type": "aave-v3-like",
+        "capabilities": [
+          "withdraw",
+          "claim-deferred",
+          "deposit",
+          "accrue",
+          "emergency-unwind"
+        ],
+        "type": "shares",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+          "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+          "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+        }
+      },
+      "fixed-rate": {
+        "id": "fixed-rate",
+        "type": "fixed-rate",
+        "capabilities": [
+          "withdraw",
+          "deposit",
+          "accrue"
+        ],
+        "type": "principal",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+        }
+      },
+      "none": {
+        "id": "none",
+        "type": "none",
+        "capabilities": [],
+        "type": "none",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+        }
+      },
+      "adversarial": {
+        "id": "adversarial",
+        "type": "adversarial",
+        "capabilities": [
+          "withdraw",
+          "deposit",
+          "accrue"
+        ],
+        "type": "principal",
+        "ops": {
+          "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+          "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+          "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+        }
+      }
+    },
+    "token-fot-bps": {},
+    "module-snapshots": {
+      "0": {
+        "appeal-bond-amount": "0",
+        "default-auto-release-delay": "0",
+        "yield-generation-module": null,
+        "challenge-bond-bps": "0",
+        "yield-module-id": null,
+        "resolution-module": "0xkleros-proxy",
+        "yield-distribution-module": null,
+        "cancellation-strategy": null,
+        "yield-profile": null,
+        "resolver-bond-bps": "1000",
+        "release-strategy": null,
+        "incentive-module": null,
+        "default-auto-cancel-delay": "0",
+        "escrow-fee-bps": "150",
+        "appeal-window-duration": "60",
+        "yield-archetype": null,
+        "dispute-resolver": null,
+        "challenge-window-duration": "0",
+        "reversal-slash-bps": "0",
+        "yield-protocol-fee-bps": "0",
+        "appeal-bond-protocol-fee-bps": "0",
+        "reversal-detection-probability": "0.0",
+        "max-dispute-duration": "2592000",
+        "challenge-bounty-bps": "0",
+        "modules": {
+          "resolution": "0xkleros-proxy",
+          "yield": null,
+          "release": null,
+          "cancel": null
+        },
+        "appeal-bond-bps": "0"
+      }
+    },
+    "total-fot-fees": {
+      "USDC": "0"
+    },
+    "resolver-slash-total": {},
+    "resolver-capacities": {},
+    "pending-settlements": {},
+    "pending-fraud-slashes": {},
+    "total-yield-generated": {},
+    "total-principal-deposited": {
+      "USDC": "5000"
+    },
+    "retained-slash-reserves": "0",
+    "total-withdrawn": {},
+    "escrow-settings": {
+      "0": {
+        "custom-resolver": null,
+        "release-address": null,
+        "yield-preset": "off",
+        "auto-release-time": "0",
+        "auto-cancel-time": "0"
+      }
+    },
+    "escalation-counts-per-addr": {
+      "0xbuyer": "1",
+      "0xseller": "1"
+    },
+    "previous-decisions": {
+      "0": {
+        "0": {
+          "resolver": "0xl0",
+          "is-release": "true"
+        },
+        "1": {
+          "resolver": "0xl1",
+          "is-release": "false"
+        },
+        "2": {
+          "resolver": "0xl2",
+          "is-release": "true"
+        }
+      }
+    },
+    "bond-slashed": {},
+    "block-time": "1260",
+    "escrow-transfers": {
+      "0": {
+        "escrow-state": "released",
+        "recipient-status": "none",
+        "sender-status": "none",
+        "auto-cancel-time": "0",
+        "amount-after-fee": "4925",
+        "auto-release-time": "0",
+        "token": "USDC",
+        "initial-fee": "75",
+        "from": "0xbuyer",
+        "dispute-resolver": "0xl2",
+        "last-accrual-time": "1000",
+        "accumulated-yield": "0",
+        "to": "0xseller"
+      }
+    },
+    "bond-distribution": {
+      "insurance": "0",
+      "protocol": "0",
+      "burned": "0"
+    },
+    "total-held": {
+      "USDC": "0"
+    },
+    "last-escalation-block-time-per-addr": {
+      "0xbuyer": "1130",
+      "0xseller": "1200"
+    },
+    "resolver-stakes": {},
+    "senior-bonds": {},
+    "total-bonds-posted": {
+      "USDC": "0"
+    }
+  },
+  "expected-outcomes": {
+    "ok?": "true",
+    "violations": []
+  },
+  "status": "not-falsified",
+  "halt-reason": null,
+  "expectations": null,
+  "falsified?": "false",
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "strategy": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "strategy": "honest"
+    },
+    {
+      "id": "l0resolver",
+      "address": "0xl0",
+      "role": "resolver"
+    },
+    {
+      "id": "l1resolver",
+      "address": "0xl1",
+      "role": "resolver"
+    },
+    {
+      "id": "l2resolver",
+      "address": "0xl2",
+      "role": "resolver"
+    }
+  ],
+  "world-checkpoints": {
+    "1": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {},
+      "total-released": {},
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "resolver-epoch-slashed": {},
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {},
+      "dispute-timestamps": {},
+      "bond-fees": {},
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {},
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {},
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {},
+      "previous-decisions": {},
+      "bond-slashed": {},
+      "block-time": "1000",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "pending",
+          "recipient-status": "none",
+          "sender-status": "none",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {},
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {}
+    },
+    "4": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {
+        "0": {
+          "0": "0xbuyer"
+        }
+      },
+      "superseded-pending-settlements": {
+        "0": [
+          {
+            "pending": {
+              "exists": "true",
+              "is-release": "true",
+              "appeal-deadline": "1180",
+              "resolution-hash": "0xl0hash"
+            },
+            "superseded-at": "1130",
+            "level": "0"
+          }
+        ]
+      },
+      "total-released": {},
+      "claimable-v2": {
+        "0": null
+      },
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "last-escalation-block-time": {
+        "0": "1130"
+      },
+      "resolver-epoch-slashed": {},
+      "time": {
+        "block-ts": "1130",
+        "scenario-step": "3"
+      },
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0"
+        }
+      },
+      "dispute-timestamps": {
+        "0": "1060"
+      },
+      "bond-fees": {
+        "USDC": "0"
+      },
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {
+        "0": "1"
+      },
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {},
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {
+        "0xbuyer": "1"
+      },
+      "previous-decisions": {
+        "0": {
+          "0": {
+            "resolver": "0xl0",
+            "is-release": "true"
+          }
+        }
+      },
+      "bond-slashed": {},
+      "block-time": "1130",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl1",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {
+        "0xbuyer": "1130"
+      },
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {
+        "USDC": "0"
+      }
+    },
+    "6": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {
+        "0": {
+          "0": "0xbuyer",
+          "1": "0xseller"
+        }
+      },
+      "superseded-pending-settlements": {
+        "0": [
+          {
+            "pending": {
+              "exists": "true",
+              "is-release": "true",
+              "appeal-deadline": "1180",
+              "resolution-hash": "0xl0hash"
+            },
+            "superseded-at": "1130",
+            "level": "0"
+          },
+          {
+            "pending": {
+              "exists": "true",
+              "is-release": "false",
+              "appeal-deadline": "1250",
+              "resolution-hash": "0xl1hash"
+            },
+            "superseded-at": "1200",
+            "level": "1"
+          }
+        ]
+      },
+      "total-released": {},
+      "claimable-v2": {
+        "0": null
+      },
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "last-escalation-block-time": {
+        "0": "1200"
+      },
+      "resolver-epoch-slashed": {},
+      "time": {
+        "block-ts": "1200",
+        "scenario-step": "5"
+      },
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0",
+          "0xseller": "0"
+        }
+      },
+      "dispute-timestamps": {
+        "0": "1060"
+      },
+      "bond-fees": {
+        "USDC": "0"
+      },
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {
+        "0": "2"
+      },
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {},
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {
+        "0xbuyer": "1",
+        "0xseller": "1"
+      },
+      "previous-decisions": {
+        "0": {
+          "0": {
+            "resolver": "0xl0",
+            "is-release": "true"
+          },
+          "1": {
+            "resolver": "0xl1",
+            "is-release": "false"
+          }
+        }
+      },
+      "bond-slashed": {},
+      "block-time": "1200",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl2",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {
+        "0xbuyer": "1130",
+        "0xseller": "1200"
+      },
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {
+        "USDC": "0"
+      }
+    },
+    "3": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {},
+      "total-released": {},
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "resolver-epoch-slashed": {},
+      "time": {
+        "block-ts": "1120",
+        "scenario-step": "2"
+      },
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {},
+      "dispute-timestamps": {
+        "0": "1060"
+      },
+      "bond-fees": {},
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {},
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {
+        "0": {
+          "exists": "true",
+          "is-release": "true",
+          "appeal-deadline": "1180",
+          "resolution-hash": "0xl0hash"
+        }
+      },
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {},
+      "previous-decisions": {
+        "0": {
+          "0": {
+            "resolver": "0xl0",
+            "is-release": "true"
+          }
+        }
+      },
+      "bond-slashed": {},
+      "block-time": "1120",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {},
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {}
+    },
+    "2": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {},
+      "total-released": {},
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "resolver-epoch-slashed": {},
+      "time": {
+        "block-ts": "1060",
+        "scenario-step": "1"
+      },
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {},
+      "dispute-timestamps": {
+        "0": "1060"
+      },
+      "bond-fees": {},
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {},
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {},
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {},
+      "previous-decisions": {},
+      "bond-slashed": {},
+      "block-time": "1060",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": null,
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {},
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {}
+    },
+    "5": {
+      "token-liquidity-crunch": [],
+      "total-fees": {
+        "USDC": "75"
+      },
+      "yield-rates": {},
+      "challengers": {
+        "0": {
+          "0": "0xbuyer"
+        }
+      },
+      "superseded-pending-settlements": {
+        "0": [
+          {
+            "pending": {
+              "exists": "true",
+              "is-release": "true",
+              "appeal-deadline": "1180",
+              "resolution-hash": "0xl0hash"
+            },
+            "superseded-at": "1130",
+            "level": "0"
+          }
+        ]
+      },
+      "total-released": {},
+      "claimable-v2": {
+        "0": null
+      },
+      "paused?": "false",
+      "next-workflow-id": "1",
+      "last-escalation-block-time": {
+        "0": "1130"
+      },
+      "resolver-epoch-slashed": {},
+      "time": {
+        "block-ts": "1190",
+        "scenario-step": "4"
+      },
+      "total-refunded": {},
+      "params": {
+        "resolver-fee-bps": "150",
+        "resolution-module": "0xkleros-proxy",
+        "escalation-resolvers": {
+          "0": "0xl0",
+          "1": "0xl1",
+          "2": "0xl2"
+        },
+        "appeal-window-duration": "60",
+        "max-dispute-duration": "2592000",
+        "scenario-id": "s180",
+        "yield-generation-module": null
+      },
+      "resolver-frozen-until": {},
+      "claimable": {},
+      "resolver-bonds": {},
+      "bond-balances": {
+        "0": {
+          "0xbuyer": "0"
+        }
+      },
+      "dispute-timestamps": {
+        "0": "1060"
+      },
+      "bond-fees": {
+        "USDC": "0"
+      },
+      "resolver-unavailable": [],
+      "circuit-breaker": {
+        "active?": "false",
+        "last-trigger": "0",
+        "cooldown": "3600",
+        "threshold-bps": "3000"
+      },
+      "dispute-levels": {
+        "0": "1"
+      },
+      "unavailability-stats": {
+        "total-resolvers": "0",
+        "unavailable-count": "0",
+        "last-update": "1000"
+      },
+      "modules": {
+        "liquid-lending": {
+          "id": "liquid-lending",
+          "type": "liquid-lending",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3": {
+          "id": "aave-v3",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "aave-v3-derisk": {
+          "id": "aave-v3-derisk",
+          "type": "aave-v3-like",
+          "capabilities": [
+            "withdraw",
+            "claim-deferred",
+            "deposit",
+            "accrue",
+            "emergency-unwind"
+          ],
+          "type": "shares",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.liquid_lending$deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.liquid_lending$withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.liquid_lending$accrue",
+            "emergency-unwind": "fn:resolver_sim.yield.modules.liquid_lending$emergency_unwind",
+            "claim-deferred": "fn:resolver_sim.yield.modules.liquid_lending$claim_deferred"
+          }
+        },
+        "fixed-rate": {
+          "id": "fixed-rate",
+          "type": "fixed-rate",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.fixed$fixed_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.fixed$fixed_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.fixed$fixed_accrue"
+          }
+        },
+        "none": {
+          "id": "none",
+          "type": "none",
+          "capabilities": [],
+          "type": "none",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.none$none_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.none$none_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.none$none_accrue"
+          }
+        },
+        "adversarial": {
+          "id": "adversarial",
+          "type": "adversarial",
+          "capabilities": [
+            "withdraw",
+            "deposit",
+            "accrue"
+          ],
+          "type": "principal",
+          "ops": {
+            "deposit": "fn:resolver_sim.yield.modules.adversarial$adversarial_deposit",
+            "withdraw": "fn:resolver_sim.yield.modules.adversarial$adversarial_withdraw",
+            "accrue": "fn:resolver_sim.yield.modules.adversarial$adversarial_accrue"
+          }
+        }
+      },
+      "token-fot-bps": {},
+      "module-snapshots": {
+        "0": {
+          "appeal-bond-amount": "0",
+          "default-auto-release-delay": "0",
+          "yield-generation-module": null,
+          "challenge-bond-bps": "0",
+          "yield-module-id": null,
+          "resolution-module": "0xkleros-proxy",
+          "yield-distribution-module": null,
+          "cancellation-strategy": null,
+          "yield-profile": null,
+          "resolver-bond-bps": "1000",
+          "release-strategy": null,
+          "incentive-module": null,
+          "default-auto-cancel-delay": "0",
+          "escrow-fee-bps": "150",
+          "appeal-window-duration": "60",
+          "yield-archetype": null,
+          "dispute-resolver": null,
+          "challenge-window-duration": "0",
+          "reversal-slash-bps": "0",
+          "yield-protocol-fee-bps": "0",
+          "appeal-bond-protocol-fee-bps": "0",
+          "reversal-detection-probability": "0.0",
+          "max-dispute-duration": "2592000",
+          "challenge-bounty-bps": "0",
+          "modules": {
+            "resolution": "0xkleros-proxy",
+            "yield": null,
+            "release": null,
+            "cancel": null
+          },
+          "appeal-bond-bps": "0"
+        }
+      },
+      "total-fot-fees": {
+        "USDC": "0"
+      },
+      "resolver-slash-total": {},
+      "resolver-capacities": {},
+      "pending-settlements": {
+        "0": {
+          "exists": "true",
+          "is-release": "false",
+          "appeal-deadline": "1250",
+          "resolution-hash": "0xl1hash"
+        }
+      },
+      "pending-fraud-slashes": {},
+      "total-yield-generated": {},
+      "total-principal-deposited": {
+        "USDC": "5000"
+      },
+      "retained-slash-reserves": "0",
+      "total-withdrawn": {},
+      "escrow-settings": {
+        "0": {
+          "custom-resolver": null,
+          "release-address": null,
+          "yield-preset": "off",
+          "auto-release-time": "0",
+          "auto-cancel-time": "0"
+        }
+      },
+      "escalation-counts-per-addr": {
+        "0xbuyer": "1"
+      },
+      "previous-decisions": {
+        "0": {
+          "0": {
+            "resolver": "0xl0",
+            "is-release": "true"
+          },
+          "1": {
+            "resolver": "0xl1",
+            "is-release": "false"
+          }
+        }
+      },
+      "bond-slashed": {},
+      "block-time": "1190",
+      "escrow-transfers": {
+        "0": {
+          "escrow-state": "disputed",
+          "recipient-status": "none",
+          "sender-status": "raise-dispute",
+          "auto-cancel-time": "0",
+          "amount-after-fee": "4925",
+          "auto-release-time": "0",
+          "token": "USDC",
+          "initial-fee": "75",
+          "from": "0xbuyer",
+          "dispute-resolver": "0xl1",
+          "last-accrual-time": "1000",
+          "accumulated-yield": "0",
+          "to": "0xseller"
+        }
+      },
+      "bond-distribution": {
+        "insurance": "0",
+        "protocol": "0",
+        "burned": "0"
+      },
+      "total-held": {
+        "USDC": "4925"
+      },
+      "last-escalation-block-time-per-addr": {
+        "0xbuyer": "1130"
+      },
+      "resolver-stakes": {},
+      "senior-bonds": {},
+      "total-bonds-posted": {
+        "USDC": "0"
+      }
+    }
+  },
+  "metrics": {
+    "escrow-unrealized": "0",
+    "invariant-violations": "0",
+    "batch-conflicts": "0",
+    "escrow-realized": "0",
+    "attack-attempts": "0",
+    "claimable": "4925",
+    "double-settlements": "2",
+    "claimable": "0",
+    "escrow-deferred": "0",
+    "pending-settlements-executed": "0",
+    "escrow-haircut": "0",
+    "amount-after-fee": "4925",
+    "accrual-loss": "0",
+    "escrow-gross": "0",
+    "invalid-state-transitions": "0",
+    "batch-events": "0",
+    "escrow-reclaimed": "0",
+    "reverts": "0",
+    "escrow-current-value": "0",
+    "resolutions-executed": "3",
+    "rejected-attacks": "0",
+    "coalition-net-profit": "0",
+    "attack-successes": "0",
+    "funds-lost": "0",
+    "total-escrows": "1",
+    "invalid-guard-conditions": "0",
+    "disputes-triggered": "1",
+    "fees-usdc": "75",
+    "state": "released",
+    "total-volume": "5000",
+    "invariant-results": {},
+    "escrow-principal": "0",
+    "negative-payoff-count": "0",
+    "live-state": "released",
+    "batch-buckets": "0"
+  }
+}

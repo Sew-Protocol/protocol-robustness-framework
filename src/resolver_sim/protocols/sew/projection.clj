@@ -11,21 +11,22 @@
    re-used here.
 
    This namespace is pure — no I/O, no DB, no side effects."
-  (:require [resolver-sim.scenario.projection :as proj]
-            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
-            [resolver-sim.protocols.sew.invariants :as inv]
-            [resolver-sim.yield.evidence :as ye]))
+   (:require [resolver-sim.scenario.projection :as proj]
+             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
+             [resolver-sim.protocols.sew.invariants :as inv]
+             [resolver-sim.protocols.sew.types :as t]
+             [resolver-sim.yield.evidence :as ye]
+              [resolver-sim.yield.accounting :as acct]
+              [resolver-sim.yield.risk :as yrisk]
+             [resolver-sim.financial.finality :as ff]
+             [resolver-sim.financial.loss :as fl]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
 ;; ---------------------------------------------------------------------------
 
-(def ^:private terminal-escrow-states
-  "Sew escrow states from which no further transitions are possible."
-  #{:released :refunded :cancelled :timeout})
-
 (defn- terminal-state? [state]
-  (contains? terminal-escrow-states (keyword (or state ""))))
+  (contains? t/terminal-states (keyword (or state ""))))
 
 (defn- escalation-event? [action]
   (boolean (re-find #"escalat" (str (or action "")))))
@@ -52,6 +53,7 @@
     (when world
       {:trace trace
        :world world
+       :world-checkpoints (:world-checkpoints result {})
        :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
@@ -153,6 +155,67 @@
     (assoc (reduce accumulate-transition init transitions)
            :transitions transitions)))
 
+(defn- shortfall-effect
+  [shortfall]
+  "Derive shortfall-effect from shortfall data."
+  (let [deferred (long (get shortfall :deferred-amount 0))
+        haircut (long (get shortfall :haircut-amount 0))]
+    (cond
+      (and (pos? deferred) (pos? haircut)) :partially-liquid
+      (pos? deferred) :timing-delayed
+      (pos? haircut) :loss-realized
+      :else :claimability-constrained)))
+
+(defn- shortfall-kind-from-reason
+  [reason]
+  (case reason
+    :liquidity-shortfall :temporary-liquidity
+    :deferred-liquidity :temporary-liquidity
+    :permanent-loss :insolvency
+    :haircut-loss :insolvency
+    :intrinsic-carry :market-markdown
+    :negative-yield :negative-yield
+    :oracle-stale :stale-accounting
+    :withdrawal-queue :withdrawal-queue
+    :unknown))
+
+(defn- shortfall-affected-fields
+  [shortfall]
+  (cond-> []
+    (pos? (long (get shortfall :deferred-amount 0))) (conj :deferred-amount)
+    (pos? (long (get shortfall :haircut-amount 0))) (conj :haircut-amount)))
+
+(defn- position-projection-fields
+  [pos]
+  (let [shortfall (:shortfall pos)
+        principal (long (:principal pos 0))
+        realized (long (:realized-yield pos 0))
+        unrealized (long (:unrealized-yield pos 0))
+        total-value (+ principal realized unrealized)
+        gross-yield (max 0 (- total-value principal))
+        intrinsic-loss (max 0 (- principal total-value))
+        sf (or shortfall {})
+        deferred (long (get sf :deferred-amount 0))
+        haircut (long (get sf :haircut-amount 0))
+        claimable-yield (max 0 (- gross-yield deferred haircut))]
+    {:position/id (:owner/id pos)
+     :position/principal principal
+     :position/total-value total-value
+     :position/gross-yield gross-yield
+     :position/intrinsic-loss intrinsic-loss
+     :position/realized-yield realized
+     :position/unrealized-yield unrealized
+     :position/claimable-yield (if shortfall claimable-yield gross-yield)
+     :position/deferred-yield (if shortfall deferred 0)
+     :position/claimable-principal (if shortfall (max 0 (- principal haircut)) principal)
+     :position/deferred-principal 0
+     :position/liquidity-shortfall (boolean (and shortfall (not (pos? haircut))))
+     :position/economic-shortfall (boolean (and shortfall (pos? haircut)))
+     :position/shortfall-affected? (some? shortfall)
+     :position/shortfall-kind (when shortfall (shortfall-kind-from-reason (:reason sf)))
+     :position/shortfall-effect (when shortfall (shortfall-effect sf))
+     :position/shortfall-affected-fields (when shortfall (shortfall-affected-fields sf))}))
+
 (defn- derive-shortfall-summary
   [world]
   (let [positions (vals (get world :yield/positions {}))
@@ -165,6 +228,7 @@
      :deferred-total (reduce + 0 (map #(long (get % :deferred-amount 0)) rows))
      :haircut-total (reduce + 0 (map #(long (get % :haircut-amount 0)) rows))
      :reasons reasons
+     :positions (mapv position-projection-fields positions)
      :rounding-policy "floor-to-asset-decimals.v1"}))
 
 ;; ---------------------------------------------------------------------------
@@ -194,7 +258,7 @@
    1-arity form is provided for backward compatibility; protocol defaults to nil."
   ([result] (trace-end-projection nil result))
   ([protocol result]
-  (when-let [{:keys [trace world metrics agents halt-reason]} (build-trace-context result)]
+  (when-let [{:keys [trace world metrics agents halt-reason world-checkpoints]} (build-trace-context result)]
       (let [live-states  (get world :live-states {})
             scenario-id  (get-in world [:params :scenario-id] "unknown")
             p-params     (get world :params {})
@@ -403,10 +467,22 @@
          :protocol-params p-params
          :scenario-id scenario-id
          :decisions decisions
-         :raw-trace trace
-         :funds-ledger-summary funds-ledger
-         :yield-evidence yield-evidence
-         :escrow-yield-outcomes escrow-yield-outcomes})))))
+          :raw-trace trace
+          :world-checkpoints world-checkpoints
+          :funds-ledger-summary funds-ledger
+          :yield-evidence yield-evidence
+          :escrow-yield-outcomes escrow-yield-outcomes
+
+          ;; ── Financial finality & loss classifiers (additive, pure read-only) ──
+          :financial-finality
+          (when (seq (keys escrows))
+            (into {}
+                  (map (fn [[wf _]]
+                         [wf (ff/combine-finality world wf)]))
+                  escrows))
+
+          :financial-loss
+          (fl/classify-loss world :USDC {:resolve-financial-finality? true})})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Read-only use-of-funds projection
@@ -446,51 +522,41 @@
                     acc))
                 {}
                 slashed)
-        parse-num (fn [x]
-                    (cond
-                      (number? x) (long x)
-                      (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                      :else 0))
         by-token
         (into {}
               (for [token (sort tokens)
                     :let [tok-kw (keyword token)]]
-                [token {:held         (+ (parse-num (get held token 0))
-                                         (parse-num (get held tok-kw 0)))
-                        :released     (+ (parse-num (get released token 0))
-                                         (parse-num (get released tok-kw 0)))
-                        :refunded     (+ (parse-num (get refunded token 0))
-                                         (parse-num (get refunded tok-kw 0)))
-                        :withdrawn    (+ (parse-num (get withdrawn token 0))
-                                         (parse-num (get withdrawn tok-kw 0)))
-                        :bond-posted  (+ (parse-num (get posted token 0))
-                                         (parse-num (get posted tok-kw 0)))
-                        :bond-slashed (+ (parse-num (get slashed-by-token token 0))
-                                         (parse-num (get slashed-by-token tok-kw 0)))}]))
-        parse-num-top (fn [x]
-                        (cond
-                          (number? x) (long x)
-                          (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                          :else 0))
+                [token {:held         (+ (t/safe-parse-long (get held token 0))
+                                          (t/safe-parse-long (get held tok-kw 0)))
+                         :released     (+ (t/safe-parse-long (get released token 0))
+                                          (t/safe-parse-long (get released tok-kw 0)))
+                         :refunded     (+ (t/safe-parse-long (get refunded token 0))
+                                          (t/safe-parse-long (get refunded tok-kw 0)))
+                         :withdrawn    (+ (t/safe-parse-long (get withdrawn token 0))
+                                          (t/safe-parse-long (get withdrawn tok-kw 0)))
+                         :bond-posted  (+ (t/safe-parse-long (get posted token 0))
+                                          (t/safe-parse-long (get posted tok-kw 0)))
+                         :bond-slashed (+ (t/safe-parse-long (get slashed-by-token token 0))
+                                          (t/safe-parse-long (get slashed-by-token tok-kw 0)))}]))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]
-                      (parse-num-top amt)))
+                      (t/safe-parse-long amt)))
         bond-locked-total
         (reduce + 0 (for [wf (vals (:bond-balances world {}))
                           amt (vals wf)]
-                      (parse-num-top amt)))
-        bond-fees-total (reduce + 0 (map parse-num-top (vals (:bond-fees world {}))))
+                      (t/safe-parse-long amt)))
+        bond-fees-total (reduce + 0 (map t/safe-parse-long (vals (:bond-fees world {}))))
         bond-distribution-total
         (let [d (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})]
-          (+ (parse-num-top (:insurance d 0))
-             (parse-num-top (:protocol d 0))
-             (parse-num-top (:burned d 0))))
-        retained-total (parse-num-top (:retained-slash-reserves world 0))
+          (+ (t/safe-parse-long (:insurance d 0))
+             (t/safe-parse-long (:protocol d 0))
+             (t/safe-parse-long (:burned d 0))))
+        retained-total (t/safe-parse-long (:retained-slash-reserves world 0))
         conservation   (inv/conservation-of-funds? world)
         drift-by-token (into {}
                              (for [{:keys [token accounted inflow]} (:violations conservation [])]
-                               [token (- (parse-num-top accounted) (parse-num-top (or inflow 0)))]))
+                               [token (- (t/safe-parse-long accounted) (t/safe-parse-long (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
     {:as-of-block-time (:block-time world)
      :by-token by-token

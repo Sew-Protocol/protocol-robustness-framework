@@ -1,42 +1,59 @@
 (ns resolver-sim.yield.evidence
-  "Protocol-neutral builders for canonical yield evidence artifacts."
-  (:require [resolver-sim.yield.registry :as yreg]))
+  "Extract explainable yield evidence for trace annotations."
+  (:require [resolver-sim.yield.market-state :as market-state]))
 
-(def default-supported-failure-modes
-  #{:partial-liquidity :withdraw-fails :negative-yield
-    :provider-paused :emergency-unwind-fails :deposit-fails})
+(defn- extract-position-evidence [oid pos ms]
+  {:owner-id (:owner/id pos)
+   :module-id (:module/id pos)
+   :token (:token pos)
+   :principal (:principal pos)
+   :shares (:shares pos)
+   :entry-index (:entry-index pos)
+   :current-index (:current-index pos)
+   :current-value (:current-value pos)
+   :unrealized-yield (:unrealized-yield pos 0)
+   :realized-yield (:realized-yield pos 0)
+   :shortfall (when-let [sf (:shortfall pos)]
+                {:kind (:reason sf)
+                 :basis (:basis-amount sf)
+                 :fulfilled (:fulfilled-amount sf)
+                 :deferred (:deferred-amount sf)
+                 :haircut (:haircut-amount sf)})
+   :market-state {:available-ratio (:available-ratio ms)
+                  :apy (:apy ms)}})
+
+(defn get-evidence
+  "Return a summary of yield state for evidence/trace purposes."
+  [world]
+  (let [positions (:yield/positions world {})]
+    (into {} (map (fn [[oid pos]]
+                    (let [ms (market-state/get-market-state world (:module/id pos) (:token pos) (:block-time world))]
+                      [oid (extract-position-evidence oid pos ms)]))
+                  positions))))
+
+
+(defn emit-shortfall-event
+  "Record a shortfall lifecycle event in world state.
+   Returns updated world with event appended to :yield/events."
+  [world event-type position-id event-data]
+  (update world :yield/events (fnil conj [])
+          (merge {:event/type event-type
+                  :event/time (:block-time world 0)
+                  :position/id position-id}
+                 event-data)))
+
+(defn sum-recognized-losses
+  "Sum all recognized principal losses for a token across all positions."
+  [world token]
+  (let [positions (:yield/positions world {})
+        losses (keep (fn [[_ pos]]
+                       (when-let [sf (:shortfall pos)]
+                         (when (#{:principal-loss :negative-carry-loss} (:reason sf))
+                           (:haircut-amount sf 0))))
+                     positions)]
+    (reduce + 0 losses)))
 
 (defn canonical-yield-evidence
-  [{:keys [routing-by-workflow
-           withdrawal-events
-           recovery-events
-           assumptions
-           supported-failure-modes
-           ;; Added forensic tracking fields
-           principal
-           total-held
-           yield-delta
-           shortfall
-           entitled
-           withdrawable-now]}]
-  {:routing-by-workflow routing-by-workflow
-   :supported-failure-modes (or supported-failure-modes default-supported-failure-modes)
-   :yield/available-liquidity nil
-   :yield/requested-withdrawal nil
-   :yield/withdrawn-immediately nil
-   :yield/deferred-amount nil
-   :yield/recovery-events (or recovery-events [])
-   :yield/withdrawal-events (or withdrawal-events [])
-   ;; Added forensic fields to output structure
-   :yield/principal principal
-   :yield/total-held total-held
-   :yield/yield-delta yield-delta
-   :yield/shortfall shortfall
-   :yield/entitled entitled
-   :yield/withdrawable-now withdrawable-now
-   :yield/assumptions (or assumptions
-                          ["Archetype evidence is protocol-neutral; settlement semantics are protocol-specific."])})
-
-(defn resolve-profile-archetype
-  [profile-or-module-id]
-  (yreg/resolve-yield-profile profile-or-module-id))
+  "Produces a canonical yield evidence summary for projection."
+  [m]
+  m)

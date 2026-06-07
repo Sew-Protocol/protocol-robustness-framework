@@ -90,7 +90,7 @@ def load_sew_claims(path: Path) -> list[dict[str, Any]]:
         "-e",
         (
             "(require '[clojure.data.json :as json] '[clojure.edn :as edn])"
-            f"(println (json/write-str (edn/read-string (slurp \"{path}\"))))"
+            f"(println (json/write-str (edn/read-string (slurp {json.dumps(str(path))}))))"
         ),
     ]
     try:

@@ -13,7 +13,10 @@
             [resolver-sim.yield.risk :as yield-risk]
             [resolver-sim.yield.invariants :as yield-inv]
             [resolver-sim.yield.invariants-transition :as yield-trans]
-            [resolver-sim.yield.registry :as yreg]))
+            [resolver-sim.yield.registry :as yreg]
+            [resolver-sim.yield.expectations :as yield-exp]
+            [resolver-sim.yield.evidence :as yield-evi]
+            [resolver-sim.protocols.sew.lifecycle :as lc]))
 
 (defn- action-name [event]
   (let [a (:action event)]
@@ -82,6 +85,10 @@
       (catch Exception e
         (err :yield-deposit-failed {:message (.getMessage e)})))
 
+    "trigger-accrue"
+    (let [wf (param event :workflow-id)]
+      (ok (lc/accrue-yield world wf)))
+
     "yield_accrue"
     (try
       (let [mid (module-id world event)
@@ -127,11 +134,12 @@
     (err :unknown-action {:action (:action event)})))
 
 (defn- check-yield-invariants [world]
-  (let [results (yield-inv/check-all world)]
-    {:ok? (every? :holds? (vals results))
-     :violations (into {}
-                       (keep (fn [[k r]] (when-not (:holds? r) {k r}))
-                             results))}))
+  (let [inv-results (yield-inv/check-all world)
+        exp-results (yield-exp/check-expectations world)]
+    {:ok? (and (every? :holds? (vals inv-results))
+               (:ok? exp-results))
+     :violations (cond-> (into {} (keep (fn [[k r]] (when-not (:holds? r) {k r})) inv-results))
+                   (not (:ok? exp-results)) (assoc :expectations (:results exp-results)))}))
 
 (deftype YieldProviderProtocol []
   proto/SimulationAdapter
@@ -146,6 +154,7 @@
       (-> {:block-time t0
            :yield/held-balances {}}
           (yield-proto/init-world pp yc)
+          (yreg/apply-yield-config yc)
           (assoc-in [:params] pp))))
 
   (build-execution-context [_ agents protocol-params]
@@ -167,13 +176,7 @@
 
   (world-snapshot [_ world]
     {:block-time (:block-time world)
-     :yield-positions (when-let [pos (:yield/positions world)]
-                        (into {} (map (fn [[oid p]]
-                                         [oid (select-keys p [:status :principal :shares
-                                                              :unrealized-yield :realized-yield
-                                                              :reclaimed-amount :current-index
-                                                              :token :module/id :yield-loss :shortfall])])
-                                      pos)))
+     :yield-evidence (yield-evi/get-evidence world)
      :yield-indices (:yield/indices world)
      :yield-held (:yield/held-balances world)})
 

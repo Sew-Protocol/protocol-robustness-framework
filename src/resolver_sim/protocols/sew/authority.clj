@@ -20,9 +20,23 @@
      Returns a resolution-module-fn that authorizes only resolver-addr.
 
    KlerosArbitrableProxy stub (escalating resolver per level):
-     (make-kleros-module resolver-by-level)
-     resolver-by-level — map of {level → resolver-addr}
-     Returns a resolution-module-fn that authorizes based on current level."
+      (make-kleros-module resolver-by-level)
+      resolver-by-level — map of {level → resolver-addr}
+      Returns a resolution-module-fn that authorizes based on current level.
+
+   Stub scope limitations (June 2026):
+     - PNK token economics (staking, coin voting) are NOT modelled.
+       The stub maps level → address without simulating juror selection,
+       PNK deposit/withdrawal, or vote commitment/reveal.
+     - Juror coherence tracking is NOT modelled.
+       The stub does not track whether a given resolver was coherent
+       in prior rounds; no coherence-based penalty or reward exists.
+     - Court economics (case fees, appeal fees, juror payouts) are NOT
+       modelled.  The stub assumes resolver willingness without economic
+       incentives.
+     - The stub is correct for authorization-flow testing only.  Any
+       evidence pack that cites Kleros-level economic security must
+       replace this stub with a full court model."
   (:require [resolver-sim.protocols.sew.types :as t]))
 
 ;; ---------------------------------------------------------------------------

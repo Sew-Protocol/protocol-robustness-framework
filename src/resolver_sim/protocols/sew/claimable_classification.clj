@@ -1,6 +1,33 @@
 (ns resolver-sim.protocols.sew.claimable-classification
   "Claimable-classification.v2 taxonomy and terminal-world aggregation.
 
+   Architecture (three layers):
+
+     1. TAXONOMY (lines 15–192)
+        Defines the 14 canonical fund classes (v2-classes) and the domain
+        vocabulary (canonical-v2-domains).  Each class maps to one or more
+        :claimable-v2 domains and carries delivery model, source, risk class,
+        category, and boundary invariant references.
+
+     2. AGGREGATION (lines 200–700)
+        Pure functions that sum :claimable-v2 balances across terminal worlds,
+        grouped by class, by domain, by workflow, and by boundary headroom.
+        All operate on immutable world maps — no I/O.
+
+     3. DOCUMENT BUILDING (lines 708–783)
+        Assembles the static taxonomy + optional terminal observations into the
+        final JSON artifact consumed by notebooks and evidence exporters.
+
+   Flow:
+     emit-from-(registry-replay|scenario-file|result-file)!
+       → build-document
+         → taxonomy-document (static)
+         → terminal-observations
+           → aggregate-class-observations
+           → aggregate-domain-observations
+           → boundary-observations
+           → scenario-highlights
+
    Distinct from the legacy invariant `:claimable-classification` (recipient/sender
    split on `:claimable`). This namespace describes :claimable-v2 domains, boundary
    invariants, and optional end-of-run observed balances."
@@ -23,21 +50,10 @@
 (def deferred-amount-semantics
   "Deferred shortfall / yield fulfillment is tracked off current pull-claimable balance until claimed.")
 
-(defn- domain-name
-  [domain]
-  (if (keyword? domain)
-    (if-let [ns (namespace domain)]
-      (str ns "/" (name domain))
-      (name domain))
-    (str domain)))
-
 (defn- parse-amount
   "Coerce trace/JSON amounts (number or string) to long."
   [x]
-  (cond
-    (number? x) (long x)
-    (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-    :else 0))
+  (t/safe-parse-long x))
 
 (defn- token-key-str
   [token]
@@ -54,7 +70,7 @@
             :source source
             :recipient_types recipient-types
             :risk_class risk-class
-            :claimable_v2_domains (mapv domain-name domains)
+            :claimable_v2_domains (vec domains)
             :v1_class v1
             :v1_mapping (if v1
                           {:status "mapped" :v1_class v1}
@@ -154,21 +170,20 @@
                 :boundary_reason "Deferred shortfall repair; not current pull-claimable until fulfilled."})})
 
 (def canonical-v2-domains
-  "Full :claimable-v2 domain vocabulary (docs/v2/YIELD_ACCOUNTING_ARCHITECTURE.md + shortfall)."
-  ["bond/forfeit"
-   "bond/refund"
-   "fees/protocol"
-   "fees/resolver"
-   "liability/challenge-bounty"
-   "liability/slash"
-   "liability/slash-bounty"
-   "reserve/shortfall"
-   "settlement/principal"
-   "settlement/yield"
-   "yield/protocol-fee"
-   "yield/resolver-incentive"])
-
-(def all-v2-domains canonical-v2-domains)
+  "Full :claimable-v2 domain vocabulary — keywords throughout internally,
+   converted to strings only at the JSON output boundary."
+  [:bond/forfeit
+   :bond/refund
+   :fees/protocol
+   :fees/resolver
+   :liability/challenge-bounty
+   :liability/slash
+   :liability/slash-bounty
+   :reserve/shortfall
+   :settlement/principal
+   :settlement/yield
+   :yield/protocol-fee
+   :yield/resolver-incentive])
 
 (defn class-ids-by-category
   [category]
@@ -180,14 +195,14 @@
   [worlds]
   (into #{}
         (mapcat (fn [w]
-                  (map (fn [[domain _]] (domain-name domain))
-                       (mapcat seq (vals (or (:claimable-v2 w) {})))))
+                  (keys (into {} (mapcat seq (vals (or (:claimable-v2 w) {}))))))
                 worlds)))
 
 (defn domain-universe
-  "Canonical domains plus any :claimable-v2 kinds observed in `worlds`."
+  "Canonical domains plus any :claimable-v2 kinds observed in `worlds`.
+   Results are keywords — convert via (name ...) at the JSON output boundary."
   [worlds]
-  (vec (sort (into (set canonical-v2-domains) (domains-present-in-worlds worlds)))))
+  (vec (sort-by name (into (set canonical-v2-domains) (domains-present-in-worlds worlds)))))
 
 (defn- class-ids-set
   [category]
@@ -261,20 +276,19 @@
   "Sum terminal-world claimable-v2 balances per domain across `worlds`."
   [worlds]
   (into {}
-        (for [domain (domain-universe worlds)
-              :let [domain-kw (keyword domain)
-                    rows (map #(sum-domain-amounts % domain-kw) worlds)
+        (for [domain-kw (domain-universe worlds)
+              :let [rows (map #(sum-domain-amounts % domain-kw) worlds)
                     merged (reduce (fn [acc row]
                                      (merge-observation acc (observation-row row)))
                                    {:total 0 :by_token {} :scenarios_nonzero 0}
                                    rows)]]
-          [domain (public-observation merged)])))
+          [(name domain-kw) (public-observation merged)])))
 
 (defn aggregate-class-observations
   [worlds]
   (into {}
         (for [[class-id {:keys [claimable_v2_domains]}] v2-classes
-              :let [domain-keys (map keyword claimable_v2_domains)
+              :let [domain-keys claimable_v2_domains
                     merged
                     (reduce merge-observation
                             {:total 0 :by_token {} :scenarios_nonzero 0}
@@ -288,16 +302,6 @@
                                                   :by_token by-token
                                                   :workflows workflows}))))]]
           [(name class-id) (public-observation merged)])))
-
-(def boundary-checks
-  [{:id "settlement-principal-boundary" :fn inv/settlement-principal-boundary?}
-   {:id "settlement-yield-boundary" :fn inv/settlement-yield-boundary?}
-   {:id "liability-slash-boundary" :fn inv/liability-slash-boundary?}
-   {:id "bond-boundary" :fn inv/bond-boundary?}
-   {:id "fee-boundary" :fn inv/fee-boundary?}])
-
-(def ^:private default-highlight-limit 15)
-(def ^:private default-workflows-per-highlight 10)
 
 (defn- sum-domain-for-workflow
   [world workflow-id domain]
@@ -320,19 +324,18 @@
 (defn- workflow-domain-breakdown
   [world workflow-id]
   (into {}
-        (for [domain (domain-universe [world])
-              :let [domain-kw (keyword domain)
-                    row     (sum-domain-for-workflow world workflow-id domain-kw)
-                    total   (:total row 0)]
+        (for [domain-kw (domain-universe [world])
+              :let [row   (sum-domain-for-workflow world workflow-id domain-kw)
+                    total (:total row 0)]
               :when (pos? total)]
-          [domain (cond-> (public-observation row)
-                    (seq (:by_address row)) (assoc :by_address (:by_address row)))])))
+          [(name domain-kw) (cond-> (public-observation row)
+                              (seq (:by_address row)) (assoc :by_address (:by_address row)))])))
 
 (defn- workflow-class-breakdown
   [world workflow-id]
   (into {}
         (for [[class-id {:keys [claimable_v2_domains]}] v2-classes
-              :let [domain-keys (map keyword claimable_v2_domains)
+              :let [domain-keys claimable_v2_domains
                     total     (reduce + 0
                                       (map #(parse-amount (:total (sum-domain-for-workflow
                                                                    world workflow-id %)))
@@ -346,6 +349,9 @@
 
 (defn- workflow-ids-for-world
   [world]
+  ;; :live-states is the terminal-escrow-state snapshot set by sew.clj:610
+  ;; during replay finalization — included here to capture workflows that
+  ;; are finalized but may not yet have :claimable-v2 entries.
   (into #{}
         (concat (keys (:claimable-v2 world {}))
                 (keys (:live-states world {}))
@@ -355,14 +361,9 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-         :let [parse-num (fn [x]
-                           (cond
-                             (number? x) (long x)
-                             (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                             :else 0))
-               claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
-               et     (get-in world [:escrow-transfers wf])
-               max    (parse-num (or (:amount-after-fee et) 0))]
+          :let [claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
+                et     (get-in world [:escrow-transfers wf])
+                max    (t/safe-parse-long (:amount-after-fee et))]
          :when (or (pos? claims) et)]
      {:workflow_id wf :claims claims :max max :headroom (- max claims)})))
 
@@ -393,14 +394,9 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-         :let [parse-num (fn [x]
-                     (cond
-                       (number? x) x
-                       (string? x) (try (Double/parseDouble x) (catch Exception _ 0))
-                       :else 0))
-               claims (reduce + 0 (vals (get domain-map :bond/refund {})))
-               posted (+ (reduce + 0 (map parse-num (vals (get-in world [:bond-balances wf] {}))))
-                       (parse-num (get-in world [:bond-posted-by-workflow wf] 0)))]
+          :let [claims (reduce + 0 (vals (get domain-map :bond/refund {})))
+                posted (+ (reduce + 0 (map t/safe-parse-long (vals (get-in world [:bond-balances wf] {}))))
+                        (t/safe-parse-long (get-in world [:bond-posted-by-workflow wf] 0)))]
          :when (or (pos? claims) (pos? posted))]
      {:workflow_id wf :claims claims :max posted :headroom (- posted claims)})))
 
@@ -413,43 +409,49 @@
                claimed       (+ (reduce + 0 (vals resolver-fees))
                                 (reduce + 0 (vals protocol-fees)))
                et            (get-in world [:escrow-transfers wf])
-               parse-num     (fn [x]
-                               (cond
-                                 (number? x) (long x)
-                                 (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                                 :else 0))
-               max-fees      (+ (parse-num (or (:initial-fee et) 0))
-                                (reduce + 0 (map parse-num (vals (get (:bond-balances world) wf {})))))]
+                max-fees      (+ (t/safe-parse-long (:initial-fee et))
+                                 (reduce + 0 (map t/safe-parse-long (vals (get (:bond-balances world) wf {})))))]
          :when (or (pos? claimed) et)]
      {:workflow_id wf :claims claimed :max max-fees :headroom (- max-fees claimed)})))
 
 (defn- liability-slash-utilization-rows
   [world]
-  (let [parse-num (fn [x]
-                      (cond
-                        (number? x) (long x)
-                        (string? x) (try (long (Double/parseDouble x)) (catch Exception _ 0))
-                        :else 0))
-        reserves (parse-num (:retained-slash-reserves world 0))]
+  (let [reserves (t/safe-parse-long (:retained-slash-reserves world 0))]
     (vec
      (for [[wf domain-map] (get-in world [:claimable-v2] {})
            :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
            :when (pos? claims)]
-       {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))))
+        {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))))
 
-(def ^:private utilization-row-fns
-  {"settlement-principal-boundary" principal-utilization-rows
-   "settlement-yield-boundary"     yield-utilization-rows
-   "bond-boundary"                 bond-utilization-rows
-   "fee-boundary"                  fee-utilization-rows
-   "liability-slash-boundary"      liability-slash-utilization-rows})
+(def boundary-checks
+  "Boundary invariants and their corresponding utilization-row generators.
+   Each entry embeds both the invariant check function (`:fn`) and the row-computation
+   function (`:rows`, pointer to the *-utilization-rows fn), so the two never drift.
+   Defined here, after all *-utilization-rows functions, so the fn pointers resolve."
+  [{:id "settlement-principal-boundary"
+    :fn  inv/settlement-principal-boundary?
+    :rows principal-utilization-rows}
+   {:id "settlement-yield-boundary"
+    :fn  inv/settlement-yield-boundary?
+    :rows yield-utilization-rows}
+   {:id "liability-slash-boundary"
+    :fn  inv/liability-slash-boundary?
+    :rows liability-slash-utilization-rows}
+   {:id "bond-boundary"
+    :fn  inv/bond-boundary?
+    :rows bond-utilization-rows}
+   {:id "fee-boundary"
+    :fn  inv/fee-boundary?
+    :rows fee-utilization-rows}])
+
+(def ^:private default-highlight-limit 15)
+(def ^:private default-workflows-per-highlight 10)
 
 (defn- workflow-boundary-snapshot
   [world workflow-id]
   (into {}
-        (for [{:keys [id]} boundary-checks
-              :let [rows (get utilization-row-fns id (fn [_] []))
-                    row  (first (filter #(= workflow-id (:workflow_id %)) (rows world)))]
+        (for [{:keys [id rows]} boundary-checks
+              :let [row  (first (filter #(= workflow-id (:workflow_id %)) (rows world)))]
               :when row]
           [id (select-keys row [:claims :max :headroom])])))
 
@@ -478,9 +480,8 @@
 (defn boundary-headroom-for-world
   [world]
   (into {}
-        (for [{:keys [id], check-fn :fn} boundary-checks
-              :let [rows-fn   (get utilization-row-fns id (fn [_] []))
-                    util      (rows-fn world)
+        (for [{:keys [id rows] check-fn :fn} boundary-checks
+              :let [util      (rows world)
                     result    (check-fn world)
                     headrooms (map :headroom util)
                     min-h     (when (seq headrooms) (apply min headrooms))]]
@@ -679,54 +680,72 @@
       (map :outcome (vals (claim-outcome/outcomes-by-workflow w))))
     worlds)))
 
+(defn- base-observations
+  "Shared observation keys that appear in every output regardless of context."
+  [worlds contexts scenarios-passed aggregation aggregation-note]
+  (let [legacy-total     (legacy-claimable-total worlds)
+        classified-total (classified-claimable-total worlds)
+        single-scenario? (= "single-terminal-world" aggregation)
+        all-classes      (aggregate-class-observations worlds)]
+    {:scope (or aggregation "terminal-worlds")
+     :scenario_count (if contexts (count contexts) (count worlds))
+     :terminal_world_count (count worlds)
+     :workflow_count (workflow-count-for-worlds worlds)
+      :scenarios_passed scenarios-passed
+     :coverage_status (coverage-status-for-worlds worlds)
+     :coverage_matrix (coverage-matrix worlds)
+     :classified_claimable_total classified-total
+     :terminal_value_total legacy-total
+     :unclassified_claimable_total (max 0 (- legacy-total classified-total))
+     :warnings (observations-warnings {:contexts contexts
+                                       :legacy-total legacy-total
+                                       :classified-total classified-total})
+     :aggregation (or aggregation "sum-across-terminal-worlds")
+     :aggregation_note
+      (or aggregation-note
+         (str "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable."))
+     ;; For single-scenario output, only emit classes with nonzero claimable
+     :by_class (if single-scenario? (compact-by-class all-classes) all-classes)
+     :by_incentive_class (subset-by-class all-classes "incentive")
+     :by_domain (aggregate-domain-observations worlds)
+     :domains_discovered
+     (vec (sort-by name (remove (set canonical-v2-domains)
+                                (domains-present-in-worlds worlds))))
+     :accrued_fees (sum-accrued-fees worlds)
+     :boundaries (boundary-observations worlds)
+     :boundary_headroom (aggregate-boundary-headroom worlds)
+     :funds_ledger (aggregate-funds-ledger worlds)
+     :escrow_yield_outcome_counts
+     (into {} (map (fn [[k v]] [(name k) v]) (escrow-yield-outcome-frequencies worlds)))}))
+
+(defn- single-scenario-section
+  "Add scenario identity when a single context was the source."
+  [first-ctx]
+  {:scenario_id (:scenario-id first-ctx)
+   :scenario_id_status (:scenario-id-status first-ctx)
+   :scenario_result_path (:scenario-result-path first-ctx)})
+
+(defn- scenario-highlights-section
+  "Add top-scenarios drill-down when multiple contexts are available."
+  [contexts highlight-limit workflow-limit]
+  {:scenario_highlights
+   (scenario-highlights contexts
+                        :limit highlight-limit
+                        :workflow-limit workflow-limit)})
+
 (defn terminal-observations
   "Aggregate claimable balances and boundary status from terminal replay worlds."
   [worlds & {:keys [scope scenarios_passed contexts highlight-limit workflow-limit
                    aggregation aggregation_note]}]
   (when (seq worlds)
-    (let [legacy-total     (legacy-claimable-total worlds)
-          classified-total (classified-claimable-total worlds)
-          first-ctx        (first contexts)]
-      (cond-> {:scope (or scope "terminal-worlds")
-              :scenario_count (if contexts (count contexts) (count worlds))
-              :terminal_world_count (count worlds)
-              :workflow_count (workflow-count-for-worlds worlds)
-              :scenarios_passed scenarios_passed
-              :coverage_status (coverage-status-for-worlds worlds)
-              :coverage_matrix (coverage-matrix worlds)
-              :classified_claimable_total classified-total
-              :terminal_value_total legacy-total
-              :unclassified_claimable_total (max 0 (- legacy-total classified-total))
-              :warnings (observations-warnings {:contexts contexts
-                                                  :legacy-total legacy-total
-                                                  :classified-total classified-total})
-              :aggregation (or aggregation "sum-across-terminal-worlds")
-              :aggregation_note
-              (or aggregation_note
-                  (str "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable."))
-              :by_class (aggregate-class-observations worlds)
-              :by_incentive_class (subset-by-class (aggregate-class-observations worlds)
-                                                    "incentive")
-              :by_domain (aggregate-domain-observations worlds)
-              :domains_discovered
-              (vec (sort (remove (set canonical-v2-domains)
-                                 (domains-present-in-worlds worlds))))
-              :accrued_fees (sum-accrued-fees worlds)
-              :boundaries (boundary-observations worlds)
-              :boundary_headroom (aggregate-boundary-headroom worlds)
-              :funds_ledger (aggregate-funds-ledger worlds)
-              :escrow_yield_outcome_counts
-              (into {} (map (fn [[k v]] [(name k) v]) (escrow-yield-outcome-frequencies worlds)))}
-        first-ctx
-        (assoc :scenario_id (:scenario-id first-ctx)
-               :scenario_id_status (:scenario-id-status first-ctx)
-               :scenario_result_path (:scenario-result-path first-ctx))
-
-        (seq contexts)
-        (assoc :scenario_highlights
-               (scenario-highlights contexts
-                                    :limit highlight-limit
-                                    :workflow-limit workflow-limit))))))
+    (let [first-ctx (first contexts)
+          base      (base-observations worlds contexts scenarios_passed
+                                        aggregation aggregation_note)]
+      (cond-> base
+        first-ctx (merge (single-scenario-section first-ctx))
+        (seq contexts) (merge (scenario-highlights-section contexts
+                                                           highlight-limit
+                                                           workflow-limit))))))
 
 (defn taxonomy-document
   "Static v2 classification (no replay)."
@@ -784,20 +803,20 @@
   (vec
    (keep
     (fn [entry]
-      (when-let [res (:replay-result entry)]
-        (when-let [world (proj/terminal-world-from-result res)]
-          (let [sid (or (:scenario-id res)
-                        (:scenario-id entry)
-                        (some-> (:name entry) str))
-                status (cond
-                         (:scenario-id res) "from-result"
-                         (:scenario-id entry) "from-summary-entry"
-                         (:name entry) "from-summary-entry-name"
-                         :else "missing-from-result")]
-            {:scenario-id (or sid "unknown")
-             :scenario-id-status status
-             :outcome (:outcome res)
-             :world world}))))
+      (if-let [res (:replay-result entry)
+               world (proj/terminal-world-from-result res)]
+        (let [sid (or (:scenario-id res)
+                      (:scenario-id entry)
+                      (some-> (:name entry) str))
+              status (cond
+                       (:scenario-id res) "from-result"
+                       (:scenario-id entry) "from-summary-entry"
+                       (:name entry) "from-summary-entry-name"
+                       :else "missing-from-result")]
+          {:scenario-id (or sid "unknown")
+           :scenario-id-status status
+           :outcome (:outcome res)
+           :world world})))
     (summary-entries summary))))
 
 (defn terminal-worlds-from-summary

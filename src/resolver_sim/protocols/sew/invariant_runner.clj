@@ -4,7 +4,7 @@
    Implementation lives in `resolver-sim.scenario.runner` and
    `resolver-sim.io.scenario-runner`; this namespace keeps stable requires
    for notebooks and legacy call sites."
-  (:require [resolver-sim.io.scenario-runner :as io-runner]
+  (:require
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]
             [resolver-sim.protocols.sew.narrative :as narrative]
             [resolver-sim.scenario.report :as report]))
@@ -15,7 +15,7 @@
 
 (defn run-all
   "Run all deterministic invariant scenarios (S01–S100). Returns summary map."
-  ([] (io-runner/run-registry-suite {})))
+  ([] ((requiring-resolve 'resolver-sim.io.scenario-runner/run-registry-suite) {})))
 
 (defn print-scenario-outline
   "Print a human-readable per-step narrative for one replay result."
@@ -39,8 +39,8 @@
   "Shell UX: run invariant registry, print report, return exit code.
 
    Prefer `resolver-sim.io.scenario-runner/run-registry-suite-and-report` for CLI wiring."
-  ([] (io-runner/run-registry-suite-and-report {}))
-  ([opts] (io-runner/run-registry-suite-and-report opts)))
+  ([] (run-and-report {}))
+  ([opts] ((requiring-resolve 'resolver-sim.io.scenario-runner/run-registry-suite-and-report) opts)))
 
 ;; Re-export for tests that inspect registry metadata
 (def scenario-type-registry sc/scenario-type-registry)

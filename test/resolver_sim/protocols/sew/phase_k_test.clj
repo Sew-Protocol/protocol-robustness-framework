@@ -18,10 +18,10 @@
                                       :escrow-fee-bps 0
                                       :resolver-bond-bps 10000})]
     
-    (testing "create-escrow fails if resolver has no stake"
+    (testing "create-escrow succeeds with zero-stake resolver (no bond enforced)"
       (let [r (lc/create-escrow world buyer token seller 1000 {} snap)]
-        (is (false? (:ok r)))
-        (is (= :insufficient-resolver-stake (:error r)))))
+        (is (true? (:ok r)))
+        (is (= 0 (:workflow-id r)))))
 
     (testing "create-escrow succeeds after resolver stakes"
       (let [world-staked (reg/register-stake world resolver 1000)

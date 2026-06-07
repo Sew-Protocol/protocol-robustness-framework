@@ -18,6 +18,11 @@
   (:require [resolver-sim.yield.protocols :as yield-proto]))
 
 (def ^:private nat-fields
+  "Fields validated as non-negative integers.
+   Fields in BOTH nat-fields and bps-fields (e.g. :escrow-fee-bps)
+   get validated twice — once as a non-negative integer and once as
+   ≤ 10000 bps.  This is intentional: fee fields are integer amounts
+   AND bps-constrained."
   #{:escrow-fee-bps :appeal-bond-protocol-fee-bps :yield-protocol-fee-bps
     :default-auto-release-delay :default-auto-cancel-delay
     :max-dispute-duration :appeal-window-duration
@@ -26,6 +31,8 @@
     :challenge-bond-bps :challenge-bounty-bps})
 
 (def ^:private bps-fields
+  "Fields validated as ≤ 10000 bps.
+   Fields in BOTH sets (overlap with nat-fields above is intentional)."
   #{:escrow-fee-bps :appeal-bond-protocol-fee-bps :yield-protocol-fee-bps
     :appeal-bond-bps :resolver-bond-bps :reversal-slash-bps
     :challenge-bond-bps :challenge-bounty-bps})
@@ -63,7 +70,7 @@
   {:resolution-module              resolution-module
    :release-strategy                 release-strategy
    :cancellation-strategy          cancellation-strategy
-   :escrow/modules                   escrow-modules
+   :escrow/modules                   escrow-modules  ;; ← destructured as `escrow-modules` from input
    :yield-module-id                  yield-module-id
    :yield-profile                    yield-profile
    :yield-archetype                  yield-archetype
@@ -153,13 +160,15 @@
                   :expected "<= 10000 bps"
                   :actual v})))))
    (let [prob (:reversal-detection-probability snapshot 0.0)]
-     (when (or (< prob 0.0) (> prob 1.0))
-       (throw (snapshot-validation-error
-               "reversal-detection-probability must be in [0, 1]"
-               {:error-type :snapshot/probability-out-of-range
-                :snapshot/field :reversal-detection-probability
-                :expected "[0.0, 1.0]"
-                :actual prob}))))
+      ;; reversal-detection-probability is the only float-valued snapshot field;
+      ;; all other numeric fields use integer (uint256) semantics.
+      (when (or (< prob 0.0) (> prob 1.0))
+        (throw (snapshot-validation-error
+                "reversal-detection-probability must be in [0, 1]"
+                {:error-type :snapshot/probability-out-of-range
+                 :snapshot/field :reversal-detection-probability
+                 :expected "[0.0, 1.0]"
+                 :actual prob}))))
    (doseq [k [:yield-generation-module :yield-profile :yield-archetype :yield-module-id]]
      (when-let [v (get snapshot k)]
        (when-not (keyword-id? v)
@@ -201,6 +210,10 @@
    Maps :resolver-fee-bps → :escrow-fee-bps. Resolves yield profile/module ids
    via the yield registry (same logic as the former sew/build-snapshot helper).
 
+   Note: the :escrow-modules map is always constructed from individual protocol-params
+   keys (:resolution-module, :release-strategy, etc.); any :escrow-modules key in
+   protocol-params is ignored.
+
    Options (second argument):
      :validate? true (default) — run `validate-snapshot`; set false only for legacy
        tests or intentionally malformed fixture construction.
@@ -233,7 +246,7 @@
                                             :yield      profile-id
                                             :release    (get pp :release-strategy nil)
                                             :cancel     (get pp :cancellation-strategy nil)}
-               :yield-module-id              (get pp :yield-module-id :module/aave-yield)
+                :yield-module-id              (or (get pp :yield-module-id) profile-id)
                :yield-profile                profile-id
                :yield-archetype              archetype
                :yield-generation-module      module-id

@@ -10,6 +10,16 @@
 (defn resolve-dispute
   "Resolve one dispute with given parameters and strategy.
 
+   RNG consumption per call (in order):
+     1. Verdict correctness  — 1× next-double (honest=0, lazy=1, mal=1, coll=1)
+     2. Appeal roll          — 1× next-double
+     3. Oracle rolls         — N× roll-double  (detection, reversal, l1/l2 phases)
+     4. Escrow-size (caller) — var. next-double (not part of this function)
+   
+   Changes to earlier draws (verdict, appeal) shift all downstream oracle
+   rolls for that trial.  For fully scripted trials use :fixed-or with
+   :scope :detection (oracle) and manage strategy/appeal externally.
+
    Phase D adds slashing reason tracking (timeout/reversal/fraud).
    Reasons are deterministically derived from existing state.
    Phase G adds slashing delays and control baseline support.
@@ -43,16 +53,17 @@
   [rng escrow-wei fee-bps bond-bps slash-mult strategy
    appeal-prob-correct appeal-prob-wrong detection-prob
    & {:keys [senior-resolver-skill resolver-bond-bps resolver-stake-wei l2-detection-prob
-             slashing-detection-delay-weeks allow-slashing?
-             unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
-             detection-type timeout-detection-probability reversal-detection-probability
-             fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
-             new-evidence-probability
-             fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
-             p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
-             model-appeal-costs? appeal-bond-recovery-rate
-             oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-             fixed-or oracle-roll-trace-enabled? evidence-quality?]
+              slashing-detection-delay-weeks allow-slashing?
+              unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
+              detection-type timeout-detection-probability reversal-detection-probability
+               fraud-detection-probability fraud-slash-bps l2-slash-bps reversal-slash-bps timeout-slash-bps
+               _new-evidence-probability
+               fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
+               p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+               lazy-correct-prob malicious-correct-prob collusive-correct-prob
+              model-appeal-costs? appeal-bond-recovery-rate
+              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
+              fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -66,29 +77,24 @@
            timeout-detection-probability 0.0
            reversal-detection-probability 1.0
            fraud-detection-probability 0.0
-           fraud-slash-bps 0
-           reversal-slash-bps 0
-           timeout-slash-bps 200
-           new-evidence-probability 0.0
+            fraud-slash-bps 0
+            l2-slash-bps 200
+            reversal-slash-bps 0
+            timeout-slash-bps 200
+             _new-evidence-probability 0.0
            resolver-stake-wei nil
-           ;; MC-1: escrow-diversion upside for malicious resolvers.
-           ;; 0.0 = original model (no upside); 0.22 = calibrated to adversarial suite.
            fraud-success-rate 0.0
-            ;; Fraud payoff model:
-            ;; :single-stage-ev       -> legacy scalar fraud-success-rate shortcut
-            ;; :sequential-escalation -> appeal/escalation-aware survival probability
-            ;; :strict-all-tiers      -> escrow loss only if L1 and L2 both fail
-            ;;                          (assumes appeal/escalation always pursued)
-            fraud-model :single-stage-ev
-            escalation-assumptions econ/default-escalation-assumptions
-            escalation-assumption-band :base
-           ;; MC-4: model appeal-bond recovery for honest resolvers.
-           ;; false = original model; true = resolver earns fraction of failed challenge bond.
+           fraud-model :single-stage-ev
+           escalation-assumptions econ/default-escalation-assumptions
+           escalation-assumption-band :base
            model-appeal-costs? false
-           ;; Fraction of challenger appeal bond returned to honest resolver when appeal fails.
            appeal-bond-recovery-rate 0.5
-           oracle-roll-trace-enabled? false
-           evidence-quality? false}}]
+            oracle-roll-trace-enabled? false
+            evidence-quality? false
+            lazy-correct-prob 0.5
+            malicious-correct-prob 0.3
+            collusive-correct-prob 0.8}
+      :as all-kw-args}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
         appeal-bond     (econ/calculate-bond escrow-wei bond-bps)
@@ -97,41 +103,21 @@
         resolver-stake  (long (or resolver-stake-wei escrow-wei))
 
         oracle-params   (detection/prepare-oracle-params
-                         {:rng rng
-                          :fraud-detection-probability fraud-detection-probability
-                          :timeout-detection-probability timeout-detection-probability
-                          :reversal-detection-probability reversal-detection-probability
-                          :l2-detection-prob l2-detection-prob
-                          :fraud-slash-bps fraud-slash-bps
-                          :reversal-slash-bps reversal-slash-bps
-                          :timeout-slash-bps timeout-slash-bps
-                          :new-evidence-probability new-evidence-probability
-                          :freeze-on-detection? freeze-on-detection?
-                          :freeze-duration-days freeze-duration-days
-                          :appeal-window-days appeal-window-days
-                          :unstaking-delay-days unstaking-delay-days
-                          :slashing-detection-delay-weeks slashing-detection-delay-weeks
-                          :escalation-assumptions escalation-assumptions
-                          :escalation-assumption-band escalation-assumption-band
-                          :p-l1-reversal p-l1-reversal
-                          :p-l2-escalation p-l2-escalation
-                          :p-l2-reversal p-l2-reversal
-                          :has-kleros? has-kleros?
-                          :oracle-fixture oracle-fixture
-                          :oracle-mode oracle-mode
-                          :oracle-roll-sequence oracle-roll-sequence
-                          :oracle-roll-on-exhaustion oracle-roll-on-exhaustion
-                          :fixed-or fixed-or
-                          :oracle-roll-trace-enabled? oracle-roll-trace-enabled?
-                          :evidence-quality? evidence-quality?})
+                         (merge {:rng rng}
+                         (dissoc all-kw-args
+                                         :senior-resolver-skill
+                                         :fraud-success-rate
+                                         :fraud-model
+                                         :model-appeal-costs?
+                                         :appeal-bond-recovery-rate)))
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
         (case strategy
           :honest    true
-          :lazy      (< (rng/next-double rng) 0.5)
-          :malicious (< (rng/next-double rng) 0.3)
-          :collusive (< (rng/next-double rng) 0.8))
+          :lazy      (< (rng/next-double rng) lazy-correct-prob)
+          :malicious (< (rng/next-double rng) malicious-correct-prob)
+          :collusive (< (rng/next-double rng) collusive-correct-prob))
 
         ;; Appeal rate depends on verdict correctness
         appeal-prob (if verdict-correct? appeal-prob-correct appeal-prob-wrong)
@@ -265,26 +251,27 @@
         (when slashed-detected?
           (payoffs/calculate-slashing-distribution bond-loss 0))]
 
-    {:dispute-correct?      verdict-correct?
-     :appeal-triggered?     appealed?
-     :l2-detected?          l2-slashed?
-     :escalated?            escalated?
-     :escalation-level      escalation-level
-     :slashed?              slashed-detected?
-     :frozen?               frozen?
-     :escaped?              escaped?
-     :slashing-pending?     slashing-pending?
-     :slashing-delay-weeks  delay-weeks
-     :slashing-reason       slash-reason
-     :profit-honest         profit-honest
-     :profit-malice         profit-malice
-     :fraud-upside          fraud-upside
-     :fraud-survival-prob   fraud-success-prob  ; probability that fraud outcome survives escalation
-     :slash-distributed     slash-distributed
+     {:dispute-correct?      verdict-correct?
+      :appeal-triggered?     appealed?
+      :l2-detected?          l2-slashed?
+      :escalated?            escalated?
+      :escalation-level      escalation-level
+      :slashed?              slashed-detected?
+      :frozen?               frozen?
+      :escaped?              escaped?
+      :slashing-pending?     slashing-pending?
+      :slashing-delay-weeks  delay-weeks
+      :slashing-reason       slash-reason
+      :bond-loss             (long (max 0 bond-loss))
+      :profit-honest         profit-honest
+      :profit-malice         profit-malice
+      :fraud-upside          fraud-upside
+      :fraud-survival-prob   fraud-success-prob
+      :slash-distributed     slash-distributed
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
      :oracle-fixture/exhausted?
-     (boolean (when-let [a (:oracle-fixture/exhausted? oracle-params)] @a))
+     (boolean (some-> oracle-params :oracle-fixture/exhausted? deref))
      :oracle-fixture/warnings
      (detection/collect-oracle-fixture-warnings
       oracle-params {:evidence-quality? evidence-quality?})

@@ -227,10 +227,12 @@
   (let [seed          (:rng-seed params 42)
         base-win-prob (get params :base-win-prob 0.22)
         rev-win-prob  (get params :reviewed-win-prob 0.03)
+        max-win-rate-threshold (double (get params :max-op-win-rate-threshold 0.20))
         _  (proto/print-phase-header
               {:benchmark-id "AA"
                :label        "Governance as Adversary"
-               :hypothesis   "Attackers cannot exceed 20% win rate via governance gaming"})
+               :hypothesis   (format "Attackers cannot exceed %.0f%% win rate via governance gaming"
+                                     (* 100 max-win-rate-threshold))})
 
         scenarios (map (fn [s]
                          (update s :params merge {:base-win-prob    base-win-prob
@@ -248,7 +250,7 @@
         class-c (count (filter #(= "C" (:class %)) op-results))
         max-op-win-rate (apply max (map :win-rate op-results))
         ;; Hypothesis applies only to operational scenarios (cap ≥ 2, above minimum viable)
-        hypothesis-holds? (< max-op-win-rate 0.20)
+        hypothesis-holds? (< max-op-win-rate max-win-rate-threshold)
         guidance (derive-prescriptive-thresholds results)
         envelope-msg (case (:envelope guidance)
                        :green "SAFE ENVELOPE: current governance profile meets target"

@@ -36,7 +36,18 @@
   {:frozen [:pre-state-snapshot :block-time :available-actors :environment-params]
    :variable [:node-action :downstream-actions :state-evolution]
    :ordering-mode :preserve
-   :exogenous-events :fixed})
+   :exogenous-events :fixed
+   ;; Continuation events inherit :params (including optional event-id) from the
+   ;; main-line trace. Deviation events (seq 0) do not receive synthetic ids.
+   :event-identity :inherit-from-main-trace
+   ;; Fork world checkpoints carry :idempotency/applied only for events already
+   ;; processed before the fork point — not for downstream continuations.
+   ;; :idempotency-state :reset-at-fork is an alternate mode that clears
+   ;; :idempotency/applied at fork (starts with empty dedupe set for all
+   ;; continuation events). Not yet implemented — only :inherit-checkpoint
+   ;; is wired. Enable when you need to re-evaluate idempotent actions on
+   ;; the fork path as if they had never been seen.
+   :idempotency-state :inherit-checkpoint})
 
 (def ^:private default-utility-spec
   {:type :terminal-realized-v1
@@ -301,7 +312,7 @@
      :utility-version   u-ver
      :utility-breakdown breakdown}))
 
-(defn- compute-utility
+(defn compute-utility
   "Canonical utility interface for Phase A.
    Returns {:defined? bool :value number|nil :utility-type kw :utility-version str}.
    pre-world is required for :resolver-reputation-v1 (slash detection baseline)."
@@ -386,24 +397,83 @@
       local-regret
       (+ local-regret (long (Math/floor (/ local-regret 2.0)))))))
 
-(defn- expand-strategic-tree
+(def stale-continuation-errors
+  "Error keywords from guard checks that indicate a continuation event from the
+   original trace does not apply in the forked world state.
+
+   This is a public var rather than a private set so that test code can
+   validate it against the actual lifecycle guard-check error keywords.
+   To add a new error, add it here AND in the corresponding lifecycle or
+   resolution guard check.
+
+   If you are adding a new guard check, export its error keyword from the
+   lifecycle/resolution namespace and add it to this set.  Run the
+   spe-validation fixture suite to confirm stale continuation tagging
+   still works."
+  #{:transfer-not-pending :transfer-not-in-dispute :invalid-workflow-id
+    :transfer-not-finalized :invalid-state-for-release
+    :invalid-state-for-refund
+    :no-pending-settlement :no-resolution-to-appeal
+    :no-resolution-to-challenge :has-pending-settlement
+    :appeal-window-expired :escalation-not-allowed
+    :liquidity-insufficient})
+
+(defn- fork-world-at-seq
+  "Return the replay-complete world checkpoint immediately before `node` executes.
+   Falls back to the lean trace snapshot when checkpoints are unavailable."
+  [world-checkpoints node pre-entry]
+  (or (get world-checkpoints (:seq node))
+      (:world pre-entry)))
+
+(defn- continuation-replay-events
+  "Normalize main-line trace tail entries into bare replay events for fork replay.
+   Preserves the original :seq as :fork/original-seq before the events are
+   renumbered to 1, 2, 3... by expand-strategic-tree."
+  [remaining-trace-entries]
+  (mapv (fn [entry]
+          (let [replay-event (replay/trace-entry->replay-event entry)]
+            (if-let [orig-seq (:seq replay-event)]
+              (assoc replay-event :fork/original-seq orig-seq)
+              replay-event)))
+        remaining-trace-entries))
+
+(defn- tag-stale-continuations
+  "Tag trace entries from continuation events (seq > 0) that were rejected due
+   to stale state.  Adds :fork/continuation true to every continuation entry and
+   :fork/stale-continuation true to those that were rejected with a state-mismatch
+   error.  Evidence consumers can use these flags to distinguish genuine protocol
+   failures from expected counterfactual fallout."
+  [trace]
+  (mapv (fn [entry]
+          (if (pos? (:seq entry 0))
+            (let [tagged (assoc entry :fork/continuation true)]
+              (if (and (= :rejected (:result entry))
+                       (contains? stale-continuation-errors (:error entry)))
+                (assoc tagged :fork/stale-continuation true)
+                tagged))
+            entry))
+        trace))
+
+(defn expand-strategic-tree
   "Phase 2: Expand strategic branches from a decision node.
    Forks the simulation for each alternative action and follows the original
    trace continuation where possible."
-  [protocol agents p-params scenario-id world actor remaining-events options]
-  (let [available (proto/available-actions protocol world actor)]
+  [protocol agents p-params scenario-id fork-world actor remaining-trace-entries options]
+  (let [available (proto/available-actions protocol fork-world actor)
+        cont-events (continuation-replay-events remaining-trace-entries)]
     (for [{:keys [action params] :as action-map} available]
-      (let [deviation-event {:seq 0 :time (:block-time world) :agent actor :action action :params params}
-            ;; Adjust seq for continuation events
-            cont-events     (map-indexed (fn [i e] (assoc e :seq (inc i))) remaining-events)
+      (let [deviation-event {:seq 0 :time (:block-time fork-world) :agent actor :action action :params params}
+            cont-events'    (map-indexed (fn [i e] (assoc e :seq (inc i))) cont-events)
             result (replay/resume-from-snapshot
-                    protocol agents p-params scenario-id world
-                    (into [deviation-event] cont-events)
-                    [] {} options)]
+                    protocol agents p-params scenario-id fork-world
+                    (into [deviation-event] cont-events')
+                    [] {} options)
+            tagged-trace (tag-stale-continuations (:trace result))]
         {:action           action-map
          :outcome          (:outcome result)
          :halt-reason      (:halt-reason result)
          :terminal-world   (:world result)
+         :trace            tagged-trace
          :terminal-utility (compute-utility (:world result) actor (:utility-spec options))}))))
 
 (defn- classify-row
@@ -416,7 +486,7 @@
 
 (defn- node->table-row
   [{:keys [raw-trace terminal-state continuation-policy replay-boundary utility-spec
-           strategy-profile backward-induction-ctx
+           strategy-profile backward-induction-ctx world-checkpoints
            protocol agents protocol-params scenario-id] :as row-ctx}
    {:keys [agent address action] :as node}
    spe-config]
@@ -427,6 +497,7 @@
         actor          (or address agent)
         node-type      (get node-type-by-action action)
         pre-world      (:world pre-entry)
+        fork-world     (fork-world-at-seq world-checkpoints node pre-entry)
         chosen-world   (:world chosen-entry)
         ;; Phase F: subgame boundary classification
         subgame-class  (classify-subgame-node node pre-world)
@@ -434,9 +505,9 @@
         
         ;; Phase 2: Dynamic Tree Expansion
         tree-expansion? (boolean (get spe-config :enable-tree-expansion? false))
-        dynamic-branches (when (and tree-expansion? pre-world protocol)
+        dynamic-branches (when (and tree-expansion? fork-world protocol)
                            (expand-strategic-tree
-                            protocol agents protocol-params scenario-id pre-world actor
+                            protocol agents protocol-params scenario-id fork-world actor
                             (drop (inc idx) raw-trace)
                             spe-config))
 
@@ -627,7 +698,7 @@
     :off-path-coverage map                           (Phase J)
     :counterexamples [...]                           (Phase I)
     :requires [...]}"
-  [{:keys [raw-trace decisions terminal-world spe-config
+  [{:keys [raw-trace decisions terminal-world spe-config world-checkpoints
             protocol agents protocol-params scenario-id]}]
   (let [decision-nodes (->> decisions
                             (sort-by (juxt :seq :agent :action))
@@ -721,6 +792,7 @@
                         :replay-boundary replay-boundary
                         :utility-spec utility-spec
                         :strategy-profile strategy-profile
+                        :world-checkpoints (or world-checkpoints {})
                         :protocol protocol
                         :agents agents
                         :protocol-params protocol-params
@@ -744,12 +816,21 @@
                                                         row    (node->table-row
                                                                  (assoc row-ctx :backward-induction-ctx bi-ctx)
                                                                  node spe-config)]
-                                                    {:rows         (conj rows (assoc row :memoization-hit? false))
-                                                     :processed-seqs (conj processed-seqs (long (:seq node)))}))
+                                                    (if (> (:local-regret row) threshold)
+                                                      (reduced {:rows (conj rows (assoc row :memoization-hit? false :short-circuited? true))})
+                                                      {:rows         (conj rows (assoc row :memoization-hit? false))
+                                                       :processed-seqs (conj processed-seqs (long (:seq node)))})))
                                                 {:rows [] :processed-seqs #{}}
                                                 eval-nodes))]
-                           (vec (sort-by :node-index bi-rows)))
-                         (mapv cached-row decision-nodes))
+                           (vec (sort-by :node-index (:rows bi-rows))))
+                         (:rows
+                          (reduce (fn [{:keys [rows]} node]
+                                    (let [row (cached-row node)]
+                                      (if (> (:local-regret row) threshold)
+                                        (reduced {:rows (conj rows (assoc row :short-circuited? true))})
+                                        {:rows (conj rows row)})))
+                                  {:rows []}
+                                  decision-nodes)))
             rows       (mapv (fn [r]
                                (assoc r :bundle-regret
                                       (compute-bundle-regret (:local-regret r) max-depth)))
@@ -765,15 +846,18 @@
                                   :evaluated 0}
                                  rows)
             evaluated-count (:evaluated class-counts 0)
+            short-circuited? (some :short-circuited? rows)
             exceed-count (count (filter identity
-                                        (for [{:keys [bundle-regret chosen-utility]} rows
+                                        (for [{:keys [bundle-regret chosen-utility short-circuited?]} rows
                                               :when (some? bundle-regret)]
-                                          (regret-exceeds-epsilon? bundle-regret chosen-utility epsilon-abs epsilon-rel))))
+                                          (or short-circuited? (regret-exceeds-epsilon? bundle-regret chosen-utility epsilon-abs epsilon-rel)))))
             pass?      (and (pos? evaluated-count)
                             (some? max-regret)
+                            (not short-circuited?)
                             (<= max-regret threshold)
                             (zero? exceed-count))
             status     (cond
+                         short-circuited? :fail
                          (zero? evaluated-count) :inconclusive
                          pass? :pass
                          :else :fail)

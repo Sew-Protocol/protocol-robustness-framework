@@ -142,9 +142,12 @@
      :use-shared-world?            — when true, use a single paired dispute pool
                                      so honest and malicious resolvers compete over
                                      the same n-trials disputes (not independent 2n).
-     :kernel-validation-sample-size — when set to N>0, validate N scenarios per
-                                      epoch through the Sew replay kernel; results
-                                      added to :kernel-validation in epoch-summary.
+      :kernel-validation-sample-size — when set to N>0, validate N scenarios per
+                                       epoch through the Sew replay kernel; results
+                                       added to :kernel-validation in epoch-summary.
+      :kernel-validation-min-pass-rate — when set >0 with kv-sample-size, marks the
+                                         epoch as below-threshold if pass-rate falls
+                                         below this value (default: 0.0 = no gate).
 
    Returns: {:epoch-summary {...} :updated-histories {...}}"
   ([rng epoch resolver-histories n-trials params]
@@ -198,15 +201,28 @@
                        (pos? honest-mean)                   Double/POSITIVE_INFINITY
                        :else                                1.0)
 
-         ;; ── Optional kernel validation ────────────────────────────────────
-         kernel-validation
-         (when (pos? kv-samples)
-           (try
-             (kernel-bridge/run-kernel-validation decayed-params kv-samples rng-kv)
-             (catch Exception e
-               {:pass-count 0 :fail-count kv-samples :pass-rate 0.0
-                :violations [{:scenario-id "error" :halt-reason :exception
-                               :message     (.getMessage e)}]})))
+          ;; ── Optional kernel validation ────────────────────────────────────
+          kv-min-pass-rate (:kernel-validation-min-pass-rate params 0.0)
+          kernel-validation
+          (when (pos? kv-samples)
+            (try
+              (let [kv-result (kernel-bridge/run-kernel-validation decayed-params kv-samples rng-kv)
+                    pass-rate (:pass-rate kv-result 0.0)]
+                (if (and (pos? kv-min-pass-rate) (< pass-rate kv-min-pass-rate))
+                  (assoc kv-result
+                         :below-threshold? true
+                         :min-pass-rate kv-min-pass-rate
+                         :violations (conj (:violations kv-result [])
+                                          {:type :kernel-validation-below-threshold
+                                           :pass-rate pass-rate
+                                           :min-pass-rate kv-min-pass-rate}))
+                  (assoc kv-result :below-threshold? false :min-pass-rate kv-min-pass-rate)))
+              (catch Exception e
+                {:pass-count 0 :fail-count kv-samples :pass-rate 0.0
+                 :below-threshold? (pos? kv-min-pass-rate)
+                 :min-pass-rate kv-min-pass-rate
+                 :violations [{:scenario-id "error" :halt-reason :exception
+                                :message     (.getMessage e)}]})))
 
          epoch-summary
          (cond-> {:epoch                  epoch

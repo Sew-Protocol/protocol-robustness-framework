@@ -156,17 +156,19 @@
 ;; Summary
 ;; ---------------------------------------------------------------------------
 
-(defn- summarize [results]
-  (let [total    (count results)
-        passing  (count (filter :pass? results))
-        by-class (frequencies (map :class results))
-        envelope (filter #(and (<= (get-in % [:params :n-resolvers]) 20)
-                               (>= (get-in % [:params :avg-bond-usd]) 500))
-                         results)
-        env-pass (count (filter :pass? envelope))
-        finite   (remove #(= ##Inf (:analytical-solvency %)) results)
-        worst    (when (seq finite) (apply min-key :analytical-solvency finite))
-        best     (when (seq finite) (apply max-key :analytical-solvency finite))]
+(defn- summarize [results params]
+  (let [total        (count results)
+        passing      (count (filter :pass? results))
+        by-class     (frequencies (map :class results))
+        max-n       (double (or (:envelope-max-resolvers params) 20))
+        min-bond    (double (or (:envelope-min-bond params) 500))
+        envelope     (filter #(and (<= (get-in % [:params :n-resolvers]) max-n)
+                                   (>= (get-in % [:params :avg-bond-usd]) min-bond))
+                              results)
+        env-pass     (count (filter :pass? envelope))
+        finite       (remove #(= ##Inf (:analytical-solvency %)) results)
+        worst        (when (seq finite) (apply min-key :analytical-solvency finite))
+        best         (when (seq finite) (apply max-key :analytical-solvency finite))]
     {:total-scenarios       total
      :passing-scenarios     passing
      :class-a               (get by-class "A" 0)
@@ -174,6 +176,8 @@
      :class-c               (get by-class "C" 0)
      :design-envelope-total (count envelope)
      :design-envelope-pass  env-pass
+     :envelope-max-resolvers max-n
+     :envelope-min-bond     min-bond
      :hypothesis-holds?     (= env-pass (count envelope))
      :worst-solvency-ratio  (if worst (:analytical-solvency worst) ##Inf)
      :worst-params          (when worst (:params worst))
@@ -203,7 +207,7 @@
 
    (let [grid    (build-param-grid params)
          results (proto/run-parameter-sweep grid run-scenario)
-         summary (summarize results)]
+         summary (summarize results params)]
 
      (println "   Sample results (n-resolvers=10, avg-bond=$500):")
      (doseq [r (filter #(and (= 10 (get-in % [:params :n-resolvers]))

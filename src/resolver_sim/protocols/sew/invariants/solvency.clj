@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew.invariants.solvency
   "Solvency-related invariant predicates for the Sew contract model."
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.yield.evidence :as yield-evi]))
 
 (defn- get-escrow-afa-sum [world token live-states]
   (reduce (fn [acc [_ et]]
@@ -15,7 +16,7 @@
   (reduce + 0 (for [[wf agents] (:bond-balances world)
                     [agent amt] agents
                     :let [et (get-in world [:escrow-transfers wf])]
-                    :when (= (= (:token et) token))]
+                     :when (= (:token et) token)]
                 amt)))
 
 (defn- get-slash-appeal-bond-sum [world token]
@@ -27,7 +28,7 @@
                     :let [amt (:appeal-bond-held ev 0)]]
                 amt)))
 
-(defn- get-yield-held-sum [world token live-states]
+(defn get-yield-held-sum [world token live-states]
   (reduce (fn [acc [oid pos]]
             (let [et (when (vector? oid) (get-in world [:escrow-transfers (second oid)]))]
               (cond
@@ -38,6 +39,7 @@
                          (t/resolver-yield-owner-id? oid)))
                 (+ acc (:unrealized-yield pos 0) (:realized-yield pos 0))
                 ;; Escrow :unwinding — deferred remains in :total-held after finalize (live AFA gone).
+                ;; Realized-yield is not added here because it is already accounted in :total-held via earlier steps.
                 ;; Resolver :unwinding — deferred is still inside the stake already in :total-held;
                 ;; do not add to yield-sum (would double-count with :resolver-stakes).
                 (and (= (:token pos) token)
@@ -56,20 +58,20 @@
 
    The internal invariant is STRICT EQUALITY (=)."
   [world token-balances]
-  (let [live-states   #{:pending :disputed}
-        all-tokens    (-> (set (keys (:total-held world)))
+  (let [all-tokens    (-> (set (keys (:total-held world)))
                           (into (map :token (vals (:escrow-transfers world))))
                           (into (keys (:total-bonds-posted world))))
         violations
         (for [token all-tokens
               :let  [held       (get (:total-held world) token 0)
-                     escrow-sum (get-escrow-afa-sum world token live-states)
+                     escrow-sum (get-escrow-afa-sum world token t/live-states)
                      bond-sum   (get-bond-held-sum world token)
                      slash-bond-sum (get-slash-appeal-bond-sum world token)
-                     yield-sum  (get-yield-held-sum world token live-states)
+                     yield-sum  (get-yield-held-sum world token t/live-states)
                      stake-sum  (if (= token :USDC) (reduce + 0 (vals (:resolver-stakes world {}))) 0)
+                     losses     (yield-evi/sum-recognized-losses world token)
                      
-                     liabilities (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum)
+                     liabilities (+ (+ escrow-sum bond-sum slash-bond-sum yield-sum stake-sum) losses)
                      
                      ext-bal    (when token-balances (get token-balances token 0))
                      internal-ok? (= liabilities held)

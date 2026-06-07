@@ -1,67 +1,124 @@
 (ns resolver-sim.stochastic.params
   "Param bridge: translate replay engine snapshot maps to MC param maps.
 
-   The replay engine uses module-snapshot maps (see protocols/sew/types.clj).
+   The replay engine uses module-snapshot maps (see protocols/sew/snapshot.clj).
    The MC engine uses flat param maps (see data/params/*.edn).
 
-   from-snap translates a replay snapshot into MC params so both engines
-   can be driven from the same numeric inputs without copy-paste. Only
-   fields that exist in both models are mapped; unknown fields are dropped.
+   Two bridge functions serve different input sources:
 
-   Snapshot keys → MC param keys
-   ─────────────────────────────
-   :resolver-fee-bps          → :fee-bps
-   :appeal-bond-bps           → :bond-bps
-   :fraud-slash-bps           → :fraud-slash-bps
-   :reversal-slash-bps        → :reversal-slash-bps
-   :timeout-slash-bps         → :timeout-slash-bps
-   :resolver-bond-bps         → :resolver-bond-bps
-   :l2-detection-prob         → :l2-detection-prob
-   :slashing-detection-prob   → :detection-prob
-   :fraud-success-rate        → :fraud-success-rate
-   :fraud-model               → :fraud-model
-   :escalation-assumption-band → :escalation-assumption-band
-   :p-appeal-wrong            → :p-appeal-wrong
-   :p-l1-reversal             → :p-l1-reversal
-   :p-l2-escalation           → :p-l2-escalation
-   :p-l2-reversal             → :p-l2-reversal
-   :fraud-detection-prob      → :fraud-detection-probability
-   :reversal-detection-prob   → :reversal-detection-probability
-   :timeout-detection-prob    → :timeout-detection-probability")
+     from-snap           — read a ModuleSnapshot (from make-escrow-snapshot or
+                           snapshot-from-protocol-params) and extract the small
+                           subset of fields that have MC equivalents.
+
+     scenario->mc-params — read an invariant scenario map and build an MC param
+                           map by merging shared fields from :protocol-params
+                           with the optional :mc-params map. :mc-params wins
+                           on conflict.
+
+   Neither function produces a complete MC parameter set. Callers must merge
+   the result with default-params (stochastic/types.clj) for fields not covered
+   by the snapshot or scenario."
+
+  (:require [resolver-sim.stochastic.types :as types]))
+
+;; ── ModuleSnapshot → MC param bridge ──────────────────────────────────────────
+
+(def snapshot->mc-keys
+  "Mapping of ModuleSnapshot keys (from make-escrow-snapshot) to their MC param
+   equivalents. Only fields that genuinely exist in both models are listed.
+   See protocols/sew/snapshot.clj for the full ModuleSnapshot schema."
+  {:escrow-fee-bps                :fee-bps
+   :appeal-bond-bps               :bond-bps
+   :reversal-slash-bps            :reversal-slash-bps
+   :resolver-bond-bps             :resolver-bond-bps
+   :reversal-detection-probability :reversal-detection-probability})
 
 (defn from-snap
-  "Translate a replay module-snapshot map to an MC-compatible param map.
+  "Translate a replay ModuleSnapshot map to MC param keys.
 
-   Only known fields are translated. Callers should merge the result into
-   their base MC param map so that fields not present in the snapshot
-   retain their defaults.
+   Only fields that genuinely exist in a real ModuleSnapshot
+   (produced by make-escrow-snapshot) are mapped. Unknown fields
+   are dropped.
+
+   Returns a map with at most 5 keys. Callers should merge this into
+   their base MC param map:
+
+     (merge default-params (params/from-snap snap))
+
+   See snapshot->mc-keys for the full mapping."
+  [snap]
+  (reduce-kv (fn [m snap-key mc-key]
+               (if (contains? snap snap-key)
+                 (assoc m mc-key (get snap snap-key))
+                 m))
+             {}
+             snapshot->mc-keys))
+
+;; ── Scenario protocol-params → MC param bridge ────────────────────────────────
+
+(defn protocol-params->mc-overrides
+  "Extract MC-settable fields from scenario :protocol-params as a flat override map.
+   Uses 1:1 key mapping — keys that exist in protocol-params AND are consumed
+   by the MC engine pass through unchanged.  Keys absent from protocol-params
+   are skipped (their value comes from types/default-params).
+
+   Override chain (rightmost wins):
+     types/default-params
+       ← protocol-params->mc-overrides(:protocol-params)
+       ← scenario :mc-params
+       ← runtime CLI options"
+  [pp]
+  (let [pp (or pp {})]
+    (cond-> {}
+      (:resolver-fee-bps pp)
+      (assoc :resolver-fee-bps (:resolver-fee-bps pp))
+
+      (:fraud-slash-bps pp)
+      (assoc :fraud-slash-bps (:fraud-slash-bps pp))
+
+      (:timeout-slash-bps pp)
+      (assoc :timeout-slash-bps (:timeout-slash-bps pp))
+
+      (:reversal-slash-bps pp)
+      (assoc :reversal-slash-bps (:reversal-slash-bps pp))
+
+      (:fraud-detection-probability pp)
+      (assoc :fraud-detection-probability (:fraud-detection-probability pp))
+
+      (:timeout-detection-probability pp)
+      (assoc :timeout-detection-probability (:timeout-detection-probability pp))
+
+      (:reversal-detection-probability pp)
+      (assoc :reversal-detection-probability (:reversal-detection-probability pp)))))
+
+(defn scenario->mc-params
+  "Build a complete MC param map from a scenario's :protocol-params
+   and optional :mc-params.
+
+   Layers (rightmost wins):
+     1. types/default-params          — full 35+ key baseline
+     2. protocol-params->mc-overrides — 7 fields mapped 1:1 from :protocol-params
+     3. scenario :mc-params           — explicit MC-only override map
+
+   The result is a complete MC param set ready for batch/run-batch.
+   No separate merge with default-params is needed.
 
    Example:
-     (merge base-params (params/from-snap snap))"
-  [snap]
-  (cond-> {}
-    (contains? snap :resolver-fee-bps)        (assoc :fee-bps (get snap :resolver-fee-bps))
-    (contains? snap :appeal-bond-bps)         (assoc :bond-bps (get snap :appeal-bond-bps))
-    (contains? snap :fraud-slash-bps)         (assoc :fraud-slash-bps (get snap :fraud-slash-bps))
-    (contains? snap :reversal-slash-bps)      (assoc :reversal-slash-bps (get snap :reversal-slash-bps))
-    (contains? snap :timeout-slash-bps)       (assoc :timeout-slash-bps (get snap :timeout-slash-bps))
-    (contains? snap :resolver-bond-bps)       (assoc :resolver-bond-bps (get snap :resolver-bond-bps))
-    (contains? snap :l2-detection-prob)       (assoc :l2-detection-prob (get snap :l2-detection-prob))
-    (contains? snap :slashing-detection-prob) (assoc :detection-prob (get snap :slashing-detection-prob))
-    (contains? snap :fraud-success-rate)      (assoc :fraud-success-rate (get snap :fraud-success-rate))
-    (contains? snap :fraud-model)             (assoc :fraud-model (get snap :fraud-model))
-    (contains? snap :escalation-assumption-band) (assoc :escalation-assumption-band (get snap :escalation-assumption-band))
-    (contains? snap :p-appeal-wrong)          (assoc :p-appeal-wrong (get snap :p-appeal-wrong))
-    (contains? snap :p-l1-reversal)           (assoc :p-l1-reversal (get snap :p-l1-reversal))
-    (contains? snap :has-kleros?)             (assoc :has-kleros? (get snap :has-kleros?))
-    (contains? snap :p-l2-escalation)         (assoc :p-l2-escalation (get snap :p-l2-escalation))
-    (contains? snap :p-l2-reversal)           (assoc :p-l2-reversal (get snap :p-l2-reversal))
-    (contains? snap :fraud-detection-prob)    (assoc :fraud-detection-probability (get snap :fraud-detection-prob))
-    (contains? snap :reversal-detection-prob) (assoc :reversal-detection-probability (get snap :reversal-detection-prob))
-    (contains? snap :timeout-detection-prob)  (assoc :timeout-detection-probability (get snap :timeout-detection-prob))))
+     (params/scenario->mc-params scenario)"
+  [scenario]
+  (let [pp (:protocol-params scenario)
+        mc (:mc-params scenario)]
+    (merge types/default-params
+           (protocol-params->mc-overrides pp)
+           mc)))
 
 (defn merge-snap
-  "Merge a replay snapshot into a base MC param map.
-   Snapshot fields override base fields. Fields absent from snap are kept as-is."
+  "Merge a replay ModuleSnapshot into a base MC param map.
+
+   Snapshot fields override base fields. Fields absent from snap
+   are kept as-is. This is a convenience wrapper over from-snap.
+
+   Example:
+     (merge-snap default-params snap)"
   [base-params snap]
   (merge base-params (from-snap snap)))

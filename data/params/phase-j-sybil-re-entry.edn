@@ -40,4 +40,11 @@
  :detection-decay-rate 0.0
  :allow-sybil-re-entry? true
  :sybil-re-entry-probability 0.3  ; 30% chance slashed resolver re-enters with new ID
- :n-seeds 1}
+ :n-seeds 1
+  ; Audit thresholds — override defaults in audit.clj
+  :audit-thresholds
+  {:dominance-threshold 1.2
+   :max-malice-equity-share 0.3
+   :tail-fraction 0.2
+   :malice-survival-threshold 0.5}
+}

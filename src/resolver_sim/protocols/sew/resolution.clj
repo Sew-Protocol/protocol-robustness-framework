@@ -14,9 +14,10 @@
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
-            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
+            [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
-            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
+            [resolver-sim.util.attribution            :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
@@ -59,7 +60,14 @@
       Same evidence as prior level — deterministic immediate slash (not appealable).
 
    2. Manual Track (proposeSlash):
-      New evidence submitted — slash is :pending with appeal window (governance path)."
+       New evidence submitted — slash is :pending with appeal window (governance path).
+
+   Limitation: Track 2 :pending reversal slashes are NOT automatically resolved
+   when the escrow finalizes.  If a pending reversal slash outlives the escrow
+   (appeal window expires without resolution), the entry remains in
+   :pending-fraud-slashes indefinitely.  This is a state inconsistency — the
+   slash cannot execute because the escrow is no longer :disputed, but the entry
+   is never garbage-collected."
   [world workflow-id current-is-release]
   (let [level (t/dispute-level world workflow-id)]
     (if-not (pos? level)
@@ -129,6 +137,7 @@
    with an appeal window, not immediately EXECUTED."
   [world slash-id workflow-id resolver slash-amt appeal-window]
   (let [now (:block-time world)]
+    (println (str "[sew/resolution] DEBUG: handle-fraud-slashing now=" now ", appeal-window=" appeal-window))
     (assoc-in world [:pending-fraud-slashes slash-id]
               {:resolver         resolver
                :amount           slash-amt
@@ -215,9 +224,11 @@
    resolution-hash     — bytes32 (opaque string in the model)
    resolution-module-fn — (fn [wf caller] → {:authorized? bool}) or nil"
   [world workflow-id caller is-release resolution-hash resolution-module-fn]
-  (cond
-    (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+  (let [ctx (attr/make-context {:workflow-id workflow-id})]
+    (attr/log-annotated! :debug "Submitting resolution" ctx {:caller caller})
+    (cond
+      (not (t/valid-workflow-id? world workflow-id))
+      (t/fail :invalid-workflow-id)
 
     ;; State is checked before auth so any caller—authorized or not—receives
     ;; :transfer-not-in-dispute on a terminal escrow rather than a misleading
@@ -240,13 +251,10 @@
           ;; if isFinalRound (currentRound >= MAX_ROUND) → shouldExecute = true
           ;; (no appeal window, decision is immediately final)
           final-round?   (t/final-round? world workflow-id)
-          ;; DR3 Sync: handle resolver bond staking (record for now)
-          bond-bps       (:resolver-bond-bps snap 0)
-          et             (t/get-transfer world workflow-id)
-          afa            (:amount-after-fee et)
-          bond-amt       (t/compute-fee afa bond-bps)
-          
-          ;; Phase K: handle reversal slashing
+          ;; Phase K: handle reversal slashing (Track 1 auto-slash OR Track 2 pending).
+          ;; Called BEFORE the final-round check below so that the prior resolver's
+          ;; stake is deducted before the current decision is recorded — the current
+          ;; resolver cannot be slashed for their own decision.
           world'         (handle-reversal-slashing world workflow-id is-release)
           
           ;; Record current decision for future reversal checks
@@ -265,7 +273,7 @@
                         :appeal-deadline (+ now window-dur)
                         :resolution-hash resolution-hash})
               world''' (assoc-in world'' [:pending-settlements workflow-id] pending)]
-          (t/ok world'''))))))
+          (t/ok world''')))))))
 
 ;; ---------------------------------------------------------------------------
 ;; execute-pending-settlement
@@ -572,6 +580,9 @@
        (nil? pending)
        (t/fail :no-pending-slash)
 
+       (nil? (:status pending))
+       (t/fail :invalid-slash-state)
+
        (not= :pending (:status pending))
        (t/fail :slash-not-pending)
 
@@ -644,11 +655,17 @@
    not that the slash is upheld.
    - appeal-upheld? = true  -> slash is reversed and cannot be executed.
    - appeal-upheld? = false -> appeal is rejected; slash returns to pending.
-   Mirrors: ResolverSlashingModuleV1.resolveAppeal"
+   Mirrors: ResolverSlashingModuleV1.resolveAppeal
+
+   3-arity calls default slash-id to workflow-id (integer).  For reversal slashes
+   (which use level-scoped string slash-ids like \"0-reversal-0\"), the 4-arity
+   version with explicit slash-id MUST be used."
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id caller appeal-upheld? slash-id]
-   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
+   (let [ctx (attr/make-context {:workflow-id _workflow-id :slash-id slash-id})
+         pending (get-in world [:pending-fraud-slashes slash-id])]
+     (attr/log-annotated! :debug "Resolving appeal" ctx {:appeal-upheld? appeal-upheld?})
      (cond
        (or (nil? caller) (= "" caller))
        (t/fail :missing-caller-context)
@@ -689,7 +706,7 @@
                      (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
 
            :else
-           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending))))))))
+           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending)))))))))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
@@ -765,8 +782,13 @@
 
     :else
     (let [old-resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])
-          same-resolver? (= old-resolver new-resolver)]
-      (if same-resolver?
+          same-resolver? (= old-resolver new-resolver)
+          last-rotation (last (get-in world [:resolver-rotations workflow-id]))
+          same-rotation? (and (not same-resolver?)
+                              (some? last-rotation)
+                              (= (:from last-rotation) old-resolver)
+                              (= (:to last-rotation) new-resolver))]
+      (if (or same-resolver? same-rotation?)
         (assoc (t/ok world)
                :old-resolver old-resolver
                :new-resolver new-resolver

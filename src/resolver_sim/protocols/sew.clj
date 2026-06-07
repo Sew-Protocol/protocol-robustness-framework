@@ -23,6 +23,7 @@
             [resolver-sim.db.sew                         :as sew-db]
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
+            [resolver-sim.util.attribution            :as attr]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.contract-model.idempotency     :as idem]
             [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]
@@ -30,7 +31,9 @@
             [resolver-sim.yield.module                   :as yield-module]
             [resolver-sim.yield.risk                     :as yield-risk]
             [resolver-sim.protocols.sew.compat           :as compat]
-            [resolver-sim.protocols.sew.action-context   :as actx]))
+            [resolver-sim.protocols.sew.action-context   :as actx]
+            [resolver-sim.yield.expectations             :as yield-exp]
+            [resolver-sim.yield.evidence                 :as yield-evi]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -72,8 +75,7 @@
 (defn- event-id
   "Optional logical event identifier used for replay dedupe."
   [event]
-  (or (get-in event [:params :event-id])
-      (get-in event [:params :event_id])))
+  (compat/event-id event))
 
 (def replay-sensitive-actions
   "Actions that should be replay-idempotent when a logical event-id is provided."
@@ -86,9 +88,14 @@
     "resolve-appeal"
     "execute-fraud-slash"})
 
-(defn- replay-sensitive?
+(defn replay-sensitive-action?
+  "True when `event` is subject to replay-boundary dedupe when event-id is present."
   [event]
   (contains? replay-sensitive-actions (compat/canonical-action event)))
+
+(defn- replay-sensitive?
+  [event]
+  (replay-sensitive-action? event))
 
 (defn- dedupe-op-key
   "Build a stable dedupe key for replay-sensitive events."
@@ -97,8 +104,7 @@
         sid (event-slash-id event)
         eid (event-id event)
         action (compat/canonical-action event)
-        explicit-hop (or (get-in event [:params :hop-id])
-                         (get-in event [:params :hop_id]))
+        explicit-hop (compat/hop-id event)
         hop-level (when (and (nil? explicit-hop)
                              (contains? #{"escalate-dispute" "challenge-resolution"} action))
                     (t/dispute-level world wf))
@@ -399,8 +405,8 @@
 
 (defmethod apply-action "withdraw-escrow"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
-    agent-index event
+  (actx/with-resolved-actor-and-unpaused
+    agent-index world event
     (fn [addr]
       (acct/withdraw-escrow world (event-workflow-id event) addr))))
 
@@ -416,14 +422,16 @@
 
 (defmethod apply-action "withdraw-fees"
   [{:keys [agent-index]} world event]
-  (actx/with-governance-actor
-    agent-index event
-    governance-actor?
-    (fn [_addr _agent]
-      (let [p     (:params event)
-            token (:token p)
-            token (when token (keyword token))]
-        (acct/withdraw-fees world token)))))
+  (if (:paused? world)
+    (t/fail :protocol-paused)
+    (actx/with-governance-actor
+      agent-index event
+      governance-actor?
+      (fn [_addr _agent]
+        (let [p     (:params event)
+              token (:token p)
+              token (when token (keyword token))]
+          (acct/withdraw-fees world token))))))
 
 (defmethod apply-action "governance-update-fee"
   [{:keys [agent-index]} world event]
@@ -553,7 +561,9 @@
 
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]
-  (t/ok (lc/accrue-yield world (event-workflow-id event))))
+  (let [wf (event-workflow-id event)]
+    (println (str "[sew] DEBUG: Triggering accrue for workflow: " wf))
+    (t/ok (lc/accrue-yield world wf))))
 
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
@@ -582,9 +592,11 @@
 
 (defn- run-single-invariants [world]
   (let [scenario-id (get-in world [:params :scenario-id])
-        r (inv/check-all world scenario-id)]
-    {:ok?        (:all-hold? r)
-     :violations (when-not (:all-hold? r) (:results r))}))
+        r (inv/check-all world scenario-id)
+        exp-res (yield-exp/check-expectations world)]
+    {:ok?        (and (:all-hold? r) (:ok? exp-res))
+     :violations (cond-> (if (:all-hold? r) {} (:results r))
+                   (not (:ok? exp-res)) (assoc :expectations (:results exp-res)))}))
 
 (defn- run-transition-invariants [world-before world-after]
   (let [r (inv/check-transition world-before world-after)]
@@ -617,14 +629,7 @@
    :claimable           (:claimable world {})
    :claimable-v2        (:claimable-v2 world {})
    :bond-balances       (:bond-balances world {})
-   :yield-positions     (when-let [pos (:yield/positions world)]
-                          (into {} (map (fn [[oid p]]
-                                          [oid (select-keys p [:status :principal :shares
-                                                               :entry-index :current-index :current-value
-                                                               :unrealized-yield :realized-yield
-                                                               :yield-loss :shortfall :reclaimed-amount
-                                                               :token :module/id])])
-                                        pos)))})
+   :yield-evidence      (yield-evi/get-evidence world)})
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending
@@ -688,10 +693,19 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (let [eid (event-id event)]
-      (if (and eid (replay-sensitive? event))
+    (let [flags       (:replay-flags context {})
+          require-id? (:require-event-id? flags false)
+          eid         (event-id event)]
+      (cond
+        (and require-id? (replay-sensitive? event) (nil? eid))
+        {:ok false :error :missing-event-id
+         :detail {:action (:action event) :seq (:seq event)}}
+
+        (and eid (replay-sensitive? event))
         (idem/apply-once world (dedupe-op-key world event)
                          (fn [w] (apply-action context w event)))
+
+        :else
         (apply-action context world event))))
 
   (check-invariants-single [_ world]
@@ -708,9 +722,12 @@
       (mapcat identity
               (for [wf wfs]
          (let [et (t/get-transfer world wf)]
-           (cond-> []
-             ;; Pending actions
-             (= :pending (:escrow-state et))
+            (cond
+              ;; Terminal escrows produce no available actions (explicit boundary)
+              (t/terminal-state? world wf)
+              []
+
+              (= :pending (:escrow-state et))
              (into (cond-> []
                      (or (= actor (:from et)) (= actor (:to et)))
                      (conj {:action "raise-dispute" :params {:workflow-id wf}})

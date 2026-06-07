@@ -4,6 +4,56 @@
 ### Notes
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 
+### Added (June 2026)
+- **Phase AE thresholds wired from params:** `:pass-threshold` and `:expected-preservation-floor` now read from EDN params in `fair_slashing.clj` instead of hardcoded 0.80.
+- **Phase AF params file created:** `data/params/phase-af-epoch-solvency.edn` with `:envelope-max-resolvers` and `:envelope-min-bond` wired from params.
+- **Phase AA governance threshold wired:** `:max-op-win-rate-threshold` read from `phase-aa-governance.edn` instead of hardcoded 0.20.
+- **Phase T survival threshold wired:** `:survival-threshold` read from `phase-t-governance-capture.edn` for H1/H2/H3 gates instead of hardcoded 0.80.
+- **Phase O RNG seeded:** `market_exit.clj` — replaced bare `(rand)` with `rng/next-double`, split RNG per epoch, read `:rng-seed` from params.
+- **Phase O threshold wired:** `:spike-ratio-threshold` read from `phase-o-baseline.edn` instead of hardcoded 0.70.
+- **Phase Y threshold wired:** `:accuracy-threshold` read from `phase-y-evidence-fog.edn` instead of hardcoded 0.75.
+- **Phase J audit thresholds from EDN:** `:audit-thresholds` threaded from `phase-j-*.edn` params into `analyze-multi-epoch`.
+- **Kernel validation gating:** `:kernel-validation-min-pass-rate` added to `multi_epoch.clj`; enabled in `phase-j-calibration-pass.edn` and `phase-j-baseline-stable.edn`.
+- **Cryptographic solvency layer:** SHA-256 state commitments in `financial/solvency.clj` — `compute-state-commitment`, `with-commitment`, and live proof verification in `classify-solvency`.
+- **Phase evidence tiers:** `core/phases.clj` — `phase-evidence-tiers` map classifying all 30+ phases as `:analytic`, `:exploratory`, or `:unknown`; `ci-gated?` query function.
+- **Fixture suite thresholds:** `:thresholds/strict-baseline` added to escalation-collision, timelock-regression, same-block-ordering, token-pathologies suites.
+- **`:max-held-delta` threshold key** added to `validate-thresholds` in `fixtures.clj` (reserved for token-pathology metrics).
+- **SPE config on spe-v1..v5 traces:** Explicit `:spe-config {:regret-threshold 0 :epsilon-abs 0.0 :epsilon-rel 0.0}`.
+- **S118 scenario:** `withdraw-while-paused` — tests that `withdraw-escrow` returns `:protocol-paused` when protocol is paused.
+- **Layer lint rule:** `protocols.sew.*` now forbidden from importing `db.*` (was allowlisted).
+- **Schema validation:** `scenario-schema` extended with validation for `new-evidence-probability`, `l2-detection-prob`, `detection-type`, `timeout-detection-probability`.
+
+### Changed (June 2026)
+- **Batch checkpoint parity fix:** Added `:world-checkpoints` + `:last-valid-world` to both batch-mode failure return paths in `replay.clj` (was missing, breaking SPE fork-from-failure).
+- **Batch conflict detection fix:** Corrected paren structure in batch-mode conflict path — the `if conflict-domain` no longer closes early, restoring proper batch conflict rejection.
+- **Event-id/hop-id normalization:** `compat/event-id` and `compat/hop-id` normalize values to strings for type-stable dedupe key comparison.
+- **Seq normalization:** String `:seq` values coerced to integers in event normalization, expected-errors, by-seq lookup, and step-terminal comparison.
+- **Normalize-detection-probabilities cleanup:** Removed stale `:reversal` key (only consumed by legacy path, not by `resolve-dispute`).
+- **`calculate-solvency-ratio` fixed:** Handles both flat (`{:USDC 5000}`) and nested (`{:USDC {"0x1" 1000}}`) claimable/bond-balance maps via `sum-amounts` helper.
+- **`loss.clj` haircut path fixed:** Explicit check for `(:haircut-total shortfall)` before falling back to `:normal`.
+- **`loss.clj` exception handling:** Removed silent `try/catch` on `max-loss?` ratio — propagates naturally.
+- **Phase C/E/F/M moved to `research/sew/analytic/`:** Namespaces updated; old files removed from `sim/`.
+- **Deprecated aliases removed:** `make-module-snapshot`, `:yield-scenarios` suite alias, `include-legacy-derived-top-levels?` option removed.
+- **Layering violations fixed:** `contract_model/replay/io` deleted (inlined in `replay.clj`); `invariant_runner`, `trace_export`, `reference_validation` switched to `requiring-resolve`.
+- **Layering lint allowlist emptied:** All 4 previously allowlisted namespaces are now compliant.
+- **`withdraw-escrow` pause guard added:** Changed from `with-resolved-actor` to `with-resolved-actor-and-unpaused`, returning `:protocol-paused` when protocol is paused.
+- **`withdraw-fees` pause guard added:** Explicit `(:paused? world)` check.
+- **`rotate-dispute-resolver` dedupe:** Added `same-rotation?` check — identical `from→to` rotation returns `:idempotent? true`.
+- **`detection-type` removed from dissoc:** No longer singled out in `prepare-oracle-params` (was never consumed by oracle functions).
+- **`documentation scope notes:** Kleros stub limitations, archive doc disclaimers, threshold policy doc update, remediation plan.
+
+### Removed (June 2026)
+- **`appeal_outcomes.clj`:** 293 lines, zero callers, `Math/random` fallback.
+- **`panel_decision.clj`, `contingent_bribery.clj`:** Unused research models (zero callers).
+- **`result_display.clj` dead functions:** 4 unreachable code paths.
+- **Old Phase files:** `sim/phase_c_corruption_economics.clj`, `sim/phase_e_evidence_integrity.clj`, `sim/phase_f_economic_parameters.clj`, `sim/phase_m_fairness_analysis.clj`.
+
+### Fixed (June 2026)
+- **S55 paused escrow naming:** Scenario key corrected from `s55-autocancel` to `s55-paused-escrow-autocancel` (was silently failing fixture resolution).
+- **`:transfer-not-finalized` label:** No longer implies "escrow missing" for yield-shortfall exit paths.
+- **`:escrow-state` gate in `open-gates`:** Removed redundant `true` guard condition in `finality.clj:94`.
+- **Archive doc citation hazard:** Added disclaimers to 4 docs with "production-ready / 92% confidence" language.
+
 ### Added
 - **Accounting Reconciliation Patch:** Resolved a critical double-counting bug in `execute-fraud-slash` and `auto-cancel-disputed-escrow` by explicitly reconciling `held` balances during slash events. Optimized invariant pass rate to 96/99.
 - **Robust Serialization Protocol:** Implemented the `ToJsonData` protocol to ensure complex simulation records and yield positions are safely converted to JSON for auditable artifact emission.

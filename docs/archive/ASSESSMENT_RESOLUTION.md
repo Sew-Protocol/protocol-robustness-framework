@@ -198,3 +198,9 @@ Security Assessment: Deeply robust
 **Production Readiness**: ✅ **CONFIRMED** (11/12 checklist items passing)
 
 The model is now production-ready with realistic mechanics, multi-layer detection, and proven scalability.
+
+---
+
+*This document is archived. Claims herein (including "production-ready" and "92% confidence")
+predate the June 2026 research-grade audit and should not be cited without qualification.*
+

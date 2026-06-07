@@ -81,3 +81,31 @@
     (is (= :released (t/escrow-state (:world r1) 0)))
     (is (false? (:ok r2)))
     (is (= :no-pending-settlement (:error r2)))))
+
+(deftest checklist-superseded-pending-single-finalization
+  (let [w0 (-> (base-world 120)
+               (assoc :block-time 1300)
+               (assoc-in [:pending-settlements 0]
+                         (t/make-pending-settlement {:exists true
+                                                     :is-release true
+                                                     :appeal-deadline 1300
+                                                     :resolution-hash "0xhash"})))
+        ;; Archive the active pending (simulating escalation), then clear it
+        w1 (-> w0
+               (update :pending-settlements dissoc 0)
+               (update-in [:superseded-pending-settlements 0]
+                          (fnil conj [])
+                          {:pending (t/make-pending-settlement {:exists true
+                                                                :is-release true
+                                                                :appeal-deadline 1300
+                                                                :resolution-hash "0xhash"})
+                           :superseded-at 1180
+                           :level 0}))
+        ;; First execute — should succeed via superseded fallback
+        r1 (res/execute-pending-settlement w1 0)
+        ;; Second execute — should fail, escrow now terminal
+        r2 (res/execute-pending-settlement (:world r1) 0)]
+    (is (:ok r1))
+    (is (= :released (t/escrow-state (:world r1) 0)))
+    (is (false? (:ok r2)))
+    (is (= :transfer-not-in-dispute (:error r2)))))

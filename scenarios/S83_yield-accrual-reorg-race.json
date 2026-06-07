@@ -11,6 +11,7 @@
     "max-dispute-duration" : 2592000,
     "appeal-bond-bps" : 500,
     "escalation-resolvers" : {
+      "0" : "0xresolver",
       "1" : "0xresolver1"
     }
   },

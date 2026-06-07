@@ -14,7 +14,8 @@
 (def known-failure-modes
   "Subset used for generative stress (see `yield.evidence/default-supported-failure-modes`)."
   [:partial-liquidity :withdraw-fails :negative-yield :deposit-fails
-   :provider-paused :emergency-unwind-fails])
+   :provider-paused :emergency-unwind-fails
+   :oracle-stale :withdrawal-queue])
 
 (def known-tokens
   ["USDC" "USDT" "DAI"])

@@ -15,23 +15,24 @@
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
              [resolver-sim.contract-model.replay.metrics :as metrics]
-             [resolver-sim.contract-model.replay.io      :as replay-io]
-             [resolver-sim.contract-model.replay.validation :as validation]
+              [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.contract-model.replay.analysis :as analysis]
              [resolver-sim.contract-model.replay.temporal :as temporal]
              [resolver-sim.contract-model.replay.validation :as validation]
              [resolver-sim.contract-model.replay.yield :as yield-replay]
              [resolver-sim.contract-model.replay.flags :as replay-flags]
+             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
-             [resolver-sim.time.model        :as time-model]))
+             [resolver-sim.time.model        :as time-model]
+             [resolver-sim.util.attribution :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
 ;; ---------------------------------------------------------------------------
 
-(defn- kw->json-key [k] (replay-io/kw->json-key k))
-(defn- kw-val->str [_k v] (replay-io/kw-val->str _k v))
+(defn- kw->json-key [k] (if (keyword? k) (name k) (str k)))
+(defn- kw-val->str [_k v] (if (keyword? v) (name v) v))
 
 ;; ---------------------------------------------------------------------------
 ;; Agent Validation (Generic)
@@ -188,6 +189,7 @@
                         :temporal-rule-id (:rule-id temporal-failure)
                         :extra           nil
                         :event-tags      tags
+                        :invariant-phase :temporal-rule
                         :invariants-ok?  true
                         :violations      nil
                         :world           (proto/world-snapshot protocol world)
@@ -249,11 +251,12 @@
             :extra           (:extra result)
             :detail          (:detail result)
             :event-tags      event-tags
-            :invariants-ok?  (if (and ok? check-inv?)
-                                (and (:ok? inv-single) (:ok? inv-trans))
-                                true)
-            :violations      all-violations
-            :trace-metadata  metadata
+             :invariant-phase :post-event
+             :invariants-ok?  (if (and ok? check-inv?)
+                                 (and (:ok? inv-single) (:ok? inv-trans))
+                                 true)
+             :violations      all-violations
+             :trace-metadata  metadata
             :world           (proto/world-snapshot protocol final-world)
             :projection      proj
             :projection-hash ph}
@@ -279,8 +282,10 @@
     (split-with #(= t (:time %)) events)))
 
 (defn- conflict-rejection-entry
-  [protocol world-before event preflight-status conflict-domain conflict-with-seq]
-  (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
+  [protocol world-before event preflight-status conflict-domain conflict-with-seq flags]
+  (let [[proj ph] (if (and (satisfies? proto/AnalysisModule protocol)
+                           (or (= (:projection-mode flags) :full)
+                               (= (:op/type event) :scenario/end)))
                     (proto/compute-projection protocol world-before)
                     [nil nil])
         tags      (if (satisfies? proto/EconomicModel protocol)
@@ -316,6 +321,13 @@
 
 (defn- expectation-metric-keys [scenario] (metrics/expectation-metric-keys scenario))
 
+(defn trace-entry->replay-event
+  "Strip trace metadata; return the minimal replay event shape.
+   Used by counterfactual fork replay so continuation steps do not carry
+   stale :world / :result fields from the main-line trace."
+  [entry]
+  (select-keys entry [:seq :time :agent :action :params]))
+
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."
   [protocol context scenario-id events world trace metrics options]
@@ -330,12 +342,13 @@
            trace trace
            metrics metrics
            states {(:seq (first events) 0) (proto/world-snapshot protocol world)}
+           world-checkpoints {}
            id-alias-map {}]
       (if (empty? events)
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
                      (seq (proto/open-entities protocol world)))]
           (if open
-            {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol}
+            {:outcome :fail :scenario-id scenario-id :events-processed (count trace) :halt-reason :open-entities-at-end :detail {:open-entities (vec open)} :trace trace :metrics metrics :agents agents :protocol protocol :last-valid-world world}
             (do
               (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :pass world metrics trace)
               (let [expected-error-analysis (analyze-expected-errors scenario trace)
@@ -359,7 +372,8 @@
                  :events events
                  :agents agents
                  :protocol protocol
-                 :world world}))))
+                 :world world
+                 :world-checkpoints world-checkpoints}))))
         (if (= :deterministic-batch (execution-mode scenario))
           (let [[bucket rest-events] (group-same-time-bucket events)
                 base-world world
@@ -388,15 +402,17 @@
                                         conflict-domain (some #(when (contains? (:claimed-domains acc) %) %) domains)
                                         winner-seq (get (:claimed-domains acc) conflict-domain)
                                         pre-status (get preflight (:seq event) :ineligible)]
-                                    (if conflict-domain
-                                      (let [entry (-> (conflict-rejection-entry protocol working-world event pre-status conflict-domain winner-seq)
+                                        (if conflict-domain
+                                        (let [entry (-> (conflict-rejection-entry protocol working-world event pre-status conflict-domain winner-seq replay-flags)
                                                       (assoc :expected-failure?
                                                              (contains? expected-errors-set
                                                                         [(:seq event) (:action event) :batch-conflict])))]
                                         (-> acc
+
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
-                                            (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))))
+                                            (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))
+                                            (update :world-checkpoints assoc (:seq event) working-world)))
                                       (let [step (process-step protocol context working-world event)
                                             entry0 (:trace-entry step)
                                             expected-failure? (and (= :rejected (:result entry0))
@@ -430,11 +446,13 @@
                                                                    (:id-alias-map acc)))
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
-                                            (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))))))))
+                                            (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))
+                                            (update :world-checkpoints assoc (:seq event) working-world)))))))
                               {:world base-world
                                :trace trace
                                :metrics metrics'
                                :states states
+                               :world-checkpoints world-checkpoints
                                :claimed-domains {}
                                :halted? false
                                :id-alias-map id-alias-map}
@@ -442,7 +460,7 @@
             (if (:halted? batch-result)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
-                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol})
+                {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
                                   (proto/check-invariants-single protocol (:world batch-result)))
                     post-trans  (when check-inv?
@@ -469,6 +487,7 @@
                          trace'
                          metrics''
                          (:states batch-result)
+                         (:world-checkpoints batch-result)
                          (:id-alias-map batch-result))
                   (do
                     (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) metrics'' trace')
@@ -479,12 +498,15 @@
                      :trace trace'
                      :metrics metrics''
                      :execution {:mode :deterministic-batch :batch-policy batch-commit-policy}
-                     :protocol protocol})))))
+                     :protocol protocol
+                     :world-checkpoints (:world-checkpoints batch-result)
+                     :last-valid-world (:world batch-result)})))))
           (let [raw-event (first events)
                 event (if (and supports-alias? (seq id-alias-map))
                         (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
                           (if (:ok res) (:event res) raw-event))
                         raw-event)
+                checkpoints' (assoc world-checkpoints (:seq event) world)
                 step (process-step protocol context world event)
                 entry0 (:trace-entry step)
                 alias-key (:save-id-as raw-event)
@@ -512,8 +534,18 @@
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
                 (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
-                {:outcome :fail :scenario-id scenario-id :events-processed (count new-trace) :halted-at-seq (:seq event) :halt-reason :invariant-violation :trace new-trace :metrics new-metrics :execution {:mode :sequential} :protocol protocol})
-              (recur new-world (rest events) new-trace new-metrics new-states new-alias-map))))))))
+                {:outcome :fail
+                 :scenario-id scenario-id
+                 :events-processed (count new-trace)
+                 :halted-at-seq (:seq event)
+                 :halt-reason :invariant-violation
+                 :trace new-trace
+                 :metrics new-metrics
+                 :execution {:mode :sequential}
+                 :protocol protocol
+                 :last-valid-world world
+                 :world-checkpoints checkpoints'})
+              (recur new-world (rest events) new-trace new-metrics new-states checkpoints' new-alias-map))))))))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations.
@@ -554,11 +586,14 @@
                                               :temporal-enabled? temporal-enabled?
                                               :agent-index agent-index
                                               :scenario scenario
-                                              :replay-flags flags})]
+                                              :replay-flags flags})
+             trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
+                             (:world-checkpoint-policy flags)
+                             raw-result)]
          (log/info! "scenario/start" {:id scenario-id})
          (if (:evaluate-expectations? flags true)
-           (finalize-scenario-result scenario raw-result flags)
-           raw-result))))))
+           (finalize-scenario-result scenario trimmed-result flags)
+           trimmed-result))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
@@ -584,11 +619,12 @@
   [protocol agents p-params scenario-id world events trace metrics options]
   (let [context  (proto/build-execution-context protocol agents p-params)
         agent-index (:agent-index context)
+        metrics' (if (seq metrics) metrics (metrics/zero-metrics protocol))
         expected-errors-set (set (map expected-error-key (:expected-errors (:scenario options) [])))
         strict-expected-errors? (boolean (:strict-expected-errors? (:scenario options) false))
         temporal-cfg (:temporal-evidence (:scenario options))
         temporal-enabled? (boolean (:enabled? temporal-cfg))]
-    (run-simulation-loop protocol context scenario-id events world trace metrics
+    (run-simulation-loop protocol context scenario-id events world trace metrics'
                          (merge {:expected-errors-set expected-errors-set
                                  :strict-expected-errors? strict-expected-errors?
                                  :allow-open-entities? true
@@ -604,7 +640,7 @@
 (defn result->json-str
   "Serialize a replay result to a JSON string."
   [result]
-  (replay-io/result->json-str result))
+  ((requiring-resolve 'resolver-sim.io.serialization/serialize-artifact) (dissoc result :protocol)))
 
 ;; ---------------------------------------------------------------------------
 ;; Verification & Determinism

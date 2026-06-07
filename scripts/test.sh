@@ -12,8 +12,17 @@
 #   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
 #   ./scripts/test.sh triage     # Failure triage grouped by purpose/threat-tag
 #   ./scripts/test.sh equivalence-new # New equivalence comparison stack (auth/race/escalation/accounting)
-#   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (4 domains)
+#   ./scripts/test.sh monte-carlo # Representative Monte Carlo phase sweep (5 domains)
 #   ./scripts/test.sh long-horizon # Extended horizon scenarios (100/200/500/1000 epochs)
+#
+# Evidence tiers (see core.phases/phase-evidence-tiers):
+#   :protocol-kernel-evidence — calls resolve-dispute or replay-with-protocol
+#   :analytic                 — algebraic/closed-form, no protocol calls
+#   :exploratory              — narrative, qualitative, or pre-prototype
+#
+# Phases C, E, M (analytic) are NOT CI-gated — run via --phase-c-dr etc.
+# Phases Q, R, U, V, W, X (exploratory) are NOT CI-gated — run via --phase-q etc.
+# All other phases are documented in core.phases/phase-evidence-tiers.
 #
 # Exit code: 0 = all passed, 1 = any failure.
 
@@ -91,6 +100,7 @@ run_unit() {
 (require '[resolver-sim.protocols.sew.slashing-test])
 (require '[resolver-sim.protocols.sew.phase-k-test])
 (require '[resolver-sim.protocols.sew.phase-m-test])
+(require '[resolver-sim.sim.waterfall-test])
 (require '[resolver-sim.io.scenario-fixture-parity-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
@@ -104,6 +114,7 @@ run_unit() {
                 'resolver-sim.sim.multi-epoch-test
                 'resolver-sim.sim.defection-test
                 'resolver-sim.sim.strategy-adaptation-test
+                'resolver-sim.sim.waterfall-test
                 'resolver-sim.io.scenario-fixture-parity-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
@@ -582,6 +593,14 @@ run_monte_carlo() {
   # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
   #
   # This sweep runs representative phases for expected-value/regime checks.
+  #
+  # The CI gate runs 5 phases (O, P, AA, AD, F).  All are :analytic (closed-form
+  # algebraic checks, not protocol-kernel evidence).  See
+  # src/resolver_sim/core/phases.clj phase-evidence-tiers for the full registry.
+  #
+  # Phases NOT CI-gated but still :analytic: AB, AC, AD, AE, AF, AG, AH, AI,
+  # T, Y, Z, market-exit, phase-c-dr, phase-e-dr, phase-m-dr.
+  # Phases :exploratory (not CI-gated): Q, R, U, V, W, X.
   # ──────────────────────────────────────────────────────────────────────────
 
   echo "Running Monte Carlo representative sweep (4 domains)..."

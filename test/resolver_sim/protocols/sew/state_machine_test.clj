@@ -107,7 +107,7 @@
     (is (= :invalid-workflow-id (:error r)))))
 
 (deftest transition-to-released-wrong-state
-  (doseq [terminal [:released :refunded :resolved :none]]
+  (doseq [terminal (conj t/terminal-states :none)]
     (testing (str "from " terminal)
       (let [w (assoc-in (base-world) [:escrow-transfers 0 :escrow-state] terminal)
             r (sm/transition-to-released w 0)]
@@ -134,7 +134,7 @@
     (is (= :invalid-workflow-id (:error r)))))
 
 (deftest transition-to-refunded-wrong-state
-  (doseq [terminal [:released :refunded :resolved :none]]
+  (doseq [terminal (conj t/terminal-states :none)]
     (testing (str "from " terminal)
       (let [w (assoc-in (base-world) [:escrow-transfers 0 :escrow-state] terminal)
             r (sm/transition-to-refunded w 0)]
@@ -272,7 +272,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest terminal-states-are-absorbing
-  (doseq [terminal [:released :refunded :resolved]]
+  (doseq [terminal t/terminal-states]
     (testing (str terminal " is absorbing")
       (let [w (assoc-in (base-world) [:escrow-transfers 0 :escrow-state] terminal)]
         (is (false? (:ok (sm/transition-to-disputed  w 0 alice))))

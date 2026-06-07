@@ -7,6 +7,8 @@ import grpc
 import argparse
 from collections import defaultdict
 
+from sim_api.event_params import normalise_event_params_for_grpc
+
 
 def _choose_action(active_ids, valid_bias=0.7):
     """Choose action with a bias toward state-valid transitions.
@@ -174,17 +176,6 @@ def _load_trace_events(trace_path):
     return data
 
 
-def _normalise_event_params_for_grpc(params):
-    p = dict(params or {})
-    # gRPC server accepts either workflow-id or id depending on action handlers;
-    # mirror id for compatibility when applicable.
-    if "workflow-id" in p and "id" not in p:
-        p["id"] = p["workflow-id"]
-    if "workflow_id" in p and "id" not in p:
-        p["id"] = p["workflow_id"]
-    return p
-
-
 def _replay_trace_prefix(step_session, session_id, trace_doc, prefix_steps=None):
     events = trace_doc.get("events", [])
     n = len(events) if prefix_steps is None else max(0, min(prefix_steps, len(events)))
@@ -193,7 +184,7 @@ def _replay_trace_prefix(step_session, session_id, trace_doc, prefix_steps=None)
     active_ids = []
 
     for i, ev in enumerate(events[:n]):
-        params = _normalise_event_params_for_grpc(ev.get("params", {}))
+        params = normalise_event_params_for_grpc(ev.get("params", {}))
         req = {
             "session_id": session_id,
             "event": {

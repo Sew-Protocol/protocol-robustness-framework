@@ -50,23 +50,26 @@
 (defn simulate-ring-dispute
   "Simulate one dispute for a resolver ring (all collude).
    
+   Accepts optional & rest kwargs that are forwarded to resolve-dispute,
+   enabling oracle fixtures, :fixed-or, escalation assumptions, etc.
+   
    Returns:
    {:ring (updated ring state)
     :caught? (whether ring was caught)
     :profit (profit/loss for ring in this dispute)}"
   [rng ring escrow-wei fee-bps bond-bps slash-mult
    appeal-prob-correct appeal-prob-wrong detection-prob
-   & {:keys [l2-detection-prob] :or {l2-detection-prob 0}}]
+   & rest-kwargs]
   
   (let [;; Simulate one resolver (arbitrarily pick senior for now)
         resolver-id (:senior-id ring)
         
         ;; All collude: use malicious strategy
-        result (dispute/resolve-dispute
+        result (apply dispute/resolve-dispute
                  rng escrow-wei fee-bps bond-bps slash-mult
                  :malicious
                  appeal-prob-correct appeal-prob-wrong detection-prob
-                 :l2-detection-prob l2-detection-prob)
+                 rest-kwargs)
         
         caught? (:slashed? result)
         profit (:profit-malice result)

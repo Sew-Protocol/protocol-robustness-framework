@@ -42,6 +42,8 @@
  :freeze-duration-days 3
  :appeal-window-days 7
  
+ :rng-seed 42
+ :spike-ratio-threshold 0.70
  :n-epochs 10
  :n-trials-per-epoch 500
  :n-resolvers 100

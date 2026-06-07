@@ -9,6 +9,10 @@
 
 (def ^:private default-asset-decimals 18)
 
+(def liquidity-modes
+  "Liquidity-mode keywords that block new deposits."
+  #{:shortfall :frozen :paused})
+
 (defn- normalize-token [token]
   (cond
     (keyword? token) token
@@ -172,20 +176,23 @@
     (if (contains? failure-modes :partial-liquidity)
       (let [yield-portion (max 0 (- gross-amount principal))
             {:keys [fulfilled shortfall]}
-            (apply-liquidity-stress world module-id token yield-portion)]
+            (apply-liquidity-stress world module-id token yield-portion :principal principal)]
         {:fulfilled (+ principal fulfilled)
          :shortfall shortfall})
-      (apply-liquidity-stress world module-id token gross-amount))))
+      (apply-liquidity-stress world module-id token gross-amount :principal principal))))
 
 (defn claim-deferred
   "Attempts to reclaim deferred funds from a position in :unwinding status.
-   If liquidity-mode is :available, transitions position to :withdrawn and returns reclaimed amount."
+   Uses :min-available-ratio-for-claim from risk config (default 1.0) instead of
+   a hardcoded (= mode :available) check.  This enables partial recovery."
   [world module-id position]
   (let [token (:token position)
         risk  (risk-map world module-id token)
-        mode  (or (:liquidity-mode risk) :available)
+        available-ratio (double (get-in risk [:shortfall :available-ratio]
+                                  (if (:shortfall risk) 0.0 1.0)))
+        min-ratio (double (get-in risk [:min-available-ratio-for-claim] 1.0))
         shortfall (:shortfall position)]
-    (if (and (= mode :available) shortfall)
+    (if (and shortfall (>= available-ratio min-ratio))
       (let [reclaimed (:deferred-amount shortfall 0)]
         (-> position
             (assoc :status :withdrawn)

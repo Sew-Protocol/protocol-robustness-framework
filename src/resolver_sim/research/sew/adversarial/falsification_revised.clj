@@ -68,7 +68,8 @@
         results (for [trial-idx (range num-trials)]
                   (let [; Randomize parameters per trial
                         ground-truth (< (rng/next-double rng) 0.5)
-                        difficulty (rand-nth ["easy" "medium" "hard"])
+                        difficulty (nth ["easy" "medium" "hard"]
+                                      (mod (long (* (rng/next-double rng) 3)) 3))
                         
                         ; Simulate full appeal
                         appeal (dq/simulate-full-appeal 

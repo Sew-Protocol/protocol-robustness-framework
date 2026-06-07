@@ -31,19 +31,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def allowed-transitions
-  "Authoritative EscrowState → #{reachable states} graph.
-   Mirrors BaseEscrow.sol call sites and StateManagementLibrary.sol guards.
-
-   :none     — pre-creation sentinel; createEscrow produces :pending directly.
-   :resolved — defined in enum and library; no production call site currently
-               reaches it.  Guards in transition-to-resolved enforce that
-               accounting is settled before it may be entered."
-  {:none      #{:pending}
-   :pending   #{:disputed :released :refunded}
-   :disputed  #{:released :refunded :resolved}
-   :resolved  #{}
-   :released  #{}
-   :refunded  #{}})
+  "Alias to t/allowed-transitions for backward compatibility."
+  t/allowed-transitions)
 
 (defn valid-transition?
   "True when :from → :to is an edge in `allowed-transitions`."
@@ -105,6 +94,42 @@
   [world workflow-id]
   (when-not (t/valid-workflow-id? world workflow-id)
     (t/fail :invalid-workflow-id)))
+
+;; ---------------------------------------------------------------------------
+;; Guard helper: require-live-state
+;;
+;; Shared precondition check for domain functions that operate on escrows.
+;; Combines the workflow-exists check, the terminal-state rejection, and the
+;; expected-state check into one call.
+;;
+;; Returns nil when all checks pass (nil is falsy in `or` guard chains).
+;; Returns {:ok false :error kw} on failure.
+;; ---------------------------------------------------------------------------
+
+(defn require-live-state
+  "Guard helper: verify workflow-id exists, is not terminal, and (optionally)
+   is in the expected state.
+
+   Usage:
+     (or (require-live-state world wf :pending :transfer-not-pending)
+         (do-the-thing world wf ...))
+
+   Returns nil when all checks pass.  Returns {:ok false :error kw} otherwise.
+   Throws on :dispatch-exception only (internal programming error)."
+  [world workflow-id expected-state state-error]
+  (or (assert-workflow world workflow-id)
+      (let [state (t/escrow-state world workflow-id)]
+        (cond
+          (nil? state)
+          nil  ;; workflow exists in workflow-id map but transfer key is missing — let caller handle
+
+          (t/terminal-state? world workflow-id)
+          (t/fail :transfer-not-finalized)
+
+          (and (some? expected-state) (not= state expected-state))
+          (t/fail (or state-error :invalid-state))
+
+          :else nil))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public: apply-transition!
@@ -176,11 +201,10 @@
   (let [et    (t/get-transfer world workflow-id)
         token (:token et)
         held  (get-in world [:total-held token] 0)
-        live-states #{:pending :disputed}
         other-live  (reduce (fn [acc [wf e]]
-                              (if (and (not= wf workflow-id)
-                                       (= (:token e) token)
-                                       (contains? live-states (:escrow-state e)))
+                               (if (and (not= wf workflow-id)
+                                        (= (:token e) token)
+                                        (contains? t/live-states (:escrow-state e)))
                                 (+ acc (:amount-after-fee e))
                                 acc))
                             0
@@ -287,35 +311,34 @@
   "True when {:escrow-state :sender-status :recipient-status} is a valid
    combination according to the Sew protocol."
   [{:keys [escrow-state sender-status recipient-status]}]
-  (let [terminals #{:released :refunded :resolved}]
-    (cond
-      ;; Terminal states: party statuses are cleared at finalization (cancellation-mutex)
-      (contains? terminals escrow-state)
-      (and (= :none sender-status) (= :none recipient-status))
+  (cond
+    ;; Terminal states: party statuses are cleared at finalization (cancellation-mutex)
+    (contains? t/terminal-states escrow-state)
+    (and (= :none sender-status) (= :none recipient-status))
 
-      ;; :none — pre-creation or uninitialized; both statuses must be :none
-      (= :none escrow-state)
-      (and (= :none sender-status) (= :none recipient-status))
+    ;; :none — pre-creation or uninitialized; both statuses must be :none
+    (= :none escrow-state)
+    (and (= :none sender-status) (= :none recipient-status))
 
-      ;; :pending — AGREE_TO_CANCEL is valid; RAISE_DISPUTE is not
-      (= :pending escrow-state)
-      (and (contains? #{:none :agree-to-cancel} sender-status)
-           (contains? #{:none :agree-to-cancel} recipient-status))
+    ;; :pending — AGREE_TO_CANCEL is valid; RAISE_DISPUTE is not
+    (= :pending escrow-state)
+    (and (contains? (disj t/sender-statuses :raise-dispute) sender-status)
+         (contains? (disj t/sender-statuses :raise-dispute) recipient-status))
 
-      ;; :disputed — exactly one party has RAISE_DISPUTE; neither has AGREE_TO_CANCEL
-      (= :disputed escrow-state)
-      (and (contains? #{:none :raise-dispute} sender-status)
-           (contains? #{:none :raise-dispute} recipient-status)
-           (not= :agree-to-cancel sender-status)
-           (not= :agree-to-cancel recipient-status)
-           ;; At least one party must have raised the dispute
-           (or (= :raise-dispute sender-status)
-               (= :raise-dispute recipient-status))
-           ;; Both cannot have raised (only one raiseDispute call is accepted)
-           (not (and (= :raise-dispute sender-status)
-                     (= :raise-dispute recipient-status))))
+    ;; :disputed — exactly one party has RAISE_DISPUTE; neither has AGREE_TO_CANCEL
+    (= :disputed escrow-state)
+    (and (contains? (disj t/sender-statuses :agree-to-cancel) sender-status)
+         (contains? (disj t/sender-statuses :agree-to-cancel) recipient-status)
+         (not= :agree-to-cancel sender-status)
+         (not= :agree-to-cancel recipient-status)
+         ;; At least one party must have raised the dispute
+         (or (= :raise-dispute sender-status)
+             (= :raise-dispute recipient-status))
+         ;; Both cannot have raised (only one raiseDispute call is accepted)
+         (not (and (= :raise-dispute sender-status)
+                   (= :raise-dispute recipient-status))))
 
-      :else false)))
+    :else false))
 
 ;; ---------------------------------------------------------------------------
 ;; Mutual-consent cancel state setters
@@ -371,23 +394,33 @@
 ;; Timed-action predicates
 ;; ---------------------------------------------------------------------------
 
+(defn- deadline-due?
+  "Shared helper for auto-release and auto-cancel deadlines.
+   Returns true when the escrow is :pending with a positive deadline timestamp
+   that has expired.  nil-safe: returns false for invalid workflow-ids (where
+   `t/get-transfer` returns nil) because (= nil :pending) is false.
+
+   `field` — the escrow key holding the deadline timestamp (:auto-release-time
+          or :auto-cancel-time)."
+  [world workflow-id field]
+  (let [et  (t/get-transfer world workflow-id)
+        ts  (get et field)]
+    ;; Order matters: the (= :pending ...) check MUST come before (pos? ...).
+    ;; If the escrow-transfer is nil (invalid wf-id) or the state is wrong,
+    ;; short-circuit prevents (pos? nil) from crashing.
+    (and (= :pending (:escrow-state et))
+         (pos? ts)
+         (dl/deadline-expired? (:block-time world) ts))))
+
 (defn auto-release-due?
   "True when auto-release-time has passed and escrow is still :pending."
   [world workflow-id]
-  (let [et    (t/get-transfer world workflow-id)
-        t-rel (:auto-release-time et)]
-    (and (= :pending (:escrow-state et))
-         (pos? t-rel)
-         (dl/deadline-expired? (:block-time world) t-rel))))
+  (deadline-due? world workflow-id :auto-release-time))
 
 (defn auto-cancel-due?
   "True when auto-cancel-time has passed and escrow is still :pending."
   [world workflow-id]
-  (let [et    (t/get-transfer world workflow-id)
-        t-can (:auto-cancel-time et)]
-    (and (= :pending (:escrow-state et))
-         (pos? t-can)
-         (dl/deadline-expired? (:block-time world) t-can))))
+  (deadline-due? world workflow-id :auto-cancel-time))
 
 (defn dispute-timeout-exceeded?
   "True when max-dispute-duration has elapsed since raiseDispute and

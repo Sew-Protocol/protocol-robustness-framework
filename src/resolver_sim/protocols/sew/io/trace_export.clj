@@ -12,10 +12,10 @@
             [clojure.string                    :as str]
              [resolver-sim.logging              :as log]
             [resolver-sim.protocols.sew          :as sew]
+            [resolver-sim.protocols.sew.compat :as compat]
             [resolver-sim.protocols.sew.projection :as sew-proj]
             [resolver-sim.protocols.sew.diff  :as diff]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.io.scenarios          :as scenarios]
             [resolver-sim.protocols.sew.trace-metadata     :as meta])
   (:gen-class))
 
@@ -253,6 +253,13 @@
 ;; Trace entry → Forge step
 ;; ---------------------------------------------------------------------------
 
+(defn- idempotency-summary
+  "Summarise replay-boundary dedupe steps for audit metadata."
+  [trace]
+  (let [deduped (filter #(= :no-op-duplicate (get-in % [:extra :idempotency])) trace)]
+    {:dedupe_step_count (count deduped)
+     :dedupe_steps      (mapv :seq deduped)}))
+
 (defn- step->forge-step
   "Convert one replay trace entry into a CDRS-compliant Forge trace step."
   [entry prev-proj scenario-events id-alias-map token-sym addr->agent-id]
@@ -302,8 +309,21 @@
                                      :accepted      accepted?
                                      :state_changed accepted?)
                         (not accepted?) (assoc :rejection_reason
-                                               (name (:error entry :unknown))))]
-
+                                               (name (:error entry :unknown))))
+        replay-event  (or raw-evt {:params {}})
+        idem-kw       (get-in entry [:extra :idempotency])
+        attributes    (cond-> {:action action :seq seq-n}
+                      wf-alias (assoc :wf_alias wf-alias)
+                      params   (merge params)
+                      (:temporal-rule-id entry)
+                      (assoc :temporal_rule_id
+                             (kw-val->str-flat (:temporal-rule-id entry)))
+                      idem-kw (assoc :idempotency (name idem-kw))
+                      (compat/event-id replay-event)
+                      (assoc :event_id (compat/event-id replay-event))
+                      (compat/hop-id replay-event)
+                      (assoc :hop_id (compat/hop-id replay-event))
+                      metadata (merge (into {} (map (fn [[k v]] [(kw-val->str-flat k) (kw-val->str-flat v)]) metadata))))]
     (cond-> {:seq           seq-n
              :cdrs_version  "0.2"
              :event_type    (str/upper-case (str/replace forge-action #"_" " "))
@@ -320,13 +340,7 @@
              :actor         caller-role
              :timestamp     (:time entry 0)
              :state_bucket  (meta/state-bucket (:world entry) wf-id)
-             :attributes    (cond-> {:action action :seq seq-n}
-                              wf-alias (assoc :wf_alias wf-alias)
-                              params   (merge params)
-                              (:temporal-rule-id entry)
-                              (assoc :temporal_rule_id
-                                     (kw-val->str-flat (:temporal-rule-id entry)))
-                              metadata (merge (into {} (map (fn [[k v]] [(kw-val->str-flat k) (kw-val->str-flat v)]) metadata))))}
+             :attributes    attributes}
       expected-v2 (assoc :expected expected-v2))))
 
 ;; ---------------------------------------------------------------------------
@@ -359,15 +373,18 @@
                         step  (step->forge-step entry prev-proj events id-alias-map token-sym addr->agent-id)]
                     (recur (rest entries) (:projection entry) (conj acc step)))))]
     (let [trace-kind         (compute-trace-kind scenario trace)
-          expected-semantics (compute-expected-semantics trace scenario last-world id-alias-map)]
+          expected-semantics (compute-expected-semantics trace scenario last-world id-alias-map)
+          idem-summary       (idempotency-summary trace)]
       {:cdrs_version      "0.2"
        :schema_version    "2"
        :scenario_id       (:scenario-id result)
        :description       (str "Generated trace: " (:scenario-id result))
        :trace_kind        trace-kind
        :fee_bps           (get-in scenario [:protocol-params :resolver-fee-bps] 100)
-       :metadata          {"scenario_class" (kw-val->str-flat (meta/classify-scenario scenario))
-                           "outcome_type"   (kw-val->str-flat (meta/classify-outcome result scenario))}
+       :metadata          (cond-> {"scenario_class" (kw-val->str-flat (meta/classify-scenario scenario))
+                                   "outcome_type"   (kw-val->str-flat (meta/classify-outcome result scenario))}
+                            (pos? (:dedupe_step_count idem-summary))
+                            (assoc "idempotency" idem-summary))
        :expected_semantics expected-semantics
        :step_count        (count steps)
        :steps             steps
@@ -402,7 +419,7 @@
     (println "Usage: trace-export <scenario-json> <output-fixture-json>")
     (System/exit 1))
   (let [[scenario-path output-path] args
-        scenario (scenarios/load-scenario-file scenario-path)
+        scenario ((requiring-resolve 'resolver-sim.io.scenarios/load-scenario-file) scenario-path)
         result   (sew/replay-with-sew-protocol scenario)]
     (if (= :invalid (:outcome result))
       (do

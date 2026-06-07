@@ -33,15 +33,20 @@
    Optional keys (defaulted if absent):
      :status   — \"PASS\" | \"FAIL\" | \"PARTIAL\" (derived from :passed? if omitted)
      :results  — seq of per-trial result maps (default [])
-     :summary  — aggregated stats map (default {})"
-  [{:keys [benchmark-id label hypothesis passed? status results summary]}]
-  {:benchmark-id  benchmark-id
-   :label         label
-   :hypothesis    hypothesis
-   :passed?       (boolean passed?)
-   :status        (or status (if passed? "PASS" "FAIL"))
-   :results       (or results [])
-   :summary       (or summary {})})
+     :summary  — aggregated stats map (default {})
+     :class    — :protocol-kernel-evidence | :analytic (default :protocol-kernel-evidence)
+                Used by evidence packs to distinguish protocol-exercising phases from
+                analytic sanity checks. Phases that do not call resolve-dispute or
+                replay-with-protocol should declare :class :analytic."
+  [{:keys [benchmark-id label hypothesis passed? status results summary class]}]
+   {:benchmark-id  benchmark-id
+    :label         label
+    :hypothesis    hypothesis
+    :passed?       (boolean passed?)
+    :status        (or status (if passed? "PASS" "FAIL"))
+    :class         (or class :protocol-kernel-evidence)
+    :results       (or results [])
+    :summary       (or summary {})})
 
 ;; ---------------------------------------------------------------------------
 ;; Parameter sweep runner

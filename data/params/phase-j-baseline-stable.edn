@@ -33,9 +33,18 @@
  :freeze-duration-days 3
  :appeal-window-days 7
  
- ; Phase J: Multi-epoch configuration
- :n-epochs 100
- :n-trials-per-epoch 500
- :n-resolvers 100
- :detection-decay-rate 0.0  ; No decay (stable control)
- :n-seeds 1}
+  ; Phase J: Multi-epoch configuration
+  :n-epochs 100
+  :n-trials-per-epoch 500
+  :n-resolvers 100
+  :detection-decay-rate 0.0  ; No decay (stable control)
+  :n-seeds 1
+  :kernel-validation-sample-size 5
+  :kernel-validation-min-pass-rate 0.80
+
+  ; Phase J: Audit thresholds — override defaults in audit.clj
+  :audit-thresholds
+  {:dominance-threshold 1.2
+   :max-malice-equity-share 0.3
+   :tail-fraction 0.2
+   :malice-survival-threshold 0.5}}

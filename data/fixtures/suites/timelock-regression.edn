@@ -7,4 +7,5 @@
 
  :protocol :protocol/baseline
  :state    :states/minimal-world
+ :thresholds :thresholds/strict-baseline
  :traces [:traces/timelock-regression]}

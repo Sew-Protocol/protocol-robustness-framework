@@ -9,7 +9,8 @@
             [resolver-sim.yield.modules.none :as none]
             [resolver-sim.yield.modules.adversarial :as adversarial]
             [resolver-sim.yield.modules.liquid-lending :as liquid-lending]
-            [resolver-sim.yield.risk :as risk]))
+            [resolver-sim.yield.risk :as risk]
+            [resolver-sim.yield.schedule :as schedule]))
 
 (def default-behavior-descriptor
   {:yield/provider-kind :immediate-withdrawal-lending
@@ -27,6 +28,7 @@
 (defn- profile->archetype [profile-id]
   (case profile-id
     :aave-v3 :yield.provider/liquid-lending
+    :aave-v3-derisk :yield.provider/liquid-lending
     :yield.profile/aave-v3-like :yield.provider/liquid-lending
     nil))
 
@@ -55,6 +57,9 @@
    :aave-v3
    (liquid-lending/make-liquid-lending-module :aave-v3 :yield.profile/aave-v3-like)
 
+   :aave-v3-derisk
+   (liquid-lending/make-liquid-lending-module :aave-v3-derisk :yield.profile/aave-v3-like)
+
    :fixed-rate
    (fixed/make-fixed-module :fixed-rate)
 
@@ -73,9 +78,23 @@
 (defn init-yield-modules [world]
   (reduce register-module world (vals default-modules)))
 
+(defn- normalize-schedule [sch]
+  (cond
+    (nil? sch) nil
+    (and (map? sch) (= (:type sch) "external"))
+    (schedule/load-external-json (:path sch))
+    (map? sch) (update sch :type #(if (string? %) (keyword %) %))
+    :else sch))
+
+(defn- normalize-policy-map [m]
+  (when (map? m)
+    (into {} (map (fn [[k v]] [k (if (string? v) (keyword v) v)]) m))))
+
 (defn- normalize-token-config [{:keys [initial-index initial-index-ray apy apy-bps
                                        liquidity-mode loss-mode rate-mode
-                                       failure-modes shortfall]
+                                       failure-modes shortfall
+                                       rate-schedule index-schedule liquidity-schedule module-state-schedule
+                                       shortfall-model withdrawal-policy]
                                 :as cfg}]
   {:initial-index     (or initial-index
                           (when initial-index-ray
@@ -97,7 +116,15 @@
    :rate-mode         (let [m (or rate-mode :deterministic)]
                         (if (string? m) (keyword m) m))
    :failure-modes     (risk/normalize-failure-modes failure-modes)
-   :shortfall         shortfall})
+   :shortfall         shortfall
+   ;; New data-driven schedules
+   :schedules         {:rate-schedule         (normalize-schedule rate-schedule)
+                       :index-schedule        (normalize-schedule index-schedule)
+                       :liquidity-schedule    (normalize-schedule liquidity-schedule)
+                       :module-state-schedule (normalize-schedule module-state-schedule)}
+   ;; New policies
+   :shortfall-model   (normalize-policy-map shortfall-model)
+   :withdrawal-policy (normalize-policy-map withdrawal-policy)})
 
 (defn- normalize-behavior-descriptor [desc]
   (merge default-behavior-descriptor (or desc {})))
@@ -146,20 +173,24 @@
                  w*)]
         (reduce-kv
           (fn [w' token token-config]
-            ;; Keywordize token so indices/rates/risk all use consistent keyword keys.
-            ;; JSON config sources produce string token names; runtime uses keywords.
-            (let [kw-token (if (string? token) (keyword token) token)
-                  {:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall]}
+            (let [kw-token (keyword token)
+                  {:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall
+                          schedules shortfall-model withdrawal-policy]}
                   (normalize-token-config token-config)]
-              (-> w'
-                  (assoc-in [:yield/indices resolved-module-id kw-token] initial-index)
-                  (assoc-in [:yield/rates resolved-module-id kw-token] apy)
-                  (assoc-in [:yield/risk resolved-module-id kw-token]
-                            {:liquidity-mode liquidity-mode
-                             :loss-mode      loss-mode
-                             :rate-mode      rate-mode
-                             :failure-modes  failure-modes
-                             :shortfall      shortfall}))))
+              (let [w' (-> w'
+                           (assoc-in [:yield/indices resolved-module-id kw-token] initial-index)
+                           (assoc-in [:yield/rates resolved-module-id kw-token] apy)
+                           (assoc-in [:yield/schedules resolved-module-id kw-token] schedules)
+                           (assoc-in [:yield/shortfall-models resolved-module-id kw-token] shortfall-model)
+                           (assoc-in [:yield/withdrawal-policies resolved-module-id kw-token] withdrawal-policy)
+                           (assoc-in [:yield/risk resolved-module-id kw-token]
+                                     {:liquidity-mode liquidity-mode
+                                      :loss-mode      loss-mode
+                                      :rate-mode      rate-mode
+                                      :failure-modes  failure-modes
+                                      :shortfall      shortfall}))]
+                  (println (str "[yield-registry] DEBUG: Stored schedule for " resolved-module-id "/" kw-token ": " schedules))
+                  w')))
           w*
           tokens)))
     world

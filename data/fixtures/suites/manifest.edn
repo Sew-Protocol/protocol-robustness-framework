@@ -20,5 +20,7 @@
   :suites/equivalence-economic-stress {:file "equivalence-economic-stress.edn" :title "Equivalence Economic Stress" :class :economic :criticality :high}
   :suites/equivalence-governance-snapshot {:file "equivalence-governance-snapshot.edn" :title "Equivalence Governance Snapshot Isolation" :class :governance :criticality :high}
   :suites/equivalence-money-path-integrity {:file "equivalence-money-path-integrity.edn" :title "Equivalence Money Path Integrity" :class :economic :criticality :high}
-  :suites/dr3-critical {:file "dr3-critical.edn" :title "DR3 Critical Decentralized Dispute Resolution" :class :safety :criticality :critical :tags [:dr3 :decentralized-resolution :critical-path]}
-}
+   :suites/dr3-critical {:file "dr3-critical.edn" :title "DR3 Critical Decentralized Dispute Resolution" :class :safety :criticality :critical :tags [:dr3 :decentralized-resolution :critical-path]}
+   :suites/forking-strategist {:file "forking-strategist.edn" :title "Forking Strategist — multi-escrow fork isolation" :class :adversarial :criticality :high}
+   :suites/withdrawals {:file "withdrawals.edn" :title "Withdrawals — fee, escrow, deferred yield" :class :safety :criticality :high}
+   :suites/replay-dedupe {:file "replay-dedupe.edn" :title "Replay deduplication scenarios — event-id idempotence and superseded-pending" :class :safety :criticality :high}}

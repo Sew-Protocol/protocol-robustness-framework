@@ -38,4 +38,11 @@
  :n-trials-per-epoch 500
  :n-resolvers 100
  :detection-decay-rate 0.5  ; Detection halves each epoch (critical assumption)
- :n-seeds 1}
+ :n-seeds 1
+  ; Audit thresholds — override defaults in audit.clj
+  :audit-thresholds
+  {:dominance-threshold 1.2
+   :max-malice-equity-share 0.3
+   :tail-fraction 0.2
+   :malice-survival-threshold 0.5}
+}

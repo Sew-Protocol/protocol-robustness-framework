@@ -8,7 +8,6 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [resolver-sim.io.scenarios :as scenarios]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.io.trace-export :as trace-export]
             [resolver-sim.sim.reference-validation-evidence :as evidence])
@@ -56,7 +55,7 @@
         scenario-path (:simulator/scenario-path sc)
         trace-rel (str "actual/traces/" trace-slug ".trace.json")
         trace-path (str actual-dir "/traces/" trace-slug ".trace.json")
-        scenario (scenarios/load-scenario-file scenario-path)
+        scenario ((requiring-resolve 'resolver-sim.io.scenarios/load-scenario-file) scenario-path)
         result (sew/replay-with-sew-protocol scenario)]
     (when (not= :pass (:outcome result))
       (throw (ex-info "reference-validation simulator scenario did not pass"
