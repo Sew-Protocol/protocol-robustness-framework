@@ -85,6 +85,33 @@
                 true)))
           (vals (:yield/positions world {}))))
 
+
+(defn check-value-conservation
+  "Conservation invariant: shortfall components are non-negative and
+   deferred-amount (when present) does not exceed the position expected
+   residual value (principal + unrealized-yield).
+
+   This is a simplified check until the full principal/yield split
+   accounting (Phase 3) is complete — at which point this invariant
+   will verify: total-value = claimable + deferred + loss.
+
+   For now, verifies: deferred-amount + haircut-amount >= 0
+   and (deferred-amount + haircut-amount) <= principal + unrealized-yield
+   when shortfall exists."
+  [world]
+  (every? (fn [pos]
+            (let [principal (long (:principal pos 0))
+                  unrealized (long (:unrealized-yield pos 0))
+                  sf (:shortfall pos)
+                  deferred  (long (or (:deferred-amount sf) 0))
+                  haircut   (long (or (:haircut-amount sf) 0))
+                  fulfilled (long (or (:fulfilled-amount sf) 0))]
+              (and (>= deferred 0) (>= haircut 0) (>= fulfilled 0)
+                   (if sf
+                     (<= (+ deferred haircut) (+ principal (max 0 unrealized)))
+                     true))))
+          (vals (:yield/positions world {}))))
+
 (defn check-deferred-reclaim
   "Withdrawn positions: no shortfall; reclaimed ≥ 0."
   [world]
@@ -134,6 +161,7 @@
    :yield/status-fsm           check-status-fsm
    :yield/realized-non-negative check-realized-non-negative
    :yield/partial-liquidity-principal check-partial-liquidity-principal
+   :yield/value-conservation   check-value-conservation
    :yield/deferred-reclaim     check-deferred-reclaim})
 
 (defn registered-ids []

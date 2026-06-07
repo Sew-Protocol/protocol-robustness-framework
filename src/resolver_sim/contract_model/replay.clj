@@ -282,8 +282,10 @@
     (split-with #(= t (:time %)) events)))
 
 (defn- conflict-rejection-entry
-  [protocol world-before event preflight-status conflict-domain conflict-with-seq]
-  (let [[proj ph] (if (satisfies? proto/AnalysisModule protocol)
+  [protocol world-before event preflight-status conflict-domain conflict-with-seq flags]
+  (let [[proj ph] (if (and (satisfies? proto/AnalysisModule protocol)
+                           (or (= (:projection-mode flags) :full)
+                               (= (:op/type event) :scenario/end)))
                     (proto/compute-projection protocol world-before)
                     [nil nil])
         tags      (if (satisfies? proto/EconomicModel protocol)
@@ -400,12 +402,13 @@
                                         conflict-domain (some #(when (contains? (:claimed-domains acc) %) %) domains)
                                         winner-seq (get (:claimed-domains acc) conflict-domain)
                                         pre-status (get preflight (:seq event) :ineligible)]
-                                    (if conflict-domain
-                                      (let [entry (-> (conflict-rejection-entry protocol working-world event pre-status conflict-domain winner-seq)
+                                        (if conflict-domain
+                                        (let [entry (-> (conflict-rejection-entry protocol working-world event pre-status conflict-domain winner-seq replay-flags)
                                                       (assoc :expected-failure?
                                                              (contains? expected-errors-set
                                                                         [(:seq event) (:action event) :batch-conflict])))]
                                         (-> acc
+
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))
