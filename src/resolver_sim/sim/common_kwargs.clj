@@ -14,9 +14,10 @@
    :allow-slashing?                    (:allow-slashing? params true)
    :resolver-bond-bps                  (:resolver-bond-bps params 0)
    :fraud-detection-probability        (:fraud-detection-probability params 0.0)
-   :fraud-slash-bps                    (:fraud-slash-bps params 0)
-   :reversal-detection-probability     (:reversal-detection-probability params 1.0)
-   :reversal-slash-bps                 (:reversal-slash-bps params 0)
+    :fraud-slash-bps                    (:fraud-slash-bps params 0)
+    :l2-slash-bps                       (:l2-slash-bps params 200)
+    :reversal-detection-probability     (:reversal-detection-probability params 1.0)
+    :reversal-slash-bps                 (:reversal-slash-bps params 0)
    :resolver-stake-wei                 (:resolver-stake-wei params)
     :new-evidence-probability           (:new-evidence-probability params 0.0)  ; 0.0 disables pending-evidence entirely; >0 gates an oracle roll
    :timeout-detection-probability      (:timeout-detection-probability params 0.0)

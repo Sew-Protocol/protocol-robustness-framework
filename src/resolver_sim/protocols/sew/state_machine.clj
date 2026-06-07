@@ -394,23 +394,33 @@
 ;; Timed-action predicates
 ;; ---------------------------------------------------------------------------
 
+(defn- deadline-due?
+  "Shared helper for auto-release and auto-cancel deadlines.
+   Returns true when the escrow is :pending with a positive deadline timestamp
+   that has expired.  nil-safe: returns false for invalid workflow-ids (where
+   `t/get-transfer` returns nil) because (= nil :pending) is false.
+
+   `field` — the escrow key holding the deadline timestamp (:auto-release-time
+          or :auto-cancel-time)."
+  [world workflow-id field]
+  (let [et  (t/get-transfer world workflow-id)
+        ts  (get et field)]
+    ;; Order matters: the (= :pending ...) check MUST come before (pos? ...).
+    ;; If the escrow-transfer is nil (invalid wf-id) or the state is wrong,
+    ;; short-circuit prevents (pos? nil) from crashing.
+    (and (= :pending (:escrow-state et))
+         (pos? ts)
+         (dl/deadline-expired? (:block-time world) ts))))
+
 (defn auto-release-due?
   "True when auto-release-time has passed and escrow is still :pending."
   [world workflow-id]
-  (let [et    (t/get-transfer world workflow-id)
-        t-rel (:auto-release-time et)]
-    (and (= :pending (:escrow-state et))
-         (pos? t-rel)
-         (dl/deadline-expired? (:block-time world) t-rel))))
+  (deadline-due? world workflow-id :auto-release-time))
 
 (defn auto-cancel-due?
   "True when auto-cancel-time has passed and escrow is still :pending."
   [world workflow-id]
-  (let [et    (t/get-transfer world workflow-id)
-        t-can (:auto-cancel-time et)]
-    (and (= :pending (:escrow-state et))
-         (pos? t-can)
-         (dl/deadline-expired? (:block-time world) t-can))))
+  (deadline-due? world workflow-id :auto-cancel-time))
 
 (defn dispute-timeout-exceeded?
   "True when max-dispute-duration has elapsed since raiseDispute and

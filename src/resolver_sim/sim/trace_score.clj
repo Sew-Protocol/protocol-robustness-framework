@@ -46,6 +46,11 @@
                               :liveness-failure     liveness-penalty})))
 
 (defn score-category
+  "Classify a scored replay into behavioural categories.
+   Note: The :cascade tag is triggered by (> disputes-triggered 1)
+   — a simple count heuristic.  It does not measure whether later
+   disputes were affected by earlier ones (sequential dependency),
+   so two independent disputes are also tagged as :cascade."
   [scored-result]
   (let [comps   (:score-components scored-result {})
         metrics (:metrics scored-result {})]

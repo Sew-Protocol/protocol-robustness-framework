@@ -24,7 +24,8 @@
              [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
-             [resolver-sim.time.model        :as time-model]))
+             [resolver-sim.time.model        :as time-model]
+             [resolver-sim.util.attribution :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)

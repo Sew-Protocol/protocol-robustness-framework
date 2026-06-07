@@ -30,7 +30,8 @@
             [resolver-sim.protocols.sew.invariants.bond :as bond]
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
-            [resolver-sim.yield.evidence :as yield-evi]))
+            [resolver-sim.yield.evidence :as yield-evi]
+            [resolver-sim.util.attribution :as attr]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 

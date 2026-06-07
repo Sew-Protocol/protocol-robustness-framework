@@ -316,3 +316,37 @@
       (is (number? (:nodes-evaluated cov)))
       (is (number? (:proper-subgames-checked cov)))
       (is (number? (:max-depth cov))))))
+
+
+(deftest stale-continuation-errors-are-guard-check-keywords
+  (let [known-guard-errors
+        #{:transfer-not-pending :transfer-not-in-dispute :invalid-workflow-id
+          :transfer-not-finalized :invalid-state-for-release
+          :invalid-state-for-refund
+          :no-pending-settlement :no-resolution-to-appeal
+          :no-resolution-to-challenge :has-pending-settlement
+          :appeal-window-expired :escalation-not-allowed
+          :liquidity-insufficient
+          ;; Non-stale guard errors that should NOT be in the set
+          :not-authorized-resolver :not-participant :invalid-recipient
+          :invalid-token :not-authorized-to-cancel-yet
+          :appeal-window-not-expired :insufficient-resolver-stake
+          :amount-zero :no-bond-to-return :no-bond-to-slash
+          :missing-caller-context :invalid-slash-amount
+          :invalid-new-resolver :dispute-timeout-not-exceeded
+          :cannot-set-both-auto-times :no-claimable-balance
+          :no-fees-to-withdraw :escalation-not-configured
+          :insufficient-module-liquidity :no-pending-slash}]
+    ;; All stale-continuation-errors must be recognized guard-check errors
+    (doseq [err cf/stale-continuation-errors]
+      (is (contains? known-guard-errors err)
+          (str err " must be a known lifecycle/resolution guard-check error"))))
+  ;; Verify no guard error tagged as stale is a false positive
+  (testing "stale-continuation-errors does not include auth/payment errors"
+    (doseq [err [:not-authorized-resolver :not-participant :invalid-recipient
+                 :invalid-token :no-bond-to-return :no-bond-to-slash
+                 :insufficient-resolver-stake :amount-zero
+                 :missing-caller-context :cannot-set-both-auto-times
+                 :no-claimable-balance :no-fees-to-withdraw]]
+      (is (not (contains? cf/stale-continuation-errors err))
+          (str err " should NOT be tagged as stale continuation")))))

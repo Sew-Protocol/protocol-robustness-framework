@@ -803,20 +803,20 @@
   (vec
    (keep
     (fn [entry]
-      (when-let [res (:replay-result entry)]
-        (when-let [world (proj/terminal-world-from-result res)]
-          (let [sid (or (:scenario-id res)
-                        (:scenario-id entry)
-                        (some-> (:name entry) str))
-                status (cond
-                         (:scenario-id res) "from-result"
-                         (:scenario-id entry) "from-summary-entry"
-                         (:name entry) "from-summary-entry-name"
-                         :else "missing-from-result")]
-            {:scenario-id (or sid "unknown")
-             :scenario-id-status status
-             :outcome (:outcome res)
-             :world world}))))
+      (if-let [res (:replay-result entry)
+               world (proj/terminal-world-from-result res)]
+        (let [sid (or (:scenario-id res)
+                      (:scenario-id entry)
+                      (some-> (:name entry) str))
+              status (cond
+                       (:scenario-id res) "from-result"
+                       (:scenario-id entry) "from-summary-entry"
+                       (:name entry) "from-summary-entry-name"
+                       :else "missing-from-result")]
+          {:scenario-id (or sid "unknown")
+           :scenario-id-status status
+           :outcome (:outcome res)
+           :world world})))
     (summary-entries summary))))
 
 (defn terminal-worlds-from-summary

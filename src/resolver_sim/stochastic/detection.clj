@@ -52,7 +52,8 @@
    Matches default-params in types.clj."
   {:fraud   0
    :reversal 0
-   :timeout 200})
+   :timeout 200
+   :l2 200})
 
 (defn- normalize-oracle-mode
   "Mode aliases. :fixed-or is shorthand for :fixed-roll-sequence."
@@ -572,21 +573,28 @@
        :l1-slashed? l1-slashed?})))
 
 (defn select-slash-reason
-  "Priority order for slashing reason (first match wins)."
+  "Priority order for slashing reason (first match wins).
+
+   Note: l2-slashed? maps to :l2 (not :fraud) so that L2 detection
+   uses its own bps param (:l2-slash-bps) and produces non-zero
+   economic impact even when :fraud-slash-bps is 0."
   [{:keys [fraud-detected? reversal-slashed? l2-slashed? timeout-detected? l1-slashed?]}]
   (cond
     fraud-detected? :fraud
     reversal-slashed? :reversal
-    l2-slashed? :fraud
+    l2-slashed? :l2
     timeout-detected? :timeout
     l1-slashed? :timeout
     :else nil))
 
 (defn slash-amount-for-reason
-  "Slash amount in wei. Reversal uses stake basis (live); other reasons use bond basis."
+  "Slash amount in wei. Reversal uses stake basis (live); other reasons use bond basis.
+   L2 detection uses its own :l2-slash-bps param so it produces economic impact
+   independently of :fraud-slash-bps."
   [reason params {:keys [bond-total resolver-stake slash-mult timeout-detected?]}]
   (case reason
     :reversal (payoffs/calculate-reversal-slash resolver-stake (:reversal-slash-bps params (:reversal default-slash-bps)))
+    :l2       (long (* bond-total (/ (:l2-slash-bps params (:l2 default-slash-bps)) 10000.0)))
     :fraud    (long (* bond-total (/ (:fraud-slash-bps params (:fraud default-slash-bps)) 10000.0)))
     :timeout  (if timeout-detected?
                 (long (* bond-total (/ (:timeout-slash-bps params (:timeout default-slash-bps)) 10000.0)))

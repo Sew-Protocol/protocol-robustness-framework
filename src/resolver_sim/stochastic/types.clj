@@ -21,6 +21,7 @@
    :slashing-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :fraud-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :fraud-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
+   :l2-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
    :reversal-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :reversal-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
     :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
@@ -168,6 +169,7 @@
     :reversal-detection-probability
     :fraud-detection-probability
     :fraud-slash-bps
+    :l2-slash-bps
     :reversal-slash-bps
     :timeout-slash-bps
     :fraud-model

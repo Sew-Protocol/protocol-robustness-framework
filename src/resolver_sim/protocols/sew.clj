@@ -23,6 +23,7 @@
             [resolver-sim.db.sew                         :as sew-db]
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
+            [resolver-sim.util.attribution            :as attr]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.contract-model.idempotency     :as idem]
             [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]

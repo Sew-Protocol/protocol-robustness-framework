@@ -21,7 +21,8 @@
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.yield.registry              :as yield-reg]
             [resolver-sim.yield.accounting            :as yield-acct]
-            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
+            [resolver-sim.util.attribution             :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal accounting helpers
@@ -74,15 +75,12 @@
   "Calculate and update accrued yield for an escrow based on time delta."
   [world workflow-id]
   (let [snap (t/get-snapshot world workflow-id)
-        mid  (:yield-generation-module snap)
-        et    (t/get-transfer world workflow-id)
-        _ (println (str "[sew/lifecycle] DEBUG: accrue-yield wf=" workflow-id ", mid=" mid ", et=" et))]
+        mid  (:yield-generation-module snap)]
     (if (and mid (contains? (:yield/modules world) mid))
       (let [et    (t/get-transfer world workflow-id)
             now   (:block-time world)
             last  (:last-accrual-time et now)
-            dt    (- now last)
-            _ (println (str "[sew/lifecycle] DEBUG: accrue-yield mid=" mid ", now=" now ", last=" last ", dt=" dt))]
+            dt    (- now last)]
         (if (pos? dt)
           (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
                                                         :module/id mid

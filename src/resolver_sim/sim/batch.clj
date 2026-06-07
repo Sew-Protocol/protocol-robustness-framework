@@ -168,13 +168,13 @@
 
    Phase F1: Multi-resolver collusion with waterfall slashing.
 
-   NOTE: run-ring-batch does NOT use common-kwargs (the shared keyword-arg
-   vector).  ring/simulate-ring-dispute accepts a smaller pre-F1 param surface
-   (no oracle fixtures, escalation, fraud model, or bribery).  If ring
-   simulations need those features, extend ring/simulate-ring-dispute's
-   signature and switch this to (apply ... common-kwargs)."
+   Uses common-kwargs (shared keyword-arg vector) so oracle fixtures,
+   :fixed-or, escalation assumptions, and bribery params are forwarded
+   to ring/simulate-ring-dispute."
   [rng n-trials params ring-spec]
-  (let [;; Initialize the ring
+  (let [kw-args       (common-kwargs params)
+        
+        ;; Initialize the ring
         initial-ring (ring/create-ring ring-spec)
         
         ;; Run repeated disputes for the ring
@@ -182,7 +182,7 @@
         (reduce
           (fn [ring-state _trial]
             (let [dispute-result
-                  (ring/simulate-ring-dispute
+                  (apply ring/simulate-ring-dispute
                    rng ring-state
                    (:escrow-size params 10000)
                    (:resolver-fee-bps params)
@@ -191,7 +191,7 @@
                    (:appeal-probability-if-correct params)
                    (:appeal-probability-if-wrong params)
                    (:slashing-detection-probability params)
-                   :l2-detection-prob (:l2-detection-prob params 0))]
+                   kw-args)]
               (:ring dispute-result)))
           initial-ring
           (range n-trials))

@@ -84,19 +84,32 @@
                         max-irrecoverable-ratio     0.2}}]
    (let [shortfall  (shortfall-total world token)
          has-sf?    (pos? (:positions-with-shortfall shortfall))
-         fin        (when resolve-financial-finality?
-                      (let [escrows (get world :escrow-transfers {})]
-                        (if (seq (keys escrows))
-                          ;; Financially final only when ALL workflows are final
-                          (let [results (map (fn [[wf _]]
-                                              (finality/classify-financial-finality world wf))
-                                            escrows)
-                                all-final? (every? :financially-final? results)]
-                            {:financially-final? all-final?
-                             :financial/phase   (if all-final? :financially-final
-                                                 (apply max-key :financially-final? results))})
-                          {:financially-final? true  ;; no escrows = trivially final
-                           :financial/phase :financially-final})))
+          fin        (when resolve-financial-finality?
+                       (let [escrows (get world :escrow-transfers {})]
+                         (if (seq (keys escrows))
+                           ;; Financially final only when ALL workflows are final.
+                           ;; Per-workflow evaluation is conservative: a single open
+                           ;; gate on any escrow blocks loss realization on all others.
+                           ;; This avoids premature loss classification during
+                           ;; multi-escrow disputes where one escrow settles early
+                           ;; while another is still challengeable.
+                           (let [results (map (fn [[wf _]]
+                                               (finality/classify-financial-finality world wf))
+                                             escrows)
+                                 phases  (map :financial/phase results)
+                                 all-final? (every? :financially-final? results)]
+                             {:financially-final? all-final?
+                              :financial/phase   (if all-final? :financially-final
+                                                  (last (sort-by
+                                                          #(case %
+                                                             :provisional 0
+                                                             :challengeable 1
+                                                             :recoverable 2
+                                                             :finalizing 3
+                                                             :financially-final 4)
+                                                          phases)))})
+                           {:financially-final? true  ;; no escrows = trivially final
+                            :financial/phase :financially-final})))
          ff-final?  (if fin (:financially-final? fin) false)
          ff-phase   (if fin (:financial/phase fin) :provisional)]
 
@@ -113,45 +126,50 @@
         :financial-phase          ff-phase
         :financially-final?       ff-final?}
 
-       ;; Shortfall exists but financial finality not yet reached
-       (not ff-final?)
-       {:loss/status              :loss-pending-finality
-        :loss/scope               :yield-module
-        :loss/token               token
-        :loss/shortfall           shortfall
-        :loss/user-realized?      false
-        :loss/protocol-realized?  false
-        :loss/reason              :partial-liquidity
-        :financial-phase          ff-phase
-        :financially-final?       false}
+        ;; Shortfall exists but financial finality not yet reached
+        ;; and escrow is still in a non-terminal state → risk, not yet impaired
+        (and (not ff-final?) (some-> fin :financial/phase #{:provisional :challengeable}))
+        {:loss/status              :loss-risk
+         :loss/scope               :yield-module
+         :loss/token               token
+         :loss/shortfall           shortfall
+         :loss/user-realized?      false
+         :loss/protocol-realized?  false
+         :loss/reason              :open-recovery-window
+         :financial-phase          ff-phase
+         :financially-final?       false}
 
-       ;; Shortfall + financially final + deferred > 0 → realized or irrecoverable
-        (and ff-final? (pos? (:deferred-total shortfall)))
-        (let [held    (get-in world [:total-held token] 0)
-              claim   (get-in world [:claimable token] 0)
-              ratio   (/ (+ held claim) (:deferred-total shortfall))
-              max-loss? (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio))]
+        ;; Shortfall exists, not yet financially final, and pipeline is past
+        ;; challenge window → obligations are impaired pending finality
+        (not ff-final?)
+        {:loss/status              :loss-pending-finality
+         :loss/scope               :yield-module
+         :loss/token               token
+         :loss/shortfall           shortfall
+         :loss/user-realized?      false
+         :loss/protocol-realized?  false
+         :loss/reason              :awaiting-finality
+         :financial-phase          ff-phase
+         :financially-final?       false}
+
+        ;; Shortfall + financially final → total obligations (deferred + haircut)
+        (and ff-final? (pos? (+ (:deferred-total shortfall) (:haircut-total shortfall))))
+        (let [held          (get-in world [:total-held token] 0)
+              claim         (get-in world [:claimable token] 0)
+              total-oblig   (+ (:deferred-total shortfall) (:haircut-total shortfall))
+              ratio         (/ (+ held claim) (max total-oblig 1))
+              max-loss?     (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio))]
           {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
            :loss/scope               :yield-module
            :loss/token               token
            :loss/shortfall           shortfall
            :loss/user-realized?      true
            :loss/protocol-realized?  true
-           :loss/reason              (if max-loss? :irrecoverable-shortfall :partial-liquidity)
+           :loss/reason              (cond max-loss? :irrecoverable-shortfall
+                                           (pos? (:haircut-total shortfall)) :haircut-loss
+                                           :else :partial-liquidity)
            :financial-phase          ff-phase
            :financially-final?       true})
-
-        ;; Shortfall + financially final + no deferred but haircut > 0 → realized (haircut is a loss)
-        (and ff-final? (pos? (:haircut-total shortfall)))
-        {:loss/status              :loss-realized
-         :loss/scope               :yield-module
-         :loss/token               token
-         :loss/shortfall           shortfall
-         :loss/user-realized?      true
-         :loss/protocol-realized?  true
-         :loss/reason              :haircut-loss
-         :financial-phase          ff-phase
-         :financially-final?       true}
 
         ;; Fallback (shortfall exists but no deferred or haircut — already resolved)
         :else

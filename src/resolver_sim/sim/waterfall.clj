@@ -17,10 +17,26 @@
    - Probabilistic (`probabilistic-process-slash-pool`): each event is filtered
      through Monte Carlo dispute resolution; slash frequency and amount reflect
      real detection probabilities. Tests pool robustness."
-  (:require [resolver-sim.stochastic.rng :as rng]
+  (:require [resolver-sim.sim.common-kwargs :as ck]
+            [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.dispute :as dispute]))
 
 (declare aggregate-waterfall-metrics)
+
+(def ^:private junior-per-slash-cap-ratio
+  "Maximum fraction of a junior's bond that can be taken in a single slash.
+   Corresponds to the protocol's 50% per-slash limit."
+  0.50)
+
+(def ^:private junior-per-epoch-cap-ratio
+  "Maximum fraction of a junior's bond that can be taken per epoch.
+   Corresponds to the protocol's 20% per-epoch cap."
+  0.20)
+
+(def ^:private senior-per-epoch-cap-ratio
+  "Maximum fraction of a senior's bond that can be taken per epoch.
+   Corresponds to the protocol's 10% per-epoch cap."
+  0.10)
 
 (defn calculate-slash-amount
   "Calculate actual slash amount given bond and slash rate (in basis points)
@@ -33,7 +49,7 @@
    
    Returns: Amount to slash (before waterfall)"
   [bond-amount slash-rate-bps]
-  (let [per-slash-cap (/ bond-amount 2.0)  ; 50% per-slash limit
+  (let [per-slash-cap (* bond-amount junior-per-slash-cap-ratio)
         calc-amount (* bond-amount (/ slash-rate-bps 10000.0))]
     (double (min per-slash-cap calc-amount))))
 
@@ -45,7 +61,7 @@
              :new-resolver updated-resolver-state}"
   [resolver slash-amount]
   (let [bond-before (:bond-remaining resolver 0)
-        per-slash-cap (/ bond-before 2.0)
+        per-slash-cap (* bond-before junior-per-slash-cap-ratio)
         capped-slash (min slash-amount per-slash-cap)
         amount-slashed (min bond-before capped-slash)
         shortage (- slash-amount amount-slashed)
@@ -90,8 +106,7 @@
              :unmet-obligation amount-not-covered}"
   [senior shortage]
   (let [available (calculate-available-coverage senior)
-        ;; Senior per-epoch cap is 10% of bond
-        max-per-epoch (* (:bond-amount senior 0) 0.10)
+        max-per-epoch (* (:bond-amount senior 0) senior-per-epoch-cap-ratio)
         can-slash (min available max-per-epoch shortage)
         unmet (- shortage can-slash)
         new-used (+ (:coverage-used senior 0) can-slash)]
@@ -292,19 +307,20 @@
   (let [n-juniors (count (:juniors pool))
         n-per-senior (/ n-juniors (max 1 (:n-seniors params 5)))
         mc-kwargs (merge
-                   {:fraud-slash-bps (:fraud-slash-bps params 50)
-                    :reversal-detection-probability (:reversal-detection-probability params 0.02)
-                    :timeout-slash-bps (:timeout-slash-bps params 25)}
-                   ;; Forward oracle fixture params so resolve-dispute can detect
-                   ;; exhaustion (needed for :repeat-last / :cycle policy checks)
-                   (when-let [f (:oracle-fixture params)]
-                     {:oracle-fixture f})
-                   (when (:oracle-mode params)
-                     {:oracle-mode (:oracle-mode params)})
-                   (when (:oracle-roll-on-exhaustion params)
-                     {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
-                   (when (:oracle-scope params)
-                     {:oracle-scope (:oracle-scope params)}))
+                    ;; base: all common-kwargs params (includes new-evidence-probability)
+                    (apply hash-map (ck/common-kwargs params))
+                    ;; waterfall-specific overrides where defaults differ from common-kwargs
+                    {:reversal-detection-probability (:reversal-detection-probability params 0.02)
+                     :timeout-slash-bps (:timeout-slash-bps params 25)}
+                    ;; remaining oracle fixture keys not covered by common-kwargs
+                    (when-let [f (:oracle-fixture params)]
+                      {:oracle-fixture f})
+                    (when (:oracle-mode params)
+                      {:oracle-mode (:oracle-mode params)})
+                    (when (:oracle-roll-on-exhaustion params)
+                      {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
+                    (when (:oracle-scope params)
+                      {:oracle-scope (:oracle-scope params)}))
         result (reduce
                 (fn [[state rng] trial-idx]
                   ;; Fork per-trial RNG so escrow/strategy draws don't shift
