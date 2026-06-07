@@ -17,7 +17,8 @@
    - Probabilistic (`probabilistic-process-slash-pool`): each event is filtered
      through Monte Carlo dispute resolution; slash frequency and amount reflect
      real detection probabilities. Tests pool robustness."
-  (:require [resolver-sim.stochastic.rng :as rng]
+  (:require [resolver-sim.sim.common-kwargs :as ck]
+            [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.dispute :as dispute]))
 
 (declare aggregate-waterfall-metrics)
@@ -292,19 +293,20 @@
   (let [n-juniors (count (:juniors pool))
         n-per-senior (/ n-juniors (max 1 (:n-seniors params 5)))
         mc-kwargs (merge
-                   {:fraud-slash-bps (:fraud-slash-bps params 50)
-                    :reversal-detection-probability (:reversal-detection-probability params 0.02)
-                    :timeout-slash-bps (:timeout-slash-bps params 25)}
-                   ;; Forward oracle fixture params so resolve-dispute can detect
-                   ;; exhaustion (needed for :repeat-last / :cycle policy checks)
-                   (when-let [f (:oracle-fixture params)]
-                     {:oracle-fixture f})
-                   (when (:oracle-mode params)
-                     {:oracle-mode (:oracle-mode params)})
-                   (when (:oracle-roll-on-exhaustion params)
-                     {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
-                   (when (:oracle-scope params)
-                     {:oracle-scope (:oracle-scope params)}))
+                    ;; base: all common-kwargs params (includes new-evidence-probability)
+                    (apply hash-map (ck/common-kwargs params))
+                    ;; waterfall-specific overrides where defaults differ from common-kwargs
+                    {:reversal-detection-probability (:reversal-detection-probability params 0.02)
+                     :timeout-slash-bps (:timeout-slash-bps params 25)}
+                    ;; remaining oracle fixture keys not covered by common-kwargs
+                    (when-let [f (:oracle-fixture params)]
+                      {:oracle-fixture f})
+                    (when (:oracle-mode params)
+                      {:oracle-mode (:oracle-mode params)})
+                    (when (:oracle-roll-on-exhaustion params)
+                      {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
+                    (when (:oracle-scope params)
+                      {:oracle-scope (:oracle-scope params)}))
         result (reduce
                 (fn [[state rng] trial-idx]
                   ;; Fork per-trial RNG so escrow/strategy draws don't shift
