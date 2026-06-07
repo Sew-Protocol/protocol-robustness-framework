@@ -26,6 +26,16 @@
     {:accuracy accuracy
      :consensus (> (count (filter identity correct)) (/ n-resolvers 2.0))}))
 
+(def ^:private lock-threshold
+  "Maximum early-accuracy and late-accuracy for the system to be considered
+   locked into a wrong consensus.  Both must fall below these thresholds."
+  {:early 0.5 :late 0.6})
+
+(def ^:private drift-threshold
+  "Minimum absolute accuracy drift for a cascading system to be classified as
+   vulnerable (high risk of irreversible belief cascade)."
+  0.15)
+
 (defn run-cascade
   "Run simulation with early skew"
   [num-epochs n-resolvers early-skew confidence correlation-bias rng]
@@ -56,10 +66,11 @@
                   (/ (apply + (map :accuracy (drop (max 0 (- (count epochs) 5)) epochs))) 5.0)
                   0.5)
         drift (- late-acc early-acc)
-        locked? (and (< early-acc 0.5) (< late-acc 0.6))]
+        locked? (and (< early-acc (:early lock-threshold))
+                     (< late-acc (:late lock-threshold)))]
     
     {:drift drift :early-accuracy early-acc :late-accuracy late-acc
-     :locked? locked? :vulnerable? (and (> (Math/abs drift) 0.15) locked?)}))
+     :locked? locked? :vulnerable? (and (> (Math/abs drift) drift-threshold) locked?)}))
 
 (defn test-cascade
   "Test scenario"

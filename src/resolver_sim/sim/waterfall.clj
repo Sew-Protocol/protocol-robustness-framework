@@ -23,6 +23,21 @@
 
 (declare aggregate-waterfall-metrics)
 
+(def ^:private junior-per-slash-cap-ratio
+  "Maximum fraction of a junior's bond that can be taken in a single slash.
+   Corresponds to the protocol's 50% per-slash limit."
+  0.50)
+
+(def ^:private junior-per-epoch-cap-ratio
+  "Maximum fraction of a junior's bond that can be taken per epoch.
+   Corresponds to the protocol's 20% per-epoch cap."
+  0.20)
+
+(def ^:private senior-per-epoch-cap-ratio
+  "Maximum fraction of a senior's bond that can be taken per epoch.
+   Corresponds to the protocol's 10% per-epoch cap."
+  0.10)
+
 (defn calculate-slash-amount
   "Calculate actual slash amount given bond and slash rate (in basis points)
    
@@ -34,7 +49,7 @@
    
    Returns: Amount to slash (before waterfall)"
   [bond-amount slash-rate-bps]
-  (let [per-slash-cap (/ bond-amount 2.0)  ; 50% per-slash limit
+  (let [per-slash-cap (* bond-amount junior-per-slash-cap-ratio)
         calc-amount (* bond-amount (/ slash-rate-bps 10000.0))]
     (double (min per-slash-cap calc-amount))))
 
@@ -46,7 +61,7 @@
              :new-resolver updated-resolver-state}"
   [resolver slash-amount]
   (let [bond-before (:bond-remaining resolver 0)
-        per-slash-cap (/ bond-before 2.0)
+        per-slash-cap (* bond-before junior-per-slash-cap-ratio)
         capped-slash (min slash-amount per-slash-cap)
         amount-slashed (min bond-before capped-slash)
         shortage (- slash-amount amount-slashed)
@@ -91,8 +106,7 @@
              :unmet-obligation amount-not-covered}"
   [senior shortage]
   (let [available (calculate-available-coverage senior)
-        ;; Senior per-epoch cap is 10% of bond
-        max-per-epoch (* (:bond-amount senior 0) 0.10)
+        max-per-epoch (* (:bond-amount senior 0) senior-per-epoch-cap-ratio)
         can-slash (min available max-per-epoch shortage)
         unmet (- shortage can-slash)
         new-used (+ (:coverage-used senior 0) can-slash)]

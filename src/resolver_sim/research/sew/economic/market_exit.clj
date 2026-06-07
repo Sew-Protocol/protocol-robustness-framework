@@ -17,13 +17,17 @@
 ;;;; EXIT PROBABILITY & SIMULATION
 ;;;; ============================================================================
 
+(def ^:private exit-prob-denominator
+  "Normalizes profit shortfall to a per-epoch exit probability [0,1].
+   Derived from the model calibration: a shortfall of this many units
+   makes exit a near-certainty."
+  1000.0)
+
 (defn calculate-exit-probability
-  "Calculate per-epoch exit probability based on profit shortfall
-  
-  Model: exit_prob = max(0, (expected - actual) / 1000)"
+  "Calculate per-epoch exit probability based on profit shortfall"
   [expected-profit actual-profit]
   (let [gap (- expected-profit actual-profit)
-        prob (/ gap 1000.0)]
+        prob (/ gap exit-prob-denominator)]
     (double (max 0.0 (min 1.0 prob)))))
 
 (defn apply-resolver-exits
