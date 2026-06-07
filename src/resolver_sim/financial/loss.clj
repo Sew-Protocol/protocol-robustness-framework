@@ -125,36 +125,46 @@
         :financial-phase          ff-phase
         :financially-final?       false}
 
-       ;; Shortfall + financial finality + still deferred → realized loss
-       (and ff-final? (pos? (:deferred-total shortfall)))
-       (let [max-loss? (try (let [held    (get-in world [:total-held token] 0)
-                                  claim   (get-in world [:claimable token] 0)
-                                  ratio   (if (zero? (:deferred-total shortfall))
-                                           1.0
-                                           (/ (+ held claim) (:deferred-total shortfall)))]
-                              (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio)))
-                            (catch Exception _ false))]
-         {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
-          :loss/scope               :yield-module
-          :loss/token               token
-          :loss/shortfall           shortfall
-          :loss/user-realized?      true
-          :loss/protocol-realized?  true
-          :loss/reason              (if max-loss? :irrecoverable-shortfall :partial-liquidity)
-          :financial-phase          ff-phase
-          :financially-final?       true})
+       ;; Shortfall + financially final + deferred > 0 → realized or irrecoverable
+        (and ff-final? (pos? (:deferred-total shortfall)))
+        (let [held    (get-in world [:total-held token] 0)
+              claim   (get-in world [:claimable token] 0)
+              ratio   (/ (+ held claim) (:deferred-total shortfall))
+              max-loss? (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio))]
+          {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
+           :loss/scope               :yield-module
+           :loss/token               token
+           :loss/shortfall           shortfall
+           :loss/user-realized?      true
+           :loss/protocol-realized?  true
+           :loss/reason              (if max-loss? :irrecoverable-shortfall :partial-liquidity)
+           :financial-phase          ff-phase
+           :financially-final?       true})
 
-       ;; Fallback (shortfall present, financially final, but deferred is 0?)
-       :else
-       {:loss/status              :normal
-        :loss/scope               :yield-module
-        :loss/token               token
-        :loss/shortfall           shortfall
-        :loss/user-realized?      false
-        :loss/protocol-realized?  false
-        :loss/reason              :shortfall-resolved
-        :financial-phase          ff-phase
-        :financially-final?       ff-final?}))))
+        ;; Shortfall + financially final + no deferred but haircut > 0 → realized (haircut is a loss)
+        (and ff-final? (pos? (:haircut-total shortfall)))
+        {:loss/status              :loss-realized
+         :loss/scope               :yield-module
+         :loss/token               token
+         :loss/shortfall           shortfall
+         :loss/user-realized?      true
+         :loss/protocol-realized?  true
+         :loss/reason              :haircut-loss
+         :financial-phase          ff-phase
+         :financially-final?       true}
+
+        ;; Fallback (shortfall exists but no deferred or haircut — already resolved)
+        :else
+        {:loss/status              :normal
+         :loss/scope               :yield-module
+         :loss/token               token
+         :loss/shortfall           shortfall
+         :loss/user-realized?      false
+         :loss/protocol-realized?  false
+         :loss/reason              :shortfall-resolved
+         :financial-phase          ff-phase
+         :financially-final?       ff-final?}))))
+
 
 ;; ── Convenience predicates ───────────────────────────────────────────────────
 

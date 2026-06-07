@@ -306,13 +306,12 @@
                    (when (:oracle-scope params)
                      {:oracle-scope (:oracle-scope params)}))
         result (reduce
-                (fn [state trial-idx]
+                (fn [[state rng] trial-idx]
                   ;; Fork per-trial RNG so escrow/strategy draws don't shift
                   ;; dispute resolution rolls across trials.  Each trial is
                   ;; reproducible independently of neighboring trials.
-                  (let [trial-rng (rng/make-rng (rng/seed-from-index
-                                                  (:base-seed params 42) trial-idx))
-                        junior-idx (mod trial-idx n-juniors)
+                   (let [[trial-rng rng-next] (rng/split-rng rng)
+                         junior-idx (mod trial-idx n-juniors)
                         senior-idx (int (/ junior-idx n-per-senior))
                         resolver-id (str "j" senior-idx "_" (mod junior-idx n-per-senior))
                         senior-id   (str "s" senior-idx)
@@ -356,25 +355,29 @@
                               :strategy strategy}
                              (:resolvers state)
                              (:seniors state))]
-                        {:resolvers resolvers
-                         :seniors seniors
-                         :events (conj (:events state)
-                                       (assoc event-result
-                                              :escrow-wei escrow-wei
-                                              :strategy strategy
-                                              :slashed? true
-                                              :oracle-exhausted? oracle-exhausted?
-                                              :oracle-warnings oracle-warnings))})
-                      ;; Not slashed or no bond loss: pool unchanged, record dispute
-                      (update state :events conj
-                              {:slashed? false
-                               :reason (:slashing-reason outcome)
-                               :strategy strategy
-                               :escrow-wei escrow-wei
-                               :oracle-exhausted? oracle-exhausted?
-                               :oracle-warnings oracle-warnings}))))
-                {:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
+                         [{:resolvers resolvers
+                           :seniors seniors
+                           :events (conj (:events state)
+                                         (assoc event-result
+                                                :escrow-wei escrow-wei
+                                                :strategy strategy
+                                                :slashed? true
+                                                :oracle-exhausted? oracle-exhausted?
+                                                :oracle-warnings oracle-warnings))}
+                          rng-next])
+                       ;; Not slashed or no bond loss: pool unchanged, record dispute
+                       [(update state :events conj
+                                {:slashed? false
+                                 :reason (:slashing-reason outcome)
+                                 :strategy strategy
+                                 :escrow-wei escrow-wei
+                                 :oracle-exhausted? oracle-exhausted?
+                                 :oracle-warnings oracle-warnings})
+                        rng-next])))
+                [{:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
+                 rng-inst]
                 (range n-trials))
+        result (first result)
         slash-events (filter :slashed? (:events result))
         metrics (aggregate-waterfall-metrics (:resolvers result) (:seniors result) slash-events)]
     (assoc result :metrics metrics)))

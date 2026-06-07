@@ -228,7 +228,8 @@
   (let [base-seed        (:rng-seed params 42)
         seeds            (mapv #(rng/seed-from-index base-seed %) (range 5))
         n-epochs         (:n-epochs params 100)
-        gov-delay        (:governance-delay-epochs params 5)]
+        gov-delay        (:governance-delay-epochs params 5)
+        surv-threshold   (double (:survival-threshold params 0.80))]
 
     (println "\n📊 PHASE T: GOVERNANCE CAPTURE VIA RULE DRIFT")
     (println "   H1: ≤35% stake cannot breach safety floors (100 epochs, abst ≤ 30%)")
@@ -254,7 +255,8 @@
                                (if (:passed? r) "✅" "❌"))))
 
           safe-low-stake (filter #(and (<= (:attacker-stake %) 0.35)
-                                       (:passed? %))
+                                        (>= (:survival-rate %) surv-threshold))
+
                                  h1-results)
           total-low      (count (filter #(<= (:attacker-stake %) 0.35) h1-results))
           h1-holds?      (= (count safe-low-stake) total-low)]
@@ -295,8 +297,8 @@
             h2-confirmed? (some (fn [r]
                                   (or (and (< (:surv-without r) 1.0)   ; breach without timing
                                            (some? (:breach-without r))) ; already failing — skip
-                                      (and (>= (:surv-without r) 0.80) ; survived without timing
-                                           (< (:surv-with r) 0.80))    ; failed with timing
+                                      (and (>= (:surv-without r) surv-threshold) ; survived without timing
+                                           (< (:surv-with r) surv-threshold))    ; failed with timing
                                       (> (- (:drift-with r) (:drift-without r)) 0.20)))  ; large drift delta
                                 h2-high-stake)]
 
@@ -328,7 +330,8 @@
                                    (* 100.0 (:improvement r)))))
 
               safe-40  (filter #(and (= (:stake %) 0.40)
-                                     (>= (:surv-with %) 0.80))
+                                      (>= (:surv-with %) surv-threshold))
+
                                h3-results)
               total-40 (count (filter #(= (:stake %) 0.40) h3-results))
               h3-holds? (= (count safe-40) total-40)]

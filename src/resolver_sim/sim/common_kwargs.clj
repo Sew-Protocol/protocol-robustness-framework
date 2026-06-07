@@ -40,4 +40,7 @@
    :oracle-roll-on-exhaustion          (:oracle-roll-on-exhaustion params)
    :fixed-or                            (:fixed-or params)
    :oracle-roll-trace-enabled?         (:oracle-roll-trace-enabled? params false)
-   :evidence-quality?                  (:evidence-quality? params false)])
+    :evidence-quality?                  (:evidence-quality? params false)
+    :lazy-correct-prob                  (:lazy-correct-prob params 0.5)
+    :malicious-correct-prob             (:malicious-correct-prob params 0.3)
+    :collusive-correct-prob             (:collusive-correct-prob params 0.8)])

@@ -86,14 +86,14 @@
       (not (contains? t/terminal-states state))
       (conj :escrow-state)
 
-      ;; Gate: unresolved pending settlement
-      (and (= state :disputed) (:exists pending) true)
-      (conj :pending-settlement)
+       ;; Gate: unresolved pending settlement
+       (and (= state :disputed) (:exists pending))
+       (conj :pending-settlement)
 
-      ;; Gate: appeal/challenge window still open
-      (and (= state :disputed) (:exists pending) true
-           (< (:block-time world) (:appeal-deadline pending)))
-      (conj :appeal-window)
+       ;; Gate: appeal/challenge window still open
+       (and (= state :disputed) (:exists pending)
+            (< (:block-time world) (:appeal-deadline pending)))
+       (conj :appeal-window)
 
       ;; Gate: yield position still unwinding (shortfall recovery)
       (and has-pos? (has-unwinding? workflow-id))

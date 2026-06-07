@@ -59,7 +59,8 @@
               fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
               new-evidence-probability
               fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
-              p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+               p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+               lazy-correct-prob malicious-correct-prob collusive-correct-prob
               model-appeal-costs? appeal-bond-recovery-rate
               oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
               fixed-or oracle-roll-trace-enabled? evidence-quality?]
@@ -87,8 +88,11 @@
            escalation-assumption-band :base
            model-appeal-costs? false
            appeal-bond-recovery-rate 0.5
-           oracle-roll-trace-enabled? false
-           evidence-quality? false}
+            oracle-roll-trace-enabled? false
+            evidence-quality? false
+            lazy-correct-prob 0.5
+            malicious-correct-prob 0.3
+            collusive-correct-prob 0.8}
       :as all-kw-args}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
@@ -99,21 +103,20 @@
 
         oracle-params   (detection/prepare-oracle-params
                          (merge {:rng rng}
-                                (dissoc all-kw-args
-                                        :senior-resolver-skill
-                                        :fraud-success-rate
-                                        :fraud-model
-                                        :model-appeal-costs?
-                                        :appeal-bond-recovery-rate
-                                        :detection-type)))
+                         (dissoc all-kw-args
+                                         :senior-resolver-skill
+                                         :fraud-success-rate
+                                         :fraud-model
+                                         :model-appeal-costs?
+                                         :appeal-bond-recovery-rate)))
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
         (case strategy
           :honest    true
-          :lazy      (< (rng/next-double rng) 0.5)
-          :malicious (< (rng/next-double rng) 0.3)
-          :collusive (< (rng/next-double rng) 0.8))
+          :lazy      (< (rng/next-double rng) lazy-correct-prob)
+          :malicious (< (rng/next-double rng) malicious-correct-prob)
+          :collusive (< (rng/next-double rng) collusive-correct-prob))
 
         ;; Appeal rate depends on verdict correctness
         appeal-prob (if verdict-correct? appeal-prob-correct appeal-prob-wrong)

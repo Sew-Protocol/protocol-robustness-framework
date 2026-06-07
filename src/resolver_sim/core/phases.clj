@@ -46,8 +46,72 @@
             [resolver-sim.research.sew.analytic.phase-m-fairness-analysis :as phase-m]
             [resolver-sim.stochastic.rng                :as rng]))
 
-;; ---------------------------------------------------------------------------
-;; Runner helpers — each handles one top-level simulation mode
+;; ── Phase evidence tiers ─────────────────────────────────────────────────────
+;; Each phase is classified by what kind of evidence it produces.
+;;   :protocol-kernel-evidence  — exercises resolve-dispute / replay-with-protocol
+;;   :analytic                  — closed-form algebraic check (no protocol kernel)
+;;   :exploratory               — narrative / qualitative simulation; not falsifiable
+;;
+;; The CI gate (scripts/test.sh monte-carlo) runs 5 phases; all others are
+;; exploratory unless explicitly CI-gated.  This map is the single source of truth
+;; for which phases are protocol-kernel vs analytic vs exploratory.
+
+(def phase-evidence-tiers
+  "Phase keyword → evidence tier.
+
+   :protocol-kernel-evidence — calls resolve-dispute or replay-with-protocol
+   :analytic                 — algebraic/closed-form, no protocol calls
+   :exploratory              — narrative, qualitative, or pre-prototype"
+  {:phase-o          :analytic
+   :phase-p          :analytic
+   :phase-aa         :analytic
+   :phase-ad         :analytic
+   :phase-f          :analytic
+   :phase-ab         :analytic
+   :phase-ac         :analytic
+   :phase-ac-sweep   :analytic
+   :phase-ac-cap     :analytic
+   :phase-ad-sweep   :analytic
+   :phase-ae         :analytic
+   :phase-af         :analytic
+   :phase-ag         :analytic
+   :phase-ah         :analytic
+   :phase-ai         :analytic
+   :phase-t          :analytic
+   :phase-y          :analytic
+   :phase-z          :analytic
+   :market-exit      :analytic
+   :phase-p-revised  :analytic
+   :phase-q          :exploratory
+   :phase-r          :exploratory
+   :phase-u          :exploratory
+   :phase-v          :exploratory
+   :phase-w          :exploratory
+   :phase-x          :exploratory
+   :phase-f-dr       :analytic
+   :phase-c-dr       :analytic
+   :phase-e-dr       :analytic
+   :phase-m-dr       :analytic})
+
+(defn tier-for-phase
+  "Return the evidence tier keyword for a phase keyword, or :unknown."
+  [phase-key]
+  (get phase-evidence-tiers phase-key :unknown))
+
+;; ── CI-gated phases ─────────────────────────────────────────────────────────
+;; Phases that run in scripts/test.sh monte-carlo.  This is the canonical list
+;; consumed by CI; changes here should be reflected in test.sh.
+
+(def ci-monte-carlo-phases
+  "Phase keywords that run in the CI Monte Carlo gate (test.sh monte-carlo)."
+  #{:phase-o :phase-p :phase-aa :phase-ad :phase-f})
+
+(defn ci-gated?
+  "True if a phase runs in the CI Monte Carlo gate."
+  [phase-key]
+  (contains? ci-monte-carlo-phases phase-key))
+
+;; ── Phase runner helpers ─────────────────────────────────────────────────────
 ;; ---------------------------------------------------------------------------
 
 (defn run-simulation [params output-dir]

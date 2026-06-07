@@ -71,7 +71,11 @@
    :p-l2-reversal (fn [x] (and (number? x) (>= x 0) (<= x 1)))
    :n-trials (fn [x] (and (integer? x) (> x 0)))
    :n-seeds (fn [x] (and (integer? x) (> x 0)))
-   :parallelism (fn [x] (or (keyword? x) (integer? x)))})
+    :parallelism (fn [x] (or (keyword? x) (integer? x)))
+    :new-evidence-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :l2-detection-prob (fn [x] (and (number? x) (>= x 0) (<= x 1)))
+    :detection-type (fn [x] (contains? #{:fraud :timeout :reversal} x))
+    :timeout-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))})
 
 ;; Trial outcome record
 (defrecord TrialOutcome

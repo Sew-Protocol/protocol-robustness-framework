@@ -29,8 +29,9 @@
  :unstaking-delay-days 14
  :freeze-on-detection? true
  :freeze-duration-days 3
- :appeal-window-days 7
-
+  :max-op-win-rate-threshold 0.20
+  :appeal-window-days 7
+ 
  :n-epochs 50
  :n-trials-per-epoch 200
  :n-resolvers 30

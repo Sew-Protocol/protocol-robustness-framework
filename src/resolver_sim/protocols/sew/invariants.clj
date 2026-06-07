@@ -848,27 +848,37 @@
 ;; New Invariant: Solvency KPI helper
 ;; ---------------------------------------------------------------------------
 
+(defn- sum-amounts
+  "Sum numeric values from a collection that may be flat (token → amount)
+   or nested (token → address → amount). Returns 0 for empty/nil."
+  [m]
+  (let [entries (vals (or m {}))]
+    (if (every? number? entries)
+      (reduce + 0 entries)                        ;; flat: {:USDC 5000}
+      (reduce + 0 (for [nested entries]
+                    (reduce + 0 (vals (or nested {}))))))))  ;; nested: {:USDC {\"0x1\" 1000}}
+
 (defn calculate-solvency-ratio
   "Returns the robust solvency ratio: Total-Assets / Total-Inflows.
-   
+    
    Total-Assets includes:
      - Current balances (held, claimable, fees, bond-balances, bond-fees)
      - Slashed distributions (insurance, protocol, retained reserves)
      - Cumulative outflows (total-withdrawn)
-   
+    
    Total-Inflows includes:
      - Initial-Principal-Deposits (escrows + bonds)
      - Total-Yield-Generated (as an internal inflow)
-   
+    
    A ratio >= 1.0 indicates perfect value conservation."
   [world]
   (let [held      (reduce + 0 (vals (:total-held world {})))
-        claimable (reduce + 0 (for [m (vals (:claimable world {}))] (reduce + 0 (vals m))))
+        claimable (sum-amounts (:claimable world))
         fees      (reduce + 0 (vals (:total-fees world {})))
         withdrawn (reduce + 0 (vals (:total-withdrawn world {})))
         
         ;; Bond assets
-        bond-bal  (reduce + 0 (for [m (vals (:bond-balances world {}))] (reduce + 0 (vals m))))
+        bond-bal  (sum-amounts (:bond-balances world))
         bond-fees (reduce + 0 (vals (:bond-fees world {})))
         bond-dist (reduce + 0 (vals (:bond-distribution world {:insurance 0 :protocol 0 :burned 0})))
         retained  (:retained-slash-reserves world 0)

@@ -39,6 +39,8 @@
   :n-resolvers 100
   :detection-decay-rate 0.0  ; No decay (stable control)
   :n-seeds 1
+  :kernel-validation-sample-size 5
+  :kernel-validation-min-pass-rate 0.80
 
   ; Phase J: Audit thresholds — override defaults in audit.clj
   :audit-thresholds

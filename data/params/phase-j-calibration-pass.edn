@@ -33,6 +33,8 @@
  ;; Small run for calibration speed
  :n-epochs           10
  :n-trials-per-epoch 200
+ :kernel-validation-sample-size 10
+ :kernel-validation-min-pass-rate 0.80
  :rng-seed           42
   ; Audit thresholds — override defaults in audit.clj
   :audit-thresholds
