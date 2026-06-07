@@ -16,6 +16,8 @@
              [resolver-sim.protocols.sew.invariants :as inv]
              [resolver-sim.protocols.sew.types :as t]
              [resolver-sim.yield.evidence :as ye]
+              [resolver-sim.yield.accounting :as acct]
+              [resolver-sim.yield.risk :as yrisk]
              [resolver-sim.financial.finality :as ff]
              [resolver-sim.financial.loss :as fl]))
 
@@ -153,6 +155,67 @@
     (assoc (reduce accumulate-transition init transitions)
            :transitions transitions)))
 
+(defn- shortfall-effect
+  [shortfall]
+  "Derive shortfall-effect from shortfall data."
+  (let [deferred (long (get shortfall :deferred-amount 0))
+        haircut (long (get shortfall :haircut-amount 0))]
+    (cond
+      (and (pos? deferred) (pos? haircut)) :partially-liquid
+      (pos? deferred) :timing-delayed
+      (pos? haircut) :loss-realized
+      :else :claimability-constrained)))
+
+(defn- shortfall-kind-from-reason
+  [reason]
+  (case reason
+    :liquidity-shortfall :temporary-liquidity
+    :deferred-liquidity :temporary-liquidity
+    :permanent-loss :insolvency
+    :haircut-loss :insolvency
+    :intrinsic-carry :market-markdown
+    :negative-yield :negative-yield
+    :oracle-stale :stale-accounting
+    :withdrawal-queue :withdrawal-queue
+    :unknown))
+
+(defn- shortfall-affected-fields
+  [shortfall]
+  (cond-> []
+    (pos? (long (get shortfall :deferred-amount 0))) (conj :deferred-amount)
+    (pos? (long (get shortfall :haircut-amount 0))) (conj :haircut-amount)))
+
+(defn- position-projection-fields
+  [pos]
+  (let [shortfall (:shortfall pos)
+        principal (long (:principal pos 0))
+        realized (long (:realized-yield pos 0))
+        unrealized (long (:unrealized-yield pos 0))
+        total-value (+ principal realized unrealized)
+        gross-yield (max 0 (- total-value principal))
+        intrinsic-loss (max 0 (- principal total-value))
+        sf (or shortfall {})
+        deferred (long (get sf :deferred-amount 0))
+        haircut (long (get sf :haircut-amount 0))
+        claimable-yield (max 0 (- gross-yield deferred haircut))]
+    {:position/id (:owner/id pos)
+     :position/principal principal
+     :position/total-value total-value
+     :position/gross-yield gross-yield
+     :position/intrinsic-loss intrinsic-loss
+     :position/realized-yield realized
+     :position/unrealized-yield unrealized
+     :position/claimable-yield (if shortfall claimable-yield gross-yield)
+     :position/deferred-yield (if shortfall deferred 0)
+     :position/claimable-principal (if shortfall (max 0 (- principal haircut)) principal)
+     :position/deferred-principal 0
+     :position/liquidity-shortfall (boolean (and shortfall (not (pos? haircut))))
+     :position/economic-shortfall (boolean (and shortfall (pos? haircut)))
+     :position/shortfall-affected? (some? shortfall)
+     :position/shortfall-kind (when shortfall (shortfall-kind-from-reason (:reason sf)))
+     :position/shortfall-effect (when shortfall (shortfall-effect sf))
+     :position/shortfall-affected-fields (when shortfall (shortfall-affected-fields sf))}))
+
 (defn- derive-shortfall-summary
   [world]
   (let [positions (vals (get world :yield/positions {}))
@@ -165,6 +228,7 @@
      :deferred-total (reduce + 0 (map #(long (get % :deferred-amount 0)) rows))
      :haircut-total (reduce + 0 (map #(long (get % :haircut-amount 0)) rows))
      :reasons reasons
+     :positions (mapv position-projection-fields positions)
      :rounding-policy "floor-to-asset-decimals.v1"}))
 
 ;; ---------------------------------------------------------------------------

@@ -356,8 +356,21 @@
            trace     (:trace result [])
            metrics   (:metrics result)
            conds     (:falsifies-if theory [])
-           eq-result (when (or (seq (:mechanism-properties theory))
-                             (seq (:equilibrium-concept theory)))
+           
+           ;; Cheap predicate check
+           predicate (when (seq conds)
+                       (if (and (vector? conds) (map? (first conds)))
+                         {:or conds}
+                         conds))
+           eval-res  (when predicate
+                       (eval-predicate protocol world trace metrics predicate opts'))
+           falsified? (boolean (:holds? eval-res))
+           
+           ;; Short-circuit SPE evaluation
+           skip-spe? (or falsified? (= :fail (:outcome result)))
+           eq-result (when (and (not skip-spe?)
+                                (or (seq (:mechanism-properties theory))
+                                    (seq (:equilibrium-concept theory))))
                        (try
                          (equilibrium/evaluate-equilibrium theory result)
                          (catch Exception e
@@ -384,9 +397,9 @@
                                                         :equilibrium-trust-mode :provenance
                                                         :validator-error])
                                 {:mechanism-results   {}
-                                 :mechanism-status    :not-checked
+                                 :mechanism-status    (if skip-spe? :skipped :not-checked)
                                  :equilibrium-results {}
-                                 :equilibrium-status  :not-checked})))]
+                                 :equilibrium-status  (if skip-spe? :skipped :not-checked)})))]
        (cond
          (empty? conds)
          (finalize-metric-result
@@ -398,12 +411,7 @@
           opts' theory)
 
          :else
-         (let [predicate (if (and (vector? conds) (map? (first conds)))
-                            {:or conds}
-                            conds)
-               eval-res  (eval-predicate protocol world trace metrics predicate opts')
-               missing   (collect-missing-metrics eval-res)
-               falsified? (boolean (:holds? eval-res))
+         (let [missing   (collect-missing-metrics eval-res)
                diagnostics (build-diagnostics eval-res missing)
                empty-logical (apply-empty-logical-policy (:empty-logical-policy opts') eval-res)
                missing-policy (or empty-logical

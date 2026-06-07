@@ -183,13 +183,16 @@
 
 (defn claim-deferred
   "Attempts to reclaim deferred funds from a position in :unwinding status.
-   If liquidity-mode is :available, transitions position to :withdrawn and returns reclaimed amount."
+   Uses :min-available-ratio-for-claim from risk config (default 1.0) instead of
+   a hardcoded (= mode :available) check.  This enables partial recovery."
   [world module-id position]
   (let [token (:token position)
         risk  (risk-map world module-id token)
-        mode  (or (:liquidity-mode risk) :available)
+        available-ratio (double (get-in risk [:shortfall :available-ratio]
+                                  (if (:shortfall risk) 0.0 1.0)))
+        min-ratio (double (get-in risk [:min-available-ratio-for-claim] 1.0))
         shortfall (:shortfall position)]
-    (if (and (= mode :available) shortfall)
+    (if (and shortfall (>= available-ratio min-ratio))
       (let [reclaimed (:deferred-amount shortfall 0)]
         (-> position
             (assoc :status :withdrawn)
