@@ -225,7 +225,7 @@
   (let [effective (or (:oracle-effective params)
                       (normalize-oracle-fixture params))
         policy (:on-exhaustion effective :throw)
-        exhausted? (boolean (when-let [a (:oracle-fixture/exhausted? params)] @a))]
+        exhausted? (boolean (some-> params :oracle-fixture/exhausted? deref))]
     (cond-> []
       (= policy :repeat-last)
       (conj {:level (cond

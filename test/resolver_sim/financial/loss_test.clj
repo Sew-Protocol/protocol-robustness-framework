@@ -4,6 +4,7 @@
    :loss-realized, :loss-irrecoverable, and the haircut path."
   (:require [clojure.test :refer :all]
             [resolver-sim.financial.loss :as loss]
+            [resolver-sim.yield.accounting :as acct]
             [resolver-sim.protocols.sew.types :as t]))
 
 (deftest no-shortfall-is-normal
@@ -102,3 +103,61 @@
     (is (true? (loss/loss-active? r2)))
     (is (false? (loss/loss-realized? r1)))
     (is (true? (loss/loss-realized? r2)))))
+
+
+(deftest reclaim-deferred-clears-shortfall-on-available
+  (testing "claim-deferred clears shortfall and returns reclaimed amount"
+    (let [pos {:token :USDC :status :unwinding :principal 10000
+               :realized-yield 500
+               :shortfall {:fulfilled-amount 8000 :deferred-amount 2000 :haircut-amount 0
+                           :reason :liquidity-shortfall}}
+          world {:yield/risk {:mod {:USDC {:liquidity-mode :available}}}}
+          result (acct/claim-deferred world :mod pos)]
+      (is (nil? (:shortfall result)) "shortfall cleared")
+      (is (= :withdrawn (:status result)) "status changed to withdrawn")
+      (is (= 2000 (:reclaimed-amount result)) "reclaimed-amount matches deferred")
+      (is (= 2500 (:realized-yield result)) "realized-yield increased by reclaimed"))))
+
+(deftest reclaim-deferred-ignores-non-available
+  (testing "claim-deferred does nothing when liquidity-mode is not available"
+    (let [pos {:token :USDC :status :unwinding :principal 10000
+               :shortfall {:fulfilled-amount 8000 :deferred-amount 2000 :haircut-amount 0
+                           :reason :liquidity-shortfall}}
+          world {:yield/risk {:mod {:USDC {:liquidity-mode :shortfall
+                                           :shortfall {:available-ratio 0.8}}}}}
+          result (acct/claim-deferred world :mod pos)]
+      (is (some? (:shortfall result)) "shortfall unchanged")
+      (is (= :unwinding (:status result)) "status unchanged"))))
+
+(deftest shortfall-total-distinguishes-yield-vs-principal
+  (testing "shortfall-total distinguishes yield-leg from principal shortfalls"
+    (let [world {:yield/positions {"y1" {:token :USDC :principal 10000
+                                            :shortfall {:fulfilled-amount 8000 :deferred-amount 2000
+                                                        :haircut-amount 0 :reason :liquidity-shortfall
+                                                        :basis-amount 5000}}
+                                   "y2" {:token :USDC :principal 10000
+                                            :shortfall {:fulfilled-amount 6000 :deferred-amount 0
+                                                        :haircut-amount 4000 :reason :permanent-loss
+                                                        :basis-amount 10000}}
+                                   "y3" {:token :USDC :principal 10000
+                                            :shortfall {:fulfilled-amount 10000 :deferred-amount 0
+                                                        :haircut-amount 0 :basis-amount 10000}}}}
+          sf (loss/shortfall-total world :USDC)]
+      (is (= 3 (:positions-with-shortfall sf)))
+      (is (= 1 (:yield-leg-shortfall-count sf)) "y1 basis=5000 < principal=10000")
+      (is (= 2 (:principal-shortfall-count sf)) "y2 and y3 basis >= principal"))))
+
+(deftest classify-loss-multi-escrow-mixed-finality
+  (testing "multi-escrow: terminal + non-terminal escrows"
+    (let [world (-> (t/empty-world 1000)
+                    (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
+                    (assoc-in [:escrow-transfers 1 :escrow-state] :disputed)
+                    (assoc-in [:yield/positions "pos1"]
+                              {:token :USDC :workflow-id 0
+                               :shortfall {:fulfilled-amount 0 :deferred-amount 1000
+                                           :haircut-amount 0}}))
+          r (loss/classify-loss world :USDC)]
+      (is (= :loss-pending-finality (:loss/status r))
+          "one non-terminal escrow blocks loss realization")
+      (is (false? (:financially-final? r)))
+      (is (false? (:loss/user-realized? r))))))

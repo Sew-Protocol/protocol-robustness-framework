@@ -20,7 +20,8 @@
      :loss-realized       → obligations impaired, financial finality reached
      :loss-irrecoverable  → obligations permanently unmet, no recovery path"
   (:require [resolver-sim.financial.finality :as finality]
-            [resolver-sim.protocols.sew.types :as t]))
+            [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.yield.accounting :as acct]))
 
 ;; ── Loss status lifecycle ───────────────────────────────────────────────────
 
@@ -38,15 +39,20 @@
 
 (defn shortfall-total
   "Aggregate shortfall across all yield positions for a given token.
-   Returns {:fulfilled N :deferred N :haircut N :positions-with-shortfall N}."
+   Returns {:fulfilled N :deferred N :haircut N :positions-with-shortfall N
+            :yield-leg-shortfall-count N :principal-shortfall-count N}."
   [world token]
   (let [positions (vals (get world :yield/positions {}))
         token-pos (filter #(= token (:token %)) positions)
-        with-sf   (filter :shortfall token-pos)]
-    {:fulfilled-total         (reduce + 0 (map #(get-in % [:shortfall :fulfilled-amount] 0) with-sf))
-     :deferred-total          (reduce + 0 (map #(get-in % [:shortfall :deferred-amount] 0) with-sf))
-     :haircut-total           (reduce + 0 (map #(get-in % [:shortfall :haircut-amount] 0) with-sf))
-     :positions-with-shortfall (count with-sf)}))
+        with-sf   (filter :shortfall token-pos)
+        yield-leg? (fn [p] (acct/partial-yield-shortfall? p (:shortfall p)))
+        has-principal-loss? (fn [p] (and (:shortfall p) (not (yield-leg? p))))]
+    {:fulfilled-total          (reduce + 0 (map #(get-in % [:shortfall :fulfilled-amount] 0) with-sf))
+     :deferred-total           (reduce + 0 (map #(get-in % [:shortfall :deferred-amount] 0) with-sf))
+     :haircut-total            (reduce + 0 (map #(get-in % [:shortfall :haircut-amount] 0) with-sf))
+     :positions-with-shortfall (count with-sf)
+     :yield-leg-shortfall-count (count (filter yield-leg? with-sf))
+     :principal-shortfall-count (count (filter has-principal-loss? with-sf))}))
 
 ;; ── Loss classifier ──────────────────────────────────────────────────────────
 
