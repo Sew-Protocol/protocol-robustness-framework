@@ -12,7 +12,8 @@
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.loss :as loss]
             [resolver-sim.yield.market-state :as market-state]
-            [resolver-sim.yield.liquidity :as liquidity]))
+            [resolver-sim.yield.liquidity :as liquidity]
+            [resolver-sim.util.attribution :as attr]))
 
 (defn- normalize-token [token]
   (cond
@@ -145,68 +146,69 @@
         token   (normalize-token (:token pos))
         status  (module-status world mid)
         mode    (liquidity-mode world mid token)]
-    (cond
-      (nil? pos)
-      world
+    (attr/with-attribution {:owner-id oid :token token :module-id mid}
+      (cond
+        (nil? pos)
+        world
 
-      ;; Retry/idempotency guard: once a position is crystallized, withdrawing
-      ;; again must be a no-op so liquidity stress is never applied twice.
-      (not= (:status pos) :active)
-      world
+        ;; Retry/idempotency guard: once a position is crystallized, withdrawing
+        ;; again must be a no-op so liquidity stress is never applied twice.
+        (not= (:status pos) :active)
+        world
 
-      (or (= status :paused)
-          (withdraw-blocked? mode)
-          (fail-enabled? world mid token :withdraw-fails))
-      (throw (ex-info "Liquid-lending withdraw unavailable"
-                      {:module/id mid
-                       :token token
-                       :module-status status
-                       :liquidity-mode mode
-                       :owner/id oid}))
+        (or (= status :paused)
+            (withdraw-blocked? mode)
+            (fail-enabled? world mid token :withdraw-fails))
+        (throw (ex-info "Liquid-lending withdraw unavailable"
+                        {:module/id mid
+                         :token token
+                         :module-status status
+                         :liquidity-mode mode
+                         :owner/id oid}))
 
-      ;; :withdrawal-queue — defer withdrawal, claim later via claim-deferred
-      (fail-enabled? world mid token :withdrawal-queue)
-      (let [current-index (or (get-in-token world [:yield/indices] mid token)
-                              (:entry-index pos 1.0))
-            updated-pos   (acct/update-position-yield world pos current-index)
-            queued-pos    (assoc updated-pos :status :queued)
-            queued-entry  {:owner/id oid :token token :principal (:principal updated-pos)
-                           :unrealized-yield (:unrealized-yield updated-pos 0)
-                           :queued-at (:block-time world 0)}]
-        (-> world
-            (assoc-in pos-key queued-pos)
-            (update-in [:yield/withdrawal-queue mid] (fnil conj []) queued-entry)))
+        ;; :withdrawal-queue — defer withdrawal, claim later via claim-deferred
+        (fail-enabled? world mid token :withdrawal-queue)
+        (let [current-index (or (get-in-token world [:yield/indices] mid token)
+                                (:entry-index pos 1.0))
+              updated-pos   (acct/update-position-yield world pos current-index)
+              queued-pos    (assoc updated-pos :status :queued)
+              queued-entry  {:owner/id oid :token token :principal (:principal updated-pos)
+                             :unrealized-yield (:unrealized-yield updated-pos 0)
+                             :queued-at (:block-time world 0)}]
+          (-> world
+              (assoc-in pos-key queued-pos)
+              (update-in [:yield/withdrawal-queue mid] (fnil conj []) queued-entry)))
 
-      :else
-      (let [current-index (or (get-in-token world [:yield/indices] mid token)
-                              (:entry-index pos 1.0))
-            updated-pos   (acct/update-position-yield world pos current-index)
-            gross-amount  (+ (:principal updated-pos 0)
-                             (:unrealized-yield updated-pos 0))
-            ;; mark-to-market loss (gross < principal) is modeled as a permanent haircut
-            ;; even when liquidity-mode is :available.
-            intrinsic-loss (max 0 (- (:principal updated-pos 0) gross-amount))
-            shortfall-result
-            (if (pos? intrinsic-loss)
-              {:fulfilled gross-amount
-               :shortfall (loss/intrinsic-carry-shortfall (:principal updated-pos 0)
-                                                          gross-amount
-                                                          current-index)}
-              (liquidity/apply-withdrawal-policy world mid token gross-amount
-                                                 (:principal updated-pos 0)))
-            {:keys [fulfilled shortfall]} shortfall-result
-            shortfall' (when shortfall
-                         (assoc shortfall :as-of-index current-index))
-            realized-yield (max 0
-                                (min (:unrealized-yield updated-pos 0)
-                                     (- fulfilled (:principal updated-pos 0))))
-            crystallized  (-> updated-pos
-                              (dissoc :yield-loss)
-                              (assoc :status (if shortfall :unwinding :withdrawn))
-                              (assoc :realized-yield realized-yield)
-                              (assoc :unrealized-yield 0)
-                              (assoc :shortfall shortfall'))]
-        (assoc-in world pos-key crystallized)))))
+        :else
+        (let [current-index (or (get-in-token world [:yield/indices] mid token)
+                                (:entry-index pos 1.0))
+              updated-pos   (acct/update-position-yield world pos current-index)
+              gross-amount  (+ (:principal updated-pos 0)
+                               (:unrealized-yield updated-pos 0))
+              ;; mark-to-market loss (gross < principal) is modeled as a permanent haircut
+              ;; even when liquidity-mode is :available.
+              intrinsic-loss (max 0 (- (:principal updated-pos 0) gross-amount))
+              shortfall-result
+              (if (pos? intrinsic-loss)
+                {:fulfilled gross-amount
+                 :shortfall (loss/intrinsic-carry-shortfall (:principal updated-pos 0)
+                                                            gross-amount
+                                                            current-index)}
+                (liquidity/apply-withdrawal-policy world mid token gross-amount
+                                                   (:principal updated-pos 0)))
+              {:keys [fulfilled shortfall]} shortfall-result
+              shortfall' (when shortfall
+                           (assoc shortfall :as-of-index current-index))
+              realized-yield (max 0
+                                  (min (:unrealized-yield updated-pos 0)
+                                       (- fulfilled (:principal updated-pos 0))))
+              crystallized  (-> updated-pos
+                                (dissoc :yield-loss)
+                                (assoc :status (if shortfall :unwinding :withdrawn))
+                                (assoc :realized-yield realized-yield)
+                                (assoc :unrealized-yield 0)
+                                (assoc :shortfall shortfall'))]
+          (assoc-in world pos-key crystallized))))))
 
 (defn claim-deferred [world module op]
   (let [oid     (:owner/id op)

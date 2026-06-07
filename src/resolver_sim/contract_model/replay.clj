@@ -57,12 +57,14 @@
 (defn sew-check-invariants-single
   "Bridge to proto/check-invariants-single using SewProtocol."
   [world]
-  (proto/check-invariants-single (preg/get-protocol "sew-v1") world))
+  (attr/with-attribution {:invariant-check :single}
+    (proto/check-invariants-single (preg/get-protocol "sew-v1") world)))
 
 (defn sew-check-invariants-transition
   "Bridge to proto/check-invariants-transition using SewProtocol."
   [world-before world-after]
-  (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after))
+  (attr/with-attribution {:invariant-check :transition}
+    (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after)))
 
 ;; ---------------------------------------------------------------------------
 ;; Analysis & Result Interpretation
@@ -214,9 +216,11 @@
             world-next (if (and ok? (:world result)) (:world result) world-t)
 
             inv-single (when (and ok? check-inv?)
-                         (proto/check-invariants-single protocol world-next))
+                         (attr/with-attribution {:invariant-check :single}
+                           (proto/check-invariants-single protocol world-next)))
             inv-trans  (when (and ok? check-inv?)
-                         (proto/check-invariants-transition protocol world-t world-next))
+                         (attr/with-attribution {:invariant-check :transition}
+                           (proto/check-invariants-transition protocol world-t world-next)))
             violated?  (and ok? check-inv?
                             (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
@@ -459,9 +463,11 @@
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
                 {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
-                                  (proto/check-invariants-single protocol (:world batch-result)))
+                                  (attr/with-attribution {:invariant-check :single}
+                                    (proto/check-invariants-single protocol (:world batch-result))))
                     post-trans  (when check-inv?
-                                  (proto/check-invariants-transition protocol base-world (:world batch-result)))
+                                  (attr/with-attribution {:invariant-check :transition}
+                                    (proto/check-invariants-transition protocol base-world (:world batch-result))))
                     post-ok?    (if check-inv?
                                   (and (:ok? post-single) (:ok? post-trans))
                                   true)

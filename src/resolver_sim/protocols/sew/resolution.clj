@@ -14,9 +14,10 @@
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
-            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
+            [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
-            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
+            [resolver-sim.util.attribution            :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
@@ -223,9 +224,10 @@
    resolution-hash     — bytes32 (opaque string in the model)
    resolution-module-fn — (fn [wf caller] → {:authorized? bool}) or nil"
   [world workflow-id caller is-release resolution-hash resolution-module-fn]
-  (cond
-    (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+  (attr/with-attribution {:workflow-id workflow-id}
+    (cond
+      (not (t/valid-workflow-id? world workflow-id))
+      (t/fail :invalid-workflow-id)
 
     ;; State is checked before auth so any caller—authorized or not—receives
     ;; :transfer-not-in-dispute on a terminal escrow rather than a misleading
@@ -270,7 +272,7 @@
                         :appeal-deadline (+ now window-dur)
                         :resolution-hash resolution-hash})
               world''' (assoc-in world'' [:pending-settlements workflow-id] pending)]
-          (t/ok world'''))))))
+          (t/ok world''')))))))
 
 ;; ---------------------------------------------------------------------------
 ;; execute-pending-settlement
@@ -657,10 +659,11 @@
   ([world workflow-id caller appeal-upheld?]
    (resolve-appeal world workflow-id caller appeal-upheld? workflow-id))
   ([world _workflow-id caller appeal-upheld? slash-id]
-   (let [pending (get-in world [:pending-fraud-slashes slash-id])]
-     (cond
-       (or (nil? caller) (= "" caller))
-       (t/fail :missing-caller-context)
+   (attr/with-attribution {:workflow-id _workflow-id :slash-id slash-id}
+     (let [pending (get-in world [:pending-fraud-slashes slash-id])]
+       (cond
+         (or (nil? caller) (= "" caller))
+         (t/fail :missing-caller-context)
 
        (nil? pending)
        (t/fail :no-pending-slash)
@@ -698,7 +701,7 @@
                      (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
 
            :else
-           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending))))))))
+           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending)))))))))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.

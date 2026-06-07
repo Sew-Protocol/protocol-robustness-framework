@@ -23,6 +23,7 @@
             [resolver-sim.db.sew                         :as sew-db]
             [resolver-sim.db.temporal                    :as temporal]
             [resolver-sim.protocols.sew.yield.policy     :as yield-policy]
+            [resolver-sim.util.attribution            :as attr]
             [resolver-sim.contract-model.replay          :as replay]
             [resolver-sim.contract-model.idempotency     :as idem]
             [resolver-sim.protocols.sew.snapshot         :as sew-snapshot]
@@ -692,20 +693,21 @@
         :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
-    (let [flags       (:replay-flags context {})
-          require-id? (:require-event-id? flags false)
-          eid         (event-id event)]
-      (cond
-        (and require-id? (replay-sensitive? event) (nil? eid))
-        {:ok false :error :missing-event-id
-         :detail {:action (:action event) :seq (:seq event)}}
+    (attr/with-attribution {:action (:action event) :agent (:agent event)}
+      (let [flags       (:replay-flags context {})
+            require-id? (:require-event-id? flags false)
+            eid         (event-id event)]
+        (cond
+          (and require-id? (replay-sensitive? event) (nil? eid))
+          {:ok false :error :missing-event-id
+           :detail {:action (:action event) :seq (:seq event)}}
 
-        (and eid (replay-sensitive? event))
-        (idem/apply-once world (dedupe-op-key world event)
-                         (fn [w] (apply-action context w event)))
+          (and eid (replay-sensitive? event))
+          (idem/apply-once world (dedupe-op-key world event)
+                           (fn [w] (apply-action context w event)))
 
-        :else
-        (apply-action context world event))))
+          :else
+          (apply-action context world event)))))
 
   (check-invariants-single [_ world]
     (run-single-invariants world))

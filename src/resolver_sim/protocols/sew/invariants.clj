@@ -30,7 +30,8 @@
             [resolver-sim.protocols.sew.invariants.bond :as bond]
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
-            [resolver-sim.yield.evidence :as yield-evi]))
+            [resolver-sim.yield.evidence :as yield-evi]
+            [resolver-sim.util.attribution :as attr]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -1347,7 +1348,8 @@
   ([world] (check-all world nil nil))
   ([world scenario-id] (check-all world scenario-id nil))
   ([world scenario-id token-balances]
-   (let [expected-failures-raw (or (get-in world [:params :expected-failures scenario-id]) 
+   (attr/with-attribution {:invariant-phase :check-all :scenario-id scenario-id}
+     (let [expected-failures-raw (or (get-in world [:params :expected-failures scenario-id]) 
                                    (get-in world [:params :expected-failures (keyword scenario-id)]) 
                                    #{})
          expected-failures (set (map keyword expected-failures-raw))
@@ -1406,7 +1408,7 @@
           all-hold? (every? #(:holds? %) (vals results))]
       {:all-hold? all-hold?
        :results   results
-       :unused-expected-failures (seq unused-expected)})))
+       :unused-expected-failures (seq unused-expected)}))))
 
 
 
