@@ -706,7 +706,7 @@
                      (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held)))
 
            :else
-           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending)))))))))
+           (t/ok (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending))))))))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
