@@ -271,7 +271,7 @@
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
      :oracle-fixture/exhausted?
-     (boolean (when-let [a (:oracle-fixture/exhausted? oracle-params)] @a))
+     (boolean (some-> oracle-params :oracle-fixture/exhausted? deref))
      :oracle-fixture/warnings
      (detection/collect-oracle-fixture-warnings
       oracle-params {:evidence-quality? evidence-quality?})
