@@ -397,16 +397,26 @@
       local-regret
       (+ local-regret (long (Math/floor (/ local-regret 2.0)))))))
 
-(def ^:private stale-continuation-errors
+(def stale-continuation-errors
   "Error keywords from guard checks that indicate a continuation event from the
    original trace does not apply in the forked world state.
 
-   Must be kept in sync with the error keywords returned by lifecycle and
-   resolution guard checks.  See `terminal-state?` in `sew.types` for the
-   authoritative terminal-state set."
+   This is a public var rather than a private set so that test code can
+   validate it against the actual lifecycle guard-check error keywords.
+   To add a new error, add it here AND in the corresponding lifecycle or
+   resolution guard check.
+
+   If you are adding a new guard check, export its error keyword from the
+   lifecycle/resolution namespace and add it to this set.  Run the
+   spe-validation fixture suite to confirm stale continuation tagging
+   still works."
   #{:transfer-not-pending :transfer-not-in-dispute :invalid-workflow-id
     :transfer-not-finalized :invalid-state-for-release
-    :invalid-state-for-refund})
+    :invalid-state-for-refund
+    :no-pending-settlement :no-resolution-to-appeal
+    :no-resolution-to-challenge :has-pending-settlement
+    :appeal-window-expired :escalation-not-allowed
+    :liquidity-insufficient})
 
 (defn- fork-world-at-seq
   "Return the replay-complete world checkpoint immediately before `node` executes.
@@ -416,10 +426,15 @@
       (:world pre-entry)))
 
 (defn- continuation-replay-events
-  "Normalize main-line trace tail entries into bare replay events for fork replay."
+  "Normalize main-line trace tail entries into bare replay events for fork replay.
+   Preserves the original :seq as :fork/original-seq before the events are
+   renumbered to 1, 2, 3... by expand-strategic-tree."
   [remaining-trace-entries]
   (mapv (fn [entry]
-          (replay/trace-entry->replay-event entry))
+          (let [replay-event (replay/trace-entry->replay-event entry)]
+            (if-let [orig-seq (:seq replay-event)]
+              (assoc replay-event :fork/original-seq orig-seq)
+              replay-event)))
         remaining-trace-entries))
 
 (defn- tag-stale-continuations

@@ -56,7 +56,7 @@
               slashing-detection-delay-weeks allow-slashing?
               unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
               detection-type timeout-detection-probability reversal-detection-probability
-              fraud-detection-probability fraud-slash-bps reversal-slash-bps timeout-slash-bps
+               fraud-detection-probability fraud-slash-bps l2-slash-bps reversal-slash-bps timeout-slash-bps
               new-evidence-probability
               fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
                p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
@@ -77,10 +77,11 @@
            timeout-detection-probability 0.0
            reversal-detection-probability 1.0
            fraud-detection-probability 0.0
-           fraud-slash-bps 0
-           reversal-slash-bps 0
-           timeout-slash-bps 200
-           new-evidence-probability 0.0
+            fraud-slash-bps 0
+            l2-slash-bps 200
+            reversal-slash-bps 0
+            timeout-slash-bps 200
+            new-evidence-probability 0.0
            resolver-stake-wei nil
            fraud-success-rate 0.0
            fraud-model :single-stage-ev

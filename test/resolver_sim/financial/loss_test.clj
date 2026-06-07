@@ -15,6 +15,20 @@
 
 (deftest shortfall-without-financial-finality-pending
   (let [world (-> (t/empty-world 1000)
+                  (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
+                  (assoc-in [:yield/positions "pos1"]
+                            {:token :USDC :workflow-id 0
+                             :status :unwinding
+                             :shortfall {:fulfilled-amount 800
+                                         :deferred-amount 200
+                                         :haircut-amount 0}}))
+        r     (loss/classify-loss world :USDC)]
+    (is (= :loss-pending-finality (:loss/status r))
+        "shortfall without financial finality must be pending, not realized")
+    (is (false? (:loss/user-realized? r)))))
+
+(deftest shortfall-during-challengeable-phase-is-risk-not-pending
+  (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
                   (assoc-in [:yield/positions "pos1"]
                             {:token :USDC :workflow-id 0
@@ -22,8 +36,8 @@
                                          :deferred-amount 200
                                          :haircut-amount 0}}))
         r     (loss/classify-loss world :USDC)]
-    (is (= :loss-pending-finality (:loss/status r))
-        "shortfall without financial finality must be pending, not realized")
+    (is (= :loss-risk (:loss/status r))
+        "shortfall while disputed must be risk, not pending (challenge window still open)")
     (is (false? (:loss/user-realized? r)))))
 
 (deftest deferred-shortfall-with-finality-realized
