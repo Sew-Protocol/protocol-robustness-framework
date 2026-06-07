@@ -14,7 +14,29 @@
    :strict-validation?       true
    :metrics-profile          :sew-integrated
    :world-checkpoint-policy  :decision-nodes-only
-   :require-event-id?        false})
+   :projection-mode          :full
+   :require-event-id?        false
+   :include-telemetry-evidence? false})
+
+(def fast-regression-flags
+  "Fast regression: theory deferred (or disabled)."
+  (assoc default-replay-flags
+         :evaluate-theory? false
+         :projection-mode :finalize-only))
+
+(def golden-full-flags
+  "Golden full replay."
+  default-replay-flags)
+
+(def audit-flags
+  "Audit replay: enable telemetry."
+  (assoc default-replay-flags
+         :include-telemetry-evidence? true))
+
+(def profiles
+  {:replay/fast-regression fast-regression-flags
+   :replay/golden-full     golden-full-flags
+   :replay/audit           audit-flags})
 
 (def minimal-replay-flags
   "Library-style replay: no temporal enforcement, no theory DSL, relaxed validation."
@@ -49,10 +71,9 @@
    (theory block present; temporal-evidence :enabled?)."
   ([scenario] (resolve-replay-flags scenario {}))
   ([scenario replay-opts]
-   (let [minimal? (boolean (or (:minimal replay-opts)
-                               (get-in scenario [:options :minimal])
-                               (= :minimal (get-in scenario [:options :profile]))))
-         base     (if minimal? minimal-replay-flags default-replay-flags)
+   (let [profile    (or (:profile replay-opts)
+                        (get-in scenario [:options :profile]))
+         base       (get profiles profile (if (:minimal replay-opts) minimal-replay-flags default-replay-flags))
          theory-present? (boolean (:theory scenario))
          temporal-cfg    (:temporal-evidence scenario)
          temporal-default? (boolean (:enabled? temporal-cfg))]
@@ -62,7 +83,7 @@
             {:evaluate-theory?
              (let [v (flag-lookup scenario replay-opts :evaluate-theory? nil)]
                (if (nil? v)
-                 (and (not minimal?) theory-present?)
+                 (and (not (or (:minimal replay-opts) (= profile :minimal))) theory-present?)
                  (boolean v)))
              :temporal-enabled?
              (let [v (flag-lookup scenario replay-opts :temporal-enabled? nil)]
@@ -73,15 +94,19 @@
              (boolean (flag-lookup scenario replay-opts :evaluate-expectations? true))
              :strict-validation?
              (boolean (flag-lookup scenario replay-opts :strict-validation?
-                                   (not minimal?)))
+                                   (not (or (:minimal replay-opts) (= profile :minimal)))))
              :metrics-profile
              (keyword (name (or (flag-lookup scenario replay-opts :metrics-profile
-                                              (if minimal? :yield-provider :sew-integrated))
+                                              (if (or (:minimal replay-opts) (= profile :minimal)) :yield-provider :sew-integrated))
                                 :sew-integrated)))
              :world-checkpoint-policy
              (keyword (name (or (flag-lookup scenario replay-opts :world-checkpoint-policy
-                                              (if minimal? :omit :decision-nodes-only))
+                                              (if (or (:minimal replay-opts) (= profile :minimal)) :omit :decision-nodes-only))
                                 :decision-nodes-only)))
+             :projection-mode
+             (keyword (name (or (flag-lookup scenario replay-opts :projection-mode
+                                              (if (or (:minimal replay-opts) (= profile :minimal)) :finalize-only :full))
+                                :full)))
              :require-event-id?
              (boolean (flag-lookup scenario replay-opts :require-event-id? false))}))))
 

@@ -176,10 +176,10 @@
     (if (contains? failure-modes :partial-liquidity)
       (let [yield-portion (max 0 (- gross-amount principal))
             {:keys [fulfilled shortfall]}
-            (apply-liquidity-stress world module-id token yield-portion)]
+            (apply-liquidity-stress world module-id token yield-portion :principal principal)]
         {:fulfilled (+ principal fulfilled)
          :shortfall shortfall})
-      (apply-liquidity-stress world module-id token gross-amount))))
+      (apply-liquidity-stress world module-id token gross-amount :principal principal))))
 
 (defn claim-deferred
   "Attempts to reclaim deferred funds from a position in :unwinding status.
