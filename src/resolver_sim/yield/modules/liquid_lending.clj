@@ -102,7 +102,6 @@
   (let [token     (normalize-token (:token op))
         dt        (:dt op)
         mid       (:module/id module)
-        _ (println (str "[liquid-lending] DEBUG: Enter accrue for " mid "/" token))
         ms        (market-state/get-market-state world mid (or token :global) (:block-time world))
         stale?    (fail-enabled? world mid token :oracle-stale)
         old-index (or (get-in-token world [:yield/indices] mid token) 1.0)

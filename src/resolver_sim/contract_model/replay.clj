@@ -24,7 +24,8 @@
              [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
-             [resolver-sim.time.model        :as time-model]))
+             [resolver-sim.time.model        :as time-model]
+             [resolver-sim.util.attribution :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -572,21 +573,22 @@
              scenario-id (:scenario-id scenario)
              expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
              strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
-             raw-result (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
-                                             {:expected-errors-set expected-errors-set
-                                              :strict-expected-errors? strict-expected-errors?
-                                              :allow-open-entities? (:allow-open-entities? scenario)
-                                              :allow-open-disputes? (:allow-open-disputes? scenario)
-                                              :agents agents
-                                              :temporal-cfg temporal-cfg
-                                              :temporal-enabled? temporal-enabled?
-                                              :agent-index agent-index
-                                              :scenario scenario
-                                              :replay-flags flags})
+             raw-result (attr/with-attribution {:scenario-id scenario-id}
+                          (run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
+                                               {:expected-errors-set expected-errors-set
+                                                :strict-expected-errors? strict-expected-errors?
+                                                :allow-open-entities? (:allow-open-entities? scenario)
+                                                :allow-open-disputes? (:allow-open-disputes? scenario)
+                                                :agents agents
+                                                :temporal-cfg temporal-cfg
+                                                :temporal-enabled? temporal-enabled?
+                                                :agent-index agent-index
+                                                :scenario scenario
+                                                :replay-flags flags}))
              trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                              (:world-checkpoint-policy flags)
                              raw-result)]
-         (log/info! "scenario/start" {:id scenario-id})
+         (log/info! "scenario/start" {:id scenario-id :attribution attr/*attribution*})
          (if (:evaluate-expectations? flags true)
            (finalize-scenario-result scenario trimmed-result flags)
            trimmed-result))))))

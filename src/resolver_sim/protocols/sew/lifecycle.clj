@@ -21,7 +21,8 @@
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.yield.registry              :as yield-reg]
             [resolver-sim.yield.accounting            :as yield-acct]
-            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]))
+            [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
+            [resolver-sim.util.attribution             :as attr]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal accounting helpers
@@ -73,30 +74,28 @@
 (defn accrue-yield
   "Calculate and update accrued yield for an escrow based on time delta."
   [world workflow-id]
-  (let [snap (t/get-snapshot world workflow-id)
-        mid  (:yield-generation-module snap)
-        et    (t/get-transfer world workflow-id)
-        _ (println (str "[sew/lifecycle] DEBUG: accrue-yield wf=" workflow-id ", mid=" mid ", et=" et))]
-    (if (and mid (contains? (:yield/modules world) mid))
-      (let [et    (t/get-transfer world workflow-id)
-            now   (:block-time world)
-            last  (:last-accrual-time et now)
-            dt    (- now last)
-            _ (println (str "[sew/lifecycle] DEBUG: accrue-yield mid=" mid ", now=" now ", last=" last ", dt=" dt))]
-        (if (pos? dt)
-          (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
-                                                        :module/id mid
-                                                        :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                        :token (:token et)
-                                                        :dt dt})
-                oid    (t/escrow-yield-owner-id workflow-id)
-                pos    (get-in world' [:yield/positions oid])
-                accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))]
-            (-> world'
-                (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
-                (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued)))
-          world))
-      world)))
+  (attr/with-attribution {:workflow-id workflow-id}
+    (let [snap (t/get-snapshot world workflow-id)
+          mid  (:yield-generation-module snap)]
+      (if (and mid (contains? (:yield/modules world) mid))
+        (let [et    (t/get-transfer world workflow-id)
+              now   (:block-time world)
+              last  (:last-accrual-time et now)
+              dt    (- now last)]
+          (if (pos? dt)
+            (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
+                                                          :module/id mid
+                                                          :owner/id (t/escrow-yield-owner-id workflow-id)
+                                                          :token (:token et)
+                                                          :dt dt})
+                  oid    (t/escrow-yield-owner-id workflow-id)
+                  pos    (get-in world' [:yield/positions oid])
+                  accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))]
+              (-> world'
+                  (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
+                  (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued)))
+            world))
+        world))))
 
 (defn resolver-yield-owner-id
   "Canonical yield position owner id for resolver stake."
