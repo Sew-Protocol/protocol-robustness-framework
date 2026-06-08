@@ -203,3 +203,130 @@
                                            {:include-legacy-derived-top-levels? true})]
       (is (= :evaluated (:claim-status legacy)))
       (is (= :evaluated (get-in legacy [:diagnostics :claim-status]))))))
+
+(deftest test-try-number-decimal
+  (testing "try-number parses decimal strings"
+    (is (= (double 0.5) (theory/try-number "0.5")))
+    (is (= (double -3.14) (theory/try-number "-3.14"))))
+
+  (testing "try-number parses integers"
+    (is (= 100 (theory/try-number "100")))
+    (is (= 0 (theory/try-number "0"))))
+
+  (testing "try-number returns nil for non-numeric strings"
+    (is (nil? (theory/try-number "abc")))
+    (is (nil? (theory/try-number ""))))
+
+  (testing "try-number passes through numbers unchanged"
+    (is (= 42 (theory/try-number 42)))
+    (is (= 1/2 (theory/try-number 1/2)))))
+
+(deftest test-try-number-error-handling
+  (testing "try-number handles null"
+    (is (nil? (theory/try-number nil))))
+
+  (testing "try-number handles empty string"
+    (is (nil? (theory/try-number "")))))
+
+(deftest test-metric-key-multi-segment
+  (testing "metric-key handles multi-segment paths"
+    (is (= :coalition/net/profit (theory/metric-key "coalition/net/profit"))))
+
+  (testing "metric-key preserves standard namespaced keys"
+    (is (= :coalition/net-profit (theory/metric-key "coalition/net-profit"))))
+
+  (testing "metric-key handles keywords directly"
+    (is (= :coalition/net-profit (theory/metric-key :coalition/net-profit)))))
+
+(deftest test-after-trace-scope
+  (testing ":after temporal operator scopes inner :always to post-event window"
+    (let [trace [{:action "release" :metrics {:x 0}}
+                {:action "step1"   :metrics {:x 5}}
+                {:action "step2"   :metrics {:x 10}}]
+          ;; :after should only check events AFTER "release": step1 (x=5), step2 (x=10)
+          ;; :always {:metric :x :op :> :value 8} = (5>8 false, 10>8 true) = false
+          ;; For comparison, if it incorrectly used the full trace, it would include
+          ;; the release event itself (x=0 > 8) = false, same result.
+          ;; Use :> :value 4 to test the true path: (5>4 true, 10>4 true) = true
+          ;; falsifies-if is TRUE → theory IS falsified.
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:after {:event "release"
+                                                    :predicate {:always {:metric :x :op :> :value 4}}}}})]
+      (is (= :falsified (:status result))
+          "Should falsify: after release, all x values > 4"))))
+
+(deftest test-after-trace-scope-correction
+  (testing ":after correctly excludes pre-event events"
+    (let [trace [{:action "pre" :metrics {:x 0}}
+                {:action "release" :metrics {:x 0}}
+                {:action "step1" :metrics {:x 5}}]
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:after {:event "release"
+                                                   :predicate {:always {:metric :x :op :> :value 3}}}}})]
+      (is (= :falsified (:status result))
+          "Scope correctly excludes pre-release event: x=5 > 3 after release"))))
+
+(deftest test-before-trace-scope
+  (testing ":before temporal operator scopes inner :eventually to pre-event window"
+    (let [trace [{:action "step1" :metrics {:x 5}}
+                {:action "step2" :metrics {:x 10}}
+                {:action "release" :metrics {:x 0}}]
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:before {:event "release"
+                                                    :predicate {:eventually {:metric :x :op :> :value 8}}}}})]
+      (is (= :falsified (:status result))
+          "Should falsify: before release, step2 has x=10 > 8"))))
+
+(deftest test-before-trace-scope-correction
+  (testing ":before correctly excludes post-event events"
+    (let [trace [{:action "step1" :metrics {:x 100}}
+                {:action "release" :metrics {:x 0}}
+                {:action "step2" :metrics {:x 10}}]
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:before {:event "release"
+                                                    :predicate {:always {:metric :x :op :> :value 50}}}}})]
+      (is (= :falsified (:status result))
+          "Scope correctly excludes post-release events: x=100 > 50 before release"))))
+
+(deftest test-before-trace-scope
+  (testing ":before temporal operator scopes inner :eventually to pre-event window"
+    (let [trace [{:action "step1"   :metrics {:x 5}}
+                {:action "step2"   :metrics {:x 10}}
+                {:action "release" :metrics {:x 0}}]
+          ;; :before should only check events BEFORE "release": step1 (x=5), step2 (x=10)
+          ;; :eventually {:metric :x :op :> :value 8} should find step2 (10>8) → true
+          ;; falsifies-if is TRUE → theory IS falsified.
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:before {:event "release"
+                                                    :predicate {:eventually {:metric :x :op :> :value 8}}}}})
+          eval-tree (first (:evidence result))]
+      (is (= :falsified (:status result))
+          "Should falsify: before release, step2 has x=10 > 8"))
+    ;; Test scope correctness:
+    (let [trace [{:action "step1"   :metrics {:x 100}}
+                {:action "release" :metrics {:x 0}}
+                {:action "step2"   :metrics {:x 10}}]
+          result (theory/evaluate-theory (assoc base-result :trace trace)
+                                         {:falsifies-if
+                                          {:before {:event "release"
+                                                    :predicate {:always {:metric :x :op :> :value 50}}}}})]
+      (is (= :falsified (:status result))
+          (str "Should falsify: before release, step1 x=100 > 50."
+               " If... would cause :always to fail.")))))
+
+(deftest test-state-predicate-missing-query
+  (testing "State predicate with nil projection flags missing-query-result?"
+    (let [result (theory/evaluate-theory base-result
+                                         {:falsifies-if {:state {:query [:party/net-position {:party "nonexistent" :token :USDC}]
+                                                                :op :>= :value 10}}})]
+      (is (= :not-falsified (:status result)))
+      (is (some? (:evidence result)))
+      (let [leaf (first (get-in result [:diagnostics :evaluated-predicates]))]
+        (when leaf
+          (is (contains? leaf :missing-query-result?)))))))
+

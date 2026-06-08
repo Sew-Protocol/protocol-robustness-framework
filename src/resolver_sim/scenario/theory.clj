@@ -53,22 +53,93 @@
     (keyword s')))
 
 (defn metric-key
-  "Keyword for metrics map lookup; preserves namespaced keys like :coalition/net-profit."
+  "Keyword for metrics map lookup; preserves namespaced keys like :coalition/net-profit
+   and multi-segment keys like :coalition/net/profit."
   [m]
   (cond
     (keyword? m) m
-    (string? m)  (if (.contains ^String m "/")
-                   (let [[ns n] (str/split m #"/" 2)]
-                     (keyword ns n))
-                   (keyword m))
+    (string? m)  (keyword m)
     :else (to-kw m)))
 
-(defn- try-number
-  "Coerce value to a number (Long parse). Returns nil if not possible."
+(def ^:private valid-ops #{:= :> :< :>= :<= :not=})
+
+(defn- validate-predicate-shape
+  "Validate a single predicate map. Returns nil or an error string."
+  [pred depth]
+  (when (pos? depth)
+    (cond
+      (:metric pred)
+      (cond
+        (nil? (:metric pred)) "nil :metric in metric leaf"
+        (not (contains? pred :op)) "missing :op in metric leaf"
+        (not (valid-ops (:op pred))) (str "invalid :op " (:op pred))
+        :else nil)
+
+      (:state pred)
+      (let [s (:state pred)]
+        (cond
+          (not (map? s)) "expected :state to be a map"
+          (not (contains? s :query)) "missing :query in :state"
+          (not (contains? s :op)) "missing :op in :state"
+          (not (valid-ops (:op s))) (str "invalid :op " (:op s))
+          :else nil))
+
+      (:and pred) (first (keep #(validate-predicate-shape % (dec depth)) (:and pred)))
+      (:or pred) (first (keep #(validate-predicate-shape % (dec depth)) (:or pred)))
+      (:not pred) (validate-predicate-shape (:not pred) (dec depth))
+      (:implies pred) (or (validate-predicate-shape (:if pred) (dec depth))
+                          (validate-predicate-shape (:then pred) (dec depth)))
+      (:always pred) (validate-predicate-shape (:always pred) (dec depth))
+      (:eventually pred) (validate-predicate-shape (:eventually pred) (dec depth))
+
+      (:after pred)
+      (let [a (:after pred)]
+        (cond
+          (not (map? a)) "expected :after to be a map"
+          (not (string? (:event a))) "expected :event in :after to be a string"
+          :else (validate-predicate-shape (:predicate a) (dec depth))))
+
+      (:before pred)
+      (let [b (:before pred)]
+        (cond
+          (not (map? b)) "expected :before to be a map"
+          (not (string? (:event b))) "expected :event in :before to be a string"
+          :else (validate-predicate-shape (:predicate b) (dec depth))))
+
+      :else "unrecognized predicate shape")))
+
+
+(defn- validate-theory-block
+  "Validate a theory block. Returns nil or a vector of error strings."
+  [theory]
+  (when (some? theory)
+    (let [errors (cond-> []
+                   (contains? theory :falsifies-if)
+                   (conj (let [conds (:falsifies-if theory)
+                               e (if (vector? conds)
+                                   (first (keep #(validate-predicate-shape % 10) conds))
+                                   (validate-predicate-shape conds 10))]
+                           (when e e)))
+
+                   (contains? theory :claim-id)
+                   (conj (let [c (:claim-id theory)]
+                           (when (and (some? c) (not (or (keyword? c) (string? c))))
+                             ":claim-id must be a keyword or string")))
+
+                   (contains? theory :assumptions)
+                   (conj (let [a (:assumptions theory)]
+                           (when (and (some? a) (not (every? keyword? a)))
+                             ":assumptions must be a vector of keywords"))))]
+      (seq (filter string? errors)))))
+
+
+(defn try-number
+  "Coerce value to a number (via edn parsing). Returns nil if not possible."
   [v]
   (cond
     (number? v) v
-    (string? v) (try (Long/parseLong v) (catch Exception _ nil))
+    (string? v) (try (clojure.edn/read-string v)
+                     (catch Exception _ nil))
     :else nil))
 
 ;; ---------------------------------------------------------------------------
@@ -114,14 +185,19 @@
     (swap! (:theory-diagnostics-atom opts) conj (assoc data :message msg))))
 
 (defn- eval-predicate
-  "Recursively evaluate a predicate map against the trace, metrics, and world state."
-  [protocol world trace metrics predicate opts]
+  "Recursively evaluate a predicate map against the trace, metrics, and world state.
+
+   `trace-scope` is the slice of events visible to temporal operators
+   (`:always`, `:eventually`, `:after`, `:before`).  Non-temporal operators
+   pass it through unchanged.  Top-level call from `evaluate-theory` passes
+   the full trace as the initial scope."
+  [protocol world trace-scope metrics predicate opts]
   (cond
     (:and predicate)
     (let [children (:and predicate)]
       (if (empty? children)
         (empty-logical-result :and)
-        (let [results (mapv #(eval-predicate protocol world trace metrics % opts) children)]
+        (let [results (mapv #(eval-predicate protocol world trace-scope metrics % opts) children)]
           (debug-log! opts "evaluated :and" {:operator :and :child-count (count results)})
           {:holds? (every? :holds? results) :operator :and :children results})))
 
@@ -129,65 +205,67 @@
     (let [children (:or predicate)]
       (if (empty? children)
         (empty-logical-result :or)
-        (let [results (mapv #(eval-predicate protocol world trace metrics % opts) children)]
+        (let [results (mapv #(eval-predicate protocol world trace-scope metrics % opts) children)]
           (debug-log! opts "evaluated :or" {:operator :or :child-count (count results)})
           {:holds? (some :holds? results) :operator :or :children results})))
 
     (:not predicate)
-    (let [result (eval-predicate protocol world trace metrics (:not predicate) opts)]
+    (let [result (eval-predicate protocol world trace-scope metrics (:not predicate) opts)]
       {:holds? (not (:holds? result)) :operator :not :children [result]})
 
     (:implies predicate)
-    (let [if-result (eval-predicate protocol world trace metrics (:if predicate) opts)
-          then-result (eval-predicate protocol world trace metrics (:then predicate) opts)]
+    (let [if-result (eval-predicate protocol world trace-scope metrics (:if predicate) opts)
+          then-result (eval-predicate protocol world trace-scope metrics (:then predicate) opts)]
       {:holds? (or (not (:holds? if-result)) (:holds? then-result))
        :operator :implies
        :children [if-result then-result]})
 
     (:always predicate)
-    (let [results (mapv #(eval-predicate protocol world trace
+    (let [results (mapv #(eval-predicate protocol world trace-scope
                                          (extract-metrics-at-entry %)
                                          (:always predicate) opts)
-                        trace)]
+                        trace-scope)]
       {:holds? (every? :holds? results) :operator :always :children results})
 
     (:eventually predicate)
-    (let [results (mapv #(eval-predicate protocol world trace
+    (let [results (mapv #(eval-predicate protocol world trace-scope
                                          (extract-metrics-at-entry %)
                                          (:eventually predicate) opts)
-                        trace)]
+                        trace-scope)]
       {:holds? (some :holds? results) :operator :eventually :children results})
 
     (:after predicate)
     (let [{:keys [event predicate]} (:after predicate)
-          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace))
-          sub-trace (if idx (drop (inc idx) trace) [])]
-      (if (empty? sub-trace)
+          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace-scope))
+          sub-scope (if idx (drop (inc idx) trace-scope) [])]
+      (if (empty? sub-scope)
         {:holds? false :reason :event-not-found :event event}
-        (let [results (mapv #(eval-predicate protocol world trace
+        (let [results (mapv #(eval-predicate protocol world sub-scope
                                              (extract-metrics-at-entry %)
                                              predicate opts)
-                            sub-trace)]
+                            sub-scope)]
           {:holds? (every? :holds? results) :operator :after :children results})))
 
     (:before predicate)
     (let [{:keys [event predicate]} (:before predicate)
-          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace))
-          sub-trace (if idx (take idx trace) [])]
-      (if (empty? sub-trace)
+          idx (first (keep-indexed #(when (= (:action %2) event) %1) trace-scope))
+          sub-scope (if idx (take idx trace-scope) [])]
+      (if (empty? sub-scope)
         {:holds? false :reason :event-not-found :event event}
-        (let [results (mapv #(eval-predicate protocol world trace
+        (let [results (mapv #(eval-predicate protocol world sub-scope
                                              (extract-metrics-at-entry %)
                                              predicate opts)
-                            sub-trace)]
+                            sub-scope)]
           {:holds? (every? :holds? results) :operator :before :children results})))
 
     (:state predicate)
     (let [proj-val (proto/project-state protocol world (:query predicate))
-          holds?   (evaluate-metric-op (:op predicate) proj-val (:value predicate))]
+          missing? (nil? proj-val)
+          holds?   (if missing? false (evaluate-metric-op (:op predicate) proj-val (:value predicate)))]
       {:holds? holds? :kind :state
+       :missing-query-result? missing?
        :state (:query predicate) :op (:op predicate) :value (:value predicate) :actual proj-val
-       :truth-status (if holds? :true :false)})
+       :truth-status (if missing? :unknown (if holds? :true :false))})
 
     :else
     (let [metric-kw (metric-key (:metric predicate))
@@ -225,7 +303,7 @@
     [(select-keys tree [:metric :op :value :actual :holds? :missing-metric? :truth-status])]
 
     (= :state (:kind tree))
-    [(select-keys tree [:state :op :value :actual :holds? :kind])]
+    [(select-keys tree [:state :op :value :actual :holds? :kind :missing-query-result?])]
 
     (:children tree) (vec (mapcat collect-evaluated-leaves (:children tree)))
     :else []))
@@ -235,17 +313,17 @@
   [eval-tree]
   (mapv
    (fn [leaf]
-     (if (= :state (:kind leaf))
-       {:kind  :state
-        :state (:state leaf)
-        :actual (:actual leaf)
-        :op    (:op leaf)
-        :value (:value leaf)
-        :threshold (:value leaf)
-        :holds? (:holds? leaf)
-        :missing? false
-        :truth-status (if (:holds? leaf) :true :false)
-        :source [:terminal-world :projection (:state leaf)]}
+      (if (= :state (:kind leaf))
+        {:kind  :state
+         :state (:state leaf)
+         :actual (:actual leaf)
+         :op    (:op leaf)
+         :value (:value leaf)
+         :threshold (:value leaf)
+         :holds? (:holds? leaf)
+         :missing? (boolean (:missing-query-result? leaf))
+         :truth-status (get leaf :truth-status (if (:holds? leaf) :true :false))
+         :source [:terminal-world :projection (:state leaf)]}
        (let [missing? (boolean (:missing-metric? leaf))]
          {:kind  :metric
           :metric (:metric leaf)
@@ -350,9 +428,29 @@
        :equilibrium-results {}
        :equilibrium-status  :not-checked}
        opts theory)
-     (let [opts'     (theory-eval/resolve-theory-eval-opts opts)
-           protocol  (:protocol result)
-           world     (:terminal-world result)
+      (let [opts'     (theory-eval/resolve-theory-eval-opts opts)
+            v-errors  (validate-theory-block theory)
+            _ (when (and (:debug-theory? opts') (seq v-errors))
+                (debug-log! opts' "theory-validation-failed" {:errors v-errors}))]
+        (if (seq v-errors)
+          (case (:validator-error-policy opts' :inconclusive)
+            :throw (throw (ex-info "Theory validation failed" {:errors v-errors}))
+            :fail (finalize-metric-result
+                   {:status :inconclusive :reason :invalid-theory-block
+                    :falsified? false :evidence []
+                    :diagnostics {:validation-errors v-errors}
+                    :mechanism-results {} :mechanism-status :not-checked
+                    :equilibrium-results {} :equilibrium-status :not-checked}
+                   opts' theory)
+            (finalize-metric-result
+             {:status :inconclusive :reason :invalid-theory-block
+              :falsified? false :evidence []
+              :diagnostics {:validation-errors v-errors}
+              :mechanism-results {} :mechanism-status :not-checked
+              :equilibrium-results {} :equilibrium-status :not-checked}
+             opts' theory))
+          (let [protocol  (:protocol result)
+                world     (:terminal-world result)
            trace     (:trace result [])
            metrics   (:metrics result)
            conds     (:falsifies-if theory [])
@@ -428,4 +526,4 @@
                         {:status :not-falsified :reason :predicate-not-satisfied
                          :falsified? false :evidence [eval-res]
                          :diagnostics diagnostics}))]
-           (finalize-metric-result (merge-eq base) opts' theory)))))))
+            (finalize-metric-result (merge-eq base) opts' theory)))))))))
