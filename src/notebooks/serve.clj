@@ -41,4 +41,5 @@
      (show-notebook! "src/resolver_sim/notebooks/subgame_counterfactual_workbench.clj")
 
      ;; Index is shown last — it becomes the default landing page.
+     (show-notebook! "notebooks/index.clj")))
 

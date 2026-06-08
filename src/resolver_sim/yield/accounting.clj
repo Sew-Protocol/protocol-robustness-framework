@@ -119,26 +119,54 @@
          (update :realized-yield + unrealized)
          (assoc :unrealized-yield 0)))))
 
+(defn- resolve-available-ratios
+  "Return [yield-ratio principal-ratio] from risk config.
+   Falls back to :available-ratio, then to 1.0."
+  [risk]
+  (let [sf (:shortfall risk)
+        avail (double (or (:available-ratio sf) 1.0))
+        yield-r (double (or (:yield-available-ratio sf) avail))
+        princ-r (double (or (:principal-available-ratio sf) avail))]
+    [yield-r princ-r]))
+
 (defn apply-liquidity-stress
   "Calculates potential shortfall and haircuts based on world risk parameters.
-   Returns a map with :fulfilled and :shortfall (if any)."
-  [world module-id token amount]
+
+   When :principal is provided and failure-modes include :partial-liquidity,
+   separate :yield-available-ratio and :principal-available-ratio from the
+   shortfall config are used.  Falls back to :available-ratio when split
+   ratios are not set."
+  [world module-id token amount & {:keys [principal]}]
   (let [risk (risk-map world module-id token)
-        mode (risk/effective-liquidity-mode risk)]
+        mode (risk/effective-liquidity-mode risk)
+        failure-modes (risk/normalize-failure-modes (:failure-modes risk))
+        [yield-r princ-r] (resolve-available-ratios risk)]
     (case mode
       :available {:fulfilled amount :shortfall nil}
-      :shortfall (let [ratio (double (get-in risk [:shortfall :available-ratio] 0.5))
-                       fulfilled (long (Math/floor (* amount ratio)))
-                       deferred  (- amount fulfilled)]
-                   {:fulfilled fulfilled
-                    :shortfall (merge {:reason (or (get-in risk [:shortfall :reason])
-                                                   :liquidity-shortfall)
-                                       :basis-amount amount
-                                       :available-ratio ratio
-                                       :fulfilled-amount fulfilled
-                                       :deferred-amount deferred
-                                       :haircut-amount 0}
-                                      (select-keys (:shortfall risk {}) [:reason]))})
+      :shortfall (if (and principal (contains? failure-modes :partial-liquidity))
+                   (let [yield-portion (max 0 (- amount principal))
+                         princ-portion (min amount principal)
+                         yf (long (Math/floor (* yield-portion yield-r)))
+                         pf (long (Math/floor (* princ-portion princ-r)))]
+                     {:fulfilled (+ yf pf)
+                      :shortfall {:reason :liquidity-shortfall
+                                  :basis-amount amount
+                                  :available-ratio yield-r
+                                  :yield-available-ratio yield-r
+                                  :principal-available-ratio princ-r
+                                  :fulfilled-amount (+ yf pf)
+                                  :deferred-amount (- amount (+ yf pf))
+                                  :haircut-amount 0
+                                  :shortfall-kind :partial-liquidity}})
+                   (let [fulfilled (long (Math/floor (* amount yield-r)))
+                         deferred (- amount fulfilled)]
+                     {:fulfilled fulfilled
+                      :shortfall {:reason :liquidity-shortfall
+                                  :basis-amount amount
+                                  :available-ratio yield-r
+                                  :fulfilled-amount fulfilled
+                                  :deferred-amount deferred
+                                  :haircut-amount 0}}))
       :haircut   (let [ratio (double (get-in risk [:haircut :loss-ratio] 0.1))
                        loss  (long (Math/floor (* amount ratio)))
                        fulfilled (- amount loss)]
@@ -148,12 +176,12 @@
                                 :fulfilled-amount fulfilled
                                 :deferred-amount 0
                                 :haircut-amount loss}})
-      ;; Default to hard block if mode is unrecognized/extreme (frozen, paused)
       {:fulfilled 0 :shortfall {:reason mode
                                 :basis-amount amount
                                 :fulfilled-amount 0
                                 :deferred-amount amount
                                 :haircut-amount 0}})))
+
 
 (defn partial-yield-shortfall?
   "True when shortfall stress applied only to the yield leg (partial-liquidity).
