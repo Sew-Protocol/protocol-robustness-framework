@@ -14,7 +14,8 @@
       :post-partial-fill-accrual :accrue-residual-as-unrealized
       :rounding-policy :floor-and-carry}"
   (:require [resolver-sim.yield.exact-math :as m]
-            [resolver-sim.yield.position :as pos]))
+            [resolver-sim.yield.position :as pos]
+            [resolver-sim.util.attribution :as attr]))
 
 
 (def ^:private schema-version "partial-fill-decision.v1")
@@ -351,3 +352,30 @@
     (-> world
         (assoc-in [:yield/positions owner-id] updated-pos)
         (update-in [:total-held tok] #(- (or % 0) filled-total)))))
+
+
+(defn apply-partial-fill-with-attribution
+  "Apply a partial-fill settlement to world state, wrapping the mutation in
+   `with-attribution` so that downstream logging and risk monitoring can see
+   the settlement details.
+
+   Attribution context keys:
+     :settlement/mode        — :full-fill or :partial-fill
+     :settlement/filled      — total filled base units
+     :settlement/deferred    — total deferred base units
+     :settlement/haircut     — total haircut base units
+     :settlement/shortage    — shortfall amount
+     :settlement/module-id   — module-id
+     :settlement/token       — token
+     :settlement/position-id — owner-id"
+  [world position decision]
+  (let [ctx {:settlement/mode (:settlement-mode decision)
+             :settlement/filled (reduce + 0 (vals (:filled decision)))
+             :settlement/deferred (reduce + 0 (vals (:deferred decision)))
+             :settlement/haircut (reduce + 0 (vals (:haircut decision)))
+             :settlement/shortage (get-in decision [:evidence :shortage] 0)
+             :settlement/module-id (:module/id position)
+             :settlement/token (:token position)
+             :settlement/position-id (:owner/id position)}]
+    (attr/with-attribution ctx
+      (apply-partial-fill world position decision))))

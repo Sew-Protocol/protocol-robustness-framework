@@ -3,7 +3,9 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.accrual :as accrual]
             [resolver-sim.yield.exact-math :as m]
-            [resolver-sim.yield.position :as pos]))
+            [resolver-sim.yield.position :as pos]
+            [resolver-sim.yield.risk-monitor :as risk]
+            [resolver-sim.util.attribution :as attr]))
 
 
 (def base-world
@@ -341,4 +343,35 @@
       (is (pos? (:yield_unrealized proj)))
       (is (zero? (:yield_deferred proj)))
       (is (zero? (:principal_haircut proj))))))
+
+(deftest test-risk-monitor-captures-short-circuit-events
+  (testing "Risk monitor captures frozen-module event"
+    (risk/clear!)
+    (let [world (-> (world-with-position)
+                    (assoc-in [:yield/module-status :test-mod] :frozen))
+          decision (accrual/accrual-decision world {:module-id :test-mod
+                                                      :token "USDC"
+                                                      :position-id "user1"
+                                                      :now 1000
+                                                      :dt 31536000})]
+      (accrual/apply-accrual-decision-with-attribution world decision)
+      (let [events (risk/events)]
+        (is (pos? (count events)) "Risk events should be captured")
+        (is (some #(= :module-frozen-zero-accrual (first (:short-circuits %))) events)
+            "Frozen module event should appear in risk monitor")))))
+
+(deftest test-risk-monitor-summary
+  (testing "Risk monitor summary aggregates correctly"
+    (risk/clear!)
+    (let [world (-> (world-with-position)
+                    (assoc-in [:yield/module-status :test-mod] :frozen))
+          decision (accrual/accrual-decision world {:module-id :test-mod
+                                                      :token "USDC"
+                                                      :position-id "user1"
+                                                      :now 1000
+                                                      :dt 31536000})]
+      (accrual/apply-accrual-decision-with-attribution world decision)
+      (let [s (risk/summary)]
+        (is (contains? s :module-frozen-zero-accrual))
+        (is (= 1 (:count (get s :module-frozen-zero-accrual))))))))
 

@@ -17,9 +17,11 @@
    5. Max index delta cap
    6. Negative yield floor
    7. Recoverable liquidity cap"
-  (:require [resolver-sim.yield.exact-math :as m]
+   (:require [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
-            [resolver-sim.yield.market-state :as market-state]))
+            [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.yield.risk-monitor :as risk]))
 
 
 (def ^:private schema-version "accrual-decision.v2")
@@ -597,6 +599,37 @@
         (-> world'
             (assoc-in [:yield/positions owner-id] updated-pos)
             (update-in [:total-yield-generated tok] (fnil + 0) (max 0 yield-delta))
-            ;; Fix solvency drift: :total-held must track the full signed delta.
             (update-in [:total-held tok] (fnil + 0) yield-delta)))
       world')))
+
+
+(defn apply-accrual-decision-with-attribution
+  "Apply a yield accrual decision to world state, wrapping the mutation in
+   `with-attribution` so that downstream logging, invariant checks, and risk
+   monitoring can see the decision's evidence without carrying it explicitly
+   through every function signature.
+
+   Attribution context keys:
+     :accrual/accrual-mode     — the accrual-mode from the decision
+     :accrual/short-circuits   — the short-circuits vector
+     :accrual/yield-delta      — final-accrual-delta
+     :accrual/deferred-delta   — deferred-yield-delta
+     :accrual/module-id        — module-id
+     :accrual/token            — token
+     :accrual/position-id      — position-id
+     :accrual/previous-index   — previous index (JSON-safe)
+     :accrual/final-index      — final index (JSON-safe)"
+  [world decision]
+  (let [ctx {:accrual/accrual-mode (:accrual-mode decision)
+             :accrual/short-circuits (vec (:short-circuits decision))
+             :accrual/yield-delta (:final-accrual-delta decision)
+             :accrual/deferred-delta (:deferred-yield-delta decision 0)
+             :accrual/module-id (:module-id decision)
+             :accrual/token (:token decision)
+             :accrual/position-id (:position-id decision)
+             :accrual/previous-index (m/ratio->json (:previous-index decision))
+             :accrual/final-index (m/ratio->json (:final-index decision))}]
+    (attr/with-attribution ctx
+      (let [world' (apply-accrual-decision world decision)]
+        (risk/capture-if-risk-event)
+        world'))))
