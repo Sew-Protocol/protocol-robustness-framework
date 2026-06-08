@@ -1,0 +1,128 @@
+{:paths ["." "src"]
+
+ :mvn/repos {"central" {:url "https://repo1.maven.org/maven2/"}
+             "clojars" {:url "https://repo.clojars.org/"}}
+
+ :deps {org.clojure/clojure              {:mvn/version "1.12.0"}
+        org.clojure/tools.logging         {:mvn/version "1.2.4"}
+        org.slf4j/slf4j-api               {:mvn/version "1.7.36"}
+        org.slf4j/slf4j-simple            {:mvn/version "1.7.36"}
+        io.github.nextjournal/clerk       {:mvn/version "0.18.1158"}
+        org.clojure/tools.cli             {:mvn/version "1.0.219"}
+        org.clojure/data.json             {:mvn/version "2.4.0"}
+        buddy/buddy-core                  {:mvn/version "1.12.0-430"}
+        ;; gRPC transport + stub helpers (no protoc — JSON Marshaller only)
+        io.grpc/grpc-netty-shaded         {:mvn/version "1.64.0"}
+        io.grpc/grpc-stub                 {:mvn/version "1.64.0"}
+        com.github.seancorfield/next.jdbc {:mvn/version "1.3.939"}
+
+        ;; data tooling (recommended)
+        scicloj/tablecloth                {:mvn/version "7.029.2"}
+
+        ;; schema validation
+        metosin/malli                     {:mvn/version "0.17.0"}}
+
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}}
+
+  :dev
+  {:extra-paths ["dev"]
+   :extra-deps {nrepl/nrepl             {:mvn/version "1.3.1"}
+                cider/cider-nrepl       {:mvn/version "0.57.0"}
+                djblue/portal            {:mvn/version "0.59.1"}
+                clj-kondo/clj-kondo      {:mvn/version "2026.04.15"}}
+   :main-opts ["-m" "nrepl.cmdline" "--bind" "localhost"]}
+
+  :build
+  {:extra-deps {io.github.clojure/tools.build {:git/tag "v0.10.7"
+                                                :git/sha "573711e"}}
+   :ns-default build}
+
+  :lint
+  {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.04.07"}}
+   :main-opts ["-m" "clj-kondo.main"
+               "--lint" "src:notebooks:test:dev"]}
+
+  :layering-lint
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "layering-lint"]}
+
+  :regenerate-goldens
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.regenerate-goldens"]}
+
+  :sync-trace-fixtures
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.sync-invariant-trace-fixtures"]}
+
+  :generate-scenario-docs
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.generate-scenario-index-docs"]}
+
+  :export-s62-traces
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.export-s62-traces"]}
+
+  :eastwood
+  {:extra-deps {jonase/eastwood {:mvn/version "1.4.3"}}
+   :main-opts ["-m" "eastwood.lint"
+               "{:source-paths [\"src\" \"notebooks\" \"test\"]}"]}
+
+  :ci
+  {:extra-paths ["test"]
+   :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}
+
+  :fmt
+  {:extra-deps {cljfmt/cljfmt {:mvn/version "0.12.0"}}
+   :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
+
+  :run
+  {:main-opts ["-e" "(require '[resolver-sim.core]) (->> *command-line-args* (map str) (apply resolver-sim.core/-main))"]}
+
+  :diff-traces
+  {:main-opts ["-m" "resolver-sim.io.diff-runner"]}
+
+  :trace-export
+  {:main-opts ["-m" "resolver-sim.protocols.sew.io.trace-export"]}
+
+  :reference-validation
+  {:main-opts ["-m" "resolver-sim.sim.reference-validation"]}
+
+  :sign-manifest
+  {:main-opts ["-m" "resolver-sim.scripts.sign-manifest"]}
+
+  ;; Promote all stored adversarial traces into Forge regression suite:
+  ;;   clojure -M:trace-regress [store-dir] [regression-dir]
+  :trace-regress
+  {:main-opts ["-m" "resolver-sim.io.trace-store"]}
+
+  ;; Run Phase Z adversarial scenarios, score them, persist top 1%:
+  ;;   clojure -M:phase-z-persist [store-dir]
+  :phase-z-persist
+  {:main-opts ["-m" "resolver-sim.io.phase-z-persist"]}
+
+  :clerk
+  {:exec-fn nextjournal.clerk/serve!
+   :exec-args {:browse true
+               :watch-paths ["src" "notebooks"]}}
+
+  :observability
+  {:git/url "https://github.com/nextjournal/clerk"
+   :git/sha "8772a0889218274384a30e79165b4c194b59560f"
+   :main-opts ["-m" "notebooks.serve"]}
+
+  :telemetry-seed
+  {:main-opts ["-m" "resolver-sim.db.telemetry-seed"]}
+
+  :speds-comparator-shadow
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "speds-generate-comparator-shadow"]}
+
+  :notebooks
+  {:extra-paths ["."]}
+
+  :search-docs
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.search_docs_sentinel.run"]}}}

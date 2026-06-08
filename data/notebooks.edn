@@ -1,0 +1,393 @@
+{:schema-version "notebooks.v1"
+ :description    "Declarative metadata registry for all Clerk notebooks.
+                  Navigation, status indicators, and the hub index are
+                  generated from this file — edit here to update nav."
+
+ ;; ── category taxonomy ───────────────────────────────────────────────────────
+ :categories
+ {:security-validation {:label "Security Validation"   :icon "🛡️"  :order 1}
+  :adversarial         {:label "Adversarial Scenarios" :icon "⚔️"  :order 2}
+  :economic-analysis   {:label "Economic Analysis"     :icon "📊"  :order 3}
+  :replay-determinism  {:label "Replay & Determinism"  :icon "🔁"  :order 4}
+  :evidence-artifacts  {:label "Evidence Artifacts"    :icon "🗂️"  :order 5}
+  :findings            {:label "Findings & Issues"     :icon "🔍"  :order 6}
+  :governance          {:label "Governance"            :icon "⚖️"  :order 7}
+  :yield-liquidity     {:label "Yield & Liquidity"     :icon "💧"  :order 8}
+  :provenance          {:label "Provenance & Manifests":icon "📋"  :order 9}
+  :demos               {:label "Demos"                 :icon "🎬"  :order 10}
+  :tooling             {:label "Tooling & Workbench"   :icon "🔧"  :order 11}
+  :experimental        {:label "Experimental"          :icon "🧪"  :order 12}}
+
+ ;; ── threat taxonomy (for Security Concerns quick-nav) ───────────────────────
+ :threats
+ {:resolver-cartelization {:label "Resolver Cartelization" :severity :high}
+  :governance-capture     {:label "Governance Capture"     :severity :high}
+  :replay-divergence      {:label "Replay Divergence"      :severity :high}
+  :escalation-abuse       {:label "Escalation Abuse"       :severity :medium}
+  :economic-extraction    {:label "Economic Extraction"    :severity :high}
+  :liquidity-shortfall    {:label "Liquidity Shortfall"    :severity :medium}
+  :yield-reorg-race       {:label "Yield Reorg Race"       :severity :medium}
+  :griefing               {:label "Griefing"               :severity :low}
+  :oracle-failure         {:label "Oracle Failure"         :severity :medium}
+  :same-block-ordering    {:label "Same-Block Ordering"    :severity :medium}}
+
+ ;; ── notebook registry ────────────────────────────────────────────────────────
+ ;; :status values: :verified :partial :experimental :draft :stale :requires-review
+ ;; :risk   values: :high :medium :low :informational
+ ;; Categories: notebook belongs to ALL listed; first = primary for nav highlighting
+ :notebooks
+ [{:id             :report
+   :path           "notebooks/report.clj"
+   :title          "Evidence Workbook"
+   :summary        "At-a-glance evidence surface for a validation run. Status indicators paired with source artifacts and known limitations."
+   :categories     [:security-validation :evidence-artifacts]
+   :audience       [:reviewer :auditor :researcher]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:dispute-resolution :invariants :escrow]
+   :threats        [:resolver-cartelization :escalation-abuse]
+   :tags           ["invariants" "evidence" "findings" "benchmark"]}
+
+  {:id             :protocol-provenance
+   :path           "notebooks/protocol_provenance.clj"
+   :title          "Protocol Provenance"
+   :summary        "Manifest management cockpit: evidence bundles, replay provenance, benchmark runs, scenario lineage, publication state."
+   :categories     [:provenance :security-validation]
+   :audience       [:auditor :grant-reviewer :researcher]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:all]
+   :tags           ["manifest" "provenance" "signing" "reproducibility" "publication"]}
+
+  {:id             :invariant-failures
+   :path           "notebooks/invariant_failures.clj"
+   :title          "Invariant Failures"
+   :summary        "Interactive browser for invariant violations across all simulation scenarios. Filter by invariant ID, severity, or scenario."
+   :categories     [:security-validation :findings]
+   :audience       [:researcher :auditor]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:invariants :state-machine]
+   :threats        [:replay-divergence :escalation-abuse]
+   :tags           ["invariants" "failures" "scenarios" "state-machine"]}
+
+  {:id             :atlas-artifact
+   :path           "notebooks/atlas_artifact.clj"
+   :title          "Atlas of Protocol Robustness"
+   :summary        "Comprehensive multi-dimensional robustness map across all simulation phases and threat categories."
+   :categories     [:security-validation :evidence-artifacts]
+   :audience       [:auditor :grant-reviewer]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:all]
+   :tags           ["robustness" "atlas" "comprehensive" "phases"]}
+
+  {:id             :dispute-artifact
+   :path           "notebooks/dispute_artifact.clj"
+   :title          "Dispute Resolution — Technical Validation"
+   :summary        "Validation story for the dispute resolution module: state machine correctness, resolver incentives, escalation paths."
+   :categories     [:security-validation :evidence-artifacts]
+   :audience       [:auditor :researcher]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:dispute-resolution :state-machine]
+   :threats        [:escalation-abuse :resolver-cartelization]
+   :tags           ["dispute" "resolution" "state-machine" "escalation"]}
+
+  {:id             :collusion-artifact
+   :path           "notebooks/collusion_artifact.clj"
+   :title          "Collusion & Cartel Dynamics — Validation"
+   :summary        "Adversarial validation of resolver collusion and multi-epoch cartel formation. Bounds on exploitability."
+   :categories     [:adversarial :security-validation]
+   :audience       [:researcher :auditor]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:dispute-resolution :bonding]
+   :threats        [:resolver-cartelization :governance-capture]
+   :tags           ["collusion" "cartel" "multi-epoch" "adversarial"]}
+
+  {:id             :game-theory-artifact
+   :path           "notebooks/game_theory_artifact.clj"
+   :title          "Game Theory — Validation Story"
+   :summary        "Game-theoretic analysis: Nash equilibria, dominant strategies, incentive alignment under adversarial conditions."
+   :categories     [:economic-analysis :security-validation]
+   :audience       [:researcher :grant-reviewer]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:bonding :fee-model :dispute-resolution]
+   :threats        [:economic-extraction :resolver-cartelization]
+   :tags           ["game-theory" "nash" "equilibrium" "incentives"]}
+
+  {:id             :economic-artifact
+   :path           "notebooks/economic_artifact.clj"
+   :title          "Economic Model — Validation Story"
+   :summary        "Economic parameter validation: fee arithmetic, bond sizing, profit/loss under adversarial and honest strategies."
+   :categories     [:economic-analysis :evidence-artifacts]
+   :audience       [:researcher :grant-reviewer]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:fee-model :bonding :accounting]
+   :threats        [:economic-extraction]
+   :tags           ["economics" "fees" "bonds" "profit"]}
+
+  {:id             :equilibrium-artifact
+   :path           "notebooks/equilibrium_artifact.clj"
+   :title          "Equilibrium Analysis — Validation Story"
+   :summary        "Protocol equilibrium stability under parameter variation. Identifies destabilising parameter combinations."
+   :categories     [:economic-analysis :evidence-artifacts]
+   :audience       [:researcher]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:fee-model :bonding]
+   :threats        [:economic-extraction :governance-capture]
+   :tags           ["equilibrium" "stability" "parameter-sensitivity"]}
+
+  {:id             :hardening-artifact
+   :path           "notebooks/hardening_artifact.clj"
+   :title          "Protocol Hardening — Validation Story"
+   :summary        "Security hardening analysis: attack surface reduction, parameter tightening, defensive improvements."
+   :categories     [:security-validation :evidence-artifacts]
+   :audience       [:auditor :researcher]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:all]
+   :threats        [:escalation-abuse :griefing :economic-extraction]
+   :tags           ["hardening" "security" "attack-surface" "mitigations"]}
+
+  {:id             :theory-falsification-artifact
+   :path           "notebooks/theory_falsification_artifact.clj"
+   :title          "Theory Falsification"
+   :summary        "Formal theory falsification: which claims survived adversarial testing and which were falsified."
+   :categories     [:security-validation :evidence-artifacts]
+   :audience       [:researcher :grant-reviewer]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:all]
+   :tags           ["theory" "falsification" "claims" "CDRS"]}
+
+  {:id             :golden-artifact
+   :path           "notebooks/golden_artifact.clj"
+   :title          "Golden Baseline — Validation Story"
+   :summary        "Canonical baseline validation across SPEDS v1.1 scenarios. Reference benchmark for regression detection."
+   :categories     [:replay-determinism :evidence-artifacts]
+   :audience       [:researcher :auditor]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:escrow :dispute-resolution]
+   :tags           ["golden" "baseline" "SPEDS" "regression" "determinism"]}
+
+  {:id             :evidence-explorer
+   :path           "notebooks/evidence_explorer.clj"
+   :title          "Evidence Explorer"
+   :summary        "Deep-dive trace inspection for verified scenarios. Audit-surface for SPEDS scenario evidence."
+   :categories     [:evidence-artifacts :replay-determinism]
+   :audience       [:auditor :researcher]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:all]
+   :tags           ["evidence" "traces" "SPEDS" "audit"]}
+
+  {:id             :evidence-drawer
+   :path           "notebooks/evidence_drawer.clj"
+   :title          "Evidence Drawer"
+   :summary        "Technical exploration surface for raw evidence artifacts. Low-level trace and artifact browser."
+   :categories     [:evidence-artifacts]
+   :audience       [:researcher]
+   :status         :partial
+   :risk           :low
+   :protocol-areas [:all]
+   :tags           ["evidence" "artifacts" "raw" "exploration"]}
+
+  {:id             :challenge-drilldown
+   :path           "notebooks/challenge_drilldown.clj"
+   :title          "Challenge Window Mechanics"
+   :summary        "Evidence drilldown for challenge window timing, bond locking, and dispute initiation edge cases."
+   :categories     [:security-validation :replay-determinism]
+   :audience       [:auditor :researcher]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:dispute-resolution :state-machine]
+   :threats        [:escalation-abuse :same-block-ordering]
+   :tags           ["challenge" "window" "timing" "bond" "dispute"]}
+
+  {:id             :withdrawal-observatory
+   :path           "notebooks/withdrawal_observatory.clj"
+   :title          "Withdrawal & Claimable Balance Observatory"
+   :summary        "Observable safety of withdrawal and claimable balance calculations under concurrent and adversarial conditions."
+   :categories     [:yield-liquidity :security-validation]
+   :audience       [:researcher :auditor]
+   :status         :partial
+   :risk           :medium
+   :protocol-areas [:accounting :yield :withdrawal]
+   :threats        [:yield-reorg-race :liquidity-shortfall]
+   :tags           ["withdrawal" "claimable" "balance" "yield" "concurrent"]}
+
+  {:id             :counterfactual-pairs
+   :path           "notebooks/counterfactual_pairs.clj"
+   :title          "Counterfactual Pairs — Simulation Correctness"
+   :summary        "Counterfactual pair analysis: verifies simulation produces correct differential outcomes for paired scenario variants."
+   :categories     [:replay-determinism :security-validation]
+   :audience       [:researcher]
+   :status         :experimental
+   :risk           :medium
+   :protocol-areas [:all]
+   :tags           ["counterfactual" "pairs" "correctness" "differential"]}
+
+  {:id             :dispute-resolution
+   :path           "notebooks/dispute_resolution.clj"
+   :title          "Dispute Resolution — Protocol Analysis"
+   :summary        "Full dispute resolution protocol analysis: mechanism design, resolver selection, escalation flow, and settlement."
+   :categories     [:security-validation :governance]
+   :audience       [:researcher :grant-reviewer :auditor]
+   :status         :verified
+   :risk           :high
+   :protocol-areas [:dispute-resolution :governance :bonding]
+   :threats        [:resolver-cartelization :escalation-abuse :governance-capture]
+   :tags           ["dispute" "resolution" "governance" "mechanism-design"]}
+
+  {:id             :telemetry
+   :path           "notebooks/telemetry.clj"
+   :title          "XTDB Telemetry Overview"
+   :summary        "Live telemetry from XTDB: trial outcomes, escrow events, performance metrics. Requires running XTDB instance."
+   :categories     [:tooling]
+   :audience       [:researcher :developer]
+   :status         :requires-review
+   :risk           :low
+   :protocol-areas [:all]
+   :tags           ["telemetry" "XTDB" "live" "metrics" "performance"]}
+
+  {:id             :xtdb-overview
+   :path           "notebooks/xtdb_overview.clj"
+   :title          "XTDB Overview"
+   :summary        "Database health and record counts. Entry-point notebook used as default landing page for the XTDB live stack."
+   :categories     [:tooling]
+   :audience       [:developer]
+   :status         :requires-review
+   :risk           :low
+   :protocol-areas [:all]
+   :tags           ["XTDB" "database" "health" "records"]}
+
+  {:id             :workbench-v2
+   :path           "notebooks/workbench_v2.clj"
+   :title          "Adversarial Validation Workbench (v2)"
+   :summary        "Production evidence workbench: aggregate results across all simulation phases, adversarial metrics, phase summaries."
+   :categories     [:tooling :security-validation]
+   :audience       [:researcher :auditor]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:all]
+   :tags           ["workbench" "phases" "aggregate" "production"]}
+
+  {:id             :yield-scenarios-workbench
+   :path           "notebooks/yield_scenarios_workbench.clj"
+   :title          "Yield Provider Scenarios (Demo)"
+   :summary        "Workbench v2 demo surface for Y01–Y06: live replay, flow spine, and shortfall/liquidity metrics at a glance."
+   :categories     [:tooling :yield]
+   :audience       [:researcher :grant-reviewer :developer]
+   :status         :verified
+   :risk           :low
+   :protocol-areas [:yield]
+   :tags           ["workbench" "yield" "shortfall" "demo" "scenarios"]}
+
+  {:id             :workbench-production
+   :path           "notebooks/workbench_production.clj"
+   :title          "Production Evidence Workbench"
+   :summary        "Curated production-quality evidence view. Filtered for grant reviewers and external audiences."
+   :categories     [:tooling :evidence-artifacts]
+   :audience       [:grant-reviewer :auditor]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:all]
+   :tags           ["workbench" "production" "curated" "grant"]}
+
+  {:id             :workbench
+   :path           "notebooks/workbench.clj"
+   :title          "Adversarial Validation Workbench"
+   :summary        "Development workbench for adversarial simulation analysis. May contain in-progress work."
+   :categories     [:tooling]
+   :audience       [:researcher :developer]
+   :status         :draft
+   :risk           :low
+   :protocol-areas [:all]
+   :tags           ["workbench" "development" "adversarial"]}
+
+  {:id             :demo-adversarial-escalation
+   :path           "notebooks/demo_adversarial_escalation.clj"
+   :title          "Demo 1 — Adversarial Dispute Escalation"
+   :summary        "Walkthrough demo: adversarial agent escalates dispute to extract value. Shows protocol defence mechanisms."
+   :categories     [:demos :adversarial]
+   :audience       [:grant-reviewer :researcher]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:dispute-resolution :bonding]
+   :threats        [:escalation-abuse :economic-extraction]
+   :tags           ["demo" "adversarial" "escalation" "walkthrough"]}
+
+  {:id             :demo-liquidity-shortfall
+   :path           "notebooks/demo_liquidity_shortfall_partial_settlement.clj"
+   :title          "Demo 2 — Liquidity Shortfall & Partial Settlement"
+   :summary        "Walkthrough demo: liquidity shortfall scenario with partial settlement outcome. Shows waterfall mechanics."
+   :categories     [:demos :yield-liquidity]
+   :audience       [:grant-reviewer :researcher]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:accounting :yield :settlement]
+   :threats        [:liquidity-shortfall]
+   :tags           ["demo" "liquidity" "shortfall" "partial-settlement" "waterfall"]}
+
+  {:id             :demo-multi-epoch-cartel
+   :path           "notebooks/demo_multi_epoch_cartel_dynamics.clj"
+   :title          "Demo 3 — Multi-Epoch Cartel Dynamics"
+   :summary        "Walkthrough demo: multi-epoch cartel formation, reputation erosion, and protocol recovery path."
+   :categories     [:demos :adversarial]
+   :audience       [:grant-reviewer :researcher]
+   :status         :verified
+   :risk           :medium
+   :protocol-areas [:bonding :reputation :dispute-resolution]
+   :threats        [:resolver-cartelization :governance-capture]
+   :tags           ["demo" "cartel" "multi-epoch" "reputation"]}
+
+  {:id             :security-validation-notebook
+   :path           "notebooks/security_validation.clj"
+   :title          "Security Validation Notebook"
+   :summary        "10-section audit-style notebook: security model, state machine, conservation, withdrawal safety, dispute robustness, governance, yield, adversarial economics, replay determinism, known limitations."
+   :categories     [:security-validation]
+   :audience       [:auditor :reviewer :researcher :governance]
+   :status         :partial
+   :risk           :high
+   :protocol-areas [:dispute-resolution :invariants :governance :yield :accounting]
+   :threats        [:reentrancy :governance-capture :resolver-cartelization :liquidity-shortfall :escalation-abuse]
+   :tags           ["security" "audit" "invariants" "claims" "falsifiable" "adversarial" "conservation"]}
+
+  {:id             :component-gallery
+    :path           "notebooks/component_gallery.clj"
+    :title          "SPEDS v1.1 — Component Gallery"
+    :summary        "Visual gallery of all SPEDS v1.1 UI components used across notebooks. Developer reference."
+    :categories     [:tooling]
+    :audience       [:developer]
+    :status         :draft
+    :risk           :informational
+    :protocol-areas []
+    :tags           ["components" "UI" "gallery" "SPEDS" "reference"]}
+
+   {:id             :yield-provider-demo
+    :path           "notebooks/yield_provider_demo.clj"
+    :title          "Yield Provider Demo"
+    :summary        "Interactive demo of 5 yield presets: deposit, accrue, and inspect position state under baseline, shortfall, negative-yield, oracle-stale, and withdrawal-queue failure modes."
+    :categories     [:demos :yield-liquidity]
+    :audience       [:grant-reviewer :researcher :developer]
+    :status         :experimental
+    :risk           :low
+    :protocol-areas [:yield]
+    :tags           ["demo" "yield" "presets" "failure-modes" "accrual"]}
+
+   {:id             :subgame-counterfactual-workbench
+    :path           "notebooks/subgame_counterfactual_workbench.clj"
+    :title          "SPE Tree Expansion Workbench"
+    :summary        "Workbench for exploring expand-strategic-tree: fork replay at decision nodes, compare alternative utilities, and inspect the deviation surface for SPE analysis."
+    :categories     [:experimental :replay-determinism]
+    :audience       [:researcher]
+    :status         :experimental
+    :risk           :medium
+    :protocol-areas [:dispute-resolution :game-theory]
+    :tags           ["SPE" "subgame" "counterfactual" "tree" "workbench" "experimental"]}]}

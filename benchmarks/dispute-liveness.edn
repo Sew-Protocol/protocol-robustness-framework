@@ -1,0 +1,17 @@
+{:benchmark/id "community/dispute-liveness-v1"
+ :description "Basic dispute escalation robustness benchmark"
+
+ :scenario-suites
+ ["scenarios"]
+
+ :invariants
+ [:conservation-of-funds
+  :bounded-resolution-time]
+
+ :metrics
+ [:user-loss-rate
+  :resolver-profitability]
+
+ :expectations
+ {:max-user-loss 0
+  :max-resolver-profit 0}}

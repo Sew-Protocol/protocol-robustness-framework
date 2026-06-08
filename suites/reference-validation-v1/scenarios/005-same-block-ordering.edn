@@ -1,0 +1,7 @@
+{:scenario/id "same-block-ordering-v1"
+ :scenario/title "005-same-block-ordering"
+ :scenario/version "1.0.0"
+ :scenario/status :public-candidate
+ :scenario/purpose "Canonical reference-validation scenario for trust evidence mapping."
+ :protocol/phase :dr3
+ :expected-result {:status :pass :classification :regression-protected}}

@@ -11,8 +11,6 @@
 
 # Simulation results (generated)
 results/
-*.csv
-*.edn
 !data/params/*.edn
 !data/params/**/*.edn
 # Fixture definitions are source-controlled; only generated golden reports are excluded

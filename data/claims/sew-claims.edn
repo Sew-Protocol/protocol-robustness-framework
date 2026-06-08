@@ -1,0 +1,95 @@
+;; Falsifiable claim registry for Sew Protocol
+;;
+;; Each claim is independently falsifiable: it specifies the exact
+;; conditions under which it would be disproved, the scenarios that
+;; validate it, and the current validation status.
+;;
+;; schema: claim.v1
+;; last-updated: 2026-06-03
+
+[{:claim/id         :resolver-collusion-unprofitable
+  :description      "Coordinated resolver collusion — where resolvers manipulate outcomes
+                     in exchange for side payments — produces negative expected value for
+                     all colluding parties under canonical bond/slash parameters."
+  :assumptions      ["bond-bps >= 500"
+                     "slash-rate >= 0.10"
+                     "collusion-size <= 3 resolvers"
+                     "detection-probability >= 0.30"]
+  :validated-by     ["scenarios/S26_forking-strategist-l1-reversal.json"
+                     "scenarios/S42_resolver-buyer-bribery-loop.json"]
+  :falsified-if     "Any simulation produces a positive EV for a collusion coalition
+                     under the above parameter bounds"
+  :confidence       :bounded
+  :status           :not-falsified
+  :last-validated   nil
+  :counterexamples  []}
+
+ {:claim/id         :dispute-liveness-bounded
+  :description      "The dispute resolution pipeline completes within the
+                     protocol-defined deadline window for all non-adversarial
+                     and bounded-adversarial inputs."
+  :assumptions      ["resolver-count >= 1"
+                     "no network partition"
+                     "adversarial-load <= governance capacity floor"]
+  :validated-by     ["scenarios/S01_basic-dispute-resolved.json"
+                     "scenarios/S08_state-machine-attack-gauntlet.json"]
+  :falsified-if     "Any scenario produces a liveness violation (deadline exceeded
+                     without resolution) under non-partitioned conditions"
+  :confidence       :high
+  :status           :not-falsified
+  :last-validated   nil
+  :counterexamples  []}
+
+ {:claim/id         :bond-slash-deters-frivolous-appeals
+  :description      "The appeal bond mechanism, combined with slash-on-loss, makes
+                     frivolous escalation economically irrational for a rational agent
+                     with no informational advantage."
+  :assumptions      ["bond-bps >= 300"
+                     "slash-rate >= 0.10"
+                     "resolver-accuracy >= 0.75"
+                     "agent is risk-neutral"]
+  :validated-by     ["scenarios/S23_preemptive-escalation-blocked.json"
+                     "scenarios/S28_forking-strategist-late-escalation-rejected.json"]
+  :falsified-if     "A rational agent achieves positive EV from frivolous escalation
+                     under any parameter set within the declared bounds"
+  :confidence       :bounded
+  :status           :not-falsified
+  :last-validated   nil
+  :counterexamples  []}
+
+ {:claim/id         :forward-only-upgrade-safe
+  :description      "Governance parameter changes do not retroactively alter the
+                     economics or outcomes of active or settled escrows.
+                     Only escrows created after the upgrade are affected."
+  :assumptions      ["upgrade applied at block boundary"
+                     "no retroactive state mutation"
+                     "active escrow state is immutable post-creation"]
+  :validated-by     ["scenarios/S12_governance-snapshot-isolation.json"
+                     "scenarios/S61_governance-snapshot-mid-dispute-immutability.json"
+                     "scenarios/S84_yield-protocol-fee-mid-accrual.json"
+                     "scenarios/S111_governance-upgrade-mid-dispute-forward-only.json"]
+  :falsified-if     "Any governance upgrade scenario produces a state mutation in
+                     escrows created before the upgrade block"
+  :confidence       :high
+  :status           :not-falsified
+  :last-validated   nil
+  :counterexamples  []}
+
+ {:claim/id         :partial-liquidity-shortfall-bounded
+  :description      "Under partial-liquidity yield module failure, the shortfall
+                     is bounded to yield-derived amounts only. Escrow principal
+                     is never at risk from yield module shortfall."
+  :assumptions      ["liquidity-mode = partial-liquidity"
+                     "yield module failure is non-catastrophic (not total loss)"
+                     "settlement delivery model = pull-claimable"]
+  :validated-by     ["scenarios/S78_yield-aave-partial-liquidity-release.json"
+                     "scenarios/S79_yield-aave-partial-liquidity-dispute-resolution.json"
+                     "scenarios/S81_escrow-yield-may-be-partially-deferred.json"
+                     "scenarios/S82_shortfall-recovery-cycle.json"
+                     "scenarios/yield/Y03_partial-liquidity-shortfall-affected.json"]
+  :falsified-if     "Any shortfall scenario produces principal loss attributable
+                     to yield module failure rather than direct escrow default"
+  :confidence       :bounded
+  :status           :not-falsified
+  :last-validated   nil
+  :counterexamples  []}]

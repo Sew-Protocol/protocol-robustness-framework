@@ -1,0 +1,5 @@
+{:benchmark-repo/id "sew/robustness-benchmarks"
+ :benchmarks
+ [{:id "community/dispute-liveness-v1"
+   :description "Basic dispute escalation robustness benchmark"
+   :manifest "benchmarks/dispute-liveness.edn"}]}
