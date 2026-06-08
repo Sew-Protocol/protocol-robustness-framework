@@ -9,6 +9,7 @@
             [resolver-sim.yield.modules.none :as none]
             [resolver-sim.yield.modules.adversarial :as adversarial]
             [resolver-sim.yield.modules.liquid-lending :as liquid-lending]
+            [resolver-sim.yield.modules.liquid-lending-v2 :as liquid-lending-v2]
             [resolver-sim.yield.risk :as risk]
             [resolver-sim.yield.schedule :as schedule]))
 
@@ -23,6 +24,7 @@
 (defn- archetype->module-id [archetype]
   (case archetype
     :yield.provider/liquid-lending :yield.provider/liquid-lending
+    :yield.provider/liquid-lending-v2 :yield.provider/liquid-lending-v2
     nil))
 
 (defn- profile->archetype [profile-id]
@@ -30,6 +32,8 @@
     :aave-v3 :yield.provider/liquid-lending
     :aave-v3-derisk :yield.provider/liquid-lending
     :yield.profile/aave-v3-like :yield.provider/liquid-lending
+    :aave-v3-v2 :yield.provider/liquid-lending-v2
+    :yield.profile/aave-v3-like-v2 :yield.provider/liquid-lending-v2
     nil))
 
 (defn- normalize-module-id [module-id]
@@ -59,6 +63,12 @@
 
    :aave-v3-derisk
    (liquid-lending/make-liquid-lending-module :aave-v3-derisk :yield.profile/aave-v3-like)
+
+   :yield.provider/liquid-lending-v2
+   (liquid-lending-v2/make-liquid-lending-v2-module :yield.provider/liquid-lending-v2)
+
+   :aave-v3-v2
+   (liquid-lending-v2/make-liquid-lending-v2-module :aave-v3-v2 :yield.profile/aave-v3-like-v2)
 
    :fixed-rate
    (fixed/make-fixed-module :fixed-rate)

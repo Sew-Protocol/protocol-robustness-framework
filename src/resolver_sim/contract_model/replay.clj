@@ -24,8 +24,9 @@
              [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
-             [resolver-sim.time.model        :as time-model]
-             [resolver-sim.util.attribution :as attr]))
+              [resolver-sim.time.model        :as time-model]
+              [resolver-sim.util.attribution :as attr]
+              [resolver-sim.yield.risk-monitor :as risk]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -210,7 +211,7 @@
                         (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
-                            (log/error! "dispatch exception"
+                             (attr/log-with-attr :error "dispatch exception"
                                         {:error (.getMessage e)
                                          :scenario-step (:seq event)
                                          :action (:action event)})
@@ -364,7 +365,7 @@
                                                   (not (:ok? expected-error-analysis)))
                     outcome (if expected-errors-mismatch? :fail :pass)
                     halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
-                (log/info! "scenario/end" {:id scenario-id :outcome outcome})
+                 (attr/log-with-attr :info "scenario/end" {:id scenario-id :outcome outcome})
                 {:context/version "1.0"
                  :context/source {:scenario-id scenario-id :run-id (str scenario-id "-run")}
                  :execution {:mode (execution-mode scenario)
@@ -537,11 +538,11 @@
                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)
                 new-states (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
-            (log/debug! "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
+            (attr/log-with-attr :debug "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
             (if (:halted? step)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
-                (log/error! "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
+                (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
                 {:outcome :fail
                  :scenario-id scenario-id
                  :events-processed (count new-trace)
@@ -561,8 +562,9 @@
    Optional third argument `replay-opts` may include `:flags` (see `replay.flags`).
    Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
-  ([protocol scenario replay-opts]
-   (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
+   ([protocol scenario replay-opts]
+    (risk/clear!)
+    (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
          vocab              (if (satisfies? proto/EconomicModel protocol)
                               (proto/metric-vocabulary protocol)
                               #{})
@@ -598,10 +600,11 @@
              trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                              (:world-checkpoint-policy flags)
                              raw-result)]
-         (log/info! "scenario/start" {:id scenario-id})
-         (if (:evaluate-expectations? flags true)
-           (finalize-scenario-result scenario trimmed-result flags)
-           trimmed-result))))))
+         (attr/log-with-attr :info "scenario/start" {:id scenario-id})
+         (let [result (if (:evaluate-expectations? flags true)
+                        (finalize-scenario-result scenario trimmed-result flags)
+                        trimmed-result)]
+           (assoc result :risk-events (risk/events))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
