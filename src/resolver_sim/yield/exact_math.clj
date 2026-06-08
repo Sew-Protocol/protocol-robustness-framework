@@ -163,7 +163,7 @@
   [total-available claims]
   (let [available (ratio total-available)
         total-amount (reduce + 0 (map (comp ratio :amount) claims))]
-    (if (zero? (double total-amount))
+    (if (zero? total-amount)
       {:allocations (mapv #(assoc % :filled 0 :ideal-exact 0 :remainder-exact 0) claims)
        :total-available-units (first (quantize-base-units available))
        :total-allocated-units 0
@@ -201,30 +201,36 @@
   (let [total (ratio total-available)
         total-units (first (quantize-base-units total))
         n (count claims)
-        claims-total (reduce + 0 (map (comp ratio :amount) claims))
-        ideal (mapv (fn [c] (* total (/ (ratio (:amount c)) (ratio (or (:basis c) claims-total)))))
-                    claims)
-        indexed (map-indexed (fn [i c] (assoc c :idx i :ideal (nth ideal i))) claims)
-        [units rems] (reduce (fn [[us rs] idx-i]
-                               (let [[u r] (quantize-base-units (:ideal idx-i))]
-                                 [(conj us u) (conj rs r)]))
-                             [[] []]
-                             indexed)
-        sum-units (reduce + 0 units)
-        shortage (- total-units sum-units)
-        indices-by-rem (->> (range n)
-                            (sort-by #(- (nth rems %)))
-                            (take shortage))
-        final-units (reduce (fn [us i] (update us i inc))
-                            (vec units)
-                            indices-by-rem)]
-    {:allocations (mapv (fn [claim u r ideal-v]
-                          (assoc claim :filled u :remainder-exact r :ideal-exact ideal-v))
-                        claims final-units rems ideal)
-     :total-available-units total-units
-     :total-allocated-units (reduce + 0 final-units)
-     :shortage-units (- total-units (reduce + 0 final-units))
-     :carry 0}))
+        claims-total (reduce + 0 (map (comp ratio :amount) claims))]
+    (if (zero? claims-total)
+      {:allocations (mapv #(assoc % :filled 0 :ideal-exact 0 :remainder-exact 0) claims)
+       :total-available-units total-units
+       :total-allocated-units 0
+       :shortage-units 0
+       :carry 0}
+      (let [ideal (mapv (fn [c] (* total (/ (ratio (:amount c)) (ratio (or (:basis c) claims-total)))))
+                        claims)
+            indexed (map-indexed (fn [i c] (assoc c :idx i :ideal (nth ideal i))) claims)
+            [units rems] (reduce (fn [[us rs] idx-i]
+                                   (let [[u r] (quantize-base-units (:ideal idx-i))]
+                                     [(conj us u) (conj rs r)]))
+                                 [[] []]
+                                 indexed)
+            sum-units (reduce + 0 units)
+            shortage (- total-units sum-units)
+            indices-by-rem (->> (range n)
+                                (sort-by #(- (nth rems %)))
+                                (take shortage))
+            final-units (reduce (fn [us i] (update us i inc))
+                                (vec units)
+                                indices-by-rem)]
+        {:allocations (mapv (fn [claim u r ideal-v]
+                              (assoc claim :filled u :remainder-exact r :ideal-exact ideal-v))
+                            claims final-units rems ideal)
+         :total-available-units total-units
+         :total-allocated-units (reduce + 0 final-units)
+         :shortage-units (- total-units (reduce + 0 final-units))
+         :carry 0}))))
 
 
 (defn principal-protective-floor-alloc
