@@ -1,52 +1,64 @@
 (ns resolver-sim.scenario.yield-provider-metrics
-  "Yield-engine metrics for provider-only replay (no Sew escrow fields).")
+  "Yield-engine metrics for provider-only replay (no Sew escrow fields)."
+  (:require [resolver-sim.yield.market-state :as market-state]))
 
-(defn- position-for-scenario
-  "Read from full world or from replay snapshot (`:yield-positions`)."
-  [world scenario]
-  (let [owner (or (get-in scenario [:protocol-params :default-owner-id])
-                  (get-in (first (:agents scenario)) [:id])
-                  "vault")
-        positions (or (:yield/positions world)
-                      (:yield-positions world)
-                      {})]
-    (or (get positions owner)
-        (first (vals positions)))))
+(defn- all-positions [world]
+  (or (:yield/positions world)
+      (:yield-positions world)
+      {}))
 
-(defn- liquidity-index-metric [world scenario]
-  (when-let [pos (position-for-scenario world scenario)]
-    (let [idx (or (:current-index pos)
-                  (let [mid (:module/id pos)
-                        tok (:token pos)]
-                    (get-in world [:yield/indices mid tok]
-                                (get-in world [:yield-indices mid tok]
-                                            (get-in world [:yield-indices mid (name tok)])))))]
-      (when idx (double idx)))))
+(defn- vault-indices [world]
+  (or (:yield/indices world)
+      (:yield-indices world)
+      {}))
 
 (defn compute-provider-metrics
+  "Extract vault-level and multi-position metrics for yield-provider replay."
   [result scenario]
   (let [trace      (:trace result)
         last-world (when (seq trace) (:world (last trace)))
-        pos        (when last-world (position-for-scenario last-world scenario))
-        shortfall  (:shortfall pos)
-        liq-idx    (liquidity-index-metric last-world scenario)]
-    (cond-> {}
-      pos
-      (assoc :yield/position-principal     (long (or (:principal pos) 0))
-             :yield/position-unrealized    (long (or (:unrealized-yield pos) 0))
-             :yield/position-realized      (long (or (:realized-yield pos) 0))
-             :yield/position-gross         (long (+ (or (:principal pos) 0)
-                                                    (or (:unrealized-yield pos) 0)))
-             :yield/accrual-loss           (long (or (:amount (:yield-loss pos)) 0))
-             :yield/position-deferred      (long (or (:deferred-amount shortfall) 0))
-             :yield/position-haircut       (long (or (:haircut-amount shortfall) 0))
-             :yield/position-reclaimed     (long (or (:reclaimed-amount pos) 0)))
-      (:status pos)
-      (assoc :yield/position-status (name (:status pos)))
-      (or (:reason shortfall) (:reason (:yield-loss pos)))
-      (assoc :yield/loss-reason (name (or (:reason shortfall) (:reason (:yield-loss pos)))))
-      liq-idx
-      (assoc :yield/liquidity-index liq-idx))))
+        positions  (when last-world (all-positions last-world))
+        indices    (when last-world (vault-indices last-world))
+        pos-vals   (vals positions)
+        shortfalls (keep :shortfall pos-vals)
+        held       (or (:yield/held-balances last-world) (:yield-held last-world) {})
+        ;; Use the first module/token found for general vault metrics
+        mid        (or (get-in scenario [:protocol-params :yield-generation-module])
+                       (get-in scenario [:protocol-params :yield-profile])
+                       (:module/id (first pos-vals))
+                       :aave-v3)
+        tok        (or (get-in scenario [:protocol-params :token])
+                       (:token (first pos-vals))
+                       :USDC)
+        ms         (when (and last-world mid)
+                     (market-state/get-market-state last-world mid tok (:block-time last-world)))]
+    (cond-> {:yield/positions-count         (count pos-vals)
+             :yield/total-principal         (long (reduce + (map #(:principal % 0) pos-vals)))
+             :yield/total-unrealized        (long (reduce + (map #(:unrealized-yield % 0) pos-vals)))
+             :yield/total-realized          (long (reduce + (map #(:realized-yield % 0) pos-vals)))
+             :yield/total-deferred          (long (reduce + (map #(:deferred-amount % 0) shortfalls)))
+             :yield/total-haircut           (long (reduce + (map #(:haircut-amount % 0) shortfalls)))
+             :yield/total-reclaimed         (long (reduce + (map #(:reclaimed-amount % 0) pos-vals)))
+             :yield/total-held              (long (reduce + (vals held)))}
+      
+      ms (assoc :yield/module-state     (name (:module-state ms))
+                :yield/available-ratio  (:available-ratio ms))
+      
+      ;; If a specific owner-id is requested, include their specific metrics
+      (get-in scenario [:protocol-params :focus-owner-id])
+      (merge (let [owner (get-in scenario [:protocol-params :focus-owner-id])
+                   pos   (get positions owner)
+                   sf    (:shortfall pos)]
+               (cond-> {}
+                 pos (assoc :yield/focus-principal  (long (or (:principal pos) 0))
+                            :yield/focus-unrealized (long (or (:unrealized-yield pos) 0))
+                            :yield/focus-status     (name (:status pos)))
+                 sf  (assoc :yield/focus-deferred   (long (or (:deferred-amount sf) 0))
+                            :yield/focus-haircut    (long (or (:haircut-amount sf) 0))))))
+
+      ;; First available index for display
+      (seq indices)
+      (assoc :yield/liquidity-index (double (first (vals (first (vals indices)))))))))
 
 (defn merge-provider-metrics
   [result scenario]

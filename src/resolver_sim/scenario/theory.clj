@@ -152,7 +152,7 @@
    Uses == for numeric types (handles Long/Integer/Double equivalence).
    Falls back to normalized string equality for non-numeric values."
   [op actual target]
-  (let [op-kw      (to-kw op)
+  (let [op-kw      (if (nil? op) := (to-kw op))
         num-actual (try-number actual)
         num-target (try-number target)]
     (case op-kw
