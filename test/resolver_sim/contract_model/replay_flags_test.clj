@@ -23,6 +23,14 @@
   (let [result (replay/simple-replay dummy/protocol minimal-scenario)]
     (is (= :pass (:outcome result)))))
 
+(deftest simple-replay-opts-override
+  (testing "replay-opts override :minimal true defaults in simple-replay path"
+    (let [scenario (assoc minimal-scenario :theory {:falsifies-if []})
+          ;; Force evaluate-theory? to true even if :minimal true would disable it
+          result (replay/simple-replay dummy/protocol scenario {:evaluate-theory? true})]
+      ;; If evaluate-theory? was true, result should have a :theory key
+      (is (contains? result :theory)))))
+
 (deftest explicit-flags-override-minimal
   (let [scenario (assoc-in minimal-scenario [:options :flags]
                            {:evaluate-theory? true :strict-validation? true})

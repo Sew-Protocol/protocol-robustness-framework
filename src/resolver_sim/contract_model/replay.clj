@@ -150,7 +150,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn process-step
-  "Apply one scenario event using tiered Protocol implementations."
+  "Apply one scenario event using tiered Protocol implementations.
+   Wraps dispatch in with-attribution so downstream yield accrual, invariant
+   checks, and logging automatically carry event-level context."
   [protocol context world event]
   (let [flags        (or (:replay-flags context) replay-flags/default-replay-flags)
         temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
@@ -199,7 +201,13 @@
 
       (let [{world-t :world} (advance-world-time world event-time)
             time-after       {:block-ts event-time}
-            result     (try
+            result     (attr/with-attribution
+                        {:replay/scenario-id (get-in world [:params :scenario-id])
+                         :replay/seq         (:seq event)
+                         :replay/action      (:action event)
+                         :replay/agent       (:agent event)
+                         :replay/event-time  event-time}
+                        (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
                             (log/error! "dispatch exception"
@@ -207,9 +215,9 @@
                                          :scenario-step (:seq event)
                                          :action (:action event)})
                            (.printStackTrace e)
-                           {:ok false :error :dispatch-exception
-                            :detail {:message (.getMessage e)
-                                     :stack   (with-out-str (st/print-stack-trace e))}}))
+                            {:ok false :error :dispatch-exception
+                             :detail {:message (.getMessage e)
+                                      :stack   (with-out-str (st/print-stack-trace e))}})))
             ok?        (:ok result)
             world-next (if (and ok? (:world result)) (:world result) world-t)
 

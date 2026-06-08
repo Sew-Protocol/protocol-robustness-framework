@@ -21,7 +21,6 @@
                        nil)
         path (if resolved-mid [:yield/schedules resolved-mid token] [:yield/schedules nil])
         schedules (get-in world path)
-        _ (println (str "[market-state] DEBUG: mid=" module-id ", token=" token ", resolved-mid=" resolved-mid ", path=" path ", found=" schedules))
         ;; Default APY from legacy path if no schedule exists
         default-apy (if resolved-mid
                       (or (get-in world [:yield/rates resolved-mid token]) 0.04)

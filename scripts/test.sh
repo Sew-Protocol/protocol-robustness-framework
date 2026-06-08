@@ -294,12 +294,26 @@ run_triage() {
   return $?
 }
 
-run_suites() {
+run_routed_suites() {
   require_clojure || return $?
-  echo "Running fixture suites (all-invariants + equilibrium-validation + spe-validation + spe-regression)..."
+  local routed=$(python3 scripts/route_suites.py)
+  if [ "$routed" = "none" ]; then
+    echo "No suites impacted by changes. Skipping."
+    return 0
+  fi
+  
+  local suite_filter
+  if [ "$routed" = "all" ]; then
+    echo "Changes impact all suites. Running full suite."
+    suite_filter="[:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]"
+  else
+    echo "Changes impact suites: $routed"
+    suite_filter="[$(echo $routed | sed 's/,/ /g')]"
+  fi
+
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
-(let [suites [:suites/all-invariants :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression]
+(let [suites $suite_filter
       verify-opts {:golden-verify-mode :replay-and-theory}
       results (map (fn [id] [id (f/run-suite id :verify nil verify-opts)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
@@ -785,6 +799,9 @@ case "$MODE" in
     ;;
   suites)
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
+    ;;
+  routed-suites)
+    run_target routed-suites run_routed_suites || FAILURES=$((FAILURES + 1))
     ;;
   reference-validation)
     run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))

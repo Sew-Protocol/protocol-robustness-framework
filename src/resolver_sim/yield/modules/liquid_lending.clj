@@ -127,14 +127,17 @@
                         (assoc-in [:yield/risk mid (name token) :stale-apy] (double apy))))]
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid) (token= (:token pos) token) (= (:status pos) :active))
-                (let [old-yield (:unrealized-yield pos 0)
-                      updated   (acct/update-position-yield world pos new-index)
-                      new-pos   (loss/annotate-accrual-loss w updated new-index)
-                      yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
-                  (-> w
-                      (assoc-in [:yield/positions oid] new-pos)
-                      (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
-                      (update-in [:total-held token] (fnil + 0) yield-delta)))
+                (attr/with-attribution {:yield/position-id oid
+                                        :yield/module-id mid
+                                        :yield/token token}
+                  (let [old-yield (:unrealized-yield pos 0)
+                        updated   (acct/update-position-yield world pos new-index)
+                        new-pos   (loss/annotate-accrual-loss w updated new-index)
+                        yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
+                    (-> w
+                        (assoc-in [:yield/positions oid] new-pos)
+                        (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
+                        (update-in [:total-held token] (fnil + 0) yield-delta))))
                 w))
             world'
             (:yield/positions world'))))
