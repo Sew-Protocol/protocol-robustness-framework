@@ -29,18 +29,20 @@
 
 
 (defn index-growth-factor
-  "Compute the exact multiplicative factor for index growth over dt seconds
-   given `apy-bps` (integer basis points).
+  "Compute the exact non-negative multiplicative factor for index growth over
+   dt seconds given `apy-bps` (integer basis points).
 
    factor = 1 + (apy-bps/10000) * (dt / seconds-per-year)
           = (10000 * seconds-per-year + apy-bps * dt) / (10000 * seconds-per-year)
 
-   Returns a ratio."
+   Clamped to >= 0 to prevent negative index (a physical impossibility).
+   Returns an exact ratio."
   [apy-bps dt]
   (let [bps (long apy-bps)
-        dt  (long dt)]
-    (/ (+ (* scaling-factor seconds-per-year) (* bps dt))
-       (* scaling-factor seconds-per-year))))
+        dt  (long dt)
+        raw (/ (+ (* scaling-factor seconds-per-year) (* bps dt))
+               (* scaling-factor seconds-per-year))]
+    (max 0 raw)))
 
 
 (defn ratio
@@ -114,12 +116,21 @@
    base-units = floor(ratio)
    remainder  = ratio - base-units  (always 0 <= remainder < 1)
 
-   Returns [long remainder-ratio]."
+   Returns [long remainder-ratio] -- units are clamped to Long/MAX_VALUE
+   to prevent silent overflow on ray-based indices or extreme supplies."
   [r]
   (let [r (ratio r)
         n (ratio-num r)
         d (ratio-den r)
-        units (long (quot n d))
+        exact-quot (quot n d)
+        max-long (java.math.BigInteger/valueOf Long/MAX_VALUE)
+        units (if (instance? java.math.BigInteger exact-quot)
+                (let [bv exact-quot]
+                  (cond
+                    (neg? (.signum bv)) 0
+                    (not (pos? (.compareTo bv max-long))) (.longValue bv)
+                    :else Long/MAX_VALUE))
+                (max 0 (long exact-quot)))
         rem (- r units)]
     [units rem]))
 
@@ -219,10 +230,10 @@
 (defn principal-protective-floor-alloc
   "Allocate `total-available` across claims, protecting principal claims first.
 
-   Principal claims receive their full floor allocation before any yield
-   claims are filled, capped at total-available. When multiple principal
-   claims exceed available liquidity, they are pro-rated via floor-and-carry.
-   Within yield claims, largest-remainder applies.
+   Principal claims receive their full floor allocation, capped at
+   total-available. Uses floor-and-carry for all principal claims to preserve
+   exact carry and minimize dust loss. Within yield claims, largest-remainder
+   applies.
 
    `principal-pred` is a fn on claim returning truthy for principal claims."
   [total-available claims principal-pred]
@@ -230,15 +241,14 @@
         total-units (first (quantize-base-units total))
         principal-claims (filterv principal-pred claims)
         yield-claims (filterv (complement principal-pred) claims)
-        principal-requested (reduce + 0 (map (comp first quantize-base-units ratio :amount) principal-claims))
-        principal-allocated (min total-units principal-requested)
+        ;; Floor quantize to get principal request, then cap at total-units
+        p-req-exact (reduce + (map (comp ratio :amount) principal-claims))
+        p-req-floored (first (quantize-base-units p-req-exact))
+        principal-allocated (min total-units p-req-floored)
         available-for-yield (max 0 (- total-units principal-allocated))
+        ;; Use floor-and-carry for all principal claims to minimize dust loss
         principal-alloc (if (seq principal-claims)
-                          (if (<= principal-requested total-units)
-                            (mapv (fn [c] (assoc c :filled (first (quantize-base-units (ratio (:amount c))))
-                                                   :remainder-exact 0 :ideal-exact (ratio (:amount c))))
-                                  principal-claims)
-                            (:allocations (floor-and-carry-alloc total-units principal-claims)))
+                          (:allocations (floor-and-carry-alloc principal-allocated principal-claims))
                           [])
         yield-alloc (if (and (seq yield-claims) (pos? available-for-yield))
                       (:allocations (largest-remainder-alloc available-for-yield yield-claims))
@@ -279,7 +289,7 @@
 
 
 (defn apy-degradation
-  "Apply stale-oracle APY degradation.
+  "Apply stale-oracle APY degradation using exact ratio arithmetic.
 
    Given base-apy-bps and stale-seconds, compute the effective APY:
    - If base is positive: decay toward a configurable floor (default 0)
@@ -296,8 +306,9 @@
         floor (long (or floor-apy-bps 0))]
     (if (<= base 0)
       base
-      (let [degradation (max 0 (/ (- max-s stale) max-s))
-            effective (+ floor (long (* (- base floor) (double degradation))))]
+      (let [degradation (max 0 (/ (- max-s stale) (max 1 max-s)))
+            exact-product (* (- base floor) degradation)
+            effective (+ floor (first (quantize-base-units exact-product)))]
         (max floor (min base effective))))))
 
 
@@ -324,6 +335,9 @@
   "Serialize a ratio for JSON output as {:num \"...\" :den \"...\"}."
   [r]
   (let [r (ratio r)]
-    {:num (str (numerator r))
-     :den (str (denominator r))}))
+    (if (ratio? r)
+      {:num (str (.numerator ^clojure.lang.Ratio r))
+       :den (str (.denominator ^clojure.lang.Ratio r))}
+      {:num (str r)
+       :den "1"})))
 

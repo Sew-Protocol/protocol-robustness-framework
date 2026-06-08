@@ -67,6 +67,9 @@
     "unknown"))
 
 
+(defn- normalize-token [token]
+  (if (keyword? token) token (keyword token)))
+
 (defn- sum-requested
   [requested]
   (reduce + 0 (map long (vals requested))))
@@ -343,7 +346,8 @@
     (let [owner-id (or (:owner/id position) (-> (pos/position-identity position) second))
         updated-pos (post-partial-fill-position position decision)
         filled-total (reduce + 0 (vals (:filled decision)))
-        token (or (:token position) (get-in position [:position/id 3]))]
+        raw-token (or (:token position) (get-in position [:position/id 3]))
+        tok (normalize-token raw-token)]
     (-> world
         (assoc-in [:yield/positions owner-id] updated-pos)
-        (update-in [:total-held (name token)] #(- (or % 0) filled-total)))))
+        (update-in [:total-held tok] #(- (or % 0) filled-total)))))

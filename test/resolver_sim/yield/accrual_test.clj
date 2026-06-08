@@ -217,8 +217,11 @@
 (deftest test-recoverable-liquidity-cap
   (testing "Recoverable liquidity cap creates unrealized excess"
     (let [pos-with-yield (assoc base-position :unrealized-yield 500)
+          ;; held-balances must exceed module liabilities (principal=10000) to have
+          ;; net-solvent space, but not enough to cover the full 10000 new accrual.
+          ;; net-solvent = 15000 - 10000 = 5000 < projected-total = 500 + 10000 = 10500
           world (-> (world-with-position base-world pos-with-yield)
-                    (assoc-in [:yield/held-balances "USDC"] 10000)
+                    (assoc-in [:yield/held-balances "USDC"] 15000)
                     (assoc-in [:yield/accrual-config :test-mod :max-index-delta-ratio] 2)
                     (assoc :yield/rates {:test-mod {"USDC" 1.0}}))
           decision (accrual/accrual-decision world {:module-id :test-mod
@@ -248,11 +251,12 @@
 (deftest test-multi-short-circuit-interaction
   (testing "Multiple short circuits can trigger together"
     (let [pos-with-yield (assoc base-position :unrealized-yield 500)
+          ;; held=11000 > principal=10000 gives net-solvent=1000 < projected=5500
           world (-> (world-with-position base-world pos-with-yield)
                     (assoc-in [:yield/risk :test-mod "USDC" :failure-modes] #{:oracle-stale})
                     (assoc-in [:yield/risk :test-mod "USDC" :oracle-stale-seconds] 43200)
                     (assoc-in [:yield/accrual-config :test-mod :max-index-delta-ratio] 2)
-                    (assoc-in [:yield/held-balances "USDC"] 5500)
+                    (assoc-in [:yield/held-balances "USDC"] 11000)
                     (assoc :yield/rates {:test-mod {"USDC" 1.0}}))
           decision (accrual/accrual-decision world {:module-id :test-mod
                                                       :token "USDC"

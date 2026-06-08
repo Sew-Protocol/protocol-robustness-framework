@@ -96,11 +96,11 @@
                                        rate-schedule index-schedule liquidity-schedule module-state-schedule
                                        shortfall-model withdrawal-policy]
                                 :as cfg}]
-  {:initial-index     (or initial-index
+   {:initial-index     (or initial-index
                           (when initial-index-ray
                             (/ (bigdec initial-index-ray)
                                1000000000000000000000000000M))
-                          1.0)
+                          1)
    :apy               (or apy
                           (when apy-bps (/ (double apy-bps) 10000.0))
                           0.0)

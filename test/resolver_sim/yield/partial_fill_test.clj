@@ -197,12 +197,12 @@
 (deftest test-apply-partial-fill-world-mutation
   (testing "apply-partial-fill updates world state correctly"
     (let [world {:yield/positions {"user1" base-position}
-                 :total-held {"USDC" 100000}}
+                 :total-held {:USDC 100000}}
           decision (pf/calculate-fulfillment 10200 base-position)
           world' (pf/apply-partial-fill world base-position decision)
           pos' (get-in world' [:yield/positions "user1"])]
       (is (:partial-fill-affected? pos'))
-      (is (< (get-in world' [:total-held "USDC"] 0) 100000)
+      (is (< (get-in world' [:total-held :USDC] 0) 100000)
           "Total held should decrease by filled amount"))))
 
 (deftest test-empty-position-full-fill

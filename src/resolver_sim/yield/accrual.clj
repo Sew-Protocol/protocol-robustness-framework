@@ -121,8 +121,12 @@
 
 
 (defn- resolve-oracle-staleness
-  "Check if oracle is stale and return {:stale? bool :stale-seconds long}."
-  [world module-id token]
+  "Check if oracle is stale and return {:stale? bool :stale-seconds long}.
+
+   Interprets `:oracle-stale-seconds` as a direct duration in seconds.
+   Interprets `:oracle-stale-since` as a block timestamp, converting to
+   seconds-ago by subtracting from `now`."
+  [world module-id token now]
   (let [mid (if (keyword? module-id) module-id (keyword (str module-id)))
         tok (normalize-token token)
         risk (or (get-in world [:yield/risk mid tok])
@@ -130,11 +134,12 @@
                  {})
         failure-modes (or (:failure-modes risk) #{})
         stale? (contains? failure-modes :oracle-stale)
-        stale-seconds (or (:oracle-stale-seconds risk)
-                         (get-in world [:yield/oracle-stale-since mid tok])
-                         0)]
+        stale-since (get-in world [:yield/oracle-stale-since mid tok])
+        stale-seconds (if (some? stale-since)
+                        (max 0 (- (long (or now 0)) (long stale-since)))
+                        (long (or (:oracle-stale-seconds risk) 0)))]
     {:stale? stale?
-     :stale-seconds (long stale-seconds)}))
+     :stale-seconds stale-seconds}))
 
 
 (defn- resolve-recoverable-liquidity
@@ -289,7 +294,8 @@
   [decision world]
   (let [module-id (:module-id decision)
         token (:token decision)
-        {:keys [stale? stale-seconds]} (resolve-oracle-staleness world module-id token)]
+        now (:now decision)
+        {:keys [stale? stale-seconds]} (resolve-oracle-staleness world module-id token now)]
     (if stale?
       (let [base (:base-apy-bps decision)
             config (:config decision)
@@ -387,27 +393,40 @@
    / configured cap, classify excess as :unrealized-yield rather than realized.
    Emits :recoverable-liquidity-cap.
 
+   Computes net module solvency: total-held - (sum of all position principals +
+   realized-yield + deferred-yield). Only yield accrual beyond net-solvent
+   liquidity is capped.
+
    Optimization: Uses pre-calculated `total-unrealized-yield` if provided in options."
   [decision world opts]
   (let [module-id (:module-id decision)
         token (:token decision)
-        pos (:position decision)]
+        pos (:position decision)
+        tok (normalize-token token)]
     (if (and pos (:unrealized-yield-delta decision) (pos? (:unrealized-yield-delta decision)))
       (let [recoverable (resolve-recoverable-liquidity world module-id token)
             current-unrealized (max 0 (long (:unrealized-yield pos 0)))
-            projected-total (+ current-unrealized (:unrealized-yield-delta decision))
-            ;; Optimized path: use provided total if available, otherwise fallback (slow)
+            ;; Compute net module solvency: total liabilities (principal + realized + deferred)
+            positions (:yield/positions world {})
+            module-liabilities (reduce + 0
+                                      (for [[oid p] positions
+                                            :when (and (= (:module/id p) module-id)
+                                                       (= (normalize-token (:token p)) tok))]
+                                        (+ (max 0 (long (:principal p 0)))
+                                           (max 0 (long (:realized-yield p 0)))
+                                           (max 0 (long (:deferred-yield p 0))))))
+            net-solvent (max 0 (- recoverable module-liabilities))
+            ;; Optimized path: use provided total if available, otherwise compute
             all-positions-yield (or (:total-unrealized-yield opts)
                                     (reduce + 0
-                                            (for [[oid p] (:yield/positions world {})
+                                            (for [[oid p] positions
                                                   :when (and (= (:module/id p) module-id)
-                                                             (= (normalize-token (:token p))
-                                                                (normalize-token token))
+                                                             (= (normalize-token (:token p)) tok)
                                                              (pos/active? p))]
                                               (max 0 (long (:unrealized-yield p 0))))))
-            available (- recoverable all-positions-yield)]
-        (if (and (pos? recoverable) (> projected-total available))
-          (let [realizable (max 0 (- available current-unrealized))
+            projected-total (+ current-unrealized (:unrealized-yield-delta decision))]
+        (if (and (pos? net-solvent) (> projected-total net-solvent))
+          (let [realizable (max 0 (- net-solvent current-unrealized))
                 unrealized-excess (max 0 (- (:unrealized-yield-delta decision) realizable))]
             (-> decision
                 (update :unrealized-yield-delta #(min % realizable))
@@ -416,8 +435,10 @@
                 (update :evidence assoc
                         :recoverable-liquidity-cap-applied true
                         :recoverable-assets recoverable
+                        :module-liabilities module-liabilities
+                        :net-solvent net-solvent
                         :all-positions-yield all-positions-yield
-                        :available-for-accrual available
+                        :available-for-accrual net-solvent
                         :realizable-delta realizable
                         :unrealized-excess unrealized-excess)))
           decision))
@@ -427,7 +448,10 @@
 (defn- compute-final-deltas
   "Given the decision with final-index set (after all index-modifying short
    circuits), compute accrual deltas from position state using exact arithmetic
-   with dust accumulation. This is the single point where deltas are computed."
+   with dust accumulation. This is the single point where deltas are computed.
+
+   Positive deltas are quantized with dust carry-forward.
+   Negative deltas pass through as-is (full loss recognized immediately)."
   [decision]
   (let [pos (:position decision)]
     (if pos
@@ -437,8 +461,13 @@
             prev-value-exact (m/current-value-exact shares prev-index)
             final-value-exact (m/current-value-exact shares final-index)
             delta-exact (- final-value-exact prev-value-exact)
-            dust-carry (m/ratio (or (:accrual-dust-remainder pos) 0))
-            {:keys [units carry]} (m/quantize-with-carry delta-exact dust-carry)]
+            ;; Positive delta: quantize and carry forward sub-unit dust.
+            ;; Negative delta: pass through unquantized so losses are recognized.
+            {:keys [units carry]}
+            (if (pos? delta-exact)
+              (let [dust-carry (m/ratio (or (:accrual-dust-remainder pos) 0))]
+                (m/quantize-with-carry delta-exact dust-carry))
+              {:units (long delta-exact) :carry 0})]
         (-> decision
             (assoc :attempted-accrual-delta units
                    :final-accrual-delta units
@@ -452,9 +481,9 @@
                    :exact-final-value final-value-exact)
             (assoc-in [:evidence :shares] (m/ratio->json shares))
             (assoc-in [:evidence :delta-exact] (m/ratio->json delta-exact))
-            (assoc-in [:evidence :dust-carry-prior] (m/ratio->json dust-carry))
+            (assoc-in [:evidence :dust-carry-prior] (m/ratio->json carry))
             (assoc-in [:evidence :final-units] units)
-            (assoc-in [:evidence :dust-carry-after] (m/ratio->json carry))))
+            (assoc-in [:evidence :dust-carry-after] (m/ratio->json (if (pos? delta-exact) carry 0)))))
       (-> decision
           (assoc :attempted-accrual-delta 0
                  :final-accrual-delta 0)))))
