@@ -72,6 +72,11 @@
   (let [p (:params event)]
     (or (:slash-id p) (:workflow-id p) (compat/wf-id event))))
 
+(defn- event-slash-bps
+  [event]
+  (let [p (:params event)]
+    (get p :slash-bps nil)))
+
 (defn- event-id
   "Optional logical event identifier used for replay dedupe."
   [event]
@@ -564,6 +569,15 @@
   (let [wf (event-workflow-id event)]
     (attr/log-with-attr :debug "trigger-accrue" {:workflow-id wf})
     (t/ok (lc/accrue-yield world wf))))
+
+(defmethod apply-action "force-reversal-slash"
+  [_ctx world event]
+  (let [wf   (event-workflow-id event)
+        bps  (event-slash-bps event)]
+    (attr/log-with-attr :debug "force-reversal-slash" {:workflow-id wf :slash-bps bps})
+    (t/ok (res/force-reversal-slash world wf
+                                    :slash-bps bps
+                                    :track :immediate))))
 
 (defmethod apply-action "set-yield-risk"
   ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).

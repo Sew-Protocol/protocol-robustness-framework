@@ -11,7 +11,7 @@
                 :reversal-slash-bps 0
                 :reversal-detection-probability 0.0}
           out (params/from-snap snap)]
-      (is (= 0 (:fee-bps out)))
+      (is (= 0 (:resolver-fee-bps out)))
       (is (= 0 (:reversal-slash-bps out)))
       (is (zero? (:reversal-detection-probability out))))))
 

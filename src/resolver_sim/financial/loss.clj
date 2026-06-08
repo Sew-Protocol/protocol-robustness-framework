@@ -20,8 +20,7 @@
      :loss-realized       → obligations impaired, financial finality reached
      :loss-irrecoverable  → obligations permanently unmet, no recovery path"
   (:require [resolver-sim.financial.finality :as finality]
-            [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.yield.accounting :as acct]))
+            [resolver-sim.protocols.sew.types :as t]))
 
 ;; ── Loss status lifecycle ───────────────────────────────────────────────────
 
@@ -37,6 +36,16 @@
 
 ;; ── Shortfall quantification ─────────────────────────────────────────────────
 
+(defn- yield-leg-shortfall?
+  "True when shortfall only affects the yield leg, not principal.
+   Works for both v1 (basis < principal) and v2 shortfall formats.
+   Principal is intact when fulfilled-amount >= principal."
+  [position shortfall]
+  (and position shortfall
+       (let [principal (long (or (:principal position) 0))
+             fulfilled (long (or (:fulfilled-amount shortfall) 0))]
+         (and (pos? principal) (>= fulfilled principal)))))
+
 (defn shortfall-total
   "Aggregate shortfall across all yield positions for a given token.
    Returns {:fulfilled N :deferred N :haircut N :positions-with-shortfall N
@@ -45,7 +54,7 @@
   (let [positions (vals (get world :yield/positions {}))
         token-pos (filter #(= token (:token %)) positions)
         with-sf   (filter :shortfall token-pos)
-        yield-leg? (fn [p] (acct/partial-yield-shortfall? p (:shortfall p)))
+        yield-leg? (fn [p] (yield-leg-shortfall? p (:shortfall p)))
         has-principal-loss? (fn [p] (and (:shortfall p) (not (yield-leg? p))))]
     {:fulfilled-total          (reduce + 0 (map #(get-in % [:shortfall :fulfilled-amount] 0) with-sf))
      :deferred-total           (reduce + 0 (map #(get-in % [:shortfall :deferred-amount] 0) with-sf))

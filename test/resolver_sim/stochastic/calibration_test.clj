@@ -249,8 +249,8 @@
                 :reversal-detection-probability 0.25
                 :unknown-field                 :ignored}
           out  (params/from-snap snap)]
-      (is (= 150  (:fee-bps out)))
-      (is (= 700  (:bond-bps out)))
+      (is (= 150  (:resolver-fee-bps out)))
+      (is (= 700  (:appeal-bond-bps out)))
       (is (= 2500 (:reversal-slash-bps out)))
       (is (= 1000 (:resolver-bond-bps out)))
       (is (= 0.25 (:reversal-detection-probability out)))
@@ -270,10 +270,10 @@
 
 (deftest param-bridge-merge-snap-overrides
   (testing "merge-snap overrides base fields with snapshot values"
-    (let [base {:fee-bps 100 :reversal-slash-bps 2000 :other 99}
+    (let [base {:resolver-fee-bps 100 :reversal-slash-bps 2000 :other 99}
           snap {:escrow-fee-bps 150 :reversal-slash-bps 2500}
           out  (params/merge-snap base snap)]
-      (is (= 150 (:fee-bps out))     "snap value overrides base")
+      (is (= 150 (:resolver-fee-bps out))     "snap value overrides base")
       (is (= 2500 (:reversal-slash-bps out)) "snap value overrides base")
       (is (= 99  (:other out))       "non-overridden base fields kept"))))
 

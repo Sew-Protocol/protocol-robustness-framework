@@ -428,3 +428,35 @@
         r (res/resolve-appeal world 0 gov true "s1")]
     (is (false? (:ok r)))
     (is (= :cannot-reverse-executed-slash (:error r)))))
+
+(deftest force-reversal-slash-immediate
+  (testing "force-reversal-slash produces an executed slash entry"
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
+          w (res/force-reversal-slash world workflow-id :track :immediate)
+          slash-entry (get-in w [:pending-fraud-slashes (str workflow-id "-force-reversal-0")])]
+      (is (some? slash-entry) "force-reversal slash entry should exist")
+      (is (= :executed (:status slash-entry)) "immediate track should be executed")
+      (is (pos? (:amount slash-entry)) "slash amount should be positive")
+      (is (= :reversal (:reason slash-entry)) "reason should be :reversal"))))
+
+(deftest force-reversal-slash-pending
+  (testing "force-reversal-slash produces a pending slash entry"
+    (let [{:keys [world workflow-id]} (rev-fx/build-reversal-world)
+          w (res/force-reversal-slash world workflow-id :track :pending)
+          slash-entry (get-in w [:pending-fraud-slashes (str workflow-id "-force-reversal-0")])]
+      (is (some? slash-entry) "force-reversal slash entry should exist")
+      (is (= :pending (:status slash-entry)) "pending track should be pending")
+      (is (pos? (:appeal-deadline slash-entry)) "pending track should have appeal deadline"))))
+
+(deftest force-reversal-slash-custom-bps
+  (testing "force-reversal-slash accepts custom slash-bps override when snapshot has zero"
+    (let [snap (snap-fix/escrow-snapshot {:reversal-slash-bps 0 :appeal-window-duration 120
+                                          :challenge-window-duration 120 :max-dispute-level 2
+                                          :dispute-resolver "0xL0Res"})
+          w0 (rev-fx/build-reversal-world {:snapshot snap})
+          [wf w] [(:workflow-id w0) (:world w0)]
+          w (res/force-reversal-slash w wf :slash-bps 5000 :track :immediate)
+          slash-entry (get-in w [:pending-fraud-slashes (str wf "-force-reversal-0")])]
+      (is (some? slash-entry) "custom bps override should produce a slash entry")
+      (is (= :executed (:status slash-entry)) "immediate track should be executed")
+      (is (pos? (:amount slash-entry)) "slash amount should be positive"))))

@@ -144,8 +144,8 @@
                                                         :haircut-amount 0 :basis-amount 10000}}}}
           sf (loss/shortfall-total world :USDC)]
       (is (= 3 (:positions-with-shortfall sf)))
-      (is (= 1 (:yield-leg-shortfall-count sf)) "y1 basis=5000 < principal=10000")
-      (is (= 2 (:principal-shortfall-count sf)) "y2 and y3 basis >= principal"))))
+      (is (= 1 (:yield-leg-shortfall-count sf)) "y3 fulfilled=10000 >= principal=10000 → yield-leg")
+      (is (= 2 (:principal-shortfall-count sf)) "y1 fulfilled=8000 < 10000, y2 fulfilled=6000 < 10000 → principal"))))
 
 (deftest classify-loss-multi-escrow-mixed-finality
   (testing "multi-escrow: terminal + non-terminal escrows"

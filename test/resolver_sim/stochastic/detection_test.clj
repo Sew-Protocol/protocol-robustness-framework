@@ -64,3 +64,45 @@
       (is (< (get baseline :new-evidence-probability 0)
              (get high-fraud :new-evidence-probability 0))
           "high-fraud new-evidence-probability should exceed baseline"))))
+
+(deftest fixed-or-per-kind-map-pipeline
+  (testing ":fixed-or with per-kind map propagates through to reversal-pending-live?"
+    (let [params  {:fixed-or {:rolls {:pending-evidence [0.9 0.9 0.9 0.9 0.9 0.1]}
+                               :scope #{:detection}}
+                   :new-evidence-probability 0.5}
+          ;; The first 5 rolls (0.9) are NOT < 0.5 → no detect.
+          ;; The 6th roll (0.1) IS < 0.5 → detect.
+          prepared (detection/prepare-oracle-params params)
+          oracle-effective (:oracle-effective prepared)]
+      (is (= :fixed-roll-sequence (:mode oracle-effective))
+          ":fixed-or shorthand must normalize to :fixed-roll-sequence")
+      (is (contains? oracle-effective :rolls)
+          "oracle fixture must have :rolls")
+      ;; The fixture has 5 zeros then a 1.0 — with threshold 1.0 and
+      ;; reversal-slashed? true, the 6th roll (1.0) should detect.
+      (let [_ (dotimes [_ 5]
+                 (detection/oracle-roll-event prepared :pending-evidence))
+            result (detection/reversal-pending-live?
+                    prepared {:reversal-slashed? true})]
+        (is result "reversal-pending-live? should detect on 6th roll (0.1 < 0.5 threshold)")))))
+
+
+(deftest fixed-or-simple-vector-fallback
+  (testing ":fixed-or simple vector feeds shared roll sequence across kinds"
+    (let [params  {:fixed-or [0.9 0.9 0.9 0.9 0.9 0.1]
+                   :oracle-mode :fixed-or
+                   :new-evidence-probability 0.5}
+          prepared (detection/prepare-oracle-params params)
+          oracle-effective (:oracle-effective prepared)]
+      (is (= :fixed-roll-sequence (:mode oracle-effective))
+          ":fixed-or shorthand must normalize to :fixed-roll-sequence")
+      (is (vector? (:rolls oracle-effective))
+          "simple vector must remain a vector, not become a per-kind map")
+      ;; Consume 5 rolls via :fraud-detection (valid roll-kind, shared cursor)
+      (dotimes [_ 5]
+        (detection/oracle-roll-event prepared :fraud-detection))
+      ;; The 6th roll (0.1) is now at cursor position 5 (0-indexed).
+      ;; :pending-evidence falls back to the same shared sequence.
+      (let [result (detection/reversal-pending-live?
+                    prepared {:reversal-slashed? true})]
+        (is result "simple vector: 6th roll 0.1 < 0.5 threshold should detect on :pending-evidence")))))

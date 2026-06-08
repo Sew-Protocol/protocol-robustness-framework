@@ -22,7 +22,8 @@
    resolver-sim.scenario.equilibrium and are available to all protocols.
 
    This namespace is pure — no I/O, no DB, no side effects."
-  (:require [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]))
+  (:require [clojure.string :as str]
+            [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared result constructors (mirrors scenario.equilibrium — kept local to
@@ -556,6 +557,25 @@
             {:workflow-count (count outcomes)}
             "all refunded workflows preserve refund-only terminal path"))))
 
+(defn- check-force-reversal-path-integrity
+  "Ensure force-reversal slash entries reference an actual workflow and
+   have a valid slash amount.  Placeholder integrity check over the
+   pending-fraud-slashes produced by force-reversal-slash."
+  [{:keys [pending-fraud-slashes]}]
+  (let [force-reversals (->> pending-fraud-slashes
+                             (filter (fn [[k _]] (str/includes? k "-force-reversal-"))))
+        bad (->> force-reversals
+                 (filter (fn [[_ v]] (not (pos? (:amount v 0)))))
+                 (mapv first))]
+    (if (seq bad)
+      (fail :force-reversal-path-integrity :single-trace-terminal-proxy
+            {:force-reversal-slashes force-reversals}
+            "force-reversal slash entries must have positive amount"
+            bad)
+      (pass :force-reversal-path-integrity :single-trace-terminal-proxy
+            {:force-reversal-count (count force-reversals)}
+            (str (count force-reversals) " force-reversal slash(es) have valid amounts")))))
+
 (defn- check-pending-lifecycle-integrity
   "Pending lifecycle should not clear more entries than it created.
    Also, superseded count cannot exceed cleared count."
@@ -593,6 +613,7 @@
    :stake-flow-conservation     check-stake-flow-conservation
    :budget-balance              check-budget-balance
    :force-refund-path-integrity check-force-refund-path-integrity
+   :force-reversal-path-integrity check-force-reversal-path-integrity
    :pending-lifecycle-integrity check-pending-lifecycle-integrity})
 
 (def equilibrium-concept-validators

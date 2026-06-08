@@ -27,8 +27,8 @@
   "Mapping of ModuleSnapshot keys (from make-escrow-snapshot) to their MC param
    equivalents. Only fields that genuinely exist in both models are listed.
    See protocols/sew/snapshot.clj for the full ModuleSnapshot schema."
-  {:escrow-fee-bps                :fee-bps
-   :appeal-bond-bps               :bond-bps
+  {:escrow-fee-bps                :resolver-fee-bps
+   :appeal-bond-bps               :appeal-bond-bps
    :reversal-slash-bps            :reversal-slash-bps
    :resolver-bond-bps             :resolver-bond-bps
    :reversal-detection-probability :reversal-detection-probability})

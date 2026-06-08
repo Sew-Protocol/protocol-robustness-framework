@@ -101,7 +101,49 @@
                     (assoc-in [:pending-fraud-slashes slash-id]
                               (make-reversal-slash-entry slash-id prev-resolver prev-stake
                                                          slash-bps slash-amt workflow-id :executed
-                                                         now 0 reversal-prob)))))))))))
+                                                          now 0 reversal-prob)))))))))))
+
+(defn force-reversal-slash
+  "Force a reversal slash on a workflow without going through the full resolution
+   pipeline.  Allows isolated testing of reversal-slash accounting, stake
+   deduction, and bond distribution.
+
+   When optional `:slash-bps` is provided, it overrides the snapshot's
+   `:reversal-slash-bps`.  When `:track` is `:immediate`, the slash executes
+   immediately (Track 1).  When `:track` is `:pending`, a pending slash with
+   appeal window is created (Track 2, default).
+
+   Returns the updated world.
+
+   Short-circuit analogue of `handle-reversal-slashing` — same slash-entry
+   schema, same `slash-resolver-stake` call, same invariants apply."
+  [world workflow-id & {:keys [slash-bps track]
+                        :or   {track :pending}}]
+  (let [level       (t/dispute-level world workflow-id)
+        prev-decision (when (pos? level)
+                        (get-in world [:previous-decisions workflow-id (dec level)]))
+        prev-resolver (or (:resolver prev-decision) (get-in world [:escrow-transfers workflow-id :sender]))
+        snap          (t/get-snapshot world workflow-id)
+        bps           (long (or slash-bps (:reversal-slash-bps snap 0)))
+        prev-stake    (reg/get-stake world prev-resolver)
+        slash-amt     (payoffs/calculate-slash-amount-from-basis (or prev-stake 0) bps)
+        slash-id      (str workflow-id "-force-reversal-0")
+        now           (:block-time world)
+        appeal-window (:appeal-window-duration snap 0)
+        reversal-prob (or (:reversal-detection-probability snap) 0.0)]
+    (if (or (nil? prev-resolver) (not (pos? slash-amt)))
+      world
+      (if (= :immediate track)
+        (-> (reg/slash-resolver-stake world prev-resolver slash-amt nil 0 workflow-id)
+            :world
+            (assoc-in [:pending-fraud-slashes slash-id]
+                      (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
+                                                 slash-amt workflow-id :executed
+                                                 now 0 reversal-prob)))
+        (assoc-in world [:pending-fraud-slashes slash-id]
+                  (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
+                                             slash-amt workflow-id :pending now
+                                             (+ now appeal-window) reversal-prob))))))
 
 (defn submit-evidence
   "Record that new evidence was submitted for workflow-id (Track 2 reversal slashing).

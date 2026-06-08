@@ -57,7 +57,7 @@
               unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
               detection-type timeout-detection-probability reversal-detection-probability
                fraud-detection-probability fraud-slash-bps l2-slash-bps reversal-slash-bps timeout-slash-bps
-               _new-evidence-probability
+               _new-evidence-probability  ; forwarded to prepare-oracle-params via all-kw-args below
                fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
                p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
                lazy-correct-prob malicious-correct-prob collusive-correct-prob
