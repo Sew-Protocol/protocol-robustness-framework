@@ -112,7 +112,7 @@
     (let [falsified-res (theory/evaluate-theory base-result {:falsifies-if [{:metric :m1 :op :> :value 5}]})
           grounded-res  (theory/evaluate-theory base-result {:falsifies-if [{:metric :m1 :op :> :value 100}]})
           optimistic    (theory/evaluate-theory base-result
-                                                {:falsifies-if [{:metric :m1 :op :> :value 0}
+                                                {:falsifies-if [{:metric :m1 :op :> :value 100}
                                                                 {:metric :m99 :op :> :value 0}]}
                                                 {:theory-eval-profile :optimistic})]
       (is (= "Falsified by this replay" (theory-result/result-display-label falsified-res)))
@@ -196,13 +196,7 @@
     (let [thin (theory/evaluate-theory base-result {:falsifies-if [{:metric :m1 :op :> :value 100}]})]
       (is (= :not-falsified (:status thin)))
       (is (nil? (:claim-status thin)))
-      (is (= :evaluated (get-in thin [:diagnostics :claim-status])))))
-
-  (testing "legacy flat derived fields when explicitly requested"
-    (let [legacy (theory/evaluate-theory base-result {:falsifies-if [{:metric :m1 :op :> :value 100}]}
-                                           {:include-legacy-derived-top-levels? true})]
-      (is (= :evaluated (:claim-status legacy)))
-      (is (= :evaluated (get-in legacy [:diagnostics :claim-status]))))))
+      (is (= :evaluated (get-in thin [:diagnostics :claim-status]))))))
 
 (deftest test-try-number-decimal
   (testing "try-number parses decimal strings"

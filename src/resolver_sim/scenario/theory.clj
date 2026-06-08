@@ -138,7 +138,8 @@
   [v]
   (cond
     (number? v) v
-    (string? v) (try (clojure.edn/read-string v)
+    (string? v) (try (let [parsed (clojure.edn/read-string v)]
+                       (when (number? parsed) parsed))
                      (catch Exception _ nil))
     :else nil))
 
