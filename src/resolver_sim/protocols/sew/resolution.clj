@@ -37,19 +37,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- make-reversal-slash-entry
-  [slash-id prev-resolver prev-stake slash-bps slash-amt workflow-id status now appeal-deadline]
-  {:resolver         prev-resolver
-   :basis-amount     prev-stake
-   :basis-kind       :stake
-   :slash-bps        slash-bps
-   :amount           slash-amt
-   :workflow-id      workflow-id
-   :reason           :reversal
-   :status           status
-   :proposed-at      now
-   :appeal-deadline  appeal-deadline
-   :appeal-bond-held 0
-   :contest-deadline 0})
+  [slash-id prev-resolver prev-stake slash-bps slash-amt workflow-id status now appeal-deadline reversal-prob]
+  {:resolver                          prev-resolver
+   :basis-amount                      prev-stake
+   :basis-kind                        :stake
+   :slash-bps                         slash-bps
+   :amount                            slash-amt
+   :workflow-id                       workflow-id
+   :reason                            :reversal
+   :status                            status
+   :proposed-at                       now
+   :appeal-deadline                   appeal-deadline
+   :appeal-bond-held                  0
+   :contest-deadline                  0
+   :reversal-detection-probability    reversal-prob})
 
 (defn- handle-reversal-slashing
   "Handles the outcome of a reversed decision.
@@ -85,6 +86,7 @@
                 slash-id        (str workflow-id "-reversal-" (dec level))
                 now             (:block-time world)
                 appeal-window   (:appeal-window-duration snap 0)
+                reversal-prob   (or (:reversal-detection-probability snap) 0.0)
                 challenger      (get-in world [:challengers workflow-id (dec level)])
                 bounty-bps      (:challenge-bounty-bps snap 0)]
             (if-not (pos? slash-amt)
@@ -93,13 +95,13 @@
                 (assoc-in world [:pending-fraud-slashes slash-id]
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake slash-bps
                                                      slash-amt workflow-id :pending now
-                                                     (+ now appeal-window)))
+                                                     (+ now appeal-window) reversal-prob))
                 (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id)
                     :world
                     (assoc-in [:pending-fraud-slashes slash-id]
                               (make-reversal-slash-entry slash-id prev-resolver prev-stake
                                                          slash-bps slash-amt workflow-id :executed
-                                                         now 0)))))))))))
+                                                         now 0 reversal-prob)))))))))))
 
 (defn submit-evidence
   "Record that new evidence was submitted for workflow-id (Track 2 reversal slashing).
@@ -134,20 +136,24 @@
   "Create a PENDING fraud slash for a resolver.
 
    Mirrors the corrected slashForFraud (Fix A): fraud slashes start as PENDING
-   with an appeal window, not immediately EXECUTED."
-  [world slash-id workflow-id resolver slash-amt appeal-window]
+   with an appeal window, not immediately EXECUTED.
+   
+   Captures the reversal-detection-probability from the module snapshot to track
+   the likelihood that an appeal will succeed."
+  [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
   (let [now (:block-time world)]
     (println (str "[sew/resolution] DEBUG: handle-fraud-slashing now=" now ", appeal-window=" appeal-window))
     (assoc-in world [:pending-fraud-slashes slash-id]
-              {:resolver         resolver
-               :amount           slash-amt
-               :workflow-id      workflow-id
-               :reason           :fraud
-               :status           :pending
-               :proposed-at      now
-               :appeal-deadline  (+ now appeal-window)
-               :appeal-bond-held 0
-               :contest-deadline 0})))
+              {:resolver                      resolver
+               :amount                        slash-amt
+               :workflow-id                   workflow-id
+               :reason                        :fraud
+               :status                        :pending
+               :proposed-at                   now
+               :appeal-deadline               (+ now appeal-window)
+               :appeal-bond-held              0
+               :contest-deadline              0
+               :reversal-detection-probability reversal-prob})))
 
 (defn- update-unavailability
   "Idempotent resolver unavailability accounting + circuit breaker trigger.
@@ -645,9 +651,10 @@
           (t/fail :slash-resolver-mismatch)
 
           :else
-          (let [snap      (t/get-snapshot world wf-id)
-                gov-delay (or (:appeal-window-duration snap) 259200)]
-            (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay))))))))
+          (let [snap              (t/get-snapshot world wf-id)
+                gov-delay         (or (:appeal-window-duration snap) 259200)
+                reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
+            (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.

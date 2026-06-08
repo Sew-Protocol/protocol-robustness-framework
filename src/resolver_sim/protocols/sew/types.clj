@@ -243,7 +243,8 @@
     :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
     :resolver-slash-total {}  ; {addr nat-int} — cumulative stake slashed (distinguishes slash from withdrawal)
     :pending-fraud-slashes {} ; {slash-id {:resolver :amount :status :appeal-deadline
-                              ;            :appeal-bond-held :contest-deadline :proposed-at}}
+                              ;            :appeal-bond-held :contest-deadline :proposed-at
+                              ;            :reversal-detection-probability}}
     :previous-decisions  {}   ; {wf-id {level {:resolver :is-release}}}
     :challengers         {}   ; {wf-id {level challenger-addr}} — for Phase L Bounties
     :bond-balances       {}   ; {workflow-id {addr amount}}
