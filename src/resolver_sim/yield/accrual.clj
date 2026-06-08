@@ -20,6 +20,7 @@
    (:require [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.yield.token :as tok]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.yield.risk-monitor :as risk]))
 
@@ -57,7 +58,7 @@
 
 
 (defn- normalize-token [token]
-  (if (keyword? token) token (keyword (name token))))
+  (tok/normalize token))
 
 
 (defn- resolve-module-status
@@ -627,6 +628,7 @@
              :accrual/module-id (:module-id decision)
              :accrual/token (:token decision)
              :accrual/position-id (:position-id decision)
+             :accrual/now (:now decision)
              :accrual/previous-index (m/ratio->json (:previous-index decision))
              :accrual/final-index (m/ratio->json (:final-index decision))}]
     (attr/with-attribution ctx

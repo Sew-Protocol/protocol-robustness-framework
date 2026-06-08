@@ -11,7 +11,8 @@
             [resolver-sim.yield.modules.liquid-lending :as liquid-lending]
             [resolver-sim.yield.modules.liquid-lending-v2 :as liquid-lending-v2]
             [resolver-sim.yield.risk :as risk]
-            [resolver-sim.yield.schedule :as schedule]))
+            [resolver-sim.yield.schedule :as schedule]
+            [resolver-sim.logging :as log]))
 
 (def default-behavior-descriptor
   {:yield/provider-kind :immediate-withdrawal-lending
@@ -199,7 +200,9 @@
                                       :rate-mode      rate-mode
                                       :failure-modes  failure-modes
                                       :shortfall      shortfall}))]
-                  (println (str "[yield-registry] DEBUG: Stored schedule for " resolved-module-id "/" kw-token ": " schedules))
+                  (log/debug! "stored-schedule" {:module resolved-module-id
+                                                              :token kw-token
+                                                              :schedules schedules})
                   w')))
           w*
           tokens)))

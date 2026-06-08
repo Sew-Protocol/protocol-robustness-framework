@@ -57,7 +57,10 @@
                        :module-frozen-zero-accrual}
                      short-circuits))
       (swap! *risk-events* conj
-             {:ts (System/currentTimeMillis)
+             {:ts (or (:accrual/now attr*)
+                      (:replay/event-time attr*)
+                      (:replay/block-time attr*)
+                      0)
               :short-circuits short-circuits
               :accrual-mode (:accrual/accrual-mode attr*)
               :yield-delta (:accrual/yield-delta attr*)

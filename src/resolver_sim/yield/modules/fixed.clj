@@ -1,14 +1,12 @@
 (ns resolver-sim.yield.modules.fixed
   "Fixed-rate yield module implementation."
   (:require [resolver-sim.yield.model :as model]
+            [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.market-state :as market-state]))
 
 (defn- normalize-token [token]
-  (cond
-    (keyword? token) token
-    (string? token)  (keyword token)
-    :else            token))
+  (tok/normalize token))
 
 (defn fixed-deposit [world module op]
   (let [oid    (:owner/id op)

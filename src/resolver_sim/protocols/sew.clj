@@ -562,7 +562,7 @@
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]
   (let [wf (event-workflow-id event)]
-    (println (str "[sew] DEBUG: Triggering accrue for workflow: " wf))
+    (attr/log-with-attr :debug "trigger-accrue" {:workflow-id wf})
     (t/ok (lc/accrue-yield world wf))))
 
 (defmethod apply-action "set-yield-risk"

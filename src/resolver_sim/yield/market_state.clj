@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.market-state
   "Unify schedules and policies into a composite yield market state at a specific time."
-  (:require [resolver-sim.yield.schedule :as schedule]))
+  (:require [resolver-sim.yield.schedule :as schedule]
+            [resolver-sim.logging :as log]))
 
 (def default-shortfall-model
   {:type :liquidity-only
@@ -28,13 +29,13 @@
     (let [schedules* (or schedules {:rate-schedule nil :index-schedule nil :liquidity-schedule nil :module-state-schedule nil})]
       (let [schedules* (or schedules {:rate-schedule nil :index-schedule nil :liquidity-schedule nil :module-state-schedule nil})]
         {:apy (try (schedule/get-value-at-time (:rate-schedule schedules*) time default-apy)
-                   (catch Exception e (println (str "[market-state] ERROR: apy lookup failed: " e)) 0.0))
-         :index (try (schedule/get-value-at-time (:index-schedule schedules*) time nil)
-                     (catch Exception e (println (str "[market-state] ERROR: index lookup failed: " e)) nil))
-         :available-ratio (try (schedule/get-value-at-time (:liquidity-schedule schedules*) time 1.0)
-                               (catch Exception e (println (str "[market-state] ERROR: liquidity lookup failed: " e)) 1.0))
-         :module-state (try (schedule/get-value-at-time (:module-state-schedule schedules*) time :normal)
-                            (catch Exception e (println (str "[market-state] ERROR: module-state lookup failed: " e)) :normal))
+                    (catch Exception e (log/error! "apy-lookup-failed" {:time time}) default-apy))
+          :index (try (schedule/get-value-at-time (:index-schedule schedules*) time nil)
+                      (catch Exception e (log/error! "index-lookup-failed" {:time time}) nil))
+          :available-ratio (try (schedule/get-value-at-time (:liquidity-schedule schedules*) time 1.0)
+                                (catch Exception e (log/error! "liquidity-lookup-failed" {:time time}) 1.0))
+          :module-state (try (schedule/get-value-at-time (:module-state-schedule schedules*) time :normal)
+                             (catch Exception e (log/error! "module-state-lookup-failed" {:time time}) :normal))
          :shortfall-model (if resolved-mid
                             (or (get-in world [:yield/shortfall-models resolved-mid token])
                                 default-shortfall-model)

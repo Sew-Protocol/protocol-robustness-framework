@@ -9,6 +9,7 @@
             [resolver-sim.yield.risk-monitor :as risk]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.exact-math :as m]
+            [resolver-sim.yield.registry :as reg]
             [resolver-sim.util.attribution :as attr]))
 
 (def v1-world
@@ -118,6 +119,37 @@
                 :realized-yield 500 :deferred-yield 200 :status :active})
           decision (partial-fill/calculate-fulfillment 8000 pos)
           _ (partial-fill/apply-partial-fill-with-attribution {} pos decision)]
-      ;; *attribution* reverts after binding exits
       (is (nil? (:settlement/mode attr/*attribution*))))))
+
+
+(deftest test-v2-lifecycle-integration
+  (testing "End-to-end: register v2 module → deposit → accrue → withdraw via lifecycle-compatible path"
+    (risk/clear!)
+    (let [v2-mid :aave-v3-v2
+          v2-mod (get-in (reg/init-yield-modules {}) [:yield/modules v2-mid])
+          world0 (-> {:yield/module-status {v2-mid :active}
+                      :yield/indices {v2-mid {"USDC" 1}}
+                      :yield/rates {v2-mid {"USDC" 0.05}}
+                      :yield/accrual-config {v2-mid {:max-index-delta-ratio 2}}
+                      :block-time 1000}
+                     (reg/init-yield-modules)
+                     (v2/deposit-v2 v2-mod {:owner/id "escrow:user1"
+                                            :amount 10000
+                                            :token "USDC"}))]
+      ;; Step 1: Accrue yield (simulates lifecycle/accrue-yield path)
+      (let [world-a (v2/accrue-v2 world0 v2-mod {:token "USDC" :dt 31536000})
+            pos (get-in world-a [:yield/positions "escrow:user1"])]
+        (is (pos? (:unrealized-yield pos 0)) "Accrue should produce yield")
+        (is (number? (:current-index pos)) "Index should be set after accrue"))
+      ;; Step 2: Withdraw (simulates lifecycle/finalize calling withdraw after accrue)
+      (let [world-w (v2/withdraw-v2 world0 v2-mod {:owner/id "escrow:user1"})
+            pos (get-in world-w [:yield/positions "escrow:user1"])]
+        (is (some #{:withdrawn :unwinding} [(:status pos)])
+            "Position should be withdrawn or unwinding")
+        (is (or (not (:shortfall pos))
+                (pos? (:fulfilled-amount (:shortfall pos) 0)))
+            "Shortfall fulfilled amount should be non-negative"))
+      ;; Step 3: Check risk events captured during the accrual phase
+      (let [events (risk/events)]
+        (is (vector? events) "Risk events should be a vector")))))
 

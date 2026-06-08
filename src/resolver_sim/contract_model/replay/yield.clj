@@ -12,7 +12,8 @@
             [resolver-sim.contract-model.replay.temporal :as temporal]
             [resolver-sim.contract-model.replay.validation :as validation]
             [resolver-sim.protocols.protocol :as proto]
-            [resolver-sim.protocols.yield :as yp]))
+            [resolver-sim.protocols.yield :as yp]
+            [resolver-sim.yield.risk-monitor :as risk]))
 
 (def ^:private yield-replay-flags replay-flags/minimal-replay-flags)
 
@@ -151,6 +152,7 @@
    enough for `scenario.runner` and expectation finalization."
   ([scenario] (replay-yield-scenario yp/protocol scenario))
   ([protocol scenario]
+   (risk/clear!)
    (let [validation (validate-yield-scenario scenario)]
      (if-not (:ok validation)
        {:outcome :invalid
@@ -168,7 +170,8 @@
              world0      (proto/init-world protocol scenario)
              events      (:events scenario)
              scenario-id (:scenario-id scenario)]
-         (log/info! "yield-replay/start" {:id scenario-id})
-         (let [raw (run-yield-loop protocol context scenario-id events world0)]
-           (log/info! "yield-replay/end" {:id scenario-id :outcome (:outcome raw)})
-           (analysis/finalize-scenario-result scenario raw yield-replay-flags)))))))
+          (log/info! "yield-replay/start" {:id scenario-id})
+          (let [raw (run-yield-loop protocol context scenario-id events world0)]
+            (log/info! "yield-replay/end" {:id scenario-id :outcome (:outcome raw)})
+            (let [result (analysis/finalize-scenario-result scenario raw yield-replay-flags)]
+              (assoc result :risk-events (risk/events)))))))))

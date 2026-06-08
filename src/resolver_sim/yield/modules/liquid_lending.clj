@@ -9,6 +9,7 @@
    This is intentionally provider-agnostic and can be profiled as Aave-like,
    Morpho-like (coarse), etc., without encoding protocol-specific internals."
   (:require [resolver-sim.yield.model :as model]
+            [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.loss :as loss]
             [resolver-sim.yield.market-state :as market-state]
@@ -17,10 +18,7 @@
             [resolver-sim.util.attribution :as attr]))
 
 (defn- normalize-token [token]
-  (cond
-    (keyword? token) token
-    (string? token)  (keyword token)
-    :else            token))
+  (tok/normalize token))
 
 (defn- token= [a b]
   (= (normalize-token a) (normalize-token b)))

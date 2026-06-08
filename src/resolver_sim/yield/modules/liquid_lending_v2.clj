@@ -11,18 +11,16 @@
      :accounting/type :shares"
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.position :as pos]
+            [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.accrual :as accrual]
             [resolver-sim.yield.partial-fill :as partial-fill]
             [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.loss :as loss]
-            [resolver-sim.yield.evidence :as ye]
-            [resolver-sim.yield.liquidity :as liquidity]
             [resolver-sim.yield.market-state :as market-state]
             [resolver-sim.util.attribution :as attr]))
 
 (defn- normalize-token [token]
-  (if (keyword? token) token (keyword (name token))))
+  (tok/normalize token))
 
 (defn- token= [a b]
   (= (normalize-token a) (normalize-token b)))
@@ -58,7 +56,8 @@
                                      :token token
                                      :principal (long amount)
                                      :shares shares
-                                     :entry-index index})))))
+                                     :entry-index index}))
+        (update-in [:total-held token] (fnil + 0) (long amount)))))
 
 
 ;; ---------------------------------------------------------------------------

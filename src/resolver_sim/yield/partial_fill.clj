@@ -15,6 +15,7 @@
       :rounding-policy :floor-and-carry}"
   (:require [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
+            [resolver-sim.yield.token :as tok]
             [resolver-sim.util.attribution :as attr]))
 
 
@@ -69,7 +70,7 @@
 
 
 (defn- normalize-token [token]
-  (if (keyword? token) token (keyword token)))
+  (tok/normalize token))
 
 (defn- sum-requested
   [requested]
