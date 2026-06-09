@@ -232,12 +232,10 @@
     (cond
       ;; :withdrawal-queue positions are deferred, claim them normally
       (= status :queued)
-      (let [current-index (or (get-in-token world [:yield/indices] mid (:token pos))
-                              (:entry-index pos 1.0))
-            claimed-pos   (-> pos
-                              (assoc :status :withdrawn)
-                              (assoc :realized-yield (:unrealized-yield pos 0))
-                              (assoc :unrealized-yield 0))]
+      (let [claimed-pos (-> pos
+                            (assoc :status :withdrawn)
+                            (assoc :realized-yield (:unrealized-yield pos 0))
+                            (assoc :unrealized-yield 0))]
         (assoc-in world pos-key claimed-pos))
 
       (= status :unwinding)
