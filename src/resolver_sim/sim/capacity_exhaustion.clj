@@ -15,7 +15,8 @@
      - correct current-active counter at every checkpoint
      - escrow final states are correct
      - conservation-of-funds invariant throughout"
-  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+  (:require [resolver-sim.time.model :as tm]
+            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -75,13 +76,13 @@
   (let [rm-fn (auth/make-default-resolution-module resolver-addr)
         r1    (res/execute-resolution world wf-id resolver-addr is-release "0xhash" rm-fn)]
     (when-not (:ok r1) (throw (ex-info "execute-resolution failed" {:error (:error r1)})))
-    (let [w1 (assoc (:world r1) :block-time (+ (:block-time (:world r1)) 200000))
+    (let [w1 (tm/advance (:world r1) {:seconds 200000})
           r2 (res/execute-pending-settlement w1 wf-id)]
       (when-not (:ok r2) (throw (ex-info "execute-pending-settlement failed" {:error (:error r2)})))
       (:world r2))))
 
 (defn- timeout-cancel! [world wf-id]
-  (let [w (assoc world :block-time (+ (:block-time world) 100000))
+  (let [w (tm/advance world {:seconds 100000})
         r (lc/auto-cancel-disputed-escrow w wf-id)]
     (when-not (:ok r) (throw (ex-info "auto-cancel failed" {:error (:error r)})))
     (:world r)))

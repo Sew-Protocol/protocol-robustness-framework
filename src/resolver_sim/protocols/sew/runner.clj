@@ -15,7 +15,8 @@
      - run-trial is pure: takes an explicit rng-fn for random decisions.
      - Escalation is modelled with Priority-3 authority (no custom-resolver):
        et.dispute-resolver tracks the current-round resolver through escalations."
-  (:require [resolver-sim.protocols.sew.snapshot  :as snap]
+  (:require [resolver-sim.time.model :as tm]
+            [resolver-sim.protocols.sew.snapshot  :as snap]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -145,7 +146,7 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
                     ;; Escalation refused (level cap or other guard) — fall through to finalize
                     (let [w-fin (if has-pending?
                                   (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
-                                        w-t (assoc w-resolved :block-time (+ dl 1))
+                                        w-t (tm/advance w-resolved {:seconds (+ dl 1)})
                                         er2 (res/execute-pending-settlement w-t wf-id)]
                                     (if (:ok er2) (:world er2) w-t))
                                   w-resolved)]
@@ -158,7 +159,7 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
                 (let [w-fin (if has-pending?
                               ;; Advance time past appeal deadline and execute pending
                               (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
-                                    w-t (assoc w-resolved :block-time (+ dl 1))
+                                    w-t (tm/advance w-resolved {:seconds (+ dl 1)})
                                     er  (res/execute-pending-settlement w-t wf-id)]
                                 (if (:ok er) (:world er) w-t))
                               w-resolved)]

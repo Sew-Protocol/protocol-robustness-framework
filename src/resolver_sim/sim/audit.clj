@@ -107,9 +107,10 @@
 
    result        — return value of run-multi-epoch
    opts          — optional overrides:
-     :dominance-threshold     minimum honest/malice ratio (default 1.2)
-     :max-malice-equity-share maximum fraction of total equity malice may hold (default 0.3)
-     :tail-fraction           fraction of epochs used for slope regression (default 0.2)
+      :dominance-threshold     minimum honest/malice ratio (default 1.2)
+      :max-malice-equity-share maximum fraction of total equity malice may hold (default 0.3)
+      :tail-fraction           fraction of epochs used for slope regression (default 0.2)
+      :min-detection-rate      minimum per-epoch detection probability (default 0.0)
 
    The hypothesis being tested:
      H: A malicious resolver cannot survive, compound, or dominate over time.
@@ -139,7 +140,8 @@
          n-epochs          (count epoch-results)
          dom-threshold     (get opts :dominance-threshold 1.2)
          max-equity-share  (get opts :max-malice-equity-share 0.3)
-         tail-fraction     (get opts :tail-fraction 0.2)
+          tail-fraction     (get opts :tail-fraction 0.2)
+          min-detection     (get opts :min-detection-rate 0.0)
 
          strata          (stratify resolver-histories)
          honest-ids      (get strata :honest [])
@@ -163,30 +165,43 @@
          equity-share    (safe-div malice-equity (max 1.0 total-equity))
          survival-rate   (:malice-survival-rate aggregated-stats 0.0)
 
-         ;; Epoch-level check: any epoch where dominance fell below threshold
-         dominance-violations
-         (for [[e r] (map-indexed vector epoch-results)
-               :when (< (:dominance-ratio r 0.0) dom-threshold)]
-           {:check :dominance-above-threshold?
-            :epoch (inc e)
-            :value (:dominance-ratio r)})
+          ;; Epoch-level check: any epoch where dominance fell below threshold
+          dominance-violations
+          (for [[e r] (map-indexed vector epoch-results)
+                :when (< (:dominance-ratio r 0.0) dom-threshold)]
+            {:check :dominance-above-threshold?
+             :epoch (inc e)
+             :value (:dominance-ratio r)})
+
+          detection-violations
+          (when (pos? min-detection)
+            (for [[e r] (map-indexed vector epoch-results)
+                  :let [dr (:detection-rate r 0.0)]
+                  :when (< dr min-detection)]
+              {:check :detection-rate-above-minimum
+               :epoch (inc e)
+               :value dr :threshold min-detection}))
 
          survival-threshold (get opts :malice-survival-threshold 0.5)
 
-         checks
-         {:honest-mean-positive?           (pos? (:honest-cumulative-profit aggregated-stats 0.0))
-          :malice-mean-nonpositive?         (<= (:malice-cumulative-profit aggregated-stats 0.0) 0.0)
-          :dominance-above-threshold?       (>= min-dominance dom-threshold)
-          :honest-p10-above-malice-p90?     (> honest-p10 malice-p90)
-          :malice-equity-share-below-limit? (< equity-share max-equity-share)
-          :malice-slope-not-improving?      (not (malice-slope-improving? epoch-results tail-fraction))
-          :malice-survival-rate-low?        (< survival-rate survival-threshold)}
+          checks
+          {:honest-mean-positive?           (pos? (:honest-cumulative-profit aggregated-stats 0.0))
+           :malice-mean-nonpositive?         (<= (:malice-cumulative-profit aggregated-stats 0.0) 0.0)
+           :dominance-above-threshold?       (>= min-dominance dom-threshold)
+           :honest-p10-above-malice-p90?     (> honest-p10 malice-p90)
+           :malice-equity-share-below-limit? (< equity-share max-equity-share)
+           :malice-slope-not-improving?      (not (malice-slope-improving? epoch-results tail-fraction))
+           :malice-survival-rate-low?        (< survival-rate survival-threshold)
+           :detection-rate-above-minimum?    (if (pos? min-detection)
+                                              (empty? detection-violations)
+                                              true)}
 
-         all-violations
-         (concat dominance-violations
-                 (for [[check passed?] checks
-                       :when (not passed?)]
-                   {:check check :value (get checks check)}))
+          all-violations
+          (concat dominance-violations
+                  detection-violations
+                  (for [[check passed?] checks
+                        :when (not passed?)]
+                    {:check check :value (get checks check)}))
 
          passed? (empty? all-violations)]
 

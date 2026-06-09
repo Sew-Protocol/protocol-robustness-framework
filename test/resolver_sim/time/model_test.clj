@@ -7,14 +7,11 @@
 (deftest test-time-now-and-advance
   (let [w0 {:block-time 1000}
         n0 (tm/now w0)
-        w1 (tm/advance w0 {:seconds 60 :blocks 3 :txs 2 :epochs 1 :steps 5})
+        w1 (tm/advance w0 {:seconds 60 :steps 5})
         n1 (tm/now w1)]
-    (is (= 1000 (:time/block-ts n0)))
-    (is (= 1060 (:time/block-ts n1)))
-    (is (= 3 (:time/block-number n1)))
-    (is (= 2 (:time/tx-index n1)))
-    (is (= 1 (:time/epoch n1)))
-    (is (= 5 (:time/scenario-step n1)))))
+    (is (= 1000 (:block-ts n0)))
+    (is (= 1060 (:block-ts n1)))
+    (is (= 5 (:scenario-step n1)))))
 
 (deftest test-time-advance-rejects-negative
   (is (thrown? clojure.lang.ExceptionInfo

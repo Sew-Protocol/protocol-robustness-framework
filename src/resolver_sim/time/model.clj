@@ -18,3 +18,18 @@
       (assoc :block-time block-ts)
       (assoc :time {:block-ts      block-ts
                     :scenario-step scenario-step})))
+
+(defn advance
+  "Advance the simulation clock by a duration map.
+   Accepts :seconds (added to block-ts), :blocks (ignored for now),
+   :txs (ignored), :epochs (ignored), :steps (added to scenario-step).
+   Negative :seconds triggers a validation error.
+   Returns an updated world with both :block-time and :time set."
+  [world {:keys [seconds steps] :or {seconds 0 steps 0}}]
+  (let [current (now world)
+        new-ts  (+ (:block-ts current) (long seconds))
+        new-step (+ (:scenario-step current) (long steps))]
+    (when (neg? seconds)
+      (throw (ex-info "advance: seconds must be non-negative"
+                      {:seconds seconds})))
+    (with-time world {:block-ts new-ts :scenario-step new-step})))
