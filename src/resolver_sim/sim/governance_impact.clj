@@ -11,30 +11,6 @@
 
 ;;;; ============================================================================
 ;;;; MULTI-EPOCH WITH GOVERNANCE DELAYS
-;;;; ============================================================================
-
-(defn apply-detection-decay
-  "Apply detection decay for governance failure scenarios (same as Phase J).
-   Decays detection probabilities and appeal-reversal quality."
-  [params epoch]
-  (let [decay-rate (:detection-decay-rate params 0.0)
-        failure-epoch (:detection-failure-epoch params nil)
-        should-fail? (and failure-epoch (>= epoch failure-epoch))
-        decay-multiplier (if should-fail?
-                          0.0
-                          (Math/pow (- 1.0 decay-rate) (dec epoch)))
-        
-        decayed-params
-        (-> params
-            (assoc :slashing-detection-probability
-                   (* (:slashing-detection-probability params 0.1) decay-multiplier))
-            (assoc :fraud-detection-probability
-                   (* (:fraud-detection-probability params 0.0) decay-multiplier))
-            (assoc :p-l1-reversal
-                   (* (or (:p-l1-reversal params) 0.85) decay-multiplier))
-            (assoc :p-l2-reversal
-                   (* (or (:p-l2-reversal params) 0.95) decay-multiplier)))]
-    decayed-params))
 
 (defn- next-int
   "Seeded [0,n) integer using stochastic RNG."
@@ -64,7 +40,7 @@
         frozen-resolver-ids (set (map :resolver-id slashes-still-pending))
         
         ;; Step 2: Run batch simulation for this epoch (frozen resolvers don't get assignments)
-        decayed-params (apply-detection-decay params epoch)
+        decayed-params (rep/apply-detection-decay params epoch)
         batch-result (batch/run-batch rng-batch n-trials decayed-params)
         
         ;; Step 3: Mark newly detected slashes as pending governance approval

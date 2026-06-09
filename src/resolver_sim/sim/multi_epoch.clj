@@ -63,35 +63,8 @@
     :reputation-concentration}) ;; Herfindahl index of profit concentration
 
 (defn apply-detection-decay
-  "Apply detection decay for governance failure scenarios.
-   If :detection-decay-rate is set, multiply detection by (1 - decay-rate) each epoch.
-   If :detection-failure-epoch is set, drop detection to 0 at that epoch.
-   Decays both detection probabilities and appeal-reversal quality.
-   Returns: Updated params with decayed governance quality signals."
   [params epoch]
-  (let [decay-rate (:detection-decay-rate params 0.0)
-        failure-epoch (:detection-failure-epoch params nil)
-        
-        ; Check if we should fail detection
-        should-fail? (and failure-epoch (>= epoch failure-epoch))
-        
-        ; Apply decay if enabled
-        decay-multiplier (if should-fail?
-                          0.0
-                          (Math/pow (- 1.0 decay-rate) (dec epoch)))
-        
-        decayed-params
-        (-> params
-            (assoc :slashing-detection-probability
-                   (* (:slashing-detection-probability params 0.1) decay-multiplier))
-            (assoc :fraud-detection-probability
-                   (* (:fraud-detection-probability params 0.0) decay-multiplier))
-            (assoc :p-l1-reversal
-                   (* (or (:p-l1-reversal params) 0.85) decay-multiplier))
-            (assoc :p-l2-reversal
-                   (* (or (:p-l2-reversal params) 0.95) decay-multiplier)))]
-    
-    decayed-params))
+  (rep/apply-detection-decay params epoch))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared-world trial pool helpers
