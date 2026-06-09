@@ -7,6 +7,9 @@
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.protocols.sew.types :as t]))
 
+(defn- yield-pos [workflow-id & extra-fields]
+  (apply merge {:token :USDC} extra-fields))
+
 (deftest no-shortfall-is-normal
   (let [world (t/empty-world 1000)
         r     (loss/classify-loss world :USDC)]
@@ -17,12 +20,11 @@
 (deftest shortfall-without-financial-finality-pending
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                  (assoc-in [:yield/positions "pos1"]
-                            {:token :USDC :workflow-id 0
-                             :status :unwinding
-                             :shortfall {:fulfilled-amount 800
-                                         :deferred-amount 200
-                                         :haircut-amount 0}}))
+                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
+                             (yield-pos 0 {:status :unwinding
+                                          :shortfall {:fulfilled-amount 800
+                                                      :deferred-amount 200
+                                                      :haircut-amount 0}})))
         r     (loss/classify-loss world :USDC)]
     (is (= :loss-pending-finality (:loss/status r))
         "shortfall without financial finality must be pending, not realized")
@@ -31,26 +33,26 @@
 (deftest shortfall-during-challengeable-phase-is-risk-not-pending
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
-                  (assoc-in [:yield/positions "pos1"]
-                            {:token :USDC :workflow-id 0
-                             :shortfall {:fulfilled-amount 800
-                                         :deferred-amount 200
-                                         :haircut-amount 0}}))
-        r     (loss/classify-loss world :USDC)]
+                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
+                             {:token :USDC :shortfall {:fulfilled-amount 800
+                                                       :deferred-amount 200
+                                                       :haircut-amount 0}}))
+         r     (loss/classify-loss world :USDC)]
     (is (= :loss-risk (:loss/status r))
         "shortfall while disputed must be risk, not pending (challenge window still open)")
     (is (false? (:loss/user-realized? r)))))
 
 (deftest deferred-shortfall-with-finality-realized
-  (let [world (-> (t/empty-world 1000)
+  (let [wf 0
+        pos-key (t/escrow-yield-owner-id wf)
+        world (-> (t/empty-world 1000)
                   (assoc :total-held {:USDC 500})
                   (assoc :claimable {:USDC 200})
-                  (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                  (assoc-in [:yield/positions "pos1"]
-                            {:token :USDC :workflow-id 0
-                             :shortfall {:fulfilled-amount 800
-                                         :deferred-amount 200
-                                         :haircut-amount 0}}))
+                  (assoc-in [:escrow-transfers wf :escrow-state] :refunded)
+                  (assoc-in [:yield/positions pos-key]
+                            {:token :USDC :shortfall {:fulfilled-amount 800
+                                                       :deferred-amount 200
+                                                       :haircut-amount 0}}))
         r     (loss/classify-loss world :USDC)]
     (is (= :loss-realized (:loss/status r))
         "deferred shortfall at finality must be realized")
@@ -61,7 +63,7 @@
                   (assoc :total-held {:USDC 500})
                   (assoc :claimable {:USDC 200})
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                  (assoc-in [:yield/positions "pos1"]
+                  (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                             {:token :USDC :workflow-id 0
                              :shortfall {:fulfilled-amount 800
                                          :deferred-amount 0
@@ -77,7 +79,7 @@
                   (assoc :total-held {:USDC 50})
                   (assoc :claimable {:USDC 10})
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                  (assoc-in [:yield/positions "pos1"]
+                  (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                             {:token :USDC :workflow-id 0
                              :shortfall {:fulfilled-amount 0
                                          :deferred-amount 1000
@@ -93,7 +95,7 @@
         ;; Create a world with shortfall
         loss-world (-> (t/empty-world 1000)
                        (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                       (assoc-in [:yield/positions "pos1"]
+                       (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                                  {:token :USDC :workflow-id 0
                                   :shortfall {:fulfilled-amount 0
                                               :deferred-amount 100
@@ -152,7 +154,7 @@
     (let [world (-> (t/empty-world 1000)
                     (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
                     (assoc-in [:escrow-transfers 1 :escrow-state] :disputed)
-                    (assoc-in [:yield/positions "pos1"]
+                    (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                               {:token :USDC :workflow-id 0
                                :shortfall {:fulfilled-amount 0 :deferred-amount 1000
                                            :haircut-amount 0}}))

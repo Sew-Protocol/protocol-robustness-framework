@@ -91,7 +91,7 @@
           ;; Attach the initial resolver via Priority-3 (et.dispute-resolver)
           w1        (assoc-in (:world cr) [:escrow-transfers wf-id :dispute-resolver] resolver-addr)
           fee       (get-in w1 [:total-fees token] 0)
-          afa       (get-in w1 [:escrow-transfers wf-id :amount-after-fee])
+afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           resolvers (resolver-chain resolver-addr)
 
           ;; Step 2: Dispute is always raised in adversarial trials

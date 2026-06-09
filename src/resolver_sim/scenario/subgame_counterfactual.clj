@@ -816,7 +816,7 @@
                                                         row    (node->table-row
                                                                  (assoc row-ctx :backward-induction-ctx bi-ctx)
                                                                  node spe-config)]
-                                                    (if (> (:local-regret row) threshold)
+                                                     (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
                                                       (reduced {:rows (conj rows (assoc row :memoization-hit? false :short-circuited? true))})
                                                       {:rows         (conj rows (assoc row :memoization-hit? false))
                                                        :processed-seqs (conj processed-seqs (long (:seq node)))})))
@@ -826,7 +826,7 @@
                          (:rows
                           (reduce (fn [{:keys [rows]} node]
                                     (let [row (cached-row node)]
-                                      (if (> (:local-regret row) threshold)
+                                       (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
                                         (reduced {:rows (conj rows (assoc row :short-circuited? true))})
                                         {:rows (conj rows row)})))
                                   {:rows []}

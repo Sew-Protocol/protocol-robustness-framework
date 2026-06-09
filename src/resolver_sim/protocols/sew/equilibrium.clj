@@ -142,8 +142,8 @@
   [{:keys [stake-flow-summary]}]
   (let [violations (->> stake-flow-summary
                         (keep (fn [[resolver {:keys [start withdrawn slashed end]}]]
-                                (let [lhs (- (long start) (long withdrawn) (long slashed))]
-                                  (when (not= lhs (long end))
+                                (let [lhs (- (long (or start 0)) (long (or withdrawn 0)) (long (or slashed 0)))]
+                                  (when (not= lhs (long (or end 0)))
                                     {:resolver resolver :start start :withdrawn withdrawn :slashed slashed :end end :expected-end lhs}))))
                         vec)]
     (if (seq violations)

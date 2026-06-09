@@ -436,16 +436,15 @@
               snap         (t/get-snapshot world workflow-id)
               et           (t/get-transfer world workflow-id)
               
-              ;; Sybil Mitigation Layer B: Linear Bond Scaling (1.1x per escalation)
-              esc-count    (get-in world [:escalation-counts-per-addr caller] 0)
-              multiplier   (+ 1.0 (* 0.1 esc-count))
-              
-              ;; Challenge bond amount
-              base-bond    (payoffs/calculate-challenge-bond-amount (:amount-after-fee et) snap)
-              bond-amt     (long (* base-bond multiplier))
-              
-              world'       (-> world
-                               (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
+               ;; Sybil Mitigation Layer B: Linear Bond Scaling (1.1x per escalation)
+               esc-count    (get-in world [:escalation-counts-per-addr caller] 0)
+
+               ;; Challenge bond amount
+               base-bond    (payoffs/calculate-challenge-bond-amount (:amount-after-fee et) snap)
+               bond-amt     (quot (* base-bond (+ 10000 (* esc-count 1000))) 10000)
+
+               world'       (-> world
+                                (acct/post-appeal-bond workflow-id caller snap (:token et) bond-amt)
                                (assoc-in [:challengers workflow-id current-level] caller)
                                (archive-pending-on-escalation workflow-id)
                                (assoc-in [:dispute-levels workflow-id] new-level)
@@ -581,17 +580,16 @@
         (let [new-level    (inc current-level)
               new-resolver (:new-resolver esc-result)
               
-              ;; Sybil Mitigation Layer B: Linear Bond Scaling (1.1x per escalation)
-              esc-count    (get-in world [:escalation-counts-per-addr caller] 0)
-              multiplier   (+ 1.0 (* 0.1 esc-count))
-              
-              ;; DR3 Sync: handle appeal bond posting
-              snap         (t/get-snapshot world workflow-id)
-              et           (t/get-transfer world workflow-id)
-              base-bond    (payoffs/calculate-appeal-bond-amount (:amount-after-fee et) snap)
-              bond-amt     (long (* base-bond multiplier))
-              
-              ;; Ensure workflow exists in bond-balances before updating
+               ;; Sybil Mitigation Layer B: Linear Bond Scaling (1.1x per escalation)
+               esc-count    (get-in world [:escalation-counts-per-addr caller] 0)
+
+               ;; DR3 Sync: handle appeal bond posting
+               snap         (t/get-snapshot world workflow-id)
+               et           (t/get-transfer world workflow-id)
+               base-bond    (payoffs/calculate-appeal-bond-amount (:amount-after-fee et) snap)
+               bond-amt     (quot (* base-bond (+ 10000 (* esc-count 1000))) 10000)
+
+               ;; Ensure workflow exists in bond-balances before updating
               world-prepared (if (get-in world [:bond-balances workflow-id])
                                world
                                (assoc-in world [:bond-balances workflow-id] {}))

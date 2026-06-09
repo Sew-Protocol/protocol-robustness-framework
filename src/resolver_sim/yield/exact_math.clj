@@ -93,9 +93,10 @@
 
 (defn shares-from-principal-and-index
   "Calculate shares from principal and entry-index.
-   shares = principal / entry-index (exact ratio)."
+   shares = principal / entry-index (exact ratio).  Returns 0 when entry-index is 0."
   [principal entry-index]
-  (/ (ratio principal) (ratio entry-index)))
+  (let [idx (ratio entry-index)]
+    (if (zero? idx) 0 (/ (ratio principal) idx))))
 
 
 (defn- ratio-num

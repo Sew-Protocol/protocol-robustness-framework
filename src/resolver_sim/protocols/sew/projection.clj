@@ -287,7 +287,7 @@
                                    (when (strategic-action? (:action entry))
                                      (let [agent-id (:agent entry)
                                            addr     (get agents-by-id agent-id agent-id)]
-                                       (assoc (select-keys entry [:seq :time :agent :action :extra])
+                                        (assoc (select-keys entry [:seq :time :agent :action :params :extra])
                                               :address addr))))
                                   trace))
 

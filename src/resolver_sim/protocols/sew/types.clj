@@ -131,10 +131,12 @@
      :escrow-state      — keyword, default :pending
      :sender-status     — keyword, default :none
      :recipient-status  — keyword, default :none"
-  [{:keys [token to from amount-after-fee dispute-resolver
-           auto-release-time auto-cancel-time
-           escrow-state sender-status recipient-status initial-fee] :as args}]
-  {:token             token
+   [{:keys [token to from amount-after-fee dispute-resolver
+            auto-release-time auto-cancel-time
+            escrow-state sender-status recipient-status initial-fee] :as args}]
+   (when (nil? amount-after-fee)
+     (throw (ex-info "make-transfer: :amount-after-fee is required" {:args args})))
+   {:token             token
    :to                to
    :from              from
    :amount-after-fee  (long amount-after-fee)

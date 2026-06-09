@@ -70,12 +70,10 @@
   [world workflow-id]
   (let [state     (t/escrow-state world workflow-id)
         pending   (t/get-pending world workflow-id)
-        positions (get-in world [:yield/positions] {})
-        has-pos?  (fn [wf] (some #(when (= wf (get-in % [:workflow-id])) true) (vals positions)))
-        has-unwinding? (fn [wf]
-                         (some #(and (= wf (get-in % [:workflow-id]))
-                                    (= :unwinding (:status %)))
-                               (vals positions)))
+        owner-id  (t/escrow-yield-owner-id workflow-id)
+        yield-pos (get-in world [:yield/positions owner-id])
+        has-pos?  (some? yield-pos)
+        has-unwinding? (= :unwinding (:status yield-pos))
         has-appeal-pending? (fn [wf]
                               (some #(and (= wf (:workflow-id %))
                                          (= :pending (:status %)))
@@ -95,12 +93,12 @@
             (< (:block-time world) (:appeal-deadline pending)))
        (conj :appeal-window)
 
-      ;; Gate: yield position still unwinding (shortfall recovery)
-      (and has-pos? (has-unwinding? workflow-id))
-      (conj :yield-recovery)
+       ;; Gate: yield position still unwinding (shortfall recovery)
+       has-unwinding?
+       (conj :yield-recovery)
 
-      ;; Gate: slashing appeal still pending
-      (and has-appeal-pending? (has-appeal-pending? workflow-id))
+       ;; Gate: slashing appeal still pending
+       (has-appeal-pending? workflow-id)
       (conj :slash-appeal))))
 
 (defn classify-financial-finality
