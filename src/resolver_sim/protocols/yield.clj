@@ -15,8 +15,7 @@
             [resolver-sim.yield.invariants-transition :as yield-trans]
             [resolver-sim.yield.registry :as yreg]
             [resolver-sim.yield.expectations :as yield-exp]
-            [resolver-sim.yield.evidence :as yield-evi]
-            [resolver-sim.protocols.sew.lifecycle :as lc]))
+            [resolver-sim.yield.evidence :as yield-evi]))
 
 (defn- action-name [event]
   (let [a (:action event)]
@@ -53,15 +52,17 @@
 (defn- sync-held-from-positions
   "Align custody ledger with active position economic value (post-accrual)."
   [world]
-  (let [positions (:yield/positions world {})]
+  (let [positions (:yield/positions world {})
+        ;; Clear previous balances to ensure fresh aggregation
+        world' (assoc world :yield/held-balances {})]
     (reduce
       (fn [w [oid pos]]
         (if (= (:status pos) :active)
           (let [tok (if (keyword? (:token pos)) (name (:token pos)) (str (:token pos)))
                 need (yield-inv/position-custody-need w pos)]
-            (assoc-in w [:yield/held-balances tok] need))
+            (update-in w [:yield/held-balances tok] (fnil + 0) need))
           w))
-      world
+      world'
       positions)))
 
 (defn- with-held-sync [world]
@@ -85,9 +86,25 @@
       (catch Exception e
         (err :yield-deposit-failed {:message (.getMessage e)})))
 
-    "trigger-accrue"
-    (let [wf (param event :workflow-id)]
-      (ok (lc/accrue-yield world wf)))
+    "yield_accrue_owner"
+    (try
+      (let [oid (owner-id event)
+            mid (module-id world event)
+            tok (token-kw event)
+            now (:block-time world)
+            pos (get-in world [:yield/positions oid])
+            last (:last-accrual-time pos now)
+            dt (- now last)]
+        (if (pos? dt)
+          (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
+                                                        :module/id mid
+                                                        :owner/id oid
+                                                        :token tok
+                                                        :dt dt})]
+            (with-held-sync world'))
+          (ok world)))
+      (catch Exception e
+        (err :yield-accrue-owner-failed {:message (.getMessage e)})))
 
     "yield_accrue"
     (try
@@ -116,6 +133,13 @@
     (let [mid (module-id world event)
           tok (token-kw event)
           world' (yield-risk/apply-market-shock world mid tok (:params event))]
+      (with-held-sync world'))
+
+    "yield_recover_liquidity"
+    (let [mid (module-id world event)
+          tok (token-kw event)
+          params (assoc (:params event) :shortfall {:available-ratio 1.0 :reason :recovery})
+          world' (yield-risk/apply-market-shock world mid tok params)]
       (with-held-sync world'))
 
     "yield_claim_deferred"
@@ -175,10 +199,17 @@
                                results))}))
 
   (world-snapshot [_ world]
-    {:block-time (:block-time world)
-     :yield-evidence (yield-evi/get-evidence world)
-     :yield-indices (:yield/indices world)
-     :yield-held (:yield/held-balances world)})
+    (cond-> {:block-time (:block-time world)
+             :yield-evidence (yield-evi/get-evidence world)
+             :yield-indices (:yield/indices world)
+             :yield-held (:yield/held-balances world)
+             :yield/positions (:yield/positions world)}
+      (:yield/risk world) (assoc :yield/risk (:yield/risk world))
+      (:yield/schedules world) (assoc :yield/schedules (:yield/schedules world))
+      (:yield/module-aliases world) (assoc :yield/module-aliases (:yield/module-aliases world))
+      (:yield/rates world) (assoc :yield/rates (:yield/rates world))
+      (:yield/shortfall-models world) (assoc :yield/shortfall-models (:yield/shortfall-models world))
+      (:yield/withdrawal-policies world) (assoc :yield/withdrawal-policies (:yield/withdrawal-policies world))))
 
   (available-actions [_ _world _actor]
     [])

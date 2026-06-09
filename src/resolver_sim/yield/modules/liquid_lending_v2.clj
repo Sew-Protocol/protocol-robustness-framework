@@ -205,8 +205,7 @@
         (assoc-in world pos-key updated-pos))
 
       (= (:status pos) :queued)
-      (let [current-index (m/ratio (or (get-in world [:yield/indices mid (:token pos)]) 1))
-            claimed-pos (-> pos
+      (let [claimed-pos (-> pos
                             (assoc :status :withdrawn)
                             (assoc :realized-yield (:unrealized-yield pos 0))
                             (assoc :unrealized-yield 0))]

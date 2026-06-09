@@ -1,8 +1,7 @@
 (ns resolver-sim.yield.expectations
   "World-level expectation checkers for yield scenarios."
   (:require [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.evidence :as yield-evi]
-            [resolver-sim.protocols.sew.types :as t]))
+            [resolver-sim.yield.evidence :as yield-evi]))
 
 (defn- check-yield-expectation [world exp terminal?]
   (let [total-yield (reduce + (vals (:total-yield-generated world {})))
@@ -41,17 +40,20 @@
 
 (defn- all-terminal?
   "Check if all entities in the world are in terminal states.
-   A world is terminal if all escrows are terminal AND no yield positions are unwinding."
+   A world is terminal if all entities (escrows, yield positions) are resolved."
   [world]
   (let [transfers (:escrow-transfers world)
-        positions (:yield/positions world)]
-    (let [escrows-done? (if (seq transfers)
-                          (every? #(contains? t/terminal-states (:escrow-state (val %))) transfers)
-                          true)
-          yields-done?  (if (seq positions)
-                          (not-any? #(= (:status (val %)) :unwinding) positions)
-                          true)]
-      (and escrows-done? yields-done?))))
+        positions (:yield/positions world)
+        ;; Check for SEW escrows if they exist
+        escrows-done? (if (seq transfers)
+                        (let [terminal-states #{:none :released :refunded :resolved}]
+                          (every? #(contains? terminal-states (:escrow-state (val %))) transfers))
+                        true)
+        ;; Check for yield positions
+        yields-done?  (if (seq positions)
+                        (not-any? #(= (:status (val %)) :unwinding) positions)
+                        true)]
+    (and escrows-done? yields-done?)))
 
 (defn- check-loss-expectation [world exp terminal?]
   (let [tokens (keys (:total-principal-deposited world {}))
