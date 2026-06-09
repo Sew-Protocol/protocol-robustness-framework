@@ -33,15 +33,7 @@
     :prf-tags [:yield-accounting :conservation :shortfall-affected]}
    :yield/deferred-reclaim
    {:description "Withdrawn positions have no open shortfall; reclaimed amounts are non-negative."
-    :prf-tags [:recovery :shortfall-affected]}
-
-   :yield/index-monotone
-   {:description "Liquidity index non-decreasing on accrue (non-increasing under :negative-yield)."
-    :prf-tags [:yield-accounting :accrual :index-precision]}
-
-   :yield/accrual-partition-bounded
-   {:description "Offline property: fragmented vs one-shot accrual within drift budget (see accrual-properties)."
-    :prf-tags [:index-precision :accrual]}})
+    :prf-tags [:recovery :shortfall-affected]}})
 
 (def default-runtime-invariant-ids
   "Checked on every successful replay step (yield-v1 adapter)."
