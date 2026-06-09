@@ -1,6 +1,6 @@
 # Use of Funds — Accounting View
 
-This document defines the canonical **use-of-funds** framing for the Sew simulation implementation and its reusable accounting shape.
+This document defines the canonical **use-of-funds** framing for the Protocol Robustness Framework implementation and its reusable accounting shape.
 
 ## Purpose
 

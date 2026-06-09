@@ -1,6 +1,6 @@
 # Proper subgames and solution-space exploration (plain language)
 
-This document explains how the Sew simulation project thinks about **whether people are actually incentivised to behave honestly**—not just whether one recorded story “looks fine,” but whether anyone could have done better by choosing differently at important moments.
+This document explains how the Protocol Robustness Framework project thinks about **whether people are actually incentivised to behave honestly**—not just whether one recorded story “looks fine,” but whether anyone could have done better by choosing differently at important moments.
 
 You do not need game theory vocabulary to follow it. The same ideas apply to any sequential game where players take turns (or roles act in order) and care about how things end.
 

@@ -1,4 +1,4 @@
-# Sew Simulation Framework — Architectural Strengths
+# Protocol Robustness Framework — Architectural Strengths
 
 A conceptual document highlighting the design decisions that make this
 framework fit for adversarial protocol analysis at production rigour.

@@ -30,4 +30,4 @@ To achieve resilience, the protocol implementation must transition from static c
 3. **Continuous Validation:** Use the `sybil-ring-mitigation-*` scenario suite in the CI gate to ensure that these defenses remain effective as protocol parameters evolve.
 
 ---
-*Documentation generated from Sew Simulation Test Suite (Phase AI/H2 Findings).*
+*Documentation generated from Protocol Robustness Framework Test Suite (Phase AI/H2 Findings).*

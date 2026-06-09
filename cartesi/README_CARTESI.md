@@ -2,7 +2,7 @@
 
 > **Status: Experimental / Proof-of-concept.**
 > This integration has not been audited. It is not production-ready.
-> It demonstrates that the Sew simulation kernel can be compiled for the
+> It demonstrates that the Protocol Robustness Framework kernel can be compiled for the
 > Cartesi Rollups stack and run verifiably on-chain, but the integration
 > is incomplete and not actively maintained.
 
