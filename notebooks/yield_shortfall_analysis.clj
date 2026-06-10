@@ -24,7 +24,7 @@
      :needs-manual-intervention? (and shortfall (> deferred 0))}))
 
 (defn shortfall-workbench [available-ratio principal]
-  (let [pos (model/make-position {:owner/id "user-1" :module/id :aave :token :USDC :principal principal})
+  (let [pos (model/make-position {:owner/id "user-1" :module/id :aave-v3 :token :USDC :principal principal})
         ;; Simulate stress
         stressed-pos (assoc pos 
                             :status :unwinding
@@ -51,7 +51,7 @@ The `:status` field transitions from `:active` to `:unwinding`.
 
 ;; A position in shortfall looks like this for demonstration:
 (def sample-shortfall-position
-  (model/make-position {:owner/id "user-1" :module/id :aave :token :USDC :principal 1000}))
+  (model/make-position {:owner/id "user-1" :module/id :aave-v3 :token :USDC :principal 1000}))
 
 (def shortfall-state
   (assoc sample-shortfall-position

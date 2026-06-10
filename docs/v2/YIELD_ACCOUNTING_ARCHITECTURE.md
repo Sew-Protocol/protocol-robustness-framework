@@ -5,9 +5,16 @@ To establish a clear separation between yield generation (market layer), workflo
 
 ## The Four Accounting Layers
 
-1. **Yield Engine / Provider State**
-   - **Location**: `src/resolver_sim/yield/*`
-   - **Role**: Tracks global provider liquidity, interest rate indices, and module solvency. Protocol-agnostic.
+## Yield Engine (V2)
+
+The yield engine now uses a **fully data-driven architecture** (previously referred to as "liquid-lending-v2"). It leverages decision-based accrual and exact-ratio arithmetic, replacing the legacy double-based arithmetic in the old implementation.
+
+### Key Architectural Improvements
+1. **Decision-based Accrual**: Each position is evaluated via `accrual/accrual-decision`, handling edge cases like dust accumulation and exact arithmetic consistently.
+2. **Exact-Ratio Math**: All interest, index, and share calculations use `resolver-sim.yield.exact-math` (rational/shares), eliminating rounding drift common in double-precision systems.
+3. **Partial-Fill Integration**: Withdrawal fulfillment is now handled by the `partial-fill` engine, providing predictable, audit-ready shortfall and haircut outcomes.
+4. **Telemetry Parity**: Integrated `emit-shortfall-event` for forensic auditability of all shortfall events.
+
    
 2. **Workflow Yield Position / Accrual**
    - **Location**: `src/resolver_sim/protocols/sew/lifecycle.clj`
