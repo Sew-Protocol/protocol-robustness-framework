@@ -35,9 +35,11 @@ def verify_registry(registry_path: pathlib.Path) -> bool:
     all_ok = True
     
     # 1. Verify artifacts integrity
+    registered_paths = set()
     for art in artifacts:
         # Resolve path relative to current working directory (project root)
         path = pathlib.Path(art["path"])
+        registered_paths.add(str(path))
         if not path.exists():
             print(f"Error: Artifact file missing: {path}")
             all_ok = False
@@ -54,6 +56,13 @@ def verify_registry(registry_path: pathlib.Path) -> bool:
         if actual_bytes != art["bytes"]:
             print(f"Error: Byte size mismatch for {path}: expected {art['bytes']}, got {actual_bytes}")
             all_ok = False
+
+    # Check for orphans in results/test-artifacts
+    artifact_dir = registry_path.parent
+    for p in artifact_dir.iterdir():
+        if p.name == "test-artifacts.json": continue
+        if str(p) not in registered_paths:
+            print(f"Warning: Orphan file found in bundle: {p}")
             
     return all_ok
 
