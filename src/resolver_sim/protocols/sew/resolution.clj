@@ -52,6 +52,15 @@
    :contest-deadline                  0
    :reversal-detection-probability    reversal-prob})
 
+;; ---------------------------------------------------------------------------
+;; Guard logging helper — returns (t/fail kw) with :guard-context attached
+;; so process-step can capture rejection context in trace entries.
+;; ---------------------------------------------------------------------------
+
+(defn- guard-fail [error-kw & {:as ctx}]
+  (attr/log-with-attr :debug "guard/rejected" (assoc ctx :error error-kw))
+  (assoc (t/fail error-kw) :guard-context ctx))
+
 (defn- handle-reversal-slashing
   "Handles the outcome of a reversed decision.
 
@@ -276,16 +285,21 @@
     (attr/log-annotated! :debug "Submitting resolution" ctx {:caller caller})
     (cond
       (not (t/valid-workflow-id? world workflow-id))
-      (t/fail :invalid-workflow-id)
+      (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     ;; State is checked before auth so any caller—authorized or not—receives
     ;; :transfer-not-in-dispute on a terminal escrow rather than a misleading
     ;; :not-authorized-resolver that obscures the real cause of failure.
     (not= :disputed (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-in-dispute)
+    (guard-fail :transfer-not-in-dispute
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     (not (auth/authorized-resolver? world workflow-id caller resolution-module-fn))
-    (t/fail :not-authorized-resolver)
+    (guard-fail :not-authorized-resolver
+                :caller caller
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
 
     :else
     (let [world          (clear-pending-settlement world workflow-id)
@@ -339,7 +353,7 @@
   "Execute a deferred settlement after the appeal window has closed."
   [world workflow-id]
   (if-not (t/valid-workflow-id? world workflow-id)
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
     (let [active-pending (t/get-pending world workflow-id)
           now-ts         (:block-time world)
           pending        (if (:exists active-pending)
@@ -347,13 +361,18 @@
                            (pick-eligible-superseded-pending world workflow-id now-ts))]
       (cond
         (not (:exists pending))
-        (t/fail :no-pending-settlement)
+        (guard-fail :no-pending-settlement :workflow-id workflow-id)
 
         (not= :disputed (t/escrow-state world workflow-id))
-        (t/fail :transfer-not-in-dispute)
+        (guard-fail :transfer-not-in-dispute
+                    :escrow-state (t/escrow-state world workflow-id)
+                    :workflow-id workflow-id)
 
         (< now-ts (:appeal-deadline pending))
-        (t/fail :appeal-window-not-expired)
+        (guard-fail :appeal-window-not-expired
+                    :block-time now-ts
+                    :appeal-deadline (:appeal-deadline pending)
+                    :workflow-id workflow-id)
 
         :else
         (t/ok (if (:is-release pending)
@@ -408,23 +427,33 @@
   [world workflow-id caller escalation-fn]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     (not= :disputed (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-in-dispute)
+    (guard-fail :transfer-not-in-dispute
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     (t/final-round? world workflow-id)
-    (t/fail :escalation-not-allowed)
+    (guard-fail :escalation-not-allowed
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
 
     (not (:exists (t/get-pending world workflow-id)))
-    (t/fail :no-resolution-to-challenge)
+    (guard-fail :no-resolution-to-challenge
+                :pending-exists false
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
 
     ;; Appeal window has closed — the pending settlement is now executable.
     (>= (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
-    (t/fail :appeal-window-expired)
+    (guard-fail :appeal-window-expired
+                :block-time (:block-time world)
+                :appeal-deadline (:appeal-deadline (t/get-pending world workflow-id))
+                :workflow-id workflow-id)
 
     (nil? escalation-fn)
-    (t/fail :escalation-not-configured)
+    (guard-fail :escalation-not-configured :workflow-id workflow-id)
 
     :else
     (let [current-level (t/dispute-level world workflow-id)
@@ -544,33 +573,43 @@
    existing resolver decision, not a unilateral level-skip.
 
    escalation-fn — (fn [world workflow-id caller level] → {:ok bool :new-resolver addr})
-                   Pass nil to simulate 'escalation not configured'."
+                    Pass nil to simulate 'escalation not configured'."
   [world workflow-id caller escalation-fn]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     (not= :disputed (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-in-dispute)
+    (guard-fail :transfer-not-in-dispute
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     (let [et (t/get-transfer world workflow-id)]
       (and (not= caller (:from et)) (not= caller (:to et))))
-    (t/fail :not-participant)
+    (guard-fail :not-participant :caller caller :workflow-id workflow-id)
 
     (t/final-round? world workflow-id)
-    (t/fail :escalation-not-allowed)
+    (guard-fail :escalation-not-allowed
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
 
     ;; Escalation is an appeal: a resolver must have already submitted a
     ;; resolution (creating a pending settlement) before a party may escalate.
     (not (:exists (t/get-pending world workflow-id)))
-    (t/fail :no-resolution-to-appeal)
+    (guard-fail :no-resolution-to-appeal
+                :pending-exists false
+                :dispute-level (t/dispute-level world workflow-id)
+                :workflow-id workflow-id)
 
     ;; Appeal window has closed — the pending settlement is now executable.
     (>= (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
-    (t/fail :appeal-window-expired)
+    (guard-fail :appeal-window-expired
+                :block-time (:block-time world)
+                :appeal-deadline (:appeal-deadline (t/get-pending world workflow-id))
+                :workflow-id workflow-id)
 
     (nil? escalation-fn)
-    (t/fail :escalation-not-configured)
+    (guard-fail :escalation-not-configured :workflow-id workflow-id)
 
     :else
     (let [current-level (t/dispute-level world workflow-id)

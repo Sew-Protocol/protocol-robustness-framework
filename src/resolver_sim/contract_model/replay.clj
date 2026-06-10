@@ -268,8 +268,9 @@
              :trace-metadata  metadata
             :world           (proto/world-snapshot protocol final-world)
             :projection      proj
-            :projection-hash ph}
-           :halted? violated?})))))
+             :projection-hash ph
+             :guard-context   (:guard-context result)}
+            :halted? violated?})))))
 
 (defn- execution-mode
   [scenario]
@@ -352,7 +353,7 @@
            metrics metrics
            states {(:seq (first events) 0) (proto/world-snapshot protocol world)}
            world-checkpoints {}
-           id-alias-map {}]
+            id-alias-map {}]
       (if (empty? events)
         (let [open (when-not (or allow-open-entities? allow-open-disputes?)
                      (seq (proto/open-entities protocol world)))]
@@ -378,7 +379,6 @@
                  :trace trace
                  :metrics metrics
                  :states states
-                 :events events
                  :agents agents
                  :protocol protocol
                  :world world
@@ -529,11 +529,15 @@
                                                   [(:seq entry0) (:action entry0) (:error entry0)]))
                 reject-phase (when (= :rejected (:result entry0))
                                (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
-                entry (cond-> entry0
-                        (= :rejected (:result entry0))
-                        (assoc :reject-class (:error entry0)
-                               :reject-phase reject-phase
-                               :expected-failure? expected-failure?))
+                 entry (cond-> entry0
+                         (= :rejected (:result entry0))
+                         (assoc :reject-class (:error entry0)
+                                :reject-phase reject-phase
+                                :expected-failure? expected-failure?
+                                :event-tags (conj (:event-tags entry0)
+                                                  (if expected-failure?
+                                                    :expected-revert
+                                                    :unexpected-revert))))
                 new-trace (conj trace entry)
                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)

@@ -25,6 +25,15 @@
             [resolver-sim.util.attribution             :as attr]))
 
 ;; ---------------------------------------------------------------------------
+;; Guard logging helper — returns (t/fail kw) with :guard-context attached
+;; so process-step can capture rejection context in trace entries.
+;; ---------------------------------------------------------------------------
+
+(defn- guard-fail [error-kw & {:as ctx}]
+  (attr/log-with-attr :debug "guard/rejected" (assoc ctx :error error-kw))
+  (assoc (t/fail error-kw) :guard-context ctx))
+
+;; ---------------------------------------------------------------------------
 ;; Internal accounting helpers
 ;; ---------------------------------------------------------------------------
 
@@ -388,18 +397,21 @@
   [world workflow-id caller release-strategy-fn]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     (not= :pending (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-pending)
+    (guard-fail :transfer-not-pending
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     (nil? release-strategy-fn)
-    (t/fail :release-strategy-not-set)
+    (guard-fail :release-strategy-not-set :workflow-id workflow-id)
 
     :else
     (let [{:keys [allowed? reason-code]} (release-strategy-fn world workflow-id caller)]
       (if-not allowed?
-        (t/fail (if (= 1 reason-code) :not-sender :release-not-allowed))
+        (guard-fail (if (= 1 reason-code) :not-sender :release-not-allowed)
+                    :reason-code reason-code :workflow-id workflow-id)
         (t/ok (finalize world workflow-id :released))))))
 
 ;; ---------------------------------------------------------------------------
@@ -427,17 +439,20 @@
   [world workflow-id caller cancel-strategy]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     (not= caller (get-in world [:escrow-transfers workflow-id :from]))
-    (t/fail :not-sender)
+    (guard-fail :not-sender :caller caller :workflow-id workflow-id)
 
     (not= :pending (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-pending)
+    (guard-fail :transfer-not-pending
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     ;; Strategy set and blocks the call
     (and (some? cancel-strategy) (not (:can-cancel? cancel-strategy)))
-    (t/fail :not-authorized-to-cancel-yet)
+    (guard-fail :not-authorized-to-cancel-yet
+                :cancel-strategy cancel-strategy :workflow-id workflow-id)
 
     ;; Strategy permits unilateral cancel
     (and (some? cancel-strategy) (:unilateral-cancel? cancel-strategy))
@@ -463,19 +478,22 @@
   "Attempt to cancel escrow as recipient.
 
    cancel-strategy — {:can-cancel? bool :unilateral-cancel? bool} or nil."
-  [world workflow-id caller cancel-strategy]
+   [world workflow-id caller cancel-strategy]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
-    (t/fail :invalid-workflow-id)
+    (guard-fail :invalid-workflow-id :workflow-id workflow-id)
 
     (not= caller (get-in world [:escrow-transfers workflow-id :to]))
-    (t/fail :not-recipient)
+    (guard-fail :not-recipient :caller caller :workflow-id workflow-id)
 
     (not= :pending (t/escrow-state world workflow-id))
-    (t/fail :transfer-not-pending)
+    (guard-fail :transfer-not-pending
+                :escrow-state (t/escrow-state world workflow-id)
+                :workflow-id workflow-id)
 
     (and (some? cancel-strategy) (not (:can-cancel? cancel-strategy)))
-    (t/fail :not-authorized-to-cancel-yet)
+    (guard-fail :not-authorized-to-cancel-yet
+                :cancel-strategy cancel-strategy :workflow-id workflow-id)
 
     (and (some? cancel-strategy) (:unilateral-cancel? cancel-strategy))
     (t/ok (finalize world workflow-id :refunded))

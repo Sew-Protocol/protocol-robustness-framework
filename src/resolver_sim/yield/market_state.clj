@@ -29,7 +29,10 @@
         risk-shortfall (:shortfall risk)
         
         ;; APY from risk/legacy path (highest priority)
-        risk-apy (when resolved-mid (get-in world [:yield/rates resolved-mid tok]))
+        ;; Try normalized (keyword) key first, fall back to string key for back compat.
+        risk-apy (when resolved-mid
+                   (or (get-in world [:yield/rates resolved-mid tok])
+                       (get-in world [:yield/rates resolved-mid (name tok)])))
         
         ;; Default APY as fallback for schedule lookup
         default-apy (if (some? risk-apy) risk-apy 0.04)]

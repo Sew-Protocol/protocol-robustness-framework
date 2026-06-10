@@ -1,8 +1,7 @@
 (ns scripts.gen-yield
   "Generalized yield scenario generator.
    Creates yield scenarios based on structural templates and parameters."
-  (:require [clojure.data.json :as json]
-            [clojure.java.io :as io]))
+  (:require [clojure.data.json :as json]))
 
 (defn- template [id title params events expectations]
   {:scenario-id id

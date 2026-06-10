@@ -841,6 +841,8 @@
       :double-settlements
       :invalid-state-transitions
       :invalid-guard-conditions
+      :expected-reverts
+      :unexpected-reverts
       :negative-payoff-count
       :coalition-net-profit
       :funds-lost})
@@ -873,10 +875,17 @@
         (update :double-settlements inc)
 
         (contains? event-tags :invalid-state-transition)
-        (update :invalid-state-transitions inc)
+        (#(if (contains? event-tags :expected-revert)
+            (update % :expected-reverts inc)
+            (update % :invalid-state-transitions inc)))
 
         (contains? event-tags :invalid-guard-condition)
-        (update :invalid-guard-conditions (fnil inc 0))
+        (#(if (contains? event-tags :expected-revert)
+            (update % :expected-reverts inc)
+            (update % :invalid-guard-conditions (fnil inc 0))))
+
+        (contains? event-tags :unexpected-revert)
+        (#(update % :unexpected-reverts inc))
 
         (and funds-lost-delta (pos? funds-lost-delta))
         (update :funds-lost + funds-lost-delta))))
