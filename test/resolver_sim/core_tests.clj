@@ -3,7 +3,9 @@
             [resolver-sim.stochastic.types :as types]
             [resolver-sim.stochastic.economics :as econ]
             [resolver-sim.stochastic.dispute :as dispute]
-            [resolver-sim.stochastic.rng :as rng]))
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.io.params :as io-params]
+            [resolver-sim.governance.rules :as gov-rules]))
 
 (deftest fee-calculation-test
   (testing "Fee calculation"
@@ -110,3 +112,53 @@
   (testing "Invalid fee-bps fails"
     (let [invalid {:resolver-fee-bps -100}]
       (is (thrown? Exception (types/validate-scenario invalid))))))
+
+(deftest governance-baseline-test
+  (testing "default-rules produces all 9 governance-approved parameters"
+    (let [rules (gov-rules/default-rules 10000)]
+      (is (= 100 (:resolver-fee-bps rules)))
+      (is (= 500 (:appeal-bond-bps rules)))
+      (is (= 2.5 (:slash-multiplier rules)))
+      (is (= 3 (:panel-size rules)))
+      (is (= (/ 2.0 3.0) (:majority-ratio rules)))
+      (is (= 0.6 (:appeal-threshold rules)))
+      (is (= 0.20 (:appeal-probability-if-correct rules)))
+      (is (= 0.40 (:appeal-probability-if-wrong rules)))
+      (is (= 0.10 (:slashing-detection-probability rules)))))
+
+  (testing "validate-rule-change accepts governance-approved defaults"
+    (let [result (gov-rules/validate-rule-change {} (gov-rules/default-rules 10000))]
+      (is (:valid? result))
+      (is (empty? (:errors result)))))
+
+  (testing "validate-rule-change rejects out-of-bounds values"
+    (doseq [[label invalid] {"bad panel-size"    (assoc (gov-rules/default-rules 10000) :panel-size 0)
+                             "bad majority-ratio" (assoc (gov-rules/default-rules 10000) :majority-ratio 0.3)
+                             "bad appeal-thresh"  (assoc (gov-rules/default-rules 10000) :appeal-threshold 1.5)
+                             "bad fee-bps"        (assoc (gov-rules/default-rules 10000) :resolver-fee-bps 10)
+                             "bad slash-mult"     (assoc (gov-rules/default-rules 10000) :slash-multiplier 0.5)
+                             "bad bond-bps"       (assoc (gov-rules/default-rules 10000) :appeal-bond-bps 3000)}]
+      (let [result (gov-rules/validate-rule-change {} invalid)]
+        (is (not (:valid? result)) (str label " should be invalid"))
+        (is (seq (:errors result)) (str label " should have errors"))))))
+
+(deftest governance-params-merge-test
+  (testing "io/params/merge-defaults includes governance-approved values"
+    (let [minimal-scenario {:description "test"
+                            :scenario-id "test-gov"
+                            :rng-seed 42
+                            :escrow-distribution {:type :lognormal}
+                            :strategy-mix {:honest 1.0 :lazy 0.0 :malicious 0.0 :collusive 0.0}
+                            :n-trials 100
+                            :n-seeds 1
+                            :parallelism :auto}
+          merged (io-params/merge-defaults minimal-scenario)]
+      (is (= 100 (:resolver-fee-bps merged)))
+      (is (= 3 (:panel-size merged)))
+      (is (= (/ 2.0 3.0) (:majority-ratio merged)))
+      (is (= 0.6 (:appeal-threshold merged)))))
+
+  (testing "EDN file values override governance defaults"
+    (let [scenario {:escrow-size 10000 :resolver-fee-bps 200}
+          merged (io-params/merge-defaults scenario)]
+      (is (= 200 (:resolver-fee-bps merged)) "EDN value should win over governance default"))))

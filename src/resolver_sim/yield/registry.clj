@@ -128,7 +128,8 @@
                         (if (string? m) (keyword m) m))
    :failure-modes     (risk/normalize-failure-modes failure-modes)
    :shortfall         shortfall
-   ;; New data-driven schedules
+   ;; Fully data-driven yield engine configuration:
+   ;; Encompasses market schedules, withdrawal policies, and failure modes.
    :schedules         {:rate-schedule         (normalize-schedule rate-schedule)
                        :index-schedule        (normalize-schedule index-schedule)
                        :liquidity-schedule    (normalize-schedule liquidity-schedule)

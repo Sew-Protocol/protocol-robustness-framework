@@ -158,7 +158,7 @@
                        (map (fn [[k v]] {:tag (name k) :count v}))
                        (sort-by :count >)
                        (take 20))
-             max-count (max 1 (apply max (map :count rows)))]
+             max-count (apply max 1 (map :count rows))]
          [:div
           (for [{:keys [tag count]} rows]
             [:div {:style {:display "grid"

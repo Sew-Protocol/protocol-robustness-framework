@@ -113,13 +113,10 @@
 
 ;; Defaults
 (def default-params
-  {:resolver-fee-bps 150
-   :appeal-bond-bps 700
-   :resolver-bond-bps 1000         ; DR3: 10% bond (DR1=0, DR2=500)
-   :slash-multiplier 2.5
-   :appeal-probability-if-correct 0.05
-   :appeal-probability-if-wrong 0.40
-   :slashing-detection-probability 0.10
+  {:resolver-bond-bps 1000         ; DR3: 10% bond (DR1=0, DR2=500)
+   :panel-size 3
+   :majority-ratio (/ 2.0 3.0)
+   :appeal-threshold 0.6
    :fraud-detection-probability 0.0              ; Phase I: fraud detection disabled by default
    :fraud-slash-bps 0                           ; Phase I: fraud slashing disabled (0 bps)
    :reversal-detection-probability 1.0          ; Keep historical deterministic reversal behavior
@@ -154,7 +151,10 @@
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.
 (def optional-schema-keys
-  #{:sweep-params
+  #{:panel-size
+    :majority-ratio
+    :appeal-threshold
+    :sweep-params
     :attacker-extra-capital-multiplier
     :resolver-bond-bps
     :slashing-detection-delay-weeks

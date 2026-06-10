@@ -20,8 +20,10 @@
             [resolver-sim.sim.reporter :as reporter]
             [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.params :as stoch-params]
+            [resolver-sim.stochastic.types :as stoch-types]
             [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.protocols.sew.invariant-scenarios :as sew-scenarios]
+            [resolver-sim.governance.rules :as gov-rules]
             [clojure.pprint :as pp]))
 
 (def ^:private golden-schema-version "2.0")
@@ -382,17 +384,32 @@
 ;; ──────────────────────────────────────────────────────────────────────────────
 
 (defn- lookup-scenario
-  "Find a scenario map by its :scenario-id string in the Sew invariant scenario registry."
+  "Find a scenario map by its :scenario-id string in the Sew invariant scenario registry.
+   Handles paired scenarios (e.g. S12) where the entry value is a vector of two maps."
   [scenario-id]
-  (some #(let [s (second %)]
-           (when (= scenario-id (:scenario-id s)) s))
+  (some (fn [[_ v]]
+          (if (vector? v)
+            (some (fn [s] (when (= scenario-id (:scenario-id s)) s)) v)
+            (when (= scenario-id (:scenario-id v)) v)))
         sew-scenarios/all-scenarios))
 
 (defn scenario->mc-params
   "Compute a complete MC param map from a scenario.
-   Override chain: default-params ← protocol-params ← :mc-params."
+   Override chain (rightmost wins):
+     stochastic.types/default-params
+       ← governance.rules/default-rules
+       ← protocol-params->mc-overrides
+       ← scenario :mc-params"
   [scenario]
-  (stoch-params/scenario->mc-params scenario))
+  (let [pp (:protocol-params scenario)
+        mc (:mc-params scenario)
+        escrow-size (or (:escrow-size (or mc {}))
+                        (:escrow-size (or pp {}))
+                        10000)]
+    (merge stoch-types/default-params
+           (gov-rules/default-rules escrow-size)
+           (stoch-params/protocol-params->mc-overrides pp)
+           mc)))
 
 (defn run-mc-batch-for-scenario
   "Run an MC batch using a scenario's :protocol-params as the shared source.

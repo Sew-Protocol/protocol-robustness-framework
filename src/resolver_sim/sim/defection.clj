@@ -40,7 +40,7 @@
                           :slash-risk-inhibition 0.7
                           :max-switch-probability 0.8
                           :detection-probability 0.1
-                          :slash-multiplier 2.0
+                           :slash-multiplier 2.5
                           :blocked-target-policy :inconclusive}
         legacy-rate      (double (get params :defection-rate 0.0))
         legacy-model     (get params :defection-model :binary-payoff)
@@ -137,7 +137,7 @@
 (defn- fee-profit-estimate
   [params]
   (let [escrow-size      (double (get params :escrow-size 10000))
-        resolver-fee-bps (double (get params :resolver-fee-bps 150))]
+        resolver-fee-bps (double (get params :resolver-fee-bps 100))]
     (* escrow-size (/ resolver-fee-bps 10000.0))))
 
 (defn- load-optimal-snapshot

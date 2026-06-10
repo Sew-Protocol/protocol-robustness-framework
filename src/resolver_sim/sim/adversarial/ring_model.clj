@@ -63,7 +63,7 @@
   (let [active-now   (:active-count ring)
         max-size     (:ring-max-size params (* 3 (:ring-size params 5)))
         fee-per-disp (* (:escrow-size params 10000)
-                        (/ (:resolver-fee-bps params 150) 10000.0))
+                         (/ (:resolver-fee-bps params 100) 10000.0))
         n-trials     (:n-trials-per-epoch params 100)
         ;; Expected disputes for one ring member (ring gets ring-fraction of disputes)
         total-r      (+ active-now (:n-resolvers params 60))

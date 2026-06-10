@@ -73,6 +73,18 @@
                    :dir             base})))
             (.listFiles root)))))
 
+(defn artifact-by-id
+  "Look up an artifact entry by ID in the loaded registry map."
+  [run artifact-id]
+  (let [registry (:registry run)]
+    (some #(when (= (:id %) artifact-id) %) (:artifacts registry))))
+
+(defn load-artifact-by-id
+  "Look up and load an artifact's file content by ID."
+  [run artifact-id]
+  (when-let [art (artifact-by-id run artifact-id)]
+    (common/read-json (str (:dir run) "/" (:path art)))))
+
 (defn load-latest
   "Load the 4 canonical artifacts from results/test-artifacts/.
   Returns nil fields for files that don't exist yet."

@@ -68,15 +68,25 @@ The `:status` field transitions from `:active` to `:unwinding`.
 ;; 3. Demonstration: Isolated Scenario S107
 ;; =============================================================================
 
-(clerk/md "
-### Isolated Scenario S107
-This scenario demonstrates how a module's policy engine autonomously handles a shortfall.
-")
-
 (def scenario-s107
-  {:scenario-id "s107-isolated-shortfall"
+  {:schema-version "1.1"
+   :scenario-id "s107-isolated-shortfall"
+   :id "s107-isolated-shortfall"
+   :title "Isolated Shortfall Demonstration"
+   :purpose "demonstration"
+   :scenario-author "agent-d"
    :events [
      {:seq 0 :action "set-yield-risk"
       :params {:module-id "aave" :token "USDC" :liquidity-mode "shortfall"
                :shortfall {:available-ratio 0.5}}}]})
+
+(require '[resolver-sim.scenario.runner :as runner]
+         '[resolver-sim.contract-model.replay :as replay]
+         '[resolver-sim.protocols.registry :as preg])
+
+(defn- run-s107 []
+  (let [protocol (preg/get-protocol "sew-v1")]
+    (runner/run-scenario scenario-s107 {:replay-fn #(replay/replay-with-protocol protocol %)})))
+
+(clerk/table [ (run-s107) ])
 

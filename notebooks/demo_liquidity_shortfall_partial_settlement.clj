@@ -65,8 +65,8 @@
   [:div {:style {:background "#0f172a" :border "1px solid #004D59" :borderRadius "8px" :padding "14px"}}
    [:div {:style {:display "grid" :gridTemplateColumns "80px 1fr 1fr 140px 140px" :gap "10px" :fontSize "12px" :color "#94a3b8" :marginBottom "8px"}}
     [:div "Time"] [:div "Liquidity"] [:div "Queue growth"] [:div "Claim now %"] [:div "Deferred %"]]
-   (let [mx-liq (apply max (map :liq stress-epochs))
-         mx-q (apply max (map :queue stress-epochs))]
+   (let [mx-liq (apply max 1 (map :liq stress-epochs))
+         mx-q (apply max 1 (map :queue stress-epochs))]
      (for [{:keys [t liq queue claim-now deferred]} stress-epochs]
        [:div {:style {:display "grid" :gridTemplateColumns "80px 1fr 1fr 140px 140px" :gap "10px" :alignItems "center" :marginBottom "7px"}}
         [:div {:style {:color "#7ADDDC" :fontWeight 700}} t]
@@ -117,7 +117,7 @@
   [:div {:style {:background "#0f172a" :border "1px solid #004D59" :borderRadius "8px" :padding "14px" :marginTop "10px"}}
    [:div {:style {:display "grid" :gridTemplateColumns "80px 1fr 140px" :gap "10px" :fontSize "12px" :color "#94a3b8" :marginBottom "8px"}}
     [:div "Time"] [:div "Counterfactual liquidity"] [:div "Claim-now %"]]
-   (let [mx-liq (apply max (map :liq counterfactual))]
+   (let [mx-liq (apply max 1 (map :liq counterfactual))]
      (for [{:keys [t liq claim-now]} counterfactual]
        [:div {:style {:display "grid" :gridTemplateColumns "80px 1fr 140px" :gap "10px" :alignItems "center" :marginBottom "7px"}}
         [:div {:style {:color "#7ADDDC" :fontWeight 700}} t]

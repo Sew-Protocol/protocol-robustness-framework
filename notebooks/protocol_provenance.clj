@@ -446,48 +446,4 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}
   :nextjournal.clerk/width :full}
-(clerk/html
- (common/safe-render
-  "publication"
-  (fn []
-    (let [manifest (:manifest latest-run)
-          h        (when manifest (mhash/canonical-hash manifest))
-          h-s      (when h (subs h 0 48))]
-      [:div {:style {:background "#020617" :padding "32px" :fontFamily "'JetBrains Mono', monospace"}}
-       [:h2 {:style {:color "#e2e8f0" :marginTop "0"}} "Signed Publication"]
-       [:div {:style {:fontSize "11px" :color "#64748b" :marginBottom "16px"}}
-        "Canonical hash for signing and independent verification"]
-
-       [:div.pub-card
-        [:div.hero-label "Canonical Manifest Hash (SHA-256, volatile fields excluded)"]
-        [:div.hash-display (or h "—")]
-
-        [:div {:style {:marginTop "20px"}}
-         [:div.hero-label "Signature Status"]
-         [:span.status-pill.status-UNSIGNED "UNSIGNED"]]
-
-        [:div {:style {:marginTop "20px" :fontSize "11px" :color "#94a3b8" :lineHeight "1.8"}}
-         "To sign:" [:br]
-         [:code {:style {:display "block" :background "#f1f5f9" :color "#0f172a"
-                         :padding "6px 10px" :borderRadius "3px" :marginTop "2px"
-                         :fontFamily "JetBrains Mono, monospace"}}
-          "(require '[resolver-sim.notebooks.manifest.publication :as pub])"]
-         [:br]
-         [:code {:style {:display "block" :background "#f1f5f9" :color "#0f172a"
-                         :padding "6px 10px" :borderRadius "3px"
-                         :fontFamily "JetBrains Mono, monospace"}}
-          (str "(pub/sign-manifest manifest \"~/.ssh/id_ed25519\")")]
-         [:br]
-         "To export bundle:" [:br]
-         [:code {:style {:display "block" :background "#f1f5f9" :color "#0f172a"
-                         :padding "6px 10px" :borderRadius "3px" :marginTop "2px"
-                         :fontFamily "JetBrains Mono, monospace"}}
-          "(pub/export-bundle! manifest registry \"results/published/<run-id>\")"]]
-
-        [:div {:style {:marginTop "20px"}}
-         [:div.hero-label "Run metadata"]
-         [:div {:style {:fontSize "11px" :color "#64748b" :marginTop "6px"}}
-          "Run ID: " [:span {:style {:color "#e2e8f0"}} (get manifest :run_id "—")] [:br]
-          "Git:    " [:span {:style {:color "#e2e8f0"}} (get-in manifest [:framework :git_commit] "—")] [:br]
-          "Suite:  " [:span {:style {:color "#e2e8f0"}} (get-in manifest [:suite :id] "—")] [:br]
-          "Hash:   " [:span {:style {:color "#7ADDDC"}} (or h-s "—")]]]]]))))
+(clerk/html (ui/provenance-footer latest-run))

@@ -54,7 +54,7 @@
   [:div {:style {:background "#0f172a" :border "1px solid #004D59" :borderRadius "8px" :padding "14px"}}
    [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px 120px" :gap "10px" :fontSize "12px" :color "#94a3b8" :marginBottom "8px"}}
     [:div "Epoch"] [:div "Collusion profitability"] [:div "Detect. prob"] [:div "Slashes"] [:div "Reputation"]]
-   (let [mx (apply max (map :collusion-profit epochs))]
+   (let [mx (apply max 1 (map :collusion-profit epochs))]
      (for [{:keys [epoch collusion-profit detection-prob slashes rep]} epochs]
        [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px 120px" :gap "10px" :alignItems "center" :marginBottom "7px"}}
         [:div {:style {:color "#7ADDDC" :fontWeight 700}} (str "E" epoch)]
@@ -74,11 +74,11 @@
     [:div {:style {:fontSize "13px" :color "#cbd5e1"}} "Detection rises (0.35 → 0.46), profitability crosses below zero by epoch 4."]]]
 
   [:div {:style {:background "#0f172a" :border "1px solid #004D59" :borderRadius "8px" :padding "14px" :marginTop "10px"}}
-   [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px" :gap "10px" :fontSize "12px" :color "#94a3b8" :marginBottom "8px"}}
+   [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px 120px" :gap "10px" :fontSize "12px" :color "#94a3b8" :marginBottom "8px"}}
     [:div "Epoch"] [:div "Counterfactual profitability"] [:div "Detect. prob"] [:div "Slashes"]]
-   (let [mx (apply max (map :collusion-profit counterfactual))]
+   (let [mx (apply max 1 (map :collusion-profit counterfactual))]
      (for [{:keys [epoch collusion-profit detection-prob slashes]} counterfactual]
-       [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px" :gap "10px" :alignItems "center" :marginBottom "7px"}}
+       [:div {:style {:display "grid" :gridTemplateColumns "70px 1fr 120px 120px 120px" :gap "10px" :alignItems "center" :marginBottom "7px"}}
         [:div {:style {:color "#7ADDDC" :fontWeight 700}} (str "E" epoch)]
         (bar collusion-profit mx (if (neg? collusion-profit) "#ef4444" "#22c55e"))
         [:div {:style {:color "#e2e8f0"}} (format "%.2f" detection-prob)]

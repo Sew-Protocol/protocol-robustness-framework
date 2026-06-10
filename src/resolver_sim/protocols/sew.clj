@@ -139,26 +139,41 @@
                {:ok? true}))}])
 
 (defn- sew-event-conflict-domains
-  "Conservative serialization/conflict domains for same-timestamp batch replay."
+  "Conservative serialization/conflict domains for same-timestamp batch replay.
+   
+   Actions are grouped by what state they modify:
+     Group 1 — workflow-scoped (escrow, dispute, resolution state)
+              [:workflow wf-id] + optional [:resolver r] + optional [:token t]
+              Note: [:token t] only resolves when the event carries :token in
+              params (e.g. create-escrow).  Actions like withdraw-escrow or
+              auto-cancel-disputed don't carry :token — the token is derived
+              from escrow state, not event params — so they remain workflow-only.
+     Group 2 — resolver-scoped (stake, bond, slash state)
+     Group 3 — token-scoped (liquidity, yield risk)
+     Group 4 — global (paused, fees, governance params)"
   [world event]
   (let [action (compat/canonical-action event)
         wf-id  (event-workflow-id event)
         token  (some-> (get-in event [:params :token]) keyword)
         resolver (or (get-in event [:params :resolver-addr])
                      (get-in event [:params :resolver])
+                     (get-in event [:params :senior-addr])
                      (get-in world [:escrow-transfers wf-id :dispute-resolver]))]
     (cond
       (contains? #{"create-escrow" "raise-dispute" "release" "sender-cancel" "recipient-cancel"
                    "execute-resolution" "execute-pending-settlement" "escalate-dispute"
                    "challenge-resolution" "automate-timed-actions" "withdraw-escrow"
-                   "rotate-dispute-resolver"}
+                   "rotate-dispute-resolver" "auto-cancel-disputed" "claim-deferred-yield"
+                   "trigger-accrue" "submit-evidence" "execute-reentrant-withdraw"}
                  action)
       (cond-> #{[:workflow wf-id]}
         resolver (conj [:resolver resolver])
         token (conj [:token token]))
 
-      (contains? #{"register-stake" "withdraw-stake" "register-resolver-bond" "register-senior-bond"
-                   "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"}
+      (contains? #{"set-resolver-capacity" "register-stake" "withdraw-stake"
+                   "register-resolver-bond" "register-senior-bond"
+                   "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"
+                   "force-reversal-slash" "delegate-to-senior"}
                  action)
       (cond-> #{}
         resolver (conj [:resolver resolver])
@@ -167,7 +182,7 @@
       (contains? #{"set-token-liquidity-crunch" "set-yield-risk"} action)
       (if token #{[:token token]} #{[:global :unknown]})
 
-      (contains? #{"set-paused" "withdraw-fees"} action)
+      (contains? #{"set-paused" "withdraw-fees" "governance-update-fee"} action)
       #{[:global :protocol]}
 
       :else
@@ -290,6 +305,16 @@
           (assoc result :extra {:old-resolver (:old-resolver result)
                                 :new-resolver (:new-resolver result)})
           result)))))
+
+(defmethod apply-action "set-resolver-capacity"
+  [{:keys [agent-index]} world event]
+  (actx/with-resolved-actor
+    agent-index event
+    (fn [addr]
+      (let [max-concurrent (get-in event [:params :max-concurrent] 0)]
+        (attr/log-with-attr :debug "set-resolver-capacity"
+                            {:resolver addr :max-concurrent max-concurrent})
+        (t/ok (t/set-resolver-capacity world addr max-concurrent))))))
 
 (defmethod apply-action "register-stake"
   [{:keys [agent-index]} world event]

@@ -62,16 +62,16 @@
 ^{:nextjournal.clerk/no-cache true
   :nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def sec-data
-  (let [load-json (fn [p] (common/read-json p))
+  (let [run (loader/load-focused)
         load-edn  (fn [p] (try (edn/read-string (slurp (io/file p)))
                                (catch Exception _ nil)))]
-    {:findings     (get (load-json "results/test-artifacts/findings.json") :findings [])
-     :issues       (get (load-json "results/test-artifacts/issues.json")   :issues   [])
-     :test-run     (load-json "results/test-artifacts/test-run.json")
-     :test-summary (load-json "results/test-artifacts/test-summary.json")
-     :coverage     (load-json "results/test-artifacts/coverage.json")
-     :claimable    (load-json "results/test-artifacts/claimable-classification.json")
-     :signature    (load-json "results/test-artifacts/signature.json")
+    {:findings     (loader/load-artifact-by-id run "findings")
+     :issues       (loader/load-artifact-by-id run "issues")
+     :test-run     (:manifest run)
+     :test-summary (:summary run)
+     :coverage     (loader/load-artifact-by-id run "coverage")
+     :claimable    (loader/load-artifact-by-id run "claimable-classification")
+     :signature    (loader/load-artifact-by-id run "signature")
      :claims       (load-edn  "data/claims/sew-claims.edn")}))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
