@@ -30,29 +30,24 @@
 
 ;; ============ FIXED RULES (Phase H baseline) ============
 
-(deftype FixedRules []
-  "No rule changes allowed. All parameters frozen.
+(defn fixed-rules
+  "Create a FixedRules instance — no rule changes allowed.
    
    Used in Phase H (baseline) and throughout Phases P-R.
-   Phase T will implement adaptive rules."
-  
-  GovernanceRules
-  
-  (can-rule-change? [_ epoch rules params]
-    false)  ;; Never allow changes
-  
-  (apply-rule-change [_ old-rules new-rules params]
-    ;; Changes are ignored
-    {:rules old-rules :delay-epochs 0})
-  
-  (governance-delay [_ params]
-    ;; Changes would take infinite time (never happen)
-    Integer/MAX_VALUE))
+   Phase T will implement adaptive rules via adaptive-rules."
+  []
+  (reify GovernanceRules
+    (can-rule-change? [_ epoch rules params]
+      false)
+    (apply-rule-change [_ old-rules new-rules params]
+      {:rules old-rules :delay-epochs 0})
+    (governance-delay [_ params]
+      Integer/MAX_VALUE)))
 
 ;; ============ ADAPTIVE RULES (Phase T - future) ============
 
-(deftype AdaptiveRules [rule-change-epoch]
-  "Allow rule changes after specified epoch.
+(defn adaptive-rules
+  "Create an AdaptiveRules instance — allow rule changes after specified epoch.
    
    Model (Phase T):
    - Governance can propose rule changes
@@ -61,21 +56,15 @@
    
    Parameters:
    - rule-change-epoch: First epoch rule changes are allowed"
-  
-  GovernanceRules
-  
-  (can-rule-change? [_ epoch current-rules params]
-    ;; Allow changes after rule-change-epoch
-    (>= epoch rule-change-epoch))
-  
-  (apply-rule-change [_ old-rules new-rules params]
-    ;; Changes take effect after governance delay
-    (let [delay (get params :governance-delay-epochs 30)]
-      {:rules new-rules :delay-epochs delay}))
-  
-  (governance-delay [_ params]
-    ;; Return configured delay
-    (get params :governance-delay-epochs 30)))
+  [rule-change-epoch]
+  (reify GovernanceRules
+    (can-rule-change? [_ epoch current-rules params]
+      (>= epoch rule-change-epoch))
+    (apply-rule-change [_ old-rules new-rules params]
+      (let [delay (get params :governance-delay-epochs 30)]
+        {:rules new-rules :delay-epochs delay}))
+    (governance-delay [_ params]
+      (get params :governance-delay-epochs 30))))
 
 ;; ============ HELPER FUNCTIONS ============
 

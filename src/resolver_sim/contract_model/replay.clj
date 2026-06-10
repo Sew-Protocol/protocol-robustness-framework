@@ -396,6 +396,14 @@
                 metrics' (-> metrics
                              (update :batch-buckets inc)
                              (update :batch-events + (count resolved-bucket)))
+                ;; Preflight runs every event against base-world (world BEFORE the bucket).
+                ;; Commit runs against the incremental world (world after previous events
+                ;; in the bucket were applied).  Preflight :eligible means "this event can
+                ;; execute in isolation at the pre-bucket state", not "it will commit".
+                ;; A preflight-eligible event may still be rejected during commit because
+                ;; an earlier event in the same bucket changed the world state (guard
+                ;; condition, depleted balance, etc.) or because its conflict domain
+                ;; intersects with a previously committed event.
                 preflight (into {}
                                 (map (fn [ev]
                                        (let [s (process-step protocol context base-world ev)]
@@ -613,17 +621,23 @@
 
 (defn simple-replay
   "Replay with library-style defaults: no temporal enforcement, no theory DSL, relaxed validation.
-
+   
    For `yield-v1`, delegates to `replay-yield-scenario` (thin runner). Other protocols
    use `replay-with-protocol` with `minimal-replay-flags`. Caller `replay-opts` apply
-   only on the generic path."
+   only on the generic path.
+   
+   Auto-defaults :schema-version to \"1.0\" when missing so hand-built
+   notebook scenarios work without an explicit version key."
   [protocol scenario & [replay-opts]]
-  (if (= "yield-v1" (proto/protocol-id protocol))
-    (yield-replay/replay-yield-scenario protocol scenario)
-    (replay-with-protocol protocol scenario
-                          (merge {:minimal true
-                                  :flags replay-flags/minimal-replay-flags}
-                                 replay-opts))))
+  (let [scenario (if (:schema-version scenario)
+                   scenario
+                   (assoc scenario :schema-version "1.0"))]
+    (if (= "yield-v1" (proto/protocol-id protocol))
+      (yield-replay/replay-yield-scenario protocol scenario)
+      (replay-with-protocol protocol scenario
+                            (merge {:minimal true
+                                    :flags replay-flags/minimal-replay-flags}
+                                   replay-opts)))))
 (defn resume-from-snapshot
   "Resume a simulation from a world snapshot and a sequence of events.
    Useful for exploring counterfactual subgames."

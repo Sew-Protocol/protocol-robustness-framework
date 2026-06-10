@@ -1,6 +1,7 @@
 (ns resolver-sim.io.params
   "Load and validate parameter files (EDN format)."
   (:require [resolver-sim.stochastic.types :as types]
+            [resolver-sim.governance.rules :as rules]
             [clojure.edn :as edn]
             [clojure.java.io :as io]))
 
@@ -13,9 +14,15 @@
       (throw (ex-info (format "Param file not found: %s" path) {:path path})))))
 
 (defn merge-defaults
-  "Merge scenario params with defaults."
+  "Merge scenario params with defaults.
+   
+   Layering order (rightmost wins):
+     stochastic.types/default-params
+       ← governance.rules/default-rules
+       ← EDN scenario"
   [scenario]
-  (merge types/default-params scenario))
+  (let [escrow-size (:escrow-size scenario 10000)]
+    (merge types/default-params (rules/default-rules escrow-size) scenario)))
 
 (defn validate-and-merge
   "Load, validate (including effective oracle-fixture), and merge with defaults."

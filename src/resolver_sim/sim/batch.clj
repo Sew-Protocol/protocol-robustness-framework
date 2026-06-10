@@ -5,7 +5,8 @@
             [resolver-sim.stochastic.dispute :as dispute]
             [resolver-sim.protocols.sew.research-models.resolver-ring :as ring]
             [resolver-sim.sim.batch-integration :as integration]
-            [resolver-sim.sim.common-kwargs :refer [common-kwargs]]))
+            [resolver-sim.sim.common-kwargs :refer [common-kwargs]]
+            [resolver-sim.governance.rules :as rules]))
 
 (defn mean [vals]
   (if (empty? vals) 0 (double (/ (reduce + vals) (count vals)))))
@@ -117,9 +118,15 @@
                      (integration/calculate-bribery-cost params))}))
 
 (defn run-batch
-  "Run N trials with given parameters and return aggregated stats with early-stopping."
+  "Run N trials with given parameters and return aggregated stats with early-stopping.
+   
+   Governance defaults are merged automatically — callers do not need
+   to supply :resolver-fee-bps, :appeal-bond-bps, etc."
   [rng n-trials params]
-  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [n-trials      (or n-trials (:n-trials params 1000))
+        escrow-size   (:escrow-size params 10000)
+        params        (merge (rules/default-rules escrow-size) params)
+        base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
         min-trials    (get params :min-trials 10)
@@ -152,11 +159,14 @@
 
 (defn run-batch-with-attribution
   "Run N trials and return both aggregate stats and per-trial results.
-
+   
    Returns {:aggregate <same map as run-batch>
             :trials    [{per-trial result map} ...]}"
   [rng n-trials params]
-  (let [base-strategy (or (:force-strategy params) (:strategy params :honest))
+  (let [n-trials      (or n-trials (:n-trials params 1000))
+        escrow-size   (:escrow-size params 10000)
+        params        (merge (rules/default-rules escrow-size) params)
+        base-strategy (or (:force-strategy params) (:strategy params :honest))
         strategy      (integration/adjust-strategy-for-bribery base-strategy params)
         params        (assoc params :adjusted-strategy strategy)
         trials
