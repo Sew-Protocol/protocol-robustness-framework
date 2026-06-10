@@ -179,7 +179,7 @@
            :yield/held-balances {}}
           (yield-proto/init-world pp yc)
           (yreg/apply-yield-config yc)
-          (assoc-in [:params] pp))))
+          (assoc-in [:params] (assoc pp :expected-failures (:expected-failures scenario {}))))))
 
   (build-execution-context [_ agents protocol-params]
     {:agent-index (into {} (map (juxt :id identity) agents))

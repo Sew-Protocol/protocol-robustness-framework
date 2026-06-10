@@ -698,7 +698,9 @@
   (init-world [_ scenario]
     (let [init-time    (get scenario :initial-block-time 1000)
           tp           (:token-params scenario)
-          pp           (assoc (:protocol-params scenario {}) :scenario-id (:scenario-id scenario))
+          pp           (assoc (:protocol-params scenario {})
+                              :scenario-id (:scenario-id scenario)
+                              :expected-failures (:expected-failures scenario {}))
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)

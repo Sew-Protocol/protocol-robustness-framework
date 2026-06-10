@@ -3,8 +3,13 @@
   (:require [resolver-sim.yield.market-state :as market-state]))
 
 (defn- all-positions [world]
+  "Read yield positions from world state.
+   Checks :yield/positions (standard), :yield-positions (legacy), and
+   :yield-evidence (yield-v1 replay trace snapshot format)."
   (or (:yield/positions world)
       (:yield-positions world)
+      (when-let [ev (:yield-evidence world)]
+        (into {} (for [[k v] ev] [(keyword k) (assoc v :owner/id k)])))
       {}))
 
 (defn- vault-indices [world]

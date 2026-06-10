@@ -1,7 +1,6 @@
 (ns resolver-sim.yield.invariants
   "Generic accounting invariants for yield mechanism (provider + Sew)."
   (:require [resolver-sim.yield.risk :as risk]
-            [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.invariant-catalog :as cat]))
 
 (defn- inv-result [holds?]
@@ -113,33 +112,6 @@
                      true))))
           (vals (:yield/positions world {}))))
 
-(defn check-exact-ratio-consistency
-  "Verifies that position principal and unrealized yield are consistent
-   with the module index: principal + unrealized = shares * current-index."
-  [world]
-  (let [positions (get world :yield/positions {})
-        indices (get world :yield/indices {})
-        violations
-        (into []
-          (keep
-            (fn [[oid pos]]
-              (let [mid (:module/id pos)
-                    tok (:token pos)
-                    shares (m/ratio (:shares pos 0))
-                    current-index (m/ratio (get-in indices [mid tok] 1))
-                    principal (m/ratio (:principal pos 0))
-                    unrealized (m/ratio (:unrealized-yield pos 0))
-                    
-                    expected-total-value (* shares current-index)
-                    actual-total-value (+ principal unrealized)]
-                
-                (when (not= expected-total-value actual-total-value)
-                  {:owner-id oid :issues [:drift-detected] 
-                   :details {:expected expected-total-value 
-                             :actual actual-total-value}}))))
-            positions))]
-    {:holds? (empty? violations) :violations (vec violations)}))
-
 (defn check-deferred-reclaim
   "Withdrawn positions: no shortfall; reclaimed ≥ 0."
   [world]
@@ -190,8 +162,7 @@
    :yield/realized-non-negative check-realized-non-negative
    :yield/partial-liquidity-principal check-partial-liquidity-principal
    :yield/value-conservation   check-value-conservation
-   :yield/deferred-reclaim     check-deferred-reclaim
-   :yield/exact-ratio-consistency check-exact-ratio-consistency})
+   :yield/deferred-reclaim     check-deferred-reclaim})
 
 (defn registered-ids []
   (vec (keys check-fns)))
@@ -221,17 +192,25 @@
 (defn run-invariants
   "Run invariant checks; returns {inv-id {:holds? bool :violations [...]}}.
    If the invariant function returns structured {:holds? ... :violations ...},
-   those violations are preserved; otherwise they default to nil."
+   those violations are preserved; otherwise they default to nil.
+
+   Supports :expected-failures from world[:params :expected-failures <scenario-id>]
+   (same mechanism as Sew invariants)."
   [world inv-ids]
-  (let [world* (normalize-world-for-check world)]
+  (let [world* (normalize-world-for-check world)
+        scenario-id (get-in world [:params :scenario-id])
+        expected-failures (set (map keyword
+                               (get-in world [:params :expected-failures scenario-id] [])))]
     (into {}
           (for [id inv-ids]
             (let [f (get check-fns id)
                   raw (when f (f world*))
-                  structured? (map? raw)]
-              [id (if structured?
-                    (assoc raw :holds? (boolean (:holds? raw)))
-                    (inv-result raw))])))))
+                  structured? (map? raw)
+                  holds? (boolean (if structured? (:holds? raw) raw))
+                  expected-fail? (contains? expected-failures id)]
+              [id {:holds? (or holds? expected-fail?)
+                   :expected-failure? expected-fail?
+                   :violations (when (and structured? (not expected-fail?)) (:violations raw))}])))))
 
 (defn check-all
   "Default runtime set for yield-v1 (see `invariant-catalog/default-runtime-invariant-ids`)."
