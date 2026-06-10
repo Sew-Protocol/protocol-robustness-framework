@@ -155,8 +155,6 @@
 
   test:unit {:doc "Run canonical unit target"
              :task (shell "./scripts/test.sh unit")}
-             :task (clojure {:dir "."} "-M:test")}
-             :task (clojure {:dir "."} "-M:ci" "-m" "kaocha.runner")}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}

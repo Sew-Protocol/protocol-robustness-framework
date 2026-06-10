@@ -290,14 +290,13 @@
    {:supporting ["S42_resolver-buyer-bribery-loop"]
     :falsifying []}
    :claims/reversal-slash-track1
-   {:supporting ["s101-reversal-slash-track1-enabled"
-                 "S103_l2-reversal-slash-ids"]
+   {:supporting []
     :falsifying []}
    :claims/reversal-slash-track2-reversed
-   {:supporting ["S106_reversal-track2-evidence-appeal"]
+   {:supporting []
     :falsifying []}
    :claims/reversal-slash-track2-executes
-   {:supporting ["S107_reversal-track2-appeal-rejected-executes"]
+   {:supporting []
     :falsifying []}})
 
 (defn purpose-def [k] (get purposes k))

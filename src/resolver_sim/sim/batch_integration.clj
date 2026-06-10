@@ -25,8 +25,8 @@
    - Per-juror cost = detection-prob × escrow-size × margin
    - Total cost = per-juror cost × (ceil(panel-size * 2/3))"
   
-  [{:keys [escrow-size detection-prob bribe-cost-ratio panel-size]
-    :or {panel-size 3 bribe-cost-ratio 1.3 detection-prob 0.0}}]
+  [{:keys [escrow-size detection-prob bribe-cost-ratio panel-size majority-ratio]
+    :or {panel-size 3 majority-ratio (/ 2.0 3.0) bribe-cost-ratio 1.3 detection-prob 0.0}}]
   
   (let [;; Ensure detection-prob is a valid number
         det-prob (double (or detection-prob 0.0))
@@ -34,8 +34,9 @@
         ;; Attacker's potential benefit if attack succeeds
         attack-benefit (long escrow-size)
         
-        ;; Jurors needed to control outcome (2/3 majority)
-        jurors-needed (long (Math/ceil (/ (* panel-size 2) 3.0)))
+        ;; Jurors needed to control outcome (majority-ratio threshold)
+        juror-majority (double (or majority-ratio (/ 2.0 3.0)))
+        jurors-needed (long (Math/ceil (* panel-size juror-majority)))
         
         ;; Cost per juror (from contingent bribery model)
         ;; Formula: cost = benefit × (margin - 1.0) × detection-prob

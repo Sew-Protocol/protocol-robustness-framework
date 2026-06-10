@@ -78,6 +78,9 @@
    {:appeal-bond-bps int
     :slash-multiplier float
     :resolver-fee-bps int
+    :panel-size int
+    :majority-ratio float
+    :appeal-threshold float
     :appeal-probability-if-correct float
     :appeal-probability-if-wrong float}"
   [escrow-size]
@@ -86,6 +89,9 @@
    :appeal-bond-bps 500       ;; 5% of escrow
    :slash-multiplier 2.5      ;; 2.5× slash for detected fraud
    :resolver-fee-bps 100      ;; 1% of escrow as base reward
+   :panel-size 3              ;; jurors per dispute panel
+   :majority-ratio (/ 2.0 3.0) ;; 2/3 majority needed
+   :appeal-threshold 0.6      ;; accuracy threshold for appeal
    :appeal-probability-if-correct 0.20
    :appeal-probability-if-wrong 0.40
    :slashing-detection-probability 0.10})
@@ -136,6 +142,21 @@
     (let [fee-bps (:resolver-fee-bps new-rules)]
       (when (or (< fee-bps 50) (> fee-bps 500))
         (swap! errors conj "Resolver fee must be in [50, 500] bps")))
+    
+    ;; Check panel size bounds
+    (let [panel-size (:panel-size new-rules)]
+      (when (or (< panel-size 1) (> panel-size 21))
+        (swap! errors conj "Panel size must be in [1, 21]")))
+    
+    ;; Check majority ratio bounds
+    (let [maj-ratio (:majority-ratio new-rules)]
+      (when (or (< maj-ratio 0.5) (> maj-ratio 1.0))
+        (swap! errors conj "Majority ratio must be in [0.5, 1.0]")))
+    
+    ;; Check appeal threshold bounds
+    (let [appeal-thresh (:appeal-threshold new-rules)]
+      (when (or (< appeal-thresh 0.0) (> appeal-thresh 1.0))
+        (swap! errors conj "Appeal threshold must be in [0.0, 1.0]")))
     
     {:valid? (empty? @errors)
      :errors @errors}))
