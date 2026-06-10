@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.invariants
   "Generic accounting invariants for yield mechanism (provider + Sew)."
   (:require [resolver-sim.yield.risk :as risk]
+            [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.invariant-catalog :as cat]))
 
 (defn- inv-result [holds?]
@@ -112,6 +113,33 @@
                      true))))
           (vals (:yield/positions world {}))))
 
+(defn check-exact-ratio-consistency
+  "Verifies that position principal and unrealized yield are consistent
+   with the module index: principal + unrealized = shares * current-index."
+  [world]
+  (let [positions (get world :yield/positions {})
+        indices (get world :yield/indices {})
+        violations
+        (into []
+          (keep
+            (fn [[oid pos]]
+              (let [mid (:module/id pos)
+                    tok (:token pos)
+                    shares (m/ratio (:shares pos 0))
+                    current-index (m/ratio (get-in indices [mid tok] 1))
+                    principal (m/ratio (:principal pos 0))
+                    unrealized (m/ratio (:unrealized-yield pos 0))
+                    
+                    expected-total-value (* shares current-index)
+                    actual-total-value (+ principal unrealized)]
+                
+                (when (not= expected-total-value actual-total-value)
+                  {:owner-id oid :issues [:drift-detected] 
+                   :details {:expected expected-total-value 
+                             :actual actual-total-value}}))))
+            positions))]
+    {:holds? (empty? violations) :violations (vec violations)}))
+
 (defn check-deferred-reclaim
   "Withdrawn positions: no shortfall; reclaimed ≥ 0."
   [world]
@@ -162,7 +190,8 @@
    :yield/realized-non-negative check-realized-non-negative
    :yield/partial-liquidity-principal check-partial-liquidity-principal
    :yield/value-conservation   check-value-conservation
-   :yield/deferred-reclaim     check-deferred-reclaim})
+   :yield/deferred-reclaim     check-deferred-reclaim
+   :yield/exact-ratio-consistency check-exact-ratio-consistency})
 
 (defn registered-ids []
   (vec (keys check-fns)))

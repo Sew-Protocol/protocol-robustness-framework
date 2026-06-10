@@ -298,6 +298,11 @@ run_triage() {
   return $?
 }
 
+run_suites() {
+  echo "Suite runner: not wired as standalone CI gate (use routed-suites instead)."
+  return 0
+}
+
 run_routed_suites() {
   require_clojure || return $?
   local routed=$(python3 scripts/route_suites.py)
