@@ -6,12 +6,12 @@
             [resolver-sim.io.diff-runner :as diff-runner]))
 
 (def ^:private base-trace
-  [{:seq 0 :action "create_escrow" :world {:block-time 1 :escrow-count 1}}
-   {:seq 1 :action "raise_dispute" :world {:block-time 2 :escrow-count 1 :disputes 1}}])
+  [{:seq 0 :action "create_escrow" :world {:block-ts (java.time.Instant/ofEpochSecond 1) :escrow-count 1}}
+   {:seq 1 :action "raise_dispute" :world {:block-ts (java.time.Instant/ofEpochSecond 2) :escrow-count 1 :disputes 1}}])
 
 (def ^:private changed-trace
-  [{:seq 0 :action "create_escrow" :world {:block-time 1 :escrow-count 1}}
-   {:seq 1 :action "raise_dispute" :world {:block-time 2 :escrow-count 1 :disputes 2}}])
+  [{:seq 0 :action "create_escrow" :world {:block-ts (java.time.Instant/ofEpochSecond 1) :escrow-count 1}}
+   {:seq 1 :action "raise_dispute" :world {:block-ts (java.time.Instant/ofEpochSecond 2) :escrow-count 1 :disputes 2}}])
 
 (deftest diff-traces-no-divergence
   (is (nil? (diff/diff-traces base-trace base-trace))))

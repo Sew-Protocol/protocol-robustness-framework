@@ -19,7 +19,7 @@
                                     :loss-mode :none}}}
    :yield/held-balances {"USDC" 1000000}
    :yield/module-status {:v1-mod :active}
-   :block-time 1000})
+   :block-ts (java.time.Instant/ofEpochSecond 1000)})
 
 (def v2-world
   {:yield/indices {:v2-mod {"USDC" 1}}
@@ -29,7 +29,7 @@
    :yield/held-balances {"USDC" 1000000}
    :yield/module-status {:v2-mod :active}
    :yield/accrual-config {:v2-mod {:max-index-delta-ratio 2}}
-   :block-time 1000})
+   :block-ts (java.time.Instant/ofEpochSecond 1000)})
 
 (def v1-mod (v1/make-liquid-lending-module :v1-mod))
 (def v2-mod (v2/make-liquid-lending-v2-module :v2-mod))
@@ -131,7 +131,7 @@
                       :yield/indices {v2-mid {"USDC" 1}}
                       :yield/rates {v2-mid {"USDC" 0.05}}
                       :yield/accrual-config {v2-mid {:max-index-delta-ratio 2}}
-                      :block-time 1000}
+                      :block-ts (java.time.Instant/ofEpochSecond 1000)}
                      (reg/init-yield-modules)
                      (v2/deposit-v2 v2-mod {:owner/id "escrow:user1"
                                             :amount 10000

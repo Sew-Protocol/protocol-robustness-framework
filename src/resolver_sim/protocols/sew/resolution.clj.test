@@ -105,7 +105,7 @@
                 (assoc-in world [:pending-fraud-slashes slash-id]
                           (make-reversal-slash-entry slash-id prev-resolver prev-stake slash-bps
                                                      slash-amt workflow-id :pending now
-                                                     (.plusSeconds now appeal-window) reversal-prob))
+                                                     (+ now appeal-window) reversal-prob))
                 (-> (reg/slash-resolver-stake world prev-resolver slash-amt challenger bounty-bps workflow-id)
                     :world
                     (assoc-in [:pending-fraud-slashes slash-id]
@@ -333,7 +333,7 @@
         (let [pending (t/make-pending-settlement
                        {:exists          true
                         :is-release      is-release
-                        :appeal-deadline (.plusSeconds now window-dur)
+                        :appeal-deadline (+ now window-dur)
                         :resolution-hash resolution-hash})
               world''' (assoc-in world'' [:pending-settlements workflow-id] pending)]
           (t/ok world''')))))))

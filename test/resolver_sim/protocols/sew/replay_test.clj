@@ -1162,11 +1162,11 @@
         event       {:seq 0 :time 1000 :agent "alice" :action "release" :params {:workflow-id 0}}
         ;; Synthetic violations: conservation-of-funds fails, solvency passes
         trace-entry {:result :ok
-                     :world  {:total-held {} :block-time 1000}
+                     :world  {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)}
                      :violations {:conservation-of-funds {:holds? false :violations ["held mismatch"]}
                                   :solvency              {:holds? true  :violations []}}}
         agent-index {}
-        world-before {:total-held {} :block-time 1000}]
+        world-before {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)}]
     (testing "violations map triggers increment"
       (let [m (accum-fn sew/protocol base-metrics event trace-entry agent-index world-before)]
         (is (= 1 (:invariant-violations m)))
@@ -1184,11 +1184,11 @@
                       :double-settlements 0 :invalid-state-transitions 0 :funds-lost 0}
         event       {:seq 0 :time 1000 :agent "alice" :action "release" :params {:workflow-id 0}}
         trace-entry {:result :ok
-                     :world  {:total-held {} :block-time 1000}
+                     :world  {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)}
                      :violations {:conservation-of-funds {:holds? false :violations ["mismatch"]}
                                   :no-negative-balances  {:holds? false :violations ["negative"]}
                                   :solvency              {:holds? true  :violations []}}}
-        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)})]
     (is (= 1 (:invariant-violations m))
         "aggregate counter increments once per step regardless of violation count")
     (is (= {:conservation-of-funds :fail :no-negative-balances :fail}
@@ -1205,8 +1205,8 @@
                       :double-settlements 0 :invalid-state-transitions 0 :funds-lost 0}
         event       {:seq 0 :time 1000 :agent "alice" :action "create_escrow"
                      :params {:token "0xUSDC" :to "0xBob" :amount 5000}}
-        trace-entry {:result :ok :world {:total-held {} :block-time 1000} :violations nil}
-        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-time 1000})]
+        trace-entry {:result :ok :world {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)} :violations nil}
+        m (accum-fn sew/protocol base-metrics event trace-entry {} {:total-held {} :block-ts (java.time.Instant/ofEpochSecond 1000)})]
     (is (= 0 (:invariant-violations m)))
     (is (= {} (:invariant-results m)))))
 

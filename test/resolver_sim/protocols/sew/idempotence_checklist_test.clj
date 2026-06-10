@@ -69,7 +69,7 @@
 
 (deftest checklist-execute-pending-settlement-single-finalization
   (let [w0 (-> (base-world 120)
-               (assoc :block-time 1240)
+               (assoc :block-ts (java.time.Instant/ofEpochSecond 1240))
                (assoc-in [:pending-settlements 0]
                          (t/make-pending-settlement {:exists true
                                                      :is-release true
@@ -84,7 +84,7 @@
 
 (deftest checklist-superseded-pending-single-finalization
   (let [w0 (-> (base-world 120)
-               (assoc :block-time 1300)
+               (assoc :block-ts (java.time.Instant/ofEpochSecond 1300))
                (assoc-in [:pending-settlements 0]
                          (t/make-pending-settlement {:exists true
                                                      :is-release true

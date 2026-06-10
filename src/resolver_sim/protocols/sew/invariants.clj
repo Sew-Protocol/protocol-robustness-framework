@@ -20,6 +20,7 @@
             [resolver-sim.yield.accounting            :as yield-acct]
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.time.invariants :as time-inv]
+            [resolver-sim.time.model      :as time.model]
             [resolver-sim.yield.invariants :as generic-yield-inv]
             [resolver-sim.protocols.sew.yield.invariants :as sew-yield-inv]
             [resolver-sim.protocols.sew.invariants.escrow :as escrow]

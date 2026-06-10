@@ -27,7 +27,8 @@
    Every operation function signature:
      (fn [world workflow-id ...args] -> {:ok bool :world world' :error keyword})"
   (:require [clojure.string :as str]
-            [resolver-sim.protocols.sew.snapshot :as snapshot]))
+            [resolver-sim.protocols.sew.snapshot :as snapshot]
+            [resolver-sim.time.model :as time.model]))
 
 ;; ---------------------------------------------------------------------------
 ;; Safe numeric coercion (shared across invariants, projection, classification)
@@ -229,49 +230,50 @@
   "Create an empty world-state map at a given block time."
   ([] (empty-world 0))
   ([block-time]
-   {:escrow-transfers    {}
-    :escrow-settings     {}
-    :total-held          {}
-    :total-fees          {}
-    :total-released      {}   ; {token-addr nat-int} — cumulative AFAs finalized via release
-    :total-refunded      {}   ; {token-addr nat-int} — cumulative AFAs finalized via refund
-    :total-withdrawn     {}   ; {token-addr nat-int} — cumulative withdrawals by users/resolvers
-    :total-principal-deposited {} ; {token-addr nat-int} — cumulative gross amount deposited
-    :pending-settlements {}
-    :module-snapshots    {}
-    :dispute-timestamps  {}
-    :dispute-levels      {}   ; {workflow-id nat-int} — current escalation round (0–2)
-    :claimable           {}
-    :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
-    :resolver-slash-total {}  ; {addr nat-int} — cumulative stake slashed (distinguishes slash from withdrawal)
-    :pending-fraud-slashes {} ; {slash-id {:resolver :amount :status :appeal-deadline
-                              ;            :appeal-bond-held :contest-deadline :proposed-at
-                              ;            :reversal-detection-probability}}
-    :previous-decisions  {}   ; {wf-id {level {:resolver :is-release}}}
-    :challengers         {}   ; {wf-id {level challenger-addr}} — for Phase L Bounties
-    :bond-balances       {}   ; {workflow-id {addr amount}}
-    :bond-fees           {}   ; {token amount}
-    :total-bonds-posted  {}   ; {token amount} — cumulative bonds ever posted
-    :bond-slashed        {}   ; {workflow-id amount}
-    :bond-distribution   {:insurance 0 :protocol 0 :burned 0} ; 50/30/20 split
-     :retained-slash-reserves 0 ; explicit accounting for retained slash residue
-    :resolver-bonds      {}   ; {addr {:stable nat-int :sew nat-int}} — DR3 80/20 mix invariant
-    :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
-    :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
-    :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
-     :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
-     :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
-     :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
-     :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
-    :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)
-    :token-liquidity-crunch #{} ; #{token-addr} — currently insolvent yield pools
-    :last-escalation-block-time-per-addr {} ; {addr block-time} — Sybil mitigation Layer A
-    :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
-    :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
-    :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
-    :next-workflow-id       0
-    :paused?                false
-    :block-time          block-time}))
+   (time.model/with-time
+     {:escrow-transfers    {}
+      :escrow-settings     {}
+      :total-held          {}
+      :total-fees          {}
+      :total-released      {}   ; {token-addr nat-int} — cumulative AFAs finalized via release
+      :total-refunded      {}   ; {token-addr nat-int} — cumulative AFAs finalized via refund
+      :total-withdrawn     {}   ; {token-addr nat-int} — cumulative withdrawals by users/resolvers
+      :total-principal-deposited {} ; {token-addr nat-int} — cumulative gross amount deposited
+      :pending-settlements {}
+      :module-snapshots    {}
+      :dispute-timestamps  {}
+      :dispute-levels      {}   ; {workflow-id nat-int} — current escalation round (0–2)
+      :claimable           {}
+      :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
+      :resolver-slash-total {}  ; {addr nat-int} — cumulative stake slashed (distinguishes slash from withdrawal)
+      :pending-fraud-slashes {} ; {slash-id {:resolver :amount :status :appeal-deadline
+                                ;            :appeal-bond-held :contest-deadline :proposed-at
+                                ;            :reversal-detection-probability}}
+      :previous-decisions  {}   ; {wf-id {level {:resolver :is-release}}}
+      :challengers         {}   ; {wf-id {level challenger-addr}} — for Phase L Bounties
+      :bond-balances       {}   ; {workflow-id {addr amount}}
+      :bond-fees           {}   ; {token amount}
+      :total-bonds-posted  {}   ; {token amount} — cumulative bonds ever posted
+      :bond-slashed        {}   ; {workflow-id amount}
+      :bond-distribution   {:insurance 0 :protocol 0 :burned 0} ; 50/30/20 split
+       :retained-slash-reserves 0 ; explicit accounting for retained slash residue
+      :resolver-bonds      {}   ; {addr {:stable nat-int :sew nat-int}} — DR3 80/20 mix invariant
+      :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
+      :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
+      :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
+       :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
+       :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
+       :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
+       :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
+      :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)
+      :token-liquidity-crunch #{} ; #{token-addr} — currently insolvent yield pools
+      :last-escalation-block-time-per-addr {} ; {addr block-time} — Sybil mitigation Layer A
+      :escalation-counts-per-addr          {} ; {addr count} — Sybil mitigation Layer B
+      :yield-rates            {} ; {token-addr rate-bps} — Current annualized yield rate
+      :total-yield-generated  {} ; {token-addr nat-int} — All-time yield accrued
+      :next-workflow-id       0
+      :paused?                false}
+     {:block-ts (java.time.Instant/ofEpochSecond block-time) :scenario-step 0})))
 
 ;; ---------------------------------------------------------------------------
 ;; Result constructors

@@ -8,7 +8,7 @@
 (def world-base
   {:yield/indices {:mod {:USDC 1.0}}
    :yield/rates {:mod {:USDC 0.05}}
-   :block-time 0})
+   :block-ts (java.time.Instant/ofEpochSecond 0)})
 
 (def pos-base
   {:owner/id "o"
