@@ -632,10 +632,17 @@
 (defn- run-single-invariants [world]
   (let [scenario-id (get-in world [:params :scenario-id])
         r (inv/check-all world scenario-id)
-        exp-res (yield-exp/check-expectations world)]
+        exp-res (yield-exp/check-expectations world)
+        violations (if (:all-hold? r) {} (:results r))
+        failed-expected (keep (fn [[id v]] (when (:expected-failure? v) id)) (:results r))
+        unused-expected (keep (fn [[id v]] (when (:unused-expected-failure? v) id)) (:results r))]
     {:ok?        (and (:all-hold? r) (:ok? exp-res))
-     :violations (cond-> (if (:all-hold? r) {} (:results r))
-                   (not (:ok? exp-res)) (assoc :expectations (:results exp-res)))}))
+     :violations (cond-> violations
+                   (seq failed-expected)   (assoc :expected-failure-ids failed-expected)
+                   (seq unused-expected)   (assoc :unused-expected-failure-ids unused-expected)
+                   (not (:ok? exp-res))    (assoc :expectations (:results exp-res)))
+     :expected-failure-ids (seq failed-expected)
+     :unused-expected-failure-ids (seq unused-expected)}))
 
 (defn- run-transition-invariants [world-before world-after]
   (let [r (inv/check-transition world-before world-after)]
@@ -700,7 +707,8 @@
           tp           (:token-params scenario)
           pp           (assoc (:protocol-params scenario {})
                               :scenario-id (:scenario-id scenario)
-                              :expected-failures (:expected-failures scenario {}))
+                              :expected-failures (:expected-failures scenario
+                                                   (get-in scenario [:protocol-params :expected-failures] {})))
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)

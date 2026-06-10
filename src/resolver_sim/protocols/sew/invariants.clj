@@ -1416,9 +1416,18 @@
   "Run all cross-world invariants that require comparing world-before to world-after.
 
    Must be called after every successful state transition in addition to check-all.
-   Returns {:all-hold? bool :results {invariant-name result-map}}"
-  [world-before world-after]
-   (let [results {:terminal-states-unchanged
+   Returns {:all-hold? bool :results {invariant-name result-map}}
+
+   When scenario-id is provided, expected-failures from world-after[:params] are applied
+   (same mechanism as check-all)."
+  ([world-before world-after]
+   (check-transition world-before world-after nil))
+  ([world-before world-after scenario-id]
+   (let [expected-failures (if scenario-id
+                             (set (map keyword
+                                  (get-in world-after [:params :expected-failures scenario-id] [])))
+                             #{})
+         results {:terminal-states-unchanged
                   (terminal-states-unchanged? world-before world-after)
                   :terminal-escrow-accounting-unchanged
                   (terminal-escrow-accounting-unchanged? world-before world-after)
@@ -1451,9 +1460,14 @@
                   (released-monotonic? world-before world-after)
                   :held-delta-accounted
                   (held-delta-accounted? world-before world-after)}
-        all?    (every? #(:holds? %) (vals results))]
+        processed (into {}
+                      (for [[id result-map] results]
+                        (let [holds? (:holds? result-map)
+                              expected-fail? (contains? expected-failures id)]
+                          [id (assoc result-map
+                                :holds? (or holds? expected-fail?)
+                                :expected-failure? expected-fail?
+                                :unused-expected-failure? (and expected-fail? holds?))])))
+        all?    (every? #(:holds? %) (vals processed))]
     {:all-hold? all?
-     :results   results}))
-
-
-
+     :results   processed})))

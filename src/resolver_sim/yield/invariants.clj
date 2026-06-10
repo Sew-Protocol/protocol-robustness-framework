@@ -1,7 +1,8 @@
 (ns resolver-sim.yield.invariants
   "Generic accounting invariants for yield mechanism (provider + Sew)."
   (:require [resolver-sim.yield.risk :as risk]
-            [resolver-sim.yield.invariant-catalog :as cat]))
+            [resolver-sim.yield.invariant-catalog :as cat]
+            [resolver-sim.logging :as log]))
 
 (defn- inv-result [holds?]
   {:holds? (boolean holds?)})
@@ -204,12 +205,14 @@
     (into {}
           (for [id inv-ids]
             (let [f (get check-fns id)
+                  _ (when-not f (log/warn! "Unknown yield invariant in run-invariants" {:invariant-id id :known (registered-ids)}))
                   raw (when f (f world*))
                   structured? (map? raw)
                   holds? (boolean (if structured? (:holds? raw) raw))
                   expected-fail? (contains? expected-failures id)]
               [id {:holds? (or holds? expected-fail?)
                    :expected-failure? expected-fail?
+                   :unused-expected-failure? (and expected-fail? holds?)
                    :violations (when (and structured? (not expected-fail?)) (:violations raw))}])))))
 
 (defn check-all

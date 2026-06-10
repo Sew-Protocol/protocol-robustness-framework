@@ -10,9 +10,17 @@
             [resolver-sim.yield.invariants :as inv]
             [resolver-sim.yield.invariants-transition :as inv-trans]))
 
-(deftest catalog-contains-first-batch
-  (is (= (set cat/default-runtime-invariant-ids)
-         (set (inv/registered-ids)))))
+(deftest default-runtime-ids-are-registered
+  (let [registered (set (inv/registered-ids))]
+    (doseq [id cat/default-runtime-invariant-ids]
+      (is (contains? registered id)
+          (str id " from default-runtime-invariant-ids is NOT in check-fns. Add it to check-fns.")))))
+
+(deftest all-check-fns-are-in-default-runtime
+  (let [default-ids (set cat/default-runtime-invariant-ids)]
+    (doseq [id (inv/registered-ids)]
+      (is (contains? default-ids id)
+          (str id " is in check-fns but NOT in default-runtime-invariant-ids. Add it there or remove from check-fns.")))))
 
 (deftest shortfall-splits-holds-on-valid-shortfall
   (let [world {:yield/positions {"v" {:shortfall {:fulfilled-amount 400

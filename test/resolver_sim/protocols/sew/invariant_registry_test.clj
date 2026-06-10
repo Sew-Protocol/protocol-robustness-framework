@@ -94,3 +94,15 @@
     (is (not (:holds? (inv/escrow-state-transition-valid? w0 w1))))
     (is (= [{:workflow-id 0 :from :disputed :to :pending}]
            (:violations (inv/escrow-state-transition-valid? w0 w1))))))
+
+
+(deftest expected-failures-suppresses-known-failure
+  (testing "expected-failures in world[:params] flips holds? from false to true"
+    (let [world (t/empty-world 1000)
+          r1 (inv/check-all world "test")
+          r2 (inv/check-all (assoc-in world [:params :expected-failures "test"] [:solvency]) "test")
+          solv1 (get-in r1 [:results :solvency])
+          solv2 (get-in r2 [:results :solvency])]
+      (is (true? (:holds? solv2)) "expected-failures flips holds? to true")
+      (is (true? (:expected-failure? solv2)) "expected-failure? is true when suppressed")
+      (is (true? (:expected-failure? solv2)) "expected-failure? is true when suppressed"))))
