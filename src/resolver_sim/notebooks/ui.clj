@@ -195,3 +195,15 @@
                " · "
                [:a {:href "suites/reference-validation-v1/reports/reference-validation-v1.md" :style {:color "#1d4ed8"}}
                 "Open reference validation report"]]])))
+
+(defn provenance-footer [run]
+  (let [manifest (:manifest run)
+        registry (:registry run)
+        run-id   (get manifest :run_id "—")
+        registry-sha (or (get-in manifest [:framework :registry_sha256]) "—")]
+    [:div {:style {:marginTop "40px" :padding "20px" :borderTop "1px solid #e2e8f0" :fontSize "0.75em" :color "#64748b"}}
+     [:div "Artifact provenance:"]
+     [:div {:style {:fontFamily "monospace"}}
+      "Run ID: " run-id [:br]
+      "Registry Hash: " registry-sha]]))
+

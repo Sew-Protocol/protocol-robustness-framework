@@ -699,9 +699,9 @@
                   ;; Invariants hold at max level and after final resolution
                   (:all-hold? (inv/check-all w-max))
                   (:all-hold? (inv/check-all w-final))
-                  (:all-hold? (inv/check-transition w-max w-final)))))))))))))))
+                  (:all-hold? (inv/check-transition w-max w-final))))))))))))))
 
 (deftest property-adversarial-repeated-escalation
   (let [result (tc/quick-check num-trials prop-adversarial-repeated-escalation)]
     (is (:pass? result)
-        (str "Adversarial repeated escalation violated: " (pr-str (:shrunk result))))))
+        (str "Adversarial repeated escalation violated: " (pr-str (:shrunk result)))))))

@@ -13,7 +13,7 @@
 
 (deftest v2-taxonomy-includes-boundary-domains
   (testing "every bounded domain appears in class registry"
-    (let [domains (set cc/all-v2-domains)]
+    (let [domains (set cc/canonical-v2-domains)]
       (is (contains? domains "settlement/principal"))
       (is (contains? domains "settlement/yield"))
       (is (contains? domains "liability/slash-bounty"))
