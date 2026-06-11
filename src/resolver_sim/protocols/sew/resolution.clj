@@ -754,11 +754,22 @@
           (t/fail :slash-resolver-mismatch)
 
           :else
-          (let [snap              (t/get-snapshot world wf-id)
-                appeal-days       (get-in world [:params :appeal-window-days] 7)
-                gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
-                reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
-            (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))
+          (let [current-stake (reg/get-stake world dispute-resolver)
+                max-bps       (get-in world [:params :max-slash-per-offense-bps] 5000)]
+            (cond
+              (<= current-stake 0)
+              (t/fail :insufficient-resolver-stake)
+
+              ;; Per-offense cap: governance slash may not exceed 50% of current stake
+              (> (* amount 10000) (* current-stake max-bps))
+              (t/fail :slash-exceeds-max-per-offense)
+
+              :else
+              (let [snap              (t/get-snapshot world wf-id)
+                    appeal-days       (get-in world [:params :appeal-window-days] 7)
+                    gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
+                    reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
+                (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))))
 
 (defn resolve-appeal
   "Governance (TIMELOCK) resolves a slashing appeal.
@@ -841,20 +852,32 @@
        (< (time-ctx/block-ts world) (:appeal-deadline pending))
        (t/fail :timelock-not-expired)
 
-       :else
-       (let [resolver        (:resolver pending)
-             amount          (:amount pending)
-             freeze-duration 259200                ; 72 hours in seconds
-             wf-for-token    (or (:workflow-id pending) workflow-id)
-             world-slashed   (-> world
-                                 (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
-                                 (reg/slash-resolver-stake resolver amount nil 0 wf-for-token)
-                                 :world)
-             world'          (-> world-slashed
-                                 (assoc-in [:resolver-frozen-until resolver]
-                                            (+ (time-ctx/block-ts world) freeze-duration))
-                                 (update-unavailability resolver true))]
-         (t/ok world'))))))
+        :else
+        (let [resolver        (:resolver pending)
+              amount          (:amount pending)
+              current-stake   (reg/get-stake world resolver)
+              epoch-cap-bps   (get-in world [:params :slash-epoch-cap-bps] 2000)
+              epoch-slashed   (get-in world [:resolver-epoch-slashed resolver :amount] 0)
+              total-epoch     (+ epoch-slashed amount)]
+          (cond
+            ;; Epoch cap: total slashing in the epoch may not exceed the percentage cap
+            (and (pos? current-stake)
+                 (> (* total-epoch 10000) (* current-stake epoch-cap-bps)))
+            (t/fail :slash-epoch-cap-exceeded)
+
+            :else
+            (let [freeze-duration 259200   ; 72 hours in seconds
+                  wf-for-token    (or (:workflow-id pending) workflow-id)
+                  world-slashed   (-> world
+                                      (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
+                                      (reg/slash-resolver-stake resolver amount nil 0 wf-for-token)
+                                      :world)
+                  world'          (-> world-slashed
+                                      (assoc-in [:resolver-frozen-until resolver]
+                                                (+ (time-ctx/block-ts world) freeze-duration))
+                                      (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
+                                      (update-unavailability resolver true))]
+              (t/ok world'))))))))
 
 (defn unfreeze-resolver
   "Governance unfreezes resolver and idempotently clears unavailability mark."

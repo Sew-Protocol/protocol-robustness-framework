@@ -353,7 +353,8 @@
 
           ;; Reduce L0's stake via fraud slash before escalation.
           ;; Advance time past the slash timelock, then reset for challenge window.
-          world-slashed (-> (res/propose-fraud-slash after-l0 workflow-id gov r0 5000) :world
+          after-l0-params (assoc-in after-l0 [:params :slash-epoch-cap-bps] 5000)
+          world-slashed (-> (res/propose-fraud-slash after-l0-params workflow-id gov r0 5000) :world
                             (assoc :block-time 3000001)
                             (res/execute-fraud-slash workflow-id)
                             :world
