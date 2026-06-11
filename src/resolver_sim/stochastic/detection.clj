@@ -25,28 +25,6 @@
 ;; Back-compat alias for internal references
 (def ^:private detection-roll-kinds oracle-detection-roll-kinds)
 
-(def oracle-roll-consumption-order
-  "Order of oracle-roll-event calls in resolve-dispute for one trial (when paths fire).
-
-   Appeal scope (:appeal in :scope):
-   1. :l1-reversal       — appeal-reversal-outcome (wrong verdict, appealed)
-   2. :l2-escalation     — appeal-reversal-outcome (L1 did not reverse, Kleros on)
-   3. :l2-reversal       — appeal-reversal-outcome (after L2 escalation)
-
-   Detection scope (:detection in :scope):
-   4. :reversal-detection — reversal-slashed-live? (MC oracle; not replay.clj)
-   5. :pending-evidence   — reversal-pending-live?
-   6. :fraud-detection    — detect-probabilistic-violations
-   7. :timeout-detection  — detect-probabilistic-violations
-   8. :l1-detection       — detect-probabilistic-violations
-   9. :l2-detection       — l2-slashed?
-
-   Verdict correctness and whether an appeal is filed still use trial :rng.
-   Prefer per-kind :rolls maps over a shared vector."
-   [:l1-reversal :l2-escalation :l2-reversal
-    :reversal-detection :pending-evidence
-    :fraud-detection :timeout-detection :l1-detection :l2-detection])
-
 (def default-slash-bps
   "Canonical defaults for slash-bps parameter fallbacks.
    Matches default-params in types.clj."
@@ -73,8 +51,7 @@
       {:mode :fixed-roll-sequence :rolls fixed-or}
 
       (map? fixed-or)
-      (let [m (if (:mode fixed-or)
-                (update fixed-or :mode normalize-oracle-mode)
+      (let [m (if (:mode fixed-or) fixed-or
                 (assoc fixed-or :mode :fixed-roll-sequence))]
         (update m :mode normalize-oracle-mode))
 
@@ -126,10 +103,7 @@
       (conj :oracle-roll-sequence)
 
       (and (:oracle-mode params)
-           (:oracle-fixture params)
-           (:mode (:oracle-fixture params))
-           (not= (normalize-oracle-mode (:mode (:oracle-fixture params)))
-                 (normalize-oracle-mode (:oracle-mode params))))
+           (not= (normalize-oracle-mode (:oracle-mode params)) mode))
       (conj :oracle-mode))))
 
 (defn validate-oracle-params!
@@ -168,6 +142,9 @@
         (when (not (<= 0.0 (double val) 1.0))
           (throw (ex-info "oracle-fixture roll value out of [0,1] range"
                           {:roll-value val})))))
+    (when (and (= mode :fixed-roll-sequence) (not (or (vector? rolls) (map? rolls))))
+      (throw (ex-info "oracle-fixture :rolls must be a vector or map for :fixed-roll-sequence"
+                      {:rolls rolls :rolls-type (type rolls)})))
     (when-let [orphans (seq (orphan-legacy-oracle-keys params effective))]
       (throw (ex-info "Orphan oracle legacy keys ignored by effective fixture"
                       {:orphan-keys orphans
@@ -215,12 +192,62 @@
            (nil? (:oracle-roll-trace params)))
       (assoc :oracle-roll-trace (atom [])))))
 
+(def detection-kind->prob-key
+  "Map from oracle-detection roll kind to the probability param key
+   that gates its consumption.  A fixture entry for a roll kind whose
+   corresponding probability is 0 will never be consumed — the detection
+   function returns false before reaching oracle-roll-event."
+  {:fraud-detection    :fraud-detection-probability
+   :timeout-detection  :timeout-detection-probability
+   :reversal-detection :reversal-detection-probability
+   :pending-evidence   :new-evidence-probability
+   :l2-detection       :l2-detection-prob})
+
+(def detection-kind->default-prob
+  "Default probability when the param key is absent.
+   Matches the hard-coded defaults in each detection function."
+  {:fraud-detection    0.0
+   :timeout-detection  0.0
+   :reversal-detection 1.0    ; from reversal-slashed-live? (line 501)
+   :pending-evidence   0.0
+   :l2-detection       0.0})
+
+(defn- dead-roll-kind-warnings
+  "Check per-kind fixture roll entries against probability thresholds.
+   Returns a seq of warning maps for roll kinds whose probability is 0."
+  [effective params]
+  (let [rolls (:rolls effective)]
+    (when (map? rolls)
+      (reduce-kv
+       (fn [warnings roll-kind roll-seq]
+         (if-let [prob-key (detection-kind->prob-key roll-kind)]
+           (let [default  (get detection-kind->default-prob roll-kind 0.0)
+                 prob     (get params prob-key default)]
+             (if (zero? prob)
+               (conj warnings
+                     {:level :warning
+                      :code :oracle-fixture-zero-prob-threshold
+                      :roll-kind roll-kind
+                      :prob-key prob-key
+                      :message
+                      (str "Fixture specifies :" (name roll-kind) " rolls but "
+                           ":" (name prob-key) " is " prob " — the roll sequence will "
+                           "never be consumed. Set :" (name prob-key) " > 0 "
+                           "or remove :" (name roll-kind) " from :rolls.")})
+               warnings))
+           warnings))
+       []
+       rolls))))
+
 (defn collect-oracle-fixture-warnings
   "Warnings for MC oracle fixture configuration. Not used by replay.clj.
 
    opts:
      :evidence-quality? — when true (benchmark/regression artifacts), exhausted
-     :repeat-last is :error; configured-but-not-exhausted :repeat-last is :info."
+     :repeat-last is :error; configured-but-not-exhausted :repeat-last is :info.
+
+   Also warns when per-kind fixture roll entries have zero probability thresholds
+   (the roll sequence will never be consumed)."
   [params & [{:keys [evidence-quality?]}]]
   (let [effective (or (:oracle-effective params)
                       (normalize-oracle-fixture params))
@@ -245,7 +272,10 @@
       (conj {:level :info
              :code :oracle-fixture-cycle-exhausted
              :message
-             "Oracle roll sequence exhausted; subsequent values cycle (MC-only; not replay)."}))))
+             "Oracle roll sequence exhausted; subsequent values cycle (MC-only; not replay)."})
+
+      (seq (dead-roll-kind-warnings effective params))
+      (into (dead-roll-kind-warnings effective params)))))
 
 (defn roll-detect?
   "True when uniform roll value is below threshold (Bernoulli with rate ≈ threshold)."

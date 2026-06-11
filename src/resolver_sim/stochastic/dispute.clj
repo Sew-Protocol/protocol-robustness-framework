@@ -63,7 +63,7 @@
                lazy-correct-prob malicious-correct-prob collusive-correct-prob
               model-appeal-costs? appeal-bond-recovery-rate
               oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-              fixed-or oracle-roll-trace-enabled? evidence-quality?]
+               fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0

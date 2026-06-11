@@ -180,4 +180,90 @@
   (testing "validate-scenario invokes oracle validation"
     (is (types/validate-scenario
          (merge types/default-params
-                {:oracle-fixture {:mode :static-no-slash}}))))))
+                {:oracle-fixture {:mode :static-no-slash}})))))
+
+;; ── Per-kind detection activation tests ─────────────────────────────────
+
+(deftest fixed-or-fraud-detection-active
+  (testing ":fixed-or :fraud-detection rolls are consumed when fraud-detection-probability > 0"
+    (let [result (dispute/resolve-dispute
+                  (rng/make-rng 42) 10000 150 700 2.5 :malicious 0.05 0.40 0.1
+                  :fraud-detection-probability 0.5
+                  :fixed-or {:rolls {:fraud-detection [0.01]}
+                             :scope #{:detection}
+                             :on-exhaustion :throw
+                             :on-unknown-roll-kind :stochastic}
+                  :oracle-roll-trace-enabled? true)]
+      (is (some #(= :fraud-detection (:roll/kind %))
+                (:oracle-roll-trace result))
+          ":fraud-detection roll consumed when threshold > 0"))))
+
+(deftest fixed-or-timeout-detection-active
+  (testing ":fixed-or :timeout-detection rolls are consumed when timeout-detection-probability > 0"
+    (let [result (dispute/resolve-dispute
+                  (rng/make-rng 43) 10000 150 700 2.5 :malicious 0.05 0.40 0.1
+                  :timeout-detection-probability 0.5
+                  :fixed-or {:rolls {:timeout-detection [0.01]}
+                             :scope #{:detection}
+                             :on-exhaustion :throw
+                             :on-unknown-roll-kind :stochastic}
+                  :oracle-roll-trace-enabled? true)]
+      (is (some #(= :timeout-detection (:roll/kind %))
+                (:oracle-roll-trace result))
+          ":timeout-detection roll consumed when threshold > 0"))))
+
+(deftest fixed-or-l2-detection-active
+  (testing ":fixed-or :l2-detection rolls are consumed when l2-detection-prob > 0"
+    (let [result (dispute/resolve-dispute
+                  (rng/make-rng 44) 10000 150 700 2.5 :malicious 0.05 0.40 0.1
+                  :l2-detection-prob 0.5
+                  :p-l1-reversal 1.0
+                  :fixed-or {:rolls {:l2-detection [0.01]}
+                             :scope #{:detection}
+                             :on-exhaustion :throw
+                             :on-unknown-roll-kind :stochastic}
+                  :oracle-roll-trace-enabled? true)]
+      (is (some #(= :l2-detection (:roll/kind %))
+                (:oracle-roll-trace result))
+          ":l2-detection roll consumed when appeal fires and threshold > 0"))))
+
+;; ── All-9 roll kinds integration test ───────────────────────────────────
+
+(deftest fixed-or-all-roll-kinds-consumed
+  (testing "all 9 oracle roll kinds consumed in one trial with :fixed-or"
+    (let [result (dispute/resolve-dispute
+                  (rng/make-rng 45) 10000 150 700 2.5 :malicious 1.0 1.0 0.1
+                  :fraud-detection-probability 0.5
+                  :timeout-detection-probability 0.5
+                  :reversal-detection-probability 0.5
+                  :new-evidence-probability 0.5
+                  :l2-detection-prob 0.5
+                  :reversal-slash-bps 2500
+                  :p-l1-reversal 1.0
+                  :p-l2-escalation 1.0
+                  :p-l2-reversal 1.0
+                  :has-kleros? true
+                  :fixed-or {:rolls {:fraud-detection [0.01]
+                                     :timeout-detection [0.01]
+                                     :pending-evidence [0.01]
+                                     :l2-detection [0.01]
+                                     :reversal-detection [0.01]
+                                     :l1-detection [0.01]
+                                     :l1-reversal [0.01]
+                                     :l2-escalation [0.01]
+                                     :l2-reversal [0.01]}
+                             :scope #{:detection :appeal}
+                             :on-exhaustion :throw}
+                  :oracle-roll-trace-enabled? true)
+          trace (:oracle-roll-trace result)
+          kinds (set (map :roll/kind trace))]
+      (is (seq trace) "roll trace should be non-empty")
+      (is (contains? kinds :fraud-detection) ":fraud-detection consumed")
+      (is (contains? kinds :timeout-detection) ":timeout-detection consumed")
+      (is (contains? kinds :l1-detection) ":l1-detection consumed")
+      (is (contains? kinds :reversal-detection) ":reversal-detection consumed")
+      (is (contains? kinds :pending-evidence) ":pending-evidence consumed")
+      (is (contains? kinds :l2-detection) ":l2-detection consumed")
+      (is (contains? kinds :l1-reversal) ":l1-reversal consumed")
+      (is (contains? kinds :l2-escalation) ":l2-escalation consumed")
+      (is (contains? kinds :l2-reversal) ":l2-reversal consumed")))))

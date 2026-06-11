@@ -228,8 +228,8 @@
                     :optimal-strategy-under-load optimal
                     :strategy-payoffs (:strategy-payoffs load-snap)
                     :allowed-targets (:allowed-targets cfg)
-                    :observed-strategies observed-strategies
-                                         :strategy-space (:strategy-space cfg)}}
+                     :observed-strategies observed-strategies
+                     :strategy-space (:strategy-space cfg)}}
 
       (switch-with-rate? rng (min rate (:max-switch-probability cfg)))
       {:to optimal

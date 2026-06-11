@@ -191,6 +191,30 @@
               (get-in high-det [:strategy-payoffs :malicious :expected-profit]))
           "malicious profit should not increase as detection probability increases"))))
 
+(deftest load-level-by-effort
+  (testing "load-level responds to effort per dispute across all levels"
+    (is (= :light   (ec/load-level 10 100)) "10 disputes, budget 100 → 10 effort/unit → light")
+    (is (= :medium  (ec/load-level 40 100)) "40 disputes, budget 100 → 2.5 effort/unit → medium")
+    (is (= :heavy   (ec/load-level 100 100)) "100 disputes, budget 100 → 1 effort/unit → heavy")
+    (is (= :extreme (ec/load-level 500 100)) "500 disputes, budget 100 → 0.2 effort/unit → extreme")
+    (is (= :light   (ec/load-level 10 200)) "10 disputes, budget 200 → 20 effort/unit → light")))
+
+(deftest expected-detection-prob-is-weighted
+  (testing "expected detection is base * ~0.86 for default distribution"
+    (let [dist (ec/default-difficulty-distribution)
+          p1   (ec/expected-detection-prob 0.10 dist)
+          p2   (ec/expected-detection-prob 0.50 dist)]
+      (is (< 0.0 p1 0.10) "weighted detection below base for 10%")
+      (is (< 0.0 p2 0.50) "weighted detection below base for 50%")
+      (is (< (Math/abs (- p1 (* 0.10 0.86))) 0.01) "10% base → ~8.6% expected")
+      (is (< (Math/abs (- p2 (* 0.50 0.86))) 0.01) "50% base → ~43% expected"))))
+
+(deftest high-detection-clamps-malice-profit
+  (testing "malicious profit never goes negative even at extreme detection"
+    (let [extreme-det (ec/optimal-strategy-under-load (rng/make-rng 1) 50 100 0.80 5.0 150.0)
+          malice-prof (get-in extreme-det [:strategy-payoffs :malicious :expected-profit])]
+      (is (>= malice-prof 0) "malicious profit must be >= 0 even at 80% detection × 5x slash"))))
+
 (deftest strategy-output-is-valid
   (testing "optimal strategy is always one of the known strategies"
     (doseq [[disputes budget] [[10 100] [50 100] [200 100] [500 100] [10 200] [100 50]]]

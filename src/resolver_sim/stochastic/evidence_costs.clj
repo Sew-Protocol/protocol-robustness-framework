@@ -310,7 +310,7 @@
         l-profit            (canon-round (* fee-profit l-accuracy))
         m-detection-prob    (expected-detection-prob detection-prob diff-dist)
         m-detection-risk    (* m-detection-prob slashing-multiplier)
-        m-profit            (canon-round (* fee-profit m-accuracy (- 1.0 m-detection-risk)))
+        m-profit            (canon-round (* fee-profit m-accuracy (max 0.0 (- 1.0 m-detection-risk))))
 
         optimal (cond
                   (> h-profit l-profit) :honest

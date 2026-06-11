@@ -209,7 +209,7 @@
                   :fraud-slashed-count    (:fraud-slashed-count aggregate-malice 0)
                   :reversal-slashed-count (:reversal-slashed-count aggregate-malice 0)
                   :timeout-slashed-count  (:timeout-slashed-count aggregate-malice 0)
-                  :detection-rate         (:slashing-detection-probability decayed-params)
+                   :detection-rate         (:slash-rate aggregate-malice)
                  :l1-reversal-rate       (:p-l1-reversal decayed-params)
                  :l2-reversal-rate       (:p-l2-reversal decayed-params)
                   :routing-mode           (router/routing-mode trial-router)}
