@@ -148,3 +148,110 @@
 - **Reporting Logic:** Fixed bug in adversarial report generation that falsely flagged non-dominant attackers.
 - **Documentation:** Updated `docs/simulation-checklist.md` with 3-dimensional evidence classification (Execution Backing, Model Depth, Claim Confidence).
 - **Dashboard UI:** Hero section now supports direct jump via URL anchor (`#dashboard`) and shows 12 curated scenarios.
+
+
+## 11 June 2026
+
+# Bug fixes
+
+1. financial/loss.clj — coverage-ratio denominator included fulfilled-total (already-paid). Split into outstanding = deferred + haircut for coverage check, keeping total-oblig = fulfilled + deferred + haircut for user-loss-ratio.
+2. financial/loss.clj:173 — :claimable read as flat {token amount} but actual world structure is {wf {addr amt}}. Fixed with nested reduce summing across workflows.
+3. financial/loss.clj:181 — Integer division returned Clojure Ratio instead of Double (1/5 ≠ 0.2). Wrapped with double.
+4. test/resolver_sim/financial/loss_test.clj — 3 tests used wrong :claimable schema {:USDC 200} → {0 {"dummy" 200}}.
+Tests added
+5. test/resolver_sim/scenario/projection_test.clj — Added test-trace-end-projection-includes-financial-loss verifying :financial-loss in projection output.
+6. test/resolver_sim/yield/liquid_lending_v2_test.clj — Rewrote 155 lines (was broken — referenced nonexistent liquid-lending-v2 module). Now uses current liquid-lending API with 7 passing tests.
+Migration clean-up
+7. test/resolver_sim/stochastic/oracle_fixture_test.clj — Added fixed-or-fraud-detection-active, fixed-or-timeout-detection-active, fixed-or-l2-detection-active, fixed-or-all-roll-kinds-consumed tests covering all 9 oracle roll kinds with non-zero probability thresholds.
+8. src/resolver_sim/stochastic/detection.clj — Added detection-kind->prob-key, detection-kind->default-prob, dead-roll-kind-warnings to warn when :fixed-or specifies roll kinds with zero probability thresholds. Removed dead oracle-roll-consumption-order vector.
+
+# Added
+
+1. Artifact Registry v1.1 & Hardening
+   * Upgraded Schema: Formally defined test-artifacts.v1.1 with mandatory importance (CORE/DIAGNOSTIC) and dependencies (SHA256
+     binding).
+   * Emitter Unification: Centralized all registry emission in write_scenario_run_manifest.py, removing 130+ lines of brittle inline
+     Python from test.sh.
+   * Transitive Dependency Closure: Emitter now automatically includes lower-importance artifacts if they are required to verify a
+     CORE claim.
+   * Overwrite Protection: Implemented a "chain-final" gate in the emitter that refuses to modify any directory containing a signed
+     envelope.
+
+  2. Authenticity & Researcher Attribution
+   * Evidence Envelopes: Implemented envelope.json to cryptographically bind the registry hash, run ID, and timestamp to a signature.
+   * Researcher Registry: Created keys/owners.json and keys/add_key.clj to map researcher identities to verified public key
+     fingerprints.
+   * Strict Verification: Created verify_claim.py and verify_evidence_bundle.py to validate the end-to-end chain: Signature → Envelope
+     → Registry → Artifacts.
+
+  3. Yield-v1 & Strategy Hardening
+   * Vault-Centric Replay: Enabled multi-owner yield scenarios (Y01–Y04) using a "Thin Runner" that bypasses legacy Sew workflow-id
+     requirements.
+   * Precision Guard: Implemented canon-round in evidence_costs.clj to prevent non-deterministic settlement drift in stochastic profit
+     models.
+   * Strategy Correction: Fixed a bug where load-mult was incorrectly penalizing honest strategy profit instead of incentivizing lazy
+     defection.
+
+  4. Diagnostic Infrastructure
+   * Attribution Quality: Upgraded with-attribution to report :complete or :partial metadata status in event-evidence artifacts.
+   * Commit Provenance: Emitter now captures both the Git Hash and the Git Message at runtime for immediate human auditability.
+   * Registry-First Notebooks: Refactored security_validation.clj and protocol_provenance.clj to load data via registry IDs rather
+     than hardcoded file paths.
+
+
+Governance baseline (6 files)
+- governance/rules.clj — added 3 missing params (panel-size, majority-ratio, appeal-threshold) to default-rules + validation bounds + reify conversion (deftype→fn)
+- io/params.clj — wired default-rules into merge pipeline (types ← governance ← EDN)
+- sim/fixtures.clj — wired default-rules into fixture scenario->mc-params
+- sim/batch.clj — run-batch auto-merges governance defaults + n-trials default
+- sim/batch_integration.clj — majority-ratio param instead of hardcoded (/ (* n 2) 3.0)
+- stochastic/types.clj — removed 6 duplicate governance keys from default-params, added 3 new keys, added 8 new threshold params
+Conflict domains & batch (7 files)
+- protocols/protocol.clj — added agent-index to BatchConflictModel/event-conflict-domains
+- protocols/sew.clj — fixed 8 missing conflict domains, added agent-addr fallback for Group 2, added set-resolver-capacity defmethod, added circuit breaker checks to create-escrow/raise-dispute
+- contract_model/replay.clj — moved alias resolution into batch reduce loop, agent-index threading, preflight doc, simple-replay schema-version auto-default
+- test/ (4 test files) — 28 new tests across Sew batch, mock protocol, slash domain, appeal/bond, multi-agent
+Hardcoded values (8 files)
+- protocols/sew/resolution.clj — freeze duration reads params, gov-delay reads 7-day param, circuit breaker cooldown auto-deactivates
+- protocols/sew/lifecycle.clj — yield deposit respects yield-preset :off
+- protocols/sew/snapshot.clj — escrow-fee-bps fallback 50→100
+- protocols/sew/types.clj — final-round? reads :max-dispute-level from params, circuit breaker cooldown/threshold + new threshold params
+- protocols/sew/invariants.clj — bond-mix 80% and epoch-cap 20% now read from world params
+- protocols/sew/accounting.clj — slashing distribution reads :insurance-cut-bps/:protocol-retained-bps from world
+- economics/payoffs.clj — calculate-slashing-distribution accepts optional BPS overrides
+- adversaries/ring_attacker.clj — slash-multiplier default 2.0→2.5
+Bug fixes (6 files)
+- protocols/sew/snapshot.clj — added types require (broke circular dependency from types.clj:30)
+- definitions/registry.clj — removed 4 stale reversal-slash claim references (s101, S103, S106, S107)
+- scripts/test.sh — added run_suites stub, registered batch test files
+- data/fixtures/golden/ — regenerated S62 golden report
+- data/params/phase-j-baseline-stable.edn — updated to governance values
+- notebooks/not_governance.clj — new workbook (177 lines, 4 sections)
+
+
+1. Yield V2 Migration
+   - Standardized V2 Engine: Refactored liquid_lending_v2.clj into the primary liquid_lending.clj module.
+   - Decision-Based Accrual: Replaced legacy double-based arithmetic with exact-ratio logic and short-circuit
+     evaluation.
+   - Registry Harmonization: Standardized all provider profiles (:aave-v3, :yield.provider/liquid-lending) to use the
+     V2 engine.
+   - Telemetry Parity: Integrated emit-shortfall-event into the V2 withdrawal path for audit trace consistency.
+
+  2. Temporal Context Architecture
+   - Temporal Context Root: Introduced resolver-sim.time.context as the canonical source for simulation time via the
+     :context/time root.
+   - Snapshot Projection Boundary: Updated world-snapshot to project state through the temporal interface while
+     maintaining legacy :block-time fields.
+   - Atomic Advancement: Implemented advance-time to synchronize clock and step increments across legacy and canonical
+     paths.
+   - Consistency Invariant: Added :temporal-consistency to detect drift between root :block-time and the context root.
+
+  3. Stability & Demo Artifacts
+   - Arity Fixes: Resolved widespread ArityException errors in max calls on empty collections within notebooks.
+   - Yield Demo Notebook: Created notebooks/yield_demo.clj, a browser-first evaluation artifact for non-expert
+     readers.
+   - Cyclic Dependency Resolution: Broke the circular load dependency between sew.types and sew.snapshot.
+   - Validation Parity: Developed and passed the parity_test.clj suite confirming functional equivalence between V1
+     and V2 logic.
+
+
