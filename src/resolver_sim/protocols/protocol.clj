@@ -149,5 +149,8 @@
    Unknown or unsupported actions should map conservatively (for example,
    #{[:global :unknown]}), never to an empty set."
 
-  (event-conflict-domains [model world event]
-    "Return serialization/conflict domains touched by event in world.")) 
+  (event-conflict-domains [model world event agent-index]
+    "Return serialization/conflict domains touched by event in world.
+     agent-index maps agent ID strings to agent maps — needed for actions
+     (e.g. register-stake) where the resolver address is the performing
+     actor, not a param key.")) 

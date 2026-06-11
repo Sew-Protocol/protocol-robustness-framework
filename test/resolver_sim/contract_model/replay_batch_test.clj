@@ -27,7 +27,7 @@
   (project-state [_ _ _] nil)
 
   proto/BatchConflictModel
-  (event-conflict-domains [_ _ event]
+  (event-conflict-domains [_ _ event _]
     (set (get-in event [:params :domains] #{[:global :unknown]}))))
 
 (def ^:private protocol (->BatchTestProtocol))

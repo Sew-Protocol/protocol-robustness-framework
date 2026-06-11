@@ -18,11 +18,13 @@
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.economics.payoffs            :as payoffs]
-            [resolver-sim.yield.ops                   :as yield-ops]
-            [resolver-sim.yield.registry              :as yield-reg]
-            [resolver-sim.yield.accounting            :as yield-acct]
+            [resolver-sim.yield.ops                    :as yield-ops]
+            [resolver-sim.yield.accounting             :as yield-acct]
+            [resolver-sim.yield.expectations           :as yield-exp]
+            [resolver-sim.yield.registry               :as yield-reg]
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
-            [resolver-sim.util.attribution             :as attr]))
+            [resolver-sim.util.attribution             :as attr]
+            [resolver-sim.time.context                 :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Guard logging helper — returns (t/fail kw) with :guard-context attached
@@ -57,7 +59,7 @@
     true
     (let [capacity-ok? (not (t/resolver-at-capacity? world resolver))
           freeze-expiry (get-in world [:resolver-frozen-until resolver] 0)
-          unfrozen?     (<= freeze-expiry (:block-time world))]
+          unfrozen?     (<= freeze-expiry (time-ctx/block-ts world))]
       (and capacity-ok? unfrozen?))))
 
 (defn- sub-held [world token amount]
@@ -89,7 +91,7 @@
           mid  (:yield-generation-module snap)]
       (if (and mid (contains? (:yield/modules world) mid))
         (let [et    (t/get-transfer world workflow-id)
-              now   (:block-time world)
+              now   (time-ctx/block-ts world)
               last  (:last-accrual-time et now)
               dt    (- now last)]
           (if (pos? dt)
@@ -115,7 +117,7 @@
 (defn init-resolver-yield-accrual-time
   "Anchor resolver yield accrual clock at the current block time."
   [world resolver-addr]
-  (assoc-in world [:resolver-yield-accrual-times resolver-addr] (:block-time world)))
+  (assoc-in world [:resolver-yield-accrual-times resolver-addr] (time-ctx/block-ts world)))
 
 (defn accrue-resolver-yield
   "Advance yield for a resolver staking position by elapsed time since last accrual."
@@ -126,7 +128,7 @@
       (if profile-id
         (let [{:keys [module-id]} (yield-reg/resolve-yield-profile profile-id)
               owner-id (resolver-yield-owner-id resolver-addr)
-              now      (:block-time world)
+              now      (time-ctx/block-ts world)
               last     (get-in world [:resolver-yield-accrual-times resolver-addr] now)
               dt       (- now last)
               tok      (if (keyword? token) token (keyword token))]
@@ -292,11 +294,11 @@
                                (zero? (:auto-cancel-time settings 0)))
             auto-rel      (cond
                             (pos? (:auto-release-time settings 0)) (:auto-release-time settings)
-                            (and use-defaults? (pos? snap-rel))    (+ (:block-time world) snap-rel)
+                            (and use-defaults? (pos? snap-rel))    (+ (time-ctx/block-ts world) snap-rel)
                             :else                                   0)
             auto-can      (cond
                             (pos? (:auto-cancel-time settings 0)) (:auto-cancel-time settings)
-                            (and use-defaults? (pos? snap-can))   (+ (:block-time world) snap-can)
+                            (and use-defaults? (pos? snap-can))   (+ (time-ctx/block-ts world) snap-can)
                             :else                                  0)
             ;; Resolver: custom-resolver takes precedence over snapshot
             resolver      (or (:custom-resolver settings)
@@ -308,7 +310,7 @@
             (and resolver (t/resolver-at-capacity? world resolver))
             (t/fail :resolver-at-capacity)
 
-            (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (:block-time world)))
+            (and resolver (> (get-in world [:resolver-frozen-until resolver] 0) (time-ctx/block-ts world)))
             (t/fail :resolver-frozen)
 
             (and resolver (pos? bond-bps) (pos? stake)
@@ -325,7 +327,7 @@
                                 :dispute-resolver  resolver
                                 :auto-release-time auto-rel
                                 :auto-cancel-time  auto-can
-                                :last-accrual-time (:block-time world)
+                                :last-accrual-time (time-ctx/block-ts world)
                                 :escrow-state      :pending})
                 world'        (-> world
                                   (assoc :next-workflow-id (inc workflow-id))
@@ -339,7 +341,9 @@
                                   (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
                 ymid          (:yield-generation-module snapshot)
-                world''       (if (and ymid (contains? (:yield/modules world') ymid))
+                world''       (if (and ymid
+                                       (t/yield-preset-yield-enabled? (:yield-preset settings))
+                                       (contains? (:yield/modules world') ymid))
                                   (yield-ops/apply-yield-op world' {:op/type :yield/deposit
                                                                     :module/id ymid
                                                                     :owner/id (t/escrow-yield-owner-id workflow-id)

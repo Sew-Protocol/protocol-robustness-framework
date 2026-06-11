@@ -104,6 +104,8 @@ run_unit() {
 (require '[resolver-sim.io.scenario-fixture-parity-test])
 (require '[resolver-sim.contract-model.replay-batch-test])
 (require '[resolver-sim.contract-model.replay-batch-sew-test])
+(require '[resolver-sim.contract-model.replay-batch-appeal-test])
+(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
@@ -119,7 +121,9 @@ run_unit() {
                 'resolver-sim.sim.waterfall-test
                 'resolver-sim.io.scenario-fixture-parity-test
                 'resolver-sim.contract-model.replay-batch-test
-                'resolver-sim.contract-model.replay-batch-sew-test)]
+                'resolver-sim.contract-model.replay-batch-sew-test
+                'resolver-sim.contract-model.replay-batch-appeal-test
+                'resolver-sim.contract-model.replay-batch-slash-domain-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?

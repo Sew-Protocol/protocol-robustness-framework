@@ -11,7 +11,9 @@
 
    All arithmetic uses integer division (uint256 truncation semantics)."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.economics.payoffs :as payoffs]))
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.io.event-evidence :as evidence]))
 
 (declare sub-held record-fee record-claimable)
 
@@ -219,13 +221,27 @@
   ([world amount challenger bounty-bps workflow-id]
    (let [bounty (payoffs/calculate-bounty amount bounty-bps)
          split-opts (select-keys (:params world) [:insurance-cut-bps :protocol-retained-bps])
-         dist   (payoffs/calculate-slashing-distribution amount bounty split-opts)]
-     (-> world
-         (update-in [:bond-distribution :insurance] (fnil + 0) (:insurance dist))
-         (update-in [:bond-distribution :protocol]  (fnil + 0) (:protocol dist))
-         (update-in [:retained-slash-reserves]      (fnil + 0) (:retained dist))
-         (cond-> (and challenger (pos? bounty) (some? workflow-id))
-           (record-claimable-v2 workflow-id :liability/challenge-bounty challenger bounty))))))
+         dist   (payoffs/calculate-slashing-distribution amount bounty split-opts)
+         world' (-> world
+                    (update-in [:bond-distribution :insurance] (fnil + 0) (:insurance dist))
+                    (update-in [:bond-distribution :protocol]  (fnil + 0) (:protocol dist))
+                    (update-in [:retained-slash-reserves]      (fnil + 0) (:retained dist))
+                    (cond-> (and challenger (pos? bounty) (some? workflow-id))
+                      (record-claimable-v2 workflow-id :liability/challenge-bounty challenger bounty)))]
+     
+     (when (and challenger (pos? bounty))
+       (attr/with-attribution
+         {:subject/type :challenger
+          :subject/id   challenger
+          :action/type  :reward-bounty
+          :evidence/reason :incentive-payout}
+         (evidence/capture-event-evidence! :incentive-payout
+                                          {:bounty-claimable 0}
+                                          {:bounty-claimable bounty}
+                                          {:slash-amount amount :bounty-bps bounty-bps}
+                                          {:formula "payoffs/calculate-bounty"})))
+     
+     world')))
 
 (defn slash-bond
   "Slash the posted bond for a losing appellant.
@@ -262,4 +278,3 @@
                        (assoc-in [:bond-balances workflow-id appellant] 0)
                        (record-claimable workflow-id appellant amount))]
         (assoc (t/ok world') :returned amount)))))
-

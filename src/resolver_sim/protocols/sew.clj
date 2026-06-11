@@ -33,7 +33,8 @@
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]
             [resolver-sim.yield.expectations             :as yield-exp]
-            [resolver-sim.yield.evidence                 :as yield-evi]))
+            [resolver-sim.yield.evidence                 :as yield-evi]
+            [resolver-sim.time.context                   :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -150,11 +151,15 @@
               from escrow state, not event params — so they remain workflow-only.
      Group 2 — resolver-scoped (stake, bond, slash state)
      Group 3 — token-scoped (liquidity, yield risk)
-     Group 4 — global (paused, fees, governance params)"
-  [world event]
+     Group 4 — global (paused, fees, governance params)
+   
+   agent-index is used to derive the resolver address from the event's :agent
+   field for actions like register-stake where the actor IS the resolver."
+  [world event agent-index]
   (let [action (compat/canonical-action event)
         wf-id  (event-workflow-id event)
         token  (some-> (get-in event [:params :token]) keyword)
+        agent-addr (some-> agent-index (get (:agent event)) :address)
         resolver (or (get-in event [:params :resolver-addr])
                      (get-in event [:params :resolver])
                      (get-in event [:params :senior-addr])
@@ -175,9 +180,13 @@
                    "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"
                    "force-reversal-slash" "delegate-to-senior"}
                  action)
-      (cond-> #{}
-        resolver (conj [:resolver resolver])
-        wf-id (conj [:workflow wf-id]))
+      ;; Group 2: resolver-scoped actions.  Derive the resolver address from
+      ;; the performing actor when the event params don't specify it directly
+      ;; (e.g. register-stake, withdraw-stake use the acting agent's address).
+      (let [g2-resolver (or resolver agent-addr)]
+        (cond-> #{}
+          g2-resolver (conj [:resolver g2-resolver])
+          wf-id (conj [:workflow wf-id])))
 
       (contains? #{"set-token-liquidity-crunch" "set-yield-risk"} action)
       (if token #{[:token token]} #{[:global :unknown]})
@@ -199,9 +208,11 @@
 (defmethod apply-action "create-escrow"
   [{:keys [agent-index snapshot]} world event]
   (let [p (:params event)]
-    (actx/with-resolved-actor-and-unpaused
-      agent-index world event
-      (fn [caller]
+    (if-let [cb-failure (:error (res/circuit-breaker-active? world))]
+      (t/fail cb-failure)
+      (actx/with-resolved-actor-and-unpaused
+        agent-index world event
+        (fn [caller]
         (let [token  (keyword (:token p))
               to     (:to p)
               amount (:amount p)]
@@ -218,14 +229,16 @@
                   result   (lc/create-escrow world caller token to amount settings snapshot)]
               (if (:ok result)
                 (assoc result :extra {:workflow-id (:workflow-id result)})
-                result))))))))
+                result)))))))))
 
 (defmethod apply-action "raise-dispute"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor-and-unpaused
-    agent-index world event
-    (fn [addr]
-      (lc/raise-dispute world (compat/wf-id event) addr))))
+  (if-let [cb-failure (:error (res/circuit-breaker-active? world))]
+    (t/fail cb-failure)
+    (actx/with-resolved-actor-and-unpaused
+      agent-index world event
+      (fn [addr]
+        (lc/raise-dispute world (compat/wf-id event) addr)))))
 
 (defmethod apply-action "execute-resolution"
   [{:keys [agent-index resolution-module-fn resolution-level-map]} world event]
@@ -647,28 +660,31 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- world-snapshot [world]
-  {:block-time         (:block-time world)
-   :escrow-count       (count (:escrow-transfers world))
-   :total-held         (:total-held world)
-   :total-fees         (:total-fees world)
-   :pending-count      (count (filter #(:exists (val %)) (:pending-settlements world)))
-   :live-states        (into {} (map (fn [[id et]] [id (:escrow-state et)])
-                                     (:escrow-transfers world)))
-   :dispute-levels     (into {} (:dispute-levels world))
-   :dispute-resolvers  (into {} (map (fn [[id et]] [id (:dispute-resolver et)])
-                                     (:escrow-transfers world)))
-   :resolver-rotations (into {} (:resolver-rotations world))
-   :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
-                                     (:escrow-transfers world)))
-   :escrow-transfers    (:escrow-transfers world {})
-   :resolver-stakes     (:resolver-stakes world)
-   :resolver-slash-total (:resolver-slash-total world)
-   :bond-distribution   (:bond-distribution world)
-   :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
-   :claimable           (:claimable world {})
-   :claimable-v2        (:claimable-v2 world {})
-   :bond-balances       (:bond-balances world {})
-   :yield-evidence      (yield-evi/get-evidence world)})
+  (let [time-ctx (time-ctx/temporal-context world)]
+    (merge
+     {:block-time         (:block-ts time-ctx)
+      :time               time-ctx
+      :escrow-count       (count (:escrow-transfers world))
+      :total-held         (:total-held world)
+      :total-fees         (:total-fees world)
+      :pending-count      (count (filter #(:exists (val %)) (:pending-settlements world)))
+      :live-states        (into {} (map (fn [[id et]] [id (:escrow-state et)])
+                                        (:escrow-transfers world)))
+      :dispute-levels     (into {} (:dispute-levels world))
+      :dispute-resolvers  (into {} (map (fn [[id et]] [id (:dispute-resolver et)])
+                                        (:escrow-transfers world)))
+      :resolver-rotations (into {} (:resolver-rotations world))
+      :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
+                                        (:escrow-transfers world)))
+      :escrow-transfers    (:escrow-transfers world {})
+      :resolver-stakes     (:resolver-stakes world)
+      :resolver-slash-total (:resolver-slash-total world)
+      :bond-distribution   (:bond-distribution world)
+      :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
+      :claimable           (:claimable world {})
+      :claimable-v2        (:claimable-v2 world {})
+      :bond-balances       (:bond-balances world {})
+      :yield-evidence      (yield-evi/get-evidence world)})))
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending
@@ -783,7 +799,7 @@
              ;; Disputed actions
              (and (= :disputed (:escrow-state et))
                   (not (and (= actor (:dispute-resolver et))
-                            (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))))
+                            (> (get-in world [:resolver-frozen-until actor] 0) (time-ctx/block-ts world)))))
              (into (let [pending (t/get-pending world wf)
                          resolver (:dispute-resolver et)]
                      (cond-> []
@@ -793,7 +809,7 @@
                               {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
 
                        ;; Escalation/Challenge (if pending exists and not expired)
-                       (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
+                       (and (:exists pending) (< (time-ctx/block-ts world) (:appeal-deadline pending)))
                        (into (cond-> []
                                (or (= actor (:from et)) (= actor (:to et)))
                                (conj {:action "escalate-dispute" :params {:workflow-id wf}})
@@ -835,8 +851,8 @@
 
   proto/BatchConflictModel
 
-  (event-conflict-domains [_ world event]
-    (sew-event-conflict-domains world event))
+  (event-conflict-domains [_ world event agent-index]
+    (sew-event-conflict-domains world event agent-index))
 
   proto/EconomicModel
 

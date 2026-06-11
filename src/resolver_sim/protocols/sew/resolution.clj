@@ -17,7 +17,8 @@
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
             [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
-            [resolver-sim.util.attribution            :as attr]))
+            [resolver-sim.util.attribution            :as attr]
+            [resolver-sim.time.context               :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
@@ -93,7 +94,7 @@
                 prev-stake      (reg/get-stake world prev-resolver)
                 slash-amt       (payoffs/calculate-slash-amount-from-basis prev-stake slash-bps)
                 slash-id        (str workflow-id "-reversal-" (dec level))
-                now             (:block-time world)
+                now             (time-ctx/block-ts world)
                 appeal-window   (:appeal-window-duration snap 0)
                 reversal-prob   (or (:reversal-detection-probability snap) 0.0)
                 challenger      (get-in world [:challengers workflow-id (dec level)])
@@ -131,33 +132,31 @@
    schema, same `slash-resolver-stake` call, same invariants apply."
   [world workflow-id & {:keys [slash-bps track]
                         :or   {track :pending}}]
-  (let [slash-id (str workflow-id "-force-reversal-0")]
-    (if (get-in world [:pending-fraud-slashes slash-id])
-      world
-      (let [level       (t/dispute-level world workflow-id)
-            prev-decision (when (pos? level)
-                            (get-in world [:previous-decisions workflow-id (dec level)]))
-            prev-resolver (or (:resolver prev-decision) (get-in world [:escrow-transfers workflow-id :sender]))
-            snap          (t/get-snapshot world workflow-id)
-            bps           (long (or slash-bps (:reversal-slash-bps snap 0)))
-            prev-stake    (reg/get-stake world prev-resolver)
-            slash-amt     (payoffs/calculate-slash-amount-from-basis (or prev-stake 0) bps)
-            now           (:block-time world)
-            appeal-window (:appeal-window-duration snap 0)
-            reversal-prob (or (:reversal-detection-probability snap) 0.0)]
-        (if (or (nil? prev-resolver) (not (pos? slash-amt)))
-          world
-          (if (= :immediate track)
-            (-> (reg/slash-resolver-stake world prev-resolver slash-amt nil 0 workflow-id)
-                :world
-                (assoc-in [:pending-fraud-slashes slash-id]
-                          (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                     slash-amt workflow-id :executed
-                                                     now 0 reversal-prob)))
-            (assoc-in world [:pending-fraud-slashes slash-id]
-                      (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
-                                                 slash-amt workflow-id :pending now
-                                                 (+ now appeal-window) reversal-prob))))))))
+   (let [level       (t/dispute-level world workflow-id)
+         prev-decision (when (pos? level)
+                         (get-in world [:previous-decisions workflow-id (dec level)]))
+         prev-resolver (or (:resolver prev-decision) (get-in world [:escrow-transfers workflow-id :sender]))
+         snap          (t/get-snapshot world workflow-id)
+         bps           (long (or slash-bps (:reversal-slash-bps snap 0)))
+         prev-stake    (reg/get-stake world prev-resolver)
+         slash-amt     (payoffs/calculate-slash-amount-from-basis (or prev-stake 0) bps)
+         slash-id      (str workflow-id "-force-reversal-0")
+         now           (time-ctx/block-ts world)
+         appeal-window (:appeal-window-duration snap 0)
+         reversal-prob (or (:reversal-detection-probability snap) 0.0)]
+     (if (or (nil? prev-resolver) (not (pos? slash-amt)))
+       world
+       (if (= :immediate track)
+         (-> (reg/slash-resolver-stake world prev-resolver slash-amt nil 0 workflow-id)
+             :world
+             (assoc-in [:pending-fraud-slashes slash-id]
+                       (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
+                                                  slash-amt workflow-id :executed
+                                                  now 0 reversal-prob)))
+         (assoc-in world [:pending-fraud-slashes slash-id]
+                   (make-reversal-slash-entry slash-id prev-resolver prev-stake bps
+                                              slash-amt workflow-id :pending now
+                                              (+ now appeal-window) reversal-prob))))))
 
 (defn submit-evidence
   "Record that new evidence was submitted for workflow-id (Track 2 reversal slashing).
@@ -197,7 +196,7 @@
    Captures the reversal-detection-probability from the module snapshot to track
    the likelihood that an appeal will succeed."
   [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
-  (let [now (:block-time world)]
+  (let [now (time-ctx/block-ts world)]
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
     (assoc-in world [:pending-fraud-slashes slash-id]
               {:resolver                      resolver
@@ -228,16 +227,36 @@
                      (update-in [:unavailability-stats :unavailable-count] (fnil #(max 0 (dec %)) 0)))
 
                  :else world)
-        world'' (assoc-in world' [:unavailability-stats :last-update] (:block-time world))
+        world'' (assoc-in world' [:unavailability-stats :last-update] (time-ctx/block-ts world))
         total (get-in world'' [:unavailability-stats :total-resolvers] 0)
         unavailable (get-in world'' [:unavailability-stats :unavailable-count] 0)
         threshold (get-in world'' [:circuit-breaker :threshold-bps] 3000)
         pct-bps (if (pos? total) (quot (* unavailable 10000) total) 0)]
-    (if (and (pos? total) (>= pct-bps threshold))
+    (cond
+      ;; Threshold exceeded — activate (or keep) the circuit breaker
+      (and (pos? total) (>= pct-bps threshold))
       (-> world''
           (assoc-in [:circuit-breaker :active?] true)
-          (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
+          (assoc-in [:circuit-breaker :last-trigger] (time-ctx/block-ts world)))
+
+      ;; Below threshold but breaker still active — deactivate after cooldown
+      (and (get-in world'' [:circuit-breaker :active?] false)
+           (let [cooldown (get-in world'' [:circuit-breaker :cooldown] 3600)
+                 elapsed (- (time-ctx/block-ts world)
+                            (get-in world'' [:circuit-breaker :last-trigger] 0))]
+             (>= elapsed cooldown)))
+      (assoc-in world'' [:circuit-breaker :active?] false)
+
+      :else
       world'')))
+
+(defn circuit-breaker-active?
+  "True when the circuit breaker is active (blocking new escrows/disputes).
+   Returns {:ok true} or {:ok false :error :circuit-breaker-active}."
+  [world]
+  (if (get-in world [:circuit-breaker :active?] false)
+    (t/fail :circuit-breaker-active)
+    (t/ok true)))
 
 (declare pick-eligible-superseded-pending)
 
@@ -313,7 +332,7 @@
           ;; Phase L extension: window is the MAX of appeal-window and challenge-window
           window-dur     (max (:appeal-window-duration snap 0)
                               (:challenge-window-duration snap 0))
-          now            (:block-time world)
+          now            (time-ctx/block-ts world)
           ;; Mirrors SettlementOps.computeResolutionExecution:
           ;; if isFinalRound (currentRound >= MAX_ROUND) → shouldExecute = true
           ;; (no appeal window, decision is immediately final)
@@ -360,7 +379,7 @@
   (if-not (t/valid-workflow-id? world workflow-id)
     (guard-fail :invalid-workflow-id :workflow-id workflow-id)
     (let [active-pending (t/get-pending world workflow-id)
-          now-ts         (:block-time world)
+          now-ts         (time-ctx/block-ts world)
           pending        (if (:exists active-pending)
                            active-pending
                            (pick-eligible-superseded-pending world workflow-id now-ts))]
@@ -401,7 +420,7 @@
           (update-in [:superseded-pending-settlements workflow-id]
                      (fnil conj [])
                      {:pending pending
-                      :superseded-at (:block-time world)
+                      :superseded-at (time-ctx/block-ts world)
                       :level (t/dispute-level world workflow-id)})
           (update :pending-settlements dissoc workflow-id))
       world)))
@@ -451,9 +470,9 @@
                 :workflow-id workflow-id)
 
     ;; Appeal window has closed — the pending settlement is now executable.
-    (>= (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
+    (>= (time-ctx/block-ts world) (:appeal-deadline (t/get-pending world workflow-id)))
     (guard-fail :appeal-window-expired
-                :block-time (:block-time world)
+                :block-time (time-ctx/block-ts world)
                 :appeal-deadline (:appeal-deadline (t/get-pending world workflow-id))
                 :workflow-id workflow-id)
 
@@ -487,11 +506,11 @@
                                 ;; Track last escalation timestamp per address (used by
                                 ;; challenge-resolution cooldown for open challengers).
                                (assoc-in [:last-escalation-block-time-per-addr caller]
-                                         (:block-time world))
+                                         (time-ctx/block-ts world))
                                ;; Increment escalation count for this address (Layer B)
                                (update-in [:escalation-counts-per-addr caller] (fnil inc 0))
                                (assoc-in [:last-escalation-block-time workflow-id]
-                                         (:block-time world)))]
+                                         (time-ctx/block-ts world)))]
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))
@@ -607,9 +626,9 @@
                 :workflow-id workflow-id)
 
     ;; Appeal window has closed — the pending settlement is now executable.
-    (>= (:block-time world) (:appeal-deadline (t/get-pending world workflow-id)))
+    (>= (time-ctx/block-ts world) (:appeal-deadline (t/get-pending world workflow-id)))
     (guard-fail :appeal-window-expired
-                :block-time (:block-time world)
+                :block-time (time-ctx/block-ts world)
                 :appeal-deadline (:appeal-deadline (t/get-pending world workflow-id))
                 :workflow-id workflow-id)
 
@@ -648,12 +667,12 @@
                                          new-resolver)
                                ;; Track when this escalation occurred for this address (Layer A)
                                (assoc-in [:last-escalation-block-time-per-addr caller]
-                                         (:block-time world))
+                                         (time-ctx/block-ts world))
                                ;; Increment escalation count for this address (Layer B)
                                (update-in [:escalation-counts-per-addr caller] (fnil inc 0))
                                ;; Track when this escalation occurred for this workflow (Invariant check)
                                (assoc-in [:last-escalation-block-time workflow-id]
-                                         (:block-time world)))]
+                                         (time-ctx/block-ts world)))]
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))
@@ -676,7 +695,7 @@
        (not= :pending (:status pending))
        (t/fail :slash-not-pending)
 
-       (> (:block-time world) (:appeal-deadline pending))
+       (> (time-ctx/block-ts world) (:appeal-deadline pending))
        (t/fail :appeal-window-expired)
 
        (not= caller (:resolver pending))
@@ -736,7 +755,8 @@
 
           :else
           (let [snap              (t/get-snapshot world wf-id)
-                gov-delay         (or (:appeal-window-duration snap) 259200)
+                appeal-days       (get-in world [:params :appeal-window-days] 7)
+                gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
                 reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
             (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))
 
@@ -818,7 +838,7 @@
                  :executed :already-executed
                  :unknown-status))
 
-       (< (:block-time world) (:appeal-deadline pending))
+       (< (time-ctx/block-ts world) (:appeal-deadline pending))
        (t/fail :timelock-not-expired)
 
        :else
@@ -832,7 +852,7 @@
                                  :world)
              world'          (-> world-slashed
                                  (assoc-in [:resolver-frozen-until resolver]
-                                            (+ (:block-time world) freeze-duration))
+                                            (+ (time-ctx/block-ts world) freeze-duration))
                                  (update-unavailability resolver true))]
          (t/ok world'))))))
 
@@ -884,7 +904,7 @@
                :old-resolver old-resolver
                :new-resolver new-resolver
                :idempotent? true)
-        (let [rotation {:from old-resolver :to new-resolver :at (:block-time world)}
+        (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
               world'   (-> world
                            (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                      new-resolver)

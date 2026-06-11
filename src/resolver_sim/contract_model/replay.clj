@@ -11,6 +11,8 @@
      2. protocol/check-invariants-transition"
    (:require [clojure.stacktrace             :as st]
              [clojure.string                :as str]
+             [clojure.data.json             :as json]
+             [clojure.java.io               :as io]
              [resolver-sim.logging          :as log]
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
@@ -25,6 +27,7 @@
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
               [resolver-sim.time.model        :as time-model]
+              [resolver-sim.time.context      :as time-ctx]
               [resolver-sim.util.attribution :as attr]
               [resolver-sim.yield.risk-monitor :as risk]))
 
@@ -92,38 +95,12 @@
 ;; Metrics — registry (must precede validate-scenario which references it)
 ;; ---------------------------------------------------------------------------
 
-;; SCOPE: deterministic trace metrics only.
-;;
-;; This registry covers metrics that the replay engine can compute from a
-;; single scenario execution (event log + world snapshots).  It intentionally
-;; excludes stochastic / population-level metrics such as:
-;;
-;;   :coalition/net-profit   — needs N-epoch batch run, not a single trace
-;;   :malice-mean-profit     — population average from sim/multi_epoch.clj
-;;   :dominance-ratio        — strategy-share statistic across resolver pool
-;;
-;; Those belong in a separate future registry, e.g.:
-;;
-;;   resolver-sim.sim.multi-epoch/known-metrics   (stochastic, multi-epoch; Sew-specific)
-;;
-;; Do NOT add population/batch metrics here. Blending the two worlds would
-;; cause validate-scenario to accept :theory/falsifies-if conditions that
-;; the deterministic replay can never satisfy, producing silent :inconclusive
-;; results for the wrong reason.
-
 (def population-metrics metrics/population-metrics)
-
 (def base-metrics metrics/base-metrics)
-
 (defn- metric-key [x] (metrics/metric-key x))
-
 (defn- falsifies-if-metric-refs [falsifies-if] (metrics/falsifies-if-metric-refs falsifies-if))
-
 (defn- theory-metric-scope [scenario] (metrics/theory-metric-scope scenario))
-
 (defn- action->transition-id [action] (analysis/action->transition-id action))
-
-
 
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
@@ -140,11 +117,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- zero-metrics [protocol] (metrics/zero-metrics protocol))
-
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (metrics/accum-metrics protocol metrics event trace-entry agent-index world-before))
-
-
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
@@ -159,7 +133,7 @@
         temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
         check-inv?   (:check-invariants? flags true)
         event-time   (:time event)
-        now          (:block-time world)
+        now          (time-ctx/block-ts world)
         time-before  {:block-ts now}
         rules        (effective-temporal-rules context)
         temporal-failure (when temporal-on?
@@ -203,11 +177,10 @@
       (let [{world-t :world} (advance-world-time world event-time)
             time-after       {:block-ts event-time}
             result     (attr/with-attribution
-                        {:replay/scenario-id (get-in world [:params :scenario-id])
-                         :replay/seq         (:seq event)
-                         :replay/action      (:action event)
-                         :replay/agent       (:agent event)
-                         :replay/event-time  event-time}
+                        {:ctx/scenario-id (get-in world [:params :scenario-id])
+                         :ctx/run-id      (str (get-in world [:params :scenario-id]) "-run")
+                         :ctx/event-index (:seq event)
+                         :ctx/event-type  (:action event)}
                         (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
@@ -279,9 +252,9 @@
 (def ^:private batch-commit-policy :deterministic-first-wins)
 
 (defn- event-conflict-domains*
-  [protocol world event]
+  [protocol world event agent-index]
   (let [domains (when (satisfies? proto/BatchConflictModel protocol)
-                  (proto/event-conflict-domains protocol world event))]
+                  (proto/event-conflict-domains protocol world event agent-index))]
     (if (seq domains)
       (set domains)
       #{[:global :unknown]})))
@@ -366,7 +339,10 @@
                                                   (not (:ok? expected-error-analysis)))
                     outcome (if expected-errors-mismatch? :fail :pass)
                     halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
-                 (attr/log-with-attr :info "scenario/end" {:id scenario-id :outcome outcome})
+                 (attr/with-attribution
+                   {:ctx/scenario-id scenario-id
+                    :ctx/run-id (str scenario-id "-run")}
+                   (attr/log-with-attr :info "scenario/end" {:id scenario-id :outcome outcome}))
                 {:context/version "1.0"
                  :context/source {:scenario-id scenario-id :run-id (str scenario-id "-run")}
                  :execution {:mode (execution-mode scenario)
@@ -384,18 +360,18 @@
                  :world world
                  :world-checkpoints world-checkpoints}))))
         (if (= :deterministic-batch (execution-mode scenario))
-          (let [[bucket rest-events] (group-same-time-bucket events)
-                base-world world
-                resolved-bucket (mapv (fn [raw]
-                                        (if (and supports-alias? (seq id-alias-map))
-                                          (let [res (proto/resolve-id-alias protocol raw id-alias-map)]
-                                            (if (:ok res) (:event res) raw))
-                                          raw))
-                                      bucket)
-                batch-time (:time (first resolved-bucket))
-                metrics' (-> metrics
-                             (update :batch-buckets inc)
-                             (update :batch-events + (count resolved-bucket)))
+           (let [[bucket rest-events] (group-same-time-bucket events)
+                 base-world world
+                 resolved-bucket (mapv (fn [raw]
+                                         (if (and supports-alias? (seq id-alias-map))
+                                           (let [res (proto/resolve-id-alias protocol raw id-alias-map)]
+                                             (if (:ok res) (:event res) raw))
+                                           raw))
+                                       bucket)
+                 batch-time (:time (first resolved-bucket))
+                 metrics' (-> metrics
+                              (update :batch-buckets inc)
+                              (update :batch-events + (count resolved-bucket)))
                 ;; Preflight runs every event against base-world (world BEFORE the bucket).
                 ;; Commit runs against the incremental world (world after previous events
                 ;; in the bucket were applied).  Preflight :eligible means "this event can
@@ -404,18 +380,29 @@
                 ;; an earlier event in the same bucket changed the world state (guard
                 ;; condition, depleted balance, etc.) or because its conflict domain
                 ;; intersects with a previously committed event.
+                ;; Preflight uses raw bucket events (unresolved aliases).
+                ;; Events referencing same-bucket aliases may show :ineligible
+                ;; here but succeed at commit after the alias is resolved.
                 preflight (into {}
                                 (map (fn [ev]
                                        (let [s (process-step protocol context base-world ev)]
                                          [(:seq ev)
                                           (if (= :ok (get-in s [:trace-entry :result])) :eligible :ineligible)])))
-                                resolved-bucket)
+                                bucket)
                 batch-result (reduce
-                              (fn [acc event]
+                              (fn [acc raw-event]
                                 (if (:halted? acc)
                                   acc
-                                  (let [working-world (:world acc)
-                                        domains (event-conflict-domains* protocol working-world event)
+                                  ;; Resolve aliases against the cumulative alias map.
+                                  ;; Aliases created by earlier events in the same bucket
+                                  ;; (via :save-id-as) are visible here — this is the key
+                                  ;; difference from pre-reduce alias resolution.
+                                  (let [event (if (and supports-alias? (seq (:id-alias-map acc)))
+                                                (let [res (proto/resolve-id-alias protocol raw-event (:id-alias-map acc))]
+                                                  (if (:ok res) (:event res) raw-event))
+                                                raw-event)
+                                        working-world (:world acc)
+                                        domains (event-conflict-domains* protocol working-world event agent-index)
                                         conflict-domain (some #(when (contains? (:claimed-domains acc) %) %) domains)
                                         winner-seq (get (:claimed-domains acc) conflict-domain)
                                         pre-status (get preflight (:seq event) :ineligible)]
@@ -473,7 +460,7 @@
                                :claimed-domains {}
                                :halted? false
                                :id-alias-map id-alias-map}
-                              resolved-bucket)]
+                              bucket)]
             (if (:halted? batch-result)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
@@ -550,11 +537,13 @@
                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)
                 new-states (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
-            (attr/log-with-attr :debug "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
             (if (:halted? step)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
-                (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
+                (attr/with-attribution
+                  {:ctx/scenario-id scenario-id
+                   :ctx/run-id (str scenario-id "-run")}
+                  (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
                 {:outcome :fail
                  :scenario-id scenario-id
                  :events-processed (count new-trace)
@@ -612,10 +601,17 @@
              trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                              (:world-checkpoint-policy flags)
                              raw-result)]
-         (attr/log-with-attr :info "scenario/start" {:id scenario-id})
+         (attr/with-attribution
+           {:ctx/scenario-id scenario-id
+            :ctx/run-id (str scenario-id "-run")}
+           (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
          (let [result (if (:evaluate-expectations? flags true)
                         (finalize-scenario-result scenario trimmed-result flags)
                         trimmed-result)]
+           ;; Phase 2: Register Theory Evaluation and Results
+           (when-let [theory (:diagnostics result)]
+             (spit (io/file "results/test-artifacts/theory-eval.json") (json/write-str theory {:indent true})))
+           
            (assoc result :risk-events (risk/events))))))))
 
 (defn replay-yield-scenario
@@ -663,8 +659,6 @@
                                  :temporal-enabled? temporal-enabled?
                                  :agent-index agent-index}
                                 options))))
-
-
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

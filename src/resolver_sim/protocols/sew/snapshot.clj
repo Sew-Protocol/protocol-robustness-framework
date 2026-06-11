@@ -221,13 +221,14 @@
      :world — passed to `validate-snapshot` when validating.
      :validate-world? — when true, same as supplying :world for registry check."
   [protocol-params & [{:keys [world validate-world? validate?] :as opts}]]
+  (require '[resolver-sim.protocols.sew.types :as types])
   (let [pp (or protocol-params {})
         yield-id (or (get pp :yield-generation-module nil)
                      (get pp :yield-profile nil))
         {:keys [profile-id archetype module-id]}
         (yield-proto/resolve-yield-profile yield-id)
         snap (make-escrow-snapshot
-              {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
+              {                 :escrow-fee-bps         (get pp :resolver-fee-bps 100)
                :resolution-module            (get pp :resolution-module nil)
                :appeal-window-duration       (get pp :appeal-window-duration 0)
                :max-dispute-duration         (get pp :max-dispute-duration types/default-max-dispute-duration)

@@ -32,9 +32,14 @@
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
             [resolver-sim.yield.evidence :as yield-evi]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
+
+(require '[resolver-sim.protocols.sew.invariants.temporal :as temporal-inv])
+
+(defn check-temporal-consistency [world] (temporal-inv/check-temporal-consistency world))
 
 (def world-invariant-ids
   "Single-world invariants run by `check-all` on every replay step."
@@ -47,6 +52,7 @@
     :escrow-state-in-graph
     :escrow-dispute-metadata-consistent
     :pending-settlement-consistent
+    :temporal-consistency
     :dispute-timestamp-consistent
     :dispute-level-bounded
     :slash-status-consistent
@@ -684,7 +690,7 @@
    first (i.e. :last-escalation-block-time carried forward from world-before
    equals bt-after of the new transition)."
   [world-before world-after]
-  (let [bt-after (or (:block-time world-after) 0)]
+  (let [bt-after (or (time-ctx/block-ts world-after) 0)]
     (if (zero? bt-after)
       {:holds? true :violations []}
       (let [violations
@@ -1106,16 +1112,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn resolver-bond-mix-valid?
-  "True when every resolver's bond satisfies the 80/20 stable/Sew mix rule.
-   Mirrors StakingModuleInvariants: stable >= 80%, Sew <= 20%."
+  "True when every resolver's bond satisfies the stable/Sew mix rule.
+   Threshold read from world params (:bond-mix-min-stable-bps, default 8000 = 80%)."
   [world]
-  (let [violations
+  (let [min-stable-bps (get-in world [:params :bond-mix-min-stable-bps] 8000)
+        violations
         (for [[addr bond] (:resolver-bonds world {})
               :let [stable (:stable bond 0)
                     sew    (:sew bond 0)
                     total  (+ stable sew)]
               :when (pos? total)
-              :when (< (* stable 10000) (* total 8000))]
+              :when (< (* stable 10000) (* total min-stable-bps))]
           {:resolver addr :stable stable :sew sew :total total})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
@@ -1150,7 +1157,7 @@
   "True when no :disputed escrow is currently assigned to a frozen resolver.
    Mirrors SlashingModuleInvariants: frozen resolver cannot receive new assignments."
   [world]
-  (let [bt         (:block-time world 0)
+  (let [bt         (time-ctx/block-ts world)
         frozen-map (:resolver-frozen-until world {})
         violations
         (for [[wf et] (:escrow-transfers world)
@@ -1170,15 +1177,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn slash-epoch-cap-respected?
-  "True when no resolver's total slashing in the current epoch exceeds 20% of their stake.
-   Mirrors SlashingModuleInvariants: resolver slash cap per epoch is 20% (v3)."
+  "True when no resolver's total slashing in the current epoch exceeds the cap.
+   Threshold read from world params (:slash-epoch-cap-bps, default 2000 = 20%)."
   [world]
-  (let [violations
+  (let [epoch-cap-bps (get-in world [:params :slash-epoch-cap-bps] 2000)
+        violations
         (for [[addr epoch-data] (:resolver-epoch-slashed world {})
               :let [epoch-amt (:amount epoch-data 0)
                     stake     (get (:resolver-stakes world) addr 0)]
               :when (pos? stake)
-              :when (> (* epoch-amt 10000) (* stake 2000))]
+              :when (> (* epoch-amt 10000) (* stake epoch-cap-bps))]
           {:resolver addr :epoch-amount epoch-amt :stake stake})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
@@ -1362,6 +1370,7 @@
                  :escrow-state-in-graph         (escrow-state-in-graph? world)
                  :escrow-dispute-metadata-consistent (escrow-dispute-metadata-consistent? world)
                  :pending-settlement-consistent (pending-settlement-consistency? world)
+                 :temporal-consistency          (check-temporal-consistency world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)
                  :slash-status-consistent       (slash-status-consistent? world)
