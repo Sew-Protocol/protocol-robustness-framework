@@ -186,6 +186,8 @@
 
 ;; === Strategy Selection Under Load ===
 
+(defn- canon-round [f] (long (Math/floor f)))
+
 (defn optimal-strategy-under-load
   "Which strategy maximizes profit given load?
    
@@ -196,19 +198,21 @@
   [rng num-disputes effort-budget detection-prob slashing-multiplier fee-profit]
   (let [effort-available (effort-available-per-dispute effort-budget num-disputes)
         load-mult (load-multiplier-for-lazy-advantage num-disputes effort-budget)
+        honest-accuracy 0.80
         
-        ;; Honest: pays slashing (low) but reliable profit
-        honest-accuracy 0.80  ; typical under load
-        honest-profit (* fee-profit honest-accuracy (/ 1.0 load-mult))
-        
-        ;; Lazy: lower accuracy but avoids slashing
+        ;; Honest: pays slashing (low) but reliable profit. 
+        ;; Load impact is on accuracy, not a direct scalar penalty on fee-profit.
+        honest-profit (canon-round (* fee-profit honest-accuracy))
+
+        ;; Lazy: lower accuracy but avoids slashing risk and effort costs.
+        ;; Lazy gains advantage because it saves effort costs compared to honest.
         lazy-accuracy 0.40
-        lazy-profit (* fee-profit lazy-accuracy)  ; no slashing risk if not detected
+        lazy-profit (canon-round (* fee-profit lazy-accuracy load-mult))
         
         ;; Malicious: lowest accuracy but high upside if not detected
         malice-accuracy 0.20
         malice-detection-risk (* detection-prob slashing-multiplier)
-        malice-profit (* fee-profit malice-accuracy (- 1.0 malice-detection-risk))]
+        malice-profit (canon-round (* fee-profit malice-accuracy (- 1.0 malice-detection-risk)))]
     
     (cond
       (> honest-profit lazy-profit) :honest

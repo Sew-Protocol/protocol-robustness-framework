@@ -200,10 +200,14 @@
   (let [manifest (:manifest run)
         registry (:registry run)
         run-id   (get manifest :run_id "—")
-        registry-sha (or (get-in manifest [:framework :registry_sha256]) "—")]
+        registry-sha (or (get-in manifest [:framework :registry_sha256]) "—")
+        git-commit   (get-in manifest [:framework :git_commit] "—")
+        git-message  (get-in manifest [:framework :git_message] "—")]
     [:div {:style {:marginTop "40px" :padding "20px" :borderTop "1px solid #e2e8f0" :fontSize "0.75em" :color "#64748b"}}
      [:div "Artifact provenance:"]
      [:div {:style {:fontFamily "monospace"}}
       "Run ID: " run-id [:br]
-      "Registry Hash: " registry-sha]]))
+      "Registry Hash: " registry-sha [:br]
+      "Commit: " git-commit [:br]
+      "Message: " git-message]]))
 
