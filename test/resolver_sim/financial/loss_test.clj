@@ -47,7 +47,7 @@
         pos-key (t/escrow-yield-owner-id wf)
         world (-> (t/empty-world 1000)
                   (assoc :total-held {:USDC 500})
-                  (assoc :claimable {:USDC 200})
+                  (assoc :claimable {0 {"dummy" 200}})
                   (assoc-in [:escrow-transfers wf :escrow-state] :refunded)
                   (assoc-in [:yield/positions pos-key]
                             {:token :USDC :shortfall {:fulfilled-amount 800
@@ -62,7 +62,7 @@
 (deftest haircut-only-shortfall-realized
   (let [world (-> (t/empty-world 1000)
                   (assoc :total-held {:USDC 500})
-                  (assoc :claimable {:USDC 200})
+                  (assoc :claimable {0 {"dummy" 200}})
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                             {:token :USDC :workflow-id 0
@@ -79,7 +79,7 @@
 (deftest irrecoverable-when-held-below-threshold
   (let [world (-> (t/empty-world 1000)
                   (assoc :total-held {:USDC 50})
-                  (assoc :claimable {:USDC 10})
+                  (assoc :claimable {0 {"dummy" 10}})
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                             {:token :USDC :workflow-id 0

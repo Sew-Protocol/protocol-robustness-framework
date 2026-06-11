@@ -170,14 +170,18 @@
         ;; Shortfall + financially final → total obligations (deferred + haircut)
         (and ff-final? (pos? (+ (:deferred-total shortfall) (:haircut-total shortfall))))
         (let [held            (get-in world [:total-held token] 0)
-              claim           (get-in world [:claimable token] 0)
+              claim           (reduce + 0
+                                (for [[_ addr-map] (get world :claimable {})
+                                      [_ amt] addr-map]
+                                  (long amt)))
               total-oblig     (+ (:fulfilled-total shortfall)
                                  (:deferred-total shortfall)
                                  (:haircut-total shortfall))
-              coverage-ratio  (/ (+ held claim) (max total-oblig 1))
+              outstanding     (+ (:deferred-total shortfall) (:haircut-total shortfall))
+              coverage-ratio  (/ (+ held claim) (max outstanding 1))
               max-loss?       (and max-irrecoverable-ratio
                                    (< coverage-ratio max-irrecoverable-ratio))
-              user-loss-ratio (/ (:haircut-total shortfall) (max total-oblig 1))]
+               user-loss-ratio (double (/ (:haircut-total shortfall) (max total-oblig 1)))]
           {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
            :loss/scope               :yield-module
            :loss/token               token

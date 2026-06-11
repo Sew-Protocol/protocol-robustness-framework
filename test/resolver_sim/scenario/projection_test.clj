@@ -287,4 +287,29 @@
                              :metrics {}}))]
       (is (number? (get-in p [:metrics :coalition-net-profit])))
       (is (= (get-in p [:metrics :coalition-net-profit])
-             (get-in p [:payoff-ledger-summary :coalition-net-profit]))))))
+              (get-in p [:payoff-ledger-summary :coalition-net-profit]))))))
+
+(deftest test-trace-end-projection-includes-financial-loss
+  (testing "projection includes :financial-loss with loss status keys and prorata user-loss-realised"
+    (let [result (replay-result
+                  {:world {:escrow-transfers {0 {:escrow-state :refunded}}
+                           :yield/positions {"pos1" {:token :USDC
+                                                     :shortfall {:fulfilled-amount 800
+                                                                 :deferred-amount 0
+                                                                 :haircut-amount 200}}}
+                           :total-held {:USDC 500}
+                           :total-fees {:USDC 0}
+                           :claimable {0 {"0xAnyone" 200}}
+                           :resolver-stakes {}
+                           :bond-balances {}
+                           :pending-count 0
+                           :block-time 1000}
+                   :metrics {}})
+          p (proj/trace-end-projection result)
+          fl (:financial-loss p)]
+      (is (map? fl) ":financial-loss should be a map")
+      (is (= :loss-realized (:loss/status fl)))
+      (is (= 0.2 (:loss/user-realized? fl)))
+      (is (true? (:loss/protocol-realized? fl)))
+      (is (= :haircut-loss (:loss/reason fl)))
+      (is (map? (:loss/shortfall fl))))))
