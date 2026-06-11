@@ -279,9 +279,9 @@
 (def ^:private batch-commit-policy :deterministic-first-wins)
 
 (defn- event-conflict-domains*
-  [protocol world event]
+  [protocol world event agent-index]
   (let [domains (when (satisfies? proto/BatchConflictModel protocol)
-                  (proto/event-conflict-domains protocol world event))]
+                  (proto/event-conflict-domains protocol world event agent-index))]
     (if (seq domains)
       (set domains)
       #{[:global :unknown]})))
@@ -415,7 +415,7 @@
                                 (if (:halted? acc)
                                   acc
                                   (let [working-world (:world acc)
-                                        domains (event-conflict-domains* protocol working-world event)
+                                        domains (event-conflict-domains* protocol working-world event agent-index)
                                         conflict-domain (some #(when (contains? (:claimed-domains acc) %) %) domains)
                                         winner-seq (get (:claimed-domains acc) conflict-domain)
                                         pre-status (get preflight (:seq event) :ineligible)]

@@ -150,11 +150,15 @@
               from escrow state, not event params — so they remain workflow-only.
      Group 2 — resolver-scoped (stake, bond, slash state)
      Group 3 — token-scoped (liquidity, yield risk)
-     Group 4 — global (paused, fees, governance params)"
-  [world event]
+     Group 4 — global (paused, fees, governance params)
+   
+   agent-index is used to derive the resolver address from the event's :agent
+   field for actions like register-stake where the actor IS the resolver."
+  [world event agent-index]
   (let [action (compat/canonical-action event)
         wf-id  (event-workflow-id event)
         token  (some-> (get-in event [:params :token]) keyword)
+        agent-addr (some-> agent-index (get (:agent event)) :address)
         resolver (or (get-in event [:params :resolver-addr])
                      (get-in event [:params :resolver])
                      (get-in event [:params :senior-addr])
@@ -175,9 +179,13 @@
                    "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"
                    "force-reversal-slash" "delegate-to-senior"}
                  action)
-      (cond-> #{}
-        resolver (conj [:resolver resolver])
-        wf-id (conj [:workflow wf-id]))
+      ;; Group 2: resolver-scoped actions.  Derive the resolver address from
+      ;; the performing actor when the event params don't specify it directly
+      ;; (e.g. register-stake, withdraw-stake use the acting agent's address).
+      (let [g2-resolver (or resolver agent-addr)]
+        (cond-> #{}
+          g2-resolver (conj [:resolver g2-resolver])
+          wf-id (conj [:workflow wf-id])))
 
       (contains? #{"set-token-liquidity-crunch" "set-yield-risk"} action)
       (if token #{[:token token]} #{[:global :unknown]})
@@ -835,8 +843,8 @@
 
   proto/BatchConflictModel
 
-  (event-conflict-domains [_ world event]
-    (sew-event-conflict-domains world event))
+  (event-conflict-domains [_ world event agent-index]
+    (sew-event-conflict-domains world event agent-index))
 
   proto/EconomicModel
 
