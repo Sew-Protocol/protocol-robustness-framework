@@ -1106,16 +1106,17 @@
 ;; ---------------------------------------------------------------------------
 
 (defn resolver-bond-mix-valid?
-  "True when every resolver's bond satisfies the 80/20 stable/Sew mix rule.
-   Mirrors StakingModuleInvariants: stable >= 80%, Sew <= 20%."
+  "True when every resolver's bond satisfies the stable/Sew mix rule.
+   Threshold read from world params (:bond-mix-min-stable-bps, default 8000 = 80%)."
   [world]
-  (let [violations
+  (let [min-stable-bps (get-in world [:params :bond-mix-min-stable-bps] 8000)
+        violations
         (for [[addr bond] (:resolver-bonds world {})
               :let [stable (:stable bond 0)
                     sew    (:sew bond 0)
                     total  (+ stable sew)]
               :when (pos? total)
-              :when (< (* stable 10000) (* total 8000))]
+              :when (< (* stable 10000) (* total min-stable-bps))]
           {:resolver addr :stable stable :sew sew :total total})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
@@ -1170,15 +1171,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn slash-epoch-cap-respected?
-  "True when no resolver's total slashing in the current epoch exceeds 20% of their stake.
-   Mirrors SlashingModuleInvariants: resolver slash cap per epoch is 20% (v3)."
+  "True when no resolver's total slashing in the current epoch exceeds the cap.
+   Threshold read from world params (:slash-epoch-cap-bps, default 2000 = 20%)."
   [world]
-  (let [violations
+  (let [epoch-cap-bps (get-in world [:params :slash-epoch-cap-bps] 2000)
+        violations
         (for [[addr epoch-data] (:resolver-epoch-slashed world {})
               :let [epoch-amt (:amount epoch-data 0)
                     stake     (get (:resolver-stakes world) addr 0)]
               :when (pos? stake)
-              :when (> (* epoch-amt 10000) (* stake 2000))]
+              :when (> (* epoch-amt 10000) (* stake epoch-cap-bps))]
           {:resolver addr :epoch-amount epoch-amt :stake stake})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))

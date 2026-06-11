@@ -77,6 +77,12 @@
    Returns updated world with the slashed amount removed from registry
    and distributed according to protocol rules.
    
+   No guards here — the per-offense cap (50%) and epoch cap (20%) are
+   enforced at the governance slash pipeline level (propose-fraud-slash,
+   execute-fraud-slash).  Automatic Track 1 reversal slashes and timeout
+   slashes (auto-cancel) are not subject to these caps — they are immediate
+   and deterministic, not governance-proposed.
+   
    Matches DR3 slashing distribution (50/30/20).
    Supports optional challenger bounty for Phase L."
   ([world resolver-addr amount] (slash-resolver-stake world resolver-addr amount nil 0 nil))
@@ -89,8 +95,6 @@
                    (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
                    :USDC)
          held-available (get-in world [:total-held token] 0)
-         ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
-         ;; after settlement has already drained :total-held for this token).
          sub-held?      (and (pos? actual)
                              (>= held-available actual))
          world'  (-> world
@@ -98,4 +102,4 @@
                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
                      (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
                      (cond-> sub-held? (acct/sub-held token actual)))]
-     (assoc (t/ok world') :slashed-from-stake actual))))
+    (assoc (t/ok world') :slashed-from-stake actual))))

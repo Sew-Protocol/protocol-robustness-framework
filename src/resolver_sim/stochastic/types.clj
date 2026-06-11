@@ -148,7 +148,13 @@
    :oracle-roll-trace-enabled? false
    :evidence-quality? false
    :circuit-breaker-threshold-bps 3000
-   :circuit-breaker-cooldown 3600})
+   :circuit-breaker-cooldown 3600
+   :max-slash-per-offense-bps 5000
+   :slash-epoch-cap-bps 2000
+   :bond-mix-min-stable-bps 8000
+   :escalation-bond-bps 1000
+   :minimum-challenge-bond 100
+   :max-dispute-level 2})
 
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.
@@ -199,6 +205,12 @@
     :evidence-quality?
     :circuit-breaker-threshold-bps
     :circuit-breaker-cooldown
+    :max-slash-per-offense-bps
+    :slash-epoch-cap-bps
+    :bond-mix-min-stable-bps
+    :escalation-bond-bps
+    :minimum-challenge-bond
+    :max-dispute-level
     :l1-honest-detection-probability
     :l1-lazy-detection-probability
     :l1-collusive-detection-probability

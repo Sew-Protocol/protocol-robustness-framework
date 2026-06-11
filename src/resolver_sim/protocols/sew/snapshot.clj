@@ -227,7 +227,7 @@
         {:keys [profile-id archetype module-id]}
         (yield-proto/resolve-yield-profile yield-id)
         snap (make-escrow-snapshot
-              {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
+              {                 :escrow-fee-bps         (get pp :resolver-fee-bps 100)
                :resolution-module            (get pp :resolution-module nil)
                :appeal-window-duration       (get pp :appeal-window-duration 0)
                :max-dispute-duration         (get pp :max-dispute-duration types/default-max-dispute-duration)

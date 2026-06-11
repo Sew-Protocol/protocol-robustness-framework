@@ -751,7 +751,8 @@
 
           :else
           (let [snap              (t/get-snapshot world wf-id)
-                gov-delay         (or (:appeal-window-duration snap) 259200)
+                appeal-days       (get-in world [:params :appeal-window-days] 7)
+                gov-delay         (or (:appeal-window-duration snap) (* appeal-days 86400))
                 reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
             (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))
 

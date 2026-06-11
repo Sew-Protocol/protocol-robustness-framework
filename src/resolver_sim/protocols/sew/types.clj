@@ -417,9 +417,11 @@
     (get-in world [:dispute-levels wf-id] 0)))
 
 (defn final-round?
-  "True when the escrow is at the maximum escalation round (no further appeals)."
+  "True when the escrow is at the maximum escalation round (no further appeals).
+   Max level read from world params, falling back to the compiled constant."
   [world workflow-id]
-  (>= (dispute-level world workflow-id) max-dispute-level))
+  (>= (dispute-level world workflow-id)
+      (get-in world [:params :max-dispute-level] max-dispute-level)))
 
 ;; ---------------------------------------------------------------------------
 ;; Resolver capacity accessors
