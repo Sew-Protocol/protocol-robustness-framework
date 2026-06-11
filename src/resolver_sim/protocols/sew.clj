@@ -207,9 +207,11 @@
 (defmethod apply-action "create-escrow"
   [{:keys [agent-index snapshot]} world event]
   (let [p (:params event)]
-    (actx/with-resolved-actor-and-unpaused
-      agent-index world event
-      (fn [caller]
+    (if-let [cb-failure (:error (res/circuit-breaker-active? world))]
+      (t/fail cb-failure)
+      (actx/with-resolved-actor-and-unpaused
+        agent-index world event
+        (fn [caller]
         (let [token  (keyword (:token p))
               to     (:to p)
               amount (:amount p)]
@@ -226,14 +228,16 @@
                   result   (lc/create-escrow world caller token to amount settings snapshot)]
               (if (:ok result)
                 (assoc result :extra {:workflow-id (:workflow-id result)})
-                result))))))))
+                result)))))))))
 
 (defmethod apply-action "raise-dispute"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor-and-unpaused
-    agent-index world event
-    (fn [addr]
-      (lc/raise-dispute world (compat/wf-id event) addr))))
+  (if-let [cb-failure (:error (res/circuit-breaker-active? world))]
+    (t/fail cb-failure)
+    (actx/with-resolved-actor-and-unpaused
+      agent-index world event
+      (fn [addr]
+        (lc/raise-dispute world (compat/wf-id event) addr)))))
 
 (defmethod apply-action "execute-resolution"
   [{:keys [agent-index resolution-module-fn resolution-level-map]} world event]

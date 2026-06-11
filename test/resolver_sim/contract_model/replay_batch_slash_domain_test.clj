@@ -304,3 +304,130 @@
       (is (= [:workflow 0] (:conflict-domain e2)))
       (is (= 0 (:conflict-with-seq e2)))
       (is (= 2 (:batch-conflicts (:metrics result)))))))
+
+;; ---------------------------------------------------------------------------
+;; L. Multi-agent same-workflow: buyer raises_dispute + seller releases
+;;    Both on [:workflow 0] → CONFLICT (different agents, same workflow)
+;; ---------------------------------------------------------------------------
+
+(deftest multi-agent-same-workflow-conflict
+  (testing "Two agents acting on the same workflow at the same timestamp:
+            second rejected on [:workflow] domain"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:workflow 0]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:workflow 0]}}}]))
+          e1 (event-by-seq result 1)]
+      (is (= :rejected (:result e1)))
+      (is (= :batch-conflict (:error e1)))
+      (is (= [:workflow 0] (:conflict-domain e1))))))
+
+;; ---------------------------------------------------------------------------
+;; M. Multi-agent same-token: two agents creating escrows with USDC
+;;    Both on [:token :USDC] → CONFLICT (different workflows, same token)
+;; ---------------------------------------------------------------------------
+
+(deftest multi-agent-same-token-conflict
+  (testing "Two agents creating escrows with the same token at the same
+            timestamp: second rejected on [:token t] domain"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:workflow 0] [:token :USDC]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:workflow 1] [:token :USDC]}}}]))
+          e1 (event-by-seq result 1)]
+      (is (= :rejected (:result e1)))
+      (is (= :batch-conflict (:error e1)))
+      (is (= [:token :USDC] (:conflict-domain e1))))))
+
+;; ---------------------------------------------------------------------------
+;; N. Multi-agent different-tokens-no-conflict: USDC + DAI
+;;    Different [:token t] domains → NO CONFLICT
+;; ---------------------------------------------------------------------------
+
+(deftest multi-agent-different-tokens-no-conflict
+  (testing "Two agents creating escrows with different tokens at the same
+            timestamp: both accepted"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:workflow 0] [:token :USDC]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:workflow 1] [:token :DAI]}}}]))
+          e0 (event-by-seq result 0)
+          e1 (event-by-seq result 1)]
+      (is (= :ok (:result e0)))
+      (is (= :ok (:result e1)))
+      (is (zero? (:batch-conflicts (:metrics result)))))))
+
+;; ---------------------------------------------------------------------------
+;; O. Governance + slash-target: gov proposes slash for R0, R0 withdraws stake
+;;    Both on [:resolver "0xR0"] → CONFLICT (different agents, same resolver target)
+;; ---------------------------------------------------------------------------
+
+(deftest governance-plus-resolver-same-target-conflict
+  (testing "Governance proposes slash for resolver R0 while R0 withdraws stake:
+            second rejected on [:resolver r] domain"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:resolver "0xR0"] [:workflow 0]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:resolver "0xR0"]}}}]))
+          e1 (event-by-seq result 1)]
+      (is (= :rejected (:result e1)))
+      (is (= :batch-conflict (:error e1)))
+      (is (= [:resolver "0xR0"] (:conflict-domain e1))))))
+
+;; ---------------------------------------------------------------------------
+;; P. Governance + different resolver: gov proposes slash for R0, R1 withdraws
+;;    Different [:resolver r] → NO CONFLICT
+;; ---------------------------------------------------------------------------
+
+(deftest governance-plus-different-resolver-no-conflict
+  (testing "Governance proposes slash for R0 while R1 withdraws stake:
+            both accepted (different resolver domains)"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:resolver "0xR0"] [:workflow 0]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:resolver "0xR1"]}}}]))
+          e0 (event-by-seq result 0)
+          e1 (event-by-seq result 1)]
+      (is (= :ok (:result e0)))
+      (is (= :ok (:result e1)))
+      (is (zero? (:batch-conflicts (:metrics result)))))))
+
+;; ---------------------------------------------------------------------------
+;; Q. Three-agent, three different workflows, different tokens
+;;    All domains distinct → NO CONFLICT (full parallel throughput)
+;; ---------------------------------------------------------------------------
+
+(deftest three-agents-fully-isolated-no-conflict
+  (testing "Three agents on three different workflows with different tokens:
+            all accepted"
+    (let [result (replay/replay-with-protocol
+                  protocol
+                  (make-scenario
+                   [{:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:workflow 0] [:resolver "0xR0"] [:token :USDC]}}}
+                    {:time 1000 :agent "b" :action "touch"
+                     :params {:domains #{[:workflow 1] [:resolver "0xR1"] [:token :DAI]}}}
+                    {:time 1000 :agent "a" :action "touch"
+                     :params {:domains #{[:workflow 2] [:resolver "0xR2"] [:token :EURC]}}}]))
+          e0 (event-by-seq result 0)
+          e1 (event-by-seq result 1)
+          e2 (event-by-seq result 2)]
+      (is (= :ok (:result e0)))
+      (is (= :ok (:result e1)))
+      (is (= :ok (:result e2)))
+      (is (zero? (:batch-conflicts (:metrics result)))))))

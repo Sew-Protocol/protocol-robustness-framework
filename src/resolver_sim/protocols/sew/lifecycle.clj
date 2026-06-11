@@ -339,7 +339,9 @@
                                   (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
                 ymid          (:yield-generation-module snapshot)
-                world''       (if (and ymid (contains? (:yield/modules world') ymid))
+                world''       (if (and ymid
+                                       (t/yield-preset-yield-enabled? (:yield-preset settings))
+                                       (contains? (:yield/modules world') ymid))
                                   (yield-ops/apply-yield-op world' {:op/type :yield/deposit
                                                                     :module/id ymid
                                                                     :owner/id (t/escrow-yield-owner-id workflow-id)

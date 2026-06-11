@@ -384,18 +384,12 @@
                  :world world
                  :world-checkpoints world-checkpoints}))))
         (if (= :deterministic-batch (execution-mode scenario))
-          (let [[bucket rest-events] (group-same-time-bucket events)
-                base-world world
-                resolved-bucket (mapv (fn [raw]
-                                        (if (and supports-alias? (seq id-alias-map))
-                                          (let [res (proto/resolve-id-alias protocol raw id-alias-map)]
-                                            (if (:ok res) (:event res) raw))
-                                          raw))
-                                      bucket)
-                batch-time (:time (first resolved-bucket))
-                metrics' (-> metrics
-                             (update :batch-buckets inc)
-                             (update :batch-events + (count resolved-bucket)))
+           (let [[bucket rest-events] (group-same-time-bucket events)
+                 base-world world
+                 batch-time (:time (first bucket))
+                 metrics' (-> metrics
+                              (update :batch-buckets inc)
+                              (update :batch-events + (count bucket)))
                 ;; Preflight runs every event against base-world (world BEFORE the bucket).
                 ;; Commit runs against the incremental world (world after previous events
                 ;; in the bucket were applied).  Preflight :eligible means "this event can
@@ -404,17 +398,28 @@
                 ;; an earlier event in the same bucket changed the world state (guard
                 ;; condition, depleted balance, etc.) or because its conflict domain
                 ;; intersects with a previously committed event.
+                ;; Preflight uses raw bucket events (unresolved aliases).
+                ;; Events referencing same-bucket aliases may show :ineligible
+                ;; here but succeed at commit after the alias is resolved.
                 preflight (into {}
                                 (map (fn [ev]
                                        (let [s (process-step protocol context base-world ev)]
                                          [(:seq ev)
                                           (if (= :ok (get-in s [:trace-entry :result])) :eligible :ineligible)])))
-                                resolved-bucket)
+                                bucket)
                 batch-result (reduce
-                              (fn [acc event]
+                              (fn [acc raw-event]
                                 (if (:halted? acc)
                                   acc
-                                  (let [working-world (:world acc)
+                                  ;; Resolve aliases against the cumulative alias map.
+                                  ;; Aliases created by earlier events in the same bucket
+                                  ;; (via :save-id-as) are visible here — this is the key
+                                  ;; difference from pre-reduce alias resolution.
+                                  (let [event (if (and supports-alias? (seq (:id-alias-map acc)))
+                                                (let [res (proto/resolve-id-alias protocol raw-event (:id-alias-map acc))]
+                                                  (if (:ok res) (:event res) raw-event))
+                                                raw-event)
+                                        working-world (:world acc)
                                         domains (event-conflict-domains* protocol working-world event agent-index)
                                         conflict-domain (some #(when (contains? (:claimed-domains acc) %) %) domains)
                                         winner-seq (get (:claimed-domains acc) conflict-domain)
@@ -473,7 +478,7 @@
                                :claimed-domains {}
                                :halted? false
                                :id-alias-map id-alias-map}
-                              resolved-bucket)]
+                              bucket)]
             (if (:halted? batch-result)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))

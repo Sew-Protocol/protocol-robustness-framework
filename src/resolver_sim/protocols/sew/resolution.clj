@@ -228,11 +228,31 @@
         unavailable (get-in world'' [:unavailability-stats :unavailable-count] 0)
         threshold (get-in world'' [:circuit-breaker :threshold-bps] 3000)
         pct-bps (if (pos? total) (quot (* unavailable 10000) total) 0)]
-    (if (and (pos? total) (>= pct-bps threshold))
-      (-> world''
-          (assoc-in [:circuit-breaker :active?] true)
-          (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
-      world'')))
+     (cond
+       ;; Threshold exceeded — activate (or keep) the circuit breaker
+       (and (pos? total) (>= pct-bps threshold))
+       (-> world''
+           (assoc-in [:circuit-breaker :active?] true)
+           (assoc-in [:circuit-breaker :last-trigger] (:block-time world)))
+
+       ;; Below threshold but breaker still active — deactivate after cooldown
+       (and (get-in world'' [:circuit-breaker :active?] false)
+            (let [cooldown (get-in world'' [:circuit-breaker :cooldown] 3600)
+                  elapsed (- (:block-time world)
+                             (get-in world'' [:circuit-breaker :last-trigger] 0))]
+              (>= elapsed cooldown)))
+       (assoc-in world'' [:circuit-breaker :active?] false)
+
+       :else
+       world'')))
+
+(defn circuit-breaker-active?
+  "True when the circuit breaker is active (blocking new escrows/disputes).
+   Returns {:ok true} or {:ok false :error :circuit-breaker-active}."
+  [world]
+  (if (get-in world [:circuit-breaker :active?] false)
+    (t/fail :circuit-breaker-active)
+    (t/ok true)))
 
 (declare pick-eligible-superseded-pending)
 
