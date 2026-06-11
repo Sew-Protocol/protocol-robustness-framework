@@ -47,12 +47,25 @@
             (do (println "ERROR:" (:error result)) (System/exit 1))
             (let [signed-manifest (:manifest result)
                   latest-dir "results/test-artifacts"
-                  run-dir (:dir run)]
-              ;; write updated manifest-with-registry into latest and run dirs
+                  run-dir (:dir run)
+                  ;; Produce Evidence Envelope (research-grade binding)
+                  envelope {:registry_sha256 (:artifact-registry-sha signed-manifest)
+                            :run_id (:run_id signed-manifest)
+                            :timestamp (str (java.time.Instant/now))
+                            :chain-final true} ; Marking the chain as final
+                  envelope-json (json/write-str envelope {:indent true})
+                  signature-json (json/write-str {:signature (:signature result)
+                                                  :hash (:hash result)
+                                                  :signer "key-path"} {:indent true})]
+              ;; write manifest, envelope, and signature
               (spit (io/file latest-dir "test-run.json") (json/write-str signed-manifest {:indent true}))
+              (spit (io/file latest-dir "envelope.json") envelope-json)
+              (spit (io/file latest-dir "signature.json") signature-json)
               (when run-dir
-                (spit (io/file run-dir "test-run.json") (json/write-str signed-manifest {:indent true})))
+                (spit (io/file run-dir "test-run.json") (json/write-str signed-manifest {:indent true}))
+                (spit (io/file run-dir "envelope.json") envelope-json)
+                (spit (io/file run-dir "signature.json") signature-json))
               (println "Signed manifest hash:" (:hash result))
-              (println "Signature (prefix):" (subs (:signature result) 0 16))))))
+              (println "Signature produced. Evidence chain is now FINAL.")))))
 
       (do (println "Unknown command. Use 'bundle <out-dir>' or 'sign <key-path>'.") (System/exit 1)))))
