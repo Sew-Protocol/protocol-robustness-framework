@@ -30,7 +30,7 @@
           fee-bps      (:resolver-fee-bps params 150)
           base-det     (:fraud-detection-probability params 0.05)
           eff-det      (/ base-det ring-size)
-          slash-mult   (:slash-multiplier params 2.0)
+          slash-mult   (:slash-multiplier params 2.5)
           fee          (* escrow (/ fee-bps 10000.0))
           slash-loss   (* escrow slash-mult eff-det)]
       (- fee slash-loss)))

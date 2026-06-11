@@ -15,7 +15,8 @@
 
    Authority *resolution modules* (`authority/make-default-resolution-module`, etc.)
    are a separate concept from yield modules and escrow snapshots."
-  (:require [resolver-sim.yield.protocols :as yield-proto]))
+  (:require [resolver-sim.yield.protocols :as yield-proto]
+            [resolver-sim.protocols.sew.types :as types]))
 
 (def ^:private nat-fields
   "Fields validated as non-negative integers.
@@ -229,7 +230,7 @@
               {:escrow-fee-bps               (get pp :resolver-fee-bps 50)
                :resolution-module            (get pp :resolution-module nil)
                :appeal-window-duration       (get pp :appeal-window-duration 0)
-               :max-dispute-duration         (get pp :max-dispute-duration 2592000)
+               :max-dispute-duration         (get pp :max-dispute-duration types/default-max-dispute-duration)
                :appeal-bond-protocol-fee-bps (get pp :appeal-bond-protocol-fee-bps 0)
                :dispute-resolver             (get pp :dispute-resolver nil)
                :appeal-bond-bps              (get pp :appeal-bond-bps 0)

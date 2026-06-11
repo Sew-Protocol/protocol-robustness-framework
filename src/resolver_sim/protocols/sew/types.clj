@@ -26,8 +26,7 @@
 
    Every operation function signature:
      (fn [world workflow-id ...args] -> {:ok bool :world world' :error keyword})"
-  (:require [clojure.string :as str]
-            [resolver-sim.protocols.sew.snapshot :as snapshot]))
+  (:require [clojure.string :as str]))
 
 ;; ---------------------------------------------------------------------------
 ;; Safe numeric coercion (shared across invariants, projection, classification)
@@ -290,6 +289,11 @@
 ;; ---------------------------------------------------------------------------
 ;; Fee arithmetic (uint256 truncating integer division)
 ;; ---------------------------------------------------------------------------
+
+(def ^:const default-max-dispute-duration
+  "Default max-dispute-duration in seconds (30 days).
+   Mirrors BaseEscrow.DEFAULT_MAX_DISPUTE_DURATION."
+  2592000)
 
 (def ^:const fee-denominator
   "ESCROW_FEE_DENOMINATOR = 10000 bps."

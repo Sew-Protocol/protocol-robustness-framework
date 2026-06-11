@@ -226,7 +226,8 @@
         world'' (assoc-in world' [:unavailability-stats :last-update] (:block-time world))
         total (get-in world'' [:unavailability-stats :total-resolvers] 0)
         unavailable (get-in world'' [:unavailability-stats :unavailable-count] 0)
-        threshold (get-in world'' [:circuit-breaker :threshold-bps] 3000)
+        threshold (or (get-in world [:params :circuit-breaker-threshold-bps])
+                       (get-in world'' [:circuit-breaker :threshold-bps] 3000))
         pct-bps (if (pos? total) (quot (* unavailable 10000) total) 0)]
     (if (and (pos? total) (>= pct-bps threshold))
       (-> world''
@@ -731,7 +732,9 @@
 
           :else
           (let [snap              (t/get-snapshot world wf-id)
-                gov-delay         (or (:appeal-window-duration snap) 259200)
+                appeal-days       (get-in world [:params :appeal-window-days] 7)
+                gov-delay         (or (:appeal-window-duration snap)
+                                      (* appeal-days 86400))
                 reversal-prob     (or (:reversal-detection-probability snap) 0.0)]
             (t/ok (handle-fraud-slashing world wf-id wf-id resolver-addr amount gov-delay reversal-prob))))))))
 
@@ -819,7 +822,8 @@
        :else
        (let [resolver        (:resolver pending)
              amount          (:amount pending)
-             freeze-duration 259200                ; 72 hours in seconds
+             freeze-days     (get-in world [:params :freeze-duration-days] 3)
+             freeze-duration (* freeze-days 86400)   ; days → seconds
              wf-for-token    (or (:workflow-id pending) workflow-id)
              world-slashed   (-> world
                                  (assoc-in [:pending-fraud-slashes slash-id :status] :executed)

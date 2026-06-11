@@ -146,7 +146,9 @@
    :timeout-detection-probability 0.0     ; Phase H: detection on appeal (separate from fraud)
    :oracle-fixture {:mode :stochastic}    ; Stochastic default oracle behavior
    :oracle-roll-trace-enabled? false
-   :evidence-quality? false})
+   :evidence-quality? false
+   :circuit-breaker-threshold-bps 3000
+   :circuit-breaker-cooldown 3600})
 
 ;; Schema keys that are optional — present in default-params or phase-specific EDN files,
 ;; but not required in every scenario map. Add new optional keys here rather than inline.
@@ -195,6 +197,8 @@
     :author
     :author-id
     :evidence-quality?
+    :circuit-breaker-threshold-bps
+    :circuit-breaker-cooldown
     :l1-honest-detection-probability
     :l1-lazy-detection-probability
     :l1-collusive-detection-probability
