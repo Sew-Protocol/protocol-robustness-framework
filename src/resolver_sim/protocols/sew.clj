@@ -822,15 +822,23 @@
       (:workflow-id extra)))
 
   (resolve-id-alias [_ event id-alias-map]
+    (tap> {:debug :resolve-id-alias :event event :map id-alias-map})
     (if (empty? id-alias-map)
       {:ok true :event event}
       (let [params   (:params event)
-            resolved (into {} (map (fn [[k v]]
-                                     [k (if (and (string? v) (contains? id-alias-map v))
-                                          (get id-alias-map v)
-                                          v)])
-                                   params))]
-        {:ok true :event (assoc event :params resolved)})))
+            agent    (:agent event)
+            resolved-agent (if (and (string? agent) (contains? id-alias-map agent))
+                             (get id-alias-map agent)
+                             agent)
+            resolved-params (into {} (map (fn [[k v]]
+                                           [k (if (and (string? v) (contains? id-alias-map v))
+                                                (get id-alias-map v)
+                                                v)])
+                                         params))]
+        (tap> {:debug :resolved-agent :agent agent :resolved-agent resolved-agent})
+        {:ok true :event (assoc event 
+                                :agent  resolved-agent
+                                :params resolved-params)})))
 
   (open-entities [_ world]
     (vec (for [[wf et] (:escrow-transfers world)
