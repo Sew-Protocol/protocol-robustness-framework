@@ -221,6 +221,7 @@
      :world — passed to `validate-snapshot` when validating.
      :validate-world? — when true, same as supplying :world for registry check."
   [protocol-params & [{:keys [world validate-world? validate?] :as opts}]]
+  (require '[resolver-sim.protocols.sew.types :as types])
   (let [pp (or protocol-params {})
         yield-id (or (get pp :yield-generation-module nil)
                      (get pp :yield-profile nil))

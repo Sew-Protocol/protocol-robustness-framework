@@ -33,7 +33,8 @@
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]
             [resolver-sim.yield.expectations             :as yield-exp]
-            [resolver-sim.yield.evidence                 :as yield-evi]))
+            [resolver-sim.yield.evidence                 :as yield-evi]
+            [resolver-sim.time.context                   :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -647,28 +648,31 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- world-snapshot [world]
-  {:block-time         (:block-time world)
-   :escrow-count       (count (:escrow-transfers world))
-   :total-held         (:total-held world)
-   :total-fees         (:total-fees world)
-   :pending-count      (count (filter #(:exists (val %)) (:pending-settlements world)))
-   :live-states        (into {} (map (fn [[id et]] [id (:escrow-state et)])
-                                     (:escrow-transfers world)))
-   :dispute-levels     (into {} (:dispute-levels world))
-   :dispute-resolvers  (into {} (map (fn [[id et]] [id (:dispute-resolver et)])
-                                     (:escrow-transfers world)))
-   :resolver-rotations (into {} (:resolver-rotations world))
-   :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
-                                     (:escrow-transfers world)))
-   :escrow-transfers    (:escrow-transfers world {})
-   :resolver-stakes     (:resolver-stakes world)
-   :resolver-slash-total (:resolver-slash-total world)
-   :bond-distribution   (:bond-distribution world)
-   :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
-   :claimable           (:claimable world {})
-   :claimable-v2        (:claimable-v2 world {})
-   :bond-balances       (:bond-balances world {})
-   :yield-evidence      (yield-evi/get-evidence world)})
+  (let [time-ctx (time-ctx/temporal-context world)]
+    (merge
+     {:block-time         (:block-ts time-ctx)
+      :time               time-ctx
+      :escrow-count       (count (:escrow-transfers world))
+      :total-held         (:total-held world)
+      :total-fees         (:total-fees world)
+      :pending-count      (count (filter #(:exists (val %)) (:pending-settlements world)))
+      :live-states        (into {} (map (fn [[id et]] [id (:escrow-state et)])
+                                        (:escrow-transfers world)))
+      :dispute-levels     (into {} (:dispute-levels world))
+      :dispute-resolvers  (into {} (map (fn [[id et]] [id (:dispute-resolver et)])
+                                        (:escrow-transfers world)))
+      :resolver-rotations (into {} (:resolver-rotations world))
+      :escrow-amounts     (into {} (map (fn [[id et]] [id (:amount-after-fee et)])
+                                        (:escrow-transfers world)))
+      :escrow-transfers    (:escrow-transfers world {})
+      :resolver-stakes     (:resolver-stakes world)
+      :resolver-slash-total (:resolver-slash-total world)
+      :bond-distribution   (:bond-distribution world)
+      :appeal-bond-distributions-by-token (:appeal-bond-distributions-by-token world {})
+      :claimable           (:claimable world {})
+      :claimable-v2        (:claimable-v2 world {})
+      :bond-balances       (:bond-balances world {})
+      :yield-evidence      (yield-evi/get-evidence world)})))
 
 (def ^:private sew-state-error-codes
   #{:transfer-not-pending

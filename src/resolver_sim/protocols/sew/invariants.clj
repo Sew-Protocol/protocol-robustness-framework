@@ -36,6 +36,10 @@
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
+(require '[resolver-sim.protocols.sew.invariants.temporal :as temporal-inv])
+
+(defn check-temporal-consistency [world] (temporal-inv/check-temporal-consistency world))
+
 (def world-invariant-ids
   "Single-world invariants run by `check-all` on every replay step."
   #{:solvency
@@ -47,6 +51,7 @@
     :escrow-state-in-graph
     :escrow-dispute-metadata-consistent
     :pending-settlement-consistent
+    :temporal-consistency
     :dispute-timestamp-consistent
     :dispute-level-bounded
     :slash-status-consistent
@@ -1362,6 +1367,7 @@
                  :escrow-state-in-graph         (escrow-state-in-graph? world)
                  :escrow-dispute-metadata-consistent (escrow-dispute-metadata-consistent? world)
                  :pending-settlement-consistent (pending-settlement-consistency? world)
+                 :temporal-consistency          (check-temporal-consistency world)
                  :dispute-timestamp-consistent  (dispute-timestamp-consistency? world)
                  :dispute-level-bounded         (dispute-level-bounded? world)
                  :slash-status-consistent       (slash-status-consistent? world)
