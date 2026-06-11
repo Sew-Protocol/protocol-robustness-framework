@@ -1,0 +1,9 @@
+# only run this manually
+
+prf-promote-main() {
+	cd ../.workspaces/integration
+	bb test:unit
+	bb test:invariants
+	jj bookmark set main -r integration
+	jj git push --bookmark main
+}

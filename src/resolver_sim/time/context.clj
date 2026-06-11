@@ -38,3 +38,19 @@
         block-ts' (:block-ts ctx')]
     (cond-> (assoc world :context/time ctx')
       block-ts' (assoc :block-time block-ts'))))
+
+(defn advance-time
+  "Atomically advance simulation time and step.
+   Accepts :seconds (time delta) or :to (absolute timestamp).
+   Increments :step by 1 unless :steps override provided."
+  [world {:keys [seconds to steps] :or {steps 1}}]
+  (let [ctx (temporal-context world)
+        new-ts (cond
+                 to      to
+                 seconds (+ (:block-ts ctx) (long seconds))
+                 :else   (:block-ts ctx))]
+    (with-temporal-context world
+      (assoc ctx
+             :block-ts new-ts
+             :step (+ (:step ctx) (long steps))))))
+

@@ -32,7 +32,8 @@
             [resolver-sim.protocols.sew.invariants.settlement :as settlement]
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
             [resolver-sim.yield.evidence :as yield-evi]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -689,7 +690,7 @@
    first (i.e. :last-escalation-block-time carried forward from world-before
    equals bt-after of the new transition)."
   [world-before world-after]
-  (let [bt-after (or (:block-time world-after) 0)]
+  (let [bt-after (or (time-ctx/block-ts world-after) 0)]
     (if (zero? bt-after)
       {:holds? true :violations []}
       (let [violations
@@ -1155,7 +1156,7 @@
   "True when no :disputed escrow is currently assigned to a frozen resolver.
    Mirrors SlashingModuleInvariants: frozen resolver cannot receive new assignments."
   [world]
-  (let [bt         (:block-time world 0)
+  (let [bt         (time-ctx/block-ts world)
         frozen-map (:resolver-frozen-until world {})
         violations
         (for [[wf et] (:escrow-transfers world)

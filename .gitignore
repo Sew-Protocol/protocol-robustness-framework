@@ -77,3 +77,6 @@ sew-simulation.jar
 results/.notebook-focus
 .rebel_readline_history
 .aider*
+
+scripts/experimental
+

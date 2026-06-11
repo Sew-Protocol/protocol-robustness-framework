@@ -1,7 +1,8 @@
 (ns resolver-sim.time.model
   "Simulation time model — minimal two-field representation.
    Only block-ts (Unix seconds) and scenario-step are tracked;
-   all protocol timeouts and deadlines run off block-ts alone.")
+   all protocol timeouts and deadlines run off block-ts alone."
+  (:require [resolver-sim.time.context :as time-ctx]))
 
 (defn now
   "Return simulation time snapshot from world.
@@ -12,12 +13,13 @@
      :scenario-step (or (:scenario-step t) 0)}))
 
 (defn with-time
-  "Persist time snapshot back onto world (and :block-time mirror)."
+  "Persist time snapshot back onto world.
+   Synchronizes with the canonical temporal context root."
   [world {:keys [block-ts scenario-step]}]
-  (-> world
-      (assoc :block-time block-ts)
-      (assoc :time {:block-ts      block-ts
-                    :scenario-step scenario-step})))
+  (time-ctx/with-temporal-context
+    (assoc world :time {:block-ts      block-ts
+                        :scenario-step scenario-step})
+    {:block-ts block-ts :step scenario-step}))
 
 (defn advance
   "Advance the simulation clock by a duration map.

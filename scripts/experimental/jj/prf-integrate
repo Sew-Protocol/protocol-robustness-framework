@@ -1,0 +1,63 @@
+prf-integrate() {
+  set -euo pipefail
+
+  agent="${1:?usage: validate-and-merge agent-a}"
+  repo_root="$(jj workspace root)"
+  integration_ws="$repo_root/../integration"
+
+  lock_file="$repo_root/../.integration.lock"
+
+  # Snapshot current agent work.
+  jj util snapshot >/dev/null
+
+  # Current agent revision.
+  source_rev="@"
+
+  # Optional but useful: tag/describe current agent change before integration.
+  jj describe -m "agent:${agent} validated candidate" "$source_rev" >/dev/null || true
+
+  (
+    flock -x 9
+
+    cd "$integration_ws"
+
+    jj util snapshot >/dev/null
+
+    echo "Creating integration candidate from ${agent}..."
+
+    # Current 2026-safe replacement for old jj merge:
+    # create a new working-copy commit with integration and source as parents.
+    jj new integration "$repo_root::$source_rev" \
+      -m "integrate(${agent}): validated candidate"
+
+    # Jujutsu permits conflicted commits, so explicitly reject them.
+    if jj log -r 'conflicts() & @' --no-graph --color never | grep -q .; then
+      echo "Conflict detected. Integration candidate rejected."
+      jj abandon @
+      exit 2
+    fi
+
+    echo "Running unit tests..."
+    bb test:unit
+
+    echo "Running invariant tests..."
+    bb test:invariants
+
+    # Check again, in case generated changes or test side-effects exposed conflicts.
+    if jj log -r 'conflicts() & @' --no-graph --color never | grep -q .; then
+      echo "Conflict detected after validation. Candidate rejected."
+      jj abandon @
+      exit 2
+    fi
+
+    # Advance integration only after validation passes.
+    jj bookmark set integration -r @
+
+    # Move integration workspace onto a fresh empty child so the bookmark is not
+    # accidentally mutated by future filesystem changes.
+    jj new integration -m "integration workspace"
+
+    echo "Integrated ${agent} successfully."
+
+  ) 9>"$lock_file"
+}

@@ -1,0 +1,16 @@
+prf-sync-check(){
+  set -euo pipefail
+
+  jj util snapshot >/dev/null
+
+  jj rebase -b @ -o integration
+
+  if jj log -r 'conflicts() & @::' --no-graph --color never | grep -q .; then
+    echo "Would conflict."
+    jj undo
+    exit 2
+  fi
+
+  echo "Would sync cleanly."
+  jj undo
+}

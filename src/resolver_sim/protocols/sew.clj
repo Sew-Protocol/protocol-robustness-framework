@@ -787,7 +787,7 @@
              ;; Disputed actions
              (and (= :disputed (:escrow-state et))
                   (not (and (= actor (:dispute-resolver et))
-                            (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))))
+                            (> (get-in world [:resolver-frozen-until actor] 0) (time-ctx/block-ts world)))))
              (into (let [pending (t/get-pending world wf)
                          resolver (:dispute-resolver et)]
                      (cond-> []
@@ -797,7 +797,7 @@
                               {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
 
                        ;; Escalation/Challenge (if pending exists and not expired)
-                       (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
+                       (and (:exists pending) (< (time-ctx/block-ts world) (:appeal-deadline pending)))
                        (into (cond-> []
                                (or (= actor (:from et)) (= actor (:to et)))
                                (conj {:action "escalate-dispute" :params {:workflow-id wf}})

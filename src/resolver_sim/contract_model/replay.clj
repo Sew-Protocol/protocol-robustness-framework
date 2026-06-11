@@ -25,6 +25,7 @@
              [resolver-sim.protocols.protocol :as proto]
              [resolver-sim.protocols.registry :as preg]
               [resolver-sim.time.model        :as time-model]
+              [resolver-sim.time.context      :as time-ctx]
               [resolver-sim.util.attribution :as attr]
               [resolver-sim.yield.risk-monitor :as risk]))
 
@@ -159,7 +160,7 @@
         temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
         check-inv?   (:check-invariants? flags true)
         event-time   (:time event)
-        now          (:block-time world)
+        now          (time-ctx/block-ts world)
         time-before  {:block-ts now}
         rules        (effective-temporal-rules context)
         temporal-failure (when temporal-on?
