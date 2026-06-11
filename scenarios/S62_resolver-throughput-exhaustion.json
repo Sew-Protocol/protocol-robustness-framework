@@ -20,7 +20,7 @@
     "role" : "keeper"
   } ],
   "protocol-params" : {
-    "resolver-capacity" : 1
+    "resolver-capacity" : 3
   },
   "events" : [ {
     "seq" : 0,
@@ -81,6 +81,33 @@
     }
   }, {
     "seq" : 6,
+    "time" : 1200,
+    "agent" : "resolver",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 0,
+      "accept" : true
+    }
+  }, {
+    "seq" : 7,
+    "time" : 1205,
+    "agent" : "resolver",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 1,
+      "accept" : true
+    }
+  }, {
+    "seq" : 8,
+    "time" : 1210,
+    "agent" : "resolver",
+    "action" : "execute_resolution",
+    "params" : {
+      "workflow-id" : 2,
+      "accept" : true
+    }
+  }, {
+    "seq" : 9,
     "time" : 1500,
     "agent" : "keeper",
     "action" : "execute_pending_settlement",
@@ -88,12 +115,20 @@
       "workflow-id" : 0
     }
   }, {
-    "seq" : 7,
+    "seq" : 10,
     "time" : 1505,
     "agent" : "keeper",
     "action" : "execute_pending_settlement",
     "params" : {
       "workflow-id" : 1
+    }
+  }, {
+    "seq" : 11,
+    "time" : 1510,
+    "agent" : "keeper",
+    "action" : "execute_pending_settlement",
+    "params" : {
+      "workflow-id" : 2
     }
   } ],
   "scenario-author" : "@grifma",

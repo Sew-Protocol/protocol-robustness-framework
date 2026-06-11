@@ -3,23 +3,27 @@
 ## Summary
 
 - Suite: reference-validation-v1
-- Version: 1.0.0
+- Version: 1.3.0
 - Status: PASS
-- Scenarios: 7
+- Scenarios: 8
+- Passed: 8
 - Failed: 0
 - Inconclusive: 0
+- Expected passed: 8
+- Generated: 2026-06-11T21:10:50Z
 
 ## Claims tested
 
 | Claim | Scenario | Status |
 |---|---|---|
-| active-escrow-rules-immutable | governance-sandwich-v1 | PASS |
-| malicious-verdict-economically-bounded | malicious-resolver-verdict-v1 | PASS |
-| liveness-under-adversarial-load | dispute-flooding-v1 | PASS |
-| unresolved-liabilities-block-withdrawal | bond-withdrawal-race-v1 | PASS |
-| settlement-mutual-exclusion | same-block-ordering-v1 | PASS |
-| pull-first-settlement-safety | autopush-settlement-v1 | PASS |
-| corrupt-verdict-must-survive-escalation | appeal-failure-cascade-v1 | PASS |
+| governance-sandwich-v1 | active-escrow-rules-immutable | pass |
+| malicious-resolver-verdict-v1 | malicious-verdict-economically-bounded | pass |
+| dispute-flooding-v1 | liveness-under-adversarial-load | pass |
+| bond-withdrawal-race-v1 | unresolved-liabilities-block-withdrawal | pass |
+| same-block-ordering-v1 | settlement-mutual-exclusion | pass |
+| autopush-settlement-v1 | pull-first-settlement-safety | pass |
+| appeal-failure-cascade-v1 | corrupt-verdict-must-survive-escalation | pass |
+| yield-accrual-efficiency-v1 | yield-accrual-covers-protocol-fees | pass |
 
 ## Invariant summary
 

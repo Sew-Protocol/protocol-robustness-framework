@@ -150,53 +150,48 @@
 - **Dashboard UI:** Hero section now supports direct jump via URL anchor (`#dashboard`) and shows 12 curated scenarios.
 
 
-## 11 June 2026
+## 11 June 2026 (continued — reference validation, oracle fixtures, notebooks)
 
-# Bug fixes
+### Fixed
+1. **`financial/loss.clj` — coverage-ratio denominator**: Included `fulfilled-total` (already-paid) in the irrecoverable check, which could falsely trigger `:loss-irrecoverable` when outstanding obligations (`deferred + haircut`) were actually covered. Split into `outstanding` for coverage check, keeping `total-oblig` for user-loss-ratio.
+2. **`financial/loss.clj` — `:claimable` schema mismatch**: `classify-loss` read `:claimable` as flat `{token amount}` but actual world structure is `{workflow-id {address amount}}`. Claimable balances were always read as 0. Fixed with nested `reduce`.
+3. **`financial/loss.clj` — Ratio in user-loss-ratio**: Integer division returned Clojure `Ratio` (`1/5`), which `(= 0.2 1/5)` evaluates to `false` and breaks `format "%.2f"` in Clerk notebooks. Wrapped with `double`.
+4. **`test/resolver_sim/financial/loss_test.clj` — wrong `:claimable` schema**: 3 tests used flat `{:USDC 200}` instead of correct nested `{0 {"dummy" 200}}`.
+5. **`protocols/sew/invariants/dispute.clj` — dispute-timestamp-consistent inverted**: Commit `8cffb6a` inverted the `:when` condition from `(not (pos? ts))` to `(pos? ts)`, causing every disputed escrow with a valid timestamp to be flagged as a violation. Restored correct logic.
+6. **`protocols/sew/resolution.clj` — force-reversal-slash double-slash**: Calling `force-reversal-slash` twice for the same workflow double-deducted stake and overwrote the first entry. Added idempotent guard checking existing `[:pending-fraud-slashes slash-id]`.
+7. **`stochastic/detection.clj` — orphan `:oracle-mode` silently ignored**: When `:fixed-or` provided the fixture mode (without `:oracle-fixture`), the old orphan checker only flagged `:oracle-mode` vs `:oracle-fixture` conflicts — it missed `:oracle-mode` vs `:fixed-or`. Fixed by comparing `:oracle-mode` directly against effective mode.
+8. **`stochastic/detection.clj` — invalid rolls type not caught**: `validate-oracle-params!` didn't reject invalid `:rolls` types for `:fixed-roll-sequence` (e.g., `42`), producing a confusing error downstream. Added explicit `(not (or vector? map?))` guard.
+9. **`sim/multi_epoch.clj` — `:detection-rate` stored as parameter not empirical rate**: `:detection-rate` was set to the input parameter `(:slashing-detection-probability)` instead of the actual simulation outcome. When `:fixed-or` overrode fixture rolls, the check read stale parameter. Changed to `(:slash-rate aggregate-malice)`.
+10. **`sim/governance_impact.clj` — same `:detection-rate` bug**: Governance pending slashes generated from the parameter rate instead of actual outcomes. Changed to `(get-in batch-result [:aggregate :slash-rate])`.
+11. **`stochastic/evidence_costs.clj` — malice profit negative**: `(- 1.0 m-detection-risk)` could go negative when detection risk > 1.0 (e.g., detection=0.80, slash-mult=5.0 → risk=4.0, profit factor=-3.0). Clamped with `(max 0.0 ...)`.
+12. **`stochastic/evidence_costs.clj` — coverage-ratio denominator fix**: When `coverage-ratio` denominator included `fulfilled-total` (already-paid amounts), the irrecoverable check could falsely trigger. Fixed by splitting `outstanding` from `total-oblig`.
+13. **`yield/liquid_lending_v2_test.clj` — broken test file**: Referenced nonexistent `liquid-lending-v2` module (v2 was merged into `liquid-lending`). Rewrote 155 lines to use current API — 7 tests now pass.
+14. **`yield/evidence.clj` — `canonical-yield-evidence` identity placeholder**: Was `identity`, never produced `:supported-failure-modes`. Now extracts failure modes from world's `:yield/risk` entries.
+15. **`notebooks/security_validation.clj` — missing `loader` import**: Used `loader/load-focused` without requiring `resolver-sim.notebooks.manifest.loader`. Added `(require ...)` block.
+16. **`notebooks/yield_demo.clj` — Ratio in format string**: `(format "%.2f" (:liquidity/available))` failed when `:liquidity/available` was a Clojure `Ratio`. Java's `Formatter` rejects `%f` for non-Double types. Wrapped with `(double ...)`.
 
-1. financial/loss.clj — coverage-ratio denominator included fulfilled-total (already-paid). Split into outstanding = deferred + haircut for coverage check, keeping total-oblig = fulfilled + deferred + haircut for user-loss-ratio.
-2. financial/loss.clj:173 — :claimable read as flat {token amount} but actual world structure is {wf {addr amt}}. Fixed with nested reduce summing across workflows.
-3. financial/loss.clj:181 — Integer division returned Clojure Ratio instead of Double (1/5 ≠ 0.2). Wrapped with double.
-4. test/resolver_sim/financial/loss_test.clj — 3 tests used wrong :claimable schema {:USDC 200} → {0 {"dummy" 200}}.
-Tests added
-5. test/resolver_sim/scenario/projection_test.clj — Added test-trace-end-projection-includes-financial-loss verifying :financial-loss in projection output.
-6. test/resolver_sim/yield/liquid_lending_v2_test.clj — Rewrote 155 lines (was broken — referenced nonexistent liquid-lending-v2 module). Now uses current liquid-lending API with 7 passing tests.
-Migration clean-up
-7. test/resolver_sim/stochastic/oracle_fixture_test.clj — Added fixed-or-fraud-detection-active, fixed-or-timeout-detection-active, fixed-or-l2-detection-active, fixed-or-all-roll-kinds-consumed tests covering all 9 oracle roll kinds with non-zero probability thresholds.
-8. src/resolver_sim/stochastic/detection.clj — Added detection-kind->prob-key, detection-kind->default-prob, dead-roll-kind-warnings to warn when :fixed-or specifies roll kinds with zero probability thresholds. Removed dead oracle-roll-consumption-order vector.
+### Added
+17. **`financial/loss.clj` — prorata user-loss-ratio**: Changed `:loss/user-realized?` from boolean `true` to a prorata ratio (`haircut-total / total-obligations`). Returns `false` when no haircut, preserves backward compatibility for all downstream consumers.
+18. **`test/resolver_sim/scenario/projection_test.clj` — `:financial-loss` test**: Added `test-trace-end-projection-includes-financial-loss` verifying `:financial-loss` key in projection output with correct loss status, prorata ratio, and shortfall detail.
+19. **`test/resolver_sim/stochastic/oracle_fixture_test.clj` — 4 per-kind detection tests**: Added `fixed-or-fraud-detection-active`, `fixed-or-timeout-detection-active`, `fixed-or-l2-detection-active`, `fixed-or-all-roll-kinds-consumed` covering all 9 oracle roll kinds with non-zero probability thresholds.
+20. **`stochastic/detection.clj` — dead-roll-kind warnings**: Added `detection-kind->prob-key`, `detection-kind->default-prob`, `dead-roll-kind-warnings` to `collect-oracle-fixture-warnings`. Warns when `:fixed-or` specifies roll kinds with zero probability thresholds (the roll sequence will never be consumed).
+21. **`stochastic/detection.clj` — probability-threshold-aware fixture validation**: Extended `collect-oracle-fixture-warnings` to detect dead per-kind roll entries.
 
-# Added
-
-1. Artifact Registry v1.1 & Hardening
-   * Upgraded Schema: Formally defined test-artifacts.v1.1 with mandatory importance (CORE/DIAGNOSTIC) and dependencies (SHA256
-     binding).
-   * Emitter Unification: Centralized all registry emission in write_scenario_run_manifest.py, removing 130+ lines of brittle inline
-     Python from test.sh.
-   * Transitive Dependency Closure: Emitter now automatically includes lower-importance artifacts if they are required to verify a
-     CORE claim.
-   * Overwrite Protection: Implemented a "chain-final" gate in the emitter that refuses to modify any directory containing a signed
-     envelope.
-
-  2. Authenticity & Researcher Attribution
-   * Evidence Envelopes: Implemented envelope.json to cryptographically bind the registry hash, run ID, and timestamp to a signature.
-   * Researcher Registry: Created keys/owners.json and keys/add_key.clj to map researcher identities to verified public key
-     fingerprints.
-   * Strict Verification: Created verify_claim.py and verify_evidence_bundle.py to validate the end-to-end chain: Signature → Envelope
-     → Registry → Artifacts.
-
-  3. Yield-v1 & Strategy Hardening
-   * Vault-Centric Replay: Enabled multi-owner yield scenarios (Y01–Y04) using a "Thin Runner" that bypasses legacy Sew workflow-id
-     requirements.
-   * Precision Guard: Implemented canon-round in evidence_costs.clj to prevent non-deterministic settlement drift in stochastic profit
-     models.
-   * Strategy Correction: Fixed a bug where load-mult was incorrectly penalizing honest strategy profit instead of incentivizing lazy
-     defection.
-
-  4. Diagnostic Infrastructure
-   * Attribution Quality: Upgraded with-attribution to report :complete or :partial metadata status in event-evidence artifacts.
-   * Commit Provenance: Emitter now captures both the Git Hash and the Git Message at runtime for immediate human auditability.
-   * Registry-First Notebooks: Refactored security_validation.clj and protocol_provenance.clj to load data via registry IDs rather
-     than hardcoded file paths.
+### Changed
+22. **`stochastic/evidence_costs.clj` — optimal-strategy-under-load refactored**:
+    - Phases 1-5: difficulty-weighted accuracy, effort-aware load-level, honest accuracy degradation replacing lazy profit multiplier, difficulty-dependent detection, validation and property tests.
+    - Return changed from bare strategy keyword to full diagnostic map with per-strategy payoffs, load level, effort per dispute, difficulty distribution, and assumptions.
+23. **`sim/defection.clj` — load-optimal selector updated**: Updated to read `:optimal-strategy` from the new full-diagnostic return map instead of bare keyword.
+24. **`suites/reference-validation-v1/` — suite refactored**:
+    - Version normalized to `1.3.0` across all metadata files (SUITE.yaml, VERSION, configs, reports).
+    - `verify.sh` now checks all 8 traces (was 1) and includes pass count check (`passed == total`).
+    - `generate-report.sh` rewritten to read from actual/ JSON instead of hardcoding.
+    - Stale `.json.sha256` files removed (duplicate SHA256 format).
+    - Orphaned `reference-suite-integrity-v1.json` removed.
+    - Scenario count 7→8: `yield-accrual-efficiency-v1` added to SUITE.yaml, catalog, docs, reports.
+    - SUITE.yaml `simulator_backed`: all 8 scenarios now `true`.
+25. **`scenarios/S62_resolver-throughput-exhaustion.json` — fixed dispute-flooding scenario**: Added 3 `execute_resolution` events and set `resolver-capacity` to 3. Scenario was pre-existingly broken (`:open-entities-at-end`).
+26. **Removed stale artifacts**: `expected/*.json.sha256`, `expected/reference-suite-integrity-v1.json`, duplicate `S62.json` from suite scenarios directory.
 
 
 Governance baseline (6 files)

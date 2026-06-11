@@ -20,6 +20,29 @@ report_json_diff() {
   python3 "$REPO_ROOT/python/json_diff_report.py" "$expected_file" "$actual_file" || true
 }
 
+# ── Pass count check ────────────────────────────────────────────────────
+
+SUMMARY="$ACTUAL/summary.json"
+echo "DEBUG: Checking for $SUMMARY"
+ls -l "$SUMMARY"
+[[ -f "$SUMMARY" ]] || { echo "FAIL missing summary.json (ACTUAL: $ACTUAL)"; exit 1; }
+
+PASSED=$(python3 -c "import json; print(json.load(open('$SUMMARY'))['passed'])")
+FAILED=$(python3 -c "import json; print(json.load(open('$SUMMARY'))['failed'])")
+TOTAL=$(python3 -c "import json; print(json.load(open('$SUMMARY'))['scenario_count'])")
+
+if [[ "$FAILED" -ne 0 ]]; then
+  echo "FAIL reference-validation-v1: $FAILED/$TOTAL scenarios failed"
+  exit 1
+fi
+if [[ "$PASSED" -ne "$TOTAL" ]]; then
+  echo "FAIL reference-validation-v1: passed $PASSED != total $TOTAL"
+  exit 1
+fi
+echo "PASS count: $PASSED/$TOTAL scenarios passed"
+
+# ── JSON content and hash verification ──────────────────────────────────
+
 files=(summary scenario-results invariants economic-results evidence-matrix)
 for base in "${files[@]}"; do
   [[ -f "$ACTUAL/$base.json" ]] || { echo "FAIL missing actual file: $base.json"; exit 1; }
@@ -39,18 +62,49 @@ for base in "${files[@]}"; do
   [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]] || { echo "FAIL hash mismatch: $base.json"; exit 1; }
 done
 
-[[ -f "$ACTUAL/traces/001-governance-sandwich.trace.json" ]] || { echo "FAIL missing simulator trace"; exit 1; }
-[[ -f "$EXPECTED/traces/001-governance-sandwich.trace.json" ]] || { echo "FAIL missing expected simulator trace"; exit 1; }
-[[ -f "$EXPECTED/traces/001-governance-sandwich.trace.sha256" ]] || { echo "FAIL missing expected simulator trace hash"; exit 1; }
+# ── Trace verification (all 8 scenarios) ────────────────────────────────
 
-A_TRACE=$(sha256sum "$ACTUAL/traces/001-governance-sandwich.trace.json" | awk '{print $1}')
-E_TRACE=$(tr -d '[:space:]' < "$EXPECTED/traces/001-governance-sandwich.trace.sha256")
-if [[ "$A_TRACE" != "$E_TRACE" ]]; then
-  echo "FAIL simulator trace hash mismatch"
-  report_json_diff \
-    "$EXPECTED/traces/001-governance-sandwich.trace.json" \
-    "$ACTUAL/traces/001-governance-sandwich.trace.json"
-  exit 1
-fi
+TRACES=(001-governance-sandwich 002-malicious-resolver-verdict 003-dispute-flooding \
+        004-bond-withdrawal-race 005-same-block-ordering 006-autopush-settlement \
+        007-appeal-failure-cascade 008-yield-accrual-efficiency)
+
+for trace in "${TRACES[@]}"; do
+  [[ -f "$ACTUAL/traces/$trace.trace.json" ]] || { echo "FAIL missing actual trace: $trace"; exit 1; }
+  [[ -f "$EXPECTED/traces/$trace.trace.json" ]] || { echo "FAIL missing expected trace: $trace"; exit 1; }
+  [[ -f "$EXPECTED/traces/$trace.trace.sha256" ]] || { echo "FAIL missing expected trace hash: $trace"; exit 1; }
+
+  A_TRACE=$(sha256sum "$ACTUAL/traces/$trace.trace.json" | awk '{print $1}')
+  E_TRACE=$(tr -d '[:space:]' < "$EXPECTED/traces/$trace.trace.sha256")
+  if [[ "$A_TRACE" != "$E_TRACE" ]]; then
+    echo "FAIL trace hash mismatch: $trace"
+    report_json_diff "$EXPECTED/traces/$trace.trace.json" "$ACTUAL/traces/$trace.trace.json"
+    exit 1
+  fi
+done
 
 echo "PASS verify-reference-validation-v1"
+
+# ── Artifact Registry Emission ──────────────────────────────────────────
+echo "Emitting artifact registry..."
+python3 "$REPO_ROOT/scripts/write_scenario_run_manifest.py" \
+    --scenario "reference-validation" \
+    --suite "reference-validation-v1" \
+    --status "pass" \
+    --artifact-dir "$ACTUAL" \
+    --registry-level CORE
+# ── Artifact Registry Orphan Audit ──────────────────────────────────────
+echo "Running orphan audit on evidence bundle..."
+REGISTRY="results/test-artifacts/test-artifacts.json"
+python3 "$REPO_ROOT/scripts/verify_artifact_registry.py" "$REGISTRY"
+
+# ── Evidence Binding/Signing ──────────────────────────────────────────
+# Signs the evidence bundle to achieve Phase 4 authenticity
+# Requires SIGNING_KEY env var
+if [[ -n "${SIGNING_KEY:-}" ]]; then
+  echo "Signing evidence bundle..."
+  bb evidence:sign "$SIGNING_KEY"
+else
+  echo "SKIP evidence signing (no SIGNING_KEY provided)"
+fi
+
+echo "PASS all integrity and authenticity checks."

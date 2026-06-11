@@ -54,6 +54,11 @@
     (reduce + 0 losses)))
 
 (defn canonical-yield-evidence
-  "Produces a canonical yield evidence summary for projection."
-  [m]
-  m)
+  "Produces a canonical yield evidence summary for projection.
+   Extracts supported failure modes from world's yield risk configuration."
+  ([m] (canonical-yield-evidence m {}))
+  ([m world]
+   (let [risk-entries (vals (get world :yield/risk {}))
+         token-entries (mapcat vals risk-entries)
+         failure-modes (into #{} (mapcat :failure-modes) token-entries)]
+     (assoc m :supported-failure-modes failure-modes))))

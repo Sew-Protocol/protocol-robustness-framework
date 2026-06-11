@@ -59,6 +59,9 @@
 ;; Data loading (all JVM-side, no SCI)
 ;; ---------------------------------------------------------------------------
 
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
+(require '[resolver-sim.notebooks.manifest.loader :as loader])
+
 ^{:nextjournal.clerk/no-cache true
   :nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def sec-data

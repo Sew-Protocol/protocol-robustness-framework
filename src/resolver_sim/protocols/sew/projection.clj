@@ -85,7 +85,8 @@
 (defn- build-yield-evidence-summary
   [world]
   (ye/canonical-yield-evidence
-   {:routing-by-workflow (build-yield-routing-view world)}))
+   {:routing-by-workflow (build-yield-routing-view world)}
+   world))
 
 (defn- build-evidence
   [world]

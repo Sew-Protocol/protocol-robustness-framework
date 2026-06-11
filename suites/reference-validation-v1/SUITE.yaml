@@ -1,22 +1,22 @@
 suite_id: reference-validation-v1
-title: Reference Validation Suite v1.1
+title: Reference Validation Suite v1.3
 status: public-candidate
-version: 1.1.0
+version: 1.3.0
 created: 2026-05
 protocol_phase: DR3 built; simulation-backed hardening and gated rollout
 
 description: >
   Canonical deterministic validation harness for Sew Protocol.
-  v1 defines scenario set, claim mappings, expected outputs,
-  verification flow, and CI checks.
+  v1.3 defines scenario set, claim mappings, expected outputs,
+  verification flow, and CI checks. All 8 scenarios are simulator-backed.
 
 public_disclosure:
   classification: deterministic-evidence-pack-harness
-  simulator_backed: partial
-  confidence: provisional
+  simulator_backed: full
+  confidence: high
   note: >
-    v1.1 runs manifest-driven replay for simulator-backed scenarios (S61
-    governance today). Remaining rows are pinned derivations until wired.
+    All 8 scenarios run manifest-driven simulator replay with trace export
+    and evidence invariant verification. Expected hashes are pinned.
 
 goals:
   - Provide externally reproducible validation evidence packaging.
@@ -35,7 +35,7 @@ repository:
   expected_root: suites/reference-validation-v1
 
 pinned_inputs:
-  suite_version: 1.1.0
+  suite_version: 1.3.0
   manifest: manifest.edn
   config_version: reference-config-v1
   economic_assumptions_version: economic-assumptions-v1
@@ -65,42 +65,49 @@ scenarios:
 
   - id: malicious-resolver-verdict-v1
     file: scenarios/002-malicious-resolver-verdict.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: dispute-flooding-v1
     file: scenarios/003-dispute-flooding.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: bond-withdrawal-race-v1
     file: scenarios/004-bond-withdrawal-race.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: same-block-ordering-v1
     file: scenarios/005-same-block-ordering.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: autopush-settlement-v1
     file: scenarios/006-autopush-settlement.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
 
   - id: appeal-failure-cascade-v1
     file: scenarios/007-appeal-failure-cascade.edn
-    evidence_type: pinned-derivation
-    simulator_backed: false
-    confidence: provisional
-    upgrade_path: wire to deterministic simulator replay and commit trace hash
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: maintain deterministic replay and trace hash stability
+
+  - id: yield-accrual-efficiency-v1
+    file: scenarios/008-yield-accrual-efficiency.edn
+    evidence_type: simulator-backed
+    simulator_backed: true
+    confidence: high
+    upgrade_path: integrate with Aave-specific LST/LRT yield adapters to verify precision parity

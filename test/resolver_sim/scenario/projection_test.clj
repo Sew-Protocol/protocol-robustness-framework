@@ -70,24 +70,25 @@
  (deftest test-trace-end-projection-includes-yield-routing-topology
    (testing "terminal-world includes snapshot module topology and yield profile->archetype routing"
      (let [result (replay-result
-                   {:world {:live-states {0 :released}
-                            :total-held {"USDC" 0}
-                            :total-fees {"USDC" 10}
-                            :module-snapshots
-                            {0 {:resolution-module :module/decentralized-dispute-resolution
-                                :release-strategy :module/release-default
-                                :cancellation-strategy :module/cancellation-default
-                                :yield-generation-module :yield.provider/liquid-lending
-                                :yield-distribution-module :module/yield-distribution-default
-                                :incentive-module :module/incentive-default
-                                :escrow/modules {:resolution :module/decentralized-dispute-resolution
-                                                 :yield :aave-v3
-                                                 :release :module/release-default
-                                                 :cancel :module/cancellation-default}
-                                :yield-module-id :module/aave-yield
-                                :yield-profile :aave-v3
-                                :yield-archetype :yield.provider/liquid-lending}}
-                            :block-time 1400}
+                    {:world {:live-states {0 :released}
+                             :total-held {"USDC" 0}
+                             :total-fees {"USDC" 10}
+                             :module-snapshots
+                             {0 {:resolution-module :module/decentralized-dispute-resolution
+                                 :release-strategy :module/release-default
+                                 :cancellation-strategy :module/cancellation-default
+                                 :yield-generation-module :yield.provider/liquid-lending
+                                 :yield-distribution-module :module/yield-distribution-default
+                                 :incentive-module :module/incentive-default
+                                 :escrow/modules {:resolution :module/decentralized-dispute-resolution
+                                                  :yield :aave-v3
+                                                  :release :module/release-default
+                                                  :cancel :module/cancellation-default}
+                                 :yield-module-id :module/aave-yield
+                                 :yield-profile :aave-v3
+                                 :yield-archetype :yield.provider/liquid-lending}}
+                             :yield/risk {:aave-v3 {:USDC {:failure-modes #{:partial-liquidity}}}}
+                             :block-time 1400}
                     :metrics {}})
            p      (proj/trace-end-projection result)]
        (is (= :module/aave-yield

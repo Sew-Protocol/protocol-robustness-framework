@@ -3,14 +3,13 @@
 ## Suite
 
 - Suite ID: reference-validation-v1
-- Suite version: 1.0.0
+- Suite version: 1.3.0
 - Status: public-candidate
 
 ## Repository state
 
-- sew-simulation commit: d6a588a9c422e0cd4e11d49d706c9858f7ef0c7c
-- sew-protocol commit: N/A (simulation repository context)
-- generated at: 2026-05-12T12:54:00Z
+- sew-simulation commit: current HEAD (refresh with `clojure -M:reference-validation --refresh-expected`)
+- generated at: 2026-06-11 (suite refactored to v1.3.0)
 
 ## Runtime
 

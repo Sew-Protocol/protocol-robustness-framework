@@ -172,7 +172,7 @@
          ["Yield model" (:yield/model vm)]
          ["Source" (:yield/source vm)]
          ["Expected yield" (format-usd (:amount/expected-yield vm))]
-         ["Liquidity ratio" (format "%.2f" (:liquidity/available vm))]])))
+          ["Liquidity ratio" (format "%.2f" (double (:liquidity/available vm)))]])))
 
 ;; --- 1. Scenario A — Healthy yield path ---
 ;;

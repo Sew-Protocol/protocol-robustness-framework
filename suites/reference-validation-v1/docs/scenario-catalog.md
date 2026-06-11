@@ -1,6 +1,6 @@
 # Scenario Catalog
 
-Canonical CI set (7 scenarios). Source of truth: `../manifest.edn`.
+Canonical CI set (8 scenarios). Source of truth: `../manifest.edn`.
 
 | ID | Claim | Threat | Evidence | Simulator | Confidence |
 |---|---|---|---|---|---|
@@ -11,5 +11,6 @@ Canonical CI set (7 scenarios). Source of truth: `../manifest.edn`.
 | same-block-ordering-v1 | settlement-mutual-exclusion | ordering-dependent-double-settlement | simulator-backed | yes (S56) | high |
 | autopush-settlement-v1 | pull-first-settlement-safety | unsafe-external-value-movement | simulator-backed | yes (S05) | high |
 | appeal-failure-cascade-v1 | corrupt-verdict-must-survive-escalation | appeal-layer-breakdown | simulator-backed | yes (S20) | high |
+| yield-accrual-efficiency-v1 | yield-accrual-covers-protocol-fees | fee-drag-on-long-escrows | simulator-backed | yes (S88) | high |
 
 Draft / future scenarios (not gated in CI) live under `../draft/expected/`.
