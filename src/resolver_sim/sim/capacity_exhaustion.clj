@@ -16,7 +16,7 @@
      - escrow final states are correct
      - conservation-of-funds invariant throughout"
   (:require [resolver-sim.time.model :as tm]
-            [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+            [resolver-sim.protocols.sew.snapshot :as snapshot]
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -34,7 +34,7 @@
 (def usdc     "0xUSDC")
 
 (def base-snapshot
-  (snap-fix/escrow-snapshot
+  (snapshot/make-escrow-snapshot
    {:escrow-fee-bps            0
     :default-auto-release-delay 0
     :default-auto-cancel-delay  0

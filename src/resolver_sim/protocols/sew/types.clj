@@ -27,7 +27,6 @@
    Every operation function signature:
      (fn [world workflow-id ...args] -> {:ok bool :world world' :error keyword})"
   (:require [clojure.string :as str]
-            [resolver-sim.protocols.sew.snapshot :as snapshot]
             [resolver-sim.time.model :as time.model]))
 
 ;; ---------------------------------------------------------------------------

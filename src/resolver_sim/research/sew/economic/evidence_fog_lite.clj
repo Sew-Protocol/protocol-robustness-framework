@@ -4,7 +4,7 @@
    Validates the Yield Module implementation, specifically checking whether
    yield generation effectively covers protocol fees and correctly handles
    distribution to participants."
-  (:require [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
+  (:require [resolver-sim.protocols.sew.snapshot :as snapshot]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
@@ -30,7 +30,7 @@
         
         ;; Setup
         w0    (t/empty-world 1000)
-        snap  (snap-fix/escrow-snapshot 
+        snap  (snapshot/make-escrow-snapshot 
                 {:escrow-fee-bps fee-bps
                  :yield-protocol-fee-bps (:yield-protocol-fee-bps params 1000)}) ; 10% of yield
         
