@@ -7,7 +7,7 @@
 (defrecord BatchTestProtocol []
   proto/SimulationAdapter
   (protocol-id [_] "batch-test")
-  (init-world [_ _] {:block-ts (java.time.Instant/ofEpochSecond 1000) :flag false :applied []})
+  (init-world [_ _] {:block-time 1000 :flag false :applied []})
   (build-execution-context [_ agents _] {:agent-index (into {} (map (juxt :id identity) agents))})
   (dispatch-action [_ _ world event]
     (case (:action event)
@@ -36,7 +36,7 @@
 (defrecord SimpleProtocol []
   proto/SimulationAdapter
   (protocol-id [_] "simple")
-  (init-world [_ _] {:block-ts (java.time.Instant/ofEpochSecond 1000) :applied []})
+  (init-world [_ _] {:block-time 1000 :applied []})
   (build-execution-context [_ agents _] {:agent-index (into {} (map (juxt :id identity) agents))})
   (dispatch-action [_ _ world event]
     (case (:action event)

@@ -30,8 +30,7 @@
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.authority  :as auth]
-            [resolver-sim.protocols.sew.invariants :as inv]
-            [resolver-sim.time.model               :as time.model]))
+            [resolver-sim.protocols.sew.invariants :as inv]))
 
 (def ^:private num-trials 200)
 
@@ -269,17 +268,14 @@
    (let [snap     (snap-fix/escrow-snapshot {:escrow-fee-bps        0
                                            :appeal-window-duration appeal-dur
                                            :max-dispute-duration   200000})
-         cr       (lc/create-escrow (t/empty-world (java.time.Instant/ofEpochSecond 1000)) "0xAlice" "0xUSDC" "0xBob" 1000
+         cr       (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" 1000
                                     (t/make-escrow-settings {:custom-resolver "0xRes"}) snap)
          dr       (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))
          w1       (when (:ok dr) (:world dr))
          rr       (when w1 (res/execute-resolution w1 0 "0xRes" true "0xhash" nil))
          w2       (when (:ok rr) (:world rr))
          deadline (when w2 (get-in w2 [:pending-settlements 0 :appeal-deadline]))
-         w-early  (when deadline
-                    (let [now (time.model/now w2)]
-                      (time.model/with-time w2 {:block-ts (java.time.Instant/ofEpochSecond (- (-> deadline .getEpochSecond) time-delta))
-                                                :scenario-step (:scenario-step now)})))
+         w-early  (when deadline (assoc w2 :block-time (- deadline time-delta)))
          r-early  (when w-early (res/execute-pending-settlement w-early 0))]
      (when (and (:ok dr) (:ok rr) r-early)
        (and (false? (:ok r-early))
@@ -367,9 +363,7 @@
              w-pending  (when (:ok rr) (:world rr))
              inv1       (when w-pending (inv/pending-settlement-consistency? w-pending))
              deadline   (when w-pending (get-in w-pending [:pending-settlements 0 :appeal-deadline]))
-             w-expired  (when deadline
-                          (let [now (time.model/now w-pending)]
-                            (time.model/with-time w-pending (assoc now :block-ts (java.time.Instant/ofEpochSecond (+ deadline 1))))))
+             w-expired  (when deadline (assoc w-pending :block-time (+ deadline 1)))
              er         (when w-expired (res/execute-pending-settlement w-expired 0))
              w-final    (when (and er (:ok er)) (:world er))
              inv2       (when w-final (inv/pending-settlement-consistency? w-final))]
@@ -574,9 +568,7 @@
              w-pend   (when (:ok rr) (:world rr))
              ;; Appeal window expires; keeper executes
              deadline (when w-pend (get-in w-pend [:pending-settlements 0 :appeal-deadline]))
-             w-exp    (when deadline
-                        (let [now (time.model/now w-res)]
-                          (time.model/with-time w-res (assoc now :block-ts (java.time.Instant/ofEpochSecond (+ deadline 1))))))
+             w-exp    (when deadline (assoc w-pend :block-time (+ deadline 1)))
              er       (when w-exp (res/execute-pending-settlement w-exp 0))
              w-final  (when (:ok er) (:world er))
              ;; Resolver arrives late and tries to flip the outcome
@@ -635,7 +627,7 @@
              ;; Trying to execute the stale pending settlement must fail
              stale   (when w-esc
                        (res/execute-pending-settlement
-                        (assoc w-esc :block-ts (java.time.Instant/ofEpochSecond 99999)) 0))
+                        (assoc w-esc :block-time 99999) 0))
              ;; New resolver submits a fresh resolution (no appeal window at level 1
              ;; if not final round — but snap still has appeal-dur, so may defer)
              new-rr  (when w-esc

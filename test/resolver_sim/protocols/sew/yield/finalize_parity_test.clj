@@ -6,8 +6,7 @@
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
-            [resolver-sim.yield.registry :as yield-reg]
-            [resolver-sim.time.model                  :as time.model]))
+            [resolver-sim.yield.registry :as yield-reg]))
 
 (def ^:private partial-liquidity-config
   {:modules {:aave-v3 {:tokens {"USDC" {:initial-index 1.0
@@ -47,7 +46,7 @@
                   (:world res))
           w-dis (let [w (-> (create-yield-escrow w0)
                             (assoc-in [:escrow-transfers 0 :dispute-resolver] "resolver")
-                            (assoc :block-ts (java.time.Instant/ofEpochSecond 2000)))
+                            (assoc :block-time 2000))
                       w' (:world (lc/raise-dispute w 0 "sender"))
                       w'' (assoc w' :block-time t1)
                       res (res/execute-resolution w'' 0 "resolver" true "0xparity" nil)]

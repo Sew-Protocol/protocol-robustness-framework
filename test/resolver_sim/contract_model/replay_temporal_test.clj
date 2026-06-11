@@ -13,7 +13,7 @@
 
 (deftest advance-world-time-helper
   (testing "advances only when event-time is in the future"
-    (let [w {:block-ts (java.time.Instant/ofEpochSecond 1000)}
+    (let [w {:block-time 1000}
           f #'resolver-sim.contract-model.replay/advance-world-time
           same (f w 1000)
           fut  (f w 1015)]
@@ -34,7 +34,7 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-ts (java.time.Instant/ofEpochSecond 2000))
+                          :block-time 2000)
           context  (temporal-step-context scenario)
           event    {:seq 0 :time 1999 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
@@ -53,7 +53,7 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-ts (java.time.Instant/ofEpochSecond 2000))
+                          :block-time 2000)
           context  (temporal-step-context scenario)
           event    {:seq 0 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
@@ -72,7 +72,7 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-ts (java.time.Instant/ofEpochSecond 2000))
+                          :block-time 2000)
           context  (assoc (temporal-step-context scenario)
                           :temporal-rules
                           [{:id :custom-no-set-paused
@@ -95,7 +95,7 @@
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
-          world    (assoc (proto/init-world sew/protocol scenario) :block-ts (java.time.Instant/ofEpochSecond 2000))
+          world    (assoc (proto/init-world sew/protocol scenario) :block-time 2000)
           context  (assoc (temporal-step-context scenario)
                           :temporal-rules
                           [{:id :rule-first

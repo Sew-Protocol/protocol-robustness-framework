@@ -79,7 +79,7 @@
     (let [batch2 (str *batch-id* "-mix")
           _h (dotimes [i 3]
                (let [tid    (str batch2 "-h-" i)
-                     params {:block-ts (java.time.Instant/ofEpochSecond 2000) :escrow-size 50000
+                     params {:block-time 2000 :escrow-size 50000
                               :strategy :honest :appeal-bond-bps 0
                               :appeal-probability-if-correct 0.0
                               :appeal-probability-if-wrong   0.0
@@ -88,7 +88,7 @@
                  (tel/record-trial! *ds* sew/protocol batch2 tid params res)))
           _m (dotimes [i 2]
                (let [tid    (str batch2 "-m-" i)
-                     params {:block-ts (java.time.Instant/ofEpochSecond 3000) :escrow-size 50000
+                     params {:block-time 3000 :escrow-size 50000
                               :strategy :malicious :appeal-bond-bps 500
                               :appeal-probability-if-correct 0.0
                               :appeal-probability-if-wrong   0.0

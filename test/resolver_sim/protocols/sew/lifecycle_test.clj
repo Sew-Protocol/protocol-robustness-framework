@@ -7,8 +7,7 @@
             [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
-            [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.time.model :as time.model]))
+            [resolver-sim.protocols.sew.resolution :as res]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared fixtures
@@ -258,7 +257,7 @@
 (deftest auto-cancel-disputed-happy
   (let [w (-> (world-disputed)
               ;; block-time > dispute-ts + max-dispute-duration (1000+3600=4600)
-              (time.model/with-time {:block-ts (java.time.Instant/ofEpochSecond 5000) :scenario-step (:scenario-step (time.model/now (world-disputed)))}))
+              (assoc :block-time 5000))
         r (lc/auto-cancel-disputed-escrow w 0)]
     (is (true? (:ok r)))
     (is (= :refunded (t/escrow-state (:world r) 0)))
@@ -274,14 +273,14 @@
   "CRIT-3: must not override a resolver's pending decision."
   (let [pending {:exists true :is-release true :appeal-deadline 9999 :resolution-hash nil}
         w       (-> (world-disputed)
-                    (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
+                    (assoc :block-time 5000)
                     (assoc-in [:pending-settlements 0] pending))
         r       (lc/auto-cancel-disputed-escrow w 0)]
     (is (false? (:ok r)))
     (is (= :has-pending-settlement (:error r)))))
 
 (deftest auto-cancel-disputed-timeout-not-exceeded
-  (let [w (assoc (world-disputed) :block-ts (java.time.Instant/ofEpochSecond 2000))  ; 2000 < 1000+3600
+  (let [w (assoc (world-disputed) :block-time 2000)  ; 2000 < 1000+3600
         r (lc/auto-cancel-disputed-escrow w 0)]
     (is (false? (:ok r)))
     (is (= :dispute-timeout-not-exceeded (:error r)))))

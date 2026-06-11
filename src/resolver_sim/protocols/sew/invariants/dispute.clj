@@ -12,7 +12,7 @@
                      ts (cond (instance? java.time.Instant val) (.getEpochSecond ^java.time.Instant val)
                               (number? val) (long val)
                               :else 0)]
-              :when (pos? ts)]
+              :when (not (pos? ts))]
           {:workflow-id wf :timestamp ts})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))

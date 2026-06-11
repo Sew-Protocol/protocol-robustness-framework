@@ -51,7 +51,7 @@
                 "Slash status should be REVERSED")
 
             (testing "Execution of reversed slash fails"
-              (let [world-late (assoc world-upheld :block-ts (java.time.Instant/ofEpochSecond 1000000))
+              (let [world-late (assoc world-upheld :block-time 1000000)
                     r-exec (res/execute-fraud-slash world-late workflow-id slash-id)]
                 (is (false? (:ok r-exec)))
                 (is (= :slash-already-reversed (:error r-exec)))))))))))

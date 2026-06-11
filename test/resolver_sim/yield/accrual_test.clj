@@ -15,7 +15,7 @@
    :yield/risk {:test-mod {"USDC" {:liquidity-mode :available
                                    :loss-mode :none}}}
    :yield/module-status {:test-mod :active}
-   :block-ts (java.time.Instant/ofEpochSecond 1000)})
+   :block-time 1000})
 
 
 (def base-position

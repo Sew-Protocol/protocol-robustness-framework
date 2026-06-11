@@ -14,7 +14,7 @@
                                           :git-sha "abc123"
                                           :outcome :pass
                                           :metrics {:invariant-violations 0}
-                                          :block-ts (java.time.Instant/ofEpochSecond 1000)})
+                                          :block-time 1000})
           step (temporal/build-step-record {:run-id "r1"
                                             :step-index 3
                                             :action :execute_pending_settlement
@@ -23,17 +23,17 @@
                                             :time-advance {:seconds 1}
                                             :time-after {:time/block-ts 1180}
                                             :projection-hash "h1"
-                                            :block-ts (java.time.Instant/ofEpochSecond 1180)})
+                                            :block-time 1180})
           inv  (temporal/build-invariant-record {:run-id "r1"
                                                  :step-index 3
                                                  :invariant :time-non-decreasing
                                                  :holds? true
                                                  :severity :time
                                                  :violations []
-                                                 :block-ts (java.time.Instant/ofEpochSecond 1180)})
+                                                 :block-time 1180})
           cov  (temporal/build-coverage-record {:run-id "r1"
                                                 :coverage {:offsets [-1 0 1]}
-                                                :block-ts (java.time.Instant/ofEpochSecond 1180)})]
+                                                :block-time 1180})]
       (is (= "r1" (:id run)))
       (is (= "sew-v1" (:protocol-id run)))
       (is (instance? java.util.Date (:valid-from run)))
@@ -47,10 +47,10 @@
   (testing "record-temporal-run! is safe/no-op with nil datasource"
     (let [out (temporal/record-temporal-run!
                nil
-               {:run {:run-id "r2" :batch-id :b2 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-ts (java.time.Instant/ofEpochSecond 1300)}
-                :steps [{:step-index 2 :action :automate_timed_actions :result :ok :block-ts (java.time.Instant/ofEpochSecond 1300)}]
-                :invariants [{:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-ts (java.time.Instant/ofEpochSecond 1300)}]
-                :coverage {:coverage {:same-block true} :block-ts (java.time.Instant/ofEpochSecond 1300)}})]
+               {:run {:run-id "r2" :batch-id :b2 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-time 1300}
+                :steps [{:step-index 2 :action :automate_timed_actions :result :ok :block-time 1300}]
+                :invariants [{:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1300}]
+                :coverage {:coverage {:same-block true} :block-time 1300}})]
       (is (= "r2" (get-in out [:run :id])))
       (is (= 1 (count (:steps out))))
       (is (= 1 (count (:invariants out))))
@@ -63,11 +63,11 @@
          #"non-decreasing valid-time violated"
          (temporal/record-temporal-run!
           nil
-          {:run {:run-id "r3" :batch-id :b3 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-ts (java.time.Instant/ofEpochSecond 1300)}
-           :steps [{:step-index 1 :action :create_escrow :result :ok :block-ts (java.time.Instant/ofEpochSecond 1301)}
-                   {:step-index 2 :action :release :result :ok :block-ts (java.time.Instant/ofEpochSecond 1300)}]
-           :invariants [{:step-index 1 :invariant :time-non-decreasing :holds? true :severity :time :block-ts (java.time.Instant/ofEpochSecond 1301)}
-                        {:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-ts (java.time.Instant/ofEpochSecond 1300)}]})))))
+          {:run {:run-id "r3" :batch-id :b3 :protocol sew/protocol :scenario-id :s75 :outcome :fail :block-time 1300}
+           :steps [{:step-index 1 :action :create_escrow :result :ok :block-time 1301}
+                   {:step-index 2 :action :release :result :ok :block-time 1300}]
+           :invariants [{:step-index 1 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1301}
+                        {:step-index 2 :invariant :time-non-decreasing :holds? true :severity :time :block-time 1300}]})))))
 
 (deftest summary-helpers
   (testing "boundary/drift/determinism helper outputs"

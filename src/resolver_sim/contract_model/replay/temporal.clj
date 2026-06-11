@@ -15,15 +15,13 @@
 
    Throws when :block-ts is missing (uninitialized world)."
   [world event-time]
-  (let [now-instant (:block-ts (time-model/now world))
-        event-instant (if (instance? java.time.Instant event-time)
-                        event-time
-                        (java.time.Instant/ofEpochSecond (long event-time)))
-        delta-seconds (- (.getEpochSecond ^java.time.Instant event-instant)
-                         (.getEpochSecond ^java.time.Instant now-instant))]
+  (let [now-ts       (:block-ts (time-model/now world))
+        event-ts     (if (number? event-time) (long event-time)
+                         (.getEpochSecond ^java.time.Instant event-time))
+        delta-seconds (- event-ts now-ts)]
     (if (pos? delta-seconds)
       (let [step (inc (:scenario-step (time-model/now world)))]
-        {:world     (time-model/with-time world {:block-ts event-instant :scenario-step step})
+        {:world     (time-model/with-time world {:block-ts event-ts :scenario-step step})
          :delta-ms  (* delta-seconds 1000)
          :advanced? true})
       {:world     world

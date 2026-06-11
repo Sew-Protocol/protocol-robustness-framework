@@ -56,7 +56,7 @@
     (is (= "v1-custom" (get-in out [:utility-spec :version])))))
 
 (deftest evaluate-subgame-counterfactual-phase-b-information-set-and-classification
-  (let [projection {:raw-trace [{:world {:block-ts (java.time.Instant/ofEpochSecond 1000)
+  (let [projection {:raw-trace [{:world {:block-time 1000
                                          :pending-count 1
                                          :live-states {"e1" :disputed}
                                          :dispute-levels {"e1" 0}

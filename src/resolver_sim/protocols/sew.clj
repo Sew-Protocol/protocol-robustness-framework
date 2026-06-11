@@ -33,8 +33,7 @@
             [resolver-sim.protocols.sew.compat           :as compat]
             [resolver-sim.protocols.sew.action-context   :as actx]
             [resolver-sim.yield.expectations             :as yield-exp]
-            [resolver-sim.yield.evidence                 :as yield-evi]
-            [resolver-sim.time.model                     :as time.model]))
+            [resolver-sim.yield.evidence                 :as yield-evi]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -155,13 +154,11 @@
   [world event]
   (let [action (compat/canonical-action event)
         wf-id  (event-workflow-id event)
-        ;; Safe workflow ID extraction
-        wf-id  (when wf-id (keyword (str wf-id)))
         token  (some-> (get-in event [:params :token]) keyword)
         resolver (or (get-in event [:params :resolver-addr])
                      (get-in event [:params :resolver])
                      (get-in event [:params :senior-addr])
-                     (when wf-id (get-in world [:escrow-transfers wf-id :dispute-resolver])))]
+                     (get-in world [:escrow-transfers wf-id :dispute-resolver]))]
     (cond
       (contains? #{"create-escrow" "raise-dispute" "release" "sender-cancel" "recipient-cancel"
                    "execute-resolution" "execute-pending-settlement" "escalate-dispute"
@@ -169,7 +166,7 @@
                    "rotate-dispute-resolver" "auto-cancel-disputed" "claim-deferred-yield"
                    "trigger-accrue" "submit-evidence" "execute-reentrant-withdraw"}
                  action)
-      (cond-> (if wf-id #{[:workflow wf-id]} #{})
+      (cond-> #{[:workflow wf-id]}
         resolver (conj [:resolver resolver])
         token (conj [:token token]))
 
@@ -635,17 +632,10 @@
 (defn- run-single-invariants [world]
   (let [scenario-id (get-in world [:params :scenario-id])
         r (inv/check-all world scenario-id)
-        exp-res (yield-exp/check-expectations world)
-        violations (if (:all-hold? r) {} (:results r))
-        failed-expected (keep (fn [[id v]] (when (:expected-failure? v) id)) (:results r))
-        unused-expected (keep (fn [[id v]] (when (:unused-expected-failure? v) id)) (:results r))]
+        exp-res (yield-exp/check-expectations world)]
     {:ok?        (and (:all-hold? r) (:ok? exp-res))
-     :violations (cond-> violations
-                   (seq failed-expected)   (assoc :expected-failure-ids failed-expected)
-                   (seq unused-expected)   (assoc :unused-expected-failure-ids unused-expected)
-                   (not (:ok? exp-res))    (assoc :expectations (:results exp-res)))
-     :expected-failure-ids (seq failed-expected)
-     :unused-expected-failure-ids (seq unused-expected)}))
+     :violations (cond-> (if (:all-hold? r) {} (:results r))
+                   (not (:ok? exp-res)) (assoc :expectations (:results exp-res)))}))
 
 (defn- run-transition-invariants [world-before world-after]
   (let [r (inv/check-transition world-before world-after)]
@@ -657,7 +647,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- world-snapshot [world]
-  {:block-ts          (:block-ts (time.model/now world))
+  {:block-time         (:block-time world)
    :escrow-count       (count (:escrow-transfers world))
    :total-held         (:total-held world)
    :total-fees         (:total-fees world)
@@ -710,8 +700,7 @@
           tp           (:token-params scenario)
           pp           (assoc (:protocol-params scenario {})
                               :scenario-id (:scenario-id scenario)
-                              :expected-failures (:expected-failures scenario
-                                                   (get-in scenario [:protocol-params :expected-failures] {})))
+                              :expected-failures (:expected-failures scenario {}))
           fot-bps      (when tp (get tp :fee-on-transfer 0))
           s-tokens     (into #{} (keep #(get-in % [:params :token]) (:events scenario)))
           base         (-> (t/empty-world init-time)
@@ -770,8 +759,7 @@
     (world-snapshot world))
 
   (available-actions [_ world actor]
-    (let [wfs (keys (:escrow-transfers world))
-          now (.getEpochSecond ^java.time.Instant (:block-ts (time.model/now world)))]
+    (let [wfs (keys (:escrow-transfers world))]
       (mapcat identity
               (for [wf wfs]
          (let [et (t/get-transfer world wf)]
@@ -795,7 +783,7 @@
              ;; Disputed actions
              (and (= :disputed (:escrow-state et))
                   (not (and (= actor (:dispute-resolver et))
-                            (> (get-in world [:resolver-frozen-until actor] 0) now))))
+                            (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))))
              (into (let [pending (t/get-pending world wf)
                          resolver (:dispute-resolver et)]
                      (cond-> []
@@ -805,7 +793,7 @@
                               {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
 
                        ;; Escalation/Challenge (if pending exists and not expired)
-                       (and (:exists pending) (< now (:appeal-deadline pending)))
+                       (and (:exists pending) (< (:block-time world) (:appeal-deadline pending)))
                        (into (cond-> []
                                (or (= actor (:from et)) (= actor (:to et)))
                                (conj {:action "escalate-dispute" :params {:workflow-id wf}})
