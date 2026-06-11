@@ -12,7 +12,9 @@
      - RESOLVER_SLASH_CAP_BPS = 20% (per epoch/period)"
   (:require [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.accounting :as acct]
-            [resolver-sim.economics.payoffs            :as payoffs]))
+            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.util.attribution         :as attr]
+            [resolver-sim.io.event-evidence         :as evidence]))
 
 ;; ---------------------------------------------------------------------------
 ;; Stake management
@@ -83,19 +85,31 @@
   ([world resolver-addr amount challenger bounty-bps]
    (slash-resolver-stake world resolver-addr amount challenger bounty-bps nil))
   ([world resolver-addr amount challenger bounty-bps workflow-id]
-   (let [current (get-stake world resolver-addr)
-         actual  (min current amount)
-         token   (if workflow-id
-                   (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
-                   :USDC)
-         held-available (get-in world [:total-held token] 0)
-         ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
-         ;; after settlement has already drained :total-held for this token).
-         sub-held?      (and (pos? actual)
-                             (>= held-available actual))
-         world'  (-> world
-                     (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
-                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
-                     (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
-                     (cond-> sub-held? (acct/sub-held token actual)))]
-     (assoc (t/ok world') :slashed-from-stake actual))))
+   (attr/with-attribution
+     {:subject/type :resolver
+      :subject/id   resolver-addr
+      :action/type  :slash
+      :evidence/reason :slashing}
+     (let [current (get-stake world resolver-addr)
+           actual  (min current amount)
+           token   (if workflow-id
+                     (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
+                     :USDC)
+           held-available (get-in world [:total-held token] 0)
+           ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
+           ;; after settlement has already drained :total-held for this token).
+           sub-held?      (and (pos? actual)
+                               (>= held-available actual))
+           world'  (-> world
+                       (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
+                       (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
+                       (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
+                       (cond-> sub-held? (acct/sub-held token actual)))]
+       
+       ;; Phase 6: Capture Slashing Evidence
+       (evidence/capture-event-evidence! :slashing
+                                        {:resolver-stake current}
+                                        {:resolver-stake (get-stake world' resolver-addr)}
+                                        {:requested-amount amount :actual-amount actual})
+       
+       (assoc (t/ok world') :slashed-from-stake actual)))))

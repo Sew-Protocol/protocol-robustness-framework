@@ -11,6 +11,8 @@
      2. protocol/check-invariants-transition"
    (:require [clojure.stacktrace             :as st]
              [clojure.string                :as str]
+             [clojure.data.json             :as json]
+             [clojure.java.io               :as io]
              [resolver-sim.logging          :as log]
              [resolver-sim.definitions.registry :as defs]
              [resolver-sim.scenario.schema-profile :as schema-profile]
@@ -92,38 +94,12 @@
 ;; Metrics — registry (must precede validate-scenario which references it)
 ;; ---------------------------------------------------------------------------
 
-;; SCOPE: deterministic trace metrics only.
-;;
-;; This registry covers metrics that the replay engine can compute from a
-;; single scenario execution (event log + world snapshots).  It intentionally
-;; excludes stochastic / population-level metrics such as:
-;;
-;;   :coalition/net-profit   — needs N-epoch batch run, not a single trace
-;;   :malice-mean-profit     — population average from sim/multi_epoch.clj
-;;   :dominance-ratio        — strategy-share statistic across resolver pool
-;;
-;; Those belong in a separate future registry, e.g.:
-;;
-;;   resolver-sim.sim.multi-epoch/known-metrics   (stochastic, multi-epoch; Sew-specific)
-;;
-;; Do NOT add population/batch metrics here. Blending the two worlds would
-;; cause validate-scenario to accept :theory/falsifies-if conditions that
-;; the deterministic replay can never satisfy, producing silent :inconclusive
-;; results for the wrong reason.
-
 (def population-metrics metrics/population-metrics)
-
 (def base-metrics metrics/base-metrics)
-
 (defn- metric-key [x] (metrics/metric-key x))
-
 (defn- falsifies-if-metric-refs [falsifies-if] (metrics/falsifies-if-metric-refs falsifies-if))
-
 (defn- theory-metric-scope [scenario] (metrics/theory-metric-scope scenario))
-
 (defn- action->transition-id [action] (analysis/action->transition-id action))
-
-
 
 ;; ---------------------------------------------------------------------------
 ;; Input validation (Generic scenario structure)
@@ -140,11 +116,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- zero-metrics [protocol] (metrics/zero-metrics protocol))
-
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (metrics/accum-metrics protocol metrics event trace-entry agent-index world-before))
-
-
 
 ;; ---------------------------------------------------------------------------
 ;; Step Processing (Kernel)
@@ -203,11 +176,10 @@
       (let [{world-t :world} (advance-world-time world event-time)
             time-after       {:block-ts event-time}
             result     (attr/with-attribution
-                        {:replay/scenario-id (get-in world [:params :scenario-id])
-                         :replay/seq         (:seq event)
-                         :replay/action      (:action event)
-                         :replay/agent       (:agent event)
-                         :replay/event-time  event-time}
+                        {:ctx/scenario-id (get-in world [:params :scenario-id])
+                         :ctx/run-id      (str (get-in world [:params :scenario-id]) "-run")
+                         :ctx/event-index (:seq event)
+                         :ctx/event-type  (:action event)}
                         (try
                          (proto/dispatch-action protocol context world-t event)
                          (catch Exception e
@@ -366,7 +338,10 @@
                                                   (not (:ok? expected-error-analysis)))
                     outcome (if expected-errors-mismatch? :fail :pass)
                     halt-reason (when expected-errors-mismatch? :expected-error-mismatch)]
-                 (attr/log-with-attr :info "scenario/end" {:id scenario-id :outcome outcome})
+                 (attr/with-attribution
+                   {:ctx/scenario-id scenario-id
+                    :ctx/run-id (str scenario-id "-run")}
+                   (attr/log-with-attr :info "scenario/end" {:id scenario-id :outcome outcome}))
                 {:context/version "1.0"
                  :context/source {:scenario-id scenario-id :run-id (str scenario-id "-run")}
                  :execution {:mode (execution-mode scenario)
@@ -396,14 +371,6 @@
                 metrics' (-> metrics
                              (update :batch-buckets inc)
                              (update :batch-events + (count resolved-bucket)))
-                ;; Preflight runs every event against base-world (world BEFORE the bucket).
-                ;; Commit runs against the incremental world (world after previous events
-                ;; in the bucket were applied).  Preflight :eligible means "this event can
-                ;; execute in isolation at the pre-bucket state", not "it will commit".
-                ;; A preflight-eligible event may still be rejected during commit because
-                ;; an earlier event in the same bucket changed the world state (guard
-                ;; condition, depleted balance, etc.) or because its conflict domain
-                ;; intersects with a previously committed event.
                 preflight (into {}
                                 (map (fn [ev]
                                        (let [s (process-step protocol context base-world ev)]
@@ -550,11 +517,13 @@
                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
                 new-world (:world step)
                 new-states (assoc states (:seq event) (proto/world-snapshot protocol new-world))]
-            (attr/log-with-attr :debug "scenario/step" {:id scenario-id :seq (:seq event) :action (:action event)})
             (if (:halted? step)
               (do
                 (maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
-                (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation})
+                (attr/with-attribution
+                  {:ctx/scenario-id scenario-id
+                   :ctx/run-id (str scenario-id "-run")}
+                  (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
                 {:outcome :fail
                  :scenario-id scenario-id
                  :events-processed (count new-trace)
@@ -612,10 +581,17 @@
              trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
                              (:world-checkpoint-policy flags)
                              raw-result)]
-         (attr/log-with-attr :info "scenario/start" {:id scenario-id})
+         (attr/with-attribution
+           {:ctx/scenario-id scenario-id
+            :ctx/run-id (str scenario-id "-run")}
+           (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
          (let [result (if (:evaluate-expectations? flags true)
                         (finalize-scenario-result scenario trimmed-result flags)
                         trimmed-result)]
+           ;; Phase 2: Register Theory Evaluation and Results
+           (when-let [theory (:diagnostics result)]
+             (spit (io/file "results/test-artifacts/theory-eval.json") (json/write-str theory {:indent true})))
+           
            (assoc result :risk-events (risk/events))))))))
 
 (defn replay-yield-scenario
@@ -663,8 +639,6 @@
                                  :temporal-enabled? temporal-enabled?
                                  :agent-index agent-index}
                                 options))))
-
-
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

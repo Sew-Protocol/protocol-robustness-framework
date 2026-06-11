@@ -147,11 +147,27 @@ def write_artifacts_to(
     write_atomic_json(run_manifest_file, run_manifest)
     write_atomic_json(claimable_file, claimable_classification)
 
+    # Register standard artifacts
     entries = [
         mk_artifact_entry("test-summary", "summary", str(artifact_file), ARTIFACT_SCHEMAS["test-summary"], "summary-emitter.v1", ["test-run.v1", "projection.v1"], "CORE", ["test-run", "scenario-result"]),
         mk_artifact_entry("test-run", "run-manifest", str(run_manifest_file), ARTIFACT_SCHEMAS["test-run"], "test-run-emitter.v1", [], "CORE", []),
         mk_artifact_entry("claimable-classification", "classification", str(claimable_file), ARTIFACT_SCHEMAS["claimable-classification"], "claimable-classification-emitter.v2", ["test-run.v1"], "CORE", ["test-run"]),
     ]
+
+    # Auto-register event evidence
+    event_evidence_dir = artifact_dir / "event-evidence"
+    if event_evidence_dir.exists():
+        for p in event_evidence_dir.glob("*.json"):
+            reason = p.name.split("-")[0]
+            e = mk_artifact_entry(
+                f"event-evidence-{p.stem}", "event-evidence", str(p),
+                "event-evidence.v1", "simulation-engine.v1",
+                ["test-run.v1"], "CORE", ["test-run"]
+            )
+            if e:
+                e["evidence_reason"] = reason
+                entries.append(e)
+
 
     # ... (other artifacts handled similarly to before) ...
     # Automated dependency resolution
