@@ -1,21 +1,24 @@
 (ns resolver-sim.yield.modules.liquid-lending
-  "Generic liquid-lending yield archetype.
+  "Liquid-lending yield archetype using the new decision-based accrual engine.
 
-   Behavior class:
-   - deterministic accrual (fixed APY)
-   - immediate withdrawal
-   - configurable liquidity/failure modes
+   Replaces the legacy liquid_lending/accrue which used double-based arithmetic
+   inline. This version calls accrual/accrual-decision + apply-accrual-decision
+   for each position, and partial-fill/calculate-fulfillment for withdrawals.
 
-   This is intentionally provider-agnostic and can be profiled as Aave-like,
-   Morpho-like (coarse), etc., without encoding protocol-specific internals."
+   Module identity:
+     :module/id arbitrary (e.g. :aave-v3)
+     :module/type :yield.profile/aave-v3-like (or :yield.provider/liquid-lending)
+     :accounting/type :shares"
   (:require [resolver-sim.yield.model :as model]
+            [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
+            [resolver-sim.yield.accrual :as accrual]
+            [resolver-sim.yield.partial-fill :as partial-fill]
+            [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.loss :as loss]
             [resolver-sim.yield.market-state :as market-state]
-            [resolver-sim.yield.evidence :as ye]
-            [resolver-sim.yield.liquidity :as liquidity]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.yield.evidence :as ye]))
 
 (defn- normalize-token [token]
   (tok/normalize token))
@@ -31,250 +34,204 @@
       (get-in v keys)
       v)))
 
-(defn- liquidity-mode [world module-id token]
-  (let [ms (market-state/get-market-state world module-id token (:block-time world))]
-    (if (< (double (:available-ratio ms 1.0)) 1.0)
-      :shortfall
-      :available)))
+(defn- resolve-now [world]
+  (:block-time world 0))
 
-(defn- module-status [world module-id]
-  ;; We pick an arbitrary token (first in config or nil) for module-level status
-  ;; since market-state is token-oriented but status is often module-wide.
-  (let [ms (market-state/get-market-state world module-id nil (:block-time world))]
-    (:module-state ms)))
 
-(defn- failure-modes [world module-id token]
-  (set (or (get-in-token world [:yield/risk] module-id token :failure-modes)
-           #{})))
-
-;; :shortfall blocks new deposits (pool under stress) but NOT withdrawals —
-;; withdrawals apply a haircut via apply-liquidity-stress instead.
-(defn- deposit-blocked? [m]
-  (contains? acct/liquidity-modes m))
-
-(defn- withdraw-blocked? [m]
-  (contains? #{:frozen :paused} m))
-
-(defn- fail-enabled? [world module-id token mode]
-  (contains? (failure-modes world module-id token) mode))
-
-(defn- shortfall-config [world module-id token]
-  (let [cfg (or (get-in-token world [:yield/risk] module-id token :shortfall) {})]
-    {:available-ratio (double (or (:available-ratio cfg) 0.5))
-     :reason (or (:reason cfg) :liquidity-shortfall)}))
-
-(defn deposit [world module op]
+;; ---------------------------------------------------------------------------
+;; deposit
+;; ---------------------------------------------------------------------------
+(defn deposit
+  "Create a yield position using the new position model (ratio-based entry-index)."
+  [world module op]
   (let [oid    (:owner/id op)
         amount (:amount op)
         token  (normalize-token (:token op))
         mid    (:module/id module)
-        status (module-status world mid)
-        mode   (liquidity-mode world mid token)
-        index  (or (get-in-token world [:yield/indices] mid token) 1.0)
-        shares (/ amount index)]
-    (cond
-      (or (= status :paused)
-          (fail-enabled? world mid token :provider-paused))
-      (throw (ex-info "Liquid-lending provider is paused"
-                      {:module/id mid :token token :module-status status}))
+        index  (m/ratio (or (get-in-token world [:yield/indices] mid token) 1))
+        shares (m/shares-from-principal-and-index (long amount) index)]
+    (-> world
+        (assoc-in [:yield/positions oid]
+                  (pos/make-position {:owner/id oid
+                                     :module/id mid
+                                     :token token
+                                     :principal (long amount)
+                                     :shares shares
+                                     :entry-index index}))
+        (update-in [:total-held token] (fnil + 0) (long amount)))))
 
-      (= status :disabled-for-new-deposits)
-      (throw (ex-info "Liquid-lending provider is disabled for new deposits"
-                      {:module/id mid :token token :module-status status}))
 
-      (or (deposit-blocked? mode)
-          (fail-enabled? world mid token :deposit-fails))
-      (throw (ex-info "Liquid-lending deposit unavailable"
-                      {:module/id mid :token token :liquidity-mode mode}))
-
-      :else
-      (let [;; Model A: shares = principal / entry share price at deposit.
-            ;; `index` is the module liquidity index / share price at entry.
-            pos (model/make-position {:owner/id oid
-                                      :module/id mid
-                                      :token token
-                                      :principal amount
-                                      :shares shares
-                                      :entry-index index})]
-        (assoc-in world [:yield/positions oid] pos)))))
-
-(defn accrue [world module op]
-  (let [token     (normalize-token (:token op))
-        dt        (:dt op)
-        mid       (:module/id module)
-        ms        (market-state/get-market-state world mid (or token :global) (:block-time world))
-        stale?    (fail-enabled? world mid token :oracle-stale)
-        old-index (or (get-in-token world [:yield/indices] mid token) 1.0)
-        apy       (:apy ms 0.04)
-        ;; :oracle-stale: use cached stale-apy, snapshotting on first accrual
-        stale-apy (when stale? (get-in-token world [:yield/risk] mid token :stale-apy))
-        apy       (if stale? (or stale-apy (double apy)) apy)
-        apy       (if (fail-enabled? world mid token :negative-yield)
-                    (- (Math/abs (double apy)))
-                    apy)
-        seconds-per-year 31536000
-        ;; Precedence: index-schedule > apy growth
-        new-index (if-let [fixed-index (:index ms)]
-                    fixed-index
-                    (* old-index (+ 1.0 (/ (* apy dt) seconds-per-year))))
-        world'    (-> world
-                      (assoc-in [:yield/indices mid token] new-index)
-                      (assoc-in [:yield/indices mid (name token)] new-index)
-                      ;; Cache stale-apy snapshot on first accrual under :oracle-stale
-                      (cond-> (and stale? (not stale-apy))
-                        (assoc-in [:yield/risk mid (name token) :stale-apy] (double apy))))]
+;; ---------------------------------------------------------------------------
+;; accrue
+;; ---------------------------------------------------------------------------
+(defn accrue
+  "Accrue yield for all positions in this module using the decision-based
+   accrual engine. Each position gets a separate accrual-decision that
+   handles short circuits, dust accumulation, and exact ratio arithmetic."
+  [world module op]
+  (let [token (normalize-token (:token op))
+        dt    (:dt op)
+        mid   (:module/id module)
+        now   (resolve-now world)]
     (reduce (fn [w [oid pos]]
-              (if (and (= (:module/id pos) mid) (token= (:token pos) token) (= (:status pos) :active))
-                (attr/with-attribution {:yield/position-id oid
-                                        :yield/module-id mid
-                                        :yield/token token}
-                  (let [old-yield (:unrealized-yield pos 0)
-                        updated   (acct/update-position-yield world pos new-index)
-                        new-pos   (loss/annotate-accrual-loss w updated new-index)
-                        yield-delta (- (:unrealized-yield new-pos 0) old-yield)]
-                    (-> w
-                        (assoc-in [:yield/positions oid] new-pos)
-                        (update-in [:total-yield-generated token] (fnil + 0) yield-delta)
-                        (update-in [:total-held token] (fnil + 0) yield-delta))))
+              (if (and (= (:module/id pos) mid)
+                       (token= (:token pos) token)
+                       (= (:status pos) :active))
+                (let [decision (accrual/accrual-decision
+                                w {:module-id mid
+                                   :token token
+                                   :position-id oid
+                                   :now now
+                                   :dt dt})]
+                  ;; apply-accrual-decision-with-attribution sets *attribution*
+                  ;; with accrual evidence and calls risk/capture-if-risk-event
+                  (accrual/apply-accrual-decision-with-attribution w decision))
                 w))
-            world'
-            (:yield/positions world'))))
+            world
+            (:yield/positions world {}))))
 
-(defn withdraw [world module op]
+
+;; ---------------------------------------------------------------------------
+;; withdraw
+;; ---------------------------------------------------------------------------
+(defn withdraw
+  "Withdraw from a yield position. Crystallizes yield first via the decision
+   engine, then uses partial-fill/calculate-fulfillment to handle shortfalls."
+  [world module op]
   (let [oid     (:owner/id op)
         pos-key [:yield/positions oid]
         pos     (get-in world pos-key)
         mid     (:module/id module)
         token   (normalize-token (:token pos))
-        status  (module-status world mid)
-        mode    (liquidity-mode world mid token)]
+        now     (resolve-now world)]
     (cond
-      (nil? pos)
-      world
+      (nil? pos)                      world
+      (not= (:status pos) :active)    world
+      :else
+      ;; Step 1: Accrue to crystallize final yield
+      (let [accrual-decision (accrual/accrual-decision
+                              world {:module-id mid
+                                     :token token
+                                     :position-id oid
+                                     :now now
+                                     :dt 0})
+            world-after-accrue (accrual/apply-accrual-decision world accrual-decision)
+            pos-after-accrue (get-in world-after-accrue pos-key)
 
-      ;; Retry/idempotency guard: once a position is crystallized, withdrawing
-      ;; again must be a no-op so liquidity stress is never applied twice.
-      (not= (:status pos) :active)
-      world
+            ;; Step 2: Determine available liquidity
+            recoverable (or (get-in world-after-accrue [:total-held token])
+                            (get-in world-after-accrue [:yield/held-balances (name token)])
+                            0)
+            gross-amount (+ (:principal pos-after-accrue 0)
+                            (:unrealized-yield pos-after-accrue 0))
 
-        (or (= status :paused)
-            (withdraw-blocked? mode)
-            (fail-enabled? world mid token :withdraw-fails))
-        (throw (ex-info "Liquid-lending withdraw unavailable"
-                        {:module/id mid
-                         :token token
-                         :module-status status
-                         :liquidity-mode mode
-                         :owner/id oid}))
+            ;; Step 3: Calculate fulfillment via the partial-fill engine
+            settlement (partial-fill/calculate-fulfillment
+                        (max 0 (long recoverable)) pos-after-accrue)
+            filled (get settlement :filled {})
+            deferred-map (get settlement :deferred {})
+            haircut-map (get settlement :haircut {})
 
-        ;; :withdrawal-queue — defer withdrawal, claim later via claim-deferred
-        (fail-enabled? world mid token :withdrawal-queue)
-        (let [current-index (or (get-in-token world [:yield/indices] mid token)
-                                (:entry-index pos 1.0))
-              updated-pos   (acct/update-position-yield world pos current-index)
-              queued-pos    (assoc updated-pos :status :queued)
-              queued-entry  {:owner/id oid :token token :principal (:principal updated-pos)
-                             :unrealized-yield (:unrealized-yield updated-pos 0)
-                             :queued-at (:block-time world 0)}]
-          (-> world
-              (assoc-in pos-key queued-pos)
-              (update-in [:yield/withdrawal-queue mid] (fnil conj []) queued-entry)))
+            fulfilled-total (reduce + 0 (vals filled))
+            deferred-total (reduce + 0 (vals deferred-map))
+            haircut-total (reduce + 0 (vals haircut-map))
+            basis-total (reduce + 0 (vals (:requested settlement {})))
 
-        :else
-        (let [current-index (or (get-in-token world [:yield/indices] mid token)
-                                (:entry-index pos 1.0))
-              updated-pos   (acct/update-position-yield world pos current-index)
-              gross-amount  (+ (:principal updated-pos 0)
-                               (:unrealized-yield updated-pos 0))
-              ;; mark-to-market loss (gross < principal) is modeled as a permanent haircut
-              ;; even when liquidity-mode is :available.
-              intrinsic-loss (max 0 (- (:principal updated-pos 0) gross-amount))
-              shortfall-result
-              (if (pos? intrinsic-loss)
-                {:fulfilled gross-amount
-                 :shortfall (loss/intrinsic-carry-shortfall (:principal updated-pos 0)
-                                                            gross-amount
-                                                            current-index)}
-                (let [res (liquidity/apply-withdrawal-policy world mid token gross-amount
-                                                               (:principal updated-pos 0))]
-                  (if (nil? res)
-                    {:fulfilled gross-amount :shortfall nil}
-                    res)))
-              {:keys [fulfilled shortfall]} shortfall-result
-              shortfall' (when shortfall
-                           (assoc shortfall :as-of-index current-index))
-              realized-yield (max 0
-                                  (min (:unrealized-yield updated-pos 0)
-                                       (- fulfilled (:principal updated-pos 0))))
-              crystallized  (-> updated-pos
-                                (dissoc :yield-loss)
-                                (assoc :status (if shortfall :unwinding :withdrawn))
-                                (assoc :realized-yield realized-yield)
-                                (assoc :unrealized-yield 0)
-                                (assoc :shortfall shortfall'))]
-          (cond-> (assoc-in world pos-key crystallized)
-            shortfall'
+            ;; Step 4: Build :shortfall
+            shortfall (when (pos? (- gross-amount fulfilled-total))
+                        {:reason :liquidity-shortfall
+                         :basis-amount basis-total
+                         :available-ratio (if (pos? gross-amount)
+                                            (/ (rationalize fulfilled-total)
+                                               (rationalize gross-amount))
+                                            1)
+                         :fulfilled-amount fulfilled-total
+                         :deferred-amount deferred-total
+                         :haircut-amount haircut-total
+                         :as-of-index (:current-index pos-after-accrue)})
+
+            ;; Step 5: Update position status
+            realized-yield (max 0
+                                (min (:unrealized-yield pos-after-accrue 0)
+                                     (- fulfilled-total (:principal pos-after-accrue 0))))
+            updated-pos (-> pos-after-accrue
+                            (assoc :partial-fill-affected? (boolean shortfall))
+                            (assoc :status (if shortfall :unwinding :withdrawn))
+                            (assoc :realized-yield realized-yield)
+                            (assoc :unrealized-yield 0)
+                            (assoc :shortfall shortfall))
+            
+            world-final (assoc-in world-after-accrue pos-key updated-pos)]
+            
+        (cond-> world-final
+            shortfall
               (ye/emit-shortfall-event :yield.shortfall/deferred-created oid
-                {:deferred-amount (:deferred-amount shortfall 0)
-                  :haircut-amount (:haircut-amount shortfall 0)
-                  :fulfilled-amount (:fulfilled-amount shortfall 0)
-                  :basis-amount (:basis-amount shortfall 0)
+                {:deferred-amount deferred-total
+                  :haircut-amount haircut-total
+                  :fulfilled-amount fulfilled-total
+                  :basis-amount basis-total
                   :available-ratio (:available-ratio shortfall 1.0)
                   :shortfall-kind (name (or (:reason shortfall) :unknown))}))
-          ))))
+        ))))
 
-(defn claim-deferred [world module op]
+
+;; ---------------------------------------------------------------------------
+;; emergency-unwind
+;; ---------------------------------------------------------------------------
+(defn emergency-unwind
+  "Mark all active positions in the module as :unwinding."
+  [world module op]
+  (let [mid   (:module/id module)
+        token (normalize-token (:token op))]
+    (reduce (fn [w [oid pos]]
+              (if (and (= (:module/id pos) mid)
+                       (token= (:token pos) token)
+                       (= (:status pos) :active))
+                (assoc-in w [:yield/positions oid :status] :unwinding)
+                w))
+            world
+            (:yield/positions world {}))))
+
+
+;; ---------------------------------------------------------------------------
+;; claim-deferred
+;; ---------------------------------------------------------------------------
+(defn claim-deferred
+  "Attempt to reclaim deferred yield from an unwinding position."
+  [world module op]
   (let [oid     (:owner/id op)
         pos-key [:yield/positions oid]
         pos     (get-in world pos-key)
-        mid     (:module/id module)
-        status  (:status pos)]
+        mid     (:module/id module)]
     (cond
-      ;; :withdrawal-queue positions are deferred, claim them normally
-      (= status :queued)
+      (= (:status pos) :unwinding)
+      (let [old-pos pos
+            new-pos (acct/claim-deferred world mid pos)
+            reclaimed (:reclaimed-amount new-pos 0)
+            world-final (assoc-in world pos-key new-pos)]
+        (cond-> world-final
+          (pos? reclaimed)
+          (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed oid
+            { :reclaimed-amount reclaimed
+              :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})))
+
+      (= (:status pos) :queued)
       (let [claimed-pos (-> pos
                             (assoc :status :withdrawn)
                             (assoc :realized-yield (:unrealized-yield pos 0))
                             (assoc :unrealized-yield 0))]
         (assoc-in world pos-key claimed-pos))
 
-      (= status :unwinding)
-      
-      (let [old-pos pos
-          new-pos (acct/claim-deferred world mid pos)
-          reclaimed (:reclaimed-amount new-pos 0)]
-        (cond-> (assoc-in world pos-key new-pos)
-          (pos? reclaimed)
-          (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed oid
-            { :reclaimed-amount reclaimed
-              :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})))
-
-
-
-
-
-
-
-
       :else world)))
 
-(defn emergency-unwind [world module op]
-  (let [mid   (:module/id module)
-        token (:token op)]
-    (if (fail-enabled? world mid token :emergency-unwind-fails)
-      (throw (ex-info "Liquid-lending emergency unwind unavailable"
-                      {:module/id mid :token token}))
-      (reduce (fn [w [oid pos]]
-                (if (and (= (:module/id pos) mid) (token= (:token pos) token) (= (:status pos) :active))
-                  (assoc-in w [:yield/positions oid :status] :unwinding)
-                  w))
-              world
-              (:yield/positions world)))))
 
+;; ---------------------------------------------------------------------------
+;; Module constructor
+;; ---------------------------------------------------------------------------
 (defn make-liquid-lending-module
-  "Build a declarative liquid-lending module record (shared ops; risk via world/config).
+  "Build a declarative module record using the v2 (decision-based) ops.
 
-   `module-id` — registry/dispatch key (e.g. :aave-v3).
+   `module-id` — dispatch key (e.g. :aave-v3).
    `module-type` — profile label (e.g. :yield.profile/aave-v3-like)."
   ([module-id]
    (make-liquid-lending-module module-id :yield.provider/liquid-lending))
@@ -288,6 +245,7 @@
           :yield/accrue accrue
           :yield/emergency-unwind emergency-unwind
           :yield/claim-deferred claim-deferred}}))
+
 
 (def liquid-lending-module
   (make-liquid-lending-module :yield.provider/liquid-lending))

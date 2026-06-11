@@ -8,8 +8,11 @@
   (let [violations
         (for [[wf et] (:escrow-transfers world)
               :when (= :disputed (:escrow-state et))
-              :let  [ts (get-in world [:dispute-timestamps wf] 0)]
-              :when (not (pos? ts))]
+              :let  [val (get-in world [:dispute-timestamps wf] 0)
+                     ts (cond (instance? java.time.Instant val) (.getEpochSecond ^java.time.Instant val)
+                              (number? val) (long val)
+                              :else 0)]
+              :when (pos? ts)]
           {:workflow-id wf :timestamp ts})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
@@ -47,7 +50,11 @@
   (let [violations
         (for [[wf et] (:escrow-transfers world {})
               :let  [state (:escrow-state et)
-                     ts    (get-in world [:dispute-timestamps wf] 0)
+                     ts    (let [val (get-in world [:dispute-timestamps wf] 0)]
+                             (cond
+                               (instance? java.time.Instant val) (.getEpochSecond ^java.time.Instant val)
+                               (number? val) (long val)
+                               :else 0))
                      level (get-in world [:dispute-levels wf] 0)
                      reason (cond
                               (= :pending state)

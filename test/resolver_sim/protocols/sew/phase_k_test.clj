@@ -77,7 +77,7 @@
         (is (= :timelock-not-expired (:error r-exec)))))
     
     (testing "Execute after timelock"
-      (let [world-time (assoc world-prop :block-time 100000) ; > 86400
+      (let [world-time (assoc world-prop :block-ts (java.time.Instant/ofEpochSecond 100000)) ; > 86400
             r-exec (res/execute-fraud-slash world-time workflow-id)
             world-final (:world r-exec)]
         (is (true? (:ok r-exec)))

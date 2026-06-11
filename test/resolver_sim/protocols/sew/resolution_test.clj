@@ -8,7 +8,8 @@
             [resolver-sim.protocols.sew.authority  :as auth]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew            :as sew]
-            [resolver-sim.contract-model.replay     :as replay]))
+            [resolver-sim.contract-model.replay     :as replay]
+            [resolver-sim.time.model                  :as time.model]))
 
 (def alice    "0xAlice")
 (def bob      "0xBob")
@@ -213,7 +214,7 @@
   "If active pending was cleared by escalation/challenge, execution should fall back
    to an eligible superseded pending at/after its deadline."
   (let [w (-> (base-world 0)
-              (assoc :block-time 5000)
+              (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
               (assoc :pending-settlements {})
               (assoc-in [:superseded-pending-settlements 0]
                         [{:pending (t/make-pending-settlement {:exists true
@@ -236,7 +237,7 @@
 (deftest execute-pending-superseded-fallback-single-finalization
   "Superseded fallback must still be single-shot: second keeper execution cannot re-finalize."
   (let [w0 (-> (base-world 0)
-               (assoc :block-time 5000)
+               (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
                (assoc :pending-settlements {})
                (assoc-in [:superseded-pending-settlements 0]
                          [{:pending (t/make-pending-settlement {:exists true
@@ -266,7 +267,7 @@
 
 (deftest automate-dispatches-auto-release
   (let [w (-> (base-world 0)
-              (assoc :block-time 5000)
+              (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
               (assoc-in [:escrow-transfers 0 :escrow-state]    :pending)
               (assoc-in [:escrow-transfers 0 :auto-release-time] 4000))
         r (res/automate-timed-actions w 0)]
@@ -276,7 +277,7 @@
 
 (deftest automate-dispatches-auto-cancel
   (let [w (-> (base-world 0)
-              (assoc :block-time 5000)
+              (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
               (assoc-in [:escrow-transfers 0 :escrow-state]   :pending)
               (assoc-in [:escrow-transfers 0 :auto-cancel-time] 4000))
         r (res/automate-timed-actions w 0)]
@@ -410,11 +411,11 @@
    This protects pending finality exactly at the appeal deadline."
   (let [esc-fn (make-escalation-fn senior-resolver)
         w-t-1  (-> (base-world 0)
-                   (assoc :block-time 4999)
+                   (assoc :block-ts (java.time.Instant/ofEpochSecond 4999))
                    (with-pending 0 true 5000))
         r-t-1  (res/escalate-dispute w-t-1 0 alice esc-fn)
         w-t    (-> (base-world 0)
-                   (assoc :block-time 5000)
+                   (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
                    (with-pending 0 true 5000))
         r-t    (res/escalate-dispute w-t 0 alice esc-fn)]
     (is (true? (:ok r-t-1)) "t-1 should still be appealable")
@@ -441,9 +442,9 @@
   (let [w0 (-> (base-world 0) (with-pending 0 true 5000))
         r1 (res/escalate-dispute w0 0 alice (make-escalation-fn "0xSenior"))
         ;; Cooldown mitigation requires >= 1 day before same caller escalates again.
-        w1 (-> (:world r1) (assoc :block-time 87401) (with-pending 0 true 90000))
+        w1 (-> (:world r1) (assoc :block-ts (java.time.Instant/ofEpochSecond 87401)) (with-pending 0 true 90000))
         r2 (res/escalate-dispute w1 0 alice (make-escalation-fn "0xKleros"))
-        w2 (-> (:world r2) (assoc :block-time 173802) (with-pending 0 true 180000))
+        w2 (-> (:world r2) (assoc :block-ts (java.time.Instant/ofEpochSecond 173802)) (with-pending 0 true 180000))
         r3 (res/escalate-dispute w2 0 alice (make-escalation-fn "0xAnother"))]
     (is (true?  (:ok r1)) "first escalation ok")
     (is (= 1    (t/dispute-level (:world r1) 0)))
@@ -519,12 +520,12 @@
    Open challengers must still respect exact deadline finality."
   (let [esc-fn (make-escalation-fn senior-resolver)
         w-t-1  (-> (base-world 0)
-                   (assoc :block-time 4999)
+                   (assoc :block-ts (java.time.Instant/ofEpochSecond 4999))
                    (with-pending 0 true 5000)
                    (assoc-in [:bond-balances 0] {}))
         r-t-1  (res/challenge-resolution w-t-1 0 carol esc-fn)
         w-t    (-> (base-world 0)
-                   (assoc :block-time 5000)
+                   (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
                    (with-pending 0 true 5000)
                    (assoc-in [:bond-balances 0] {}))
         r-t    (res/challenge-resolution w-t 0 carol esc-fn)]
@@ -537,7 +538,7 @@
    and a same-timestamp escalation attempt must then be rejected."
   (let [esc-fn (make-escalation-fn senior-resolver)
         w0     (-> (base-world 0)
-                   (assoc :block-time 5000)
+                   (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
                    (with-pending 0 true 5000))
         r-exec (res/execute-pending-settlement w0 0)
         w1     (:world r-exec)
@@ -552,7 +553,7 @@
    pending execution should still succeed immediately afterward."
   (let [esc-fn  (make-escalation-fn senior-resolver)
         w-base  (-> (base-world 0)
-                    (assoc :block-time 5000)
+                    (assoc :block-ts (java.time.Instant/ofEpochSecond 5000))
                     (with-pending 0 true 5000)
                     (assoc-in [:bond-balances 0] {}))
         r-esc   (res/escalate-dispute w-base 0 alice esc-fn)

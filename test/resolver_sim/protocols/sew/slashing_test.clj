@@ -57,7 +57,7 @@
         (world-ready-for-fraud-slash-propose world buyer "0xT" seller resolver-addr 1000 snap)
         world-prop (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 500)
                        :world)
-        world-late (assoc world-prop :block-time 1011)
+        world-late (assoc world-prop :block-ts (java.time.Instant/ofEpochSecond 1011))
         r-app (res/appeal-slash world-late workflow-id resolver-addr)]
     (is (false? (:ok r-app)))
     (is (= :appeal-window-expired (:error r-app)))))
@@ -121,7 +121,7 @@
         {:keys [world workflow-id]}
         (world-ready-for-fraud-slash-propose world0 buyer "USDC" seller resolver-addr 1000 snap)
         world1 (-> (res/propose-fraud-slash world workflow-id gov resolver-addr 200) :world)
-        world2 (assoc world1 :block-time 1011)
+        world2 (assoc world1 :block-ts (java.time.Instant/ofEpochSecond 1011))
         r-exec (res/execute-fraud-slash world2 workflow-id)
         world3 (:world r-exec)]
     (is (true? (:ok r-exec)))
@@ -354,10 +354,10 @@
           ;; Reduce L0's stake via fraud slash before escalation.
           ;; Advance time past the slash timelock, then reset for challenge window.
           world-slashed (-> (res/propose-fraud-slash after-l0 workflow-id gov r0 5000) :world
-                            (assoc :block-time 3000001)
+                            (assoc :block-ts (java.time.Instant/ofEpochSecond 3000001))
                             (res/execute-fraud-slash workflow-id)
                             :world
-                            (assoc :block-time 1000))
+                            (assoc :block-ts (java.time.Instant/ofEpochSecond 1000)))
 
           ;; Escalate and reverse
           esc-fn (fn [_ _ _ _] {:ok true :new-resolver r1})

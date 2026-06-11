@@ -159,13 +159,14 @@
         temporal-on? (let [v (:temporal-enabled? flags)] (if (nil? v) true (boolean v)))
         check-inv?   (:check-invariants? flags true)
         event-time   (:time event)
-        now          (:block-time world)
-        time-before  {:block-ts now}
+        now-instant  (:block-ts (time-model/now world))
+        now-seconds  (.getEpochSecond ^java.time.Instant now-instant)
+        time-before  {:block-ts now-instant}
         rules        (effective-temporal-rules context)
         temporal-failure (when temporal-on?
                            (evaluate-temporal-rules rules
                                                     {:event-time event-time
-                                                     :now now
+                                                     :now now-seconds
                                                      :world world
                                                      :event event
                                                      :context context
@@ -392,7 +393,7 @@
                                             (if (:ok res) (:event res) raw))
                                           raw))
                                       bucket)
-                batch-time (:time (first resolved-bucket))
+                batch-time (:block-ts (time-model/now (first resolved-bucket)))
                 metrics' (-> metrics
                              (update :batch-buckets inc)
                              (update :batch-events + (count resolved-bucket)))

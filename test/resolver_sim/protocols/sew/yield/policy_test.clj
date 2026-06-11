@@ -10,7 +10,8 @@
             [resolver-sim.yield.registry :as yield-reg]
             [resolver-sim.yield.ops :as yield-ops]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]))
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
+            [resolver-sim.time.model                  :as time.model]))
 
 (defn- load-scenario [path]
   (scen-io/load-scenario-file path))

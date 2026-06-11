@@ -73,17 +73,27 @@
 ;; ---------------------------------------------------------------------------
 
 (defn calculate-slashing-distribution
-  "Calculate the 50/30/20 distribution for slashed funds.
-   If bounty is provided, it is deducted from insurance and protocol portions.
+  "Calculate distribution for slashed funds with optional governance overrides.
+   
+   Default split: 50% insurance, 30% protocol, 20% retained reserves.
+   Overridable via :insurance-cut-bps and :protocol-retained-bps (in basis points).
+   Retained is always the remainder (10000 - insurance-cut-bps - protocol-retained-bps).
+   
+   If bounty is provided, it is deducted equally from insurance and protocol portions.
    Returns {:insurance amount :protocol amount :retained amount}"
-  [amount bounty]
-  (let [insurance (quot (* amount 50) 100)
-        protocol  (quot (* amount 30) 100)
-        retained  (- amount insurance protocol)
-        half-bounty (quot bounty 2)]
-    {:insurance (- insurance half-bounty)
-     :protocol  (- protocol half-bounty)
-     :retained  retained}))
+  ([amount bounty]
+   (calculate-slashing-distribution amount bounty nil))
+  ([amount bounty {:keys [insurance-cut-bps protocol-retained-bps]
+                   :or   {insurance-cut-bps 5000
+                          protocol-retained-bps 3000}}]
+   (let [remainder (- 10000 insurance-cut-bps protocol-retained-bps)
+         insurance (quot (* amount insurance-cut-bps) 10000)
+         protocol  (quot (* amount protocol-retained-bps) 10000)
+         retained  (quot (* amount remainder) 10000)
+         half-bounty (quot bounty 2)]
+     {:insurance (- insurance half-bounty)
+      :protocol  (- protocol half-bounty)
+      :retained  retained})))
 
 (defn calculate-bounty
   "Calculate the bounty amount for a successful challenge (Phase L)."

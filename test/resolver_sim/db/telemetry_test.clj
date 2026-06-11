@@ -27,7 +27,7 @@
    :appeal-probability-if-correct    0.0
    :appeal-probability-if-wrong      0.3
    :strategy                         :malicious
-   :block-time                       1000})
+   :block-ts (java.time.Instant/ofEpochSecond 1000)})
 
 (defn- rng [] 0.9)  ; deterministic: always above 0.3, so verdict is wrong (malicious)
 

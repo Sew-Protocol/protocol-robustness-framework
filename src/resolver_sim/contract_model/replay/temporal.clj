@@ -5,7 +5,7 @@
   (:require [resolver-sim.time.model :as time-model]))
 
 (defn advance-world-time
-  "Advance :block-time and scenario-step counter atomically.
+  "Advance :block-ts and scenario-step counter atomically.
    Returns {:world w' :delta-ms n :advanced? bool}.
 
    Same-timestamp events (event-time == block-time) are a no-op:
@@ -13,17 +13,18 @@
    This models same-block semantics — multiple actions at the same
    timestamp share a single time context without stepping the counter.
 
-   Throws when :block-time is nil (uninitialized world)."
+   Throws when :block-ts is missing (uninitialized world)."
   [world event-time]
-  (let [now (or (:block-time world)
-                (throw (ex-info "advance-world-time: world has no :block-time"
-                                {:error/type :missing-block-time
-                                 :world world})))
-        delta (- event-time now)]
-    (if (pos? delta)
-      (let [step (inc (get-in world [:time :scenario-step] 0))]
-        {:world     (time-model/with-time world {:block-ts event-time :scenario-step step})
-         :delta-ms  delta
+  (let [now-instant (:block-ts (time-model/now world))
+        event-instant (if (instance? java.time.Instant event-time)
+                        event-time
+                        (java.time.Instant/ofEpochSecond (long event-time)))
+        delta-seconds (- (.getEpochSecond ^java.time.Instant event-instant)
+                         (.getEpochSecond ^java.time.Instant now-instant))]
+    (if (pos? delta-seconds)
+      (let [step (inc (:scenario-step (time-model/now world)))]
+        {:world     (time-model/with-time world {:block-ts event-instant :scenario-step step})
+         :delta-ms  (* delta-seconds 1000)
          :advanced? true})
       {:world     world
        :delta-ms  0

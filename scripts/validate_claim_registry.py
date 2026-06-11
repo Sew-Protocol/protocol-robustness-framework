@@ -78,7 +78,9 @@ def collect_theory_claim_ids(scenarios_dir: Path) -> set[str]:
         if cid:
             found.add(normalize_claim_id(cid))
     if parse_errors:
-        warn(f"skipped {len(parse_errors)} scenario files due to read/parse errors")
+        warn(f"skipped {len(parse_errors)} scenario files due to read/parse errors:")
+        for err in parse_errors:
+            warn(f"  {err}")
     return found
 
 
@@ -109,7 +111,7 @@ def load_sew_claims(path: Path) -> list[dict[str, Any]]:
 def validate_sew_claims(scenarios_dir: Path, sew_claims_path: Path) -> None:
     if not sew_claims_path.exists():
         fail(f"sew-claims file missing: {sew_claims_path}")
-    scenario_files = {p.name for p in scenarios_dir.glob("*.json")}
+    scenario_files = {p.name for p in scenarios_dir.rglob("*.json")}
     claims = load_sew_claims(sew_claims_path)
     for claim in claims:
         cid = claim.get("claim/id") or claim.get("claim-id") or claim.get("id")
@@ -153,7 +155,7 @@ def main() -> int:
             f"missing_in_map={missing_in_map}, extra_in_map={extra_in_map}"
         )
 
-    scenario_files = {p.name for p in scenarios_dir.glob("*.json")}
+    scenario_files = {p.name for p in scenarios_dir.rglob("*.json")}
 
     for cid, cdef in claims.items():
         claim_id_field = normalize_claim_id(cdef.get("claim/id") or cid)

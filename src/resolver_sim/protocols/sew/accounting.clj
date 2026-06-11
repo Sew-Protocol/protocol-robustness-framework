@@ -207,17 +207,19 @@
         (add-held token net))))
 
 (defn distribute-slashed-funds
-  "Internal: distribute slashed funds according to 50/30/20 split.
+  "Internal: distribute slashed funds according to configurable split.
+   Default split (50/30/20) can be overridden via :insurance-cut-bps and
+   :protocol-retained-bps in world params (basis points).
    If a challenger is provided (Phase L), they receive a bounty from the slashed amount.
-   50% -> insurance, 30% -> protocol, 20% -> retained reserves.
-   Bounty is subtracted from the 'insurance' and 'protocol' portions proportionally.
+   Bounty is subtracted from the 'insurance' and 'protocol' portions.
    Returns updated world."
   ([world amount] (distribute-slashed-funds world amount nil 0 nil))
   ([world amount challenger bounty-bps]
    (distribute-slashed-funds world amount challenger bounty-bps nil))
   ([world amount challenger bounty-bps workflow-id]
    (let [bounty (payoffs/calculate-bounty amount bounty-bps)
-         dist   (payoffs/calculate-slashing-distribution amount bounty)]
+         split-opts (select-keys (:params world) [:insurance-cut-bps :protocol-retained-bps])
+         dist   (payoffs/calculate-slashing-distribution amount bounty split-opts)]
      (-> world
          (update-in [:bond-distribution :insurance] (fnil + 0) (:insurance dist))
          (update-in [:bond-distribution :protocol]  (fnil + 0) (:protocol dist))

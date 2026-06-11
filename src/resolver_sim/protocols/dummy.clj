@@ -13,7 +13,8 @@
 
    Layering: may import protocols/protocol only.
    Must NOT import contract_model/*, model/*, db/*, io/*."
-  (:require [resolver-sim.protocols.protocol :as proto]))
+  (:require [resolver-sim.protocols.protocol :as proto]
+            [resolver-sim.time.model :as time.model]))
 
 ;; ---------------------------------------------------------------------------
 ;; DummyProtocol implementation (Core only)
@@ -25,7 +26,7 @@
   (protocol-id [_] "dummy")
 
   (init-world [_ scenario]
-    {:block-time (get scenario :initial-block-time 1000)})
+    (time.model/with-time {} {:block-ts (java.time.Instant/ofEpochSecond (get scenario :initial-block-time 1000)) :scenario-step 0}))
 
   (build-execution-context [_ agents _protocol-params]
     {:agent-index (into {} (map (juxt :id identity) agents))})
@@ -40,7 +41,7 @@
     {:ok? true :violations nil})
 
   (world-snapshot [_ world]
-    {:block-time (:block-time world)})
+    (time.model/now world))
 
   (open-entities [_ _world]
     [])

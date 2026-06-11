@@ -28,7 +28,7 @@
                             :dispute-levels {0 0 1 1}
                             :pending-count 0
                             :resolver-stakes {"0xR" 1000}
-                            :block-time 1300}
+                            :block-ts (java.time.Instant/ofEpochSecond 1300)}
                     :metrics {:disputes-triggered 1
                               :resolutions-executed 2}})
            p      (proj/trace-end-projection result)]
@@ -45,7 +45,7 @@
                             :total-held {"USDC" 9950}
                             :total-fees {"USDC" 50}
                             :pending-count 0
-                            :block-time 1060}
+                            :block-ts (java.time.Instant/ofEpochSecond 1060)}
                     :halt-reason :open-entities-at-end
                     :metrics {:disputes-triggered 1}})
            p      (proj/trace-end-projection result)]
@@ -59,7 +59,7 @@
                    {:world {:live-states {0 :released 1 :refunded}
                             :total-held {"USDC" 0 "DAI" 0}
                             :total-fees {"USDC" 25 "DAI" 40}
-                            :block-time 1400}
+                            :block-ts (java.time.Instant/ofEpochSecond 1400)}
                     :metrics {}})
            p      (proj/trace-end-projection result)]
        (is (= {"USDC" 0 "DAI" 0} (get-in p [:terminal-world :total-held-by-token])))
@@ -87,7 +87,7 @@
                                 :yield-module-id :module/aave-yield
                                 :yield-profile :aave-v3
                                 :yield-archetype :yield.provider/liquid-lending}}
-                            :block-time 1400}
+                            :block-ts (java.time.Instant/ofEpochSecond 1400)}
                     :metrics {}})
            p      (proj/trace-end-projection result)]
        (is (= :module/aave-yield
@@ -108,24 +108,24 @@
                    :world {:live-states {0 :pending}
                            :total-held {"USDC" 5000}
                            :total-fees {"USDC" 0}
-                           :block-time 1000}}
+                           :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                   {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
                    :world {:live-states {0 :disputed}
                            :total-held {"USDC" 5000}
                            :total-fees {"USDC" 0}
-                           :block-time 1060}}
+                           :block-ts (java.time.Instant/ofEpochSecond 1060)}}
                   {:seq 2 :time 1120 :agent "buyer" :action "escalate_dispute"
                    :extra {:level 1}
                    :world {:live-states {0 :disputed}
                            :total-held {"USDC" 5000}
                            :total-fees {"USDC" 0}
-                           :block-time 1120}}
+                           :block-ts (java.time.Instant/ofEpochSecond 1120)}}
                   {:seq 3 :time 1180 :agent "buyer" :action "escalate_dispute"
                    :extra {:level 2}
                    :world {:live-states {0 :released}
                            :total-held {"USDC" 0}
                            :total-fees {"USDC" 0}
-                           :block-time 1180}}]
+                           :block-ts (java.time.Instant/ofEpochSecond 1180)}}]
            p (proj/trace-end-projection (replay-result {:trace trace :metrics {:disputes-triggered 1}}))]
        (is (= #{1 2} (get-in p [:trace-summary :escalation-levels])))
        (is (= #{"buyer"} (get-in p [:trace-summary :actors])))
@@ -139,28 +139,28 @@
                           :total-held {"USDC" 1000}
                           :total-fees {"USDC" 0}
                           :resolver-stakes {"0xR" 100}
-                          :block-time 1000}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                  {:seq 1 :time 1010 :agent "resolver" :action "execute_resolution"
                   :world {:live-states {0 :pending}
                           :pending-count 1
                           :total-held {"USDC" 1000}
                           :total-fees {"USDC" 10}
                           :resolver-stakes {"0xR" 100}
-                          :block-time 1010}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1010)}}
                  {:seq 2 :time 1020 :agent "buyer" :action "escalate_dispute"
                   :world {:live-states {0 :disputed}
                           :pending-count 0
                           :total-held {"USDC" 1000}
                           :total-fees {"USDC" 10}
                           :resolver-stakes {"0xR" 100}
-                          :block-time 1020}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1020)}}
                  {:seq 3 :time 1030 :agent "resolver" :action "withdraw_stake"
                   :world {:live-states {0 :released}
                           :pending-count 0
                           :total-held {"USDC" 0}
                           :total-fees {"USDC" 10}
                           :resolver-stakes {"0xR" 70}
-                          :block-time 1030}}]
+                          :block-ts (java.time.Instant/ofEpochSecond 1030)}}]
           p (proj/trace-end-projection (replay-result {:trace trace :metrics {}}))]
       (is (= -1000 (get-in p [:money-movement-summary :token-deltas "USDC" :held-delta])))
       (is (= 10 (get-in p [:money-movement-summary :token-deltas "USDC" :fee-delta])))
@@ -178,7 +178,7 @@
                           :resolver-stakes {"0xR" 100}
                           :claimable {0 {"0xbuyer" 0}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1000}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                  {:seq 1 :time 1010 :agent "resolver" :action "execute_resolution"
                   :world {:live-states {0 :released}
                           :pending-count 0
@@ -187,7 +187,7 @@
                           :resolver-stakes {"0xR" 90}
                           :claimable {0 {"0xbuyer" 990}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1010}}]
+                          :block-ts (java.time.Instant/ofEpochSecond 1010)}}]
           p (proj/trace-end-projection
              (replay-result {:trace trace
                              :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
@@ -210,7 +210,7 @@
                           :resolver-stakes {"0xR" 100}
                           :claimable {0 {"0xbuyer" 0}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1000}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                  {:seq 1 :time 1010 :agent "resolver" :action "execute_resolution"
                   :world {:live-states {0 :released}
                           :pending-count 0
@@ -219,7 +219,7 @@
                           :resolver-stakes {"0xR" 90}
                           :claimable {0 {"0xbuyer" 990}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1010}}]
+                          :block-ts (java.time.Instant/ofEpochSecond 1010)}}]
           p (proj/trace-end-projection
              (replay-result {:trace trace
                              :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
@@ -242,7 +242,7 @@
                           :resolver-stakes {"0xR" 100}
                           :claimable {0 {"0xbuyer" 0}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1000}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                  {:seq 1 :time 1010 :agent "resolver" :action "execute_resolution"
                   :world {:live-states {0 :released}
                           :pending-count 0
@@ -251,7 +251,7 @@
                           :resolver-stakes {"0xR" 90}
                           :claimable {0 {"0xbuyer" 990}}
                           :bond-balances {0 {"0xbuyer" 0}}
-                          :block-time 1010}}]
+                          :block-ts (java.time.Instant/ofEpochSecond 1010)}}]
           p (proj/trace-end-projection
              (replay-result {:trace trace
                              :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
@@ -271,7 +271,7 @@
                           :claimable {0 {"0xC" 0}}
                           :bond-balances {}
                           :pending-count 0
-                          :block-time 1000}}
+                          :block-ts (java.time.Instant/ofEpochSecond 1000)}}
                  {:seq 1 :time 1010 :agent "colluder" :action "release"
                   :world {:live-states {0 :released}
                           :total-held {"USDC" 0}
@@ -280,7 +280,7 @@
                           :claimable {0 {"0xC" 100}}
                           :bond-balances {}
                           :pending-count 0
-                          :block-time 1010}}]
+                          :block-ts (java.time.Instant/ofEpochSecond 1010)}}]
           p (proj/trace-end-projection
              (replay-result {:trace trace
                              :agents [{:id "colluder" :address "0xC" :strategy "collusive"}]

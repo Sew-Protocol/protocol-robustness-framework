@@ -1,7 +1,16 @@
 # Yield-general invariant catalog (yield-v1)
 
-Liquid-lending archetype (`:aave-v3` profile) — provider-only replay, no Sew escrow.
+### Data-Driven General Yield
 
+The simulation uses a **fully data-driven yield engine** (General Yield Module) to model market behavior. This engine does not use hardcoded transition logic; instead, its behavior is injected via:
+1. **Schedules**: External JSON/EDN files defining interest rates and liquidity indices over time.
+2. **Policies**: Data-driven rules for withdrawal fulfillment (e.g., partial-fill, defer, haircut).
+3. **Risk Profiles**: Dynamic failure modes like `:withdrawal-queue` or `:negative-yield` activated by simulation events.
+
+*Note: As of this update, all yield modules utilize exact-ratio arithmetic and decision-based accrual.*
+
+Liquid-lending archetype (`:aave-v3` profile) — provider-only replay, no Sew escrow.
+...
 Replay: `contract-model.replay/replay-yield-scenario` (thin sequential runner). Each
 `yield_accrue` event's `:dt` must equal the `:time` delta from the previous event.
 Simulated time advances only via each event's `:time` field (no separate time-advance action).

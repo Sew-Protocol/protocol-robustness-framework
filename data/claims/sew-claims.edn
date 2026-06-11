@@ -31,7 +31,7 @@
   :assumptions      ["resolver-count >= 1"
                      "no network partition"
                      "adversarial-load <= governance capacity floor"]
-  :validated-by     ["scenarios/S01_basic-dispute-resolved.json"
+  :validated-by     ["scenarios/S01_baseline-happy-path.json"
                      "scenarios/S08_state-machine-attack-gauntlet.json"]
   :falsified-if     "Any scenario produces a liveness violation (deadline exceeded
                      without resolution) under non-partitioned conditions"
@@ -92,4 +92,76 @@
   :confidence       :bounded
   :status           :not-falsified
   :last-validated   nil
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-all-levels-confirm
+  :description      "Third escalation after max level must reject without corrupting L2 pending settlement."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S31_forking-strategist-all-levels-confirm.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-double-loss
+  :description      "When L1 confirms L0, final settlement remains release and accounting stays conserved."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S30_forking-strategist-double-loss.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-l1-reversal
+  :description      "L1 escalation may reverse L0 without breaking accounting or monotonic dispute level."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S26_forking-strategist-l1-reversal.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-l2-fork
+  :description      "Dispute level advances monotonically 0→1→2; L2 may fork without rewriting L0/L1 hashes."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S27_forking-strategist-l2-fork.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-late-escalation-rejected
+  :description      "Post-deadline escalation must not advance dispute level or block L0 settlement."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S28_forking-strategist-late-escalation-rejected.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-premature-settlement-rejected
+  :description      "Premature settlement must reject without corrupting pending state; post-window refund succeeds."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S32_forking-strategist-premature-settlement-rejected.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :forking-strategist-seller-escalates
+  :description      "Seller escalation may fork L0 refund to L1 release with correct bonds and hashes."
+  :assumptions      ["appeal-window-60s" "kleros-escalation-ladder"]
+  :validated-by     ["scenarios/S29_forking-strategist-seller-escalates.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
+  :counterexamples  []}
+
+ {:claim/id         :workflow-dispute-isolation-shared-resolver
+  :description      "Escalating workflow 0 must not alter, block, cancel, delay, overwrite, or contaminate the pending settlement state of workflow 1."
+  :assumptions      ["appeal-window-60s" "shared-l0-resolver" "independent-escrow-state"]
+  :validated-by     ["scenarios/S33_forking-strategist-two-escrow-fork-isolation.json"]
+  :falsified-if     "Funds lost or double settlements occur"
+  :confidence       :bounded
+  :status           :not-falsified
   :counterexamples  []}]

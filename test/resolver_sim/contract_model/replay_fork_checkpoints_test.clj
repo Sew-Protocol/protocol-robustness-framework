@@ -28,7 +28,7 @@
 (deftest trace-entry->replay-event-strips-trace-metadata
   (let [entry {:seq 3 :time 1120 :agent "buyer" :action "challenge_resolution"
                :params {:workflow-id 0 :event-id "evt-1"}
-               :world {:block-time 1120}
+               :world {:block-ts (java.time.Instant/ofEpochSecond 1120)}
                :result :ok
                :error nil}
         event  (replay/trace-entry->replay-event entry)]

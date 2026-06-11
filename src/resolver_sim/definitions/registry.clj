@@ -259,6 +259,78 @@
     :claim/type :safety
     :claim/statement "When a resolver is at max concurrent disputes, additional disputes on that resolver are rejected."
     :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/solvency]}
+
+   :claims/forking-strategist-all-levels-confirm
+   {:claim/id :claims/forking-strategist-all-levels-confirm
+    :claim/title "Third escalation after max level must reject"
+    :claim/type :safety
+    :claim/statement "Third escalation after max level must reject without corrupting L2 pending settlement."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/forking-strategist-double-loss
+   {:claim/id :claims/forking-strategist-double-loss
+    :claim/title "Double loss: L1 confirms L0"
+    :claim/type :safety
+    :claim/statement "When L1 confirms L0, final settlement remains release and accounting stays conserved."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/solvency]}
+
+   :claims/forking-strategist-l1-reversal
+   {:claim/id :claims/forking-strategist-l1-reversal
+    :claim/title "L1 reversal after L0 release"
+    :claim/type :safety
+    :claim/statement "L1 escalation may reverse L0 without breaking accounting or monotonic dispute level."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/forking-strategist-l2-fork
+   {:claim/id :claims/forking-strategist-l2-fork
+    :claim/title "L2 fork after confirming L0 and L1"
+    :claim/type :safety
+    :claim/statement "Dispute level advances monotonically 0→1→2; L2 may fork without rewriting L0/L1 hashes."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/forking-strategist-late-escalation-rejected
+   {:claim/id :claims/forking-strategist-late-escalation-rejected
+    :claim/title "Late escalation rejected; L0 release stands"
+    :claim/type :safety
+    :claim/statement "Post-deadline escalation must not advance dispute level or block L0 settlement."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/forking-strategist-premature-settlement-rejected
+   {:claim/id :claims/forking-strategist-premature-settlement-rejected
+    :claim/title "Premature settlement rejected; L1 fork finalizes"
+    :claim/type :safety
+    :claim/statement "Premature settlement must reject without corrupting pending state; post-window refund succeeds."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/forking-strategist-seller-escalates
+   {:claim/id :claims/forking-strategist-seller-escalates
+    :claim/title "Seller-initiated L1 fork to release"
+    :claim/type :safety
+    :claim/statement "Seller escalation may fork L0 refund to L1 release with correct bonds and hashes."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/finality]}
+
+   :claims/workflow-dispute-isolation-shared-resolver
+   {:claim/id :claims/workflow-dispute-isolation-shared-resolver
+    :claim/title "Fork isolation across two disputed escrows"
+    :claim/type :safety
+    :claim/statement "Escalating workflow 0 must not alter, block, cancel, delay, overwrite, or contaminate the pending settlement state of workflow 1."
+    :claim/evidence-mode :support
+    :claim/related-invariants [:invariant/conservation]}
+
+   :claims/optimal-strategy-under-load-bounded
+   {:claim/id :claims/optimal-strategy-under-load-bounded
+    :claim/title "Optimal resolver strategy is honest under low load"
+    :claim/type :safety
+    :claim/statement "As dispute load increases, the optimal strategy for a resolver remains honest; collusion becomes irrational due to bond-slash risk. Note: Strategy selection models greedy best-response incentives assuming fixed-accuracy estimates; does not account for multi-agent strategy equilibrium."
+    :claim/evidence-mode :support
     :claim/related-invariants [:invariant/solvency]}})
 
 (def claim-scenario-map
@@ -283,18 +355,59 @@
    :claims/resolver-capacity-enforced
    {:supporting ["S62_resolver-capacity-concurrent-dispute-load"]
     :falsifying []}
+
+   :claims/forking-strategist-all-levels-confirm
+   {:supporting ["S31_forking-strategist-all-levels-confirm"]
+    :falsifying []}
+
+   :claims/forking-strategist-double-loss
+   {:supporting ["S30_forking-strategist-double-loss"]
+    :falsifying []}
+
+   :claims/forking-strategist-l1-reversal
+   {:supporting ["S26_forking-strategist-l1-reversal"]
+    :falsifying []}
+
+   :claims/forking-strategist-l2-fork
+   {:supporting ["S27_forking-strategist-l2-fork"]
+    :falsifying []}
+
+   :claims/forking-strategist-late-escalation-rejected
+   {:supporting ["S28_forking-strategist-late-escalation-rejected"]
+    :falsifying []}
+
+   :claims/forking-strategist-premature-settlement-rejected
+   {:supporting ["S32_forking-strategist-premature-settlement-rejected"]
+    :falsifying []}
+
+   :claims/forking-strategist-seller-escalates
+   {:supporting ["S29_forking-strategist-seller-escalates"]
+    :falsifying []}
+
+   :claims/workflow-dispute-isolation-shared-resolver
+   {:supporting ["S33_forking-strategist-two-escrow-fork-isolation"]
+    :falsifying []}
+
+   :claims/optimal-strategy-under-load-bounded
+   {:supporting ["Y08_optimal-strategy-load-stress"]
+    :falsifying []}
+
    :claims/dr3-reversal-slash-disabled
    {:supporting ["S41_dr3-reversal-slash-disabled"]
     :falsifying []}
+
    :claims/bribery-neutralized-by-l1
    {:supporting ["S42_resolver-buyer-bribery-loop"]
     :falsifying []}
+
    :claims/reversal-slash-track1
    {:supporting []
     :falsifying []}
+
    :claims/reversal-slash-track2-reversed
    {:supporting []
     :falsifying []}
+
    :claims/reversal-slash-track2-executes
    {:supporting []
     :falsifying []}})
