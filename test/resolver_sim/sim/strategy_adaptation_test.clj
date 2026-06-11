@@ -53,12 +53,26 @@
           final-mix (frequencies (map :strategy (vals updated-histories)))]
       (is (pos? (get final-mix :lazy 0))))))
 
-(deftest load-level-changes-target-strategy
+(deftest difficulty-weighted-accuracy
+  (testing "expected-accuracy uses difficulty distribution correctly"
+    (let [dist (ec/default-difficulty-distribution)
+          h-acc (ec/expected-accuracy :honest dist)
+          l-acc (ec/expected-accuracy :lazy dist)
+          m-acc (ec/expected-accuracy :malicious dist)]
+      (is (<= 0 h-acc 1))
+      (is (< l-acc h-acc) "lazy accuracy below honest")
+      (is (< m-acc l-acc) "malicious accuracy below lazy"))))
+
+(deftest optimal-strategy-changes-under-load
   (testing "light load selects honest, heavy load selects lazy in evidence model"
-    (let [light-opt (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.10 2.0 150.0)
-          heavy-opt (ec/optimal-strategy-under-load (rng/make-rng 1) 500 100 0.10 2.0 150.0)]
-      (is (= :honest light-opt))
-      (is (= :lazy heavy-opt)))))
+    (let [light-decision (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.10 2.0 150.0)
+          heavy-decision (ec/optimal-strategy-under-load (rng/make-rng 1) 500 100 0.10 2.0 150.0)]
+      (is (= :honest (:optimal-strategy light-decision)))
+      (is (= :lazy (:optimal-strategy heavy-decision)))
+      (is (contains? light-decision :strategy-payoffs))
+      (is (contains? heavy-decision :strategy-payoffs))
+      (is (= :light (:load-level light-decision)))
+      (is (= :extreme (:load-level heavy-decision))))))
 
 (deftest unsupported-optimal-strategy-is-diagnostic
   (testing "if optimal strategy is lazy but lazy is disallowed, adaptation emits diagnostics"
@@ -147,6 +161,46 @@
       (is (= :inconclusive (:blocked-target-policy cfg)))
       (is (contains? (:defaults-used cfg) :max-switch-probability))
       (is (contains? (:defaults-used cfg) :blocked-target-policy)))))
+
+(deftest validation-rejects-invalid-params
+  (testing "parameter validation throws ex-info for out-of-range inputs"
+    (is (thrown? clojure.lang.ExceptionInfo
+          (ec/optimal-strategy-under-load (rng/make-rng 1) 0 100 0.1 2.0 150.0)))
+    (is (thrown? clojure.lang.ExceptionInfo
+          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 0 0.1 2.0 150.0)))
+    (is (thrown? clojure.lang.ExceptionInfo
+          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 -0.1 2.0 150.0)))
+    (is (thrown? clojure.lang.ExceptionInfo
+          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 0.0 150.0)))
+    (is (thrown? clojure.lang.ExceptionInfo
+          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 2.0 0.0)))))
+
+(deftest load-reduces-honest-accuracy-monotonically
+  (testing "as dispute count increases, honest expected accuracy does not increase"
+    (let [base-cost  (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 2.0 150.0)
+          heavy-cost (ec/optimal-strategy-under-load (rng/make-rng 1) 200 100 0.1 2.0 150.0)]
+      (is (>= (get-in base-cost [:strategy-payoffs :honest :expected-accuracy])
+              (get-in heavy-cost [:strategy-payoffs :honest :expected-accuracy]))
+          "honest accuracy should not increase as load increases"))))
+
+(deftest detection-reduces-malicious-profit
+  (testing "as detection probability increases, malicious expected profit does not increase"
+    (let [low-det  (ec/optimal-strategy-under-load (rng/make-rng 1) 50 100 0.05 2.0 150.0)
+          high-det (ec/optimal-strategy-under-load (rng/make-rng 1) 50 100 0.50 2.0 150.0)]
+      (is (>= (get-in low-det [:strategy-payoffs :malicious :expected-profit])
+              (get-in high-det [:strategy-payoffs :malicious :expected-profit]))
+          "malicious profit should not increase as detection probability increases"))))
+
+(deftest strategy-output-is-valid
+  (testing "optimal strategy is always one of the known strategies"
+    (doseq [[disputes budget] [[10 100] [50 100] [200 100] [500 100] [10 200] [100 50]]]
+      (let [decision (ec/optimal-strategy-under-load (rng/make-rng 1) disputes budget 0.1 2.0 150.0)
+            optimal  (:optimal-strategy decision)]
+        (is (contains? #{:honest :lazy :malicious} optimal)
+            (str "unexpected optimal strategy " optimal " at disputes=" disputes " budget=" budget))
+        (is (contains? #{:light :medium :heavy :extreme} (:load-level decision)))
+        (is (contains? decision :strategy-payoffs))
+        (is (contains? decision :assumptions))))))
 
 (deftest blocked-target-policy-modes
   (testing "blocked-target-policy controls compatibility classification"

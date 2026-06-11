@@ -56,7 +56,8 @@
         r     (loss/classify-loss world :USDC)]
     (is (= :loss-realized (:loss/status r))
         "deferred shortfall at finality must be realized")
-    (is (true? (:loss/user-realized? r)))))
+    (is (false? (:loss/user-realized? r))
+        "deferred-only shortfall has no haircut → user loss not realized")))
 
 (deftest haircut-only-shortfall-realized
   (let [world (-> (t/empty-world 1000)
@@ -72,7 +73,8 @@
     (is (= :loss-realized (:loss/status r))
         "haircut-only shortfall must be realized (haircut is a loss)")
     (is (= :haircut-loss (:loss/reason r)))
-    (is (true? (:loss/user-realized? r)))))
+    (is (= 0.2 (:loss/user-realized? r))
+        "haircut 200 / total-oblig 1000 = 0.2 pro-rata user-loss ratio")))
 
 (deftest irrecoverable-when-held-below-threshold
   (let [world (-> (t/empty-world 1000)
@@ -92,14 +94,14 @@
 (deftest loss-active-predicate
   (let [normal-world (t/empty-world 1000)
         r1 (loss/classify-loss normal-world :USDC)
-        ;; Create a world with shortfall
+        ;; Create a world with haircut shortfall (permanent loss)
         loss-world (-> (t/empty-world 1000)
                        (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
                        (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
                                  {:token :USDC :workflow-id 0
                                   :shortfall {:fulfilled-amount 0
-                                              :deferred-amount 100
-                                              :haircut-amount 0}}))
+                                              :deferred-amount 0
+                                              :haircut-amount 100}}))
         r2 (loss/classify-loss loss-world :USDC)]
     (is (false? (loss/loss-active? r1)))
     (is (true? (loss/loss-active? r2)))

@@ -169,17 +169,21 @@
 
         ;; Shortfall + financially final → total obligations (deferred + haircut)
         (and ff-final? (pos? (+ (:deferred-total shortfall) (:haircut-total shortfall))))
-        (let [held          (get-in world [:total-held token] 0)
-              claim         (get-in world [:claimable token] 0)
-              total-oblig   (+ (:deferred-total shortfall) (:haircut-total shortfall))
-              ratio         (/ (+ held claim) (max total-oblig 1))
-              max-loss?     (and max-irrecoverable-ratio (< ratio max-irrecoverable-ratio))]
+        (let [held            (get-in world [:total-held token] 0)
+              claim           (get-in world [:claimable token] 0)
+              total-oblig     (+ (:fulfilled-total shortfall)
+                                 (:deferred-total shortfall)
+                                 (:haircut-total shortfall))
+              coverage-ratio  (/ (+ held claim) (max total-oblig 1))
+              max-loss?       (and max-irrecoverable-ratio
+                                   (< coverage-ratio max-irrecoverable-ratio))
+              user-loss-ratio (/ (:haircut-total shortfall) (max total-oblig 1))]
           {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
            :loss/scope               :yield-module
            :loss/token               token
            :loss/shortfall           shortfall
-           :loss/user-realized?      true
-           :loss/protocol-realized?  true
+           :loss/user-realized?      (if (pos? user-loss-ratio) user-loss-ratio false)
+           :loss/protocol-realized?  (pos? (:haircut-total shortfall))
            :loss/reason              (cond max-loss? :irrecoverable-shortfall
                                            (pos? (:haircut-total shortfall)) :haircut-loss
                                            :else :partial-liquidity)
@@ -209,4 +213,4 @@
 (defn loss-realized?
   "True when loss has been realized (or is irrecoverable)."
   [loss-classification]
-  (and (loss-active? loss-classification) (:loss/user-realized? loss-classification)))
+  (boolean (and (loss-active? loss-classification) (:loss/user-realized? loss-classification))))

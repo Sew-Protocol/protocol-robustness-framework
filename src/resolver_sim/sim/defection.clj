@@ -149,34 +149,33 @@
         detection-prob   (:detection-probability cfg)
         slash-multiplier (:slash-multiplier cfg)
         fee-profit       (fee-profit-estimate params)
-        opt              (ec/optimal-strategy-under-load rng
+        decision         (ec/optimal-strategy-under-load rng
                                                          num-disputes
                                                          effort-budget
                                                          detection-prob
                                                          slash-multiplier
                                                          fee-profit)]
-    {:num-disputes                 num-disputes
-     :effort-budget                effort-budget
-     :effort-available-per-dispute (ec/effort-available-per-dispute effort-budget (max 1 num-disputes))
-     :load-level                   (ec/load-level (max 1 num-disputes) effort-budget)
-     :detection-prob               detection-prob
-     :slash-multiplier             slash-multiplier
-     :fee-profit                   fee-profit
-     :optimal-strategy-under-load  opt}))
+    (assoc decision
+           :num-disputes     num-disputes
+           :effort-budget    effort-budget
+           :detection-prob   detection-prob
+           :slash-multiplier slash-multiplier
+           :fee-profit       fee-profit)))
 
 (defn- event-base
   [epoch id from to selector reason load-snap rate]
-  {:event/type                  :resolver.strategy/changed
-   :epoch                       epoch
-   :resolver-id                 id
-   :from                        from
-   :to                          to
-   :selector                    selector
-   :reason                      reason
-   :load-level                  (:load-level load-snap)
-   :defection-rate              rate
-   :optimal-strategy-under-load (:optimal-strategy-under-load load-snap)
-   :evidence-cost-snapshot      (dissoc load-snap :optimal-strategy-under-load :load-level)})
+  (let [opt-strategy (:optimal-strategy load-snap)]
+    {:event/type                  :resolver.strategy/changed
+     :epoch                       epoch
+     :resolver-id                 id
+     :from                        from
+     :to                          to
+     :selector                    selector
+     :reason                      reason
+     :load-level                  (:load-level load-snap)
+     :defection-rate              rate
+     :optimal-strategy-under-load opt-strategy
+     :evidence-cost-snapshot      (dissoc load-snap :optimal-strategy :load-level :strategy-payoffs :assumptions)}))
 
 (defmulti select-next-strategy
   (fn [selector _ctx _resolver] selector))
@@ -206,7 +205,7 @@
   [_ {:keys [rate rng cfg load-snap epoch observed-strategies]} resolver]
   (let [from    (:strategy resolver)
         trials  (get-in resolver [:epoch-history (epoch-key epoch) :trials] 0)
-        optimal (:optimal-strategy-under-load load-snap)]
+        optimal (:optimal-strategy load-snap)]
     (cond
       (not (pos? trials))
       {:to from :skip? true}
@@ -227,9 +226,10 @@
                     :policy (:blocked-target-policy cfg)
                     :load-level (:load-level load-snap)
                     :optimal-strategy-under-load optimal
+                    :strategy-payoffs (:strategy-payoffs load-snap)
                     :allowed-targets (:allowed-targets cfg)
                     :observed-strategies observed-strategies
-                    :strategy-space (:strategy-space cfg)}}
+                                         :strategy-space (:strategy-space cfg)}}
 
       (switch-with-rate? rng (min rate (:max-switch-probability cfg)))
       {:to optimal

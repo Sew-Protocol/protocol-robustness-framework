@@ -110,38 +110,62 @@
 
 ;; === Load Analysis ===
 
-(defn load-level
-  "Classify load as light/medium/heavy/extreme.
-   
-   light: <= 10 disputes (honest can fully verify all)
-   medium: 11-50 disputes (honest can verify most)
-   heavy: 51-150 disputes (honest must shortcut some)
-   extreme: >150 disputes (honest can't verify any)
-   
-   Each level has different equilibrium strategies."
-  [num-disputes effort-budget]
-  (let [avg-effort (/ effort-budget (double num-disputes))]
-    (cond
-      (<= num-disputes 10)  :light
-      (<= num-disputes 50)  :medium
-      (<= num-disputes 150) :heavy
-      :else                 :extreme)))
+(def load-level-thresholds
+  "Effort-per-dispute thresholds for load classification.
 
-(defn load-multiplier-for-lazy-advantage
-  "How much does load shift incentives toward lazy?
+   :full-verification-effort   — effort units where honest can fully verify a dispute
+   :partial-verification-effort — effort units where honest can partially verify
+   :minimal-check-effort        — effort units where honest can only minimally check
    
-   Light: lazy pays same as honest (both can verify)
-   Medium: lazy has slight advantage (honest stretched)
-   Heavy: lazy has 2x advantage (honest can't verify, lazy doesn't care)
-   Extreme: lazy has 5x advantage (honest completely overwhelmed)
-   
-   This multiplier applies to profit calculations."
+   These are research assumptions about verification cost under the
+   difficulty distribution. They depend on the difficulty mix and
+   the effort-cost-to-fully-verify model in difficulty.clj."
+  {:full-verification-effort   10.0
+   :partial-verification-effort 2.0
+   :minimal-check-effort        0.5})
+
+(defn load-level
+  "Classify load as light/medium/heavy/extreme based on effort per dispute.
+
+   light:   effort-available >= full-verification-effort  (can fully verify all)
+   medium:  effort-available >= partial-verification-effort (can verify most)
+   heavy:   effort-available >= minimal-check-effort       (must shortcut some)
+   extreme: effort-available <  minimal-check-effort        (can't meaningfully verify)
+
+   Each level has different equilibrium strategies.
+   This formulation is portable across resolver effort budgets and
+   dispute counts — it does not assume a fixed budget or volume."
   [num-disputes effort-budget]
-  (case (load-level num-disputes effort-budget)
-    :light   1.0
-    :medium  1.5
-    :heavy   2.0
-    :extreme 5.0))
+  (let [avg-effort (effort-available-per-dispute effort-budget num-disputes)
+        {:keys [full-verification-effort
+                partial-verification-effort
+                minimal-check-effort]} load-level-thresholds]
+    (cond
+      (>= avg-effort full-verification-effort)     :light
+      (>= avg-effort partial-verification-effort)  :medium
+      (>= avg-effort minimal-check-effort)          :heavy
+      :else                                         :extreme)))
+
+;; === Detection Probability ===
+
+(defn expected-detection-prob
+  "Expected detection probability weighted by difficulty distribution.
+
+   Detection varies by difficulty: easy cases have full detection,
+   medium cases attenuate to 60%, hard cases to 20% of base probability.
+   This reflects the fact that ambiguous/hard cases are harder to
+   adjudicate, creating an attacker advantage in the tail.
+
+   The neutral expectation uses the default difficulty distribution.
+   An attacker-targeted distribution (overweighting hard cases) would
+   yield lower expected detection, which is the vulnerability the
+   adversarial framework is designed to surface."
+  [base-detection-prob difficulty-distribution]
+  (reduce (fn [acc [difficulty weight]]
+            (+ acc (* weight (diff/detection-probability-by-difficulty
+                               base-detection-prob difficulty))))
+          0.0
+          difficulty-distribution))
 
 ;; === Evidence Forgery Costs ===
 
@@ -184,40 +208,133 @@
   (/ (verify-evidence-cost difficulty)
      (forge-evidence-cost difficulty)))
 
+;; === Difficulty Distribution ===
+
+(defn default-difficulty-distribution
+  "Default dispute difficulty distribution.
+
+   Returns a map of difficulty → weight (summing to 1.0).
+   These are research assumptions: the protocol's case docket mix.
+
+   Normal docket:       70% easy, 25% medium, 5% hard
+   Adversarial docket:  30% easy, 45% medium, 25% hard
+   Attack-targeted:     10% easy, 30% medium, 60% hard"
+  []
+  {:easy 0.70 :medium 0.25 :hard 0.05})
+
+(defn expected-accuracy
+  "Expected accuracy for a strategy given a difficulty distribution.
+
+   Weights accuracy-by-difficulty by the distribution weights.
+   This is the strategy's base accuracy before load degradation."
+  [strategy difficulty-distribution]
+  (reduce (fn [acc [difficulty weight]]
+            (+ acc (* weight (diff/accuracy-by-difficulty strategy difficulty))))
+          0.0
+          difficulty-distribution))
+
 ;; === Strategy Selection Under Load ===
 
 (defn- canon-round [f] (long (Math/floor f)))
 
-(defn optimal-strategy-under-load
-  "Which strategy maximizes profit given load?
-   
-   This is the core broken assumption: under load, LAZY becomes optimal
-   because verification cost exceeds potential upside.
-   
-   Returns: :honest | :lazy | :malicious (rarely) based on profit maximization"
-  [rng num-disputes effort-budget detection-prob slashing-multiplier fee-profit]
-  (let [effort-available (effort-available-per-dispute effort-budget num-disputes)
-        load-mult (load-multiplier-for-lazy-advantage num-disputes effort-budget)
-        honest-accuracy 0.80
-        
-        ;; Honest: pays slashing (low) but reliable profit. 
-        ;; Load impact is on accuracy, not a direct scalar penalty on fee-profit.
-        honest-profit (canon-round (* fee-profit honest-accuracy))
+(defn- load-dependent-accuracy
+  "Expected accuracy for a strategy under load, weighted by difficulty distribution.
 
-        ;; Lazy: lower accuracy but avoids slashing risk and effort costs.
-        ;; Lazy gains advantage because it saves effort costs compared to honest.
-        lazy-accuracy 0.40
-        lazy-profit (canon-round (* fee-profit lazy-accuracy load-mult))
-        
-        ;; Malicious: lowest accuracy but high upside if not detected
-        malice-accuracy 0.20
-        malice-detection-risk (* detection-prob slashing-multiplier)
-        malice-profit (canon-round (* fee-profit malice-accuracy (- 1.0 malice-detection-risk)))]
-    
-    (cond
-      (> honest-profit lazy-profit) :honest
-      (> lazy-profit malice-profit) :lazy
-      :else :malicious)))
+   Honest accuracy degrades under load because full verification becomes
+   impossible. Lazy and malicious accuracy are roughly load-insensitive
+   because they were already shortcutting — their effort-actually-spent
+   is bounded below by a minimum (3 for lazy, 1 for malicious) that
+   does not degrade further under extreme load.
+
+   Returns a double in [0, 1]."
+  [rng strategy effort-available difficulty-distribution]
+  (reduce (fn [acc [difficulty weight]]
+            (+ acc (* weight (accuracy-given-load rng strategy difficulty
+                                                  effort-available))))
+          0.0
+          difficulty-distribution))
+
+(defn- validate-params
+  "Validate input parameters for optimal-strategy-under-load.
+   Throws ex-info on invalid inputs."
+  [num-disputes effort-budget detection-prob slashing-multiplier fee-profit]
+  (when-not (pos? num-disputes)
+    (throw (ex-info "num-disputes must be positive"
+                    {:num-disputes num-disputes})))
+  (when-not (pos? effort-budget)
+    (throw (ex-info "effort-budget must be positive"
+                    {:effort-budget effort-budget})))
+  (when-not (<= 0.0 detection-prob 1.0)
+    (throw (ex-info "detection-prob must be in [0, 1]"
+                    {:detection-prob detection-prob})))
+  (when-not (pos? slashing-multiplier)
+    (throw (ex-info "slashing-multiplier must be positive"
+                    {:slashing-multiplier slashing-multiplier})))
+  (when-not (pos? fee-profit)
+    (throw (ex-info "fee-profit must be positive"
+                    {:fee-profit fee-profit})))
+  true)
+
+(defn optimal-strategy-under-load
+  "Evaluate which strategy maximizes expected profit under given load conditions.
+
+   The core economic mechanism:
+   - Under light load, honest verification is accurate and profitable.
+   - Under heavy load, honest accuracy degrades (can't verify everything),
+     making lazy relatively more attractive.
+   - Malicious faces detection/slashing risk that limits its upside.
+
+   Returns a full diagnostic map with per-strategy payoffs, not just the
+   winning strategy keyword. This enables inspection of why a particular
+   strategy dominates.
+
+   Parameters:
+     rng                — seeded RNG (for reproducibility; used by accuracy-given-load)
+     num-disputes       — dispute volume this epoch
+     effort-budget      — total time-units available per resolver per epoch
+     detection-prob     — base probability of detecting malicious behavior [0,1]
+     slashing-multiplier — slash penalty multiple on detection
+     fee-profit         — expected fee profit per dispute"
+  [rng num-disputes effort-budget detection-prob slashing-multiplier fee-profit]
+  (validate-params num-disputes effort-budget detection-prob slashing-multiplier fee-profit)
+  (let [diff-dist           (default-difficulty-distribution)
+        effort-avail        (effort-available-per-dispute effort-budget num-disputes)
+        load                (load-level num-disputes effort-budget)
+
+        ;; Strategy payoffs under load
+        h-accuracy          (load-dependent-accuracy rng :honest effort-avail diff-dist)
+        l-accuracy          (load-dependent-accuracy rng :lazy effort-avail diff-dist)
+        m-accuracy          (load-dependent-accuracy rng :malicious effort-avail diff-dist)
+
+        h-profit            (canon-round (* fee-profit h-accuracy))
+        l-profit            (canon-round (* fee-profit l-accuracy))
+        m-detection-prob    (expected-detection-prob detection-prob diff-dist)
+        m-detection-risk    (* m-detection-prob slashing-multiplier)
+        m-profit            (canon-round (* fee-profit m-accuracy (- 1.0 m-detection-risk)))
+
+        optimal (cond
+                  (> h-profit l-profit) :honest
+                  (> l-profit m-profit) :lazy
+                  :else                 :malicious)]
+
+    {:optimal-strategy          optimal
+     :load-level                load
+     :effort-available-per-dispute effort-avail
+     :difficulty-distribution   diff-dist
+     :strategy-payoffs
+     {:honest    {:expected-profit h-profit
+                  :expected-accuracy h-accuracy}
+      :lazy      {:expected-profit l-profit
+                  :expected-accuracy l-accuracy}
+      :malicious {:expected-profit m-profit
+                  :expected-accuracy m-accuracy
+                  :expected-detection-prob m-detection-prob}}
+     :assumptions
+     {:base-detection-prob    detection-prob
+      :slashing-multiplier    slashing-multiplier
+      :detection-model        :difficulty-weighted
+      :load-model             :effort-available-per-dispute
+      :accuracy-model         :accuracy-given-load}}))
 
 ;; === Validation ===
 
