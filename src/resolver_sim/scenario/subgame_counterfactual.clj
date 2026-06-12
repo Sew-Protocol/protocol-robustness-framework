@@ -25,6 +25,7 @@
   (:require [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.protocol :as proto]
+            [resolver-sim.protocols.sew.trace-metadata :as meta]
             [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
 
 (def ^:private default-continuation-policy
@@ -55,7 +56,7 @@
    :undefined-policy :inconclusive})
 
 (def ^:private strategic-actions
-  #{"raise_dispute" "escalate_dispute" "execute_resolution"})
+  (clojure.set/difference meta/strategic-actions #{"create-escrow"}))
 
 (def ^:private action-alternatives
   {"raise_dispute" ["settle_now" "wait"]

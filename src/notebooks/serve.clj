@@ -12,7 +12,8 @@
     (println (str "Starting Clerk notebook server on http://localhost:" port "/notebooks/xtdb_overview"))
     (clerk/serve! {:watch-paths ["src" "notebooks" "data"]
                    :browse true
-                   :port port})
+                   :port port
+                   :render-nrepl {:port 7778}})
     ;; Pre-evaluate all notebooks so they are reachable by URL without a file-change trigger.
     ;; show! evaluates the file and registers it; the last call sets the default landing page.
     (show-notebook! "notebooks/xtdb_overview.clj")
