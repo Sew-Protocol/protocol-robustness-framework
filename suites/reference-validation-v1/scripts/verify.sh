@@ -39,6 +39,12 @@ if [[ "$PASSED" -ne "$TOTAL" ]]; then
   echo "FAIL reference-validation-v1: passed $PASSED != total $TOTAL"
   exit 1
 fi
+# Minimum threshold: all 8 scenarios must pass
+MIN_PASSED=8
+if [[ "$PASSED" -lt "$MIN_PASSED" ]]; then
+  echo "FAIL reference-validation-v1: passed $PASSED < minimum $MIN_PASSED"
+  exit 1
+fi
 echo "PASS count: $PASSED/$TOTAL scenarios passed"
 
 # ── JSON content and hash verification ──────────────────────────────────

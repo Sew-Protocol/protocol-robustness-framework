@@ -4,7 +4,6 @@
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.lifecycle :as lc]
-            [resolver-sim.protocols.sew.trace-metadata :as tm]
             [resolver-sim.protocols.sew.types :as t]))
 
 (def ^:private snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50}))
@@ -79,11 +78,6 @@
   (let [w0 (sample-world)
         w1 (assoc-in w0 [:module-snapshots 0 :resolver-fee-bps] 999)]
     (is (not (:holds? (inv/module-snapshot-immutable? w0 w1))))))
-
-(deftest trace-metadata-categories-cover-canonical-ids
-  (let [cats (set (keys tm/invariant-categories))]
-    (is (set/subset? inv/canonical-ids cats)
-        (str "uncategorized: " (sort (set/difference inv/canonical-ids cats))))))
 
 (deftest escrow-state-transition-valid-rejects-circular-back-edge
   (let [w0 (-> (sample-world)

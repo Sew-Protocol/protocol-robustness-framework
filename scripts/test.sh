@@ -86,7 +86,7 @@ run_target() {
 
 run_unit() {
   require_clojure || return $?
-  echo "Running unit tests..."
+  echo "Running unit tests (all — framework + Sew)..."
   clojure -M:test -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
@@ -124,6 +124,177 @@ run_unit() {
                 'resolver-sim.contract-model.replay-batch-sew-test
                 'resolver-sim.contract-model.replay-batch-appeal-test
                 'resolver-sim.contract-model.replay-batch-slash-domain-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
+  return $?
+}
+
+run_framework() {
+  require_clojure || return $?
+  echo "Running framework unit tests (no Sew protocol)..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.core-tests])
+(require '[resolver-sim.sim.multi-epoch-test])
+(require '[resolver-sim.sim.defection-test])
+(require '[resolver-sim.sim.strategy-adaptation-test])
+(require '[resolver-sim.sim.waterfall-test])
+(require '[resolver-sim.io.scenario-fixture-parity-test])
+(require '[resolver-sim.contract-model.replay-batch-test])
+(let [results (t/run-tests
+                'resolver-sim.core-tests
+                'resolver-sim.sim.multi-epoch-test
+                'resolver-sim.sim.defection-test
+                'resolver-sim.sim.strategy-adaptation-test
+                'resolver-sim.sim.waterfall-test
+                'resolver-sim.io.scenario-fixture-parity-test
+                'resolver-sim.contract-model.replay-batch-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
+  return $?
+}
+
+run_sew() {
+  require_clojure || return $?
+  echo "Running Sew protocol unit tests..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.core-tests])
+(require '[resolver-sim.protocols.sew.replay-test])
+(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
+(require '[resolver-sim.scenario.expectations-test])
+(require '[resolver-sim.scenario.equilibrium-test])
+(require '[resolver-sim.protocols.sew.slashing-test])
+(require '[resolver-sim.protocols.sew.phase-k-test])
+(require '[resolver-sim.protocols.sew.phase-m-test])
+(require '[resolver-sim.contract-model.replay-batch-sew-test])
+(require '[resolver-sim.contract-model.replay-batch-appeal-test])
+(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
+(require '[resolver-sim.protocols.sew.lifecycle-test])
+(require '[resolver-sim.protocols.sew.resolution-test])
+(require '[resolver-sim.protocols.sew.state-machine-test])
+(require '[resolver-sim.protocols.sew.governance-test])
+(require '[resolver-sim.protocols.sew.integration-test])
+(require '[resolver-sim.protocols.sew.accounting-test])
+(require '[resolver-sim.protocols.sew.governance-gates-test])
+(require '[resolver-sim.protocols.sew.yield-reorg-race-test])
+(require '[resolver-sim.protocols.sew.yield-solvency-test])
+(require '[resolver-sim.protocols.sew.yield.failure-test])
+(require '[resolver-sim.protocols.sew.yield.policy-test])
+(require '[resolver-sim.protocols.sew.yield.finalize-parity-test])
+(require '[resolver-sim.protocols.sew.resolver-yield-accrual-test])
+(require '[resolver-sim.protocols.sew.invariant-registry-test])
+(require '[resolver-sim.protocols.sew.invariant-runner-test])
+(require '[resolver-sim.protocols.sew.dispute-capacity-test])
+(require '[resolver-sim.protocols.sew.funds-ledger-projection-test])
+(require '[resolver-sim.protocols.sew.snapshot-test])
+(require '[resolver-sim.protocols.sew.snapshot-boundary-test])
+(require '[resolver-sim.protocols.sew.claimable-classification-test])
+(require '[resolver-sim.protocols.sew.replay-bridge-test])
+(require '[resolver-sim.protocols.sew.replay-dedupe-policy-test])
+(require '[resolver-sim.protocols.sew.replay-event-id-scenario-test])
+(require '[resolver-sim.protocols.sew.replay-idempotency-test])
+(require '[resolver-sim.protocols.sew.require-event-id-test])
+(require '[resolver-sim.protocols.sew.temporal-boundary-test])
+(require '[resolver-sim.protocols.sew.temporal-generator-test])
+(require '[resolver-sim.protocols.sew.trace-export-idempotency-test])
+(require '[resolver-sim.protocols.sew.authority-test])
+(require '[resolver-sim.protocols.sew.idempotence-checklist-test])
+(require '[resolver-sim.protocols.sew.invariants.solvency-test])
+(require '[resolver-sim.protocols.sew.invariants.temporal-test])
+(require '[resolver-sim.scenario.subgame-counterfactual-test])
+(require '[resolver-sim.scenario.yield-expectations-test])
+(require '[resolver-sim.scenario.yield-scenario-lint-test])
+(require '[resolver-sim.scenario.report-test])
+(require '[resolver-sim.scenario.runner-test])
+(require '[resolver-sim.scenario.theory-test])
+(require '[resolver-sim.scenario.golden-test])
+(require '[resolver-sim.scenario.phase-3-spe-test])
+(require '[resolver-sim.scenario.spe-fork-event-id-test])
+(require '[resolver-sim.properties.invariants-test])
+(require '[resolver-sim.definitions.registry-test])
+(let [results (t/run-tests
+                'resolver-sim.core-tests
+                'resolver-sim.protocols.sew.replay-test
+                'resolver-sim.protocols.sew.forking-strategist-expectations-test
+                'resolver-sim.scenario.expectations-test
+                'resolver-sim.scenario.equilibrium-test
+                'resolver-sim.protocols.sew.slashing-test
+                'resolver-sim.protocols.sew.phase-k-test
+                'resolver-sim.protocols.sew.phase-m-test
+                'resolver-sim.contract-model.replay-batch-sew-test
+                'resolver-sim.contract-model.replay-batch-appeal-test
+                'resolver-sim.contract-model.replay-batch-slash-domain-test
+                'resolver-sim.protocols.sew.lifecycle-test
+                'resolver-sim.protocols.sew.resolution-test
+                'resolver-sim.protocols.sew.state-machine-test
+                'resolver-sim.protocols.sew.governance-test
+                'resolver-sim.protocols.sew.integration-test
+                'resolver-sim.protocols.sew.accounting-test
+                'resolver-sim.protocols.sew.governance-gates-test
+                'resolver-sim.protocols.sew.yield-reorg-race-test
+                'resolver-sim.protocols.sew.yield-solvency-test
+                'resolver-sim.protocols.sew.yield.failure-test
+                'resolver-sim.protocols.sew.yield.policy-test
+                'resolver-sim.protocols.sew.yield.finalize-parity-test
+                'resolver-sim.protocols.sew.resolver-yield-accrual-test
+                'resolver-sim.protocols.sew.invariant-registry-test
+                'resolver-sim.protocols.sew.invariant-runner-test
+                'resolver-sim.protocols.sew.dispute-capacity-test
+                'resolver-sim.protocols.sew.funds-ledger-projection-test
+                'resolver-sim.protocols.sew.snapshot-test
+                'resolver-sim.protocols.sew.snapshot-boundary-test
+                'resolver-sim.protocols.sew.claimable-classification-test
+                'resolver-sim.protocols.sew.replay-bridge-test
+                'resolver-sim.protocols.sew.replay-dedupe-policy-test
+                'resolver-sim.protocols.sew.replay-event-id-scenario-test
+                'resolver-sim.protocols.sew.replay-idempotency-test
+                'resolver-sim.protocols.sew.require-event-id-test
+                'resolver-sim.protocols.sew.temporal-boundary-test
+                'resolver-sim.protocols.sew.temporal-generator-test
+                'resolver-sim.protocols.sew.trace-export-idempotency-test
+                'resolver-sim.protocols.sew.authority-test
+                'resolver-sim.protocols.sew.idempotence-checklist-test
+                'resolver-sim.protocols.sew.invariants.solvency-test
+                'resolver-sim.protocols.sew.invariants.temporal-test
+                'resolver-sim.scenario.subgame-counterfactual-test
+                'resolver-sim.scenario.yield-expectations-test
+                'resolver-sim.scenario.yield-scenario-lint-test
+                'resolver-sim.scenario.report-test
+                'resolver-sim.scenario.runner-test
+                'resolver-sim.scenario.theory-test
+                'resolver-sim.scenario.golden-test
+                'resolver-sim.scenario.phase-3-spe-test
+                'resolver-sim.scenario.spe-fork-event-id-test
+                'resolver-sim.properties.invariants-test
+                'resolver-sim.definitions.registry-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
+  return $?
+}
+
+run_yield() {
+  require_clojure || return $?
+  echo "Running yield protocol unit tests..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.protocols.sew.yield-reorg-race-test])
+(require '[resolver-sim.protocols.sew.yield-solvency-test])
+(require '[resolver-sim.protocols.sew.yield.failure-test])
+(require '[resolver-sim.protocols.sew.yield.policy-test])
+(require '[resolver-sim.protocols.sew.yield.finalize-parity-test])
+(require '[resolver-sim.protocols.sew.resolver-yield-accrual-test])
+(require '[resolver-sim.scenario.yield-expectations-test])
+(require '[resolver-sim.scenario.yield-scenario-lint-test])
+(let [results (t/run-tests
+               'resolver-sim.protocols.sew.yield-reorg-race-test
+               'resolver-sim.protocols.sew.yield-solvency-test
+               'resolver-sim.protocols.sew.yield.failure-test
+               'resolver-sim.protocols.sew.yield.policy-test
+               'resolver-sim.protocols.sew.yield.finalize-parity-test
+               'resolver-sim.protocols.sew.resolver-yield-accrual-test
+               'resolver-sim.scenario.yield-expectations-test
+               'resolver-sim.scenario.yield-scenario-lint-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -795,11 +966,20 @@ case "$MODE" in
   unit)
     run_unit || FAILURES=$((FAILURES + 1))
     ;;
+  framework)
+    run_framework || FAILURES=$((FAILURES + 1))
+    ;;
+  sew)
+    run_sew || FAILURES=$((FAILURES + 1))
+    ;;
   invariants)
     run_invariants || FAILURES=$((FAILURES + 1))
     ;;
   yield-scenarios)
     run_yield_scenarios || FAILURES=$((FAILURES + 1))
+    ;;
+  yield)
+    run_yield || FAILURES=$((FAILURES + 1))
     ;;
   generators)
     run_generators || FAILURES=$((FAILURES + 1))
@@ -871,7 +1051,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|generators|contracts|invariants|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

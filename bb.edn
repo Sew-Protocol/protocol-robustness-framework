@@ -153,8 +153,17 @@
   test {:doc "Run canonical validation gate (all targets via scripts/test.sh)"
         :task (shell "./scripts/test.sh all")}
 
-  test:unit {:doc "Run canonical unit target"
-             :task (shell "./scripts/test.sh unit")}
+  test:unit {:doc "Run canonical unit target (all — framework + Sew)"
+              :task (shell "./scripts/test.sh unit")}
+
+  test:framework {:doc "Run framework unit tests only (no Sew protocol)"
+                  :task (shell "./scripts/test.sh framework")}
+
+  test:sew {:doc "Run Sew protocol unit tests only"
+             :task (shell "./scripts/test.sh sew")}
+
+  test:yield {:doc "Run yield protocol unit tests only"
+              :task (shell "./scripts/test.sh yield")}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}

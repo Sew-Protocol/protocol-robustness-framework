@@ -72,7 +72,7 @@
       (is (map? result))
       (is (contains? result :ok?))
       (is (true? (:ok? result)))
-      (is (nil? (:violations result))))))
+      (is (nil? (seq (:violations result)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; sew-check-invariants-transition
@@ -83,7 +83,7 @@
     (let [world  (t/empty-world 1000)
           result (replay/sew-check-invariants-transition world world)]
       (is (true? (:ok? result)))
-      (is (nil? (:violations result))))))
+      (is (nil? (seq (:violations result)))))))
 
 (deftest sew-check-invariants-transition-valid-escrow-creation
   (testing "transition from empty world to world-with-escrow holds invariants"

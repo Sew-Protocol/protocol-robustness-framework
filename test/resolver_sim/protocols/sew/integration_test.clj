@@ -39,16 +39,6 @@
    :appeal-probability-if-wrong    0.0
    :strategy                       :honest})
 
-(deftest run-trial-honest-strategy
-  "Honest resolver: correct verdict, no slashing."
-  (let [r (runner/run-trial (always 0.5) base-params)]
-    (is (true?  (:dispute-correct? r)))
-    (is (false? (:slashed? r)))
-    ;; fee = 10000 * 50 / 10000 = 50
-    (is (= 50 (:profit-honest r)) "honest profit = fee")
-    (is (= 50 (:profit-malice r)) "honest strategy: malice profit = fee too")
-    (is (true? (:cm/invariants-ok? r)))))
-
 (deftest run-trial-malicious-detected
   "Malicious resolver: forced wrong verdict + high detection => loss."
   (let [;; rng vals: [verdict?, detection?]

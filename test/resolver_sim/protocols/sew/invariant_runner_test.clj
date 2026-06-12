@@ -6,7 +6,7 @@
             [resolver-sim.scenario.runner :as scenario-runner]))
 
 (deftest test-registry-size
-  (is (= 115 (count sc/all-scenarios))))
+  (is (= 116 (count sc/all-scenarios))))
 
 (deftest test-run-all-all-pass
   (let [{:keys [passed total results]} (runner/run-all)]

@@ -1,0 +1,27 @@
+name: Framework Unit Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  framework-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Clojure CLI
+        run: |
+          curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
+          chmod +x /tmp/install-clojure.sh
+          sudo /tmp/install-clojure.sh
+
+      - name: Run framework unit tests
+        run: ./scripts/test.sh framework

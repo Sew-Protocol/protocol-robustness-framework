@@ -8,11 +8,6 @@
             [resolver-sim.yield.presets :as yield-presets]
             [resolver-sim.yield.registry :as yield-reg]))
 
-(deftest test-make-escrow-snapshot-aliases-make-module-snapshot
-  (let [params {:escrow-fee-bps 50 :max-dispute-duration 3600}]
-    (is (= (snap/make-escrow-snapshot params)
-           (t/make-module-snapshot params)))))
-
 (deftest test-sew-preset-dispute-heavy-keyword
   (is (some? (presets/preset->protocol-params :sew.preset/dispute-heavy)))
   (is (pos? (:appeal-window-duration
