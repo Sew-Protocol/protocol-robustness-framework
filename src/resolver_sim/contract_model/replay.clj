@@ -160,6 +160,7 @@
                         :agent           (:agent event)
                         :action          (:action event)
                         :params          (:params event)
+                        :save-id-as      (:save-id-as event)
                         :transition/id   (action->transition-id (:action event))
                         :result          :rejected
                         :error           (:error temporal-failure)
@@ -227,6 +228,7 @@
             :agent           (:agent event)
             :action          (:action event)
             :params          (:params event)
+            :save-id-as      (:save-id-as event)
             :transition/id   (action->transition-id (:action event))
             :result          result-kw
             :error           error-kw
@@ -309,7 +311,7 @@
    Used by counterfactual fork replay so continuation steps do not carry
    stale :world / :result fields from the main-line trace."
   [entry]
-  (select-keys entry [:seq :time :agent :action :params]))
+  (select-keys entry [:seq :time :agent :action :params :save-id-as]))
 
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."
