@@ -36,7 +36,22 @@
    #{:escalation-level-monotonic :dispute-level-bounded :dispute-resolution-path}
 
    "yield-accrual-efficiency"
-   #{:held-delta-accounted :settlement-yield-boundary :conservation-of-funds}})
+   #{:held-delta-accounted :settlement-yield-boundary :conservation-of-funds}
+
+   "no-stale-pending-settlements"
+   #{:pending-settlement-consistent :no-stale-automatable-escrows}
+
+   "terminal-states-unchanged"
+   #{:terminal-states-unchanged}
+
+   "single-resolution-payout-consistent"
+   #{:single-resolution-payout-consistent}
+
+   "pending-settlement-consistent"
+   #{:pending-settlement-consistent}
+
+   "escalation-level-monotonic"
+   #{:escalation-level-monotonic}})
 
 (def all-evidence-ids
   (set (keys evidence-invariant->canonical)))

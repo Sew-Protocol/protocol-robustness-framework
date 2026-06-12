@@ -1,9 +1,13 @@
 (ns resolver-sim.sim.reference-validation
   "Reference Validation Suite v1 — deterministic public evidence harness.
 
-   Reads suites/reference-validation-v1/manifest.edn, runs simulator-backed
+   Reads suites/<suite>/manifest.edn, runs simulator-backed
    scenarios via replay + trace export, verifies evidence→canonical invariants,
-   and writes actual/*.json for CI verification."
+   and writes actual/*.json for CI verification.
+
+   Protocol parameterization: the replay function is supplied via
+   `:replay-fn` to generate! (default sew/replay-with-sew-protocol).
+   The `-main` entry point accepts --protocol and --suite-root flags."
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -13,11 +17,23 @@
             [resolver-sim.sim.reference-validation-evidence :as evidence])
   (:gen-class))
 
-(defn- suite-root []
-  (io/file "suites/reference-validation-v1"))
+(def ^{:doc "Default suite root (relative to project root)."}
+  default-suite-root "suites/reference-validation-v1")
 
-(defn- load-manifest []
-  (-> (suite-root) (io/file "manifest.edn") slurp edn/read-string))
+(def ^{:doc "Map of protocol keyword → replay function. Extend this when adding new protocols."}
+  protocols
+  {:sew sew/replay-with-sew-protocol})
+
+(def ^{:doc "Default replay function (Sew protocol)."}
+  default-replay-fn sew/replay-with-sew-protocol)
+
+(defn- suite-root
+  [& [root]]
+  (io/file (or root default-suite-root)))
+
+(defn- load-manifest
+  [& [root]]
+  (-> (suite-root root) (io/file "manifest.edn") slurp edn/read-string))
 
 (defn- sha256-hex [^bytes bytes]
   (let [md (java.security.MessageDigest/getInstance "SHA-256")]
@@ -49,46 +65,55 @@
   (name k))
 
 (defn- run-simulator-scenario
-  [sc actual-dir]
+  [sc actual-dir replay-fn]
   (let [{:keys [id trace-slug upgrade-path classification primary-threat
                 expectations-passed invariants-passed claim-id invariant-ids]} sc
         scenario-path (:simulator/scenario-path sc)
         trace-rel (str "actual/traces/" trace-slug ".trace.json")
         trace-path (str actual-dir "/traces/" trace-slug ".trace.json")
         scenario ((requiring-resolve 'resolver-sim.io.scenarios/load-scenario-file) scenario-path)
-        result (sew/replay-with-sew-protocol scenario)]
-    (when (not= :pass (:outcome result))
-      (throw (ex-info "reference-validation simulator scenario did not pass"
-                      {:scenario-id id
-                       :path scenario-path
-                       :outcome (:outcome result)
-                       :halt-reason (:halt-reason result)})))
+        result (replay-fn scenario)]
     (evidence/verify-evidence-invariants! result (or invariant-ids []))
-    (trace-export/write-fixture-file
-     (trace-export/export-trace-fixture result scenario)
-     trace-path)
-    (write-sha256! trace-path)
-    (let [trace-hash (sha256-file trace-path)]
-      {:scenario_id id
-       :classification (kw-str classification)
-       :confidence "high"
-       :evidence_type "simulator-backed"
-       :expectations_failed 0
-       :expectations_passed expectations-passed
-       :invariants_failed 0
-       :invariants_passed (or invariants-passed (count (or invariant-ids [])))
-       :primary_claim (name claim-id)
-       :primary_threat primary-threat
-       :simulator_backed true
-       :source_artifact scenario-path
-       :status "pass"
-       :trace_hash trace-hash
-       :trace_path trace-rel
-       :upgrade_path upgrade-path})))
+    (let [metrics         (or (:metrics result) {})
+          inv-violations  (:invariant-violations metrics 0)
+          expectations    (:expectations result)
+          exp-ok?         (or (nil? expectations) (:ok? expectations))
+          exp-violations  (count (:violations expectations []))]
+      (when (not= :pass (:outcome result))
+        (throw (ex-info "reference-validation simulator scenario did not pass"
+                        {:scenario-id id :path scenario-path
+                         :outcome (:outcome result) :halt-reason (:halt-reason result)})))
+      (when (pos? inv-violations)
+        (throw (ex-info "reference-validation scenario has invariant violations"
+                        {:scenario-id id :invariant-violations inv-violations})))
+      (when-not exp-ok?
+        (throw (ex-info "reference-validation scenario expectations failed"
+                        {:scenario-id id :expectation-violations exp-violations})))
+      (trace-export/write-fixture-file
+       (trace-export/export-trace-fixture result scenario)
+       trace-path)
+      (write-sha256! trace-path)
+      (let [trace-hash (sha256-file trace-path)]
+        {:scenario_id id
+         :classification (kw-str classification)
+         :confidence "high"
+         :evidence_type "simulator-backed"
+         :expectations_failed (if exp-ok? 0 exp-violations)
+         :expectations_passed (or expectations-passed 0)
+         :invariants_failed inv-violations
+         :invariants_passed (or invariants-passed (count (or invariant-ids [])))
+         :primary_claim (name claim-id)
+         :primary_threat primary-threat
+         :simulator_backed true
+         :source_artifact scenario-path
+         :status "pass"
+         :trace_hash trace-hash
+         :trace_path trace-rel
+         :upgrade_path upgrade-path}))))
 
-(defn- build-scenario-results [manifest actual-dir]
+(defn- build-scenario-results [manifest actual-dir replay-fn]
   {:suite_id (:suite/id manifest)
-   :results (mapv #(run-simulator-scenario % actual-dir)
+   :results (mapv #(run-simulator-scenario % actual-dir replay-fn)
                   (:scenarios manifest))})
 
 (defn- build-invariants [manifest]
@@ -187,13 +212,20 @@
         (io/copy f dest)))))
 
 (defn generate!
-  "Generate actual/ artifacts under suite root. Returns {:ok? true} or throws."
-  [& {:keys [root refresh-expected?]}]
+  "Generate actual/ artifacts under suite root. Returns {:ok? true} or throws.
+
+   Optional keyword arguments:
+     :root         — suite root directory (default suites/reference-validation-v1)
+     :replay-fn    — protocol replay function (default sew/replay-with-sew-protocol)
+     :protocol     — keyword shortcut for known protocols (:sew)
+     :refresh-expected? — copy actual/ to expected/ after generation"
+  [& {:keys [root refresh-expected? replay-fn protocol]}]
   (let [root-dir (or root (.getPath (suite-root)))
-        manifest (load-manifest)
-        actual-dir (str root-dir "/actual")]
+        manifest (load-manifest root)
+        actual-dir (str root-dir "/actual")
+        replay-fn (or (when protocol (get protocols protocol)) replay-fn default-replay-fn)]
     (.mkdirs (io/file actual-dir "traces"))
-    (let [scenario-results (build-scenario-results manifest actual-dir)
+    (let [scenario-results (build-scenario-results manifest actual-dir replay-fn)
           results (:results scenario-results)
           outputs {"scenario-results" scenario-results
                    "invariants" (build-invariants manifest)
@@ -213,20 +245,40 @@
        :scenario-count (count (:results scenario-results))
        :simulator-backed (count results)})))
 
+(defn- parse-arg
+  "Find value for --key in args, or nil."
+  [args key]
+  (let [args-vec (vec args)
+        idx (.indexOf args-vec key)]
+    (when (<= 0 idx)
+      (nth args-vec (inc idx) nil))))
+
+(defn- kw-arg
+  "Parse --key value from args as keyword."
+  [args key]
+  (when-let [v (parse-arg args key)]
+    (keyword v)))
+
 (defn -main
   [& args]
-  (let [refresh? (some #{"--refresh-expected"} args)]
+  (let [refresh?     (some #{"--refresh-expected"} args)
+        protocol-kw  (kw-arg args "--protocol")
+        suite-root   (parse-arg args "--suite-root")
+        suite-label  (or suite-root "reference-validation-v1")]
     (try
-      (let [{:keys [ok? scenario-count simulator-backed]} (generate! :refresh-expected? refresh?)]
+      (let [{:keys [ok? scenario-count simulator-backed]}
+            (generate! :refresh-expected? refresh?
+                       :protocol protocol-kw
+                       :root suite-root)]
         (when ok?
-          (println "PASS reference-validation-v1")
+          (println (str "PASS " suite-label))
           (println scenario-count "scenarios")
           (println "0 failures")
           (println "0 inconclusive")
           (when (pos? simulator-backed)
             (println simulator-backed "simulator-backed"))))
       (catch Exception e
-        (println "FAIL reference-validation-v1:" (.getMessage e))
+        (println (str "FAIL " suite-label ":") (.getMessage e))
         (when-let [data (ex-data e)]
           (println "  data:" (pr-str data)))
         (System/exit 1)))))

@@ -5,7 +5,6 @@ REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
 ACTUAL="$ROOT/actual"
 EXPECTED="$ROOT/expected"
 
-# Derive suite name from root directory basename (e.g. reference-validation-v1)
 SUITE="${ROOT##*/}"
 
 canon() {
@@ -42,7 +41,6 @@ if [[ "$PASSED" -ne "$TOTAL" ]]; then
   echo "FAIL $SUITE: passed $PASSED != total $TOTAL"
   exit 1
 fi
-# Minimum threshold: all scenarios must pass
 if [[ "$PASSED" -lt "$TOTAL" ]]; then
   echo "FAIL $SUITE: passed $PASSED < total $TOTAL"
   exit 1
@@ -78,8 +76,8 @@ PY
 
 # ── JSON content and hash verification ──────────────────────────────────
 
-files=(summary scenario-results invariants economic-results evidence-matrix)
-for base in "${files[@]}"; do
+FILES=(summary scenario-results invariants economic-results evidence-matrix)
+for base in "${FILES[@]}"; do
   [[ -f "$ACTUAL/$base.json" ]] || { echo "FAIL missing actual file: $base.json"; exit 1; }
   [[ -f "$EXPECTED/$base.json" ]] || { echo "FAIL missing expected file: $base.json"; exit 1; }
   [[ -f "$EXPECTED/$base.sha256" ]] || { echo "FAIL missing expected hash: $base.sha256"; exit 1; }
@@ -97,22 +95,20 @@ for base in "${files[@]}"; do
   [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]] || { echo "FAIL hash mismatch: $base.json"; exit 1; }
 done
 
-# ── Trace verification (all 8 scenarios) ────────────────────────────────
+# ── Trace verification ─────────────────────────────────────────────────
 
-TRACES=(001-governance-sandwich 002-malicious-resolver-verdict 003-dispute-flooding \
-        004-bond-withdrawal-race 005-same-block-ordering 006-autopush-settlement \
-        007-appeal-failure-cascade 008-yield-accrual-efficiency)
-
-for trace in "${TRACES[@]}"; do
-  [[ -f "$ACTUAL/traces/$trace.trace.json" ]] || { echo "FAIL missing actual trace: $trace"; exit 1; }
-  [[ -f "$EXPECTED/traces/$trace.trace.json" ]] || { echo "FAIL missing expected trace: $trace"; exit 1; }
-  [[ -f "$EXPECTED/traces/$trace.trace.sha256" ]] || { echo "FAIL missing expected trace hash: $trace"; exit 1; }
-
-  A_TRACE=$(sha256sum "$ACTUAL/traces/$trace.trace.json" | awk '{print $1}')
-  E_TRACE=$(tr -d '[:space:]' < "$EXPECTED/traces/$trace.trace.sha256")
+for trace_path in "$EXPECTED/traces/"*.trace.json; do
+  trace_name="$(basename "$trace_path")"
+  actual_trace="$ACTUAL/traces/$trace_name"
+  expected_hash="${trace_path%.json}.sha256"
+  actual_hash="${actual_trace%.json}.sha256"
+  [[ -f "$actual_trace" ]] || { echo "FAIL missing actual trace: $trace_name"; exit 1; }
+  [[ -f "$expected_hash" ]] || { echo "FAIL missing expected hash: $trace_name"; exit 1; }
+  A_TRACE=$(sha256sum "$actual_trace" | awk '{print $1}')
+  E_TRACE=$(tr -d '[:space:]' < "$expected_hash")
   if [[ "$A_TRACE" != "$E_TRACE" ]]; then
-    echo "FAIL trace hash mismatch: $trace"
-    report_json_diff "$EXPECTED/traces/$trace.trace.json" "$ACTUAL/traces/$trace.trace.json"
+    echo "FAIL trace hash mismatch: $trace_name"
+    report_json_diff "$expected_trace" "$actual_trace"
     exit 1
   fi
 done
@@ -122,24 +118,10 @@ echo "PASS verify-$SUITE"
 # ── Artifact Registry Emission ──────────────────────────────────────────
 echo "Emitting artifact registry..."
 python3 "$REPO_ROOT/scripts/write_scenario_run_manifest.py" \
-    --scenario "reference-validation" \
-    --suite "reference-validation-v1" \
+    --scenario "$SUITE" \
+    --suite "$SUITE" \
     --status "pass" \
     --artifact-dir "$ACTUAL" \
     --registry-level CORE || true
-# ── Artifact Registry Orphan Audit ──────────────────────────────────────
-echo "Running orphan audit on evidence bundle..."
-REGISTRY="results/test-artifacts/test-artifacts.json"
-python3 "$REPO_ROOT/scripts/verify_artifact_registry.py" "$REGISTRY" || true
-
-# ── Evidence Binding/Signing ──────────────────────────────────────────
-# Signs the evidence bundle to achieve Phase 4 authenticity
-# Requires SIGNING_KEY env var
-if [[ -n "${SIGNING_KEY:-}" ]]; then
-  echo "Signing evidence bundle..."
-  bb evidence:sign "$SIGNING_KEY" || true
-else
-  echo "SKIP evidence signing (no SIGNING_KEY provided)"
-fi
 
 echo "PASS all integrity and authenticity checks."

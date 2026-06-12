@@ -99,3 +99,30 @@ reference-validation-v1-check:
 .PHONY: refresh-reference-validation-v1
 refresh-reference-validation-v1:
 	clojure -M:reference-validation --refresh-expected
+
+.PHONY: sew-domain-reference-v1
+sew-domain-reference-v1:
+	./suites/sew-domain-reference-v1/scripts/run.sh
+
+.PHONY: verify-sew-domain-reference-v1
+verify-sew-domain-reference-v1:
+	./suites/sew-domain-reference-v1/scripts/verify.sh
+
+.PHONY: clean-sew-domain-reference-v1
+clean-sew-domain-reference-v1:
+	./suites/sew-domain-reference-v1/scripts/clean.sh
+
+.PHONY: report-sew-domain-reference-v1
+report-sew-domain-reference-v1:
+	./suites/sew-domain-reference-v1/scripts/generate-report.sh
+
+.PHONY: sew-domain-reference-v1-check
+sew-domain-reference-v1-check:
+	$(MAKE) clean-sew-domain-reference-v1
+	$(MAKE) sew-domain-reference-v1
+	$(MAKE) verify-sew-domain-reference-v1
+	$(MAKE) report-sew-domain-reference-v1
+
+.PHONY: refresh-sew-domain-reference-v1
+refresh-sew-domain-reference-v1:
+	clojure -M:reference-validation --suite-root suites/sew-domain-reference-v1 --protocol sew --refresh-expected
