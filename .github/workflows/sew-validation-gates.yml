@@ -1,6 +1,7 @@
 name: SEW Validation Gates
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main, master]

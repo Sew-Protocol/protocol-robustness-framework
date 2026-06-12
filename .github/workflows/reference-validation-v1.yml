@@ -27,7 +27,6 @@ jobs:
           curl -fsSL https://download.clojure.org/install/linux-install-1.11.1.1413.sh -o /tmp/install-clojure.sh
           chmod +x /tmp/install-clojure.sh
           sudo /tmp/install-clojure.sh
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -37,11 +36,16 @@ jobs:
         run: rm -rf suites/reference-validation-v1/actual
 
       - name: Run reference suite
-        run: clojure -M:reference-validation
-
+        run: |
+          make reference-validation-v1
       - name: Verify reference outputs
-        run: make verify-reference-validation-v1
-
+        run: |
+          echo "Checking actual/ exists..."
+          ls -la suites/reference-validation-v1/actual/ || true
+          echo "Checking expected/ exists..."
+          ls -la suites/reference-validation-v1/expected/ | head -20 || true
+          echo "Running verify..."
+          ./suites/reference-validation-v1/scripts/verify.sh
       - name: Upload reference artifacts
         if: always()
         uses: actions/upload-artifact@v4
