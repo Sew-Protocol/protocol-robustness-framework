@@ -78,5 +78,9 @@ results/.notebook-focus
 .rebel_readline_history
 .aider*
 
+# experimental scripts
 scripts/experimental
+
+# local only
+local
 

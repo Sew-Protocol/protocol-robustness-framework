@@ -5,9 +5,6 @@ on:
   push:
     branches: [main, master]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   core-validation:
     runs-on: ubuntu-latest
@@ -34,16 +31,42 @@ jobs:
 
       - name: Run canonical suite
         run: |
-          FAILURES=0
-          ./scripts/test.sh unit || FAILURES=$((FAILURES + 1))
-          ./scripts/test.sh reference-validation || FAILURES=$((FAILURES + 1))
+          set +e
+          echo "=== Running unit tests ==="
+          ./scripts/test.sh unit
+          UNIT_EXIT=$?
+          echo "Unit exit code: $UNIT_EXIT"
+
+          echo "=== Running reference validation ==="
+          clojure -M:reference-validation
+          REF_EXIT=$?
+          echo "Reference validation exit code: $REF_EXIT"
+
+          echo "=== Running generators ==="
           ./scripts/test.sh generators || true
+
+          echo "=== Running contracts ==="
           ./scripts/test.sh contracts || true
+
+          echo "=== Running invariants ==="
           ./scripts/test.sh invariants || true
+
+          echo "=== Running suites ==="
           ./scripts/test.sh suites || true
+
+          echo "=== Running coverage ==="
           ./scripts/test.sh coverage || true
+
+          echo "=== Running triage ==="
           ./scripts/test.sh triage || true
+
+          echo "=== Running monte-carlo ==="
           ./scripts/test.sh monte-carlo || true
+
+          FAILURES=0
+          [ $UNIT_EXIT -eq 0 ] || FAILURES=$((FAILURES + 1))
+          [ $REF_EXIT -eq 0 ] || FAILURES=$((FAILURES + 1))
+          echo "Total gating failures: $FAILURES"
           exit $FAILURES
 
       - name: Generate ephemeral Ed25519 key for CI signing
@@ -77,6 +100,7 @@ jobs:
         with:
           name: test-artifacts
           path: results/test-artifacts/
+          if-no-files-found: ignore
 
       - name: Upload evidence bundle
         if: always()
@@ -84,6 +108,7 @@ jobs:
         with:
           name: evidence-bundle
           path: results/ci-bundle/
+          if-no-files-found: ignore
 
   coverage-gates:
     runs-on: ubuntu-latest
