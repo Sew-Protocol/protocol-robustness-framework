@@ -17,12 +17,14 @@
    5. Max index delta cap
    6. Negative yield floor
    7. Recoverable liquidity cap"
-   (:require [resolver-sim.yield.exact-math :as m]
-            [resolver-sim.yield.position :as pos]
-            [resolver-sim.yield.market-state :as market-state]
-            [resolver-sim.yield.token :as tok]
-            [resolver-sim.util.attribution :as attr]
-            [resolver-sim.yield.risk-monitor :as risk]))
+    (:require [resolver-sim.yield.exact-math :as m]
+             [resolver-sim.yield.position :as pos]
+             [resolver-sim.yield.market-state :as market-state]
+             [resolver-sim.yield.token :as tok]
+             [resolver-sim.yield.loss :as loss]
+             [resolver-sim.yield.risk :as risk-utils]
+             [resolver-sim.util.attribution :as attr]
+             [resolver-sim.yield.risk-monitor :as risk]))
 
 
 (def ^:private schema-version "accrual-decision.v2")
@@ -228,11 +230,15 @@
    do not create a balance update. Emits :dust-threshold.
 
    Sub-unit accrual is preserved as exact remainder and carried forward via
-   the dust accumulator on the position."
+   the dust accumulator on the position.
+
+   Does NOT override accrual-mode when already set to :module-frozen or :suspended
+   by earlier short circuits (the freeze/unwinding checks take priority)."
   [decision]
   (let [min-delta (get-in decision [:config :min-accrual-delta] default-min-accrual-delta)
-        attempted (Math/abs (long (:attempted-accrual-delta decision)))]
-    (if (and (pos? min-delta) (< attempted min-delta))
+        attempted (Math/abs (long (:attempted-accrual-delta decision)))
+        blocked? (#{:module-frozen :suspended} (:accrual-mode decision))]
+    (if (and (not blocked?) (pos? min-delta) (< attempted min-delta))
       (-> decision
           (assoc :final-accrual-delta 0
                  :realized-yield-delta 0
@@ -361,33 +367,62 @@
       decision)))
 
 
+(defn- resolve-loss-mode
+  "Get the effective loss-mode for the position's risk config.
+   Uses risk/effective-loss-mode which upgrades :none→:mark-to-market
+   when :negative-yield is an active failure mode."
+  [world module-id token]
+  (let [mid (if (keyword? module-id) module-id (keyword (str module-id)))
+        tok (normalize-token token)
+        risk (or (get-in world [:yield/risk mid tok])
+                 (get-in world [:yield/risk mid (name tok)])
+                 {})]
+    (risk-utils/effective-loss-mode risk)))
+
 (defn- apply-negative-yield-floor
   "Short circuit 6: If negative accrual would push position value below
    configured floor, classify as :capital-event rather than ordinary accrual.
-   Emits :negative-yield-floor-breached."
+   Emits :negative-yield-floor-breached.
+   When loss-mode is :none, clamps index to prevent any decrease."
   [decision world]
   (let [pos (:position decision)
         module-id (:module-id decision)
-        token (:token decision)]
+        token (:token decision)
+        loss-mode (resolve-loss-mode world module-id token)]
     (if (and pos (:unrealized-yield-delta decision) (neg? (:unrealized-yield-delta decision)))
-      (let [floor-bps (resolve-negative-yield-floor world module-id token)
-            principal (:principal pos 0)
-            current-unrealized (:unrealized-yield pos 0)
-            projected-value (+ principal current-unrealized (:unrealized-yield-delta decision))
-            floor-value (- principal floor-bps)]
-        (if (< projected-value floor-value)
+      (if (= loss-mode :none)
+        ;; :none loss-mode: prevent any index decrease, zero out deltas
+        (let [prev-idx (:previous-index decision)]
           (-> decision
-              (assoc :accrual-mode :capital-event
-                     :final-accrual-delta (:unrealized-yield-delta decision))
+              (assoc :final-index prev-idx
+                     :accrual-mode :capital-event)
+              (assoc :unrealized-yield-delta 0
+                     :final-accrual-delta 0
+                     :deferred-yield-delta 0
+                     :haircut-yield-delta 0)
               (update :short-circuits conj :negative-yield-floor-breached)
               (update :evidence assoc
                       :negative-yield-floor-breached true
-                      :projected-value projected-value
-                      :floor-value floor-value
-                      :floor-bps floor-bps
-                      :principal principal
-                      :current-unrealized current-unrealized))
-          decision))
+                      :loss-mode :none
+                      :clamped-to-zero true)))
+        (let [floor-bps (resolve-negative-yield-floor world module-id token)
+              principal (:principal pos 0)
+              current-unrealized (:unrealized-yield pos 0)
+              projected-value (+ principal current-unrealized (:unrealized-yield-delta decision))
+              floor-value (- principal floor-bps)]
+          (if (< projected-value floor-value)
+            (-> decision
+                (assoc :accrual-mode :capital-event
+                       :final-accrual-delta (:unrealized-yield-delta decision))
+                (update :short-circuits conj :negative-yield-floor-breached)
+                (update :evidence assoc
+                        :negative-yield-floor-breached true
+                        :projected-value projected-value
+                        :floor-value floor-value
+                        :floor-bps floor-bps
+                        :principal principal
+                        :current-unrealized current-unrealized))
+            decision)))
       decision)))
 
 
@@ -596,9 +631,10 @@
                               (assoc :capital-event-affected? true))
                             (cond-> (contains? (set short-circuits) :recoverable-liquidity-cap)
                               (assoc :shortfall-affected? true)))
-            pos-key (or (:position/id pos) owner-id)]
+            pos-key (or (:position/id pos) owner-id)
+            annotated-pos (loss/annotate-accrual-loss world' updated-pos final-index)]
         (-> world'
-            (assoc-in [:yield/positions owner-id] updated-pos)
+            (assoc-in [:yield/positions owner-id] annotated-pos)
             (update-in [:total-yield-generated tok] (fnil + 0) (max 0 yield-delta))
             (update-in [:total-held tok] (fnil + 0) yield-delta)))
       world')))

@@ -344,16 +344,87 @@
       (is (zero? (:yield_deferred proj)))
       (is (zero? (:principal_haircut proj))))))
 
+(deftest test-custom-stale-oracle-config
+  (testing "Custom stale-oracle-max-seconds and stale-oracle-floor-bps are honored"
+    (let [world (-> (world-with-position)
+                    (assoc-in [:yield/accrual-config :test-mod :stale-oracle-max-seconds] 3600)
+                    (assoc-in [:yield/accrual-config :test-mod :stale-oracle-floor-bps] 250)  ;; 2.5%
+                    (assoc-in [:yield/risk :test-mod "USDC" :failure-modes] #{:oracle-stale})
+                    (assoc-in [:yield/risk :test-mod "USDC" :oracle-stale-seconds] 7200))
+          decision (accrual/accrual-decision world {:module-id :test-mod
+                                                       :token "USDC"
+                                                       :position-id "user1"
+                                                       :now 1000
+                                                       :dt 31536000})
+          evidence (:evidence decision)]
+      (is (some #(= :stale-oracle-degraded-apy %) (:short-circuits evidence))
+          "Oracle staleness beyond custom max-seconds should trigger degradation")
+      (is (number? (:effective-apy-bps-after-degradation evidence))
+          "Effective APY after degradation is present")
+      (is (< (:effective-apy-bps-after-degradation evidence)
+             (:base-apy-bps evidence 0))
+          "Degraded APY is below base APY")
+      (is (>= (:effective-apy-bps-after-degradation evidence) 0)
+          "Floor APY should be non-negative (custom floor-bps = 250 = 2.5%)"))))
+
+(deftest test-custom-freeze-on
+  (testing "Custom freeze-on set only freezes accrual for listed statuses"
+    (let [;; High enough APY to avoid dust-threshold short circuiting the freeze check
+          world (-> (world-with-position)
+                    (assoc-in [:yield/accumulated-guard :reset] true)
+                    (assoc-in [:yield/rates :test-mod "USDC"] 0.10)
+                    (assoc-in [:yield/accrual-config :test-mod :freeze-on] #{:paused}))
+          ;; :frozen is NOT in the custom set, so accrual should proceed
+          unfrozen (-> world
+                       (assoc-in [:yield/module-status :test-mod] :frozen))
+          ;; :frozen is NOT in the custom set, so accrual should proceed
+          unfrozen (-> world
+                       (assoc-in [:yield/module-status :test-mod] :frozen))
+          unfrozen-decision (accrual/accrual-decision unfrozen {:module-id :test-mod
+                                                                   :token "USDC"
+                                                                   :position-id "user1"
+                                                                   :now 1000
+                                                                   :dt 31536000})
+          ;; :paused IS in the custom set, so accrual should be blocked
+          frozen (-> world
+                     (assoc-in [:yield/module-status :test-mod] :paused))
+          frozen-decision (accrual/accrual-decision frozen {:module-id :test-mod
+                                                              :token "USDC"
+                                                              :position-id "user1"
+                                                              :now 1000
+                                                              :dt 31536000})]
+      (is (not= :module-frozen (:accrual-mode unfrozen-decision))
+          ":frozen module should NOT freeze accrual when custom freeze-on excludes it")
+      (is (= :module-frozen (:accrual-mode frozen-decision))
+          ":paused module SHOULD freeze accrual when custom freeze-on includes it"))))
+
+(deftest test-custom-min-accrual-delta
+  (testing "Custom min-accrual-delta defers small accruals"
+    (let [world (-> (world-with-position)
+                    (assoc-in [:yield/rates :test-mod "USDC"] 0.001)  ;; very low APY
+                    (assoc-in [:yield/accrual-config :test-mod :min-accrual-delta] 100))
+          decision (accrual/accrual-decision world {:module-id :test-mod
+                                                       :token "USDC"
+                                                       :position-id "user1"
+                                                       :now 1000
+                                                       :dt 31536000})
+          world' (accrual/apply-accrual-decision world decision)
+          pos' (get-in world' [:yield/positions "user1"])]
+      (is (zero? (:unrealized-yield pos' 0))
+          "Unrealized yield should be 0 when accrual delta is below min-accrual-delta")
+      (is (some #(= :dust-threshold %) (:short-circuits decision))
+          "Dust threshold short circuit should fire"))))
+
 (deftest test-risk-monitor-captures-short-circuit-events
   (testing "Risk monitor captures frozen-module event"
     (risk/clear!)
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/module-status :test-mod] :frozen))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                       :token "USDC"
+                                                       :position-id "user1"
+                                                       :now 1000
+                                                       :dt 31536000})]
       (accrual/apply-accrual-decision-with-attribution world decision)
       (let [events (risk/events)]
         (is (pos? (count events)) "Risk events should be captured")

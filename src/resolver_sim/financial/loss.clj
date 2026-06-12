@@ -181,12 +181,18 @@
               coverage-ratio  (/ (+ held claim) (max outstanding 1))
               max-loss?       (and max-irrecoverable-ratio
                                    (< coverage-ratio max-irrecoverable-ratio))
-               user-loss-ratio (double (/ (:haircut-total shortfall) (max total-oblig 1)))]
+               user-loss-ratio (double (/ (:haircut-total shortfall) (max total-oblig 1)))
+               ;; For irrecoverable: the full outstanding (deferred + haircut) is lost
+               ;; because there's no recovery path, not just the haircut portion
+               irr-loss-ratio (double (/ (+ (:deferred-total shortfall) (:haircut-total shortfall))
+                                         (max total-oblig 1)))]
           {:loss/status              (if max-loss? :loss-irrecoverable :loss-realized)
            :loss/scope               :yield-module
            :loss/token               token
            :loss/shortfall           shortfall
-           :loss/user-realized?      (if (pos? user-loss-ratio) user-loss-ratio false)
+            :loss/user-realized?      (if (pos? (if max-loss? irr-loss-ratio user-loss-ratio))
+                                        (if max-loss? irr-loss-ratio user-loss-ratio)
+                                        false)
            :loss/protocol-realized?  (pos? (:haircut-total shortfall))
            :loss/reason              (cond max-loss? :irrecoverable-shortfall
                                            (pos? (:haircut-total shortfall)) :haircut-loss
@@ -217,4 +223,6 @@
 (defn loss-realized?
   "True when loss has been realized (or is irrecoverable)."
   [loss-classification]
-  (boolean (and (loss-active? loss-classification) (:loss/user-realized? loss-classification))))
+  (boolean (and (loss-active? loss-classification)
+                (or (:loss/user-realized? loss-classification)
+                    (= :loss-irrecoverable (:loss/status loss-classification))))))

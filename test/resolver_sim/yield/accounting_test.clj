@@ -29,8 +29,8 @@
           module {:module/id :aave-v3}
           world' (liquid/deposit world module {:owner/id "user1" :amount 10000 :token "USDC"})
           pos (get-in world' [:yield/positions "user1"])]
-      (is (= 8000.0 (:shares pos)))
-      (is (= 1.25 (:entry-index pos)))
+      (is (== 8000 (:shares pos)))
+      (is (== 1.25 (:entry-index pos)))
       (is (= 10000 (:principal pos))))))
 
 (deftest test-liquid-lending-accrual-math
@@ -40,20 +40,25 @@
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC" 
                                            :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})]
-      (is (== 1.1 (get-in world' [:yield/indices :aave-v3 "USDC"])))
-      (is (== 100 (get-in world' [:yield/positions "user1" :unrealized-yield]))))))
+      (is (== 21/20 (get-in world' [:yield/indices :aave-v3 "USDC"]))
+          "index capped at 5% max-delta (1/20) even with 10% APY")
+      (is (== 50 (get-in world' [:yield/positions "user1" :unrealized-yield]))
+          "unrealized = 1000 * 0.05 = 50, capped at 5% max-delta-ratio"))))
 
 (deftest test-liquid-lending-withdraw-crystallizes-yield
   (testing "Liquid-lending withdraw realizes current unrealized yield before marking withdrawn"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.1}}
-                 :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available}}}
+                 :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available
+                                                 :shortfall {:available-ratio 1.0}}}}
+                 :total-held {:USDC 1100}
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
                                              :principal 1000 :shares 1000 :entry-index 1.0
-                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                             :status :active :unrealized-yield 100 :realized-yield 0}}}
           world' (liquid/withdraw world {:module/id :aave-v3} {:owner/id "user1"})
           pos    (get-in world' [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
-      (is (== 100 (:realized-yield pos)))
+      (is (== 0 (:realized-yield pos))
+          "realized-yield is 0 because :unrealized-yield-treatment is :not-claimable (default)")
       (is (zero? (:unrealized-yield pos))))))
 
 (deftest test-fixed-rate-accrual-math
@@ -213,11 +218,12 @@
                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})
           pos     (get-in world' [:yield/positions "user1"])]
-      (is (< (:current-index pos) 1.0))
+      (is (== 1.0 (:current-index pos))
+          "index unchanged when loss-mode is :none and APY is negative")
       (is (= 0 (:unrealized-yield pos))
           (str "Expected unrealized clamped to 0 under :none loss-mode, got " (:unrealized-yield pos)))
-      (is (< (:current-value pos) (:principal pos))
-          (str "current-value=" (:current-value pos) " < principal=" (:principal pos))))))
+      (is (= (:current-value pos) (:principal pos))
+          (str "current-value=" (:current-value pos) " = principal=" (:principal pos) " under :none loss-mode")))))
 
 (deftest test-fixed-accrue-negative-apy-mark-to-market
   (testing "Fixed-rate negative APY produces negative unrealized under mark-to-market"
@@ -250,3 +256,45 @@
           (str "Expected unrealized clamped to 0 under :none, got " (:unrealized-yield pos)))
       (is (= (:current-value pos) 950)
           (str "Expected current-value 950, got " (:current-value pos))))))
+
+(deftest test-partial-liquidity-split-ratios
+  (testing "Partial-liquidity with separate yield and principal availability ratios"
+    (let [result (acct/apply-liquidity-stress
+                  {:yield/risk {:test-mod {"USDC" {:failure-modes #{:partial-liquidity}
+                                                   :shortfall {:yield-available-ratio 0.8
+                                                               :principal-available-ratio 1.0
+                                                               :available-ratio 0.8}}}}}
+                  :test-mod "USDC" 10000 :principal 8000)]
+      (is (= 0 (get-in result [:shortfall :haircut-amount] 0))
+          "No haircut under partial-liquidity")
+      (is (pos? (get-in result [:shortfall :deferred-amount] 0))
+          "Deferred amount present under partial-liquidity")
+      (is (= 0.8 (double (get-in result [:shortfall :yield-available-ratio])))
+          "Yield availability ratio honored")
+      (is (= 1.0 (double (get-in result [:shortfall :principal-available-ratio])))
+          "Principal availability ratio honored (principal fully covered)"))))
+
+(deftest test-haircut-liquidity-mode
+  (testing ":haircut liquidity mode applies loss ratio"
+    (let [result (acct/apply-liquidity-stress
+                  {:yield/risk {:test-mod {"USDC" {:liquidity-mode :haircut
+                                                   :haircut {:loss-ratio 0.15}}}}}
+                  :test-mod "USDC" 10000)]
+      (is (pos? (get-in result [:shortfall :haircut-amount]))
+          "Haircut amount should be positive under :haircut mode")
+      (is (= 1500 (get-in result [:shortfall :haircut-amount]))
+          "Haircut should be 15% of 10000 = 1500")
+      (is (= 8500 (:fulfilled result))
+          "Fulfilled amount should be 10000 - 1500 = 8500"))))
+
+(deftest test-haircut-liquidity-mode-default-ratio
+  (testing ":haircut liquidity mode defaults to 10% loss ratio"
+    (let [result (acct/apply-liquidity-stress
+                  {:yield/risk {:test-mod {"USDC" {:liquidity-mode :haircut}}}}
+                  :test-mod "USDC" 10000)]
+      (is (pos? (get-in result [:shortfall :haircut-amount]))
+          "Haircut amount should be positive under :haircut mode")
+      (is (= 1000 (get-in result [:shortfall :haircut-amount]))
+          "Default haircut should be 10% of 10000 = 1000")
+      (is (= 9000 (:fulfilled result))
+          "Fulfilled amount should be 10000 - 1000 = 9000"))))

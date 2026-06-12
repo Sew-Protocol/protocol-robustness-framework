@@ -137,8 +137,8 @@
             haircut-total (reduce + 0 (vals haircut-map))
             basis-total (reduce + 0 (vals (:requested settlement {})))
 
-            ;; Step 4: Build :shortfall
-            shortfall (when (pos? (- gross-amount fulfilled-total))
+            ;; Step 4: Build :shortfall (based on requested vs filled, not gross value)
+            shortfall (when (pos? (- basis-total fulfilled-total))
                         {:reason :liquidity-shortfall
                          :basis-amount basis-total
                          :available-ratio (if (pos? gross-amount)
@@ -207,17 +207,19 @@
       (= (:status pos) :unwinding)
       (let [old-pos pos
             new-pos (acct/claim-deferred world mid pos)
-            reclaimed (:reclaimed-amount new-pos 0)
-            world-final (assoc-in world pos-key new-pos)]
-        (cond-> world-final
-          (pos? reclaimed)
-          (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed oid
-            { :reclaimed-amount reclaimed
-              :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})))
+            reclaimed (:reclaimed-amount new-pos 0)]
+        (if (pos? reclaimed)
+          (let [world-final (assoc-in world pos-key new-pos)]
+            (ye/emit-shortfall-event world-final :yield.shortfall/deferred-reclaimed oid
+              { :reclaimed-amount reclaimed
+                :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})
+            world-final)
+          world))
 
       (= (:status pos) :queued)
       (let [claimed-pos (-> pos
                             (assoc :status :withdrawn)
+                            (assoc :shortfall nil)
                             (assoc :realized-yield (:unrealized-yield pos 0))
                             (assoc :unrealized-yield 0))]
         (assoc-in world pos-key claimed-pos))

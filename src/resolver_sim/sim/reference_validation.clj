@@ -66,13 +66,45 @@
 (defn- kw-str [k]
   (name k))
 
+(defn- keyword->string
+  "Recursively convert keywords to strings and ratios to doubles for JSON-safe output."
+  [x]
+  (cond
+    (keyword? x) (name x)
+    (instance? clojure.lang.Ratio x) (double x)
+    (map? x) (into {} (map (fn [[k v]] [(keyword->string k) (keyword->string v)]) x))
+    (coll? x) (map keyword->string x)
+    :else x))
+
+(defn- export-yield-trace-fixture
+  "Export a yield-v1 replay result as a JSON-safe trace fixture map.
+   Strips the full world state from each trace entry and converts
+   remaining keys to strings."
+  [result]
+  (let [trace (:trace result)]
+    {:cdrs_version "0.2"
+     :schema_version "2"
+     :scenario_id (:scenario-id result)
+     :description (str "Yield-v1 trace: " (:scenario-id result))
+     :step_count (count trace)
+     :steps (keyword->string
+             (mapv (fn [entry]
+                     (select-keys entry [:seq :time :action :agent :result :error :params]))
+                   trace))}))
+
 (defn- write-trace-fixture!
-  "Write trace fixture for a protocol. Sew protocol uses trace-export; others skip trace export."
+  "Write trace fixture for a protocol. Sew uses pretty-printed export; yield uses simplified JSON."
   [replay-fn result scenario trace-path]
-  (when (= replay-fn sew/replay-with-sew-protocol)
+  (cond
+    (= replay-fn sew/replay-with-sew-protocol)
     (trace-export/write-fixture-file
      (trace-export/export-trace-fixture result scenario)
-     trace-path)))
+     trace-path)
+
+    (= replay-fn yield-replay/replay-yield-scenario)
+    (write-json! trace-path (export-yield-trace-fixture result))
+
+    :else nil))
 
 (defn- run-simulator-scenario
   [sc actual-dir replay-fn]

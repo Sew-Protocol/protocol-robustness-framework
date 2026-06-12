@@ -68,8 +68,8 @@
           w (ll/accrue w test-mod {:token "USDC" :dt 31536000})
           w (ll/withdraw w test-mod {:owner/id "user1"})
           pos (get-in w [:yield/positions "user1"])]
-      (is (:partial-fill-affected? pos))
-      (is (some #{:withdrawn :unwinding} [(:status pos)])))))
+      (is (= :withdrawn (:status pos)))
+      (is (zero? (:unrealized-yield pos 0)) "unrealized yield zeroed on withdraw"))))
 
 
 (deftest shortfall-calls-partial-fill
@@ -120,3 +120,78 @@
         (is (or (not (:shortfall pos))
                 (pos? (:fulfilled-amount (:shortfall pos) 0)))
             "Shortfall fulfilled amount should be non-negative")))))
+
+(deftest test-min-available-ratio-for-claim-threshold
+  (testing "claim-deferred respects custom min-available-ratio-for-claim threshold"
+    (let [risk {:liquidity-mode :shortfall
+                :failure-modes #{:partial-liquidity}
+                :shortfall {:available-ratio 1.0}
+                :min-available-ratio-for-claim 0.9}
+          world {:yield/risk {:test-mod {"USDC" risk}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :test-mod :token "USDC"
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :unwinding :unrealized-yield 0 :realized-yield 0
+                                            :deferred-yield 100
+                                            :shortfall {:reason :liquidity-shortfall
+                                                        :basis-amount 1100
+                                                        :fulfilled-amount 1000
+                                                        :deferred-amount 100
+                                                        :haircut-amount 0
+                                                        :available-ratio 1.0}}}}
+          result (ll/claim-deferred world test-mod {:owner/id "user1"})
+          pos (get-in result [:yield/positions "user1"])]
+      (is (= :withdrawn (:status pos))
+          "Position should be withdrawn when available-ratio (1.0) >= min-ratio (0.9)")
+      (is (nil? (:shortfall pos))
+          "Shortfall should be cleared after successful claim")
+      (is (>= (long (:reclaimed-amount pos 0)) 0)
+          "Reclaimed amount should be non-negative"))))
+
+(deftest test-min-available-ratio-for-claim-too-low
+  (testing "claim-deferred should NOT reclaim when available-ratio below threshold"
+    (let [risk {:liquidity-mode :shortfall
+                :failure-modes #{:partial-liquidity}
+                :shortfall {:available-ratio 0.5}
+                :min-available-ratio-for-claim 0.9}
+          world {:yield/risk {:test-mod {"USDC" risk}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :test-mod :token "USDC"
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :unwinding :unrealized-yield 0 :realized-yield 0
+                                            :deferred-yield 100
+                                            :shortfall {:reason :liquidity-shortfall
+                                                        :basis-amount 1100
+                                                        :fulfilled-amount 1000
+                                                        :deferred-amount 100
+                                                        :haircut-amount 0
+                                                        :available-ratio 0.5}}}}
+          result (ll/claim-deferred world test-mod {:owner/id "user1"})
+          pos (get-in result [:yield/positions "user1"])]
+      (is (= :unwinding (:status pos))
+          "Position should remain :unwinding when available-ratio (0.5) < min-ratio (0.9)")
+      (is (some? (:shortfall pos))
+          "Shortfall should NOT be cleared when reclaim fails")
+      (is (zero? (:reclaimed-amount pos 0))
+          "Reclaimed amount should be 0 when below threshold"))))
+
+(deftest test-partial-liquidity-split-ratios-in-withdraw
+  (testing "Withdraw with separate yield/principal availability ratios under partial-liquidity"
+    (let [world {:yield/indices {:test-mod {"USDC" 1.0}}
+                 :yield/rates {:test-mod {"USDC" 0.10}}
+                 :yield/risk {:test-mod {"USDC" {:failure-modes #{:partial-liquidity}
+                                                 :shortfall {:yield-available-ratio 0.5
+                                                             :principal-available-ratio 1.0}}}}
+                 :total-held {:test-mod 15000}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :test-mod :token "USDC"
+                                            :principal 10000 :shares 10000 :entry-index 1.0
+                                            :status :active :unrealized-yield 0 :realized-yield 0}}}
+          deposited (ll/deposit world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
+          accrued (ll/accrue deposited test-mod {:token "USDC" :dt 31536000})
+          pos-before (get-in accrued [:yield/positions "user1"])
+          result (ll/withdraw accrued test-mod {:owner/id "user1"})
+          pos (get-in result [:yield/positions "user1"])]
+      (is (some #{:withdrawn :unwinding} [(:status pos)])
+          "Position should be withdrawn or unwinding after withdraw")
+      (is (>= (:realized-yield pos 0) 0)
+          "Realized yield should be non-negative")
+      (is (zero? (:unrealized-yield pos 0))
+          "Unrealized yield should be zeroed on withdraw"))))

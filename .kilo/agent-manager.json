@@ -1,9 +1,13 @@
 {
   "worktrees": {},
-  "sessions": {},
+  "sessions": {
+    "local": {
+      "ses_143201031ffeLqtWHqvkQGXxhf": {}
+    }
+  },
   "tabOrder": {
     "local": [
-      "pending:1"
+      "ses_143201031ffeLqtWHqvkQGXxhf"
     ]
   }
 }

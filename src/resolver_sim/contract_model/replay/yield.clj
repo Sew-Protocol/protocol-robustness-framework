@@ -100,8 +100,9 @@
         inv-trans  (when ok? (proto/check-invariants-transition protocol world-t world-next))
         violated?  (and ok? (not (and (:ok? inv-single) (:ok? inv-trans))))
         violations (when violated?
-                     (merge (when-not (:ok? inv-single) (:violations inv-single))
-                            (when-not (:ok? inv-trans) (:violations inv-trans))))
+                     (merge-with (fn [a b] (if (sequential? a) (concat a [b]) [a b]))
+                       (when-not (:ok? inv-single) (:violations inv-single))
+                       (when-not (:ok? inv-trans) (:violations inv-trans))))
         result-kw  (cond violated? :invariant-violated ok? :ok :else :rejected)
         error-kw   (when-not ok? (:error result))
         final-world (if violated? world-t world-next)]
