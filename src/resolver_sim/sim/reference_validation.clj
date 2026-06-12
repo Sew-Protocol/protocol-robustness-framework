@@ -12,6 +12,7 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [resolver-sim.contract-model.replay.yield :as yield-replay]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.io.trace-export :as trace-export]
             [resolver-sim.sim.reference-validation-evidence :as evidence])
@@ -22,7 +23,8 @@
 
 (def ^{:doc "Map of protocol keyword → replay function. Extend this when adding new protocols."}
   protocols
-  {:sew sew/replay-with-sew-protocol})
+  {:sew sew/replay-with-sew-protocol
+   :yield yield-replay/replay-yield-scenario})
 
 (def ^{:doc "Default replay function (Sew protocol)."}
   default-replay-fn sew/replay-with-sew-protocol)
@@ -64,6 +66,14 @@
 (defn- kw-str [k]
   (name k))
 
+(defn- write-trace-fixture!
+  "Write trace fixture for a protocol. Sew protocol uses trace-export; others skip trace export."
+  [replay-fn result scenario trace-path]
+  (when (= replay-fn sew/replay-with-sew-protocol)
+    (trace-export/write-fixture-file
+     (trace-export/export-trace-fixture result scenario)
+     trace-path)))
+
 (defn- run-simulator-scenario
   [sc actual-dir replay-fn]
   (let [{:keys [id trace-slug upgrade-path classification primary-threat
@@ -89,11 +99,14 @@
       (when-not exp-ok?
         (throw (ex-info "reference-validation scenario expectations failed"
                         {:scenario-id id :expectation-violations exp-violations})))
-      (trace-export/write-fixture-file
-       (trace-export/export-trace-fixture result scenario)
-       trace-path)
-      (write-sha256! trace-path)
-      (let [trace-hash (sha256-file trace-path)]
+      (write-trace-fixture! replay-fn result scenario trace-path)
+      (when (.exists (io/file trace-path))
+        (write-sha256! trace-path))
+      (let [trace-rel-path (if (.exists (io/file trace-path))
+                             trace-rel
+                             nil)
+            trace-hash (when trace-rel-path
+                         (sha256-file trace-path))]
         {:scenario_id id
          :classification (kw-str classification)
          :confidence "high"
@@ -108,7 +121,7 @@
          :source_artifact scenario-path
          :status "pass"
          :trace_hash trace-hash
-         :trace_path trace-rel
+         :trace_path trace-rel-path
          :upgrade_path upgrade-path}))))
 
 (defn- build-scenario-results [manifest actual-dir replay-fn]

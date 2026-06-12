@@ -51,7 +51,23 @@
    #{:pending-settlement-consistent}
 
    "escalation-level-monotonic"
-   #{:escalation-level-monotonic}})
+   #{:escalation-level-monotonic}
+
+   ;; Yield evidence invariants
+   "yield-position-consistency"
+   #{:yield/position-consistency}
+
+   "yield-value-conservation"
+   #{:yield/value-conservation}
+
+   "yield-exposure"
+   #{:yield/exposure}
+
+   "yield-shortfall-splits"
+   #{:yield/shortfall-splits}
+
+   "yield-deferred-reclaim"
+   #{:yield/deferred-reclaim}})
 
 (def all-evidence-ids
   (set (keys evidence-invariant->canonical)))
@@ -68,9 +84,14 @@
 (defn verify-evidence-invariants!
   "After a successful replay, assert mapped world-level canonical invariants hold.
 
+   Accepts optional :world-invariant-ids and :check-all-fn for protocol-specific
+   invariant checking. Defaults to Sew protocol invariants.
+
    Transition-level mapped IDs are implied by a :pass replay outcome (replay runs
    check-transition on every successful step). Returns a summary map."
-  [replay-result evidence-ids]
+  [replay-result evidence-ids & {:keys [world-invariant-ids check-all-fn]
+                                 :or {world-invariant-ids inv/world-invariant-ids
+                                      check-all-fn inv/check-all}}]
   (let [outcome (:outcome replay-result)]
     (when-not (= :pass outcome)
       (throw (ex-info "replay did not pass; cannot verify evidence invariants"
@@ -83,11 +104,10 @@
     (let [required   (canonical-ids-for-evidence evidence-ids)
           world      (:world replay-result)
           _          (when (nil? world)
-                       (throw (ex-info "replay pass result missing :world"
-                                       {:scenario-id (:scenario-id replay-result)})))
-          world-req  (set/intersection required inv/world-invariant-ids)
-          trans-req  (set/intersection required inv/transition-invariant-ids)
-          check      (inv/check-all world)
+                      (throw (ex-info "replay pass result missing :world"
+                                      {:scenario-id (:scenario-id replay-result)})))
+          world-req  (set/intersection required world-invariant-ids)
+          check      (check-all-fn world)
           failures   (for [id world-req
                            :let [r (get-in check [:results id])]
                            :when (not (:holds? r))]
@@ -98,6 +118,5 @@
                          :evidence-ids evidence-ids})))
       {:evidence-ids evidence-ids
        :canonical-verified (vec (sort required))
-       :world-checked (vec (sort world-req))
-       :transition-implied-by-replay (vec (sort trans-req))})))
+       :world-checked (vec (sort world-req))})))
 

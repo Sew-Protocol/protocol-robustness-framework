@@ -126,3 +126,30 @@ sew-domain-reference-v1-check:
 .PHONY: refresh-sew-domain-reference-v1
 refresh-sew-domain-reference-v1:
 	clojure -M:reference-validation --suite-root suites/sew-domain-reference-v1 --protocol sew --refresh-expected
+
+.PHONY: yield-reference-v1
+yield-reference-v1:
+	./suites/yield-reference-v1/scripts/run.sh
+
+.PHONY: verify-yield-reference-v1
+verify-yield-reference-v1:
+	./suites/yield-reference-v1/scripts/verify.sh
+
+.PHONY: clean-yield-reference-v1
+clean-yield-reference-v1:
+	./suites/yield-reference-v1/scripts/clean.sh
+
+.PHONY: report-yield-reference-v1
+report-yield-reference-v1:
+	./suites/yield-reference-v1/scripts/generate-report.sh
+
+.PHONY: yield-reference-v1-check
+yield-reference-v1-check:
+	$(MAKE) clean-yield-reference-v1
+	$(MAKE) yield-reference-v1
+	$(MAKE) verify-yield-reference-v1
+	$(MAKE) report-yield-reference-v1
+
+.PHONY: refresh-yield-reference-v1
+refresh-yield-reference-v1:
+	clojure -M:reference-validation --suite-root suites/yield-reference-v1 --protocol yield --refresh-expected
