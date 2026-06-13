@@ -160,6 +160,7 @@
                         :agent           (:agent event)
                         :action          (:action event)
                         :params          (:params event)
+                        :save-id-as      (:save-id-as event)
                         :transition/id   (action->transition-id (:action event))
                         :result          :rejected
                         :error           (:error temporal-failure)
@@ -227,6 +228,7 @@
             :agent           (:agent event)
             :action          (:action event)
             :params          (:params event)
+            :save-id-as      (:save-id-as event)
             :transition/id   (action->transition-id (:action event))
             :result          result-kw
             :error           error-kw
@@ -309,7 +311,7 @@
    Used by counterfactual fork replay so continuation steps do not carry
    stale :world / :result fields from the main-line trace."
   [entry]
-  (select-keys entry [:seq :time :agent :action :params]))
+  (select-keys entry [:seq :time :agent :action :params :save-id-as]))
 
 (defn- run-simulation-loop
   "Execute the core simulation loop from a given world state and event sequence."
@@ -358,7 +360,8 @@
                  :agents agents
                  :protocol protocol
                  :world world
-                 :world-checkpoints world-checkpoints}))))
+                 :world-checkpoints world-checkpoints
+                 :id-alias-map id-alias-map}))))
         (if (= :deterministic-batch (execution-mode scenario))
            (let [[bucket rest-events] (group-same-time-bucket events)
                  base-world world
@@ -412,13 +415,13 @@
                                                              (contains? expected-errors-set
                                                                         [(:seq event) (:action event) :batch-conflict])))]
                                         (-> acc
-
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol working-world))
                                             (update :world-checkpoints assoc (:seq event) working-world)))
                                       (let [step (process-step protocol context working-world event)
-                                            entry0 (:trace-entry step)
+                                          _ (tap> {:debug :process-step-result :step step :event event})
+                                          entry0 (:trace-entry step)
                                             expected-failure? (and (= :rejected (:result entry0))
                                                                    (contains? expected-errors-set
                                                                               [(:seq entry0) (:action entry0) (:error entry0)]))
@@ -435,19 +438,25 @@
                                                            :expected-failure? expected-failure?))
                                             new-world (:world step)
                                             alias-key (:save-id-as event)
+                                            agent-alias-key (:save-agent-as event)
                                             new-id (when (and alias-key supports-alias? (= :ok (:result entry)))
                                                      (proto/created-id protocol (:action event) (:extra entry)))
+                                            new-agent-addr (when (and agent-alias-key (= :ok (:result entry)))
+                                                             (let [agent-id (:agent event)
+                                                                   addr (or (get-in context [:agent-index agent-id :address])
+                                                                            (get-in context [:agent-index (name agent-id) :address]))]
+                                                               addr))
                                             claimed' (if (= :ok (:result entry))
                                                        (reduce (fn [m d] (assoc m d (:seq event))) (:claimed-domains acc) domains)
                                                        (:claimed-domains acc))]
-                                        (tap> {:scenario-id scenario-id :seq (:seq event) :world working-world :entry entry})
                                         (-> acc
                                             (assoc :world new-world
                                                    :claimed-domains claimed'
                                                    :halted? (:halted? step)
-                                                   :id-alias-map (if (and alias-key new-id)
-                                                                   (assoc (:id-alias-map acc) alias-key new-id)
-                                                                   (:id-alias-map acc)))
+                                                   :id-alias-map (let [m (:id-alias-map acc)]
+                                                                   (cond-> m
+                                                                     (and alias-key new-id) (assoc alias-key new-id)
+                                                                     (and agent-alias-key new-agent-addr) (assoc agent-alias-key new-agent-addr))))
                                             (update :trace conj entry)
                                             (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                             (update :states assoc (:seq event) (proto/world-snapshot protocol new-world))

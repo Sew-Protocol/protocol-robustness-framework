@@ -194,7 +194,7 @@
             (:all-hold? (inv/check-transition world w-released))
             (false? (:ok (lc/raise-dispute w-released 0 "0xAlice")))
             (false? (:ok (lc/release w-released 0 "0xAlice"
-                                     (fn [_ _ _] {:allowed? true :reason-code 0}))))))))))
+                                     (fn [_ _ _] {:allowed? true :reason-code 0})))))))))))
 
 (deftest property-irreversibility
   (let [result (tc/quick-check num-trials prop-irreversibility)]

@@ -25,6 +25,7 @@
   (:require [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.protocol :as proto]
+            [resolver-sim.protocols.sew.trace-metadata :as meta]
             [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
 
 (def ^:private default-continuation-policy
@@ -55,7 +56,7 @@
    :undefined-policy :inconclusive})
 
 (def ^:private strategic-actions
-  #{"raise_dispute" "escalate_dispute" "execute_resolution"})
+  (clojure.set/difference meta/strategic-actions #{"create-escrow"}))
 
 (def ^:private action-alternatives
   {"raise_dispute" ["settle_now" "wait"]
@@ -427,15 +428,17 @@
 
 (defn- continuation-replay-events
   "Normalize main-line trace tail entries into bare replay events for fork replay.
+   Filters out non-event trace entries (e.g. batch markers, synthetic snapshots).
    Preserves the original :seq as :fork/original-seq before the events are
    renumbered to 1, 2, 3... by expand-strategic-tree."
   [remaining-trace-entries]
-  (mapv (fn [entry]
-          (let [replay-event (replay/trace-entry->replay-event entry)]
-            (if-let [orig-seq (:seq replay-event)]
-              (assoc replay-event :fork/original-seq orig-seq)
-              replay-event)))
-        remaining-trace-entries))
+  (->> remaining-trace-entries
+       (filter :action)
+       (mapv (fn [entry]
+               (let [replay-event (replay/trace-entry->replay-event entry)]
+                 (if-let [orig-seq (:seq replay-event)]
+                   (assoc replay-event :fork/original-seq orig-seq)
+                   replay-event))))))
 
 (defn- tag-stale-continuations
   "Tag trace entries from continuation events (seq > 0) that were rejected due
@@ -491,8 +494,9 @@
    {:keys [agent address action] :as node}
    spe-config]
   (let [node-seq        (:seq node)
-        idx             (long node-seq)
-        pre-entry      (when (pos? idx) (nth raw-trace (dec idx) nil))
+        trace-idx       (first (keep-indexed (fn [i e] (when (= (:seq e) node-seq) i)) raw-trace))
+        idx             (or trace-idx (long node-seq))
+        pre-entry      (when (and trace-idx (pos? trace-idx)) (nth raw-trace (dec trace-idx) nil))
         chosen-entry   (nth raw-trace idx nil)
         actor          (or address agent)
         node-type      (get node-type-by-action action)

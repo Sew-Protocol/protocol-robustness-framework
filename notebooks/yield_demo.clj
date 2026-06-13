@@ -78,7 +78,7 @@
                     (double (get shortfall :fulfilled-amount 0))
                     (+ principal realized))
         status (get pos :status)
-        shortfall? (or (pos? deferred) (= status :unwinding))]
+        shortfall? (or (pos? deferred) (pos? (double (get shortfall :haircut-amount 0))))]
     {:demo/title title
      :scenario/id (:scenario-id normalized)
      :yield/model "gen-yield"

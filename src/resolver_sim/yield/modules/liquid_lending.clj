@@ -118,10 +118,14 @@
             world-after-accrue (accrual/apply-accrual-decision world accrual-decision)
             pos-after-accrue (get-in world-after-accrue pos-key)
 
-            ;; Step 2: Determine available liquidity
-            recoverable (or (get-in world-after-accrue [:total-held token])
-                            (get-in world-after-accrue [:yield/held-balances (name token)])
-                            0)
+            ;; Step 2: Determine available liquidity from actual held balance,
+            ;; then modulate by any configured shortfall risk (available-ratio).
+            base-recoverable (or (get-in world-after-accrue [:total-held token])
+                                 (get-in world-after-accrue [:yield/held-balances (name token)])
+                                 0)
+            shortfall-cfg (get-in world-after-accrue [:yield/risk mid token :shortfall])
+            available-ratio (:available-ratio shortfall-cfg 1.0)
+            recoverable (long (* base-recoverable available-ratio))
             gross-amount (+ (:principal pos-after-accrue 0)
                             (:unrealized-yield pos-after-accrue 0))
 

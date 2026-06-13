@@ -31,13 +31,11 @@
    :protocol-params {:resolver-fee-bps 0 :appeal-window-duration 0
                      :max-dispute-duration 300}
    :events [{:seq 0 :time 1000 :agent "alice"   :action "create_escrow"
-             :params {:token "USDC" :to "0xBob" :amount 1000 :custom-resolver "0xResolver"}}
-            {:seq 1 :time 1060 :agent "alice"   :action "raise_dispute"
-             :params {:workflow-id 0}}
-            {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-             :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
-            {:seq 3 :time 1200 :agent "keeper"  :action "execute_pending_settlement"
-             :params {:workflow-id 0}}]})
+              :params {:token "USDC" :to "0xBob" :amount 1000 :custom-resolver "0xResolver"}}
+             {:seq 1 :time 1060 :agent "alice"   :action "raise_dispute"
+              :params {:workflow-id 0}}
+             {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+              :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ^{:nextjournal.clerk/visibility {:code :fold :result :show}}
 (defonce lifecycle-result (delay (sew/replay-with-sew-protocol lifecycle-scenario)))

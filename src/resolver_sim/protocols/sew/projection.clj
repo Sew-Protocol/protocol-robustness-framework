@@ -11,9 +11,11 @@
    re-used here.
 
    This namespace is pure — no I/O, no DB, no side effects."
-   (:require [resolver-sim.scenario.projection :as proj]
+   (:require [clojure.string :as str]
+            [resolver-sim.scenario.projection :as proj]
              [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
              [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.protocols.sew.trace-metadata :as meta]
              [resolver-sim.protocols.sew.types :as t]
              [resolver-sim.yield.evidence :as ye]
               [resolver-sim.yield.accounting :as acct]
@@ -38,7 +40,7 @@
   (boolean (re-find #"slash|auto_cancel_disputed" (str (or action "")))))
 
 (defn- strategic-action? [action]
-  (contains? #{"create_escrow" "raise_dispute" "escalate_dispute" "execute_resolution"} action))
+  (contains? meta/strategic-actions (str/replace (str (or action "")) "_" "-")))
 
 (defn terminal-world-from-result
   "Canonical terminal-world accessor for replay result payloads.

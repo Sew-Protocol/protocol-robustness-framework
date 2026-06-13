@@ -65,7 +65,8 @@
               world' (:world (lc/raise-dispute world workflow-id buyer))]
           {:world (:world (res/execute-resolution world' workflow-id resolver true "0xhash" nil))
            :workflow-id workflow-id})
-        r-prop (res/propose-fraud-slash world workflow-id gov resolver 5000)
+        world-params (assoc-in world [:params :slash-epoch-cap-bps] 5000)
+        r-prop (res/propose-fraud-slash world-params workflow-id gov resolver 5000)
         world-prop (:world r-prop)]
     
     (is (true? (:ok r-prop)))

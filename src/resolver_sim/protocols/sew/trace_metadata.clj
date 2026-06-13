@@ -16,7 +16,8 @@
    - Section A: vocabulary sets (stable keyword enums)
    - Section B: classifier functions (derive type from data)
    - Section C: resolution semantics (full resolution map from world state)"
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [clojure.string :as str]))
 
 ;; ===========================================================================
 ;; A. Vocabulary Sets
@@ -88,6 +89,11 @@
 ;; ---------------------------------------------------------------------------
 ;; A3. Transition taxonomy
 ;; ---------------------------------------------------------------------------
+
+(def strategic-actions
+  "Actions that represent strategic decision nodes in replay traces.
+   Used by subgame counterfactual analysis and projection replay."
+  #{"create-escrow" "raise-dispute" "escalate-dispute" "execute-resolution"})
 
 (def transition-types
   "Semantic categories for protocol state transitions."
@@ -371,34 +377,40 @@
 ;; B3. Transition classifier
 ;; ---------------------------------------------------------------------------
 
+(def transition-type-map
+  "Data-driven mapping from action name to transition type keyword.
+   Keys use kebab-case (after canonical-action normalization)."
+  {"create-escrow"               :transition/creation
+   "register-stake"              :transition/creation
+   "set-resolver-capacity"       :transition/creation
+   "register-resolver-bond"      :transition/creation
+   "register-senior-bond"        :transition/creation
+   "delegate-to-senior"          :transition/creation
+   "raise-dispute"               :transition/state-change
+   "challenge-resolution"        :transition/escalation
+   "submit-evidence"             :transition/escalation
+   "escalate-dispute"            :transition/escalation
+   "execute-resolution"          :transition/resolution
+   "execute-pending-settlement"  :transition/resolution
+   "propose-fraud-slash"         :transition/governance
+   "appeal-slash"               :transition/governance
+   "resolve-appeal"             :transition/governance
+   "execute-fraud-slash"        :transition/economic
+   "distribute-slash"           :transition/economic
+   "release"                    :transition/economic
+   "sender-cancel"              :transition/state-change
+   "recipient-cancel"           :transition/state-change
+   "automate-timed-actions"     :transition/maintenance
+   "auto-cancel-disputed"       :transition/timeout})
+
 (defn transition-type
   "Map a protocol action string to its :transition/type keyword.
+   Accepts both kebab-case (create-escrow) and snake_case (create_escrow).
    Returns :transition/unknown for unrecognized actions."
   [action]
-  (case action
-    "create_escrow"             :transition/creation
-    "register_stake"            :transition/creation
-    "set_resolver_capacity"     :transition/creation
-    "register_resolver_bond"    :transition/creation
-    "register_senior_bond"      :transition/creation
-    "delegate_to_senior"        :transition/creation
-    "raise_dispute"             :transition/state-change
-    "challenge_resolution"      :transition/escalation
-    "submit_evidence"           :transition/escalation
-    "escalate_dispute"          :transition/escalation
-    "execute_resolution"        :transition/resolution
-    "execute_pending_settlement" :transition/resolution
-    "propose_fraud_slash"       :transition/governance
-    "appeal_slash"              :transition/governance
-    "resolve_appeal"            :transition/governance
-    "execute_fraud_slash"       :transition/economic
-    "distribute_slash"          :transition/economic
-    "release"                   :transition/economic
-    "sender_cancel"             :transition/state-change
-    "recipient_cancel"          :transition/state-change
-    "automate_timed_actions"    :transition/maintenance
-    "auto_cancel_disputed"      :transition/timeout
-    :transition/unknown))
+  (get transition-type-map action
+       (get transition-type-map (str/replace action "_" "-")
+            :transition/unknown)))
 
 ;; ---------------------------------------------------------------------------
 ;; B4. Effect classifier
@@ -473,12 +485,18 @@
 ;; C1. Legacy helpers (retained for backwards compatibility)
 ;; ---------------------------------------------------------------------------
 
-(defn resolution-path [action]
-  (case action
-    "execute_resolution"         :resolution/standard
-    "execute_pending_settlement" :resolution/delayed
-    "auto_cancel_disputed"       :resolution/timeout
-    :resolution/none))
+(def resolution-path-map
+  {"execute-resolution"          :resolution/standard
+   "execute-pending-settlement"  :resolution/delayed
+   "auto-cancel-disputed"        :resolution/timeout})
+
+(defn resolution-path
+  "Map an action name to its resolution path type.
+   Accepts both kebab-case and snake_case. Returns :resolution/none by default."
+  [action]
+  (get resolution-path-map action
+       (get resolution-path-map (str/replace action "_" "-")
+            :resolution/none)))
 
 ;; RESERVED — no production callers. Superseded by classify-resolution (C3)
 ;; which returns the full resolution taxonomy. Retained as vocabulary reference.

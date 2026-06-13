@@ -210,8 +210,12 @@
                        "-m" "clj-kondo.main" "--lint" "src:test")}
 
   fmt {:doc "Format code with cljfmt"
-       :task (clojure {:dir "." :extra-deps {cljfmt/cljfmt {:mvn/version "0.12.0"}}}
-                      "-m" "cljfmt.main" "fix" "src" "test")}
+       :task (shell "clojure -M:fmt")}
+
+  validate {:doc "Structural validation pipeline: fmt -> lint"
+            :task (do (println "Running structural validation...")
+                      (shell "clojure -M:fmt")
+                      (shell "clojure -M:lint"))}
 
   clean {:doc "Delete generated results/"
          :task (shell "rm -rf results/*" "echo 'Cleaned results/'")
