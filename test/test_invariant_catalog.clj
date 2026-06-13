@@ -1,5 +1,6 @@
 (ns test-invariant-catalog
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.set]
+            [clojure.test :refer [deftest is]]
             [resolver-sim.yield.invariant-catalog :as cat]
             [resolver-sim.yield.invariants :as inv]))
 

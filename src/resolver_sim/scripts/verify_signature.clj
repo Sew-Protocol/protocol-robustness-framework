@@ -5,6 +5,7 @@
   "
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.manifest.loader :as loader]
             [resolver-sim.notebooks.manifest.publication :as pub]))
 
@@ -13,8 +14,8 @@
         run (loader/load-focused)
         manifest (:manifest run)
         registry (:registry run)
-        latest-dir "results/test-artifacts"
-        sigf (io/file latest-dir "signature.json")]
+        latest-dir (evcfg/artifact-dir)
+        sigf (io/file latest-dir (evcfg/artifact-file :signature))]
     (when-not pubkey
       (println "Usage: clojure -M -m resolver-sim.scripts.verify-signature <public-key-path>")
       (System/exit 1))

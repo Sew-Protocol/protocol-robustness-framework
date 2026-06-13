@@ -9,25 +9,26 @@
    Replay invariants (after every successful transition):
      1. protocol/check-invariants-single
      2. protocol/check-invariants-transition"
-   (:require [clojure.stacktrace             :as st]
-             [clojure.string                :as str]
-             [clojure.data.json             :as json]
-             [clojure.java.io               :as io]
-             [resolver-sim.logging          :as log]
-             [resolver-sim.definitions.registry :as defs]
-             [resolver-sim.scenario.schema-profile :as schema-profile]
-             [resolver-sim.contract-model.replay.metrics :as metrics]
+   (:require [clojure.stacktrace                 :as st]
+              [clojure.string                    :as str]
+              [clojure.data.json                 :as json]
+              [clojure.java.io                   :as io]
+              [resolver-sim.evidence.config      :as evcfg]
+              [resolver-sim.logging               :as log]
+              [resolver-sim.definitions.registry :as defs]
+              [resolver-sim.scenario.schema-profile :as schema-profile]
+              [resolver-sim.contract-model.replay.metrics :as metrics]
+               [resolver-sim.contract-model.replay.validation :as validation]
+              [resolver-sim.contract-model.replay.analysis :as analysis]
+              [resolver-sim.contract-model.replay.temporal :as temporal]
               [resolver-sim.contract-model.replay.validation :as validation]
-             [resolver-sim.contract-model.replay.analysis :as analysis]
-             [resolver-sim.contract-model.replay.temporal :as temporal]
-             [resolver-sim.contract-model.replay.validation :as validation]
-             [resolver-sim.contract-model.replay.yield :as yield-replay]
-             [resolver-sim.contract-model.replay.flags :as replay-flags]
-             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
-             [resolver-sim.protocols.protocol :as proto]
-             [resolver-sim.protocols.registry :as preg]
-              [resolver-sim.time.model        :as time-model]
-              [resolver-sim.time.context      :as time-ctx]
+              [resolver-sim.contract-model.replay.yield :as yield-replay]
+              [resolver-sim.contract-model.replay.flags :as replay-flags]
+              [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
+              [resolver-sim.protocols.protocol :as proto]
+              [resolver-sim.protocols.registry :as preg]
+               [resolver-sim.time.model        :as time-model]
+               [resolver-sim.time.context      :as time-ctx]
               [resolver-sim.util.attribution :as attr]
               [resolver-sim.yield.risk-monitor :as risk]))
 
@@ -617,9 +618,9 @@
          (let [result (if (:evaluate-expectations? flags true)
                         (finalize-scenario-result scenario trimmed-result flags)
                         trimmed-result)]
-           ;; Phase 2: Register Theory Evaluation and Results
-           (when-let [theory (:diagnostics result)]
-             (spit (io/file "results/test-artifacts/theory-eval.json") (json/write-str theory {:indent true})))
+            ;; Phase 2: Register Theory Evaluation and Results
+            (when-let [theory (:diagnostics result)]
+              (spit (io/file (evcfg/artifact-path :theory-eval)) (json/write-str theory {:indent true})))
            
            (assoc result :risk-events (risk/events))))))))
 

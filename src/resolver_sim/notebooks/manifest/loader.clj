@@ -5,10 +5,11 @@
   Returns plain maps; no db deps."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.common :as common]))
 
-(def runs-root "results/runs")
-(def latest-dir "results/test-artifacts")
+(def runs-root (evcfg/runs-root))
+(def latest-dir (evcfg/artifact-dir))
 
 ;; ── internal helpers ──────────────────────────────────────────────────────────
 
@@ -65,12 +66,12 @@
       (some (fn [d]
               (when (and (.isDirectory d)
                          (str/ends-with? (.getName d) run-id))
-                (let [base (.getPath d)]
-                  {:manifest        (common/read-json (str base "/test-run.json"))
-                   :summary         (common/read-json (str base "/test-summary.json"))
-                   :registry        (common/read-json (str base "/test-artifacts.json"))
-                   :classification  (common/read-json (str base "/claimable-classification.json"))
-                   :dir             base})))
+                 (let [base (.getPath d)]
+                   {:manifest        (common/read-json (str base "/" (evcfg/artifact-file :test-run)))
+                    :summary         (common/read-json (str base "/" (evcfg/artifact-file :test-summary)))
+                    :registry        (common/read-json (str base "/test-artifacts.json"))
+                    :classification  (common/read-json (str base "/" (evcfg/artifact-file :claimable-classification)))
+                    :dir             base})))
             (.listFiles root)))))
 
 (defn artifact-by-id
@@ -89,10 +90,10 @@
   "Load the 4 canonical artifacts from results/test-artifacts/.
   Returns nil fields for files that don't exist yet."
   []
-  {:manifest        (common/read-json (str latest-dir "/test-run.json"))
-   :summary         (common/read-json (str latest-dir "/test-summary.json"))
+  {:manifest        (common/read-json (str latest-dir "/" (evcfg/artifact-file :test-run)))
+   :summary         (common/read-json (str latest-dir "/" (evcfg/artifact-file :test-summary)))
    :registry        (common/read-json (str latest-dir "/test-artifacts.json"))
-   :classification  (common/read-json (str latest-dir "/claimable-classification.json"))
+   :classification  (common/read-json (str latest-dir "/" (evcfg/artifact-file :claimable-classification)))
    :dir             latest-dir})
 
 (defn load-focused

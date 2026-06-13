@@ -9,6 +9,8 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [clojure.data.json :as json]
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.validation.suite-result :as suite]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.sim.minimizer :as minimizer]
@@ -25,6 +27,22 @@
             [resolver-sim.protocols.sew.invariant-scenarios :as sew-scenarios]
             [resolver-sim.governance.rules :as gov-rules]
             [clojure.pprint :as pp]))
+
+(defn- result->checks
+  [entry]
+  (map (fn [[k v]]
+         {:check/id k
+          :status (if (:ok? v true) :passed :failed)
+          :message (str (:violations v) (:expected v) (:actual v))})
+       (:checks entry)))
+
+(defn emit-suite-result
+  [suite-id result]
+  (let [all-checks (mapcat result->checks (:results result))
+        suite-res (suite/suite-result suite-id :protocol all-checks)
+        out-path  (str (evcfg/artifact-dir) "/suite-" (name suite-id) ".json")]
+    (io/make-parents out-path)
+    (spit out-path (json/write-str suite-res))))
 
 (def ^:private golden-schema-version "2.0")
 

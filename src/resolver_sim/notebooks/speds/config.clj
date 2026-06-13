@@ -1,14 +1,15 @@
 (ns resolver_sim.notebooks.speds.config
   "SPEDS Configuration: Centralized paths and protocol identifiers."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]))
 
 (def artifact-paths
-  {:test-summary "results/test-artifacts/test-summary.json"
-   :test-run     "results/test-artifacts/test-run.json"
-   :coverage     "results/test-artifacts/coverage.json"
-   :equivalence  "results/test-artifacts/equivalence-comparison-summary.json"
-   :findings     "results/test-artifacts/findings.json"
-   :issues       "results/test-artifacts/issues.json"
+  {:test-summary (evcfg/artifact-path :test-summary)
+   :test-run     (evcfg/artifact-path :test-run)
+   :coverage     (evcfg/artifact-path :coverage)
+   :equivalence  (evcfg/artifact-path :equivalence-summary)
+   :findings     (evcfg/artifact-path :findings)
+   :issues       (evcfg/artifact-path :issues)
    :manifest     "evidence-manifest.json"
    :traces-dir   "data/fixtures/traces"
    :golden-dir   "data/fixtures/golden"})

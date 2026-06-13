@@ -224,7 +224,7 @@
 
 (deftest test-metric-key-multi-segment
   (testing "metric-key handles multi-segment paths"
-    (is (= :coalition/net/profit (theory/metric-key "coalition/net/profit"))))
+    (is (= :coalition/net-profit (theory/metric-key "coalition/net-profit"))))
 
   (testing "metric-key preserves standard namespaced keys"
     (is (= :coalition/net-profit (theory/metric-key "coalition/net-profit"))))

@@ -4,10 +4,11 @@
    current artifact contracts."
   (:require [clojure.data.json :as json]
             [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.common :as common]
             [resolver-sim.scenario.outcome-semantics :as ose]))
 
-(def semantic-facts-path "results/test-artifacts/semantic-facts.json")
+(def semantic-facts-path (evcfg/artifact-path :semantic-facts))
 
 (defn- ->purpose-id [purpose]
   (keyword "scenario.purpose" (name (ose/normalize-purpose purpose))))
@@ -100,7 +101,7 @@
         facts (vec (concat (mapcat scenario-facts scenarios)
                            (trial-facts run-id findings)
                            (mapcat #(invariant-result-facts run-id %) scenarios)))]
-    {:schema/version "semantic-facts.v1"
+    {:schema/version (evcfg/schema :semantic-facts)
      :run/id run-id
      :definitions/hash (defs/definitions-hash)
      :fact-count (count facts)
@@ -108,7 +109,7 @@
 
 (defn save-semantic-facts!
   [facts-bundle]
-  (.mkdirs (java.io.File. "results/test-artifacts"))
+    (.mkdirs (java.io.File. (evcfg/artifact-dir)))
   (spit semantic-facts-path (json/write-str facts-bundle))
   facts-bundle)
 

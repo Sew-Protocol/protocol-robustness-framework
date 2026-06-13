@@ -10,6 +10,7 @@
   "
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.manifest.loader :as loader]
             [resolver-sim.notebooks.manifest.bundle :as bundle]
             [resolver-sim.notebooks.manifest.publication :as pub]))
@@ -26,7 +27,7 @@
         run  (loader/load-focused)
         manifest (:manifest run)
         registry (:registry run)
-        out-dir (or param "results/evidence-bundle")]
+        out-dir (or param (evcfg/evidence-bundle-dir))]
     (when-not manifest
       (println "ERROR: no manifest found. Run bb scenario:run first.")
       (System/exit 1))
@@ -46,7 +47,7 @@
           (if (:error result)
             (do (println "ERROR:" (:error result)) (System/exit 1))
             (let [signed-manifest (:manifest result)
-                  latest-dir "results/test-artifacts"
+                  latest-dir (evcfg/artifact-dir)
                   run-dir (:dir run)
                   ;; Produce Evidence Envelope (research-grade binding)
                   envelope {:registry_sha256 (:artifact-registry-sha signed-manifest)
@@ -58,13 +59,13 @@
                                                   :hash (:hash result)
                                                   :signer "key-path"} {:indent true})]
               ;; write manifest, envelope, and signature
-              (spit (io/file latest-dir "test-run.json") (json/write-str signed-manifest {:indent true}))
-              (spit (io/file latest-dir "envelope.json") envelope-json)
-              (spit (io/file latest-dir "signature.json") signature-json)
+              (spit (io/file latest-dir (evcfg/artifact-file :test-run)) (json/write-str signed-manifest {:indent true}))
+              (spit (io/file latest-dir (evcfg/artifact-file :envelope)) envelope-json)
+              (spit (io/file latest-dir (evcfg/artifact-file :signature)) signature-json)
               (when run-dir
-                (spit (io/file run-dir "test-run.json") (json/write-str signed-manifest {:indent true}))
-                (spit (io/file run-dir "envelope.json") envelope-json)
-                (spit (io/file run-dir "signature.json") signature-json))
+                (spit (io/file run-dir (evcfg/artifact-file :test-run)) (json/write-str signed-manifest {:indent true}))
+                (spit (io/file run-dir (evcfg/artifact-file :envelope)) envelope-json)
+                (spit (io/file run-dir (evcfg/artifact-file :signature)) signature-json))
               (println "Signed manifest hash:" (:hash result))
               (println "Signature produced. Evidence chain is now FINAL.")))))
 

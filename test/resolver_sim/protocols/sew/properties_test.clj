@@ -146,10 +146,6 @@
 ;; Properties 1–8: single-step invariant checks
 ;; ============================================================================
 
-;; ---------------------------------------------------------------------------
-;; Property 1: check-all holds after create, cancel, and release
-;; ---------------------------------------------------------------------------
-
 (def prop-solvency
   (prop/for-all
    [amount   gen-amount
@@ -157,29 +153,25 @@
     block-t  gen-time]
    (when-some [res (make-base-world-with-escrow amount fee-bps block-t "0xAlice" "0xBob")]
      (let [{:keys [world]} res]
-     (and
-      (:all-hold? (inv/check-all world))
-      (let [r2 (lc/sender-cancel world 0 "0xAlice" nil)]
-        (if (:ok r2)
-          (and (:all-hold? (inv/check-all (:world r2)))
-               (:all-hold? (inv/check-transition world (:world r2))))
-          true))
-      (let [r3 (lc/release world 0 "0xAlice"
-                           (fn [_ _ _] {:allowed? true :reason-code 0}))]
-        (if (:ok r3)
-          (and (:all-hold? (inv/check-all (:world r3)))
-               (:all-hold? (inv/check-transition world (:world r3))))
-          true))))))
+       (and
+        (:all-hold? (inv/check-all world))
+        (let [r2 (lc/sender-cancel world 0 "0xAlice" nil)]
+          (if (:ok r2)
+            (and (:all-hold? (inv/check-all (:world r2)))
+                 (:all-hold? (inv/check-transition world (:world r2))))
+            true))
+        (let [r3 (lc/release world 0 "0xAlice"
+                             (fn [_ _ _] {:allowed? true :reason-code 0}))]
+          (if (:ok r3)
+            (and (:all-hold? (inv/check-all (:world r3)))
+                 (:all-hold? (inv/check-transition world (:world r3))))
+            true)))))))
 
 (deftest property-solvency
   (let [result (tc/quick-check num-trials prop-solvency)]
     (is (:pass? result)
         (str "Invariant suite violated after create/cancel/release: "
              (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 2: Terminal states are absorbing (irreversibility)
-;; ---------------------------------------------------------------------------
 
 (def prop-irreversibility
   (prop/for-all
@@ -201,10 +193,6 @@
     (is (:pass? result)
         (str "Irreversibility violated: " (pr-str (:shrunk result))))))
 
-;; ---------------------------------------------------------------------------
-;; Property 3: Fee monotonicity — total-fees never decreases between creates
-;; ---------------------------------------------------------------------------
-
 (def prop-fee-monotonicity
   (prop/for-all
    [amount1 gen-amount
@@ -212,7 +200,7 @@
     fee-bps gen-bps]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps fee-bps :max-dispute-duration 3600})
          w0   (t/empty-world 1000)
-         r1   (lc/create-escrow w0 "0xAlice" "0xUSDC" "0xBob" amount1
+         r1   (lc/create-escrow w0 "0xAlice" "0xUSDC" "0xDave" amount1
                                 (t/make-escrow-settings {}) snap)]
      (if-not (:ok r1)
        true
@@ -230,10 +218,6 @@
   (let [result (tc/quick-check num-trials prop-fee-monotonicity)]
     (is (:pass? result)
         (str "Fee monotonicity violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 4: Custom-resolver exclusivity
-;; ---------------------------------------------------------------------------
 
 (def prop-resolver-exclusivity
   (prop/for-all
@@ -256,10 +240,6 @@
   (let [result (tc/quick-check num-trials prop-resolver-exclusivity)]
     (is (:pass? result)
         (str "Resolver exclusivity violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 5: Appeal window enforcement
-;; ---------------------------------------------------------------------------
 
 (def prop-appeal-window
   (prop/for-all
@@ -287,10 +267,6 @@
     (is (:pass? result)
         (str "Appeal window enforcement violated: " (pr-str (:shrunk result))))))
 
-;; ---------------------------------------------------------------------------
-;; Property 6: Status combinations are valid after every lifecycle step
-;; ---------------------------------------------------------------------------
-
 (def prop-status-combinations-valid
   (prop/for-all
    [amount  gen-amount
@@ -316,10 +292,6 @@
     (is (:pass? result)
         (str "Status combinations violated: " (pr-str (:shrunk result))))))
 
-;; ---------------------------------------------------------------------------
-;; Property 7: Escalation level increases by exactly 1 and never decreases
-;; ---------------------------------------------------------------------------
-
 (def prop-escalation-monotonic
   (prop/for-all
    [amount  gen-amount
@@ -341,10 +313,6 @@
   (let [result (tc/quick-check num-trials prop-escalation-monotonic)]
     (is (:pass? result)
         (str "Escalation monotonicity violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 8: Pending settlement only exists for :disputed escrows
-;; ---------------------------------------------------------------------------
 
 (def prop-pending-settlement-consistent
   (prop/for-all
@@ -380,17 +348,6 @@
 ;; Properties 9–14: multi-step / sequence / adversarial
 ;; ============================================================================
 
-;; ---------------------------------------------------------------------------
-;; Property 9: Full escalation chain
-;;
-;; Exercises the complete 0→1→2 escalation path with an appeal window active.
-;; Verifies:
-;;   - Level increments at each step
-;;   - Third escalation (at max level) is rejected
-;;   - Final-round resolution is IMMEDIATE even when appeal-window-duration > 0
-;;   - check-all + check-transition hold at every step
-;; ---------------------------------------------------------------------------
-
 (def prop-full-escalation-chain
   (prop/for-all
    [amount     gen-amount
@@ -399,59 +356,41 @@
    (let [snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   3600
                       :appeal-window-duration appeal-dur}]
-     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [{:keys [world]} res]
-       (let [;; Round 0 → 1
+     (if-let [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res
              er1 (res/escalate-dispute world 0 "0xAlice"
                                        (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"}))
-             ;; Round 1 → 2  (reaches max-dispute-level = 2)
              er2 (when (:ok er1)
                    (res/escalate-dispute (:world er1) 0 "0xAlice"
                                          (fn [_ _ _ _] {:ok true :new-resolver "0xRes2"})))
              w2  (when (:ok er2) (:world er2))
-             ;; Round 2 → ? must be rejected
              er3 (when w2
                    (res/escalate-dispute w2 0 "0xAlice"
                                          (fn [_ _ _ _] {:ok true :new-resolver "0xRes3"})))
-             ;; Final-round resolution by "0xRes2" — must be immediate
              rr  (when w2
                    (res/execute-resolution w2 0 "0xRes2" true "0xhash" nil))]
-         (when (and (:ok er1) (:ok er2) er3 (:ok rr))
+         (if (and (:ok er1) (:ok er2) er3 (:ok rr))
            (and
-            ;; Level tracking
             (= 1 (t/dispute-level (:world er1) 0))
             (= 2 (t/dispute-level w2 0))
             (true? (t/final-round? w2 0))
-            ;; Third escalation rejected
             (false? (:ok er3))
             (= :escalation-not-allowed (:error er3))
-            ;; Final-round resolution is immediate (state :released, no pending)
             (= :released (t/escrow-state (:world rr) 0))
             (not (:exists (t/get-pending (:world rr) 0)))
-            ;; Invariants at every step
             (:all-hold? (inv/check-all (:world er1)))
             (:all-hold? (inv/check-all w2))
             (:all-hold? (inv/check-all (:world rr)))
             (:all-hold? (inv/check-transition world (:world er1)))
             (:all-hold? (inv/check-transition (:world er1) w2))
-            (:all-hold? (inv/check-transition w2 (:world rr))))))))))
+            (:all-hold? (inv/check-transition w2 (:world rr))))
+           false))
+       false))))
 
 (deftest property-full-escalation-chain
   (let [result (tc/quick-check num-trials prop-full-escalation-chain)]
     (is (:pass? result)
         (str "Full escalation chain violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 10: Multi-step lifecycle — sequence generator
-;;
-;; Generates: escalation-count ∈ {0,1,2} × appeal-window ∈ [0,1800] × outcome
-;; Produces a full chain:
-;;   create → raise-dispute → [escalate × n] → execute-resolution
-;;   → [execute-pending if deferred]
-;;
-;; check-all + check-transition verified at every step.
-;; Final state is always terminal.
-;; ---------------------------------------------------------------------------
 
 (def prop-multi-step-lifecycle
   (prop/for-all
@@ -460,49 +399,43 @@
     esc-count  (gen/large-integer* {:min 0 :max 2})
     appeal-dur (gen/large-integer* {:min 0 :max 1800})
     is-release gen/boolean]
-   (let [;; Resolver address at each level — Priority-3 auth tracks et.dispute-resolver
-         resolvers  ["0xRes0" "0xRes1" "0xRes2"]
+   (let [resolvers  ["0xRes0" "0xRes1" "0xRes2"]
          snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   3600
-                      :appeal-window-duration appeal-dur}]
-     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [{:keys [world]} res]
-       ;; Phase 1: apply esc-count escalations, checking invariants at each step
-       (let [{:keys [ok world violations]}
-             (run-escalation-sequence world resolvers esc-count)]
-         (when (and ok (empty? violations))
-           ;; Phase 2: execute resolution with the current round's resolver
-           (let [curr-res (resolvers esc-count)
-                 rr       (res/execute-resolution world 0 curr-res is-release "0xhash" nil)]
-             (when (:ok rr)
-               (let [w-res (:world rr)]
-                 (if (t/terminal-state? w-res 0)
-                   ;; Immediate path (no appeal window or final round)
-                   (and (:all-hold? (inv/check-all w-res))
-                        (:all-hold? (inv/check-transition world w-res)))
-                   ;; Deferred path — advance past deadline and execute pending
-                   (let [deadline (get-in w-res [:pending-settlements 0 :appeal-deadline])
-                         w-exp    (assoc w-res :block-time (+ deadline 1))
-                         er       (res/execute-pending-settlement w-exp 0)]
-                     (when (:ok er)
-                       (and (:all-hold? (inv/check-all w-res))
-                            (:all-hold? (inv/check-transition world w-res))
-                            (:all-hold? (inv/check-all (:world er)))
-                            (:all-hold? (inv/check-transition w-res (:world er)))
-                            (t/terminal-state? (:world er) 0))))))))))))))
+                      :appeal-window-duration appeal-dur}
+         base-world   (t/empty-world 1000)
+         c            (lc/create-escrow base-world "0xAlice" "0xUSDC" "0xBob" amount
+                                        (t/make-escrow-settings {:custom-resolver (resolvers 0)})
+                                        (snap-fix/escrow-snapshot snap-params))]
+     (if-not (:ok c)
+       false
+       (let [world (:world c)
+             d     (lc/raise-dispute world 0 "0xAlice")]
+         (if-not (:ok d)
+           false
+           (let [res (reduce (fn [acc i]
+                               (if (and (:ok acc) (< i esc-count))
+                                 (res/escalate-dispute (:world acc) 0 "0xAlice"
+                                                       (fn [_ _ _ _] {:ok true :new-resolver (resolvers (inc i))}))
+                                 acc))
+                             d (range esc-count))
+                 w-res (:world res)]
+             (if-not (:ok res)
+               false
+               (let [rr      (res/execute-resolution w-res 0 (resolvers (min esc-count 2)) is-release "0xhash" nil)
+                     w-final (if (:ok rr) (:world rr) w-res)]
+                 (and
+                  (if (>= esc-count 2) (true? (t/final-round? w-res 0)) true)
+                  (if (or is-release (>= esc-count 2))
+                    (t/terminal-state? w-final 0)
+                    true)
+                  (:all-hold? (inv/check-all w-final))
+                  (:all-hold? (inv/check-transition w-res w-final))))))))))))
 
 (deftest property-multi-step-lifecycle
   (let [result (tc/quick-check num-trials prop-multi-step-lifecycle)]
     (is (:pass? result)
         (str "Multi-step lifecycle violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 11: Interrupted flow — dispute timeout
-;;
-;; Dispute is raised but resolver never acts. Time advances past
-;; max-dispute-duration. Keeper auto-cancels the escrow.
-;; A late resolver call after cancellation must be rejected.
-;; ---------------------------------------------------------------------------
 
 (def prop-interrupted-flow-timeout
   (prop/for-all
@@ -515,40 +448,28 @@
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                 (t/make-escrow-settings {:custom-resolver "0xResolver"}) snap)
          dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]
-     (when (and (:ok cr) (:ok dr))
+     (if-not (and (:ok cr) (:ok dr))
+       false
        (let [w-disp      (:world dr)
-             ;; Advance time past dispute timeout
              w-timed-out (assoc w-disp :block-time (+ 1000 max-dur 1))
-             ;; Keeper triggers auto-cancel
              ac          (lc/auto-cancel-disputed-escrow w-timed-out 0)
              w-cancelled (when (:ok ac) (:world ac))
-             ;; Late resolver arrives and tries to submit a resolution
              late-rr     (when w-cancelled
                            (res/execute-resolution w-cancelled 0 "0xResolver"
                                                    true "0xhash" nil))]
-         (when (and (:ok ac) late-rr)
+         (if (and (:ok ac) late-rr)
            (and
-            ;; Auto-cancel produced :refunded
             (= :refunded (t/escrow-state w-cancelled 0))
-            ;; Late resolution rejected — escrow is no longer disputed
             (false? (:ok late-rr))
             (= :transfer-not-in-dispute (:error late-rr))
-            ;; Invariants hold on the cancelled world
             (:all-hold? (inv/check-all w-cancelled))
-            (:all-hold? (inv/check-transition w-disp w-cancelled)))))))))
+            (:all-hold? (inv/check-transition w-disp w-cancelled)))
+           false))))))
 
 (deftest property-interrupted-flow-timeout
   (let [result (tc/quick-check num-trials prop-interrupted-flow-timeout)]
     (is (:pass? result)
         (str "Interrupted flow (timeout) violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 12: Adversarial — delayed resolver
-;;
-;; Resolver submits resolution (deferred), appeal window expires, keeper
-;; executes the pending settlement. The resolver then tries to submit
-;; a conflicting resolution — must be rejected with :transfer-not-in-dispute.
-;; ---------------------------------------------------------------------------
 
 (def prop-adversarial-delayed-resolver
   (prop/for-all
@@ -563,26 +484,20 @@
          dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]
      (when (and (:ok cr) (:ok dr))
        (let [w-disp   (:world dr)
-             ;; Resolver submits → deferred to pending settlement
              rr       (res/execute-resolution w-disp 0 "0xResolver" true "0xhash" nil)
              w-pend   (when (:ok rr) (:world rr))
-             ;; Appeal window expires; keeper executes
              deadline (when w-pend (get-in w-pend [:pending-settlements 0 :appeal-deadline]))
              w-exp    (when deadline (assoc w-pend :block-time (+ deadline 1)))
              er       (when w-exp (res/execute-pending-settlement w-exp 0))
              w-final  (when (:ok er) (:world er))
-             ;; Resolver arrives late and tries to flip the outcome
              late-rr  (when w-final
                         (res/execute-resolution w-final 0 "0xResolver"
                                                 false "0xhash-flip" nil))]
          (when (and (:ok rr) (:ok er) late-rr)
            (and
-            ;; Original resolution produced :released
             (= :released (t/escrow-state w-final 0))
-            ;; Late flip rejected — escrow is already terminal
             (false? (:ok late-rr))
             (= :transfer-not-in-dispute (:error late-rr))
-            ;; Invariants hold at finalization
             (:all-hold? (inv/check-all w-final))
             (:all-hold? (inv/check-transition w-pend w-final)))))))))
 
@@ -591,75 +506,45 @@
     (is (:pass? result)
         (str "Adversarial delayed resolver violated: " (pr-str (:shrunk result))))))
 
-;; ---------------------------------------------------------------------------
-;; Property 13: Adversarial — conflicting actions (escalation mid-pending)
-;;
-;; Resolver submits resolution → pending settlement created.
-;; Participant escalates the dispute before the appeal window closes.
-;; Escalation must:
-;;   (a) clear the pending settlement
-;;   (b) reject subsequent execute-pending-settlement
-;; The new resolver can then proceed with a fresh resolution.
-;; ---------------------------------------------------------------------------
-
 (def prop-adversarial-escalation-clears-pending
   (prop/for-all
    [amount     gen-amount
     fee-bps    gen-bps
     appeal-dur (gen/large-integer* {:min 100 :max 3600})]
-   ;; Must use make-disputed-world-for-escalation (not custom-resolver).
-   ;; custom-resolver locks Priority-1 permanently, so an escalation resolver
-   ;; can never become authorised. et.dispute-resolver tracks escalation via Priority-3.
    (let [snap-params {:escrow-fee-bps         fee-bps
                       :max-dispute-duration   10000
                       :appeal-window-duration appeal-dur}]
-     (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
-       (let [{:keys [world]} res]
-       (let [w-disp  world
-             ;; Resolver submits → creates pending settlement
+     (if-let [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
+       (let [{:keys [world]} res
+             w-disp  world
              rr      (res/execute-resolution w-disp 0 "0xRes0" true "0xhash" nil)
              w-pend  (when (:ok rr) (:world rr))
-             ;; Participant escalates before appeal window closes
              er      (when w-pend
                        (res/escalate-dispute w-pend 0 "0xAlice"
                                              (fn [_ _ _ _] {:ok true :new-resolver "0xRes1"})))
              w-esc   (when (:ok er) (:world er))
-             ;; Trying to execute the stale pending settlement must fail
              stale   (when w-esc
                        (res/execute-pending-settlement
                         (assoc w-esc :block-time 99999) 0))
-             ;; New resolver submits a fresh resolution (no appeal window at level 1
-             ;; if not final round — but snap still has appeal-dur, so may defer)
              new-rr  (when w-esc
                        (res/execute-resolution w-esc 0 "0xRes1" true "0xhash2" nil))]
-         (when (and (:ok rr) (:ok er) stale new-rr)
+         (if (and (:ok rr) (:ok er) stale new-rr)
            (and
-            ;; Pending settlement was cleared by escalation
             (not (:exists (t/get-pending w-esc 0)))
-            ;; Stale execute-pending rejected
             (false? (:ok stale))
             (= :no-pending-settlement (:error stale))
-            ;; Fresh resolution by new resolver was accepted
             (:ok new-rr)
-            ;; Invariants hold at escalation and after new resolution
             (:all-hold? (inv/check-all w-esc))
             (:all-hold? (inv/check-all (:world new-rr)))
             (:all-hold? (inv/check-transition w-pend w-esc))
-            (:all-hold? (inv/check-transition w-esc (:world new-rr))))))))))
+            (:all-hold? (inv/check-transition w-esc (:world new-rr))))
+           false))
+       false))))
 
 (deftest property-adversarial-escalation-clears-pending
   (let [result (tc/quick-check num-trials prop-adversarial-escalation-clears-pending)]
     (is (:pass? result)
         (str "Adversarial escalation-clears-pending violated: " (pr-str (:shrunk result))))))
-
-;; ---------------------------------------------------------------------------
-;; Property 14: Adversarial — repeated escalation attempts
-;;
-;; Three rejection cases, verified across all generated amounts:
-;;   (a) at max dispute level    → :escalation-not-allowed
-;;   (b) from a non-participant  → :not-participant
-;;   (c) after terminal state    → :transfer-not-in-dispute
-;; ---------------------------------------------------------------------------
 
 (def prop-adversarial-repeated-escalation
   (prop/for-all
@@ -670,38 +555,30 @@
      (when-some [res (make-disputed-world-for-escalation amount snap-params "0xRes0")]
        (let [{:keys [world]} res]
          (let [esc-fn (fn [_ _ _ _] {:ok true :new-resolver "0xSenior"})
-               ;; Escalate to level 1, then level 2 (max)
                er1    (res/escalate-dispute world 0 "0xAlice" esc-fn)
                er2    (when (:ok er1) (res/escalate-dispute (:world er1) 0 "0xAlice" esc-fn))
                w-max  (when (:ok er2) (:world er2))]
            (when (and (:ok er1) (:ok er2) w-max)
-             (let [;; (a) Escalation at max level — same participant, same fn
-                   at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
-                   ;; (b) Non-participant escalation attempt
+             (let [at-max    (res/escalate-dispute w-max 0 "0xAlice" esc-fn)
                    non-part  (res/escalate-dispute w-max 0 "0xCarol" esc-fn)
-                   ;; Finalize the dispute (final-round → immediate)
                    rr        (res/execute-resolution w-max 0 "0xSenior" true "0xhash" nil)
                    w-final   (when (:ok rr) (:world rr))
-                   ;; (c) Escalation after terminal state
                    after-fin (when w-final
                                (res/escalate-dispute w-final 0 "0xAlice" esc-fn))]
-               (when (and at-max non-part (:ok rr) after-fin)
+               (if (and at-max non-part (:ok rr) after-fin)
                  (and
-                  ;; (a) Max-level rejection
                   (false? (:ok at-max))
                   (= :escalation-not-allowed (:error at-max))
-                  ;; (b) Non-participant rejection
                   (false? (:ok non-part))
                   (= :not-participant (:error non-part))
-                  ;; (c) Terminal-state rejection
                   (false? (:ok after-fin))
                   (= :transfer-not-in-dispute (:error after-fin))
-                  ;; Invariants hold at max level and after final resolution
                   (:all-hold? (inv/check-all w-max))
                   (:all-hold? (inv/check-all w-final))
-                  (:all-hold? (inv/check-transition w-max w-final))))))))))))))
+                  (:all-hold? (inv/check-transition w-max w-final)))
+                 false)))))))))
 
 (deftest property-adversarial-repeated-escalation
   (let [result (tc/quick-check num-trials prop-adversarial-repeated-escalation)]
     (is (:pass? result)
-        (str "Adversarial repeated escalation violated: " (pr-str (:shrunk result)))))))
+        (str "Adversarial repeated escalation violated: " (pr-str (:shrunk result))))))

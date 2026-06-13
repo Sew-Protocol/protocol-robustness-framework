@@ -3,6 +3,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.scenario.schema-profile :as schema-profile]))
 
 (def evidence-semantics-path "docs/generated/evidence-semantics.md")
@@ -97,7 +98,7 @@
                  (catch Exception _ nil))))))
 
 (defn- load-coverage []
-  (json/read-str (slurp "results/test-artifacts/coverage.json") :key-fn keyword))
+  (json/read-str (slurp (evcfg/artifact-path :coverage)) :key-fn keyword))
 
 (defn- read-json-file [path]
   (when (.exists (io/file path))
@@ -230,20 +231,20 @@
                          " | " hc " |\n")))))))
 
 (defn- evidence-artifact-contract-md []
-  (let [summary (read-json-file "results/test-artifacts/test-summary.json")
-        coverage (read-json-file "results/test-artifacts/coverage.json")
-        findings (read-json-file "results/test-artifacts/findings.json")
-        issues (read-json-file "results/test-artifacts/issues.json")
+  (let [summary (read-json-file (evcfg/artifact-path :test-summary))
+        coverage (read-json-file (evcfg/artifact-path :coverage))
+        findings (read-json-file (evcfg/artifact-path :findings))
+        issues (read-json-file (evcfg/artifact-path :issues))
         cdrs-trace-schema (read-json-file "spec/cdrs-trace-v0.2.schema.json")
         cdrs-event-schema (read-json-file "spec/cdrs-event-v0.2.schema.json")]
     (str "# Evidence Artifact Contract (Generated)\n\n"
-         "Source of truth: current emitted artifacts under `results/test-artifacts`, CDRS schemas under `spec/`, and semantic registry hash.\n\n"
+         (str "Source of truth: current emitted artifacts under `" (evcfg/artifact-dir) "`, CDRS schemas under `spec/`, and semantic registry hash.\n\n")
          "Definitions hash: `" (defs/definitions-hash) "`\n\n"
          "## Canonical Artifact Set\n\n"
-         "- `results/test-artifacts/test-summary.json`\n"
-         "- `results/test-artifacts/coverage.json`\n"
-         "- `results/test-artifacts/findings.json`\n"
-         "- `results/test-artifacts/issues.json`\n\n"
+         (str "- `" (evcfg/artifact-path :test-summary) "`\n"
+              "- `" (evcfg/artifact-path :coverage) "`\n"
+              "- `" (evcfg/artifact-path :findings) "`\n"
+              "- `" (evcfg/artifact-path :issues) "`\n\n")
          "## Required Provenance Fields (run-level)\n\n"
          "- `run_id` / `run.id`\n"
          "- `git_sha` where available\n"

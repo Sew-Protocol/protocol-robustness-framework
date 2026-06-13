@@ -12,6 +12,7 @@
 
    This namespace is pure — no I/O, no DB, no side effects."
    (:require [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.scenario.projection :as proj]
              [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
              [resolver-sim.protocols.sew.invariants :as inv]
@@ -232,7 +233,7 @@
      :haircut-total (reduce + 0 (map #(long (get % :haircut-amount 0)) rows))
      :reasons reasons
      :positions (mapv position-projection-fields positions)
-     :rounding-policy "floor-to-asset-decimals.v1"}))
+           :rounding-policy (evcfg/rounding-policy)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew trace-end projection

@@ -14,12 +14,13 @@
   (:require [resolver-sim.notebooks.manifest.loader :as loader]
             [resolver-sim.notebooks.manifest.publication :as pub]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [resolver-sim.evidence.config :as evcfg]))
 
-(def ^:private latest-dir "results/test-artifacts")
+(def ^:private latest-dir (evcfg/artifact-dir))
 
 (defn- write-sig! [dir result]
-  (let [f (io/file dir "signature.json")]
+  (let [f (io/file dir (evcfg/artifact-file :signature))]
     (.mkdirs (io/file dir))
     (spit f (json/write-str result {:indent true}))
     (.getPath f)))

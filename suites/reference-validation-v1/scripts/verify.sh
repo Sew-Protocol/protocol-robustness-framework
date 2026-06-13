@@ -129,7 +129,8 @@ python3 "$REPO_ROOT/scripts/write_scenario_run_manifest.py" \
     --registry-level CORE || true
 # ── Artifact Registry Orphan Audit ──────────────────────────────────────
 echo "Running orphan audit on evidence bundle..."
-REGISTRY="results/test-artifacts/test-artifacts.json"
+ARTIFACT_DIR="$(python3 -c "from scripts.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
+REGISTRY="$ARTIFACT_DIR/test-artifacts.json"
 python3 "$REPO_ROOT/scripts/verify_artifact_registry.py" "$REGISTRY" || true
 
 # ── Evidence Binding/Signing ──────────────────────────────────────────

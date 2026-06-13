@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Validate test artifact registry integrity + schema compatibility."""
+"""Validate test artifact registry integrity + schema compatibility.
+
+Reads canonical evidence chain configuration from config/evidence.json.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +11,8 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+
+from evidence_config import EvidenceConfig
 
 
 def sha256_file(path: Path) -> str:
@@ -35,7 +40,7 @@ def validate_schema_const(doc: dict, expected: str, label: str):
 
 def validate_claimable_v2_integrity(claim: dict, raw_text: str) -> None:
     """Evidence-integrity checks for claimable-classification.v2 terminal observations."""
-    if claim.get("schema_version") != "claimable-classification.v2":
+    if claim.get("schema_version") != cfg.schema("claimable-classification"):
         return
 
     classes = claim.get("classes") or {}
@@ -58,7 +63,6 @@ def validate_claimable_v2_integrity(claim: dict, raw_text: str) -> None:
     # Raw JSON must not contain duplicate keys in by_token (parser keeps last only).
     if '"by_token"' in raw_text:
         import re
-
         blocks = re.findall(r'"by_token"\s*:\s*\{([^}]*)\}', raw_text, re.DOTALL)
         for block in blocks:
             token_keys = re.findall(r'"([A-Za-z0-9_-]+)"\s*:\s*\{', block)
@@ -88,11 +92,12 @@ def validate_claimable_v2_integrity(claim: dict, raw_text: str) -> None:
 
 
 def main() -> int:
+    cfg = EvidenceConfig()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--registry", default="results/test-artifacts/test-artifacts.json")
-    ap.add_argument("--run-manifest", default="results/test-artifacts/test-run.json")
-    ap.add_argument("--summary", default="results/test-artifacts/test-summary.json")
-    ap.add_argument("--claimable", default="results/test-artifacts/claimable-classification.json")
+    ap.add_argument("--registry", default=f"{cfg.artifact_dir}/test-artifacts.json")
+    ap.add_argument("--run-manifest", default=cfg.artifact_path("test-run"))
+    ap.add_argument("--summary", default=cfg.artifact_path("test-summary"))
+    ap.add_argument("--claimable", default=cfg.artifact_path("claimable-classification"))
     args = ap.parse_args()
 
     registry_p = Path(args.registry)
@@ -110,12 +115,13 @@ def main() -> int:
     claim_raw = claim_p.read_text()
     claim = json.loads(claim_raw)
 
-    validate_schema_const(registry, "test-artifacts.v1", "test-artifacts")
-    validate_schema_const(run, "test-run.v1", "test-run")
-    validate_schema_const(summary, "test-summary.v2", "test-summary")
+    validate_schema_const(registry, cfg.schema("test-artifacts"), "test-artifacts")
+    validate_schema_const(run, cfg.schema("test-run"), "test-run")
+    validate_schema_const(summary, cfg.schema("test-summary"), "test-summary")
     claim_schema = claim.get("schema_version")
-    if claim_schema not in ("claimable-classification.v1", "claimable-classification.v2"):
-        fail(f"claimable-classification schema_version must be v1 or v2, got {claim_schema!r}")
+    allowed_claim_schemas = [cfg.schema("claimable-classification")]
+    if claim_schema not in allowed_claim_schemas:
+        fail(f"claimable-classification schema_version must be {allowed_claim_schemas}, got {claim_schema!r}")
     obs_status = claim.get("observations_status")
     if obs_status and obs_status not in (
         "taxonomy-only",
@@ -160,8 +166,8 @@ def main() -> int:
     # Compatibility assertions
     ts = by_id["test-summary"]
     iv = ts.get("input_versions") or {}
-    if iv.get("test_run") != "test-run.v1":
-        fail("test-summary input_versions.test_run must be test-run.v1")
+    if iv.get("test_run") != cfg.schema("test-run"):
+        fail(f"test-summary input_versions.test_run must be {cfg.schema('test-run')}")
     if ts.get("schema_version") != summary.get("schema_version"):
         fail("test-summary schema_version mismatch between registry and file")
 
@@ -169,8 +175,8 @@ def main() -> int:
     for k in ("shortfall_related_scenarios", "partial_liquidity_enabled_scenarios", "rounding_policy"):
         if k not in shortfall_exposure:
             fail(f"test-summary missing shortfall_exposure.{k}")
-    if shortfall_exposure.get("rounding_policy") != "floor-to-asset-decimals.v1":
-        fail("test-summary shortfall_exposure.rounding_policy must be floor-to-asset-decimals.v1")
+    if shortfall_exposure.get("rounding_policy") != cfg.rounding_policy:
+        fail(f"test-summary shortfall_exposure.rounding_policy must be {cfg.rounding_policy}")
 
     cc = by_id["claimable-classification"]
     if cc.get("schema_version") != claim.get("schema_version"):
@@ -179,8 +185,8 @@ def main() -> int:
     for k in ("mode", "allocation", "rounding_policy"):
         if k not in sp:
             fail(f"claimable-classification missing shortfall_policy.{k}")
-    if sp.get("rounding_policy") != "floor-to-asset-decimals.v1":
-        fail("claimable-classification shortfall_policy.rounding_policy must be floor-to-asset-decimals.v1")
+    if sp.get("rounding_policy") != cfg.rounding_policy:
+        fail(f"claimable-classification shortfall_policy.rounding_policy must be {cfg.rounding_policy}")
 
     validate_claimable_v2_integrity(claim, claim_raw)
 

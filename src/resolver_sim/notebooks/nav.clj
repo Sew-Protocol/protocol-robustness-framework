@@ -11,6 +11,7 @@
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.common :as common]))
 
 ;; ── registry loading ──────────────────────────────────────────────────────────
@@ -63,9 +64,9 @@
 ;; ── quick stats from artifacts ────────────────────────────────────────────────
 
 (defn- artifact-stats []
-  (let [findings     (common/read-json "results/test-artifacts/findings.json")
-        issues       (common/read-json "results/test-artifacts/issues.json")
-        test-run     (common/read-json "results/test-artifacts/test-run.json")
+  (let [findings     (common/read-json (evcfg/artifact-path :findings))
+        issues       (common/read-json (evcfg/artifact-path :issues))
+        test-run     (common/read-json (evcfg/artifact-path :test-run))
         registry     (load-registry)
         all-nb       (:notebooks registry)
         verified     (count (filter #(= :verified (:status %)) all-nb))

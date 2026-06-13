@@ -3,6 +3,8 @@
 Write lightweight run-manifest artifacts for a bb scenario:run,
 scenario:run:family, or evidence:build invocation.
 
+Reads canonical evidence chain configuration from config/evidence.json.
+
 Produces into results/test-artifacts/:
   test-run.json                 schema: test-run.v1
   test-summary.json             schema: test-summary.v2
@@ -24,25 +26,10 @@ import subprocess
 import sys
 import tempfile
 
+from evidence_config import EvidenceConfig
+
 SCENARIOS_DIR = pathlib.Path("scenarios")
 
-# Schema versions definition
-ARTIFACT_SCHEMAS = {
-    "test-summary": "test-summary.v2",
-    "test-run": "test-run.v1",
-    "claimable-classification": "claimable-classification.v2",
-    "scenario-result": "scenario-result.v1",
-    "coverage": "coverage.v1",
-    "findings": "findings.v1",
-    "issues": "issues.v1",
-    "telemetry": "telemetry.v1",
-    "mc-summary": "mc-summary.v1",
-    "mc-failures": "mc-failures.v1",
-    "theory-eval": "theory-eval.v1",
-    "signature": "signature.v1",
-    "envelope": "envelope.v1",
-    "event-evidence": "event-evidence.v1"
-}
 
 # ── file helpers ──────────────────────────────────────────────────────────────
 
@@ -80,30 +67,28 @@ def artifact_meta(path: pathlib.Path) -> dict | None:
     }
 
 def mk_artifact_entry(
+    cfg: EvidenceConfig,
     aid: str,
-    kind: str,
-    path_s: str,
-    schema_version: str,
-    producer: str,
-    verifies_against: list,
-    importance: str = "CORE",
-    input_dependencies: list | None = None,
+    path_s: str | None,
 ) -> dict | None:
+    a = cfg.artifact(aid)
+    if not a or not path_s:
+        return None
     p = pathlib.Path(path_s)
     m = artifact_meta(p)
     if not m:
         return None
     return {
         "id": aid,
-        "kind": kind,
-        "path": path_s,
-        "importance": importance,
-        "schema_version": schema_version,
-        "contract_version": "evidence-contract.v1",
-        "producer": producer,
-        "verifies_against": verifies_against,
-        "dependencies": [], # populated later
-        "input_dependencies": input_dependencies or [],
+        "kind": a["kind"],
+        "path": str(p),
+        "importance": a["importance"],
+        "schema_version": cfg.schema(a["schema_key"]),
+        "contract_version": cfg.contract_version,
+        "producer": cfg.producer(a["producer_key"]),
+        "verifies_against": list(a.get("verifies_against", [])),
+        "dependencies": [],
+        "input_dependencies": list(a.get("input_dependencies", [])),
         **m,
     }
 
@@ -128,6 +113,7 @@ def make_scenario_slug(scenario_path: str | None, suite: str) -> str:
 
 def write_artifacts_to(
     artifact_dir: pathlib.Path,
+    cfg: EvidenceConfig,
     args: argparse.Namespace,
     run_id: str,
     created_at: str,
@@ -137,13 +123,13 @@ def write_artifacts_to(
     claimable_classification: dict,
 ) -> None:
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    
-    artifact_file     = artifact_dir / "test-summary.json"
-    run_manifest_file = artifact_dir / "test-run.json"
-    claimable_file    = artifact_dir / "claimable-classification.json"
-    registry_file     = artifact_dir / "test-artifacts.json"
-    envelope_file     = artifact_dir / "envelope.json"
-    signature_file    = artifact_dir / "signature.json"
+
+    artifact_file     = artifact_dir / cfg.artifact("test-summary")["file"]
+    run_manifest_file = artifact_dir / cfg.artifact("test-run")["file"]
+    claimable_file    = artifact_dir / cfg.artifact("claimable-classification")["file"]
+    registry_file     = artifact_dir / "test-artifacts.json"  # registry is self-referencing
+    envelope_file     = artifact_dir / cfg.artifact("envelope")["file"]
+    signature_file    = artifact_dir / cfg.artifact("signature")["file"]
 
     # Overwrite protection: If the bundle is already signed, abort.
     # This enforces that once an evidence chain is final, it cannot be changed.
@@ -161,50 +147,66 @@ def write_artifacts_to(
     write_atomic_json(claimable_file, claimable_classification)
 
     # Register all possible artifacts for this run
-    all_potential_entries = [
-        mk_artifact_entry("test-summary", "summary", str(artifact_file), ARTIFACT_SCHEMAS["test-summary"], "summary-emitter.v1", ["test-run.v1", "projection.v1"], "CORE", ["test-run", "scenario-result"]),
-        mk_artifact_entry("test-run", "run-manifest", str(run_manifest_file), ARTIFACT_SCHEMAS["test-run"], "test-run-emitter.v1", [], "CORE", []),
-        mk_artifact_entry("claimable-classification", "classification", str(claimable_file), ARTIFACT_SCHEMAS["claimable-classification"], "claimable-classification-emitter.v2", ["test-run.v1"], "CORE", ["test-run"]),
-        mk_artifact_entry("coverage", "coverage", str(artifact_dir / "coverage.json"), ARTIFACT_SCHEMAS["coverage"], "coverage-emitter.v1", ["scenario.v1"], "DIAGNOSTIC", ["test-summary"]),
-        mk_artifact_entry("findings", "findings", str(artifact_dir / "findings.json"), ARTIFACT_SCHEMAS["findings"], "findings-emitter.v1", ["test-summary.v2"], "DIAGNOSTIC", ["test-summary"]),
-        mk_artifact_entry("issues", "issues", str(artifact_dir / "issues.json"), ARTIFACT_SCHEMAS["issues"], "issues-emitter.v1", ["test-summary.v2"], "DIAGNOSTIC", ["test-summary"]),
-        mk_artifact_entry("telemetry", "telemetry", str(artifact_dir / "telemetry.json"), ARTIFACT_SCHEMAS["telemetry"], "telemetry-emitter.v1", ["test-summary.v2"], "DIAGNOSTIC", ["test-summary"]),
-        mk_artifact_entry("mc-summary", "mc-summary", str(artifact_dir / "batch-summary.json"), ARTIFACT_SCHEMAS["mc-summary"], "mc-emitter.v1", ["test-summary.v2"], "CORE", ["test-summary"]),
-        mk_artifact_entry("mc-failures", "mc-failures", str(artifact_dir / "failure-examples.json"), ARTIFACT_SCHEMAS["mc-failures"], "mc-emitter.v1", ["test-summary.v2"], "DIAGNOSTIC", ["test-summary"]),
-        mk_artifact_entry("theory-eval", "theory-eval", str(artifact_dir / "theory-eval.json"), ARTIFACT_SCHEMAS["theory-eval"], "theory-eval-emitter.v1", ["test-summary.v2"], "CORE", ["test-summary"]),
-    ]
+    all_potential_entries = []
+    for aid in cfg.all_artifact_ids:
+        if aid == "scenario-result":
+            continue  # handled below with user-supplied path
+        try:
+            p = cfg.artifact_path(aid)
+        except KeyError:
+            continue
+        e = mk_artifact_entry(cfg, aid, p)
+        if e:
+            all_potential_entries.append(e)
 
     if args.output_file:
-        e = mk_artifact_entry("scenario-result", "scenario-result", args.output_file, ARTIFACT_SCHEMAS["scenario-result"], "evidence-build-emitter.v1", ["test-run.v1"], "CORE", ["test-run"])
-        if e: all_potential_entries.append(e)
+        e = mk_artifact_entry(cfg, "scenario-result", args.output_file)
+        if e:
+            all_potential_entries.append(e)
 
-    for f in ["signature.json", "envelope.json"]:
+    for sid in ("signature", "envelope"):
+        f = cfg.artifact(sid)["file"]
         if (artifact_dir / f).exists():
-            kind = "signature" if "signature" in f else "evidence-envelope"
-            e = mk_artifact_entry(f.split(".")[0], kind, str(artifact_dir / f), ARTIFACT_SCHEMAS[f.split(".")[0]], "evidence-signer.v1", ["test-run.v1"], "CORE", [])
-            if e: all_potential_entries.append(e)
-
-    # Auto-register event evidence
-    event_evidence_dir = artifact_dir / "event-evidence"
-    if event_evidence_dir.exists():
-        for p in event_evidence_dir.glob("*.json"):
-            reason = p.name.split("-")[0]
-            e = mk_artifact_entry(f"event-evidence-{p.stem}", "event-evidence", str(p), ARTIFACT_SCHEMAS["event-evidence"], "simulation-engine.v1", ["test-run.v1"], "CORE", ["test-run"])
+            e = mk_artifact_entry(cfg, sid, str(artifact_dir / f))
             if e:
-                e["evidence_reason"] = reason
                 all_potential_entries.append(e)
 
+    # Auto-register event evidence
+    event_cfg = cfg._data.get("event_evidence", {})
+    event_evidence_dir = artifact_dir / (event_cfg.get("dir") or "event-evidence")
+    if event_evidence_dir.exists():
+        for p in event_evidence_dir.glob("*.json"):
+            m = artifact_meta(p)
+            if not m:
+                continue
+            e = {
+                "id": f"event-evidence-{p.stem}",
+                "kind": event_cfg["kind"],
+                "path": str(p),
+                "importance": event_cfg["importance"],
+                "schema_version": cfg.schema(event_cfg["schema_key"]),
+                "contract_version": cfg.contract_version,
+                "producer": cfg.producer(event_cfg["producer_key"]),
+                "verifies_against": list(event_cfg.get("verifies_against", [])),
+                "dependencies": [],
+                "input_dependencies": list(event_cfg.get("input_dependencies", [])),
+                "evidence_reason": p.name.split("-")[0],
+                **m,
+            }
+            all_potential_entries.append(e)
+
     # Filtering phase
-    importance_map = {"CORE": 0, "DIAGNOSTIC": 1, "TRACE": 2}
-    min_importance = importance_map.get(args.registry_level, 1)
-    
-    # 1. Select root artifacts based on level
-    root_entries = [e for e in all_potential_entries if e and importance_map.get(e.get("importance", "CORE"), 0) <= min_importance]
-    
-    # 2. Compute transitive closure of dependencies
+    imp_map = cfg.importance_map
+    min_importance = imp_map.get(args.registry_level, 1)
+
+    root_entries = [
+        e for e in all_potential_entries if e
+        and imp_map.get(e.get("importance", "CORE"), 1) <= min_importance
+    ]
+
     registered_entries = {e["id"]: e for e in root_entries}
     to_resolve = list(root_entries)
-    
+
     while to_resolve:
         curr = to_resolve.pop()
         for dep_id in curr.get("input_dependencies", []):
@@ -218,7 +220,6 @@ def write_artifacts_to(
 
     final_entries = list(registered_entries.values())
 
-    # 3. Final dependency resolution (id -> sha256 binding)
     for entry in final_entries:
         entry["dependencies"] = []
         for dep_id in entry.get("input_dependencies", []):
@@ -229,25 +230,30 @@ def write_artifacts_to(
             del entry["input_dependencies"]
 
     registry = {
-        "schema_version":   "test-artifacts.v1.1",
-        "contract_version": "evidence-contract.v1",
+        "schema_version":   cfg.schema("test-artifacts"),
+        "contract_version": cfg.contract_version,
         "run_id":           run_id,
         "generated_at":     created_at,
         "generator":        {"name": "artifact-registry-emitter", "version": "v1.1"},
         "root_dir":         str(artifact_dir),
-        "artifacts":        final_entries
+        "artifacts":        final_entries,
     }
     write_atomic_json(registry_file, registry)
 
+
 def main() -> int:
+    cfg = EvidenceConfig()
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenario", default="unknown")
     ap.add_argument("--suite", default="unknown")
     ap.add_argument("--status", default="unknown")
     ap.add_argument("--duration-ms", type=int, default=0)
     ap.add_argument("--output-file")
-    ap.add_argument("--artifact-dir", default="results/test-artifacts")
-    ap.add_argument("--registry-level", default="DIAGNOSTIC", choices=["CORE", "DIAGNOSTIC", "TRACE"])
+    ap.add_argument("--artifact-dir", default=cfg.artifact_dir)
+    ap.add_argument(
+        "--registry-level", default="DIAGNOSTIC",
+        choices=list(cfg.importance_map.keys()),
+    )
     ap.add_argument("--risk-digest-file")
     ap.add_argument("--long-horizon-meta-file")
     ap.add_argument("--target-log-csv")
@@ -257,27 +263,29 @@ def main() -> int:
     run_id     = now.strftime("%Y%m%d-%H%M%S")
     created_at = now.isoformat()
     git_info   = get_git_info()
-    
-    # Mock data for demonstration of unification logic
+
     summary = {
-        "schema_version": "test-summary.v2",
+        "schema_version": cfg.schema("test-summary"),
         "run_id": run_id,
         "overall_status": args.status,
-        "risk_digest": {} # In reality, populated from risk-digest-file
+        "risk_digest": {},
     }
     run_manifest = {
-        "schema_version": "test-run.v1",
+        "schema_version": cfg.schema("test-run"),
         "run_id": run_id,
-        "framework": {"name": "sew-simulation-test-runner", "version": "0.1.0"}
+        "framework": dict(cfg.framework),
     }
-    claimable = {"schema_version": "claimable-classification.v2", "run_id": run_id}
+    claimable = {
+        "schema_version": cfg.schema("claimable-classification"),
+        "run_id": run_id,
+    }
 
-    per_run_dir = pathlib.Path("results/runs") / f"{make_scenario_slug(args.scenario, args.suite)}-{run_id}"
-    write_artifacts_to(per_run_dir, args, run_id, created_at, git_info, summary, run_manifest, claimable)
-    
-    # Symlink logic omitted for brevity in hardening pass
+    per_run_dir = pathlib.Path(cfg._data.get("runs_root", "results/runs")) / f"{make_scenario_slug(args.scenario, args.suite)}-{run_id}"
+    write_artifacts_to(per_run_dir, cfg, args, run_id, created_at, git_info, summary, run_manifest, claimable)
+
     print(f"[artifact-registry] Emitted v1.1 to {per_run_dir}")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

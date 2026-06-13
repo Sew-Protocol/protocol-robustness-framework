@@ -1,5 +1,5 @@
 (ns resolver-sim.yield.risk-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is]]
             [resolver-sim.yield.risk :as risk]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.model :as model]

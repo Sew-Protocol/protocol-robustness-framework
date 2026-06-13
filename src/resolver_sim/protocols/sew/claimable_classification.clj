@@ -33,19 +33,20 @@
    invariants, and optional end-of-run observed balances."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.projection :as proj]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.yield.accounting :as yield-acct]))
 
-(def schema-version "claimable-classification.v2")
-(def classifier-version "claimable-classification-emitter.v2.1")
+(def schema-version (evcfg/schema :claimable-classification))
+(def classifier-version (evcfg/producer :claimable-classification-classifier))
 
 (def shortfall-policy
   {:mode "partial-liquidity-supported"
    :allocation "fulfilled-plus-deferred"
-   :rounding_policy "floor-to-asset-decimals.v1"})
+   :rounding_policy (evcfg/rounding-policy)})
 
 (def deferred-amount-semantics
   "Deferred shortfall / yield fulfillment is tracked off current pull-claimable balance until claimed.")

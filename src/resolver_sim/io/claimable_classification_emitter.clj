@@ -4,10 +4,11 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.string :as str]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.scenario-runner :as scenario-runner]
             [resolver-sim.protocols.sew.claimable-classification :as cc]))
 
-(def producer-id "claimable-classification-emitter.v2")
+(def producer-id (evcfg/producer :claimable-classification))
 
 (defn- write-json! [path doc]
   (let [f (io/file path)]
@@ -131,7 +132,7 @@
 
 (defn -main
   [& args]
-  (let [output-path (or (first args) "results/test-artifacts/claimable-classification.json")
+  (let [output-path (or (first args) (evcfg/artifact-path :claimable-classification))
         mode        (second args)]
     (case mode
       "taxonomy-only"

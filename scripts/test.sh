@@ -30,7 +30,7 @@ cd "$(dirname "$0")/.."
 
 MODE="${1:-all}"
 FAILURES=0
-ARTIFACT_DIR="results/test-artifacts"
+ARTIFACT_DIR="$(python3 -c "from scripts.evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_dir)" 2>/dev/null)" || ARTIFACT_DIR="results/test-artifacts"
 ARTIFACT_FILE="$ARTIFACT_DIR/test-summary.json"
 RUN_MANIFEST_FILE="$ARTIFACT_DIR/test-run.json"
 ARTIFACT_REGISTRY_FILE="$ARTIFACT_DIR/test-artifacts.json"
@@ -502,6 +502,7 @@ run_routed_suites() {
       results (map (fn [id] [id (f/run-suite id :verify nil verify-opts)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
+    (f/emit-suite-result suite-id result)
     (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
     (when-not (:ok? result)
       (doseq [r (:results result)]
@@ -528,6 +529,7 @@ run_dr3_coverage() {
   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [r (f/run-suite :suites/dr3-critical)]
+  (f/emit-suite-result :suites/dr3-critical r)
   (println (str :suites/dr3-critical \" → \" (if (:ok? r) \"PASS\" \"FAIL\")))
   (when-not (:ok? r)
     (doseq [x (:results r)]
@@ -579,6 +581,7 @@ run_equivalence_new() {
       results (map (fn [id] [id (f/run-suite id)]) suites)
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
+    (f/emit-suite-result suite-id result)
     (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
     (when-not (:ok? result)
       (doseq [r (:results result)]
@@ -586,10 +589,11 @@ run_equivalence_new() {
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
 
+  _eq_out=$(python3 -c "from evidence_config import EvidenceConfig; c=EvidenceConfig(); print(c.artifact_path('equivalence-summary'))")
   python3 python/equivalence_pair_diff.py \
     --traces-dir data/fixtures/traces \
-    --out results/test-artifacts/equivalence-comparison-summary.json \
-    --replay-dir results/test-artifacts/equivalence-pairs || true
+    --out "$_eq_out" \
+    --replay-dir "$ARTIFACT_DIR/equivalence-pairs" || true
 
   return $?
 }
@@ -689,7 +693,8 @@ run_coverage_gates() {
   require_clojure || return $?
   echo "Running transition/guard coverage report + gates..."
   mkdir -p "$ARTIFACT_DIR"
-  clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$ARTIFACT_DIR/coverage.json" || return $?
+  _cov_out=$(python3 -c "from evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_path('coverage'))" 2>/dev/null) || _cov_out="$ARTIFACT_DIR/coverage.json"
+  clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$_cov_out" || return $?
   python - <<PY
 import json, sys
 from pathlib import Path
@@ -1058,8 +1063,14 @@ esac
 
 if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
   emit_claimable_classification || true
+  if ls results/test-artifacts/suite-*.json >/dev/null 2>&1; then
+    python3 scripts/emit_validation_root.py --input-dir results/test-artifacts --output-dir results/test-artifacts
+  fi
   python - <<PY
-import csv, json, pathlib, datetime, subprocess
+import csv, json, pathlib, datetime, subprocess, sys
+sys.path.insert(0, "scripts")
+from evidence_config import EvidenceConfig
+_cfg = EvidenceConfig()
 csv_path = pathlib.Path("$ARTIFACT_DIR/.targets-${RUN_ID}.csv")
 risk_path = pathlib.Path("$ARTIFACT_DIR/.risk-${RUN_ID}.lines")
 lh_meta_path = pathlib.Path("$ARTIFACT_DIR/.long-horizon-${RUN_ID}.meta")
@@ -1125,7 +1136,7 @@ else:
     decision = "REJECTED"
 
 out = {
-  "schema_version": "test-summary.v2",
+  "schema_version": _cfg.schema("test-summary"),
   "run_id": "$RUN_ID",
   "mode": "$MODE",
   "overall_status": overall,
@@ -1224,18 +1235,18 @@ if claimable_path.exists():
   claimable_classification = json.loads(claimable_path.read_text())
 else:
   claimable_classification = {
-    "schema_version": "claimable-classification.v2",
+    "schema_version": _cfg.schema("claimable-classification"),
     "observations_status": "taxonomy-only",
     "shortfall_policy": {
       "mode": "partial-liquidity-supported",
       "allocation": "fulfilled-plus-deferred",
-      "rounding_policy": "floor-to-asset-decimals.v1"
+      "rounding_policy": _cfg.rounding_policy
     },
     "classes": {}
   }
 run_manifest = {
-  "schema_version": "test-run.v1",
-  "contract_version": "evidence-contract.v1",
+  "schema_version": _cfg.schema("test-run"),
+  "contract_version": _cfg.contract_version,
   "produced_by": {
     "name": "test-run-emitter",
     "version": "v1"
@@ -1243,8 +1254,8 @@ run_manifest = {
   "run_id": "$RUN_ID",
   "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
   "framework": {
-    "name": "sew-simulation-test-runner",
-    "version": "0.1.0",
+    "name": _cfg.framework["name"],
+    "version": _cfg.framework["version"],
     "git_commit": None
   },
   "model": {
@@ -1269,9 +1280,9 @@ run_manifest = {
     "test_summary": "$ARTIFACT_FILE",
     "test_artifacts": "$ARTIFACT_REGISTRY_FILE",
     "claimable_classification": "$CLAIMABLE_CLASSIFICATION_FILE",
-    "coverage": "results/test-artifacts/coverage.json",
-    "findings": "results/test-artifacts/findings.json",
-    "issues": "results/test-artifacts/issues.json"
+    "coverage": _cfg.artifact_path("coverage"),
+    "findings": _cfg.artifact_path("findings"),
+    "issues": _cfg.artifact_path("issues")
   }
 }
 
@@ -1291,7 +1302,7 @@ out["yield_context"] = caps["yield"]
 out["shortfall_exposure"] = {
   "shortfall_related_scenarios": caps["yield"].get("shortfall_related_scenarios", 0),
   "partial_liquidity_enabled_scenarios": caps["yield"].get("partial_liquidity_enabled_scenarios", 0),
-  "rounding_policy": "floor-to-asset-decimals.v1"
+  "rounding_policy": _cfg.rounding_policy
 }
 out["claimable_classification"] = {
   "schema_version": claimable_classification["schema_version"],
@@ -1441,31 +1452,45 @@ def artifact_meta(path_s: str):
       "mtime_utc": datetime.datetime.fromtimestamp(st.st_mtime, datetime.timezone.utc).isoformat()
     }
 
-def mk_artifact_entry(aid, kind, path_s, schema_version, producer, verifies_against, input_versions=None):
+def _make_entry_v1(aid, path_s, input_versions=None):
+    a = _cfg.artifact(aid)
+    if not a or not path_s:
+        return None
+    p = pathlib.Path(path_s)
     m = artifact_meta(path_s)
     if not m:
         return None
     return {
       "id": aid,
-      "kind": kind,
-      "path": path_s,
-      "schema_version": schema_version,
-      "contract_version": "evidence-contract.v1",
-      "producer": producer,
-      "verifies_against": verifies_against,
+      "kind": a["kind"],
+      "path": str(p),
+      "schema_version": _cfg.schema(a["schema_key"]),
+      "contract_version": _cfg.contract_version,
+      "producer": _cfg.producer(a["producer_key"]),
+      "verifies_against": list(a.get("verifies_against", [])),
       "input_versions": input_versions or {},
       "sha256": m["sha256"],
       "bytes": m["bytes"],
       "mtime_utc": m["mtime_utc"]
     }
 
+def _input_versions(aid):
+    """Build input_versions dict for v1 registry entries."""
+    iv = {}
+    for dep_id in _cfg.artifact_input_dependencies(aid):
+        dep = _cfg.artifact(dep_id)
+        if dep:
+            dep_schema = _cfg.schema(dep["schema_key"])
+            iv[dep_id.replace("-", "_")] = dep_schema
+    return iv
+
 artifact_registry = {
   "schema_version": "test-artifacts.v1",
-  "contract_version": "evidence-contract.v1",
+  "contract_version": _cfg.contract_version,
   "run_id": "$RUN_ID",
   "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
   "generator": {"name": "artifact-registry-emitter", "version": "v1"},
-  "root_dir": "results/test-artifacts",
+  "root_dir": _cfg.artifact_dir,
   "run_manifest": {
     "path": "$RUN_MANIFEST_FILE",
     "schema_version": run_manifest["schema_version"],
@@ -1476,25 +1501,21 @@ artifact_registry = {
   "artifacts": []
 }
 
-entries = [
-  mk_artifact_entry("test-summary", "summary", "$ARTIFACT_FILE", out.get("schema_version"),
-                    "summary-emitter.v1", ["test-run.v1", "projection.v1"],
-                    {"test_run": "test-run.v1", "projection": "projection.v1", "scenario": "scenario.v1"}),
-  mk_artifact_entry("test-run", "run-manifest", "$RUN_MANIFEST_FILE", run_manifest.get("schema_version"),
-                    "test-run-emitter.v1", [], {}),
-  mk_artifact_entry("claimable-classification", "classification", "$CLAIMABLE_CLASSIFICATION_FILE", claimable_classification.get("schema_version"),
-                    "claimable-classification-emitter.v2", ["test-run.v1"],
-                    {"test_run": "test-run.v1"}),
-  mk_artifact_entry("coverage", "coverage", "results/test-artifacts/coverage.json", "coverage.v1",
-                    "coverage-emitter.v1", ["scenario.v1"],
-                    {"scenario": "scenario.v1"}),
-  mk_artifact_entry("findings", "findings", "results/test-artifacts/findings.json", "findings.v1",
-                    "findings-emitter.v1", ["test-summary.v2"],
-                    {"test_summary": "test-summary.v2"}),
-  mk_artifact_entry("issues", "issues", "results/test-artifacts/issues.json", "issues.v1",
-                    "issues-emitter.v1", ["test-summary.v2"],
-                    {"test_summary": "test-summary.v2"})
-]
+_v1_aids = ["test-summary", "test-run", "claimable-classification",
+            "validation-root", "coverage", "findings", "issues"]
+_path_map = {
+    "test-summary": "$ARTIFACT_FILE",
+    "test-run": "$RUN_MANIFEST_FILE",
+    "claimable-classification": "$CLAIMABLE_CLASSIFICATION_FILE",
+}
+
+entries = []
+for aid in _v1_aids:
+    path_s = _path_map.get(aid) or _cfg.artifact_path(aid)
+    e = _make_entry_v1(aid, path_s, _input_versions(aid))
+    if e:
+        entries.append(e)
+
 artifact_registry["artifacts"] = [e for e in entries if e is not None]
 pathlib.Path("$ARTIFACT_REGISTRY_FILE").write_text(json.dumps(artifact_registry, indent=2))
 print(f"Wrote machine-readable summary: $ARTIFACT_FILE")

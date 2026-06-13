@@ -13,6 +13,9 @@ import pathlib
 import sys
 import subprocess
 
+from evidence_config import EvidenceConfig
+_cfg = EvidenceConfig()
+
 def sha256_data(data: str) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 

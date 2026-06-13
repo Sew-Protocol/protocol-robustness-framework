@@ -29,12 +29,13 @@
   - :epoch-summary: Stats for this epoch
   - :updated-histories: Resolver state after epoch
   - :governance-state: Updated pending/resolved slashes
-  - :executed-slashes: Slashes that executed this epoch"
-  [rng epoch resolver-histories n-trials params governance-state]
+  - :executed-slashes: Slashes that executed this epoch
+  - :next-id: Tracker for new resolver IDs"
+  [rng epoch resolver-histories n-trials params governance-state next-id]
   (let [;; Step 1: Execute any pending slashes whose governance window closed
         {:keys [pending-state executable-slashes slashes-still-pending]}
         (gov-delay/process-governance-approvals governance-state epoch)
-        [rng-batch rng-events] (rng/split-rng rng)
+        [rng-batch rng-events rng-decay] (rng/split-rng rng)
         
         ;; Get set of frozen resolvers (those with pending slashes)
         frozen-resolver-ids (set (map :resolver-id slashes-still-pending))
@@ -77,8 +78,6 @@
          :frozen-resolvers (count frozen-resolver-ids)}
         
         ;; Update resolver histories
-        ;; Resolvers with pending slashes don't receive new assignments
-        ;; So their profit is reduced (or zero if fully frozen)
         updated-histories
         (let [honest-mean (:honest-mean batch-result)
               malice-mean (:malice-mean batch-result)
@@ -90,8 +89,6 @@
                              is-honest? (= strategy :honest)
                              is-frozen? (contains? frozen-resolver-ids id)
                              
-                             ;; If resolver is frozen, they get zero assignments this epoch
-                             ;; (governance window is preventing new assignments)
                              resolver-profit (if is-frozen?
                                              0.0  ; Frozen = zero profit this epoch
                                              (if is-honest?
@@ -114,10 +111,11 @@
                      {} resolver-histories))
         
         ;; Apply population decay
-        decayed-histories (rep/apply-epoch-decay updated-histories epoch params)]
+        decay-result (rep/apply-epoch-decay updated-histories epoch params rng-decay next-id)]
     
     {:epoch-summary epoch-summary
-     :updated-histories decayed-histories
+     :histories (:histories decay-result)
+     :next-id (:next-id decay-result)
      :governance-state new-pending
      :executed-slashes executable-slashes}))
 
@@ -154,9 +152,10 @@
                   (let [[rng-1 rng-2] (rng/split-rng (:rng acc))
                         prev-histories (:histories acc initial-histories)
                         prev-gov-state (:gov-state acc initial-gov-state)
+                        prev-next-id   (:next-id acc n-resolvers)
                         
-                        {:keys [epoch-summary updated-histories governance-state executed-slashes]}
-                        (run-single-epoch-with-governance rng-1 epoch-num prev-histories n-trials-per-epoch params prev-gov-state)
+                        {:keys [epoch-summary histories next-id governance-state executed-slashes]}
+                        (run-single-epoch-with-governance rng-1 epoch-num prev-histories n-trials-per-epoch params prev-gov-state prev-next-id)
                         
                         _ (println (format "   Epoch %d: honest=%.0f, frozen=%d, pending=%d, executed=%d"
                                          epoch-num
@@ -168,10 +167,11 @@
                     (assoc acc
                       :rng rng-2
                       :epochs (cons epoch-summary (:epochs acc []))
-                      :histories updated-histories
+                      :histories histories
+                      :next-id next-id
                       :gov-state governance-state
                       :all-executed-slashes (concat executed-slashes (:all-executed-slashes acc [])))))
-                {:rng rng :epochs [] :histories initial-histories :gov-state initial-gov-state :all-executed-slashes []}
+                {:rng rng :epochs [] :histories initial-histories :next-id n-resolvers :gov-state initial-gov-state :all-executed-slashes []}
                 (range 1 (inc n-epochs)))
         
         epoch-results (reverse (:epochs result-accumulator []))

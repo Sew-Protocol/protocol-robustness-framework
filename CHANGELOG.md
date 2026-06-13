@@ -1,6 +1,23 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- **Validation State-Root system:** New `resolver-sim.validation.suite-result` and `resolver-sim.validation.root` namespaces for canonical validation state reduction.
+- **Validation Emitter:** New `scripts/emit_validation_root.py` to aggregate suite results into `validation-root.json`.
+
+### Changed
+- **Test Runner Integration:** Updated `scripts/test.sh` to emit per-suite JSON validation artifacts and run the validation-root emitter.
+- **Artifact Registry:** Updated `scripts/write_scenario_run_manifest.py` and the inlined registry in `scripts/test.sh` to include `validation-root` artifacts.
+
+### Fixed
+- **Data Shape Mismatch:** Corrected `emit-suite-result` in `fixtures.clj` to properly flatten check maps.
+- **Critical Error Detection:** Fixed Python emitter to correctly identify `failed-critical` status.
+- **Test Coverage:** Added comprehensive unit test coverage for validation namespaces.
+- **Workflow Robustness:** Restricted validation root emitter to run only when suite artifacts are present.
+- **Structural Integrity:** Resolved critical arity mismatches in `governance_impact.clj` and state management logic for multi-epoch simulations.
+- **Syntax/Structure:** Fixed unbalanced parentheses and invalid keyword literals across `properties_test.clj`, `theory_test.clj`, and `adversarial.clj`.
+- **Linting & Hygiene:** Cleaned up unused namespaces, duplicate requires, and unused bindings across the `resolver-sim` test suite to restore `bb validate` functionality.
+
 ### Notes
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 

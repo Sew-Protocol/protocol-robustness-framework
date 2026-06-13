@@ -10,6 +10,9 @@ import json
 import pathlib
 import sys
 
+from evidence_config import EvidenceConfig
+_cfg = EvidenceConfig()
+
 def sha256_file(path: pathlib.Path) -> str | None:
     if not path.exists():
         return None

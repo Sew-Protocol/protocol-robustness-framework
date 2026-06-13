@@ -1,0 +1,705 @@
+Running structural validation (fmt skipped)...
+dev:0:0: error: file does not exist
+notebooks/demo_adversarial_escalation.clj:54:7: warning: unused binding artifacts
+notebooks/dispute_resolution.clj:30:14: warning: namespace clojure.java.io is required but never used
+notebooks/dispute_resolution.clj:31:14: warning: namespace clojure.edn is required but never used
+notebooks/dispute_resolution.clj:32:14: warning: namespace clojure.data.json is required but never used
+notebooks/dispute_resolution.clj:74:14: warning: duplicate require of resolver_sim.notebooks.speds.data
+notebooks/dispute_resolution.clj:79:14: warning: duplicate require of resolver_sim.notebooks.speds.data
+notebooks/dispute_resolution.clj:85:16: warning: duplicate require of resolver_sim.notebooks.speds.data
+notebooks/dispute_resolution.clj:91:16: warning: duplicate require of resolver_sim.notebooks.speds.data
+notebooks/dispute_resolution.clj:142:9: warning: unused binding state-order
+notebooks/dispute_resolution.clj:143:9: warning: unused binding terminal?
+notebooks/dispute_resolution.clj:156:26: warning: unused binding actor
+notebooks/dispute_resolution.clj:168:15: warning: unused binding label
+notebooks/dispute_resolution.clj:175:13: warning: redundant do
+notebooks/dispute_resolution.clj:320:11: warning: unused binding gate-rag
+notebooks/dispute_resolution.clj:323:7: warning: Unused value
+notebooks/dispute_resolution.clj:581:11: warning: unused binding results
+notebooks/dispute_resolution.clj:661:29: warning: unused binding rag
+notebooks/dispute_resolution.clj:699:11: warning: unused binding adv-results
+notebooks/dispute_resolution.clj:741:34: warning: unused binding type
+notebooks/dispute_resolution.clj:741:63: warning: unused binding traits
+notebooks/dispute_resolution.clj:741:85: warning: unused binding r
+notebooks/dispute_resolution.clj:1118:14: info: Single argument to str already is a string
+notebooks/dispute_resolution.clj:1145:11: warning: unused binding results
+notebooks/dispute_resolution.clj:1146:11: warning: unused binding pass-n
+notebooks/dispute_resolution.clj:1147:11: warning: unused binding total-n
+notebooks/dispute_resolution.clj:1390:11: warning: unused binding gate-rag
+notebooks/equilibrium_artifact.clj:3:14: warning: namespace clojure.string is required but never used
+notebooks/equilibrium_artifact.clj:4:14: warning: namespace resolver-sim.notebooks.common is required but never used
+notebooks/evidence_explorer.clj:3:14: warning: namespace clojure.string is required but never used
+notebooks/game_theory_artifact.clj:3:14: warning: namespace clojure.string is required but never used
+notebooks/game_theory_artifact.clj:4:14: warning: namespace resolver-sim.notebooks.common is required but never used
+notebooks/hardening_artifact.clj:3:14: warning: namespace clojure.string is required but never used
+notebooks/hardening_artifact.clj:4:14: warning: namespace resolver-sim.notebooks.common is required but never used
+notebooks/not_governance.clj:14:14: warning: namespace resolver-sim.sim.fixtures is required but never used
+notebooks/partial_liquidity_recovery_deferred_claim.clj:15:8: warning: Unused private var notebooks.partial-liquidity-recovery-deferred-claim/kv-table
+notebooks/partial_liquidity_recovery_deferred_claim.clj:63:8: warning: Unused private var notebooks.partial-liquidity-recovery-deferred-claim/outcome-by
+notebooks/protocol_provenance.clj:19:14: warning: namespace resolver-sim.notebooks.manifest.publication is required but never used
+notebooks/protocol_provenance.clj:206:21: warning: Single arg use of or always returns the arg itself
+notebooks/protocol_provenance.clj:320:11: warning: unused binding cx
+notebooks/protocol_provenance.clj:340:32: warning: unused binding xm
+notebooks/report.clj:29:14: warning: namespace clojure.data.json is required but never used
+notebooks/report.clj:411:11: warning: unused binding priority-ids
+notebooks/security_validation.clj:25:14: warning: namespace clojure.data.json is required but never used
+notebooks/security_validation.clj:28:14: warning: namespace resolver-sim.notebooks.common is required but never used
+notebooks/telemetry.clj:62:12: warning: Unresolved namespace clojure.set. Are you missing a require?
+notebooks/util/yield_demo.clj:15:14: warning: namespace clojure.string is required but never used
+notebooks/util/yield_demo.clj:83:13: warning: unused binding positions
+notebooks/util/yield_demo.clj:103:9: warning: Redundant let expression.
+notebooks/util/yield_demo.clj:158:13: warning: Redundant let expression.
+notebooks/util/yield_demo.clj:238:9: warning: unused binding users
+notebooks/withdrawal_observatory.clj:3:14: warning: namespace clojure.string is required but never used
+notebooks/withdrawal_observatory.clj:4:14: warning: namespace resolver-sim.notebooks.common is required but never used
+notebooks/workbench.clj:8:14: warning: namespace resolver-sim.notebooks.ui is required but never used
+notebooks/workbench_production.clj:3:14: warning: namespace resolver_sim.notebooks.speds.core is required but never used
+notebooks/workbench_production.clj:5:14: warning: namespace resolver_sim.notebooks.speds.story is required but never used
+notebooks/workbench_production.clj:6:14: warning: namespace resolver_sim.notebooks.speds.tokens is required but never used
+notebooks/workbench_production.clj:18:9: warning: unused binding scenarios
+notebooks/workbench_v2.clj:103:9: warning: unused binding git-sha
+notebooks/yield_demo.clj:5:14: warning: namespace clojure.string is required but never used
+notebooks/yield_demo.clj:6:14: warning: namespace resolver-sim.notebooks.yield-scenarios is required but never used
+notebooks/yield_demo.clj:80:9: warning: unused binding status
+notebooks/yield_demo.clj:110:9: warning: unused binding pass?
+notebooks/yield_shortfall_analysis.clj:7:14: warning: namespace resolver-sim.yield.accounting is required but never used
+notebooks/yield_shortfall_partial_withdrawal_fills.clj:91:7: warning: unused binding s
+src/notebooks/serve.clj:9:16: warning: unused binding args
+src/resolver_sim/adversaries/strategy.clj:28:4: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:76:19: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:79:25: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:82:23: warning: unused binding attack-type
+src/resolver_sim/adversaries/strategy.clj:82:35: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:104:25: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:133:25: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:153:22: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:166:25: warning: unused binding params
+src/resolver_sim/adversaries/strategy.clj:174:35: warning: unused binding params
+src/resolver_sim/benchmark/hashing.clj:3:14: warning: namespace clojure.edn is required but never used
+src/resolver_sim/benchmark/registry.clj:4:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/benchmark/repo.clj:6:26: warning: unused binding err
+src/resolver_sim/benchmark/repo.clj:15:25: warning: unused binding path
+src/resolver_sim/benchmark/runner.clj:7:14: warning: namespace resolver-sim.protocols.registry is required but never used
+src/resolver_sim/benchmark/runner.clj:38:25: warning: unused binding benchmark
+src/resolver_sim/benchmark/sharing.clj:3:14: warning: namespace resolver-sim.benchmark.hashing is required but never used
+src/resolver_sim/benchmark/sharing.clj:68:26: warning: unused binding out
+src/resolver_sim/benchmark/sharing.clj:76:26: warning: unused binding err
+src/resolver_sim/benchmark/signing.clj:5:14: warning: namespace clojure.java.io is required but never used
+src/resolver_sim/benchmark/signing.clj:10:32: warning: Unused import StringReader
+src/resolver_sim/cartesi/handler.clj:115:16: warning: unused binding args
+src/resolver_sim/contract_model/replay.clj:13:15: warning: namespace clojure.string is required but never used
+src/resolver_sim/contract_model/replay.clj:16:15: warning: namespace resolver-sim.logging is required but never used
+src/resolver_sim/contract_model/replay.clj:17:15: warning: namespace resolver-sim.definitions.registry is required but never used
+src/resolver_sim/contract_model/replay.clj:18:15: warning: namespace resolver-sim.scenario.schema-profile is required but never used
+src/resolver_sim/contract_model/replay.clj:23:15: warning: duplicate require of resolver-sim.contract-model.replay.validation
+src/resolver_sim/contract_model/replay.clj:23:65: error: Conflicting alias for resolver-sim.contract-model.replay.validation
+src/resolver_sim/contract_model/replay.clj:29:16: warning: namespace resolver-sim.time.model is required but never used
+src/resolver_sim/contract_model/replay.clj:38:8: warning: Unused private var resolver-sim.contract-model.replay/kw->json-key
+src/resolver_sim/contract_model/replay.clj:39:8: warning: Unused private var resolver-sim.contract-model.replay/kw-val->str
+src/resolver_sim/contract_model/replay.clj:75:8: warning: Unused private var resolver-sim.contract-model.replay/normalize-error-value
+src/resolver_sim/contract_model/replay.clj:77:8: warning: Unused private var resolver-sim.contract-model.replay/rejected-entry-key
+src/resolver_sim/contract_model/replay.clj:100:8: warning: Unused private var resolver-sim.contract-model.replay/metric-key
+src/resolver_sim/contract_model/replay.clj:101:8: warning: Unused private var resolver-sim.contract-model.replay/falsifies-if-metric-refs
+src/resolver_sim/contract_model/replay.clj:102:8: warning: Unused private var resolver-sim.contract-model.replay/theory-metric-scope
+src/resolver_sim/contract_model/replay.clj:209:9: warning: Redundant let expression.
+src/resolver_sim/contract_model/replay/validation.clj:45:10: warning: unused binding known-ids
+src/resolver_sim/contract_model/replay/yield.clj:132:21: warning: unused binding ok?
+src/resolver_sim/core/cli.clj:81:9: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/core/phases.clj:13:14: warning: namespace resolver-sim.io.params is required but never used
+src/resolver_sim/core/phases.clj:164:31: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/core/phases.clj:503:29: warning: unused binding p
+src/resolver_sim/core/phases.clj:505:29: warning: unused binding p
+src/resolver_sim/core/phases.clj:507:29: warning: unused binding p
+src/resolver_sim/core/phases.clj:509:29: warning: unused binding p
+src/resolver_sim/db/sew.clj:62:21: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/db/store.clj:161:31: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/financial/finality.clj:15:14: warning: namespace resolver-sim.protocols.sew.resolution is required but never used
+src/resolver_sim/financial/finality.clj:58:8: warning: Unused private var resolver-sim.financial.finality/phase-ordinal
+src/resolver_sim/financial/finality.clj:75:9: warning: unused binding has-pos?
+src/resolver_sim/financial/loss.clj:23:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+src/resolver_sim/financial/loss.clj:31:8: warning: Unused private var resolver-sim.financial.loss/loss-ordinal
+src/resolver_sim/financial/solvency.clj:35:14: warning: namespace resolver-sim.financial.finality is required but never used
+src/resolver_sim/financial/solvency.clj:86:8: info: Single argument to str already is a string
+src/resolver_sim/generators/yield/core.clj:52:4: warning: unused binding token
+src/resolver_sim/generators/yield/scenario.clj:74:13: warning: #'clojure.test.check.generators/pos-int is deprecated since 0.10.0
+src/resolver_sim/governance/rules.clj:40:26: warning: unused binding epoch
+src/resolver_sim/governance/rules.clj:40:32: warning: unused binding rules
+src/resolver_sim/governance/rules.clj:40:38: warning: unused binding params
+src/resolver_sim/governance/rules.clj:42:37: warning: unused binding new-rules
+src/resolver_sim/governance/rules.clj:42:47: warning: unused binding params
+src/resolver_sim/governance/rules.clj:44:26: warning: unused binding params
+src/resolver_sim/governance/rules.clj:61:32: warning: unused binding current-rules
+src/resolver_sim/governance/rules.clj:61:46: warning: unused binding params
+src/resolver_sim/governance/rules.clj:63:27: warning: unused binding old-rules
+src/resolver_sim/governance/rules.clj:127:4: warning: unused binding old-rules
+src/resolver_sim/io/diff.clj:7:8: warning: Unused private var resolver-sim.io.diff/world-at-step
+src/resolver_sim/io/phase_z_persist.clj:10:17: warning: unused binding store-dir
+src/resolver_sim/io/results.clj:39:19: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/io/scenario_export.clj:5:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/io/scenario_fixture_sync.clj:5:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/io/serialization.clj:43:18: warning: unused binding this
+src/resolver_sim/io/trace_store.clj:59:13: warning: unused binding scored-result
+src/resolver_sim/notebooks/manifest/dag.clj:39:33: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/notebooks/manifest/publication.clj:11:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/notebooks/nav.clj:11:14: warning: namespace clojure.java.io is required but never used
+src/resolver_sim/notebooks/nav.clj:12:14: warning: namespace clojure.edn is required but never used
+src/resolver_sim/notebooks/nav.clj:128:12: warning: unused binding id
+src/resolver_sim/notebooks/nav.clj:128:34: warning: unused binding categories
+src/resolver_sim/notebooks/nav.clj:128:66: warning: unused binding tags
+src/resolver_sim/notebooks/security.clj:243:3: warning: Misplaced docstring.
+src/resolver_sim/notebooks/security.clj:276:54: warning: unused binding confidence
+src/resolver_sim/notebooks/shortfall_fairness.clj:7:14: warning: namespace clojure.pprint is required but never used
+src/resolver_sim/notebooks/shortfall_fairness.clj:10:14: warning: namespace resolver-sim.yield.risk is required but never used
+src/resolver_sim/notebooks/shortfall_fairness.clj:81:9: warning: unused binding ms
+src/resolver_sim/notebooks/shortfall_fairness.clj:197:17: warning: unused binding holds?
+src/resolver_sim/notebooks/shortfall_fairness.clj:198:17: warning: unused binding holds?
+src/resolver_sim/notebooks/shortfall_fairness.clj:215:9: warning: unused binding events
+src/resolver_sim/notebooks/speds/config.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.config
+src/resolver_sim/notebooks/speds/core.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.core
+src/resolver_sim/notebooks/speds/core.clj:117:12: warning: unused binding title
+src/resolver_sim/notebooks/speds/core.clj:117:25: warning: unused binding status-badge
+src/resolver_sim/notebooks/speds/core.clj:117:63: warning: unused binding content-class
+src/resolver_sim/notebooks/speds/data.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.data
+src/resolver_sim/notebooks/speds/data.clj:197:34: warning: unused binding artifacts
+src/resolver_sim/notebooks/speds/data.clj:231:18: warning: unused binding ds
+src/resolver_sim/notebooks/speds/findings.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.findings
+src/resolver_sim/notebooks/speds/findings.clj:100:23: error: Expected: set or nil, received: seq.
+src/resolver_sim/notebooks/speds/findings.clj:100:33: error: Expected: set or nil, received: seq.
+src/resolver_sim/notebooks/speds/findings.clj:235:27: warning: unused binding artifacts
+src/resolver_sim/notebooks/speds/findings.clj:392:21: warning: Unresolved namespace clojure.java.io. Are you missing a require?
+src/resolver_sim/notebooks/speds/issues.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.issues
+src/resolver_sim/notebooks/speds/issues.clj:21:8: warning: Unused private var resolver_sim.notebooks.speds.issues/purpose->family
+src/resolver_sim/notebooks/speds/issues.clj:24:8: warning: Unused private var resolver_sim.notebooks.speds.issues/status-kind
+src/resolver_sim/notebooks/speds/issues.clj:35:8: warning: Unused private var resolver_sim.notebooks.speds.issues/severity
+src/resolver_sim/notebooks/speds/issues.clj:43:8: warning: Unused private var resolver_sim.notebooks.speds.issues/priority
+src/resolver_sim/notebooks/speds/issues.clj:147:21: warning: Unresolved namespace clojure.java.io. Are you missing a require?
+src/resolver_sim/notebooks/speds/semantics.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.semantics
+src/resolver_sim/notebooks/speds/semantics.clj:12:8: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/notebooks/speds/story.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.story
+src/resolver_sim/notebooks/speds/story.clj:265:25: warning: unused binding coverage
+src/resolver_sim/notebooks/speds/story.clj:279:8: warning: Unused private var resolver_sim.notebooks.speds.story/family->scenario-id
+src/resolver_sim/notebooks/speds/story.clj:289:23: warning: unused binding issues-path
+src/resolver_sim/notebooks/speds/story.clj:341:26: warning: unused binding summary
+src/resolver_sim/notebooks/speds/story_data.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.story-data
+src/resolver_sim/notebooks/speds/tokens.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.tokens
+src/resolver_sim/notebooks/speds/validation.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.validation
+src/resolver_sim/notebooks/speds/validation.clj:3:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/notebooks/ui.clj:201:9: warning: unused binding registry
+src/resolver_sim/notebooks/yield_provider_demo.clj:4:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/notebooks/yield_provider_demo.clj:5:14: warning: namespace resolver-sim.yield.model is required but never used
+src/resolver_sim/notebooks/yield_scenarios.clj:3:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/notebooks/yield_scenarios.clj:57:8: warning: Unused private var resolver-sim.notebooks.yield-scenarios/action-name
+src/resolver_sim/notebooks/yield_scenarios.clj:153:37: warning: unused binding metrics
+src/resolver_sim/notebooks/yield_scenarios.clj:154:9: warning: unused binding sid
+src/resolver_sim/notebooks/yield_scenarios.clj:191:19: warning: unused binding scenario
+src/resolver_sim/protocols/dummy.clj:23:3: warning: Missing protocol method(s): available-actions, resolve-id-alias, created-id, project-state
+src/resolver_sim/protocols/sew.clj:12:14: warning: namespace resolver-sim.protocols.sew.state-machine is required but never used
+src/resolver_sim/protocols/sew.clj:25:14: warning: namespace resolver-sim.protocols.sew.yield.policy is required but never used
+src/resolver_sim/protocols/sew.clj:426:13: warning: unused binding old-pos
+src/resolver_sim/protocols/sew.clj:496:13: warning: unused binding agent
+src/resolver_sim/protocols/sew.clj:497:9: warning: Redundant let expression.
+src/resolver_sim/protocols/sew.clj:960:34: warning: unused binding result-kw
+src/resolver_sim/protocols/sew.clj:1009:9: warning: redundant do
+src/resolver_sim/protocols/sew.clj:1022:23: warning: unused binding scenario
+src/resolver_sim/protocols/sew/accounting.clj:138:12: warning: unused binding domains
+src/resolver_sim/protocols/sew/advisory.clj:13:14: warning: namespace resolver-sim.protocols.protocol is required but never used
+src/resolver_sim/protocols/sew/claimable_classification.clj:706:10: info: Single argument to str already is a string
+src/resolver_sim/protocols/sew/claimable_classification.clj:738:21: warning: unused binding scope
+src/resolver_sim/protocols/sew/claimable_classification.clj:806:7: warning: Missing else branch.
+src/resolver_sim/protocols/sew/claimable_classification.clj:807:9: warning: Missing else branch.
+src/resolver_sim/protocols/sew/equilibrium.clj:211:44: info: Single argument to str already is a string
+src/resolver_sim/protocols/sew/equilibrium.clj:256:30: warning: unused binding regret-table
+src/resolver_sim/protocols/sew/equilibrium.clj:257:17: warning: unused binding continuation-policy
+src/resolver_sim/protocols/sew/equilibrium.clj:257:37: warning: unused binding replay-boundary
+src/resolver_sim/protocols/sew/equilibrium.clj:257:53: warning: unused binding utility-spec
+src/resolver_sim/protocols/sew/equilibrium.clj:259:71: warning: unused binding not-checkable-nodes
+src/resolver_sim/protocols/sew/equilibrium.clj:261:17: warning: unused binding class-counts
+src/resolver_sim/protocols/sew/equilibrium.clj:261:30: warning: unused binding exceed-epsilon-count
+src/resolver_sim/protocols/sew/equilibrium.clj:261:51: warning: unused binding memoization
+src/resolver_sim/protocols/sew/equilibrium.clj:261:63: warning: unused binding regret-distribution
+src/resolver_sim/protocols/sew/equilibrium.clj:262:17: warning: unused binding max-deviation-depth
+src/resolver_sim/protocols/sew/equilibrium.clj:262:37: warning: unused binding mean-regret
+src/resolver_sim/protocols/sew/equilibrium.clj:313:30: warning: unused binding regret-table
+src/resolver_sim/protocols/sew/equilibrium.clj:314:17: warning: unused binding continuation-policy
+src/resolver_sim/protocols/sew/equilibrium.clj:314:37: warning: unused binding replay-boundary
+src/resolver_sim/protocols/sew/equilibrium.clj:314:53: warning: unused binding utility-spec
+src/resolver_sim/protocols/sew/equilibrium.clj:316:71: warning: unused binding not-checkable-nodes
+src/resolver_sim/protocols/sew/equilibrium.clj:318:17: warning: unused binding class-counts
+src/resolver_sim/protocols/sew/equilibrium.clj:318:30: warning: unused binding exceed-epsilon-count
+src/resolver_sim/protocols/sew/equilibrium.clj:318:51: warning: unused binding memoization
+src/resolver_sim/protocols/sew/equilibrium.clj:318:63: warning: unused binding regret-distribution
+src/resolver_sim/protocols/sew/equilibrium.clj:319:17: warning: unused binding max-deviation-depth
+src/resolver_sim/protocols/sew/equilibrium.clj:319:37: warning: unused binding mean-regret
+src/resolver_sim/protocols/sew/equilibrium.clj:384:17: warning: unused binding continuation-policy
+src/resolver_sim/protocols/sew/equilibrium.clj:384:37: warning: unused binding replay-boundary
+src/resolver_sim/protocols/sew/equilibrium.clj:384:53: warning: unused binding utility-spec
+src/resolver_sim/protocols/sew/equilibrium.clj:386:71: warning: unused binding not-checkable-nodes
+src/resolver_sim/protocols/sew/equilibrium.clj:388:17: warning: unused binding class-counts
+src/resolver_sim/protocols/sew/equilibrium.clj:388:30: warning: unused binding exceed-epsilon-count
+src/resolver_sim/protocols/sew/equilibrium.clj:388:51: warning: unused binding memoization
+src/resolver_sim/protocols/sew/equilibrium.clj:388:63: warning: unused binding regret-distribution
+src/resolver_sim/protocols/sew/equilibrium.clj:389:17: warning: unused binding max-deviation-depth
+src/resolver_sim/protocols/sew/equilibrium.clj:389:37: warning: unused binding mean-regret
+src/resolver_sim/protocols/sew/equilibrium.clj:390:17: warning: unused binding evaluation-mode
+src/resolver_sim/protocols/sew/invariant_scenarios/adversarial.clj:2:75: warning: use alias or :refer [appeal dr3 kleros-appeal stake-cascade]
+src/resolver_sim/protocols/sew/invariant_scenarios/baseline.clj:2:75: warning: use alias or :refer [appeal dr3 dr3-module ieo ieo-timeout kleros kleros-appeal kleros-create-escrow-event timeout]
+src/resolver_sim/protocols/sew/invariant_scenarios/extended.clj:2:75: warning: use alias or :refer [appeal dr3 ieo kleros kleros-appeal timeout]
+src/resolver_sim/protocols/sew/invariant_scenarios/forking_strategist.clj:15:22: warning: unused binding wf
+src/resolver_sim/protocols/sew/invariant_scenarios/gaps.clj:6:75: warning: use alias or :refer [appeal-60 dr3 dr3-module kleros-appeal scenario-author]
+src/resolver_sim/protocols/sew/invariant_scenarios/reversal.clj:3:75: warning: use alias or :refer [kleros-appeal scenario-author]
+src/resolver_sim/protocols/sew/invariants.clj:23:14: warning: namespace resolver-sim.time.model is required but never used
+src/resolver_sim/protocols/sew/invariants.clj:35:14: warning: namespace resolver-sim.util.attribution is required but never used
+src/resolver_sim/protocols/sew/invariants.clj:963:21: warning: unused binding delta-claimable-net
+src/resolver_sim/protocols/sew/invariants/accounting.clj:2:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+src/resolver_sim/protocols/sew/invariants/accounting.clj:4:8: warning: Unused private var resolver-sim.protocols.sew.invariants.accounting/sum-tokens
+src/resolver_sim/protocols/sew/invariants/solvency.clj:17:22: warning: unused binding agent
+src/resolver_sim/protocols/sew/invariants/solvency.clj:74:37: info: Redundant nested call: +
+src/resolver_sim/protocols/sew/io/trace_export.clj:17:14: warning: namespace resolver-sim.protocols.sew.diff is required but never used
+src/resolver_sim/protocols/sew/io/trace_export.clj:18:14: warning: namespace resolver-sim.contract-model.replay is required but never used
+src/resolver_sim/protocols/sew/io/trace_export.clj:52:8: warning: Unused private var resolver-sim.protocols.sew.io.trace-export/kw-val->str
+src/resolver_sim/protocols/sew/io/trace_export.clj:65:21: warning: unused binding token-sym
+src/resolver_sim/protocols/sew/io/trace_export.clj:265:10: warning: unused binding prev-proj
+src/resolver_sim/protocols/sew/io/trace_export.clj:375:5: warning: Redundant let expression.
+src/resolver_sim/protocols/sew/lifecycle.clj:23:14: warning: namespace resolver-sim.yield.expectations is required but never used
+src/resolver_sim/protocols/sew/lifecycle.clj:57:8: warning: Unused private var resolver-sim.protocols.sew.lifecycle/resolver-available?
+src/resolver_sim/protocols/sew/lifecycle.clj:287:7: warning: Redundant let expression.
+src/resolver_sim/protocols/sew/lifecycle.clj:546:11: warning: unused binding token
+src/resolver_sim/protocols/sew/narrative.clj:43:25: warning: unused binding world
+src/resolver_sim/protocols/sew/narrative.clj:80:38: warning: unused binding result
+src/resolver_sim/protocols/sew/narrative.clj:201:10: warning: unused binding agents-by-id
+src/resolver_sim/protocols/sew/projection.clj:21:16: warning: namespace resolver-sim.yield.accounting is required but never used
+src/resolver_sim/protocols/sew/projection.clj:22:16: warning: namespace resolver-sim.yield.risk is required but never used
+src/resolver_sim/protocols/sew/projection.clj:163:3: warning: Misplaced docstring.
+src/resolver_sim/protocols/sew/projection.clj:163:3: warning: Unused value: "Derive shortfall-effect from shortfall data."
+src/resolver_sim/protocols/sew/projection.clj:387:9: warning: Redundant let expression.
+src/resolver_sim/protocols/sew/research_models/bribery_markets.clj:10:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/protocols/sew/research_models/bribery_markets.clj:52:9: warning: unused binding resolver-incentive-to-attack
+src/resolver_sim/protocols/sew/research_models/delegation.clj:47:30: warning: unused binding resolver-id
+src/resolver_sim/protocols/sew/research_models/delegation.clj:135:15: warning: unused binding remaining-slash-2
+src/resolver_sim/protocols/sew/research_models/escalation_economics.clj:12:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/protocols/sew/research_models/escalation_economics.clj:222:4: warning: unused binding dispute-value
+src/resolver_sim/protocols/sew/research_models/evidence_spoofing.clj:12:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/protocols/sew/research_models/evidence_spoofing.clj:148:17: warning: unused binding total-cost
+src/resolver_sim/protocols/sew/research_models/evidence_spoofing.clj:205:34: warning: unused binding evidence-complexity
+src/resolver_sim/protocols/sew/research_models/information_cascade.clj:88:43: warning: unused binding evidence-quality
+src/resolver_sim/protocols/sew/research_models/resolver_ring.clj:15:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/protocols/sew/research_models/resolver_ring.clj:16:14: warning: namespace resolver-sim.stochastic.economics is required but never used
+src/resolver_sim/protocols/sew/resolution.clj:17:14: warning: namespace resolver-sim.protocols.sew.yield.policy is required but never used
+src/resolver_sim/protocols/sew/resolution.clj:19:14: warning: namespace resolver-sim.yield.ops is required but never used
+src/resolver_sim/protocols/sew/resolution.clj:41:4: warning: unused binding slash-id
+src/resolver_sim/protocols/sew/runner.clj:23:14: warning: namespace resolver-sim.protocols.sew.accounting is required but never used
+src/resolver_sim/protocols/sew/runner.clj:24:14: warning: namespace resolver-sim.protocols.sew.authority is required but never used
+src/resolver_sim/protocols/sew/yield/invariants.clj:7:14: warning: unused binding pos
+src/resolver_sim/protocols/sew/yield/policy.clj:46:9: warning: Redundant let expression.
+src/resolver_sim/protocols/sew/yield/risk_policy.clj:3:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+src/resolver_sim/protocols/yield.clj:47:8: warning: Unused private var resolver-sim.protocols.yield/held-balance
+src/resolver_sim/protocols/yield.clj:59:15: warning: unused binding oid
+src/resolver_sim/protocols/yield.clj:189:23: warning: unused binding context
+src/resolver_sim/research/sew/adversarial/advanced_vulnerability.clj:14:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/adversarial/advanced_vulnerability.clj:73:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/adversarial/advanced_vulnerability.clj:128:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/adversarial/ema_convergence.clj:253:26: info: Single argument to str already is a string
+src/resolver_sim/research/sew/adversarial/escalation_trap.clj:210:30: warning: unused binding final-capitals
+src/resolver_sim/research/sew/adversarial/evidence_fog.clj:70:47: warning: unused binding complexity-add
+src/resolver_sim/research/sew/adversarial/fair_slashing.clj:36:12: warning: unused binding appeal-window
+src/resolver_sim/research/sew/adversarial/fair_slashing.clj:101:50: warning: unused binding pass-threshold
+src/resolver_sim/research/sew/adversarial/fair_slashing.clj:103:12: warning: unused default for binding pass-threshold
+src/resolver_sim/research/sew/adversarial/falsification_lite.clj:96:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/adversarial/falsification_lite.clj:135:13: warning: Redundant let expression.
+src/resolver_sim/research/sew/adversarial/falsification_lite.clj:230:18: warning: unused binding params
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:65:9: warning: unused binding config
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:68:23: warning: unused binding trial-idx
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:221:9: warning: unused binding rng
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:224:9: warning: unused binding ground-truth
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:225:9: warning: unused binding difficulty
+src/resolver_sim/research/sew/adversarial/falsification_revised.clj:229:9: warning: unused binding wrong-decision
+src/resolver_sim/research/sew/adversarial/legitimacy_loop.clj:11:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/adversarial/legitimacy_loop.clj:230:4: warning: unused binding params
+src/resolver_sim/research/sew/adversarial/liveness_participation.clj:56:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:99:35: warning: unused binding r
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:272:1: warning: inline def
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:362:1: warning: inline def
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:367:1: warning: inline def
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:425:1: warning: inline def
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:426:15: warning: unused binding disputes-per-epoch
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:432:37: warning: unused binding best-min-leg
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:440:1: warning: inline def
+src/resolver_sim/research/sew/adversarial/trust_floor.clj:503:11: warning: unused binding max-failed-mult
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:17:14: warning: namespace resolver-sim.stochastic.economics is required but never used
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:18:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:63:9: warning: unused binding per-dispute-ev
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:82:30: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:127:26: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:180:34: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:229:37: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:244:41: info: Redundant nested call: *
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:297:23: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj:347:32: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_e_evidence_integrity.clj:37:38: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_e_evidence_integrity.clj:138:28: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_e_evidence_integrity.clj:196:33: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_e_evidence_integrity.clj:312:30: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:17:14: warning: namespace resolver-sim.stochastic.economics is required but never used
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:18:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:41:8: warning: Unused private var resolver-sim.research.sew.analytic.phase-f-economic-parameters/incentive-aligned?
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:48:8: warning: Unused private var resolver-sim.research.sew.analytic.phase-f-economic-parameters/safe-parameter?
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:68:27: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:118:22: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:169:20: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:221:26: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:272:26: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_f_economic_parameters.clj:324:33: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_m_fairness_analysis.clj:15:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/analytic/phase_m_fairness_analysis.clj:28:28: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_m_fairness_analysis.clj:78:37: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_m_fairness_analysis.clj:130:33: warning: unused binding seed
+src/resolver_sim/research/sew/analytic/phase_m_fairness_analysis.clj:193:27: warning: unused binding seed
+src/resolver_sim/research/sew/economic/adaptive_attacker.clj:71:53: warning: unused binding strategy-history
+src/resolver_sim/research/sew/economic/adaptive_attacker.clj:491:6: warning: unused binding args
+src/resolver_sim/research/sew/economic/belief_cascades.clj:110:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/economic/belief_cascades.clj:127:16: warning: unused binding args
+src/resolver_sim/research/sew/economic/burst_concurrency.clj:11:14: warning: namespace clojure.math is required but never used
+src/resolver_sim/research/sew/economic/burst_concurrency.clj:20:15: warning: unused binding n-resolvers
+src/resolver_sim/research/sew/economic/burst_concurrency.clj:27:17: warning: unused binding honest-vote?
+src/resolver_sim/research/sew/economic/burst_concurrency.clj:112:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:10:14: warning: namespace clojure.math is required but never used
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:18:9: warning: unused binding epoch
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:58:21: warning: unused binding n-resolvers
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:58:33: warning: unused binding difficulty-distribution
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:58:57: warning: unused binding n-attacks
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:58:67: warning: unused binding rng
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:59:14: warning: unused binding success-rate
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:83:23: warning: unused binding difficulty-spread
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:83:41: warning: unused binding rho-learning
+src/resolver_sim/research/sew/economic/dispute_clustering.clj:142:5: warning: Redundant let expression.
+src/resolver_sim/research/sew/economic/evidence_fog_lite.clj:11:14: warning: namespace resolver-sim.protocols.sew.accounting is required but never used
+src/resolver_sim/research/sew/economic/evidence_fog_lite.clj:12:14: warning: namespace resolver-sim.protocols.sew.authority is required but never used
+src/resolver_sim/research/sew/economic/evidence_fog_lite.clj:14:14: warning: namespace resolver-sim.stochastic.economics is required but never used
+src/resolver_sim/research/sew/economic/evidence_fog_lite.clj:15:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/research/sew/economic/market_exit.clj:61:27: warning: unused binding r
+src/resolver_sim/research/sew/economic/market_exit.clj:65:27: warning: unused binding exited-count
+src/resolver_sim/research/sew/economic/market_exit.clj:146:44: warning: unused binding rng-scenarios
+src/resolver_sim/research/sew/governance/adversary.clj:93:36: warning: unused binding bias
+src/resolver_sim/research/sew/governance/adversary.clj:128:12: warning: unused binding params
+src/resolver_sim/research/sew/governance/bandwidth_floor.clj:281:39: warning: Unresolved namespace clojure.string. Are you missing a require?
+src/resolver_sim/scenario/equilibrium.clj:108:8: warning: Unused private var resolver-sim.scenario.equilibrium/not-applicable
+src/resolver_sim/scenario/equilibrium_result.clj:6:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/scenario/runner.clj:107:52: warning: Destructured :or refers to binding of same map: scenario
+src/resolver_sim/scenario/subgame_counterfactual.clj:58:16: warning: Unused private var resolver-sim.scenario.subgame-counterfactual/strategic-actions
+src/resolver_sim/scenario/subgame_counterfactual.clj:59:4: warning: Unresolved namespace clojure.set. Are you missing a require?
+src/resolver_sim/scenario/subgame_counterfactual.clj:493:61: warning: unused binding row-ctx
+src/resolver_sim/scenario/subgame_counterfactual.clj:629:38: warning: unused binding threshold
+src/resolver_sim/scenario/subgame_counterfactual.clj:629:48: warning: unused binding exceed-count
+src/resolver_sim/scenario/theory.clj:31:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/scenario/theory.clj:141:36: warning: Unresolved namespace clojure.edn. Are you missing a require?
+src/resolver_sim/scenario/theory_validation.clj:70:7: warning: Unused value: :else
+src/resolver_sim/scenario/theory_validation.clj:73:1: warning: inline def
+src/resolver_sim/scenario/theory_validation.clj:81:1: warning: inline def
+src/resolver_sim/scenario/yield_provider_metrics.clj:6:3: warning: Misplaced docstring.
+src/resolver_sim/scripts/evidence.clj:17:8: warning: Unused private var resolver-sim.scripts.evidence/write-file!
+src/resolver_sim/scripts/sign_manifest.clj:27:1: error: Found an opening ( with no matching )
+src/resolver_sim/scripts/sign_manifest.clj:52:1: error: Expected a ) to match ( from line 27
+src/resolver_sim/scripts/verify_signature.clj:15:9: warning: unused binding registry
+src/resolver_sim/server/grpc.clj:27:70: warning: Unused import StatusException
+src/resolver_sim/server/grpc.clj:192:28: error: Static fields should be referenced without parens unless they are intended as function calls
+src/resolver_sim/sim/adversarial.clj:13:37: warning: unused binding pte
+src/resolver_sim/sim/adversarial.clj:26:22: error: resolver-sim.sim.adversarial/eval-params is called with 3 args but expects 2
+src/resolver_sim/sim/adversarial.clj:51:14: error: resolver-sim.sim.adversarial/eval-params is called with 3 args but expects 2
+src/resolver_sim/sim/adversarial.clj:61:20: error: resolver-sim.sim.adversarial/eval-params is called with 3 args but expects 2
+src/resolver_sim/sim/adversarial.clj:65:20: warning: unused binding pte
+src/resolver_sim/sim/adversarial.clj:131:35: error: resolver-sim.sim.adversarial/eval-params is called with 3 args but expects 2
+src/resolver_sim/sim/adversarial.clj:132:57: error: resolver-sim.sim.adversarial/hill-climb is called with 4 args but expects 3
+src/resolver_sim/sim/adversarial.clj:158:31: warning: unused binding params
+src/resolver_sim/sim/adversarial.clj:158:57: warning: unused binding method
+src/resolver_sim/sim/adversarial/adversarial.clj:1:5: error: Namespace name does not match file name: resolver-sim.sim.adversarial
+src/resolver_sim/sim/adversarial/adversarial.clj:6:1: warning: redefined var #'resolver-sim.sim.adversarial/pte-v1
+src/resolver_sim/sim/adversarial/adversarial.clj:12:1: warning: redefined var #'resolver-sim.sim.adversarial/random-point-constrained
+src/resolver_sim/sim/adversarial/adversarial.clj:12:37: warning: unused binding pte
+src/resolver_sim/sim/adversarial/adversarial.clj:24:1: warning: redefined var #'resolver-sim.sim.adversarial/eval-params
+src/resolver_sim/sim/adversarial/adversarial.clj:37:1: warning: redefined var #'resolver-sim.sim.adversarial/hill-climb
+src/resolver_sim/sim/adversarial/adversarial.clj:53:1: warning: redefined var #'resolver-sim.sim.adversarial/grid-search
+src/resolver_sim/sim/adversarial/adversarial.clj:53:20: warning: unused binding pte
+src/resolver_sim/sim/adversarial/adversarial.clj:61:1: warning: redefined var #'resolver-sim.sim.adversarial/find-flip
+src/resolver_sim/sim/adversarial/adversarial.clj:70:1: warning: redefined var #'resolver-sim.sim.adversarial/run-pte-analysis
+src/resolver_sim/sim/adversarial/adversarial.clj:113:1: warning: redefined var #'resolver-sim.sim.adversarial/run-adversarial-search
+src/resolver_sim/sim/adversarial/adversarial.clj:113:31: warning: unused binding params
+src/resolver_sim/sim/adversarial/adversarial.clj:113:57: warning: unused binding method
+src/resolver_sim/sim/adversarial/reorg_check.clj:14:14: warning: namespace resolver-sim.protocols.sew.runner is required but never used
+src/resolver_sim/sim/adversarial/reorg_check.clj:36:21: warning: unused binding fork-depth
+src/resolver_sim/sim/adversarial/reorg_check.clj:44:9: warning: unused binding world-root
+src/resolver_sim/sim/adversarial/ring_model.clj:184:4: warning: unused binding ring
+src/resolver_sim/sim/audit.clj:19:14: warning: namespace resolver-sim.sim.trajectory is required but never used
+src/resolver_sim/sim/batch.clj:3:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/sim/batch.clj:50:9: warning: unused binding pending-slashed
+src/resolver_sim/sim/batch.clj:51:9: warning: unused binding pending-delay-weeks
+src/resolver_sim/sim/batch_integration.clj:7:14: warning: namespace resolver-sim.adversaries.strategy is required but never used
+src/resolver_sim/sim/batch_integration.clj:67:55: warning: unused binding bribe-cost-ratio
+src/resolver_sim/sim/batch_integration.clj:99:30: warning: unused binding escrow-size
+src/resolver_sim/sim/batch_integration.clj:99:42: warning: unused binding detection-prob
+src/resolver_sim/sim/batch_integration.clj:100:30: warning: unused binding fraud-detection-probability
+src/resolver_sim/sim/batch_integration.clj:108:12: info: Redundant nested call: and
+src/resolver_sim/sim/batch_integration.clj:153:57: warning: unused binding fraud-slash-bps
+src/resolver_sim/sim/capacity_exhaustion.clj:244:9: warning: unused binding n-resolvers
+src/resolver_sim/sim/capacity_exhaustion.clj:251:25: warning: unused binding idx
+src/resolver_sim/sim/capacity_exhaustion.clj:258:31: warning: unused binding res-addr
+src/resolver_sim/sim/capacity_exhaustion.clj:343:20: warning: unused binding r
+src/resolver_sim/sim/common_kwargs.clj:5:14: warning: namespace resolver-sim.stochastic.dispute is required but never used
+src/resolver_sim/sim/fixtures.clj:9:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/sim/fixtures.clj:10:14: warning: namespace clojure.walk is required but never used
+src/resolver_sim/sim/fixtures.clj:181:4: warning: unused binding suite-key
+src/resolver_sim/sim/fixtures.clj:202:4: warning: unused binding suite-key
+src/resolver_sim/sim/governance_delay.clj:92:3: warning: use the idiom (seq x) rather than (not (empty? x))
+src/resolver_sim/sim/governance_delay.clj:115:29: warning: unused binding resolution-fee-per-dispute
+src/resolver_sim/sim/minimizer.clj:145:65: warning: unused binding k
+src/resolver_sim/sim/multi_epoch.clj:250:5: warning: Redundant let expression.
+src/resolver_sim/sim/multi_epoch.clj:266:8: warning: Redundant let expression.
+src/resolver_sim/sim/multi_epoch.clj:325:29: warning: unused binding eh
+src/resolver_sim/sim/reputation.clj:3:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/sim/reputation.clj:98:9: warning: unused binding total-loss
+src/resolver_sim/sim/result_display.clj:125:35: warning: unused binding opts
+src/resolver_sim/sim/stochastic_equilibrium.clj:44:14: warning: namespace clojure.string is required but never used
+src/resolver_sim/sim/stochastic_equilibrium.clj:489:1: warning: redefined var #'resolver-sim.sim.stochastic-equilibrium/evaluators
+src/resolver_sim/sim/stress_propagation.clj:3:14: warning: namespace clojure.set is required but never used
+src/resolver_sim/sim/trajectory.clj:143:15: warning: unused binding ek
+src/resolver_sim/sim/trial_router.clj:372:15: warning: unused binding n-others
+src/resolver_sim/sim/waterfall.clj:31:16: warning: Unused private var resolver-sim.sim.waterfall/junior-per-epoch-cap-ratio
+src/resolver_sim/sim/waterfall.clj:360:29: warning: unused binding senior-bond
+src/resolver_sim/sim/waterfall.clj:435:9: warning: unused binding total-seniors
+src/resolver_sim/sim/waterfall.clj:437:37: warning: unused binding available
+src/resolver_sim/stochastic/decision_quality.clj:209:4: warning: unused binding honest-path
+src/resolver_sim/stochastic/decision_quality.clj:235:44: warning: unused binding corruption-level
+src/resolver_sim/stochastic/decision_quality.clj:278:33: warning: unused binding r2-corrupt?
+src/resolver_sim/stochastic/detection.clj:26:16: warning: Unused private var resolver-sim.stochastic.detection/detection-roll-kinds
+src/resolver_sim/stochastic/detection.clj:222:32: warning: unused binding roll-seq
+src/resolver_sim/stochastic/detection.clj:343:11: warning: unused binding on-exhaustion
+src/resolver_sim/stochastic/detection.clj:477:4: warning: unused binding rng
+src/resolver_sim/stochastic/detection.clj:577:5: warning: Redundant let expression.
+src/resolver_sim/stochastic/difficulty.clj:144:15: warning: unused binding escrow-wei
+src/resolver_sim/stochastic/difficulty.clj:158:4: warning: unused binding num-disputes
+src/resolver_sim/stochastic/difficulty.clj:158:17: warning: unused binding num-attackers
+src/resolver_sim/stochastic/dispute.clj:55:14: warning: unused binding senior-resolver-skill
+src/resolver_sim/stochastic/dispute.clj:55:73: warning: unused binding l2-detection-prob
+src/resolver_sim/stochastic/dispute.clj:58:15: warning: unused binding detection-type
+src/resolver_sim/stochastic/dispute.clj:58:30: warning: unused binding timeout-detection-probability
+src/resolver_sim/stochastic/dispute.clj:58:60: warning: unused binding reversal-detection-probability
+src/resolver_sim/stochastic/dispute.clj:59:16: warning: unused binding fraud-detection-probability
+src/resolver_sim/stochastic/dispute.clj:59:44: warning: unused binding fraud-slash-bps
+src/resolver_sim/stochastic/dispute.clj:59:60: warning: unused binding l2-slash-bps
+src/resolver_sim/stochastic/dispute.clj:59:73: warning: unused binding reversal-slash-bps
+src/resolver_sim/stochastic/dispute.clj:59:92: warning: unused binding timeout-slash-bps
+src/resolver_sim/stochastic/dispute.clj:65:15: warning: unused binding oracle-fixture
+src/resolver_sim/stochastic/dispute.clj:65:30: warning: unused binding oracle-mode
+src/resolver_sim/stochastic/dispute.clj:65:42: warning: unused binding oracle-roll-sequence
+src/resolver_sim/stochastic/dispute.clj:65:63: warning: unused binding oracle-roll-on-exhaustion
+src/resolver_sim/stochastic/dispute.clj:66:16: warning: unused binding fixed-or
+src/resolver_sim/stochastic/dispute.clj:67:12: warning: unused default for binding senior-resolver-skill
+src/resolver_sim/stochastic/dispute.clj:69:12: warning: unused default for binding l2-detection-prob
+src/resolver_sim/stochastic/dispute.clj:76:12: warning: unused default for binding detection-type
+src/resolver_sim/stochastic/dispute.clj:77:12: warning: unused default for binding timeout-detection-probability
+src/resolver_sim/stochastic/dispute.clj:78:12: warning: unused default for binding reversal-detection-probability
+src/resolver_sim/stochastic/dispute.clj:79:12: warning: unused default for binding fraud-detection-probability
+src/resolver_sim/stochastic/dispute.clj:80:13: warning: unused default for binding fraud-slash-bps
+src/resolver_sim/stochastic/dispute.clj:81:13: warning: unused default for binding l2-slash-bps
+src/resolver_sim/stochastic/dispute.clj:82:13: warning: unused default for binding reversal-slash-bps
+src/resolver_sim/stochastic/dispute.clj:83:13: warning: unused default for binding timeout-slash-bps
+src/resolver_sim/stochastic/dispute.clj:84:14: warning: unused default for binding _new-evidence-probability
+src/resolver_sim/stochastic/economics.clj:6:23: warning: Unused import BigDecimal
+src/resolver_sim/stochastic/evidence_costs.clj:12:14: warning: namespace resolver-sim.stochastic.rng is required but never used
+src/resolver_sim/stochastic/evidence_costs.clj:64:4: warning: unused binding rng
+src/resolver_sim/stochastic/evidence_costs.clj:64:17: warning: unused binding difficulty
+src/resolver_sim/yield/accrual.clj:153:10: warning: unused binding module-id
+src/resolver_sim/yield/accrual.clj:450:46: warning: unused binding oid
+src/resolver_sim/yield/accrual.clj:460:52: warning: unused binding oid
+src/resolver_sim/yield/accrual.clj:634:13: warning: unused binding pos-key
+src/resolver_sim/yield/evidence.clj:5:35: warning: unused binding oid
+src/resolver_sim/yield/evidence.clj:47:10: warning: unused binding token
+src/resolver_sim/yield/expectations.clj:3:14: warning: namespace resolver-sim.yield.accounting is required but never used
+src/resolver_sim/yield/invariants.clj:7:8: warning: Unused private var resolver-sim.yield.invariants/inv-result
+src/resolver_sim/yield/invariants.clj:30:21: warning: unused binding sf
+src/resolver_sim/yield/liquidity.clj:5:14: warning: namespace resolver-sim.yield.loss is required but never used
+src/resolver_sim/yield/liquidity.clj:6:14: warning: namespace resolver-sim.yield.accounting is required but never used
+src/resolver_sim/yield/liquidity.clj:54:39: warning: unused binding principal
+src/resolver_sim/yield/market_state.clj:39:5: warning: Redundant let expression.
+src/resolver_sim/yield/market_state.clj:41:43: warning: unused binding e
+src/resolver_sim/yield/market_state.clj:43:45: warning: unused binding e
+src/resolver_sim/yield/market_state.clj:45:45: warning: unused binding e
+src/resolver_sim/yield/market_state.clj:46:7: warning: Redundant let expression.
+src/resolver_sim/yield/market_state.clj:60:39: warning: unused binding e
+src/resolver_sim/yield/modules/adversarial.clj:30:23: warning: unused binding dt
+src/resolver_sim/yield/modules/adversarial.clj:51:35: warning: unused binding module
+src/resolver_sim/yield/modules/fixed.clj:49:29: warning: unused binding module
+src/resolver_sim/yield/modules/liquid_lending.clj:12:14: warning: namespace resolver-sim.yield.model is required but never used
+src/resolver_sim/yield/modules/liquid_lending.clj:19:14: warning: namespace resolver-sim.yield.market-state is required but never used
+src/resolver_sim/yield/modules/liquid_lending.clj:20:14: warning: namespace resolver-sim.util.attribution is required but never used
+src/resolver_sim/yield/ops.clj:3:14: warning: namespace resolver-sim.yield.model is required but never used
+src/resolver_sim/yield/partial_fill.clj:45:8: warning: Unused private var resolver-sim.yield.partial-fill/fill-order-set
+src/resolver_sim/yield/partial_fill.clj:51:8: warning: Unused private var resolver-sim.yield.partial-fill/position-bucket
+src/resolver_sim/yield/partial_fill.clj:62:8: warning: Unused private var resolver-sim.yield.partial-fill/position-bucket-name
+src/resolver_sim/yield/partial_fill.clj:256:41: warning: unused binding opts
+src/resolver_sim/yield/position.clj:65:47: warning: unused binding status
+src/resolver_sim/yield/position.clj:66:45: warning: unused default for binding status
+src/resolver_sim/yield/registry.clj:101:37: warning: unused binding cfg
+src/resolver_sim/yield/registry.clj:184:15: warning: Redundant let expression.
+test/resolver_sim/benchmark/runner_test.clj:8:14: warning: namespace clojure.java.io is required but never used
+test/resolver_sim/benchmark/runner_test.clj:9:14: warning: namespace clojure.edn is required but never used
+test/resolver_sim/benchmark/runner_test.clj:11:14: warning: namespace buddy.core.keys is required but never used
+test/resolver_sim/benchmark/runner_test.clj:12:14: warning: namespace buddy.core.codecs is required but never used
+test/resolver_sim/contract_model/idempotency_test.clj:2:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/contract_model/replay_batch_appeal_test.clj:12:14: warning: namespace resolver-sim.contract-model.replay is required but never used
+test/resolver_sim/contract_model/replay_batch_appeal_test.clj:13:14: warning: namespace resolver-sim.protocols.protocol is required but never used
+test/resolver_sim/contract_model/replay_batch_sew_test.clj:8:14: warning: namespace resolver-sim.contract-model.replay is required but never used
+test/resolver_sim/contract_model/replay_batch_sew_test.clj:9:14: warning: namespace resolver-sim.protocols.protocol is required but never used
+test/resolver_sim/contract_model/replay_flags_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/contract_model/replay_yield_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/core_tests.clj:53:14: warning: unused binding b
+test/resolver_sim/core_tests.clj:56:14: warning: unused binding d
+test/resolver_sim/core_tests.clj:108:7: warning: Redundant let expression.
+test/resolver_sim/db/telemetry_integration_test.clj:68:11: warning: unused binding outcomes
+test/resolver_sim/db/telemetry_test.clj:8:54: warning: #'clojure.test/are is referred but never used
+test/resolver_sim/db/telemetry_test.clj:226:20: warning: Unresolved namespace resolver-sim.protocols.protocol. Are you missing a require?
+test/resolver_sim/delegation_test.clj:82:7: warning: Redundant let expression.
+test/resolver_sim/financial/finality_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/financial/loss_test.clj:5:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/financial/loss_test.clj:10:19: warning: unused binding workflow-id
+test/resolver_sim/financial/solvency_test.clj:9:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/generators/yield_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/generators/yield_test.clj:8:14: warning: namespace resolver-sim.protocols.yield is required but never used
+test/resolver_sim/io/scenario_fixture_parity_test.clj:7:14: warning: namespace resolver-sim.protocols.sew.invariant-scenarios is required but never used
+test/resolver_sim/io/scenario_fixture_parity_test.clj:36:8: warning: Unused private var resolver-sim.io.scenario-fixture-parity-test/scenario-by-id
+test/resolver_sim/notebooks/speds/findings_comparator_test.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.findings-comparator-test
+test/resolver_sim/notebooks/speds/findings_comparator_test.clj:70:15: warning: Unresolved namespace clojure.string. Are you missing a require?
+test/resolver_sim/notebooks/speds/issues_shadow_report_test.clj:1:5: warning: Avoid underscore in namespace name: resolver_sim.notebooks.speds.issues-shadow-report-test
+test/resolver_sim/properties/invariants_test.clj:7:14: warning: namespace resolver-sim.contract-model.replay is required but never used
+test/resolver_sim/protocols/protocol_adapter_test.clj:41:3: warning: Unused value: "Verify protocol satisfaction for tiered interfaces."
+test/resolver_sim/protocols/sew/accounting_test.clj:4:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/protocols/sew/accounting_test.clj:120:3: warning: Unused value: "Manually corrupt total-held to exceed live sum — invariant should catch it."
+test/resolver_sim/protocols/sew/adversarial_test.clj:25:14: warning: namespace resolver-sim.protocols.sew.accounting is required but never used
+test/resolver_sim/protocols/sew/adversarial_test.clj:26:14: warning: namespace resolver-sim.protocols.sew.authority is required but never used
+test/resolver_sim/protocols/sew/adversarial_test.clj:50:8: warning: Unused private var resolver-sim.protocols.sew.adversarial-test/windowed-snap
+test/resolver_sim/protocols/sew/adversarial_test.clj:266:3: warning: Unused value: "Mallory (not from/to) attempts to escalate. Must fail with :not-participant."
+test/resolver_sim/protocols/sew/adversarial_test.clj:293:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/adversarial_test.clj:533:3: warning: Unused value: "Escalate-dispute with nil escalation-fn must fail with :escalation-not-configured."
+test/resolver_sim/protocols/sew/adversarial_test.clj:619:3: warning: Unused value: "create-escrow with amount=0 must fail with :amount-zero."
+test/resolver_sim/protocols/sew/adversarial_test.clj:629:3: warning: Unused value: "create-escrow with amount=-1 must fail with :amount-zero."
+test/resolver_sim/protocols/sew/adversarial_test.clj:657:3: warning: Unused value: "Passing both auto-release-time and auto-cancel-time in settings must fail."
+test/resolver_sim/protocols/sew/adversarial_test.clj:693:23: warning: unused binding wf-id
+test/resolver_sim/protocols/sew/alias_test.clj:4:14: warning: namespace resolver-sim.protocols.protocol is required but never used
+test/resolver_sim/protocols/sew/alias_test.clj:5:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+test/resolver_sim/protocols/sew/authority_test.clj:91:3: warning: Unused value: "Governance changing the module address must NOT affect in-flight escrows."
+test/resolver_sim/protocols/sew/dispute_capacity_test.clj:233:7: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/dispute_capacity_test.clj:244:7: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/governance_test.clj:15:9: warning: unused binding gov
+test/resolver_sim/protocols/sew/idempotence_checklist_test.clj:3:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/protocols/sew/integration_test.clj:6:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/protocols/sew/integration_test.clj:7:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+test/resolver_sim/protocols/sew/integration_test.clj:9:14: warning: namespace resolver-sim.protocols.sew.invariants is required but never used
+test/resolver_sim/protocols/sew/integration_test.clj:16:3: warning: Misplaced docstring.
+test/resolver_sim/protocols/sew/integration_test.clj:16:3: warning: Unused value: "Returns an rng-fn that always produces value v."
+test/resolver_sim/protocols/sew/integration_test.clj:43:3: warning: Unused value: "Malicious resolver: forced wrong verdict + high detection => loss."
+test/resolver_sim/protocols/sew/integration_test.clj:59:3: warning: Unused value: "Malicious resolver: wrong verdict but evades detection."
+test/resolver_sim/protocols/sew/integration_test.clj:69:3: warning: Unused value: "With appeal window set, trial completes without error and invariants hold."
+test/resolver_sim/protocols/sew/integration_test.clj:78:3: warning: Unused value: "Invariants hold for all strategies."
+test/resolver_sim/protocols/sew/integration_test.clj:93:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/integration_test.clj:101:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/integration_test.clj:110:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/integration_test.clj:121:3: warning: Unused value: "When both models agree, divergence? is nil."
+test/resolver_sim/protocols/sew/invariant_registry_test.clj:98:11: warning: unused binding solv1
+test/resolver_sim/protocols/sew/invariants/solvency_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/protocols/sew/lifecycle_test.clj:7:54: warning: #'clojure.test/run-tests is referred but never used
+test/resolver_sim/protocols/sew/lifecycle_test.clj:195:3: warning: Unused value: "Sender sets agree-to-cancel but recipient hasn't yet — no finalisation."
+test/resolver_sim/protocols/sew/lifecycle_test.clj:203:3: warning: Unused value: "Sender and recipient both call cancel — finalises on second call."
+test/resolver_sim/protocols/sew/lifecycle_test.clj:273:3: warning: Unused value: "CRIT-3: must not override a resolver's pending decision."
+test/resolver_sim/protocols/sew/phase_k_test.clj:8:14: warning: namespace resolver-sim.protocols.sew.accounting is required but never used
+test/resolver_sim/protocols/sew/phase_k_test.clj:40:9: warning: unused binding r1
+test/resolver_sim/protocols/sew/phase_m_test.clj:23:9: warning: unused binding net-escrow
+test/resolver_sim/protocols/sew/properties_test.clj:450:1: error: Too many arguments to def
+test/resolver_sim/protocols/sew/properties_test.clj:465:8: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/properties_test.clj:501:1: warning: inline def
+test/resolver_sim/protocols/sew/properties_test.clj:547:1: warning: inline def
+test/resolver_sim/protocols/sew/properties_test.clj:599:1: error: Too many arguments to def
+test/resolver_sim/protocols/sew/properties_test.clj:599:1: error: clojure.core/def is called with 4 args but expects 1, 2 or 3
+test/resolver_sim/protocols/sew/properties_test.clj:599:1: warning: inline def
+test/resolver_sim/protocols/sew/properties_test.clj:612:8: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/properties_test.clj:658:1: warning: inline def
+test/resolver_sim/protocols/sew/properties_test.clj:666:10: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/replay_test.clj:19:14: warning: namespace resolver-sim.protocols.sew.resolution is required but never used
+test/resolver_sim/protocols/sew/replay_test.clj:469:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/replay_test.clj:487:5: warning: Redundant let expression.
+test/resolver_sim/protocols/sew/replay_test.clj:523:10: warning: Unresolved namespace clojure.string. Are you missing a require?
+test/resolver_sim/protocols/sew/replay_test.clj:656:3: warning: Unused value: "Escalation clears a pending settlement; stale execute-pending-settlement is rejected."
+test/resolver_sim/protocols/sew/replay_test.clj:694:3: warning: Unused value: "Attacker (not :from or :to) cannot escalate a dispute."
+test/resolver_sim/protocols/sew/replay_test.clj:721:3: warning: Unused value: "After two escalations (level = max-dispute-level), a third attempt is rejected."
+test/resolver_sim/protocols/sew/replay_test.clj:767:3: warning: Unused value: "First created escrow gets workflow-id 0; subsequent events use integer 0 directly."
+test/resolver_sim/protocols/sew/replay_test.clj:781:3: warning: Unused value: "Two creates produce IDs 0 and 1; operations targeting each work independently."
+test/resolver_sim/protocols/sew/replay_test.clj:811:3: warning: Unused value: "Integer workflow-id 0 is accepted as-is without any transformation."
+test/resolver_sim/protocols/sew/replay_test.clj:947:3: warning: Unused value: "Mirrors S40: keeper settles at 1241, governance executes slash at 1255 (72h freeze)."
+test/resolver_sim/protocols/sew/replay_test.clj:1084:3: warning: Unused value: "Security: only governance may withdraw protocol fees."
+test/resolver_sim/protocols/sew/replay_test.clj:1178:3: warning: Unused value: "Multiple failing invariants in one step each appear in :invariant-results."
+test/resolver_sim/protocols/sew/replay_test.clj:1199:3: warning: Unused value: "When :violations is nil (normal step), :invariant-violations stays zero."
+test/resolver_sim/protocols/sew/replay_test.clj:1213:1: warning: redefined var #'resolver-sim.protocols.sew.replay-test/test-auto-cancel-after-timeout
+test/resolver_sim/protocols/sew/replay_test.clj:1214:3: warning: Unused value: "auto_cancel_disputed succeeds when block-time > dispute-timestamp + max-dispute-duration."
+test/resolver_sim/protocols/sew/require_event_id_test.clj:2:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/protocols/sew/require_event_id_test.clj:6:14: warning: namespace resolver-sim.protocols.sew.compat is required but never used
+test/resolver_sim/protocols/sew/resolution_test.clj:8:14: warning: namespace resolver-sim.protocols.sew.authority is required but never used
+test/resolver_sim/protocols/sew/resolution_test.clj:201:3: warning: Unused value: "Boundary behavior: settlement is executable exactly at t == appeal-deadline."
+test/resolver_sim/protocols/sew/resolution_test.clj:237:3: warning: Unused value: "Superseded fallback must still be single-shot: second keeper execution cannot re-finalize."
+test/resolver_sim/protocols/sew/resolution_test.clj:260:3: warning: Unused value: "Pending settlement ready → executes it first (highest priority)."
+test/resolver_sim/protocols/sew/resolution_test.clj:440:3: warning: Unused value: "After two escalations the level reaches max-dispute-level; a third must be rejected."
+test/resolver_sim/protocols/sew/resolution_test.clj:461:3: warning: Unused value: "At max-dispute-level, resolution is immediate even when appeal-window-duration > 0."
+test/resolver_sim/protocols/sew/resolution_test.clj:478:9: warning: unused binding esc-fn
+test/resolver_sim/protocols/sew/slashing_test.clj:157:13: warning: Unresolved namespace resolver-sim.protocols.sew.invariants. Are you missing a require?
+test/resolver_sim/protocols/sew/slashing_test.clj:206:11: warning: unused binding stake
+test/resolver_sim/protocols/sew/snapshot_boundary_test.clj:5:14: warning: namespace resolver-sim.time.context is required but never used
+test/resolver_sim/protocols/sew/snapshot_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/protocols/sew/state_machine_test.clj:9:54: warning: #'clojure.test/run-tests is referred but never used
+test/resolver_sim/protocols/sew/temporal_boundary_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/protocols/sew/temporal_generator_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/protocols/sew/yield/failure_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/protocols/sew/yield/policy_test.clj:3:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/protocols/sew/yield_reorg_race_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/protocols/sew/yield_solvency_test.clj:3:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/protocols/yield_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/scenario/equilibrium_test.clj:1041:11: warning: unused binding rows
+test/resolver_sim/scenario/expectations_test.clj:41:12: warning: Unresolved namespace clojure.string. Are you missing a require?
+test/resolver_sim/scenario/golden_test.clj:2:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/scenario/golden_test.clj:60:3: warning: Unused value: "Failed golden comparison must be reflected in :pass? at judgement time."
+test/resolver_sim/scenario/theory_test.clj:289:1: warning: redefined var #'resolver-sim.scenario.theory-test/test-before-trace-scope
+test/resolver_sim/scenario/theory_test.clj:301:11: warning: unused binding eval-tree
+test/resolver_sim/scenario/yield_scenario_lint_test.clj:2:46: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/server/session_test.clj:8:65: warning: #'clojure.test/testing is referred but never used
+test/resolver_sim/server/session_test.clj:8:73: warning: #'clojure.test/run-tests is referred but never used
+test/resolver_sim/server/session_test.clj:10:14: warning: namespace resolver-sim.protocols.sew.types is required but never used
+test/resolver_sim/server/session_test.clj:29:8: warning: Unused private var resolver-sim.server.session-test/create-step!
+test/resolver_sim/server/session_test.clj:82:3: warning: Unused value: "Agents with string map keys (from JSON parse) must be normalised."
+test/resolver_sim/server/session_test.clj:124:3: warning: Unused value: "Unknown-agent revert is non-fatal — session remains alive."
+test/resolver_sim/sim/audit_test.clj:10:14: warning: namespace resolver-sim.sim.trajectory is required but never used
+test/resolver_sim/sim/fixtures_mc_batch_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/sim/fixtures_mc_batch_test.clj:44:7: warning: Redundant let expression.
+test/resolver_sim/sim/multi_epoch_test.clj:161:11: warning: unused binding many-resolvers-params
+test/resolver_sim/sim/result_display_test.clj:81:17: warning: Unresolved namespace clojure.string. Are you missing a require?
+test/resolver_sim/sim/step6a_readiness_test.clj:21:14: warning: namespace resolver-sim.io.params is required but never used
+test/resolver_sim/sim/step6a_readiness_test.clj:229:28: warning: Unresolved namespace clojure.string. Are you missing a require?
+test/resolver_sim/sim/waterfall_test.clj:42:29: warning: unused binding seniors
+test/resolver_sim/sim/waterfall_test.clj:101:26: warning: unused binding malicious
+test/resolver_sim/stochastic/calibration_test.clj:356:19: warning: unused binding mean-malice
+test/resolver_sim/stochastic/calibration_test.clj:356:36: warning: unused binding base-r
+test/resolver_sim/stochastic/calibration_test.clj:358:31: warning: unused binding mean-malice-up
+test/resolver_sim/stochastic/detection_test.clj:4:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/stochastic/params_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/stochastic/params_test.clj:4:14: warning: namespace resolver-sim.stochastic.types is required but never used
+test/resolver_sim/time/model_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/validation/root_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/validation/suite_result_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/yield/accounting_test.clj:2:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/yield/accrual_test.clj:3:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/yield/accrual_test.clj:8:14: warning: namespace resolver-sim.util.attribution is required but never used
+test/resolver_sim/yield/accrual_test.clj:50:11: warning: unused binding pos
+test/resolver_sim/yield/accrual_test.clj:378:11: warning: unused binding unfrozen
+test/resolver_sim/yield/exact_math_test.clj:4:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/yield/exact_math_test.clj:153:11: warning: unused binding sum-remainders
+test/resolver_sim/yield/invariants_test.clj:2:34: warning: use alias or :refer [deftest is]
+test/resolver_sim/yield/invariants_test.clj:5:14: warning: namespace resolver-sim.protocols.yield is required but never used
+test/resolver_sim/yield/liquid_lending_v2_test.clj:8:34: warning: use alias or :refer [deftest is testing]
+test/resolver_sim/yield/module_test.clj:2:34: warning: use alias or :refer [deftest is]
+linting took 10558ms, errors: 16, warnings: 678
+Error while executing task: validate

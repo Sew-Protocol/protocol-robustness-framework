@@ -1,7 +1,7 @@
 (ns resolver-sim.yield.partial-fill-test
   "Tests for partial-fill settlement decisions: pro-rata, principal-first,
    waterfall modes, recovery, haircut, and multi-escrow isolation."
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.yield.partial-fill :as pf]
             [resolver-sim.yield.position :as pos]))
 
@@ -36,8 +36,7 @@
     (let [policy {:mode :pro-rata
                   :unrealized-yield-treatment :not-claimable}
           decision (pf/calculate-fulfillment 5350 base-position policy)
-          filled (:filled decision)
-          deferred (:deferred decision)]
+          filled (:filled decision)]
       (is (= :partial-fill (:settlement-mode decision)))
       (is (> (get filled :principal 0) 0) "Principal gets some")
       (is (> (get filled :realized-yield 0) 0) "Realized yield gets some")

@@ -7,10 +7,8 @@
    liquid-lending module."
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.modules.liquid-lending :as ll]
-            [resolver-sim.yield.accrual :as accrual]
             [resolver-sim.yield.partial-fill :as partial-fill]
             [resolver-sim.yield.position :as pos]
-            [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.registry :as reg]
             [resolver-sim.util.attribution :as attr]))
 
@@ -186,7 +184,6 @@
                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
           deposited (ll/deposit world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
           accrued (ll/accrue deposited test-mod {:token "USDC" :dt 31536000})
-          pos-before (get-in accrued [:yield/positions "user1"])
           result (ll/withdraw accrued test-mod {:owner/id "user1"})
           pos (get-in result [:yield/positions "user1"])]
       (is (some #{:withdrawn :unwinding} [(:status pos)])

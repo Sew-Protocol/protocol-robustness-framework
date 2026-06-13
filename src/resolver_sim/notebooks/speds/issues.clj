@@ -4,6 +4,7 @@
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.definitions.registry :as defs]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebooks.common :as common]
             [resolver_sim.notebooks.speds.data :as data]
             [resolver_sim.notebooks.speds.findings :as findings]
@@ -11,8 +12,8 @@
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver_sim.notebooks.speds.config :as config]))
 
-(def issues-path "results/test-artifacts/issues.json")
-(def comparator-shadow-path "results/test-artifacts/comparator-shadow.json")
+(def issues-path (evcfg/artifact-path :issues))
+(def comparator-shadow-path (str (evcfg/artifact-dir) "/comparator-shadow.json"))
 
 (def required-issue-keys
   #{:issue/id :scenario/id :kind :severity :status-kind :title

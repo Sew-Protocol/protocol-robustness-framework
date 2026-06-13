@@ -1,7 +1,8 @@
 (ns resolver-sim.scripts.runner
   "Robust runner for test suites with automated registry emission."
   (:require [clojure.java.shell :as shell]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [resolver-sim.evidence.config :as evcfg]))
 
 (defn- run-suite [suite-cmd]
   (let [result (apply shell/sh suite-cmd)]
@@ -11,7 +12,7 @@
     (= 0 (:exit result))))
 
 (defn emit-registry! [suite status]
-  (let [artifact-dir "results/test-artifacts"
+  (let [artifact-dir (evcfg/artifact-dir)
         ;; Pass diagnostic files if they exist (mimicking test.sh logic)
         risk-file (first (filter #(.exists %) [(io/file artifact-dir "risk-invariants.lines")]))
         cmd ["python3" "scripts/write_scenario_run_manifest.py"

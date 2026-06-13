@@ -17,7 +17,8 @@
 
    Layering: sim/* only. File I/O via resolver-sim.io.audit-outputs."
   (:require [resolver-sim.sim.trajectory :as trajectory]
-            [clojure.string               :as str])
+            [clojure.string               :as str]
+            [resolver-sim.evidence.config :as evcfg])
   (:import [java.security MessageDigest]
            [java.math BigInteger]))
 
@@ -257,20 +258,21 @@
 
    Optional overrides:
      :git-commit   — override auto-detected git SHA
-     :sim-version  — simulator version string (default '0.1.0')
+     :sim-version  — simulator version string (default from evidence config)
 
    Returns a map suitable for writing to EDN alongside results."
   [result params params-file seed & {:keys [git-commit sim-version]}]
-  {:params-file       params-file
-   :params-hash       (params-hash params)
-   :seed              seed
-   :epochs            (:n-epochs result)
-   :trials-per-epoch  (:n-trials-per-epoch result)
-   :initial-resolvers (:initial-resolver-count result)
-   :routing-mode      (-> result :epoch-results first :routing-mode)
-   :git-commit        (or git-commit (git-head-sha))
-   :sim-version       (or sim-version "0.1.0")
-   :completed-at      (str (java.time.Instant/now))})
+  (let [default-version (get (evcfg/framework) "version" "0.1.0")]
+    {:params-file       params-file
+     :params-hash       (params-hash params)
+     :seed              seed
+     :epochs            (:n-epochs result)
+     :trials-per-epoch  (:n-trials-per-epoch result)
+     :initial-resolvers (:initial-resolver-count result)
+     :routing-mode      (-> result :epoch-results first :routing-mode)
+     :git-commit        (or git-commit (git-head-sha))
+     :sim-version       (or sim-version default-version)
+     :completed-at      (str (java.time.Instant/now))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical output writing

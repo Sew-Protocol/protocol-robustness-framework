@@ -9,8 +9,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+try:
+    from evidence_config import EvidenceConfig
+    _cfg = EvidenceConfig()
+except Exception:
+    _cfg = None
 
 from trace_compare import (
     compare_documents,
@@ -197,14 +207,16 @@ def main(argv: list[str] | None = None) -> int:
         default="data/fixtures/traces",
         help="Directory containing *.trace.json fixtures",
     )
+    default_out = _cfg.artifact_path("equivalence-summary") if _cfg else "results/test-artifacts/equivalence-comparison-summary.json"
     parser.add_argument(
         "--out",
-        default="results/test-artifacts/equivalence-comparison-summary.json",
+        default=default_out,
         help="Summary JSON output path",
     )
+    default_replay = str(Path(_cfg.artifact_dir) / "equivalence-pairs") if _cfg else "results/test-artifacts/equivalence-pairs"
     parser.add_argument(
         "--replay-dir",
-        default="results/test-artifacts/equivalence-pairs",
+        default=default_replay,
         help="Directory for per-group replay outputs and comparison reports",
     )
     parser.add_argument(

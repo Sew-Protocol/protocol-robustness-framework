@@ -3,6 +3,7 @@
    Integrates with with-attribution context to bind causal metadata."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.util.attribution :as attr]))
 
 (defn- evidence-filename [attribution reason]
@@ -19,7 +20,7 @@
         requirements (into attr/required-evidence-keys attr/scenario-evidence-keys)
         attr-report  (attr/current-evidence-attribution requirements)
         
-        evidence {:schema_version      "event-evidence/v1"
+        evidence {:schema_version      (evcfg/schema :event-evidence)
                   :evidence/type       :transition-evidence
                   :evidence/reason     reason
                   :attribution         (:attribution attr-report)
@@ -30,7 +31,7 @@
                   :post-state          post
                   :calculation         calc}
         
-        out-dir  "results/test-artifacts/event-evidence"
+        out-dir  (str (evcfg/artifact-dir) "/event-evidence")
         filename (evidence-filename {:attribution/context (:attribution attr-report)} reason)
         f        (io/file out-dir filename)]
     

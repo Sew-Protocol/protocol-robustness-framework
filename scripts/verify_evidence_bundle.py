@@ -13,6 +13,9 @@ import pathlib
 import sys
 import subprocess
 
+from evidence_config import EvidenceConfig
+_cfg = EvidenceConfig()
+
 def sha256_file(path: pathlib.Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -28,8 +31,8 @@ def main():
 
     bundle = pathlib.Path(args.bundle_dir)
     registry_file = bundle / "test-artifacts.json"
-    envelope_file = bundle / "envelope.json"
-    signature_file = bundle / "signature.json"
+    envelope_file = bundle / _cfg.artifact("envelope")["file"]
+    signature_file = bundle / _cfg.artifact("signature")["file"]
 
     # 1. Verify Artifact Registry Integrity
     registry = json.loads(registry_file.read_text())
