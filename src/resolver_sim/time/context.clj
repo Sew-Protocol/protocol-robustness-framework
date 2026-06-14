@@ -26,10 +26,15 @@
   [world]
   (:block-ts (temporal-context world)))
 
-(defn step
-  "Canonical accessor for scenario step."
+(defn now
+  "Alias for canonical block timestamp accessor."
   [world]
-  (:step (temporal-context world)))
+  (block-ts world))
+
+(defn clock-mode
+  "Canonical accessor for clock-mode."
+  [world]
+  (:clock-mode (temporal-context world)))
 
 (defn with-temporal-context
   "Update world with a new temporal context, maintaining legacy :block-time compatibility."

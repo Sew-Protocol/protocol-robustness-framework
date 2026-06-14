@@ -114,7 +114,11 @@
   (testing "Floor helper is deterministic and non-negative"
     (is (= 0 (acct/floor-to-asset-decimals -1.2 6)))
     (is (= 1 (acct/floor-to-asset-decimals 1.9999 6)))
-    (is (= 42 (acct/floor-to-asset-decimals 42 18)))))
+    (is (= 42 (acct/floor-to-asset-decimals 42 18))))
+  (testing "Low-decimal token support (6 decimals)"
+    (is (= 1 (acct/floor-to-asset-decimals 1.234567 6)))
+    (is (= 0 (acct/floor-to-asset-decimals 0.999999 6)))
+    (is (= -1 (acct/floor-to-asset-decimals-signed -1.234567 6)))))
 
 (deftest test-token-decimals-resolution
   (testing "Token decimals resolve from world metadata with fallback"
