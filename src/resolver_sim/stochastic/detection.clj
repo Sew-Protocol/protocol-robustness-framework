@@ -87,6 +87,9 @@
         on-unknown-roll-kind (or (:on-unknown-roll-kind fixture) :throw)
         rolls (or (:rolls fixture) legacy-rolls [])]
     {:mode mode
+     :fixture-mode (case mode
+                     :fixed-roll-sequence (if (map? rolls) :per-kind :shared-stream)
+                     :none)
      :scope scope
      :on-exhaustion on-exhaustion
      :on-unknown-roll-kind on-unknown-roll-kind
@@ -111,9 +114,18 @@
 
    Throws ex-info on invalid :scope, unknown per-kind roll keys, empty fixed rolls,
    conflicting legacy vs nested modes, or orphan legacy keys that would be ignored.
+   Rejects both :fixed-or and :oracle-fixture :rolls simultaneously (ambiguous
+   cursor mode — shared stream vs. per-kind). Non-roll keys like :scope or
+   :on-exhaustion may coexist.
 
    MC-only: live replay does not use oracle fixtures."
   [params]
+  (when (and (:fixed-or params)
+             (get-in params [:oracle-fixture :rolls]))
+    (throw (ex-info "Ambiguous oracle fixture: both :fixed-or and :oracle-fixture :rolls are present"
+                    {:fixed-or (:fixed-or params)
+                     :oracle-fixture-rolls (get-in params [:oracle-fixture :rolls])
+                     :hint "Use :fixed-or alone for a shared deterministic stream, or :oracle-fixture {:rolls {kind [...]}} for per-kind fixtures. Non-roll keys like :on-exhaustion may be set on :oracle-fixture alongside :fixed-or without conflict."})))
   (let [effective (normalize-oracle-fixture params)
         {:keys [mode scope rolls]} effective]
     (when (or (empty? scope)

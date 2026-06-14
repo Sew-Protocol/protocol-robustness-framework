@@ -284,14 +284,16 @@
 (defn multiple-disputes
   "Run N consecutive disputes with same parameters.
 
-   Returns aggregated statistics including Phase B escalation metrics."
+   Returns aggregated statistics including Phase B escalation metrics.
+   Additional keyword arguments are forwarded to resolve-dispute."
   [rng n-trials escrow-wei fee-bps bond-bps slash-mult strategy
-   appeal-prob-correct appeal-prob-wrong detection-prob]
+   appeal-prob-correct appeal-prob-wrong detection-prob
+   & args]
 
   (let [results (repeatedly n-trials
-                  #(resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
+                  #(apply resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
                                     strategy appeal-prob-correct appeal-prob-wrong
-                                    detection-prob))
+                                    detection-prob args))
         profits-honest    (map :profit-honest results)
         profits-malice    (map :profit-malice results)
         mean-honest       (double (/ (reduce + profits-honest) n-trials))

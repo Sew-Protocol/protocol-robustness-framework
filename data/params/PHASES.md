@@ -141,8 +141,11 @@ normalizes to `:fixed-roll-sequence`):
 :oracle-roll-sequence [0.99 0.01]
 ```
 
-`:fixed-or` merges with `:oracle-fixture` when both are present (`:fixed-or` wins
-on overlapping keys).
+`:fixed-or` must not be combined with `:oracle-fixture {:rolls ...}` — providing
+both raises a validation error. Use `:fixed-or` alone for a shared deterministic
+stream, or `:oracle-fixture {:rolls {kind [...]}}` for per-kind fixtures.
+Non-roll keys (`:scope`, `:on-exhaustion`) on `:oracle-fixture` may coexist with
+`:fixed-or`.
 
 Do not combine `:oracle-fixture {:mode :stochastic}` with a non-empty
 `:oracle-roll-sequence` — the sequence is ignored and load validation fails.
