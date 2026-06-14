@@ -116,6 +116,7 @@
         sorted-m       (sort profits-malice)
 
         total-slashed      (count (filter :slashed? paired-trials))
+        detected-count     (count (filter :detected? paired-trials))
         appeal-count       (count (filter :appeal-triggered? paired-trials))
         escalation-count   (count (filter :escalated? paired-trials))
         fraud-slashed      (count (filter #(= (:slashing-reason %) :fraud) paired-trials))
@@ -157,6 +158,7 @@
                           Double/POSITIVE_INFINITY)
      :appeal-rate       (double (/ appeal-count n-trials))
      :escalation-rate   (double (/ escalation-count n-trials))
+     :detection-rate    (double (/ detected-count n-trials))
      :l2-detection-rate (double (/ l2-detected-count n-trials))
      :slash-rate        (double (/ total-slashed n-trials))
      :fraud-slash-rate  (double (/ fraud-slashed n-trials))

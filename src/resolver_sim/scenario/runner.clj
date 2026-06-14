@@ -152,12 +152,12 @@
                  (let [[_ r] (first resolutions)]
                    {:resolution/type (if (:is-release r) :release :refund)
                     :resolved-by (:resolved-by r)})
-                 (into {} (mapcat (fn [[wf-id r]]
-                                    [(keyword (str "wf-" wf-id "-resolution"))
-                                     (if (:is-release r) :release :refund)
-                                     (keyword (str "wf-" wf-id "-resolved-by"))
-                                     (:resolved-by r)])
-                                  resolutions))))))))
+                  (apply merge (map (fn [[wf-id r]]
+                                      {(keyword (str "wf-" wf-id "-resolution"))
+                                       (if (:is-release r) :release :refund)
+                                       (keyword (str "wf-" wf-id "-resolved-by"))
+                                       (:resolved-by r)})
+                                     (filter (fn [[_ r]] (map? r)) resolutions)))))))))
 
 (defn build-entry-result
   "Build one collection entry from a replay result.

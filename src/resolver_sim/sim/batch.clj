@@ -45,6 +45,7 @@
         sorted-honest (sort profits-honest)
         sorted-malice (sort profits-malice)
 
+        detected-count    (count (filter :detected? results))
         l2-detected-count (count (filter :l2-detected? results))
 
         pending-slashed (count (filter :slashing-pending? results))
@@ -96,6 +97,7 @@
      :appeal-rate (double (/ appeal-count n-trials))
      :escalation-rate (double (/ escalation-count n-trials))
 
+     :detection-rate    (double (/ detected-count n-trials))
      :l2-detection-rate (double (/ l2-detected-count n-trials))
 
      :slash-rate (double (/ total-slashed n-trials))

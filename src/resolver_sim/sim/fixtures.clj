@@ -147,7 +147,11 @@
                                 :detail (str "resolver-profit-ev " profit " > " max-profit)})))
     (let [min-detection (:min-detection-rate thresholds)
           rate (get metrics :detection-rate)]
-      (when (and min-detection rate (< rate min-detection))
+      (cond
+        (and min-detection (nil? rate))
+        (swap! violations conj {:type :detection-rate-check-skipped
+                                :detail "detection-rate not present in replay metrics (stochastic-only metric)"})
+        (and min-detection rate (< rate min-detection))
         (swap! violations conj {:type :detection-rate-below-minimum
                                 :detail (str "detection-rate " rate " < " min-detection)})))
     (when-let [max-delta (:max-held-delta thresholds)]

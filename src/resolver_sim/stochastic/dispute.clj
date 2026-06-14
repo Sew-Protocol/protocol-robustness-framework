@@ -158,11 +158,14 @@
 
         escalated? (pos? escalation-level)
 
+        ;; ── Detection outcome (independent of slashing execution) ───────
+        detected?
+        (or l1-slashed? fraud-detected? reversal-slashed?
+            l2-slashed? timeout-detected?)
+
         ;; ── Slashing outcome ────────────────────────────────────────────
         slashed-detected?
-        (and allow-slashing?
-             (or l1-slashed? fraud-detected? reversal-slashed?
-                 l2-slashed? timeout-detected?))
+        (and allow-slashing? detected?)
 
         slash-reason
         (when slashed-detected?
@@ -253,10 +256,11 @@
 
      {:dispute-correct?      verdict-correct?
       :appeal-triggered?     appealed?
-      :l2-detected?          l2-slashed?
-      :escalated?            escalated?
-      :escalation-level      escalation-level
-      :slashed?              slashed-detected?
+       :detected?             detected?
+       :l2-detected?          l2-slashed?
+       :escalated?            escalated?
+       :escalation-level      escalation-level
+       :slashed?              slashed-detected?
       :frozen?               frozen?
       :escaped?              escaped?
       :slashing-pending?     slashing-pending?
