@@ -22,6 +22,9 @@
        ← EDN scenario"
   [scenario]
   (let [escrow-size (:escrow-size scenario 10000)]
+    (when-not (number? escrow-size)
+      (throw (ex-info (format "Invalid escrow-size: %s. Must be a number." escrow-size)
+                      {:escrow-size escrow-size})))
     (merge types/default-params (rules/default-rules escrow-size) scenario)))
 
 (defn validate-and-merge
