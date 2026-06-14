@@ -602,6 +602,15 @@
   (res/execute-fraud-slash world (event-workflow-id event)
                            (event-slash-id event)))
 
+(defmethod apply-action "compute-prorata-slash-allocation"
+  [_ctx world event]
+  (let [p (:params event)]
+    (res/compute-prorata-slash-allocation world
+      {:slash-obligation (:slash-obligation p)
+       :liable-parties   (:liable-parties p)
+       :basis            (:basis p)
+       :cap-field        (:cap-field p)})))
+
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]
   (let [wf (event-workflow-id event)]

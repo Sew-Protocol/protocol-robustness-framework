@@ -462,3 +462,21 @@
       (is (some? slash-entry) "custom bps override should produce a slash entry")
       (is (= :executed (:status slash-entry)) "immediate track should be executed")
       (is (pos? (:amount slash-entry)) "slash amount should be positive"))))
+
+(deftest execute-fraud-slash-emits-allocation-evidence
+  (testing "execute-fraud-slash computes and emits pro-rata allocation evidence"
+    (let [resolver-addr "0xRes"
+          gov  "0xGov"
+          snap (snap-fix/escrow-snapshot {:appeal-window-duration 0})
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 10000)
+          {:keys [world workflow-id]}
+          (world-ready-for-fraud-slash-propose world0 "0xBuyer" "0xT" "0xSeller" resolver-addr 1000 snap)
+          r-prop (res/propose-fraud-slash world workflow-id gov resolver-addr 300)
+          world-prop (:world r-prop)
+          r-exec (res/execute-fraud-slash world-prop workflow-id workflow-id)
+          world-exec (:world r-exec)]
+      (is (= :pending (get-in world-prop [:pending-fraud-slashes workflow-id :status])))
+      (is (true? (:ok r-exec)))
+      (is (= :executed (get-in world-exec [:pending-fraud-slashes workflow-id :status])))
+      (is (= 9700 (reg/get-stake world-exec resolver-addr))
+          "stake reduced by 300"))))

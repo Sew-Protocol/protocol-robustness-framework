@@ -16,6 +16,8 @@
     "address" : "0xseller",
     "strategy" : "honest"
   } ],
+  "title" : "Status Leak: Agree-Cancel Over Dispute",
+  "threat-tags" : ["state-transition", "concurrent-disputes"],
   "scenario-id" : "s22-status-leak-agree-cancel-over-dispute",
   "events" : [ {
     "seq" : 0,

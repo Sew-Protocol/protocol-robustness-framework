@@ -1325,3 +1325,41 @@
     (is (= 9500 (get-in w-slashed [:resolver-stakes "0xResolver"])))
     (is (= 500 (get-in w-slashed [:resolver-slash-total "0xResolver"])))
     (is (= :released (get-in w-final [:escrow-transfers 0 :escrow-state])))))
+
+;; ---------------------------------------------------------------------------
+;; Section 21: Pro-rata slash allocation action (non-governance user facing)
+;; ---------------------------------------------------------------------------
+
+(deftest test-compute-prorata-slash-allocation-non-governance
+  (testing "non-governance agent can call compute-prorata-slash-allocation"
+    (let [r (sew/replay-with-sew-protocol
+             (sb/sc :agents [alice]
+                 :events
+                 [{:seq 0 :time 1000 :agent "alice"
+                   :action "compute_prorata_slash_allocation"
+                   :params {:slash-obligation 400
+                            :liable-parties
+                            [{:id "resolver-a" :slashable-stake 1000 :available-slashable 1000}
+                             {:id "resolver-b" :slashable-stake 500  :available-slashable 60}
+                             {:id "resolver-c" :slashable-stake 500  :available-slashable 500}]}}]))]
+      (is (= :pass (:outcome r)))
+      (is (= :ok (get-in r [:trace 0 :result])))
+      (let [allocation (get-in r [:trace 0 :extra :allocation])]
+        (is (some? allocation) "trace extra should contain allocation")
+        (is (= 360 (:recovered-total allocation)))
+        (is (= 40 (:unmet-total allocation)))
+        (is (= 3 (count (:allocations allocation))))
+        (is (= 200 (:paid (first (:allocations allocation))))))))
+
+  (testing "compute-prorata-slash-allocation with zero-basis returns structured failure"
+    (let [r (sew/replay-with-sew-protocol
+             (sb/sc :agents [alice]
+                 :events
+                 [{:seq 0 :time 1000 :agent "alice"
+                   :action "compute_prorata_slash_allocation"
+                   :params {:slash-obligation 100
+                            :liable-parties
+                            [{:id "resolver-a" :slashable-stake 0 :available-slashable 0}]}}]))]
+      (is (= :pass (:outcome r)))
+      (is (= :ok (get-in r [:trace 0 :result])))
+      (is (= :no-liable-basis (get-in r [:trace 0 :extra :allocation :status]))))))
