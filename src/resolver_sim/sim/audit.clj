@@ -176,12 +176,19 @@
 
           detection-violations
           (when (pos? min-detection)
-            (for [[e r] (map-indexed vector epoch-results)
-                  :let [dr (:detection-rate r 0.0)]
-                  :when (< dr min-detection)]
-              {:check :detection-rate-above-minimum
-               :epoch (inc e)
-               :value dr :threshold min-detection}))
+            (let [missing (filter (fn [[_ r]] (nil? (:detection-rate r))) epoch-results)]
+              (concat
+               (for [[e _] missing]
+                 {:check :detection-rate-no-data
+                  :epoch (inc e)
+                  :detail "detection-rate not present in epoch result (may be stochastic-only metric)"
+                  :threshold min-detection})
+               (for [[e r] (map-indexed vector epoch-results)
+                     :let [dr (:detection-rate r)]
+                     :when (and dr (< dr min-detection))]
+                 {:check :detection-rate-above-minimum
+                  :epoch (inc e)
+                  :value dr :threshold min-detection}))))
 
          survival-threshold (get opts :malice-survival-threshold 0.5)
 

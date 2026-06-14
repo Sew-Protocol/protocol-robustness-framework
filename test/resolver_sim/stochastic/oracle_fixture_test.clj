@@ -88,16 +88,23 @@
           {:oracle-fixture {:mode :stochastic}
            :oracle-mode :fixed-roll-sequence})))))
 
-(deftest fixed-or-merges-over-oracle-fixture-and-validates
-  (testing ":fixed-or wins on merge; :oracle-roll-sequence is not an orphan once mode is :fixed-roll-sequence"
+(deftest fixed-or-rejects-mixed-oracle-fixture-rolls
+  (testing "validate-oracle-params! rejects mixed :oracle-fixture :rolls and :fixed-or"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"both :fixed-or and :oracle-fixture :rolls"
+         (det/validate-oracle-params!
+          {:oracle-fixture {:mode :stochastic :rolls [0.5]}
+           :fixed-or [0.99 0.01]
+           :oracle-roll-sequence [0.3]})))
+    ;; Legacy :oracle-roll-sequence alongside :fixed-or is fine (no :rolls key conflict)
     (let [params (det/validate-oracle-params!
-                  {:oracle-fixture {:mode :stochastic :rolls [0.5]}
-                   :fixed-or [0.99 0.01]
-                   ;; Legacy key is allowed here (not orphan) because :fixed-or sets effective mode.
+                  {:fixed-or [0.99 0.01]
                    :oracle-roll-sequence [0.3]})
           effective (:oracle-effective params)]
       (is (= :fixed-roll-sequence (:mode effective)))
-      (is (= [0.99 0.01] (:rolls effective))))))
+      (is (= [0.99 0.01] (:rolls effective)))
+      (is (= :shared-stream (:fixture-mode effective))))))
 
 (deftest appeal-fixture-scripts-l1-reversal
   (testing ":scope #{:appeal} uses fixed roll for L1 reversal threshold"
@@ -267,3 +274,129 @@
       (is (contains? kinds :l1-reversal) ":l1-reversal consumed")
       (is (contains? kinds :l2-escalation) ":l2-escalation consumed")
       (is (contains? kinds :l2-reversal) ":l2-reversal consumed")))))
+
+;; ── Cursor semantics tests ───────────────────────────────────────────────
+
+(deftest shared-vector-cursor-crosses-kinds
+  (testing "shared vector cursor advances across different roll kinds in call order"
+    (let [params {:rng (rng/make-rng 40)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls [0.90 0.01 0.80 0.02]
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw}
+                  :oracle-roll-cursor (atom 0)
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          out (det/detect-probabilistic-violations params :malicious false 0.1)]
+      ;; call order: fraud (0.90 >= 0.1 → false), timeout (0.01 < 0.1 → true), l1 (0.80 >= 0.1 → false)
+      (is (false? (:fraud-detected? out)) ":fraud gets roll 0")
+      (is (true? (:timeout-detected? out)) ":timeout gets roll 1")
+      (is (false? (:l1-slashed? out)) ":l1 gets roll 2")
+      ;; fourth roll (0.02) not consumed because detect-probabilistic-violations does 3 checks
+      (let [cursor @(:oracle-roll-cursor params)]
+        (is (= 3 cursor) "shared cursor advanced to 3 after 3 detection calls")))))
+
+(deftest per-kind-map-cursor-advances-independently
+  (testing "per-kind cursors advance independently for each roll-kind"
+    (let [cursors (atom {})
+          params {:rng (rng/make-rng 41)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls {:fraud-detection [0.90 0.01 0.30]
+                                           :timeout-detection [0.01 0.90]}
+                                   :scope #{:detection}
+                                   :on-exhaustion :throw
+                                   :on-unknown-roll-kind :stochastic}
+                  :oracle-roll-cursors cursors
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          out (det/detect-probabilistic-violations params :malicious false 0.1)]
+      ;; fraud gets its own 0.90 → false; timeout gets its own 0.01 → true; l1 unrolled → false
+      (is (false? (:fraud-detected? out)) ":fraud uses [0.90] → false")
+      (is (true? (:timeout-detected? out)) ":timeout uses [0.01] → true")
+      ;; second call: fraud advances to next roll in its independent sequence
+      (let [out2 (det/detect-probabilistic-violations params :malicious false 0.1)]
+        (is (true? (:fraud-detected? out2)) ":fraud second call uses [0.01] → true")
+        (is (false? (:timeout-detected? out2)) ":timeout second call uses [0.90] → false"))
+      ;; verify cursor positions
+      (let [fraud-cursor (get @cursors :fraud-detection 0)
+            timeout-cursor (get @cursors :timeout-detection 0)]
+        (is (= 2 fraud-cursor) ":fraud cursor advanced to 2 after 2 calls")
+        (is (= 2 timeout-cursor) ":timeout cursor advanced to 2 after 2 calls")))))
+
+(deftest shared-vector-cycle-exhaustion
+  (testing ":cycle on shared vector wraps the single cursor back to start"
+    (let [exhausted? (atom false)
+          params {:rng (rng/make-rng 42)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls [0.01 0.50 1.0]
+                                   :scope #{:detection}
+                                   :on-exhaustion :cycle}
+                  :oracle-roll-cursor (atom 0)
+                  :oracle-fixture/exhausted? exhausted?
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          ;; 3 detection checks per call, 3-roll vector cycles cleanly
+          results (repeatedly 3
+                    #(det/detect-probabilistic-violations
+                      params :malicious false 0.1))
+          fraud-results (map :fraud-detected? results)
+          timeout-results (map :timeout-detected? results)]
+      ;; Each 3-roll cycle: fraud(0.01)→true, timeout(0.50)→false, l1(1.0)→false
+      (is (= [true false true false true false]
+             (interleave fraud-results timeout-results))
+          "shared cycle repeats [0.01 0.50 1.0] in order, l1(1.0)→false")
+      (is (true? @exhausted?)
+          "exhausted flag set after cycle begins"))))
+
+(deftest per-kind-map-cycle-advances-independently
+  (testing ":cycle on per-kind map wraps each kind's sequence independently"
+    (let [cursors (atom {})
+          params {:rng (rng/make-rng 43)
+                  :oracle-fixture {:mode :fixed-roll-sequence
+                                   :rolls {:fraud-detection [0.01]
+                                           :timeout-detection [0.90 0.01]}
+                                   :scope #{:detection}
+                                   :on-exhaustion :cycle
+                                   :on-unknown-roll-kind :stochastic}
+                  :oracle-roll-cursors cursors
+                  :fraud-detection-probability 0.1
+                  :timeout-detection-probability 0.1}
+          results (repeatedly 3
+                    #(det/detect-probabilistic-violations
+                      params :malicious false 0.1))
+          fraud-results (map :fraud-detected? results)
+          timeout-results (map :timeout-detected? results)]
+      ;; fraud cycles [0.01] → always true; timeout cycles [0.90 0.01] → false, true, false
+      (is (= [true true true] fraud-results)
+          ":fraud-detection cycles [0.01] → always detected")
+      (is (= [false true false] timeout-results)
+          ":timeout-detection cycles [0.90 0.01] → false, true, false"))))
+
+(deftest validate-raises-on-mixed-fixed-or-and-fixture-rolls
+  (testing "validate-oracle-params! rejects both :fixed-or and :oracle-fixture :rolls"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"both :fixed-or and :oracle-fixture :rolls"
+         (det/validate-oracle-params!
+          {:fixed-or [0.1 0.9]
+           :oracle-fixture {:rolls {:fraud-detection [0.5]}}
+           :fraud-detection-probability 0.1})))
+    ;; non-roll keys on :oracle-fixture are still allowed alongside :fixed-or
+    (is (det/validate-oracle-params!
+         {:fixed-or [0.1 0.9]
+          :oracle-fixture {:scope #{:detection :appeal}
+                           :on-exhaustion :repeat-last}
+          :fraud-detection-probability 0.1})
+        "non-roll :oracle-fixture keys coexist with :fixed-or")))
+
+(deftest normalize-oracle-fixture-emits-fixture-mode
+  (testing "normalize-oracle-fixture includes :fixture-mode metadata"
+    (let [shared   (det/normalize-oracle-fixture {:fixed-or [0.1 0.9]})
+          per-kind (det/normalize-oracle-fixture
+                    {:oracle-fixture {:mode :fixed-roll-sequence
+                                      :rolls {:fraud-detection [0.1]}
+                                      :scope #{:detection}}})
+          no-fix   (det/normalize-oracle-fixture {})]
+      (is (= :shared-stream (:fixture-mode shared)))
+      (is (= :per-kind (:fixture-mode per-kind)))
+      (is (= :none (:fixture-mode no-fix))))))

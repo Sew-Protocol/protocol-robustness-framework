@@ -172,7 +172,27 @@
    "s33-forking-strategist-two-escrow-fork-isolation"
    {:title "Fork Isolation Across Two Disputed Escrows"
     :purpose "adversarial-robustness"
-    :threat-tags ["fork-isolation" "state-isolation" "appeal-escalation"]}})
+    :threat-tags ["fork-isolation" "state-isolation" "appeal-escalation"]}
+
+   "s20-dr3-kleros-max-escalation-guard"
+   {:title "DR3 Kleros: Max Escalation Guard"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s21-dr3-kleros-pending-cleared-on-escalation"
+   {:title "DR3 Kleros: Pending Cleared On Escalation"
+    :purpose "regression"
+    :threat-tags ["appeal-escalation"]}
+
+   "s22-status-leak-agree-cancel-over-dispute"
+   {:title "Status Leak: Agree-Cancel Over Dispute"
+    :purpose "regression"
+    :threat-tags ["state-transition" "concurrent-disputes"]}
+
+   "s23-preemptive-escalation-blocked"
+   {:title "DR3 Kleros: Preemptive Escalation Blocked"
+    :purpose "regression"
+    :threat-tags ["escalation-abuse"]}})
 
 (defn write-json-file
   [doc path]

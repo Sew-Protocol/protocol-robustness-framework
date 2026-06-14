@@ -12,6 +12,7 @@
    `:theory :metric-scope` is `:population` (multi-epoch runner).
    Keep in sync with `resolver-sim.sim.multi-epoch/known-metrics`."
   #{:coalition/net-profit
+    :detection-rate
     :malice-mean-profit
     :dominance-ratio
     :mean-profit

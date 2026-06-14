@@ -45,7 +45,7 @@
         batch-result (batch/run-batch rng-batch n-trials decayed-params)
         
         ;; Step 3: Mark newly detected slashes as pending governance approval
-        detection-rate (double (get-in batch-result [:aggregate :slash-rate] 0.0))
+        detection-rate (double (get-in batch-result [:aggregate :detection-rate] 0.0))
         detected-slashes-count (long (* n-trials detection-rate))
         
         ;; Create pending slash entries for detected slashes

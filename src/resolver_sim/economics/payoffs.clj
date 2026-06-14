@@ -118,6 +118,88 @@
   (calculate-slash-amount-from-basis slashable-stake slash-bps))
 
 ;; ---------------------------------------------------------------------------
+;; Pro-Rata Slash Allocation
+;; ---------------------------------------------------------------------------
+
+(defn calculate-prorata-slash-allocation
+  "Allocate a slash obligation pro-rata across liable parties.
+   
+   Each party's owed amount is proportional to their share of total basis
+   (default: :slashable-stake). The actual paid amount is capped by their
+   available-slashable amount. Any unpaid portion is recorded as unmet.
+   
+   Rounding uses largest-remainder (Hare quota) with deterministic tie-break
+   by party id for reproducibility.
+   
+   Policy keys (on input map):
+     :basis       - key for pro-rata weighting (default :slashable-stake)
+     :cap-field   - key capping paid amount  (default :available-slashable)
+     :unmet-policy - :record-only (default), no redistribution of unmet
+   
+   Returns map with :allocations, :recovered-total, :unmet-total, and metadata.
+   When total-basis is zero, returns {:status :no-liable-basis :recovered-total 0}."
+  [{:keys [slash-obligation liable-parties basis cap-field unmet-policy]
+    :or   {basis        :slashable-stake
+           cap-field    :available-slashable
+           unmet-policy :record-only}}]
+  (let [total-basis (reduce + 0 (map basis liable-parties))]
+    (if (zero? total-basis)
+      {:status :no-liable-basis
+       :basis basis
+       :cap-field cap-field
+       :unmet-policy unmet-policy
+       :slash-obligation slash-obligation
+       :total-basis 0
+       :recovered-total 0
+       :unmet-total slash-obligation
+       :allocations []}
+      (let [raw-owed    (mapv (fn [p]
+                                (quot (* slash-obligation (basis p)) total-basis))
+                              liable-parties)
+            total-owed  (reduce + 0 raw-owed)
+            remainder   (- slash-obligation total-owed)
+            remainders  (mapv (fn [p]
+                                {:id (:id p)
+                                 :rem (mod (* slash-obligation (basis p)) total-basis)})
+                              liable-parties)
+            sorted      (sort (fn [a b]
+                                (let [cmp (compare (:rem b) (:rem a))]
+                                  (if (zero? cmp)
+                                    (compare (:id a) (:id b))
+                                    cmp)))
+                              remainders)
+            top-n       (take remainder sorted)
+            top-ids     (set (map :id top-n))
+            owed-amounts (mapv (fn [p raw]
+                                 (if (contains? top-ids (:id p))
+                                   (inc raw)
+                                   raw))
+                               liable-parties raw-owed)
+            allocations  (mapv (fn [p owed]
+                                 (let [available (or (cap-field p) 0)
+                                       paid      (min owed available)
+                                       unmet     (- owed paid)]
+                                   {:id (:id p)
+                                    :basis-amount (basis p)
+                                    :share (if (pos? total-basis)
+                                             (/ (basis p) total-basis)
+                                             0)
+                                    :owed owed
+                                    :paid paid
+                                    :unmet (max unmet 0)}))
+                               liable-parties owed-amounts)
+            recovered-total (reduce + 0 (map :paid allocations))
+            unmet-total     (reduce + 0 (map :unmet allocations))]
+        {:basis basis
+         :cap-field cap-field
+         :unmet-policy unmet-policy
+         :slash-obligation slash-obligation
+         :total-basis total-basis
+         :recovered-total recovered-total
+         :unmet-total unmet-total
+         :allocations allocations}))))
+
+;; ---------------------------------------------------------------------------
 ;; Economic Policies (Bands)
 ;; ---------------------------------------------------------------------------
 

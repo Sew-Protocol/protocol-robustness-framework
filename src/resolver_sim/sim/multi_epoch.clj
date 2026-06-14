@@ -204,14 +204,15 @@
                   :honest-mean-profit     honest-mean
                   :malice-mean-profit     malice-mean
                   :dominance-ratio        dom-ratio
-                  :appeal-rate            (:appeal-rate aggregate)
-                  :slash-rate             (:slash-rate aggregate-malice)
-                  :fraud-slashed-count    (:fraud-slashed-count aggregate-malice 0)
-                  :reversal-slashed-count (:reversal-slashed-count aggregate-malice 0)
-                  :timeout-slashed-count  (:timeout-slashed-count aggregate-malice 0)
-                   :detection-rate         (:slash-rate aggregate-malice)
-                 :l1-reversal-rate       (:p-l1-reversal decayed-params)
-                 :l2-reversal-rate       (:p-l2-reversal decayed-params)
+                   :appeal-rate            (:appeal-rate aggregate)
+                   :slash-rate             (:slash-rate aggregate-malice)
+                   :fraud-slash-rate       (:fraud-slash-rate aggregate-malice 0.0)
+                   :reversal-slash-rate    (:reversal-slash-rate aggregate-malice 0.0)
+                   :timeout-slash-rate     (:timeout-slash-rate aggregate-malice 0.0)
+                   :l2-detection-rate      (:l2-detection-rate aggregate-malice 0.0)
+                   :detection-rate         (:detection-rate aggregate-malice)
+                   :l1-reversal-rate       (:p-l1-reversal decayed-params)
+                   :l2-reversal-rate       (:p-l2-reversal decayed-params)
                   :routing-mode           (router/routing-mode trial-router)}
            kernel-validation
            (assoc :kernel-validation kernel-validation))

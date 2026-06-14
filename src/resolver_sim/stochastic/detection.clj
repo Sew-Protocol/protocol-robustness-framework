@@ -87,6 +87,9 @@
         on-unknown-roll-kind (or (:on-unknown-roll-kind fixture) :throw)
         rolls (or (:rolls fixture) legacy-rolls [])]
     {:mode mode
+     :fixture-mode (case mode
+                     :fixed-roll-sequence (if (map? rolls) :per-kind :shared-stream)
+                     :none)
      :scope scope
      :on-exhaustion on-exhaustion
      :on-unknown-roll-kind on-unknown-roll-kind
@@ -111,9 +114,18 @@
 
    Throws ex-info on invalid :scope, unknown per-kind roll keys, empty fixed rolls,
    conflicting legacy vs nested modes, or orphan legacy keys that would be ignored.
+   Rejects both :fixed-or and :oracle-fixture :rolls simultaneously (ambiguous
+   cursor mode — shared stream vs. per-kind). Non-roll keys like :scope or
+   :on-exhaustion may coexist.
 
    MC-only: live replay does not use oracle fixtures."
   [params]
+  (when (and (:fixed-or params)
+             (get-in params [:oracle-fixture :rolls]))
+    (throw (ex-info "Ambiguous oracle fixture: both :fixed-or and :oracle-fixture :rolls are present"
+                    {:fixed-or (:fixed-or params)
+                     :oracle-fixture-rolls (get-in params [:oracle-fixture :rolls])
+                     :hint "Use :fixed-or alone for a shared deterministic stream, or :oracle-fixture {:rolls {kind [...]}} for per-kind fixtures. Non-roll keys like :on-exhaustion may be set on :oracle-fixture alongside :fixed-or without conflict."})))
   (let [effective (normalize-oracle-fixture params)
         {:keys [mode scope rolls]} effective]
     (when (or (empty? scope)
@@ -570,6 +582,12 @@
 (defn detect-probabilistic-violations
   "Fraud, timeout, and generic L1 detection rolls.
 
+   Fraud and L1 detection are mutually exclusive: if fraud detection fires
+   (malicious strategy with wrong verdict), L1 detection is skipped to
+   avoid consuming two oracle roll entries for the same wrong verdict.
+   select-slash-reason already prioritises :fraud over :l1, so the outcome
+   is unchanged — but the oracle fixture roll sequence stays aligned.
+
    Pass :rng in params. Returns {:fraud-detected? :timeout-detected? :l1-slashed?}."
   [params strategy verdict-correct? detection-prob]
   (let [probs (normalize-detection-probabilities params detection-prob)
@@ -592,7 +610,8 @@
               detected?)
             false)
           l1-slashed?
-          (if (not verdict-correct?)
+          (if (and (not verdict-correct?)
+                   (not fraud-detected?))
             (let [roll-event (oracle-roll-event params :l1-detection)
                   detected? (roll-detect? (:roll/value roll-event) base-detection-prob)]
               (trace-decision! params roll-event base-detection-prob detected?)
@@ -607,20 +626,26 @@
 
    Note: l2-slashed? maps to :l2 (not :fraud) so that L2 detection
    uses its own bps param (:l2-slash-bps) and produces non-zero
-   economic impact even when :fraud-slash-bps is 0."
+   economic impact even when :fraud-slash-bps is 0.
+
+   l1-slashed? maps to :l1 (not :timeout) so the slash amount
+   uses slash-mult (general multiplier) rather than timeout-slash-bps."
   [{:keys [fraud-detected? reversal-slashed? l2-slashed? timeout-detected? l1-slashed?]}]
   (cond
     fraud-detected? :fraud
     reversal-slashed? :reversal
     l2-slashed? :l2
     timeout-detected? :timeout
-    l1-slashed? :timeout
+    l1-slashed? :l1
     :else nil))
 
 (defn slash-amount-for-reason
   "Slash amount in wei. Reversal uses stake basis (live); other reasons use bond basis.
    L2 detection uses its own :l2-slash-bps param so it produces economic impact
-   independently of :fraud-slash-bps."
+   independently of :fraud-slash-bps.
+   L1 detection uses slash-mult (general multiplier) rather than a dedicated bps param —
+   this means :l1 has the same economic effect as a timeout that wasn't specifically
+   detected as a timeout."
   [reason params {:keys [bond-total resolver-stake slash-mult timeout-detected?]}]
   (case reason
     :reversal (payoffs/calculate-reversal-slash resolver-stake (:reversal-slash-bps params (:reversal default-slash-bps)))
@@ -629,6 +654,7 @@
     :timeout  (if timeout-detected?
                 (long (* bond-total (/ (:timeout-slash-bps params (:timeout default-slash-bps)) 10000.0)))
                 (long (* bond-total slash-mult)))
+    :l1       (long (* bond-total slash-mult))
     nil 0))
 
 (defn detect-fraud-rolls

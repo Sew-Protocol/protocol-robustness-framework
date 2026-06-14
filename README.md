@@ -50,22 +50,54 @@ For escrow and dispute resolution systems, failures rarely stem from invalid cod
 
 - **Core Framework**: Robust, in-process deterministic runner operational.
 - **Reference Implementation**: Sew Protocol (v1) fully integrated.
+- **SPE Equilibrium**: Bounded public-state epsilon-SPE proxy with counterexample generation active. Forward and backward-induction evaluation modes supported.
 - **Integration**: Python-based adversarial suite via gRPC bridge.
+
+## Development Workflow
+
+The project uses a multi-agent workspace model with `jj` (Jujutsu):
+
+- **agent-a/b/c/d** — parallel exploration workspaces for independent changes
+- **integration** — merge target where all agent workspaces are combined
+- **main** — release branch pushed to remote
+
+### Workspace sync process
+
+```bash
+# Rebase all agents onto main from their workspaces
+jj rebase -d main
+
+# On integration: create a merge commit with all agents
+jj new agent-a agent-b agent-c agent-d
+
+# Resolve conflicts, then validate
+bb validate
+bb test:unit
+
+# Push to main
+jj git push -B main -B integration
+```
 
 ## Quick Start
 
-### 1. Run canonical validation suite
+### 1. Lint and structural validation
 ```bash
-./scripts/test.sh all
+bb validate
 ```
-This authoritative entrypoint runs unit tests, generator regression, contract checks, invariant scenarios, and fixture validation suites.
+Runs clj-kondo lint over src, test, notebooks, and dev sources.
 
-### 2. Run invariant scenarios (fast, in-process)
+### 2. Run unit tests
+```bash
+bb test:unit
+```
+Runs all unit tests — framework, Sew protocol, equilibrium, and yield modules.
+
+### 3. Run invariant scenarios (fast, in-process)
 ```bash
 clojure -M:run -- --invariants
 ```
 
-### 3. Adversarial exploration
+### 4. Adversarial exploration
 ```bash
 # Start gRPC simulation server
 nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
@@ -74,7 +106,7 @@ nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 python3 python/invariant_suite.py
 ```
 
-### 4. Dispute Resolution Robustness Validation (Monte Carlo)
+### 5. Dispute Resolution Robustness Validation (Monte Carlo)
 ```bash
 # Run all DR phases (Economic Parameters, Corruption, Evidence, Fairness)
 ./run.sh all

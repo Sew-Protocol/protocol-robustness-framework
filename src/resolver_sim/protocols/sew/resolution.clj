@@ -18,7 +18,8 @@
             [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.util.attribution            :as attr]
-            [resolver-sim.time.context               :as time-ctx]))
+            [resolver-sim.time.context               :as time-ctx]
+            [resolver-sim.io.event-evidence           :as evidence]))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: finalize helpers (no accounting — see lifecycle for that)
@@ -883,8 +884,42 @@
                                       (assoc-in [:resolver-frozen-until resolver]
                                                 (+ (time-ctx/block-ts world) freeze-duration))
                                       (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
-                                      (update-unavailability resolver true))]
+                                      (update-unavailability resolver true))
+                  allocation      (payoffs/calculate-prorata-slash-allocation
+                                    {:slash-obligation amount
+                                     :liable-parties
+                                     [{:id resolver
+                                       :slashable-stake current-stake
+                                       :available-slashable current-stake}]})]
+              (evidence/capture-event-evidence! :fraud-slash-allocation
+                {:pre-stake current-stake}
+                {:post-stake (- current-stake amount)
+                 :recovered-total (:recovered-total allocation)
+                 :unmet-total (:unmet-total allocation)}
+                {:slash-obligation amount
+                 :resolver resolver
+                 :workflow-id workflow-id
+                 :slash-id slash-id}
+                {:allocation allocation
+                 :formula "payoffs/calculate-prorata-slash-allocation"})
               (t/ok world'))))))))
+
+(defn compute-prorata-slash-allocation
+  "Non-governance query action: compute pro-rata allocation for a slash obligation.
+   
+   Accepts {:slash-obligation N :liable-parties [...]} with optional
+   :basis and :cap-field overrides.
+   
+   Pure read — no world mutation.
+   Returns {:ok true :allocation <result-map>} with the full allocation
+   including :allocations, :recovered-total, :unmet-total."
+  [world {:keys [slash-obligation basis cap-field liable-parties]}]
+  (let [allocation (payoffs/calculate-prorata-slash-allocation
+                    (cond-> {:slash-obligation slash-obligation
+                             :liable-parties liable-parties}
+                      basis (assoc :basis basis)
+                      cap-field (assoc :cap-field cap-field)))]
+    {:ok true :world world :extra {:allocation allocation}}))
 
 (defn unfreeze-resolver
   "Governance unfreezes resolver and idempotently clears unavailability mark."

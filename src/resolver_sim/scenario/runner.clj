@@ -127,6 +127,7 @@
   [replay-result scenario]
   (let [world    (:world replay-result)
         escrows  (get world :escrow-transfers {})
+        escrows  (if (map? escrows) escrows {})
         ;; Derive global attributes from world state
         mod-attr (when-let [m (get-in world [:params :resolution-module])]
                    {:resolution/module (keyword (str/replace m "0x" ""))})
@@ -152,12 +153,12 @@
                  (let [[_ r] (first resolutions)]
                    {:resolution/type (if (:is-release r) :release :refund)
                     :resolved-by (:resolved-by r)})
-                 (into {} (mapcat (fn [[wf-id r]]
-                                    [(keyword (str "wf-" wf-id "-resolution"))
-                                     (if (:is-release r) :release :refund)
-                                     (keyword (str "wf-" wf-id "-resolved-by"))
-                                     (:resolved-by r)])
-                                  resolutions))))))))
+                  (apply merge (map (fn [[wf-id r]]
+                                      {(keyword (str "wf-" wf-id "-resolution"))
+                                       (if (:is-release r) :release :refund)
+                                       (keyword (str "wf-" wf-id "-resolved-by"))
+                                       (:resolved-by r)})
+                                     (filter (fn [[_ r]] (map? r)) resolutions)))))))))
 
 (defn build-entry-result
   "Build one collection entry from a replay result.

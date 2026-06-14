@@ -75,9 +75,9 @@
            appeal-window-days 7
            detection-type :fraud
            timeout-detection-probability 0.0
-           reversal-detection-probability 1.0
-           fraud-detection-probability 0.0
-            fraud-slash-bps 0
+            reversal-detection-probability 1.0
+            ; fraud-detection-probability intentionally absent (nil) — normalize-detection-probabilities falls back to l1-malicious
+             fraud-slash-bps 0
             l2-slash-bps 200
             reversal-slash-bps 0
             timeout-slash-bps 200
@@ -158,11 +158,14 @@
 
         escalated? (pos? escalation-level)
 
+        ;; ── Detection outcome (independent of slashing execution) ───────
+        detected?
+        (or l1-slashed? fraud-detected? reversal-slashed?
+            l2-slashed? timeout-detected?)
+
         ;; ── Slashing outcome ────────────────────────────────────────────
         slashed-detected?
-        (and allow-slashing?
-             (or l1-slashed? fraud-detected? reversal-slashed?
-                 l2-slashed? timeout-detected?))
+        (and allow-slashing? detected?)
 
         slash-reason
         (when slashed-detected?
@@ -253,10 +256,11 @@
 
      {:dispute-correct?      verdict-correct?
       :appeal-triggered?     appealed?
-      :l2-detected?          l2-slashed?
-      :escalated?            escalated?
-      :escalation-level      escalation-level
-      :slashed?              slashed-detected?
+       :detected?             detected?
+       :l2-detected?          l2-slashed?
+       :escalated?            escalated?
+       :escalation-level      escalation-level
+       :slashed?              slashed-detected?
       :frozen?               frozen?
       :escaped?              escaped?
       :slashing-pending?     slashing-pending?
@@ -280,14 +284,16 @@
 (defn multiple-disputes
   "Run N consecutive disputes with same parameters.
 
-   Returns aggregated statistics including Phase B escalation metrics."
+   Returns aggregated statistics including Phase B escalation metrics.
+   Additional keyword arguments are forwarded to resolve-dispute."
   [rng n-trials escrow-wei fee-bps bond-bps slash-mult strategy
-   appeal-prob-correct appeal-prob-wrong detection-prob]
+   appeal-prob-correct appeal-prob-wrong detection-prob
+   & args]
 
   (let [results (repeatedly n-trials
-                  #(resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
+                  #(apply resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
                                     strategy appeal-prob-correct appeal-prob-wrong
-                                    detection-prob))
+                                    detection-prob args))
         profits-honest    (map :profit-honest results)
         profits-malice    (map :profit-malice results)
         mean-honest       (double (/ (reduce + profits-honest) n-trials))
