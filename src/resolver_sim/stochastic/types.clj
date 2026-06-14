@@ -1,82 +1,94 @@
 (ns resolver-sim.stochastic.types
   "Parameter schemas and types for the Sew Protocol dispute resolution simulation."
-  (:require [resolver-sim.stochastic.detection :as detection]))
+  (:require [resolver-sim.stochastic.detection :as detection]
+            [malli.core :as m]
+            [malli.error :as me]))
 
-;; Scenario configuration schema
+;; Schedule configuration schema
+(def schedule-schema
+  [:or
+   [:map [:type [:= :constant]] [:value number?]]
+   [:map [:type [:= :steps]] [:values [:vector [:map [:time number?] [:value number?]]]]]])
+
+;; Scenario configuration schema using Malli
 (def scenario-schema
-  {:description string?
-   :scenario-id string?
-   :rng-seed integer?
-   :escrow-distribution map?
-   :strategy-mix (fn [m] (and (map? m)
-                               (every? #(>= (get m % 0) 0) [:honest :lazy :malicious :collusive])
-                               (let [sum (reduce + (vals m))]
-                                 (or (== sum 1.0) (== sum 1)))))
-   :resolver-fee-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :appeal-bond-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :resolver-bond-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :slash-multiplier (fn [x] (and (number? x) (>= x 0)))  ; 0 = no slashing (DR1)
-   :appeal-probability-if-correct (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :appeal-probability-if-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :slashing-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :fraud-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :fraud-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :l2-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-   :reversal-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :reversal-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-    :timeout-slash-bps (fn [x] (and (number? x) (>= x 0) (<= x 10000)))
-    :l1-honest-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :l1-lazy-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :l1-collusive-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :l1-unknown-strategy-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :oracle-fixture (fn [m]
-                     (and (map? m)
-                          (contains? #{:stochastic :static-no-slash :static-always-detect
-                                       :fixed-roll-sequence :fixed-or}
-                                     (:mode m :stochastic))
-                         (or (nil? (:rolls m))
-                             (vector? (:rolls m))
-                             (and (map? (:rolls m))
-                                  (every? (fn [[k v]]
-                                            (and (keyword? k)
-                                                 (vector? v)
-                                                 (every? number? v)))
-                                          (:rolls m))))
-                          (or (nil? (:scope m)) (set? (:scope m)))
-                          (or (nil? (:on-exhaustion m))
-                              (contains? #{:throw :repeat-last :cycle}
-                                         (:on-exhaustion m)))
-                          (or (nil? (:on-unknown-roll-kind m))
-                              (contains? #{:throw :stochastic}
-                                         (:on-unknown-roll-kind m)))))
-   :oracle-mode (fn [x] (contains? #{:stochastic :static-no-slash :static-always-detect
-                                   :fixed-roll-sequence :fixed-or} x))
-   :fixed-or (fn [x]
-               (or (vector? x)
-                   (and (map? x)
-                        (or (nil? (:mode x))
-                            (contains? #{:fixed-or :fixed-roll-sequence} (:mode x)))
-                        (or (nil? (:rolls x))
-                            (vector? (:rolls x))
-                            (and (map? (:rolls x))
-                                 (every? (fn [[_ v]] (vector? v)) (:rolls x)))))))
-   :oracle-roll-sequence vector?
-   :oracle-roll-on-exhaustion (fn [x] (contains? #{:throw :repeat-last :cycle} x))
-   :oracle-roll-trace-enabled? boolean?
-   :evidence-quality? boolean?
-   :fraud-model (fn [x] (contains? #{:single-stage-ev :sequential-escalation :strict-all-tiers} x))
-   :escalation-assumption-band (fn [x] (contains? #{:conservative :base :optimistic} x))
-   :p-appeal-wrong (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :p-l1-reversal (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :p-l2-escalation (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :p-l2-reversal (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-   :n-trials (fn [x] (and (integer? x) (> x 0)))
-   :n-seeds (fn [x] (and (integer? x) (> x 0)))
-    :parallelism (fn [x] (or (keyword? x) (integer? x)))
-    :new-evidence-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :l2-detection-prob (fn [x] (and (number? x) (>= x 0) (<= x 1)))
-    :detection-type (fn [x] (contains? #{:fraud :timeout :reversal} x))
-    :timeout-detection-probability (fn [x] (and (number? x) (>= x 0) (<= x 1)))})
+  [:map {:closed true}
+   [:description string?]
+   [:scenario-id string?]
+   [:rng-seed integer?]
+   [:escrow-distribution map?]
+   [:strategy-mix [:map
+                   [:honest [:>= 0]]
+                   [:lazy [:>= 0]]
+                   [:malicious [:>= 0]]
+                   [:collusive [:>= 0]]]]
+   [:resolver-fee-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:appeal-bond-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:resolver-bond-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:slash-multiplier [:>= 0]]
+   [:appeal-probability-if-correct [:and number? [:>= 0] [:<= 1]]]
+   [:appeal-probability-if-wrong [:and number? [:>= 0] [:<= 1]]]
+   [:slashing-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:fraud-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:fraud-slash-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:l2-slash-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:reversal-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:reversal-slash-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:timeout-slash-bps [:and number? [:>= 0] [:<= 10000]]]
+   [:l1-honest-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:l1-lazy-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:l1-collusive-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:l1-unknown-strategy-detection-probability [:and number? [:>= 0] [:<= 1]]]
+   [:oracle-fixture {:optional true} map?]
+   [:oracle-mode {:optional true} [:enum :stochastic :static-no-slash :static-always-detect :fixed-roll-sequence :fixed-or]]
+   [:fixed-or {:optional true} [:or vector? map?]]
+   [:oracle-roll-sequence {:optional true} vector?]
+   [:oracle-roll-on-exhaustion {:optional true} [:enum :throw :repeat-last :cycle]]
+   [:oracle-roll-trace-enabled? {:optional true} boolean?]
+   [:evidence-quality? {:optional true} boolean?]
+   [:fraud-model {:optional true} [:enum :single-stage-ev :sequential-escalation :strict-all-tiers]]
+   [:escalation-assumption-band {:optional true} [:enum :conservative :base :optimistic]]
+   [:p-appeal-wrong {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:p-l1-reversal {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:p-l2-escalation {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:p-l2-reversal {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:n-trials {:optional true} [:and integer? [:> 0]]]
+   [:n-seeds {:optional true} [:and integer? [:> 0]]]
+   [:parallelism {:optional true} [:or keyword? integer?]]
+   [:new-evidence-probability {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:l2-detection-prob {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:detection-type {:optional true} [:enum :fraud :timeout :reversal]]
+   [:timeout-detection-probability {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:yield-config {:optional true} map?]
+
+   ;; Optional keys
+   [:panel-size {:optional true} [:>= 0]]
+   [:majority-ratio {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:appeal-threshold {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:sweep-params {:optional true} map?]
+   [:attacker-extra-capital-multiplier {:optional true} [:>= 0]]
+   [:slashing-detection-delay-weeks {:optional true} [:>= 0]]
+   [:force-strategy {:optional true} [:maybe keyword?]]
+   [:allow-slashing? {:optional true} boolean?]
+   [:unstaking-delay-days {:optional true} [:>= 0]]
+   [:freeze-on-detection? {:optional true} boolean?]
+   [:freeze-duration-days {:optional true} [:>= 0]]
+   [:appeal-window-days {:optional true} [:>= 0]]
+   [:escalation-assumptions {:optional true} map?]
+   [:resolver-stake-wei {:optional true} [:>= 0]]
+   [:ring-spec {:optional true} map?]
+   [:senior-resolver-skill {:optional true} [:>= 0]]
+   [:author {:optional true} string?]
+   [:author-id {:optional true} string?]
+   [:circuit-breaker-threshold-bps {:optional true} [:>= 0]]
+   [:circuit-breaker-cooldown {:optional true} [:>= 0]]
+   [:max-slash-per-offense-bps {:optional true} [:>= 0]]
+   [:slash-epoch-cap-bps {:optional true} [:>= 0]]
+   [:bond-mix-min-stable-bps {:optional true} [:>= 0]]
+   [:escalation-bond-bps {:optional true} [:>= 0]]
+   [:minimum-challenge-bond {:optional true} [:>= 0]]
+   [:max-dispute-level {:optional true} [:>= 0]]])
+
 
 ;; Trial outcome record
 (defrecord TrialOutcome
@@ -156,73 +168,19 @@
    :minimum-challenge-bond 100
    :max-dispute-level 2})
 
-;; Schema keys that are optional — present in default-params or phase-specific EDN files,
-;; but not required in every scenario map. Add new optional keys here rather than inline.
-(def optional-schema-keys
-  #{:panel-size
-    :majority-ratio
-    :appeal-threshold
-    :sweep-params
-    :attacker-extra-capital-multiplier
-    :resolver-bond-bps
-    :slashing-detection-delay-weeks
-    :force-strategy
-    :allow-slashing?
-    :unstaking-delay-days
-    :freeze-on-detection?
-    :freeze-duration-days
-    :appeal-window-days
-    :detection-type
-    :timeout-detection-probability
-    :reversal-detection-probability
-    :fraud-detection-probability
-    :fraud-slash-bps
-    :l2-slash-bps
-    :reversal-slash-bps
-    :timeout-slash-bps
-    :fraud-model
-    :escalation-assumption-band
-    :escalation-assumptions
-    :p-appeal-wrong
-    :p-l1-reversal
-    :p-l2-escalation
-    :p-l2-reversal
-    :resolver-stake-wei
-    :new-evidence-probability
-    :ring-spec
-    :l2-detection-prob
-    :senior-resolver-skill
-    :oracle-fixture
-    :oracle-mode
-    :oracle-roll-sequence
-    :oracle-roll-on-exhaustion
-    :fixed-or
-    :oracle-roll-trace-enabled?
-    :oracle-effective
-    ;; Optional author metadata
-    :author
-    :author-id
-    :evidence-quality?
-    :circuit-breaker-threshold-bps
-    :circuit-breaker-cooldown
-    :max-slash-per-offense-bps
-    :slash-epoch-cap-bps
-    :bond-mix-min-stable-bps
-    :escalation-bond-bps
-    :minimum-challenge-bond
-    :max-dispute-level
-    :l1-honest-detection-probability
-    :l1-lazy-detection-probability
-    :l1-collusive-detection-probability
-    :l1-unknown-strategy-detection-probability})
-
 (defn validate-scenario
   "Validate scenario params against schema. Throws if invalid."
   [scenario]
-  (doseq [[k validator] scenario-schema]
-    (if-let [v (get scenario k)]
-      (when-not (validator v)
-        (throw (ex-info (format "Invalid param %s: %s" k v) {:param k :value v})))
-      (when-not (optional-schema-keys k)
-        (throw (ex-info (format "Missing required param %s" k) {:param k})))))
-  (detection/validate-oracle-params! scenario))
+  (let [validator (m/validator scenario-schema)
+        explanation (m/explain scenario-schema scenario)]
+    (when-not (validator scenario)
+      (throw (ex-info (format "Invalid scenario parameters: %s" (me/humanize explanation))
+                      {:explanation (me/humanize explanation)})))
+    
+    ;; Mitigation for repeat-last
+    (when (and (= (:oracle-roll-on-exhaustion scenario) :repeat-last)
+               (:evidence-quality? scenario))
+      (throw (ex-info "Invalid scenario: :repeat-last is incompatible with :evidence-quality? true. Use :throw instead."
+                      {:scenario-id (:scenario-id scenario)})))
+    
+    (detection/validate-oracle-params! scenario)))

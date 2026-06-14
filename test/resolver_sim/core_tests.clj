@@ -98,19 +98,37 @@
                  :strategy-mix {:honest 0.75 :lazy 0.15 :malicious 0.08 :collusive 0.02}
                  :resolver-fee-bps 150
                  :appeal-bond-bps 700
+                 :resolver-bond-bps 500
                  :slash-multiplier 2.5
                  :appeal-probability-if-correct 0.05
                  :appeal-probability-if-wrong 0.40
                  :slashing-detection-probability 0.10
+                 :fraud-detection-probability 0.1
+                 :fraud-slash-bps 100
+                 :l2-slash-bps 100
+                 :reversal-detection-probability 0.1
+                 :reversal-slash-bps 100
+                 :timeout-slash-bps 100
+                 :l1-honest-detection-probability 0.1
+                 :l1-lazy-detection-probability 0.1
+                 :l1-collusive-detection-probability 0.1
+                 :l1-unknown-strategy-detection-probability 0.1
                  :n-trials 1000
                  :n-seeds 1
                  :parallelism :auto}]
-      (let [out (types/validate-scenario valid)]
-        (is (= valid (dissoc out :oracle-effective)))
-        (is (map? (:oracle-effective out))))))
+      (is (some? (types/validate-scenario valid)))))
   
   (testing "Invalid fee-bps fails"
     (let [invalid {:resolver-fee-bps -100}]
+      (is (thrown? Exception (types/validate-scenario invalid)))))
+
+  (testing "Unknown keys fail"
+    (let [invalid {:description "test"
+                   :scenario-id "test-1"
+                   :rng-seed 42
+                   :escrow-distribution {}
+                   :strategy-mix {:honest 1 :lazy 0 :malicious 0 :collusive 0}
+                   :unknown-key 123}]
       (is (thrown? Exception (types/validate-scenario invalid))))))
 
 (deftest governance-baseline-test

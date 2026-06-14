@@ -5,7 +5,8 @@
    balances and accrual transformations.
 
    This substrate is designed to be portable across different protocol simulations."
-  (:require [resolver-sim.yield.risk :as risk]))
+  (:require [resolver-sim.yield.risk :as risk]
+            [resolver-sim.yield.exact-math :as math]))
 
 (def ^:private default-asset-decimals 18)
 
@@ -37,20 +38,16 @@
               default-asset-decimals))))
 
 (defn floor-to-asset-decimals
-  "Floor numeric amount to token precision (base units).
-
-   Amounts are already in base units (integer token atoms). The `decimals`
-   argument is reserved for future fractional-base-unit support; today it is
-   unused but kept so all materialization boundaries share one rounding API."
+  "Floor numeric amount to token precision (base units)."
   [amount _decimals]
-  (long (Math/floor (double (max 0 amount)))))
+  (first (math/quantize-base-units amount)))
 
 (defn floor-to-asset-decimals-signed
-  "Floor numeric amount to token precision while preserving sign.
-
-   See `floor-to-asset-decimals` — `decimals` is reserved and currently unused."
+  "Floor numeric amount to token precision while preserving sign."
   [amount _decimals]
-  (long (Math/floor (double amount))))
+  (if (neg? amount)
+    (- (first (math/quantize-base-units (abs amount))))
+    (first (math/quantize-base-units amount))))
 
 (defn position-current-value
   "Redeemable position value in underlying token units.

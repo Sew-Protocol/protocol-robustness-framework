@@ -607,6 +607,7 @@
      ;; Phase K
      :deviation-classes deviation-classes
      :deterministic-key (str idx "|" agent "|" action)
+     :node/id           (str idx "|" agent "|" action)
      ;; Reputation utility breakdown (only present for :resolver-reputation-v1)
      :utility-breakdown utility-breakdown
      :min-reputation-penalty-required min-rep-penalty-required}))
