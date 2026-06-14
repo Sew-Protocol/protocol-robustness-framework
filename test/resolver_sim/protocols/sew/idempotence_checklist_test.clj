@@ -4,7 +4,8 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.accounting :as acct]))
+            [resolver-sim.protocols.sew.accounting :as acct]
+            [resolver-sim.time.context :as time-ctx]))
 
 (def alice "0xAlice")
 (def bob "0xBob")
@@ -69,7 +70,7 @@
 
 (deftest checklist-execute-pending-settlement-single-finalization
   (let [w0 (-> (base-world 120)
-               (assoc :block-time 1240)
+               (time-ctx/advance-time {:to 1240})
                (assoc-in [:pending-settlements 0]
                          (t/make-pending-settlement {:exists true
                                                      :is-release true
@@ -84,7 +85,7 @@
 
 (deftest checklist-superseded-pending-single-finalization
   (let [w0 (-> (base-world 120)
-               (assoc :block-time 1300)
+               (time-ctx/advance-time {:to 1300})
                (assoc-in [:pending-settlements 0]
                          (t/make-pending-settlement {:exists true
                                                      :is-release true

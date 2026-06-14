@@ -5,6 +5,7 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
+            [resolver-sim.time.context :as time-ctx]
             [resolver-sim.yield.registry :as yield-reg]))
 
 (deftest test-json-string-yield-preset-routes-to-recipient-on-release
@@ -17,7 +18,7 @@
                                  (t/make-escrow-settings {:yield-preset "to-recipient"})
                                  snapshot)
           world1 (:world res1)
-          world2 (assoc world1 :block-time (+ 1000 31536000))
+          world2 (time-ctx/advance-time world1 {:seconds 31536000})
           world3 (lc/accrue-yield world2 0)
           res3 (lc/release world3 0 "sender" (fn [_ _ _] {:allowed? true}))
           world4 (:world res3)]
@@ -36,7 +37,7 @@
                                  (t/make-escrow-settings {:yield-preset :to-recipient})
                                  snapshot)
           world1 (:world res1)
-          world2 (assoc world1 :block-time (+ 1000 31536000))
+          world2 (time-ctx/advance-time world1 {:seconds 31536000})
           world3 (lc/accrue-yield world2 0)
           
           res3  (lc/release world3 0 "sender" (fn [_ _ _] {:allowed? true}))

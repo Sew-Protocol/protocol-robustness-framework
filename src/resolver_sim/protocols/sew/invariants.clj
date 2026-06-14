@@ -92,6 +92,7 @@
     :escrow-state-transition-valid
     :module-snapshot-immutable
     :time-non-decreasing
+    :step-non-decreasing
     :time-no-action-after-finality
     :finalization-accounting-correct
     :escalation-level-monotonic
@@ -1447,6 +1448,8 @@
                   (module-snapshot-immutable? world-before world-after)
                  :time-non-decreasing
                  (time-inv/non-decreasing-time? world-before world-after)
+                 :step-non-decreasing
+                 (time-inv/non-decreasing-step? world-before world-after)
                  :time-no-action-after-finality
                  (time-inv/no-action-after-finality?
                    world-before world-after

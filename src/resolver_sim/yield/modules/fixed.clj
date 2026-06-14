@@ -3,7 +3,8 @@
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.market-state :as market-state]))
+            [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn- normalize-token [token]
   (tok/normalize token))
@@ -23,7 +24,7 @@
 (defn fixed-accrue [world module op]
   (let [{:keys [token dt]} op
         mid (:module/id module)
-        ms (market-state/get-market-state world mid token (:block-time world))
+        ms (market-state/get-market-state world mid token (time-ctx/block-ts world))
         apy (:apy ms 0.05)
         seconds-per-year 31536000
         old-index (or (get-in world [:yield/indices mid token]) 1.0)

@@ -14,6 +14,8 @@
             [resolver-sim.sim.fixtures :as fixtures]
             [resolver-sim.notebooks.common :as common]))
 
+(require 'resolver-sim.protocols.sew :reload-all)
+
 ;; ---------------------------------------------------------------------------
 ;; ## 1. Dispute Lifecycle
 ;; Walk through one dispute from creation to settlement.
@@ -97,17 +99,17 @@
 ^{:nextjournal.clerk/visibility {:code :fold :result :show}}
 (defn- result-card
   [label r]
-  [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a"}}
-   [:h3 {:style {:fontSize "14px" :color "#7ADDDC" :marginBottom "12px"}} label]
-   [:div {:style {:display "grid" :gap "8px"}}
-    [:div {:style {:display "flex" :justifyContent "space-between"}}
-     [:span {:style {:color "#94a3b8"}} "Disputes"] [:span {:style {:fontWeight 700 :color "#f8fafc"}} (:disputes-triggered r 0)]]
-    [:div {:style {:display "flex" :justifyContent "space-between"}}
-     [:span {:style {:color "#94a3b8"}} "Correct"] [:span {:style {:fontWeight 700 :color "#22c55e"}} (:correct-decisions r 0)]]
-    [:div {:style {:display "flex" :justifyContent "space-between"}}
-     [:span {:style {:color "#94a3b8"}} "Slash rate"] [:span {:style {:fontWeight 700 :color "#f59e0b"}} (format "%.1f%%" (double (* 100 (or (:slash-rate r) 0))))]]
-    [:div {:style {:display "flex" :justifyContent "space-between"}}
-     [:span {:style {:color "#94a3b8"}} "Avg profit"] [:span {:style {:fontWeight 700 :color (if (pos? (or (:mean-profit r) 0)) "#22c55e" "#ef4444")}} (format "%.0f" (double (or (:mean-profit r) 0)))]]]])
+  (let [profit-key (if (= :honest (:strategy r)) :honest-mean :malice-mean)
+        profit-val (get r profit-key 0)]
+    [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a"}}
+     [:h3 {:style {:fontSize "14px" :color "#7ADDDC" :marginBottom "12px"}} label]
+     [:div {:style {:display "grid" :gap "8px"}}
+      [:div {:style {:display "flex" :justifyContent "space-between"}}
+       [:span {:style {:color "#94a3b8"}} "Trials"] [:span {:style {:fontWeight 700 :color "#f8fafc"}} (:n-trials r 0)]]
+      [:div {:style {:display "flex" :justifyContent "space-between"}}
+       [:span {:style {:color "#94a3b8"}} "Slash rate"] [:span {:style {:fontWeight 700 :color "#f59e0b"}} (format "%.1f%%" (double (* 100 (or (:slash-rate r) 0))))]]
+      [:div {:style {:display "flex" :justifyContent "space-between"}}
+       [:span {:style {:color "#94a3b8"}} "Avg profit"] [:span {:style {:fontWeight 700 :color (if (pos? profit-val) "#22c55e" "#ef4444")}} (format "%.0f" (double profit-val))]]]]))
 
 ^{:nextjournal.clerk/visibility {:code :fold :result :show}
   :nextjournal.clerk/width :full}
@@ -135,7 +137,7 @@
                        :parallelism :auto})]
                {:detection-prob p
                 :slash-rate (or (:slash-rate r) 0)
-                :profit (or (:mean-profit r) 0)}))
+                :profit (or (:malice-mean r) 0)}))
            probs))))
 
 ^{:nextjournal.clerk/visibility {:code :fold :result :show}}

@@ -4,7 +4,8 @@
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.registry :as reg]))
+            [resolver-sim.protocols.sew.registry :as reg]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn- require-ok!
   [result step context]
@@ -16,7 +17,7 @@
 (defn- at-block-time
   [world block-times step-key]
   (if-let [t (get block-times step-key)]
-    (assoc world :block-time t)
+    (time-ctx/with-temporal-context world {:block-ts t})
     world))
 
 (defn- escalate!

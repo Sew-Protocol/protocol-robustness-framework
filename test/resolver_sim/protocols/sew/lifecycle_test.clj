@@ -7,7 +7,8 @@
             [clojure.test :refer [deftest is testing run-tests]]
             [resolver-sim.protocols.sew.types     :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
-            [resolver-sim.protocols.sew.resolution :as res]))
+            [resolver-sim.protocols.sew.resolution :as res]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared fixtures
@@ -257,7 +258,7 @@
 (deftest auto-cancel-disputed-happy
   (let [w (-> (world-disputed)
               ;; block-time > dispute-ts + max-dispute-duration (1000+3600=4600)
-              (assoc :block-time 5000))
+              (time-ctx/with-temporal-context {:block-ts 5000}))
         r (lc/auto-cancel-disputed-escrow w 0)]
     (is (true? (:ok r)))
     (is (= :refunded (t/escrow-state (:world r) 0)))

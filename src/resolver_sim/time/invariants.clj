@@ -1,15 +1,30 @@
 (ns resolver-sim.time.invariants
   "Cross-cutting temporal invariants for simulation traces/world transitions."
-  (:require [resolver-sim.protocols.sew.types :as t]))
+  (:require [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn non-decreasing-time?
   "Transition invariant: block-time must be monotonic non-decreasing."
   [world-before world-after]
-  (let [tb (long (or (:block-time world-before) 0))
-        ta (long (or (:block-time world-after) 0))]
+  (let [tb (time-ctx/block-ts world-before)
+        ta (time-ctx/block-ts world-after)]
     {:holds? (<= tb ta)
      :violations (when (> tb ta)
                    [{:before tb :after ta :violation :time-decreased}])}))
+
+(defn non-decreasing-step?
+  "Transition invariant: scenario step must be monotonic non-decreasing."
+  [world-before world-after]
+  (let [sb (time-ctx/step world-before)
+        sa (time-ctx/step world-after)]
+    {:holds? (<= sb sa)
+     :violations (when (> sb sa)
+                   [{:before sb :after sa :violation :step-decreased}])}))
+
+(defn check-temporal-consistency
+  "Single-state invariant: ensures legacy root matches canonical context."
+  [world]
+  (time-ctx/check-temporal-consistency world))
 
 (defn no-action-after-finality?
   "Transition invariant: terminal escrow states must remain terminal and unchanged.

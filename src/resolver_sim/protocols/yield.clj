@@ -15,7 +15,8 @@
             [resolver-sim.yield.invariants-transition :as yield-trans]
             [resolver-sim.yield.registry :as yreg]
             [resolver-sim.yield.expectations :as yield-exp]
-            [resolver-sim.yield.evidence :as yield-evi]))
+            [resolver-sim.yield.evidence :as yield-evi]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn- action-name [event]
   (let [a (:action event)]
@@ -173,14 +174,15 @@
   (init-world [_ scenario]
     (let [t0 (get scenario :initial-block-time 1000)
           pp (merge {:yield-profile :aave-v3}
-                    (get scenario :protocol-params {}))
+                     (get scenario :protocol-params {}))
           yc (get scenario :yield-config {})]
-      (-> {:block-time t0
-           :yield/held-balances {}}
+      (-> (time-ctx/ensure-temporal-context
+           {:block-time t0
+            :yield/held-balances {}})
           (yield-proto/init-world pp yc)
           (yreg/apply-yield-config yc)
           (assoc-in [:params] (assoc pp :expected-failures (:expected-failures scenario
-                                                              (get-in scenario [:protocol-params :expected-failures] {})))))))
+                                                               (get-in scenario [:protocol-params :expected-failures] {})))))))
 
   (build-execution-context [_ agents protocol-params]
     {:agent-index (into {} (map (juxt :id identity) agents))
@@ -200,17 +202,19 @@
                                results))}))
 
   (world-snapshot [_ world]
-    (cond-> {:block-time (:block-time world)
-             :yield-evidence (yield-evi/get-evidence world)
-             :yield-indices (:yield/indices world)
-             :yield-held (:yield/held-balances world)
-             :yield/positions (:yield/positions world)}
-      (:yield/risk world) (assoc :yield/risk (:yield/risk world))
-      (:yield/schedules world) (assoc :yield/schedules (:yield/schedules world))
-      (:yield/module-aliases world) (assoc :yield/module-aliases (:yield/module-aliases world))
-      (:yield/rates world) (assoc :yield/rates (:yield/rates world))
-      (:yield/shortfall-models world) (assoc :yield/shortfall-models (:yield/shortfall-models world))
-      (:yield/withdrawal-policies world) (assoc :yield/withdrawal-policies (:yield/withdrawal-policies world))))
+    (let [tctx (time-ctx/temporal-context world)]
+      (cond-> {:block-time (:block-ts tctx)
+               :time tctx
+               :yield-evidence (yield-evi/get-evidence world)
+               :yield-indices (:yield/indices world)
+               :yield-held (:yield/held-balances world)
+               :yield/positions (:yield/positions world)}
+        (:yield/risk world) (assoc :yield/risk (:yield/risk world))
+        (:yield/schedules world) (assoc :yield/schedules (:yield/schedules world))
+        (:yield/module-aliases world) (assoc :yield/module-aliases (:yield/module-aliases world))
+        (:yield/rates world) (assoc :yield/rates (:yield/rates world))
+        (:yield/shortfall-models world) (assoc :yield/shortfall-models (:yield/shortfall-models world))
+        (:yield/withdrawal-policies world) (assoc :yield/withdrawal-policies (:yield/withdrawal-policies world)))))
 
   (available-actions [_ _world _actor]
     [])

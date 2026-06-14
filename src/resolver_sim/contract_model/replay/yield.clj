@@ -13,7 +13,8 @@
             [resolver-sim.contract-model.replay.validation :as validation]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.yield :as yp]
-            [resolver-sim.yield.risk-monitor :as risk]))
+            [resolver-sim.yield.risk-monitor :as risk]
+            [resolver-sim.time.context :as time-ctx]))
 
 (def ^:private yield-replay-flags replay-flags/minimal-replay-flags)
 
@@ -68,8 +69,8 @@
   [protocol world-before event result-kw error-kw detail violations world-after]
   {:seq           (:seq event)
    :time          (:time event)
-   :time-before   {:block-ts (:block-time world-before)}
-   :time-after    {:block-ts (:block-time world-after)}
+   :time-before   {:block-ts (time-ctx/block-ts world-before)}
+   :time-after    {:block-ts (time-ctx/block-ts world-after)}
    :agent         (:agent event)
    :action        (:action event)
    :params        (:params event)

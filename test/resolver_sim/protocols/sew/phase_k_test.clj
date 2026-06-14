@@ -6,7 +6,8 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
             [resolver-sim.protocols.sew.accounting :as acct]
-            [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]))
+            [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
+            [resolver-sim.time.context :as time-ctx]))
 
 (deftest tiered-authority-test
   (let [world (t/empty-world 1000)
@@ -78,7 +79,7 @@
         (is (= :timelock-not-expired (:error r-exec)))))
     
     (testing "Execute after timelock"
-      (let [world-time (assoc world-prop :block-time 100000) ; > 86400
+      (let [world-time (time-ctx/advance-time world-prop {:to 100000}) ; > 86400
             r-exec (res/execute-fraud-slash world-time workflow-id)
             world-final (:world r-exec)]
         (is (true? (:ok r-exec)))

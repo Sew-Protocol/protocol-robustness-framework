@@ -12,7 +12,8 @@
    it never modifies state. All functions are pure and side-effect-free."
   (:require [clojure.string :as str]
             [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.resolution :as res]))
+            [resolver-sim.protocols.sew.resolution :as res]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ── Chain finality ───────────────────────────────────────────────────────────
 
@@ -36,15 +37,16 @@
   [world]
   {:chain/phase  :final
    :chain/source :assumed-by-replay
-   :chain/block  (:block-time world)
+   :chain/block  (time-ctx/block-ts world)
    :chain-final? true})
 
 ;; ── Financial finality ───────────────────────────────────────────────────────
 
 (def financial-phases
-  "Ordered phases of financial outcome stability.
+  "Ordered phases of financial finality.
 
-   :provisional        — no resolution or settlement yet; outcome unknown
+   Phase definitions:
+   :provisional        — outcome not yet determined (escrow open)
    :challengeable      — resolution recorded but appeal/challenge window open
    :recoverable        — settlement executed but positions still recoverable
                          (yield shortfall recovery, slashing appeal)
@@ -90,7 +92,7 @@
 
        ;; Gate: appeal/challenge window still open
        (and (= state :disputed) (:exists pending)
-            (< (:block-time world) (:appeal-deadline pending)))
+            (< (time-ctx/block-ts world) (:appeal-deadline pending)))
        (conj :appeal-window)
 
        ;; Gate: yield position still unwinding (shortfall recovery)

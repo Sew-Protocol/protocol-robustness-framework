@@ -8,7 +8,8 @@
             [resolver-sim.scenario.expectations :as expectations]
             [resolver-sim.scenario.theory-result :as theory-result]
             [resolver-sim.scenario.yield-metrics :as yield-metrics]
-            [resolver-sim.scenario.yield-provider-metrics :as yield-provider-metrics]))
+            [resolver-sim.scenario.yield-provider-metrics :as yield-provider-metrics]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn action->transition-id
   "Map an event action string/keyword to canonical transition semantic id.
@@ -84,14 +85,21 @@
                                                             (:theory-eval-opts scenario {})
                                                             :theory (:theory scenario))
 
+         ;; Step 7: Add temporal evidence envelope
+         terminal-world (:world result')
+         time-ctx      (when terminal-world (time-ctx/temporal-context terminal-world))
+         result-ev     (cond-> result''
+                         time-ctx (assoc :time-evidence {:schema-version "temporal-context.v2"
+                                                         :terminal-time time-ctx}))
+
          outcomes-ok? (:ok? outcomes true)
          expect-ok?   (or (nil? expect) (:ok? expect))
-         theory-ok?   (or (nil? (:falsified? result'')) (not (:falsified? result'')))
+         theory-ok?   (or (nil? (:falsified? result-ev)) (not (:falsified? result-ev)))
          checks-ok?   (and outcomes-ok? expect-ok? theory-ok?)]
-     (cond-> (assoc result''
+     (cond-> (assoc result-ev
                :expected-outcomes outcomes
                :expectations expect)
-       (and (= (:outcome result'') :pass) (not checks-ok?))
+       (and (= (:outcome result-ev) :pass) (not checks-ok?))
        (assoc :outcome :fail
               :halt-reason (cond (not outcomes-ok?) :expected-outcome-mismatch
                                  (not expect-ok?)   :expectation-mismatch

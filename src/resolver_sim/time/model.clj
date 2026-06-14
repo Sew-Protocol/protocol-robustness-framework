@@ -8,17 +8,15 @@
   "Return simulation time snapshot from world.
    Falls back to :block-time for backward compatibility."
   [world]
-  (let [t (get world :time {})]
-    {:block-ts      (or (:block-ts t) (:block-time world) 0)
-     :scenario-step (or (:scenario-step t) 0)}))
+  (let [tctx (time-ctx/temporal-context world)]
+    {:block-ts      (:block-ts tctx)
+     :scenario-step (:step tctx)}))
 
 (defn with-time
   "Persist time snapshot back onto world.
    Synchronizes with the canonical temporal context root."
   [world {:keys [block-ts scenario-step]}]
-  (time-ctx/with-temporal-context
-    (assoc world :time {:block-ts      block-ts
-                        :scenario-step scenario-step})
+  (time-ctx/with-temporal-context world
     {:block-ts block-ts :step scenario-step}))
 
 (defn advance
@@ -26,12 +24,9 @@
    Accepts :seconds (added to block-ts), :blocks (ignored for now),
    :txs (ignored), :epochs (ignored), :steps (added to scenario-step).
    Negative :seconds triggers a validation error.
-   Returns an updated world with both :block-time and :time set."
+   Returns an updated world with canonical temporal context set."
   [world {:keys [seconds steps] :or {seconds 0 steps 0}}]
-  (let [current (now world)
-        new-ts  (+ (:block-ts current) (long seconds))
-        new-step (+ (:scenario-step current) (long steps))]
-    (when (neg? seconds)
-      (throw (ex-info "advance: seconds must be non-negative"
-                      {:seconds seconds})))
-    (with-time world {:block-ts new-ts :scenario-step new-step})))
+  (when (neg? seconds)
+    (throw (ex-info "advance: seconds must be non-negative"
+                    {:seconds seconds})))
+  (time-ctx/advance-time world {:seconds seconds :steps steps}))

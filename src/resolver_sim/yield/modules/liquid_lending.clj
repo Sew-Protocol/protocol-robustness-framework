@@ -18,10 +18,14 @@
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.market-state :as market-state]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.yield.evidence :as ye]))
+            [resolver-sim.yield.evidence :as ye]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn- normalize-token [token]
   (tok/normalize token))
+
+(defn- resolve-now [world]
+  (time-ctx/block-ts world))
 
 (defn- token= [a b]
   (= (normalize-token a) (normalize-token b)))
@@ -33,9 +37,6 @@
     (if (seq keys)
       (get-in v keys)
       v)))
-
-(defn- resolve-now [world]
-  (:block-time world 0))
 
 
 ;; ---------------------------------------------------------------------------

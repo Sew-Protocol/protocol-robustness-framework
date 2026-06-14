@@ -3,7 +3,8 @@
    Implements policies like partial-fill, defer, and haircut based on market state."
   (:require [resolver-sim.yield.market-state :as market-state]
             [resolver-sim.yield.loss :as loss]
-            [resolver-sim.yield.accounting :as acct]))
+            [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn- calculate-fulfillment
   "Determine fulfilled vs shortfall amounts based on available ratio."
@@ -52,7 +53,7 @@
 (defn apply-withdrawal-policy
   "Apply market-state withdrawal policy to a gross amount."
   [world module-id token gross-amount principal]
-  (let [ms (market-state/get-market-state world module-id token (:block-time world))
+  (let [ms (market-state/get-market-state world module-id token (time-ctx/block-ts world))
         policy (:withdrawal-policy ms)
         shortfall-model (:shortfall-model ms)
         ratio (:available-ratio ms 1.0)]

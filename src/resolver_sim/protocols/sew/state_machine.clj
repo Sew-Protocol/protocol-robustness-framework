@@ -24,7 +24,8 @@
    in the graph for enum completeness and Foundry/halmos compatibility, and is
    reachable only after terminal-transfer-done? confirms accounting is settled."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.time.deadlines      :as dl]))
+            [resolver-sim.time.deadlines      :as dl]
+            [resolver-sim.time.context        :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Declarative transition graph
@@ -236,7 +237,7 @@
     
     :record-dispute-timestamp
     (fn [world workflow-id _]
-      (assoc-in world [:dispute-timestamps workflow-id] (:block-time world)))}})
+      (assoc-in world [:dispute-timestamps workflow-id] (time-ctx/block-ts world)))}})
 
 (defn- run-guards [world workflow-id caller txn]
   (reduce (fn [_ g-kw]
@@ -410,7 +411,7 @@
     ;; short-circuit prevents (pos? nil) from crashing.
     (and (= :pending (:escrow-state et))
          (pos? ts)
-         (dl/deadline-expired? (:block-time world) ts))))
+         (dl/deadline-expired? (time-ctx/block-ts world) ts))))
 
 (defn auto-release-due?
   "True when auto-release-time has passed and escrow is still :pending."
@@ -435,7 +436,7 @@
          (not (:exists pending))
          (pos? ts)
          (pos? max-dur)
-         (dl/deadline-expired? (:block-time world) (dl/deadline ts max-dur)))))
+         (dl/deadline-expired? (time-ctx/block-ts world) (dl/deadline ts max-dur)))))
 
 (defn pending-settlement-executable?
   "True when pending-settlement exists, state is :disputed, and
@@ -445,4 +446,4 @@
         state   (t/escrow-state world workflow-id)]
     (and (:exists pending)
          (= :disputed state)
-         (dl/deadline-expired? (:block-time world) (:appeal-deadline pending)))))
+         (dl/deadline-expired? (time-ctx/block-ts world) (:appeal-deadline pending)))))

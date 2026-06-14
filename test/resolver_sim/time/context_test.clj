@@ -7,15 +7,14 @@
     (let [w {:block-time 1000}
           c (ctx/temporal-context w)]
       (is (= 1000 (:block-ts c)))
-      (is (= 1000 (:legacy/block-time c)))
       (is (= 0 (:step c)))
-      (is (= :legacy (:clock-source c)))))
+      (is (= :legacy (:clock/source c)))))
 
   (testing "Creation from rich world (with :context/time)"
-    (let [w {:context/time {:block-ts 2000 :step 5 :clock-source :scenario}}]
+    (let [w {:context/time {:block-ts 2000 :step 5 :clock/source :scenario}}]
       (is (= 2000 (ctx/block-ts w)))
       (is (= 5 (ctx/step w)))
-      (is (= :scenario (:clock-source (ctx/temporal-context w))))))
+      (is (= :scenario (:clock/source (ctx/temporal-context w))))))
 
   (testing "Synchronization during update"
     (let [w {:block-time 1000}

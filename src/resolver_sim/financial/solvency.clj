@@ -32,7 +32,8 @@
   (:require [clojure.string :as str]
             [resolver-sim.protocols.sew.invariants.solvency :as solvency-inv]
             [resolver-sim.protocols.sew.invariants :as invariants]
-            [resolver-sim.financial.finality :as finality]))
+            [resolver-sim.financial.finality :as finality]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ── SHA-256 state commitment ──────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@
   (str/join "\n"
     (concat
       [(str "protocol-version:1")
-       (str "block-time:" (:block-time world 0))
+       (str "block-time:" (time-ctx/block-ts world))
        (str "prev-commitment:" (or prev-commitment "none"))]
       (escrow-summary-seq world)
       (yield-summary-seq world)
@@ -233,4 +234,4 @@
     (assoc world :solvency
            {:commitment-root new-hash
             :prev-commitment prev-hash
-            :block-time (:block-time world 0)})))
+            :block-time (time-ctx/block-ts world)})))

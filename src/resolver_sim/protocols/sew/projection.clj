@@ -22,7 +22,8 @@
               [resolver-sim.yield.accounting :as acct]
               [resolver-sim.yield.risk :as yrisk]
              [resolver-sim.financial.finality :as ff]
-             [resolver-sim.financial.loss :as fl]))
+             [resolver-sim.financial.loss :as fl]
+             [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
@@ -427,7 +428,7 @@
           :actors            actors
           :dispute-count     (get metrics :disputes-triggered 0)
           :escalation-levels escalation-levels
-          :terminal-time     (get world :block-time 0)
+          :terminal-time     (time-ctx/block-ts world)
           :halt-reason       halt-reason
           :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
           :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
@@ -449,7 +450,7 @@
           :negative-payoff-count (let [mval (get metrics :negative-payoff-count)]
                                    (if (some? mval) mval negative-payoff-count))
           :terminal-state-counts (frequencies (vals escrows))
-          :terminal-time (get world :block-time 0)}
+          :terminal-time (time-ctx/block-ts world)}
 
          :money-movement-summary
          {:workflow-outcomes workflow-outcomes
@@ -562,7 +563,7 @@
                              (for [{:keys [token accounted inflow]} (:violations conservation [])]
                                [token (- (t/safe-parse-long accounted) (t/safe-parse-long (or inflow 0)))]))
         drift-total    (reduce + 0 (vals drift-by-token))]
-    {:as-of-block-time (:block-time world)
+    {:as-of-block-time (time-ctx/block-ts world)
      :by-token by-token
      :global {:claimable-total          claimable-total
               :bond-locked-total        bond-locked-total

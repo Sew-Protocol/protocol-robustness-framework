@@ -15,7 +15,8 @@
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.invariants :as inv]))
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures
@@ -57,7 +58,7 @@
   (let [r1 (res/execute-resolution world wf-id resolver is-release "0xhash" rm-fn)
         _  (is (:ok r1) "execute-resolution must succeed")
         ;; advance time past appeal window (2 days)
-        w1 (assoc (:world r1) :block-time (+ (:block-time world) 200000))
+        w1 (time-ctx/advance-time (:world r1) {:seconds 200000})
         r2 (res/execute-pending-settlement w1 wf-id)]
     (is (:ok r2) "execute-pending-settlement must succeed")
     (:world r2)))
@@ -196,7 +197,7 @@
           w2 (:world (lc/raise-dispute w1 0 alice))
           _  (is (= 1 (get-in w2 [:resolver-capacities resolver :current-active])))
           ;; advance time past max-dispute-duration (86400s)
-          w3 (assoc w2 :block-time (+ (:block-time w2) 100000))
+          w3 (time-ctx/advance-time w2 {:seconds 100000})
           r  (lc/auto-cancel-disputed-escrow w3 0)]
       (is (:ok r))
       (is (= :refunded (t/escrow-state (:world r) 0)))

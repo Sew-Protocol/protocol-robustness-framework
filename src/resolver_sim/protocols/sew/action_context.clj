@@ -1,7 +1,8 @@
 (ns resolver-sim.protocols.sew.action-context
   "Shared action precondition helpers for Sew handlers."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.common.action-context :as common-actx]))
+            [resolver-sim.protocols.common.action-context :as common-actx]
+            [resolver-sim.time.context :as time-ctx]))
 
 (defn resolve-address
   "Return {:ok true :address addr} or {:ok false :error :unknown-agent}.
@@ -26,7 +27,7 @@
 (defn check-unfrozen
   [world actor]
   (if (and (contains? (:resolver-stakes world) actor)
-           (> (get-in world [:resolver-frozen-until actor] 0) (:block-time world)))
+           (> (get-in world [:resolver-frozen-until actor] 0) (time-ctx/block-ts world)))
     (t/fail :resolver-frozen)
     {:ok true}))
 

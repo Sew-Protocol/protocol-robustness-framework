@@ -135,6 +135,8 @@ run_framework() {
   clojure -M:test -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
+(require '[resolver-sim.time.context-test])
+(require '[resolver-sim.time.model-test])
 (require '[resolver-sim.sim.multi-epoch-test])
 (require '[resolver-sim.sim.defection-test])
 (require '[resolver-sim.sim.strategy-adaptation-test])
@@ -143,6 +145,8 @@ run_framework() {
 (require '[resolver-sim.contract-model.replay-batch-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
+                'resolver-sim.time.context-test
+                'resolver-sim.time.model-test
                 'resolver-sim.sim.multi-epoch-test
                 'resolver-sim.sim.defection-test
                 'resolver-sim.sim.strategy-adaptation-test

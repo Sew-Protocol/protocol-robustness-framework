@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.adversarial
+(ns resolver-sim.sim.adversarial.adversarial
   "Adversarial parameter search with Production Threat Envelope (PTE)."
   (:require [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.rng :as rng]))

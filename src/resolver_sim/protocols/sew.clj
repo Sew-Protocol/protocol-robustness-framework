@@ -378,7 +378,7 @@
           (> pending-slash-amount (- current amount))
           (t/fail :pending-slash-blocks-withdrawal)
 
-          (> (get-in world [:resolver-frozen-until resolver-addr] 0) (:block-time world))
+          (> (get-in world [:resolver-frozen-until resolver-addr] 0) (time-ctx/block-ts world))
           (t/fail :resolver-frozen)
 
           :else
@@ -635,8 +635,11 @@
     (t/ok (yield-risk/apply-market-shock world mid tok (:params event)))))
 
 (defmethod apply-action :default
-  [_ctx _world event]
-  {:ok false :error :unknown-action :detail {:action (:action event)}})
+  [_ctx world event]
+  (let [consistency (time-ctx/check-temporal-consistency world)]
+    (when-not (:holds? consistency)
+      (throw (ex-info "Temporal inconsistency detected" consistency)))
+    {:ok false :error :unknown-action :detail {:action (:action event)}}))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant Checks
