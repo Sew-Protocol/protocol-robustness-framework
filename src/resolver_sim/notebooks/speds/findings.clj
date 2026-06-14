@@ -97,7 +97,7 @@
   (when (and scenario-report baseline-report)
     (let [sm (:metrics scenario-report {})
           bm (:metrics baseline-report {})]
-      (->> (set/union (keys sm) (keys bm))
+      (->> (set/union (set (keys sm)) (set (keys bm)))
            (keep (fn [k]
                    (let [sv (metric-long (get sm k))
                          bv (metric-long (get bm k))]

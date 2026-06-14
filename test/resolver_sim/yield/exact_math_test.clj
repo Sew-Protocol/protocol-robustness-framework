@@ -92,7 +92,7 @@
 
   (testing "floor-and-carry preserves exact carry"
      (let [result (m/floor-and-carry-alloc 100 [{:key :a :amount 3} {:key :b :amount 3}])]
-       (is (number? (:carry result))))))
+       (is (number? (:carry result)))))
 
   (testing "equal claims get equal floor allocations"
     (let [claims [{:key :a :amount 100} {:key :b :amount 100}]
@@ -100,6 +100,33 @@
           allocs (:allocations result)]
       (is (= 75 (:filled (first allocs))))
       (is (= 75 (:filled (second allocs))))))
+
+  (testing "shortage units are distributed (no lost units)"
+    (let [claims [{:key :a :amount 100} {:key :b :amount 100} {:key :c :amount 100}]
+          available 10
+          result (m/floor-and-carry-alloc available claims)
+          total-filled (reduce + 0 (map :filled (:allocations result)))]
+      (is (= available total-filled)
+          (str "Expected all " available " units allocated, but got " total-filled
+               ". shortage=" (:shortage-units result) " carry=" (:carry result)))))
+
+  (testing "distributes across claims when amounts differ"
+    (let [claims [{:key :a :amount 7} {:key :b :amount 3}]
+          available 10
+          result (m/floor-and-carry-alloc available claims)
+          total-filled (reduce + 0 (map :filled (:allocations result)))]
+      (is (= available total-filled)
+          (str "Expected all " available " units allocated, but got " total-filled
+               ". shortage=" (:shortage-units result)))))
+
+  (testing "large-rounding-loss prevented for many claims"
+    (let [claims (mapv (fn [i] {:key (keyword (str "c" i)) :amount 1}) (range 100))
+          available 50
+          result (m/floor-and-carry-alloc available claims)
+          total-filled (reduce + 0 (map :filled (:allocations result)))]
+      (is (= available total-filled)
+          (str "Expected " available " units, got " total-filled
+               " — lost " (- available total-filled) " units across " (count claims) " claims")))))
 
 
 (deftest test-largest-remainder-alloc

@@ -29,7 +29,9 @@
     "trace-end-projection": "trace-end-projection.v1",
     "partial-fill-decision": "partial-fill-decision.v1",
     "semantic-facts": "semantic-facts.v1",
-    "equivalence-summary": "equivalence-summary.v1"
+    "evidence-record": "evidence-record.v1",
+    "equivalence-summary": "equivalence-summary.v1",
+    "evidence-registry": "evidence-registry.v1"
   },
   "producers": {
     "summary": "summary-emitter.v1",
@@ -213,6 +215,16 @@
       "importance": "DIAGNOSTIC",
       "verifies_against": ["test-assertion.v1"],
       "input_dependencies": ["test-summary"]
+    },
+    {
+      "id": "evidence-registry",
+      "file": "evidence-registry.json",
+      "kind": "evidence-registry",
+      "schema_key": "evidence-registry",
+      "producer_key": "simulation-engine",
+      "importance": "CORE",
+      "verifies_against": ["test-run.v1"],
+      "input_dependencies": ["test-run"]
     }
   ],
   "event_evidence": {

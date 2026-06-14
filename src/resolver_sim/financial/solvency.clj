@@ -176,16 +176,14 @@
                                (= stored-commitment computed-commitment))
 
          proof-status* (case proof-status
-                         nil       :unproven
-                         :unproven :unproven
-                         :valid    (if commitment-valid? :valid :invalid)
-                         :invalid  :invalid
-                         :mismatch :mismatch
-                         :unproven)
+                          (:nil :unproven) :unproven
+                          :valid    (if commitment-valid? :valid :invalid)
+                          :invalid  :invalid
+                          :mismatch :mismatch
+                          :unproven)
 
          proof-valid? (case proof-status*
-                        nil       nil
-                        :unproven nil
+                        (:nil :unproven) nil
                         :invalid  false
                         :mismatch false
                         :valid    true

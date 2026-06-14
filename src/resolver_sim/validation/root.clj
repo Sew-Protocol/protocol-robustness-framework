@@ -19,7 +19,8 @@
     :replay/non-deterministic
     :invariant/broken
     :financial-finality/invalid
-    :evidence/binding-mismatch})
+    :evidence/binding-mismatch
+    :bank-run})
 
 (def empty-validation-root
   {:status       :unknown

@@ -749,6 +749,26 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
+(defn workflow-max-yield
+  "Maximum yield claimable for a workflow — shared with claimable-classification rows."
+  [world workflow-id]
+  (let [owner-id   (t/escrow-yield-owner-id workflow-id)
+        pos        (get-in world [:yield/positions owner-id])
+        shortfall  (:shortfall pos)
+        snap       (t/get-snapshot world workflow-id)
+        fee-bps    (or (:yield-protocol-fee-bps snap) 0)
+        reclaimed  (:reclaimed-amount pos 0)
+        pos-yield  (+ (:realized-yield pos 0) (:unrealized-yield pos 0))]
+    (long
+     (cond
+       (nil? pos) 0
+       (pos? reclaimed) (reduce + 0 (vals (get-in world [:claimable-v2 workflow-id :settlement/yield] {})))
+       (= :settled (:status pos)) (max (reduce + 0 (vals (get-in world [:claimable-v2 workflow-id :settlement/yield] {}))) pos-yield)
+       (yield-acct/partial-yield-shortfall? pos shortfall)
+       (let [liq (long (:fulfilled-amount shortfall 0))]
+         (- liq (t/compute-fee liq fee-bps)))
+       :else pos-yield))))
+
 (defn settlement-principal-boundary?
   "True when settlement principal claims do not exceed escrow principal."
   [world]
@@ -762,31 +782,49 @@
           {:workflow-id wf :claims total :max afa})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
-(defn- check-v2-non-negative
-  "Checks that one or more claimable-v2 domain keys have non-negative totals."
-  [world & domain-keys]
+(defn settlement-yield-boundary?
+  "True when settlement yield claims do not exceed available yield position capacity."
+  [world]
   (let [violations
         (for [[wf domain-map] (get-in world [:claimable-v2] {})
-              :let [total (reduce + 0 (for [dk domain-keys]
-                                        (reduce + 0 (vals (get domain-map dk {})))))]
-              :when (neg? total)]
-          {:workflow-id wf :claims total})]
+              :let [claims (reduce + 0 (vals (get domain-map :settlement/yield {})))
+                    max-yield (workflow-max-yield world wf)]
+              :when (> claims max-yield)]
+          {:workflow-id wf :claims claims :max max-yield})]
     {:holds? (empty? violations) :violations (vec violations)}))
 
-(defn settlement-yield-boundary?
-  "True when settlement yield claims are non-negative."
-  [world]
-  (check-v2-non-negative world :settlement/yield))
+(defn workflow-max-fees
+  "Maximum fees claimable for a workflow — shared with claimable-classification rows."
+  [world workflow-id]
+  (let [et (get-in world [:escrow-transfers workflow-id])]
+    (+ (t/safe-parse-long (:initial-fee et))
+       (reduce + 0 (map t/safe-parse-long (vals (get-in world [:bond-balances workflow-id] {})))))))
 
 (defn fee-boundary?
-  "True when fee claims are non-negative."
+  "True when fee claims do not exceed available fee capacity (initial-fee + bond balances)."
   [world]
-  (check-v2-non-negative world :fees/resolver :fees/protocol))
+  (let [violations
+        (for [[wf domain-map] (get-in world [:claimable-v2] {})
+              :let [resolver-fees (get domain-map :fees/resolver {})
+                    protocol-fees (get domain-map :fees/protocol {})
+                    claims (+ (reduce + 0 (vals resolver-fees))
+                              (reduce + 0 (vals protocol-fees)))
+                    max-fees (workflow-max-fees world wf)]
+              :when (> claims max-fees)]
+          {:workflow-id wf :claims claims :max max-fees})]
+    {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn liability-slash-boundary?
-  "True when liability slash claims are non-negative."
+  "True when liability slash bounty claims do not exceed retained slash reserves."
   [world]
-  (check-v2-non-negative world :liability/slash :liability/slash-bounty))
+  (let [total-claims (reduce + 0
+                        (for [[_ domain-map] (get-in world [:claimable-v2] {})]
+                          (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))))
+        reserves (t/safe-parse-long (:retained-slash-reserves world 0))]
+    {:holds? (<= total-claims reserves)
+     :violations (if (> total-claims reserves)
+                   [{:total-claims total-claims :max reserves}]
+                   [])}))
 
 (defn bond-boundary?
   "True when bond refund claims do not exceed posted bonds."

@@ -465,6 +465,8 @@
 
 (def s18
   {:scenario-id     "s18-dr3-kleros-l0-resolves"
+   :title           "DR3 Kleros: L0 Resolver Resolves"
+   :threat-tags     ["appeal-escalation"]
    :schema-version  "1.0"
    :scenario-author "@grifma"
    :initial-block-time 1000
@@ -524,6 +526,8 @@
 
 (def s20
   {:scenario-id          "s20-dr3-kleros-max-escalation-guard"
+   :title                "DR3 Kleros: Max Escalation Guard"
+   :threat-tags          ["appeal-escalation"]
    :schema-version       "1.0"
    :scenario-author "@grifma"
    :allow-open-disputes? true ; intentionally tests guard logic; dispute is never resolved
@@ -556,6 +560,8 @@
 
 (def s21
   {:scenario-id     "s21-dr3-kleros-pending-cleared-on-escalation"
+   :title           "DR3 Kleros: Pending Cleared On Escalation"
+   :threat-tags     ["appeal-escalation"]
    :schema-version  "1.0"
    :scenario-author "@grifma"
    :initial-block-time 1000
@@ -619,6 +625,8 @@
 
 (def s23
   {:scenario-id     "s23-preemptive-escalation-blocked"
+   :title           "DR3 Kleros: Preemptive Escalation Blocked"
+   :threat-tags     ["escalation-abuse"]
    :schema-version  "1.0"
    :scenario-author "@grifma"
    :strict-expected-errors? true

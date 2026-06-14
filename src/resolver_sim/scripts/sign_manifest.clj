@@ -49,4 +49,4 @@
             (println (str "Hash:             " (:hash result)))
             (println (str "Signature:        " (subs (:signature result) 0 16) "..."))
             (doseq [p paths]
-              (println (str "Written:          " p))))))))
+              (println (str "Written:          " p)))))))))

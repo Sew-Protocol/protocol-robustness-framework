@@ -180,13 +180,22 @@
             sum-units (reduce + 0 units)
             available-units (first (quantize-base-units available))
             shortage (- available-units sum-units)
-            carry (reduce + 0 rems)]
+            n (count claims)
+            indices-by-rem (when (pos? shortage)
+                             (->> (range n)
+                                  (sort-by #(- (nth rems %)))
+                                  (take shortage)))
+            final-units (if (pos? shortage)
+                          (reduce (fn [us i] (update us i inc))
+                                  (vec units) indices-by-rem)
+                          units)
+            carry (- available (ratio available-units))]
         {:allocations (mapv (fn [claim u r ideal-i]
                               (assoc claim :filled u :ideal-exact ideal-i :remainder-exact r))
-                            claims units rems ideal)
+                            claims final-units rems ideal)
          :total-available-units available-units
-         :total-allocated-units sum-units
-         :shortage-units shortage
+         :total-allocated-units (reduce + 0 final-units)
+         :shortage-units 0
          :carry (ratio carry)}))))
 
 
