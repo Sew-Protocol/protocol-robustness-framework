@@ -25,8 +25,9 @@
               [resolver-sim.contract-model.replay.yield :as yield-replay]
               [resolver-sim.contract-model.replay.flags :as replay-flags]
               [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
-              [resolver-sim.protocols.protocol :as proto]
-              [resolver-sim.protocols.registry :as preg]
+               [resolver-sim.protocols.protocol :as proto]
+               [resolver-sim.protocols.registry :as preg]
+               [resolver-sim.sim.dispatcher :as sim-dispatcher]
                [resolver-sim.time.model        :as time-model]
                [resolver-sim.time.context      :as time-ctx]
               [resolver-sim.util.attribution :as attr]
@@ -184,14 +185,14 @@
                          :ctx/event-index (:seq event)
                          :ctx/event-type  (:action event)}
                         (try
-                         (proto/dispatch-action protocol context world-t event)
+                         (sim-dispatcher/apply-action-with-evidence protocol context world-t event)
                          (catch Exception e
                              (attr/log-with-attr :error "dispatch exception"
                                         {:error (.getMessage e)
                                          :scenario-step (:seq event)
                                          :action (:action event)})
                            (.printStackTrace e)
-                            {:ok false :error :dispatch-exception
+                            {:ok false :error :dispatch-exception :evidence nil
                              :detail {:message (.getMessage e)
                                       :stack   (with-out-str (st/print-stack-trace e))}})))
             ok?        (:ok result)
