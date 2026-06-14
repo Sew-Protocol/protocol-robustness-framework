@@ -1,119 +1,119 @@
 (ns resolver-sim.validation.root
-  "Shared validation root that accumulates suite-local results into a
-   single canonical validation state.
+  "Validation-root builder built on resolver-sim.validation.state.
 
-   Reducer:
-     (reduce merge-validation-result empty-validation-root suite-results)
-       → validation-root map
+   This is the only namespace that should integrate the semantic state API
+   with the finalized validation root shape. It does NOT call
+   resolver-sim.util.state-monad directly — all state operations go through
+   resolver-sim.validation.state.
 
-   The root is designed to be:
-     - Hashable for evidence-chain anchoring
-     - Machine-readable for CI and registry
-     - Human-readable for notebooks and dashboards"
-  (:require [clojure.set :as set]))
+   ── public API ──
 
-(def critical-error-keys
-  "Errors at this severity invalidate the run or its evidence chain."
-  #{:registry/dangling-dependency
-    :artifact/hash-mismatch
-    :replay/non-deterministic
-    :invariant/broken
-    :financial-finality/invalid
-    :evidence/binding-mismatch
-    :bank-run})
+     empty-root           — initial validation state map
+     derive-root-status   — :passed | :warning | :failed from accumulated keys
+     finalize-root        — add :status and :validation/root-version
+     build-root           — run a state computation, finalize, return root
+     merge-suite-result   — absorb a suite result map into current state
 
-(def empty-validation-root
+   ── finalized root shape ──
+
+     {:validation/root-version \"validation-root.v1\"
+      :status               :passed | :warning | :failed
+      :status-keys          #{...}
+      :error-keys           #{...}
+      :warning-keys         #{...}
+      :checks               [...]
+      :errors               [...]
+      :warnings             [...]
+      :evidence             [...]
+      :metrics              {:checks N :passed N :failed N :warnings N}
+      :extra                {:run-id ...}
+      :suite/id             keyword|nil
+      :suite/type           keyword|nil}"
+
+  (:require [resolver-sim.validation.state :as vs]))
+
+(def status-precedence
+  "Ordered vector of status keywords from most severe to least.
+   Status derivation follows this order — the first matching condition wins.
+
+     [:failed :warning :passed]"
+  [:failed :warning :passed])
+
+(def empty-root
+  "Initial validation state before any checks are executed."
   {:status       :unknown
    :status-keys  #{}
-   :warning-keys #{}
    :error-keys   #{}
+   :warning-keys #{}
+   :checks       []
    :errors       []
    :warnings     []
    :evidence     []
-   :suite-results {}
-   :metrics      {:checks 0 :passed 0 :failed 0 :warnings 0}})
+   :metrics      {:checks 0 :passed 0 :failed 0 :warnings 0}
+   :extra        {}
+   :suite/id     nil
+   :suite/type   nil})
 
-(defn merge-metrics
-  "Combine two metrics maps by summing corresponding counters."
-  [a b]
-  (merge-with + a b))
-
-(defn merge-validation-result
-  "Accumulate one suite result into the validation root.
-
-   Suite result shape (from suite-result/suite-result):
-     {:suite/id     :yield
-      :suite/type   :protocol
-      :status       :passed|:warning|:failed
-      :status-keys  #{...}
-      :warning-keys #{...}
-      :error-keys   #{...}
-      :errors       [...]
-      :warnings     [...]
-      :evidence     [...]
-      :metrics      {:checks N :passed N :failed N :warnings N}}"
-  [root suite-result]
-  (let [sid (:suite/id suite-result)]
-    (-> root
-        (update :status-keys into (:status-keys suite-result))
-        (update :warning-keys into (:warning-keys suite-result))
-        (update :error-keys into (:error-keys suite-result))
-        (update :errors into (:errors suite-result))
-        (update :warnings into (:warnings suite-result))
-        (update :evidence into (:evidence suite-result))
-        (update :suite-results assoc sid suite-result)
-        (update :metrics merge-metrics (:metrics suite-result)))))
+(def empty-validation-root
+  "Alias for empty-root. Retained for backward compatibility."
+  empty-root)
 
 (defn derive-root-status
-  "Derive final validation root status from accumulated error and warning keys.
+  "Derive final root status from accumulated state.
+   Precedence order (defined in status-precedence):
+     :failed  — any :error-keys present
+     :warning — any :warning-keys present, no errors
+     :passed  — no error or warning keys
 
-   Status ladder:
-     :failed-critical  — at least one critical-error-keys is present
-     :failed           — at least one error-key present
-     :warning          — at least one warning-key present, no errors
-     :passed           — no errors or warnings"
+   See also status-precedence for the ordered priority ladder."
   [root]
-  (let [error-keys   (:error-keys root #{})
-        warning-keys (:warning-keys root #{})]
-    (cond
-      (seq (set/intersection critical-error-keys error-keys)) :failed-critical
-      (seq error-keys)                                         :failed
-      (seq warning-keys)                                       :warning
-      :else                                                    :passed)))
+  (cond
+    (seq (:error-keys root))   :failed
+    (seq (:warning-keys root)) :warning
+    :else                      :passed))
 
-(defn build-validation-root
-  "Reduce a collection of suite results into a single validation root.
+(defn finalize-root
+  "Finalize a validation state map by deriving :status and adding
+   :validation/root-version. Returns the completed root map."
+  [state]
+  (-> state
+      (assoc :status (derive-root-status state))
+      (assoc :validation/root-version "validation-root.v1")))
 
-   Args:
-     suite-results — vector of suite result maps (from suite-result/suite-result)
-     extra         — optional map merged into the root (:run-id, :source-revision, etc.)
+(defn build-root
+  "Run a state computation (built from resolver-sim.validation.state
+   semantic operations) against empty-root and finalize the result.
 
-   Returns a validation-root map with :status derived from accumulated errors/warnings."
-  ([suite-results] (build-validation-root suite-results {}))
-  ([suite-results extra]
-   (let [root (reduce merge-validation-result
-                       empty-validation-root
-                       suite-results)]
-     (-> root
-         (assoc :status (derive-root-status root))
-         (merge extra)))))
+   Example:
+     (build-root
+       (vs/bind (vs/record-pass)
+         (fn [_]
+           (vs/record-evidence {:check/id :yield/solvency
+                                :status :passed}))))"
+  [computation]
+  (-> (vs/exec-state computation empty-root)
+      finalize-root))
 
-(defn status-summary
-  "Return a concise one-line summary of the validation root.
-   Useful for terminal output and CI status lines."
-  [root]
-  (let [s (:status root)
-        m (:metrics root)]
-    (format "Validation: %s  (%d checks, %d passed, %d failed, %d warnings)"
-            (name s)
-            (:checks m 0) (:passed m 0) (:failed m 0) (:warnings m 0))))
-
-(defn error-summary
-  "Return a vector of concise error strings from the root's error list."
-  [root]
-  (mapv (fn [e]
-          (format "[%s] %s — %s"
-                  (name (:severity e :warning))
-                  (name (:key e :unknown))
-                  (:message e "")))
-        (:errors root)))
+(defn merge-suite-result
+  "Return a state computation that absorbs a suite-result map into the
+   current validation state. The suite-result should have:
+     :status-keys, :error-keys, :warning-keys,
+     :errors, :warnings, :evidence, :checks, :metrics,
+     :suite/id, :suite/type (all optional, anything present is merged)"
+  [suite-result]
+  (fn [state]
+    (let [state' (-> state
+                     (update :status-keys  into (:status-keys  suite-result #{}))
+                     (update :error-keys   into (:error-keys   suite-result #{}))
+                     (update :warning-keys into (:warning-keys suite-result #{}))
+                     (update :errors       into (:errors       suite-result []))
+                     (update :warnings     into (:warnings     suite-result []))
+                     (update :evidence     into (:evidence     suite-result []))
+                     (update :checks       into (:checks       suite-result []))
+                     (update :metrics (fn [m]
+                                        (merge-with + m (:metrics suite-result))))
+                     (cond-> (:suite/id suite-result)
+                       (assoc :suite/id (:suite/id suite-result)))
+                     (cond-> (:suite/type suite-result)
+                       (assoc :suite/type (:suite/type suite-result))))]
+      [nil state'])))

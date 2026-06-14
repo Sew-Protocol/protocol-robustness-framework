@@ -2,20 +2,20 @@
  {sim:run {:doc "Run a simulation with EDN params"
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
-  scenario:run
-  {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
-   :task (let [arg          (first *command-line-args*)
-               scenario-map {"kleros/preemptive-escalation-rejected-l0"
-                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
-                              ;; deprecated alias (pre-2026-06 rename)
-                              "kleros/escalation-race"
-                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-               scenario     (or (get scenario-map arg) arg)]
-           (when-not scenario
-             (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
-           (let [t0   (System/currentTimeMillis)
-                 exit (try
-                        (let [args (vec *command-line-args*)
+   scenario:run
+   {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
+    :task (let [arg          (first *command-line-args*)
+                scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                               "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                               ;; deprecated alias (pre-2026-06 rename)
+                               "kleros/escalation-race"
+                               "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+                scenario     (or (get scenario-map arg) arg)]
+            (when-not scenario
+              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
+            (let [t0   (System/currentTimeMillis)
+                  exit (try
+                         (let [args (vec *command-line-args*)
                                       ;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
                                       alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
                                       level-idx (.indexOf args "--result-display-level")
@@ -25,15 +25,38 @@
                                       chosen (or level-val alias-val)
                                       cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
                                                  chosen (conj "--result-display-level" chosen))]
-                                 (apply clojure {:dir "." :extra-deps {}} cli-args))
-                        0
-                        (catch clojure.lang.ExceptionInfo e
-                          (or (:exit (ex-data e)) 1)))
-                 dur  (- (System/currentTimeMillis) t0)]
-             (shell "python3" "scripts/write_scenario_run_manifest.py"
-                    "--scenario"    scenario
-                    "--status"      (if (zero? exit) "pass" "fail")
-                    "--duration-ms" (str dur))
+                                (apply clojure {:dir "." :extra-deps {}} cli-args))
+                         0
+                         (catch clojure.lang.ExceptionInfo e
+                           (or (:exit (ex-data e)) 1)))
+                  dur  (- (System/currentTimeMillis) t0)]
+              (shell "python3" "scripts/write_scenario_run_manifest.py"
+                     "--scenario"    scenario
+                     "--status"      (if (zero? exit) "pass" "fail")
+                     "--duration-ms" (str dur))
+              ;; validate the emitted artifact registry (additive, slug-filtered)
+              (try
+                (let [slug (some-> scenario
+                              (clojure.string/replace (re-pattern "^.*/") "")
+                              (clojure.string/replace (re-pattern "\\.json$") ""))
+                      runs-dir (java.io.File. "results/runs")
+                      dirs (when (.exists runs-dir)
+                             (->> (.listFiles runs-dir)
+                                  (filter (fn [x] (.isDirectory x)))
+                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                  (sort-by (fn [x] (.lastModified x)))
+                                  vec))
+                      latest-run (last dirs)
+                      registry-path (when latest-run
+                                      (str (.getPath latest-run) "/test-artifacts.json"))]
+                  (if (and registry-path (.exists (java.io.File. registry-path)))
+                    (do
+                      (println (str "[artifact-registry-validation] Validating " registry-path))
+                      (apply clojure {:dir "." :extra-deps {}}
+                             ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+                (catch Exception e
+                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
              (when-not (zero? exit) (System/exit exit))))}
 
   scenario:run:family
@@ -86,6 +109,27 @@
                       "--scenario-count"  (str (count scenarios))
                       "--status"          status
                       "--duration-ms"     (str dur))
+               ;; validate the emitted artifact registry (additive, slug-filtered)
+               (try
+                 (let [slug "scenario-family"
+                       runs-dir (java.io.File. "results/runs")
+                       dirs (when (.exists runs-dir)
+                              (->> (.listFiles runs-dir)
+                                   (filter (fn [d] (.isDirectory d)))
+                                   (filter (fn [f] (.startsWith (.getName f) slug)))
+                                   (sort-by (fn [x] (.lastModified x)))
+                                   vec))
+                       latest-run (last dirs)
+                       registry-path (when latest-run
+                                       (str (.getPath latest-run) "/test-artifacts.json"))]
+                   (if (and registry-path (.exists (java.io.File. registry-path)))
+                     (do
+                       (println (str "[artifact-registry-validation] Validating " registry-path))
+                       (apply clojure {:dir "." :extra-deps {}}
+                              ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                     (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+                 (catch Exception e
+                   (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
                (when-not (empty? failed)
                  (println (str (count failed) " scenario(s) failed: "
                                (mapv :scenario failed)))
@@ -128,6 +172,29 @@
                     "--output-file"  output-file
                     "--status"       (if (zero? exit) "pass" "fail")
                     "--duration-ms"  (str dur))
+             ;; validate the emitted artifact registry (additive, slug-filtered)
+             (try
+               (let [slug (some-> scenario
+                             (clojure.string/replace (re-pattern "^.*/") "")
+                             (clojure.string/replace (re-pattern "\\.json$") ""))
+                     runs-dir (java.io.File. "results/runs")
+                     dirs (when (.exists runs-dir)
+                            (->> (.listFiles runs-dir)
+                                 (filter (fn [d] (.isDirectory d)))
+                                 (filter (fn [f] (.startsWith (.getName f) (or slug ""))))
+                                 (sort-by (fn [x] (.lastModified x)))
+                                 vec))
+                     latest-run (last dirs)
+                     registry-path (when latest-run
+                                     (str (.getPath latest-run) "/test-artifacts.json"))]
+                 (if (and registry-path (.exists (java.io.File. registry-path)))
+                   (do
+                     (println (str "[artifact-registry-validation] Validating " registry-path))
+                     (apply clojure {:dir "." :extra-deps {}}
+                            ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                   (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+               (catch Exception e
+                 (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
              (when-not (zero? exit) (System/exit exit))))}
 
   evidence:sign
@@ -217,6 +284,37 @@
   validate {:doc "Structural validation pipeline: lint (fmt skipped due to env artifact issues)"
             :task (do (println "Running structural validation (fmt skipped)...")
                       (shell "clj -M:lint"))}
+
+  validation:artifact-registry
+  {:doc "Validate an artifact registry (test-artifacts.json) and write a
+         validation-root.v1 result beside it.
+
+         Usage:
+           bb validation:artifact-registry
+               — validates results/test-artifacts/test-artifacts.json (default)
+
+           bb validation:artifact-registry results/runs/<run-id>/test-artifacts.json
+               — validates a per-run registry
+
+         Output:
+           <registry-dir>/artifact-registry-validation.json
+
+         Non-blocking:
+           This task is additive. Registry validation failures do not block CI.
+           Operational errors (file not found, parse failure) are reported as
+           skipped and do not block the caller.
+
+         Integrated into:
+           bb scenario:run — runs automatically after registry emission."
+   :task (let [registry-path (or (first *command-line-args*)
+                                 "results/test-artifacts/test-artifacts.json")]
+           (println (str "[artifact-registry-validation] Validating " registry-path "..."))
+           (try
+             (apply clojure {:dir "." :extra-deps {}}
+                    ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path])
+             (catch Exception e
+               (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
+           (println "[artifact-registry-validation] Done"))}
 
   clean {:doc "Delete generated results/"
          :task (shell "rm -rf results/*" "echo 'Cleaned results/'")

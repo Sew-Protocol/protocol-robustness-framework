@@ -188,10 +188,10 @@
               (log/error! "grpc/internal-error" {:error (.getMessage t)})
              (println (str "[grpc] " msg))
              (st/print-stack-trace t)
-             (.onError observer
-                       (-> (Status/INTERNAL)
-                           (.withDescription msg)
-                           (.asRuntimeException))))))))))
+              (.onError observer
+                        (-> Status/INTERNAL
+                            (.withDescription msg)
+                            (.asRuntimeException))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service definition
