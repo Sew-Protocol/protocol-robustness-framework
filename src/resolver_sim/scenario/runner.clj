@@ -4,12 +4,38 @@
    Returns data only — no printing, files, or exit codes.
 
    `:pass?` on each entry is the single source of truth for pass/fail.
-   Reports read `:pass?` and use `:checks` only to explain failures."
-  (:require [resolver-sim.scenario.expectations :as expectations]
+   Reports read `:pass?` and use `:checks` only to explain failures.
+
+   Use `with-attribute` to attach clarifying semantic annotations to a
+   result entry — e.g. resolution outcome, dispute level, module identity.
+   Attributes are stored under `:attributes` and surfaced in verbose reports."
+  (:require [clojure.string :as str]
+            [resolver-sim.scenario.expectations :as expectations]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.summary :as summary]
             [resolver-sim.scenario.normalize :as normalize]
             [resolver-sim.scenario.theory :as theory]))
+
+;; ---------------------------------------------------------------------------
+;; Attribute helpers — enrich result entries with clarifying annotations
+;; ---------------------------------------------------------------------------
+
+(defn with-attribute
+  "Attach clarifying semantic attributes to a result entry.
+
+   `entry` is a result map (from `build-entry-result` / `run-scenario`).
+   Remaining args are alternating keyword-value pairs.
+
+   Attributes are stored under `:attributes` and surfaced in verbose/audit reports.
+   Unlike `with-attribution` (dynamic binding for execution context), this is a
+   pure-data enrichment for post-hoc clarity — e.g. annotating a pass/fail result
+   with `:resolution/type :release` or `:dispute/level 0`.
+
+   Returns the entry with an appended or merged `:attributes` map."
+  [entry & kvs]
+  (assert (even? (count kvs)) "with-attribute requires an even number of key-value pairs")
+  (let [attr (apply hash-map kvs)]
+    (update entry :attributes #(merge % attr))))
 
 ;; ---------------------------------------------------------------------------
 ;; Pass semantics
@@ -93,6 +119,46 @@
           theory-opts (merge {:theory-eval-profile profile} opts)]
       (theory/evaluate-theory replay-result (:theory scenario) theory-opts))))
 
+(defn- derive-resolution-attributes
+  "Extract resolution attributes from a replay result's world state.
+   Scans all escrow-transfers for :resolution metadata and produces
+   a flat attribute map. Includes dispute level progression, module,
+   and scenario purpose when available."
+  [replay-result scenario]
+  (let [world    (:world replay-result)
+        escrows  (get world :escrow-transfers {})
+        ;; Derive global attributes from world state
+        mod-attr (when-let [m (get-in world [:params :resolution-module])]
+                   {:resolution/module (keyword (str/replace m "0x" ""))})
+        lvl-attr (let [levels (get world :dispute-levels {})]
+                   (when (seq levels)
+                     (let [max-lvl (apply max (vals levels))
+                           path   (vec (range 0 (inc max-lvl)))]
+                       (merge {:dispute/max-level max-lvl
+                               :escalation/path path}
+                              (if (= 1 (count levels))
+                                {}
+                                (into {} (map (fn [[wf lvl]] [(keyword (str "wf-" wf "-level")) lvl]) levels)))))))
+        purpose-attr (when-let [p (:purpose scenario)]
+                       {:scenario/purpose (keyword p)})]
+    (merge mod-attr lvl-attr purpose-attr
+           ;; Resolution-specific attributes per escrow
+           (let [resolutions (keep (fn [[wf-id et]]
+                                     (when-let [r (:resolution et)]
+                                       [wf-id r]))
+                                   escrows)]
+             (when (seq resolutions)
+               (if (= 1 (count resolutions))
+                 (let [[_ r] (first resolutions)]
+                   {:resolution/type (if (:is-release r) :release :refund)
+                    :resolved-by (:resolved-by r)})
+                 (into {} (mapcat (fn [[wf-id r]]
+                                    [(keyword (str "wf-" wf-id "-resolution"))
+                                     (if (:is-release r) :release :refund)
+                                     (keyword (str "wf-" wf-id "-resolved-by"))
+                                     (:resolved-by r)])
+                                  resolutions))))))))
+
 (defn build-entry-result
   "Build one collection entry from a replay result.
 
@@ -101,7 +167,9 @@
 
    Second argument `opts` forwards theory evaluation flags.
 
-   Does not re-evaluate expectations when replay already attached them."
+   Does not re-evaluate expectations when replay already attached them.
+   Automatically enriches the entry with resolution attributes derived
+   from the replay result's world state."
   ([input] (build-entry-result input {}))
   ([{:keys [name replay-result scenario source expected-fail?]
      :or {expected-fail? (boolean (:expected-fail? scenario false))}}
@@ -117,20 +185,24 @@
          violations    (if expected-fail?
                          0
                          (get-in replay-result [:metrics :invariant-violations] 0))
-         entry         (cond-> {:name           name
-                                :scenario-id    (:scenario-id replay-result)
-                                :source         (or source :replay)
-                                :outcome        (:outcome replay-result)
-                                :halt-reason    (:halt-reason replay-result)
-                                :expected-fail? expected-fail?
-                                :steps          (:events-processed replay-result 0)
-                                :reverts        (get-in replay-result [:metrics :reverts] 0)
-                                :violations     violations
-                                :checks         checks
-                                :replay-result  replay-result
-                                :details        [replay-result]}
-                         scenario (assoc :scenario scenario))]
-     (assoc entry :pass? (scenario-pass? entry opts)))))
+          entry         (cond-> {:name           name
+                                 :scenario-id    (:scenario-id replay-result)
+                                 :source         (or source :replay)
+                                 :outcome        (:outcome replay-result)
+                                 :halt-reason    (:halt-reason replay-result)
+                                 :expected-fail? expected-fail?
+                                 :steps          (:events-processed replay-result 0)
+                                 :reverts        (get-in replay-result [:metrics :reverts] 0)
+                                 :violations     violations
+                                 :checks         checks
+                                 :replay-result  replay-result
+                                 :details        [replay-result]}
+                          scenario (assoc :scenario scenario))
+          pass-entry    (assoc entry :pass? (scenario-pass? entry opts))
+          attr          (derive-resolution-attributes replay-result scenario)]
+      (if attr
+        (apply with-attribute pass-entry (mapcat identity (seq attr)))
+        pass-entry))))
 
 (defn runner-opts-for-scenario
   "Default theory evaluation opts for a scenario map (fixture or JSON).

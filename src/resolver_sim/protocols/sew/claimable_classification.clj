@@ -37,8 +37,7 @@
             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.projection :as proj]
-            [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.yield.accounting :as yield-acct]))
+            [resolver-sim.protocols.sew.types :as t]))
 
 (def schema-version (evcfg/schema :claimable-classification))
 (def classifier-version (evcfg/producer :claimable-classification-classifier))
@@ -372,23 +371,9 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-         :let [claims     (reduce + 0 (vals (get domain-map :settlement/yield {})))
-               owner-id   (t/escrow-yield-owner-id wf)
-               pos        (get-in world [:yield/positions owner-id])
-               shortfall  (:shortfall pos)
-               snap       (t/get-snapshot world wf)
-               fee-bps    (or (:yield-protocol-fee-bps snap) 0)
-               reclaimed  (:reclaimed-amount pos 0)
-               pos-yield  (+ (:realized-yield pos 0) (:unrealized-yield pos 0))
-               max-yield  (long
-                           (cond
-                             (pos? reclaimed) claims
-                             (= :settled (:status pos)) (max claims pos-yield)
-                             (yield-acct/partial-yield-shortfall? pos shortfall)
-                             (let [liq (long (:fulfilled-amount shortfall 0))]
-                               (- liq (t/compute-fee liq fee-bps)))
-                             :else pos-yield))]
-         :when (or (pos? claims) pos)]
+         :let [claims   (reduce + 0 (vals (get domain-map :settlement/yield {})))
+               max-yield (inv/workflow-max-yield world wf)]
+         :when (pos? claims)]
      {:workflow_id wf :claims claims :max max-yield :headroom (- max-yield claims)})))
 
 (defn- bond-utilization-rows
@@ -409,20 +394,19 @@
                protocol-fees (get domain-map :fees/protocol {})
                claimed       (+ (reduce + 0 (vals resolver-fees))
                                 (reduce + 0 (vals protocol-fees)))
-               et            (get-in world [:escrow-transfers wf])
-                max-fees      (+ (t/safe-parse-long (:initial-fee et))
-                                 (reduce + 0 (map t/safe-parse-long (vals (get (:bond-balances world) wf {})))))]
-         :when (or (pos? claimed) et)]
+               max-fees      (inv/workflow-max-fees world wf)]
+         :when (or (pos? claimed) (get-in world [:escrow-transfers wf]))]
      {:workflow_id wf :claims claimed :max max-fees :headroom (- max-fees claimed)})))
 
 (defn- liability-slash-utilization-rows
   [world]
-  (let [reserves (t/safe-parse-long (:retained-slash-reserves world 0))]
-    (vec
-     (for [[wf domain-map] (get-in world [:claimable-v2] {})
-           :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
-           :when (pos? claims)]
-        {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))))
+  (let [reserves (t/safe-parse-long (:retained-slash-reserves world 0))
+        rows     (vec
+                  (for [[wf domain-map] (get-in world [:claimable-v2] {})
+                        :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
+                        :when (pos? claims)]
+                    {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))]
+    rows))
 
 (def boundary-checks
   "Boundary invariants and their corresponding utilization-row generators.

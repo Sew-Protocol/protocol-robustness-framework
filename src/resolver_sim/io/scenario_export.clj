@@ -43,7 +43,7 @@
 
 (def ^:private public-metadata-keys
   [:description :scenario-title :scenario-family :scenario-purpose :purpose
-   :threat-tags :security-properties :threat-model :expected-outcome
+   :title :threat-tags :security-properties :threat-model :expected-outcome
    :theory :expectations :notes :provenance])
 
 (defn- attach-public-metadata [doc scenario]
@@ -55,14 +55,19 @@
           public-metadata-keys))
 
 (defn scenario->trace-document
-  "Build a schema 1.1 trace document from an invariant scenario map."
+  "Build a schema 1.1 trace document from an invariant scenario map.
+   Prefers :title, :threat-tags, :purpose from the scenario map when present,
+   falling back to metadata, then defaults."
   [scenario {:keys [title purpose threat-tags]}]
-  (let [sid (:scenario-id scenario)]
+  (let [sid     (:scenario-id scenario)
+        sc-title (or (:title scenario) title sid)
+        sc-purpose (or (:purpose scenario) purpose "regression")
+        sc-tags (vec (or (:threat-tags scenario) threat-tags []))]
     (-> (cond-> {:schema-version     "1.1"
                  :id                 (str "scenarios/" sid)
-                 :title              (or title sid)
-                 :purpose            (or purpose "regression")
-                 :threat-tags        (vec (or threat-tags []))
+                 :title              sc-title
+                 :purpose            sc-purpose
+                 :threat-tags        sc-tags
                  :scenario-id        sid
                  :initial-block-time (:initial-block-time scenario 1000)
                  :agents             (mapv agent->trace-agent (:agents scenario []))
@@ -81,7 +86,8 @@
         (attach-public-metadata scenario))))
 
 (defn scenario->public-json-document
-  "Build scenarios/*.json document (schema 1.0) from an invariant scenario map."
+  "Build scenarios/*.json document (schema 1.0) from an invariant scenario map.
+   Includes :title and :threat-tags when present on the scenario."
   [scenario]
   (let [sid (:scenario-id scenario)
         base (cond-> {:schema-version     "1.0"
@@ -90,6 +96,8 @@
                      :agents             (mapv agent->public-json-agent (:agents scenario []))
                      :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
                      :events             (:events scenario [])}
+                     (:title scenario) (assoc :title (:title scenario))
+                      (:threat-tags scenario) (assoc :threat-tags (vec (:threat-tags scenario)))
               (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
               (:expected-errors scenario)
               (assoc :expected-errors
@@ -101,30 +109,10 @@
     (attach-public-metadata base scenario)))
 
 (def default-export-metadata
-  {"s18-dr3-kleros-l0-resolves"
-   {:title "DR3 Kleros: L0 Resolver Resolves"
-    :purpose "regression"
-    :threat-tags ["appeal-escalation"]}
-
-   "s19-dr3-kleros-escalation-rejected-l0-resolves"
+  {"s19-dr3-kleros-escalation-rejected-l0-resolves"
    {:title "DR3 Kleros: Escalation Rejected, L0 Resolves"
     :purpose "regression"
     :threat-tags ["appeal-escalation"]}
-
-   "s20-dr3-kleros-max-escalation-guard"
-   {:title "DR3 Kleros: Max Escalation Guard"
-    :purpose "regression"
-    :threat-tags ["appeal-escalation"]}
-
-   "s21-dr3-kleros-pending-cleared-on-escalation"
-   {:title "DR3 Kleros: Pending Cleared On Escalation"
-    :purpose "regression"
-    :threat-tags ["appeal-escalation"]}
-
-   "s23-preemptive-escalation-blocked"
-   {:title "Preemptive Escalation Blocked (No Pending Settlement)"
-    :purpose "adversarial-robustness"
-    :threat-tags ["escalation-abuse"]}
 
    "s62-cross-token-isolation-under-dispute-load"
    {:title "Cross-Token Isolation Under Concurrent Disputes"

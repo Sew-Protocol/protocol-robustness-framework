@@ -342,15 +342,22 @@
           ;; stake is deducted before the current decision is recorded — the current
           ;; resolver cannot be slashed for their own decision.
           world'         (handle-reversal-slashing world workflow-id is-release)
-          
+
           ;; Record current decision for future reversal checks
           world''        (assoc-in world' [:previous-decisions workflow-id (t/dispute-level world workflow-id)]
-                                   {:resolver caller :is-release is-release})]
+                                   {:resolver caller :is-release is-release})
+
+          ;; Store resolution metadata on the escrow-transfer so terminal-world
+          ;; consumers can query who resolved, what the outcome was, and the hash
+          world'''       (assoc-in world'' [:escrow-transfers workflow-id :resolution]
+                                   {:resolved-by caller
+                                    :is-release is-release
+                                    :resolution-hash resolution-hash})]
       (if (or final-round? (not (pos? window-dur)))
         ;; Final round or no windows: execute immediately
         (t/ok (if is-release
-                (finalize world'' workflow-id :released)
-                (finalize world'' workflow-id :refunded)))
+                (finalize world''' workflow-id :released)
+                (finalize world''' workflow-id :refunded)))
 
         ;; Window active: defer settlement
         (let [pending (t/make-pending-settlement
@@ -358,8 +365,8 @@
                         :is-release      is-release
                         :appeal-deadline (+ now window-dur)
                         :resolution-hash resolution-hash})
-              world''' (assoc-in world'' [:pending-settlements workflow-id] pending)]
-          (t/ok world''')))))))
+              world'''' (assoc-in world''' [:pending-settlements workflow-id] pending)]
+          (t/ok world'''')))))))
 
 ;; ---------------------------------------------------------------------------
 ;; execute-pending-settlement

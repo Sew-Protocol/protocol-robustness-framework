@@ -19,7 +19,8 @@
     (is (= :passed (sut/derive-root-status base)))
     (is (= :warning (sut/derive-root-status (assoc base :warning-keys #{:w1}))))
     (is (= :failed (sut/derive-root-status (assoc base :error-keys #{:e1}))))
-    (is (= :failed-critical (sut/derive-root-status (assoc base :error-keys #{:invariant/broken}))))))
+    (is (= :failed-critical (sut/derive-root-status (assoc base :error-keys #{:invariant/broken}))))
+    (is (= :failed-critical (sut/derive-root-status (assoc base :error-keys #{:bank-run}))))))
 
 (deftest test-merge-metrics
   (is (= {:checks 2 :passed 1 :failed 1}

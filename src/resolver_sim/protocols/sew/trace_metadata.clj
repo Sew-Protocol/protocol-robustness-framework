@@ -349,6 +349,10 @@
 ;; or call in sim/fixtures.clj fixture runner to annotate adversarial suites.
 ;; ---------------------------------------------------------------------------
 
+(defn- sid-contains-segment?
+  [sid segment]
+  (some #{segment} (str/split sid #"-")))
+
 (defn classify-adversary
   "Return an adversary classification map from a scenario map.
    Looks for :adversary/type and :adversary/traits on the scenario, or
@@ -360,15 +364,15 @@
     (if explicit-type
       {:adversary/type   explicit-type
        :adversary/traits explicit-traits}
-      ;; Fallback: infer from scenario-id keywords
+      ;; Fallback: infer from scenario-id segments
       (cond
-        (.contains sid "profit-maximizer")
+        (sid-contains-segment? sid "profit-maximizer")
         {:adversary/type   :profit-maximizer
          :adversary/traits #{:multi-step :capital-efficient}}
-        (.contains sid "forking-strategist")
+        (sid-contains-segment? sid "forking-strategist")
         {:adversary/type   :forking-strategist
          :adversary/traits #{:multi-step :adaptive}}
-        (.contains sid "ring-attack")
+        (sid-contains-segment? sid "ring-attack")
         {:adversary/type   :colluder
          :adversary/traits #{:multi-step :coordinated}}
         :else nil))))
@@ -474,7 +478,7 @@
       (and (= :pass outcome) (zero? violations)) :normal-completion
       (= halt :invariant-violation)      :invariant-failure
       (#{:open-entities-at-end :open-disputes-at-end} halt) :liveness-failure
-      (= outcome :fail)                  :invariant-failure
+       (= outcome :fail)                  :cascade-failure
       :else                              :normal-completion)))
 
 ;; ===========================================================================

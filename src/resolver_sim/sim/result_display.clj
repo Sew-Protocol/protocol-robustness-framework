@@ -125,6 +125,9 @@
 (defn- scenario-verbose-detail [r opts]
   (let [lines (vec
                (concat
+                (when-let [attrs (:attributes r)]
+                  [(str "    attributes: "
+                        (str/join ", " (map (fn [[k v]] (str (name k) " " v)) attrs)))])
                 (when (:halt-reason r)
                   [(str "    halt: " (:halt-reason r))])
                 (when (and (:expectations r) (not (:ok? (:expectations r))))
@@ -173,8 +176,16 @@
   (let [failed-ids (set (map :trace-id (remove scenario-entry-ok? (:results suite-result))))
         base       (standard-lines suite-result opts)]
     (into base
-          (mapcat #(scenario-verbose-detail % opts)
-                  (filter #(contains? failed-ids (:trace-id %)) (:results suite-result))))))
+          (mapcat (fn [r]
+                    (let [detail (scenario-verbose-detail r opts)]
+                      (if (contains? failed-ids (:trace-id r))
+                        detail
+                        ;; Passing entries: show attributes line when present
+                        (when-let [attrs (:attributes r)]
+                          [(str "  " (:trace-id r) ":")
+                           (str "    attributes: "
+                                (str/join ", " (map (fn [[k v]] (str (name k) " " v)) attrs)))]))))
+                  (:results suite-result)))))
 
 (defn suite-report-lines
   "Return a vector of report lines for a fixture suite result.

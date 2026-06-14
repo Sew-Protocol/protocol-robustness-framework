@@ -224,5 +224,6 @@
   "True when loss has been realized (or is irrecoverable)."
   [loss-classification]
   (boolean (and (loss-active? loss-classification)
-                (or (:loss/user-realized? loss-classification)
-                    (= :loss-irrecoverable (:loss/status loss-classification))))))
+                (or (= :loss-realized (:loss/status loss-classification))
+                    (= :loss-irrecoverable (:loss/status loss-classification))
+                    (:loss/user-realized? loss-classification)))))

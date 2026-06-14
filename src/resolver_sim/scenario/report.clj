@@ -7,14 +7,19 @@
    - For detailed fixture sections (theory/yield columns), use `sim.result-display`.
 
    Prints only — no replay, no judgement."
-  (:require [resolver-sim.scenario.theory-result :as theory-result]))
+  (:require [clojure.string :as str]
+            [resolver-sim.scenario.theory-result :as theory-result]))
 
 (defn- status-label
-  [{:keys [pass? expected-fail?]}]
-  (cond
-    (and pass? expected-fail?) "✓ XFAIL"
-    pass? "✓ PASS"
-    :else "✗ FAIL"))
+  [{:keys [pass? expected-fail? attributes]}]
+  (let [status (cond
+                 (and pass? expected-fail?) "✓ XFAIL"
+                 pass? "✓ PASS"
+                 :else "✗ FAIL")]
+    (if-let [al (when (seq attributes)
+                  (str/join " " (map (fn [[k v]] (str (name k) "=" v)) attributes)))]
+      (str status " " al)
+      status)))
 
 (defn- format-violation
   [v]

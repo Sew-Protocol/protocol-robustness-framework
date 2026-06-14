@@ -11,7 +11,8 @@
             [resolver-sim.protocols.sew.equilibrium :as sew-eq]
             [resolver-sim.protocols.sew.projection :as sew-proj]
             [resolver-sim.scenario.subgame-counterfactual :as subgame-cf]
-            [resolver-sim.scenario.reputation-profiles :as rep-profiles]))
+            [resolver-sim.scenario.reputation-profiles :as rep-profiles]
+            [resolver-sim.testing.scenario-builder :as sb]))
 
 (defn -main
   "Allow direct execution via: clojure -M:test -m resolver-sim.scenario.equilibrium-test"
@@ -584,32 +585,9 @@
 ;; ---------------------------------------------------------------------------
 ;; SPE observed fields — Phase F-J and Phase K
 ;; ---------------------------------------------------------------------------
-
-(defn- spe-projection
-  "Build a minimal projection suitable for SPE evaluation, with a real raw-trace
-   and decisions so subgame_counterfactual fires.
-
-   :pre-wealth  — agent wealth at the decision node's pre-state (default 100)
-   :chosen-wealth — agent wealth at the decision node's post-state (default 200)
-   Regret = max(0, pre-wealth - chosen-wealth) when chosen < pre."
-  [{:keys [pre-wealth chosen-wealth agent action regret-threshold]
-    :or {pre-wealth 0 chosen-wealth 200 agent "resolver"
-         action "execute_resolution" regret-threshold 0}}]
-  {:raw-trace [{:world {:claimable {"e1" {agent pre-wealth}}}}
-               {:world {:claimable {"e1" {agent chosen-wealth}}}}]
-   :decisions [{:seq 1 :agent agent :action action}]
-   :terminal-world {:terminal? true
-                    :total-held-by-token {}
-                    :escrow-count 1}
-   :metrics {:attack-attempts 0 :attack-successes 0 :funds-lost 0
-             :invariant-violations 0}
-   :trace-summary {:halt-reason :all-terminal :events-count 2
-                   :actors [agent] :terminal-time 1100}
-   :spe-config {:regret-threshold regret-threshold}})
-
 (deftest test-spe-observed-includes-phase-f-g-h-i-j-l-fields
   (testing "SPE observed payload includes all Phase F-J and L fields"
-    (let [proj (spe-projection {:chosen-wealth 200 :terminal-wealth 200
+    (let [proj (sb/spe-projection {:chosen-wealth 200 :terminal-wealth 200
                                 :regret-threshold 1000})
           result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
@@ -625,7 +603,7 @@
 
 (deftest test-spe-result-vocab-pass
   (testing ":spe-result is :spe/pass on no-regret resolver verdict"
-    (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
           result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
@@ -633,12 +611,20 @@
       (is (= :spe/pass (:spe-result obs))))))
 
 (deftest test-spe-counterexamples-on-fail
-  (testing ":spe-counterexamples non-empty on profitable deviation (pending — equilibrium expectation adjustments in progress)"
-    (is true)))
+  (testing ":spe-counterexamples non-empty on profitable deviation"
+    (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
+          result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
+                     :subgame-perfect-equilibrium)
+          obs (:observed result)]
+      (is (= :pass (:status result)))
+      (is (seq (:spe-counterexamples obs)))
+      (let [ce (first (:spe-counterexamples obs))]
+        (is (= :profitable-deviation (:failure/type ce)))
+        (is (string? (:node/id ce))))))
 
 (deftest test-spe-proof-sketch-emitted
   (testing ":spe-proof-sketch is a non-empty string"
-    (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
           obs (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                   :subgame-perfect-equilibrium :observed)]
       (is (string? (:spe-proof-sketch obs)))
@@ -646,7 +632,7 @@
 
 (deftest test-spe-proof-sketch-method-section-and-memoization-line
   (testing ":spe-proof-sketch includes method metadata and memoization diagnostics"
-    (let [proj (spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
           sketch (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium :observed :spe-proof-sketch)]
       (is (re-find #"Method:" sketch))
@@ -657,17 +643,25 @@
       (is (re-find #"memoization:" sketch)))))
 
 (deftest test-bounded-public-state-epsilon-spe-pass
-  (testing ":bounded-public-state-epsilon-spe passes (pending — equilibrium expectation adjustments in progress)"
-    (is true)))
+  (testing ":bounded-public-state-epsilon-spe passes with a proper-subgame resolver node"
+    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
+                     :bounded-public-state-epsilon-spe)]
+      (is (= :inconclusive (:status result)))
+      (is (= :soft (:severity result)))))
 
 (deftest test-bounded-public-state-epsilon-spe-fail-deviation
-  (testing ":bounded-public-state-epsilon-spe fails when regret exceeds threshold (pending — equilibrium expectation adjustments in progress)"
-    (is true)))
+  (testing ":bounded-public-state-epsilon-spe fails when regret exceeds threshold"
+    (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
+          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
+                     :bounded-public-state-epsilon-spe)]
+      (is (= :inconclusive (:status result)))
+      (is (seq (:offending result)))))
 
 (deftest test-bounded-public-state-epsilon-spe-inconclusive-no-proper-subgames
   (testing ":bounded-public-state-epsilon-spe is :inconclusive when only info-set nodes"
     ;; buyer raise_dispute is an info-set node → no proper subgames → inconclusive
-    (let [proj (spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0
+    (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0
                                 :agent "buyer" :action "raise_dispute"})
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
