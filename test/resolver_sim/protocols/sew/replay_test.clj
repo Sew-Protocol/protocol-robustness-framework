@@ -101,7 +101,8 @@
 
 (deftest test-validation-unknown-agent-in-event
   (let [r (sew/replay-with-sew-protocol
-           (sc :events [{:seq 0 :time 1000 :agent "nobody" :action "create_escrow"
+           (sc :agents [alice bob resolver]
+               :events [{:seq 0 :time 1000 :agent "nobody" :action "create_escrow"
                           :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
     (is (= :invalid (:outcome r)))
     (is (= :unknown-agent-in-event (:halt-reason r)))))
