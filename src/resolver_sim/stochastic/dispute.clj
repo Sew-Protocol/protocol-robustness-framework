@@ -75,9 +75,9 @@
            appeal-window-days 7
            detection-type :fraud
            timeout-detection-probability 0.0
-           reversal-detection-probability 1.0
-           fraud-detection-probability 0.0
-            fraud-slash-bps 0
+            reversal-detection-probability 1.0
+            ; fraud-detection-probability intentionally absent (nil) — normalize-detection-probabilities falls back to l1-malicious
+             fraud-slash-bps 0
             l2-slash-bps 200
             reversal-slash-bps 0
             timeout-slash-bps 200

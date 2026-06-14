@@ -13,7 +13,7 @@
    :slashing-detection-delay-weeks     (:slashing-detection-delay-weeks params 0)
    :allow-slashing?                    (:allow-slashing? params true)
    :resolver-bond-bps                  (:resolver-bond-bps params 0)
-   :fraud-detection-probability        (:fraud-detection-probability params 0.0)
+    :fraud-detection-probability        (:fraud-detection-probability params)  ; nil fallback → l1-malicious in normalize-detection-probabilities
     :fraud-slash-bps                    (:fraud-slash-bps params 0)
     :l2-slash-bps                       (:l2-slash-bps params 200)
     :reversal-detection-probability     (:reversal-detection-probability params 1.0)

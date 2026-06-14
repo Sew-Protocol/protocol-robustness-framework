@@ -127,6 +127,7 @@
   [replay-result scenario]
   (let [world    (:world replay-result)
         escrows  (get world :escrow-transfers {})
+        escrows  (if (map? escrows) escrows {})
         ;; Derive global attributes from world state
         mod-attr (when-let [m (get-in world [:params :resolution-module])]
                    {:resolution/module (keyword (str/replace m "0x" ""))})
