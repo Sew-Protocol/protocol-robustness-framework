@@ -13,13 +13,14 @@
       :residual-treatment :defer
       :post-partial-fill-accrual :accrue-residual-as-unrealized
       :rounding-policy :floor-and-carry}"
-  (:require [resolver-sim.yield.exact-math :as m]
+  (:require [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
             [resolver-sim.util.attribution :as attr]))
 
 
-(def ^:private schema-version "partial-fill-decision.v1")
+(def ^:private schema-version (evcfg/schema :partial-fill-decision))
 
 
 (def default-partial-fill-policy

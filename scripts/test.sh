@@ -1069,6 +1069,7 @@ if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
   emit_claimable_classification || true
   if ls results/test-artifacts/suite-*.json >/dev/null 2>&1; then
     python3 scripts/emit_validation_root.py --input-dir results/test-artifacts --output-dir results/test-artifacts
+    python3 scripts/ci_gate_validation.py
   fi
   python - <<PY
 import csv, json, pathlib, datetime, subprocess, sys

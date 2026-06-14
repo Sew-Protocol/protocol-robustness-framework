@@ -4,6 +4,8 @@
 ### Added
 - **Validation State-Root system:** New `resolver-sim.validation.suite-result` and `resolver-sim.validation.root` namespaces for canonical validation state reduction.
 - **Validation Emitter:** New `scripts/emit_validation_root.py` to aggregate suite results into `validation-root.json`.
+- **Validation Dashboard:** New `notebooks/validation_dashboard.clj` Clerk notebook to visualize aggregated validation results.
+- **CI Gating:** New `scripts/ci_gate_validation.py` added to the test pipeline to block CI if validation fails.
 
 ### Changed
 - **Test Runner Integration:** Updated `scripts/test.sh` to emit per-suite JSON validation artifacts and run the validation-root emitter.

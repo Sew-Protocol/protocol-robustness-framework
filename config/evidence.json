@@ -27,6 +27,7 @@
     "event-evidence": "event-evidence.v1",
     "validation-root": "validation-root.v1",
     "trace-end-projection": "trace-end-projection.v1",
+    "partial-fill-decision": "partial-fill-decision.v1",
     "semantic-facts": "semantic-facts.v1",
     "equivalence-summary": "equivalence-summary.v1"
   },

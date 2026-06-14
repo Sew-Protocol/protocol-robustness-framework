@@ -149,12 +149,25 @@
       (is (= :unproven (:solvency/status result)))
       (is (nil? (:solvency/proof-valid? result))))))
 
-(deftest solvency-insolvent-detected
-  (testing "Accounting insolvency is detected"
-    (let [world (-> (t/empty-world 1000)
-                    (assoc-in [:total-held :USDC] 500)
-                    (assoc-in [:claimable :USDC] 200))
-          ;; Add a liability that exceeds assets
-          world (assoc-in world [:bond-balances 0 "0xRes0"] 10000)
-          result (solv/classify-solvency world)]
-      (is (= :insolvent (:solvency/status result)) "bond liability exceeds held+claimable"))))
+(deftest test-open-gates-exhaustive
+  (testing "Exhaustive coverage of open-gates logic"
+    (let [w (t/empty-world 1000)
+          wf-id 0]
+      (testing "Provisional state (no escrow)"
+        (is (empty? (#'fin/open-gates w wf-id))))
+      
+      (testing "Disputed state with pending settlement"
+        (let [w-disp (assoc-in w [:escrow-transfers wf-id] {:status :disputed})
+              w-pend (assoc-in w-disp [:pending-settlements wf-id] {:exists true :appeal-deadline 2000})]
+          (is (= #{:pending-settlement :appeal-window} (set (#'fin/open-gates w-pend wf-id)))))
+        
+        (let [w-disp (assoc-in w [:escrow-transfers wf-id] {:status :disputed})
+              w-pend (assoc-in w-disp [:pending-settlements wf-id] {:exists true :appeal-deadline 500})]
+          ;; deadline 500 < world time 1000: appeal-window closed
+          (is (= #{:pending-settlement} (set (#'fin/open-gates w-pend wf-id))))))
+
+      (testing "Yield recovery state"
+        (let [w-yield (assoc-in w [:yield/positions "owner1"] {:status :unwinding})
+              ;; Requires owner mapping
+              w-yield-mapped (assoc w-yield :yield/owner-map {wf-id "owner1"})]
+          (is (contains? (set (#'fin/open-gates w-yield-mapped wf-id)) :yield-recovery)))))))

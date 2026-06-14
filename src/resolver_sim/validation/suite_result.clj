@@ -115,7 +115,7 @@
 (defn checks-failed?
   "True when at least one check has :failed status."
   [checks]
-  (some #(= :failed (:status %)) checks))
+  (boolean (some #(= :failed (:status %)) checks)))
 
 (defn checks-by-severity
   "Return only checks at or above the given severity threshold.
