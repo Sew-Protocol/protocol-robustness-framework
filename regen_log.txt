@@ -1,0 +1,676 @@
+{:ts "2026-06-15T12:04:42.607240519Z", :level :info, :message "scenario/end", :context {:id "fee-on-transfer-leak", :outcome :pass, :ctx/scenario-id "fee-on-transfer-leak", :ctx/run-id "fee-on-transfer-leak-run"}}
+{:ts "2026-06-15T12:04:42.611352554Z", :level :info, :message "scenario/start", :context {:id "fee-on-transfer-leak", :ctx/scenario-id "fee-on-transfer-leak", :ctx/run-id "fee-on-transfer-leak-run"}}
+Suite: :suites/token-pathologies
+Status: FAIL
+Scenarios: 0/1  (2.9 s)
+Failed: fee-on-transfer-leak
+{:ts "2026-06-15T12:04:42.735409429Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.760303582Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.776832946Z", :level :info, :message "scenario/end", :context {:id "spe-v1-rational-appeal", :outcome :pass, :ctx/scenario-id "spe-v1-rational-appeal", :ctx/run-id "spe-v1-rational-appeal-run"}}
+{:ts "2026-06-15T12:04:42.777217458Z", :level :info, :message "scenario/start", :context {:id "spe-v1-rational-appeal", :ctx/scenario-id "spe-v1-rational-appeal", :ctx/run-id "spe-v1-rational-appeal-run"}}
+{:ts "2026-06-15T12:04:42.866425107Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.880485663Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.896314705Z", :level :info, :message "scenario/end", :context {:id "spe-v2-irrational-appeal", :outcome :pass, :ctx/scenario-id "spe-v2-irrational-appeal", :ctx/run-id "spe-v2-irrational-appeal-run"}}
+{:ts "2026-06-15T12:04:42.896645745Z", :level :info, :message "scenario/start", :context {:id "spe-v2-irrational-appeal", :ctx/scenario-id "spe-v2-irrational-appeal", :ctx/run-id "spe-v2-irrational-appeal-run"}}
+{:ts "2026-06-15T12:04:42.955204520Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.970512711Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.985760216Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:42.994582896Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "spe-v3-multi-agent-regret", :ctx/run-id "spe-v3-multi-agent-regret-run", :ctx/event-index 7, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:42.996298791Z", :level :info, :message "scenario/end", :context {:id "spe-v3-multi-agent-regret", :outcome :pass, :ctx/scenario-id "spe-v3-multi-agent-regret", :ctx/run-id "spe-v3-multi-agent-regret-run"}}
+{:ts "2026-06-15T12:04:42.996615634Z", :level :info, :message "scenario/start", :context {:id "spe-v3-multi-agent-regret", :ctx/scenario-id "spe-v3-multi-agent-regret", :ctx/run-id "spe-v3-multi-agent-regret-run"}}
+{:ts "2026-06-15T12:04:43.066832463Z", :level :info, :message "scenario/end", :context {:id "spe-v4-no-strategic-node", :outcome :pass, :ctx/scenario-id "spe-v4-no-strategic-node", :ctx/run-id "spe-v4-no-strategic-node-run"}}
+{:ts "2026-06-15T12:04:43.067540781Z", :level :info, :message "scenario/start", :context {:id "spe-v4-no-strategic-node", :ctx/scenario-id "spe-v4-no-strategic-node", :ctx/run-id "spe-v4-no-strategic-node-run"}}
+{:ts "2026-06-15T12:04:43.127532253Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.140137690Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.154164583Z", :level :info, :message "scenario/end", :context {:id "spe-v5-seller-rational-appeal", :outcome :pass, :ctx/scenario-id "spe-v5-seller-rational-appeal", :ctx/run-id "spe-v5-seller-rational-appeal-run"}}
+{:ts "2026-06-15T12:04:43.154745027Z", :level :info, :message "scenario/start", :context {:id "spe-v5-seller-rational-appeal", :ctx/scenario-id "spe-v5-seller-rational-appeal", :ctx/run-id "spe-v5-seller-rational-appeal-run"}}
+Suite: :suites/spe-validation
+Status: FAIL
+Scenarios: 0/5  (0.5 s)
+Failed: spe-v1-rational-appeal, spe-v2-irrational-appeal, spe-v3-multi-agent-regret, spe-v4-no-strategic-node, spe-v5-seller-rational-appeal
+{:ts "2026-06-15T12:04:43.202669125Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.203100896Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s43-auth-rejected-then-authorized-recovery", :ctx/run-id "s43-auth-rejected-then-authorized-recovery-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.204292684Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.209544568Z", :level :info, :message "scenario/end", :context {:id "s43-auth-rejected-then-authorized-recovery", :outcome :pass, :ctx/scenario-id "s43-auth-rejected-then-authorized-recovery", :ctx/run-id "s43-auth-rejected-then-authorized-recovery-run"}}
+{:ts "2026-06-15T12:04:43.209951052Z", :level :info, :message "scenario/start", :context {:id "s43-auth-rejected-then-authorized-recovery", :ctx/scenario-id "s43-auth-rejected-then-authorized-recovery", :ctx/run-id "s43-auth-rejected-then-authorized-recovery-run"}}
+{:ts "2026-06-15T12:04:43.239969486Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.253705074Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.254001608Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 1, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run", :ctx/event-index 4, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.254668327Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.265881565Z", :level :info, :message "scenario/end", :context {:id "s44-escalation-tier-mismatch-rejected", :outcome :pass, :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run"}}
+{:ts "2026-06-15T12:04:43.266316132Z", :level :info, :message "scenario/start", :context {:id "s44-escalation-tier-mismatch-rejected", :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run"}}
+{:ts "2026-06-15T12:04:43.293668292Z", :level :debug, :message "Submitting resolution", :context {:caller "0xlegacy", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.293925812Z", :level :debug, :message "guard/rejected", :context {:caller "0xlegacy", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s45-stale-module-snapshot-rejects-legacy-resolver", :ctx/run-id "s45-stale-module-snapshot-rejects-legacy-resolver-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.294463716Z", :level :debug, :message "Submitting resolution", :context {:caller "0xnewresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.299475794Z", :level :info, :message "scenario/end", :context {:id "s45-stale-module-snapshot-rejects-legacy-resolver", :outcome :pass, :ctx/scenario-id "s45-stale-module-snapshot-rejects-legacy-resolver", :ctx/run-id "s45-stale-module-snapshot-rejects-legacy-resolver-run"}}
+{:ts "2026-06-15T12:04:43.299851489Z", :level :info, :message "scenario/start", :context {:id "s45-stale-module-snapshot-rejects-legacy-resolver", :ctx/scenario-id "s45-stale-module-snapshot-rejects-legacy-resolver", :ctx/run-id "s45-stale-module-snapshot-rejects-legacy-resolver-run"}}
+Suite: :suites/equivalence-auth-paths
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s43-auth-rejected-then-authorized-recovery, s44-escalation-tier-mismatch-rejected, s45-stale-module-snapshot-rejects-legacy-resolver
+{:ts "2026-06-15T12:04:43.332862567Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.345594235Z", :level :info, :message "scenario/end", :context {:id "timelock-regression", :outcome :pass, :ctx/scenario-id "timelock-regression", :ctx/run-id "timelock-regression-run"}}
+{:ts "2026-06-15T12:04:43.346046676Z", :level :info, :message "scenario/start", :context {:id "timelock-regression", :ctx/scenario-id "timelock-regression", :ctx/run-id "timelock-regression-run"}}
+Suite: :suites/timelock-regression
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: timelock-regression
+{:ts "2026-06-15T12:04:43.402714713Z", :level :info, :message "scenario/end", :context {:id "s114-withdraw-fees-governance", :outcome :pass, :ctx/scenario-id "s114-withdraw-fees-governance", :ctx/run-id "s114-withdraw-fees-governance-run"}}
+{:ts "2026-06-15T12:04:43.402999064Z", :level :info, :message "scenario/start", :context {:id "s114-withdraw-fees-governance", :ctx/scenario-id "s114-withdraw-fees-governance", :ctx/run-id "s114-withdraw-fees-governance-run"}}
+{:ts "2026-06-15T12:04:43.420212460Z", :level :debug, :message "stored-schedule", :context {:module :yield.provider/liquid-lending, :token :USDC, :schedules {:rate-schedule nil, :index-schedule nil, :liquidity-schedule nil, :module-state-schedule nil}}}
+{:ts "2026-06-15T12:04:43.429436914Z", :level :error, :message "scenario/halt", :context {:id "s115-claim-deferred-yield-recovery", :seq 0, :reason :invariant-violation, :ctx/scenario-id "s115-claim-deferred-yield-recovery", :ctx/run-id "s115-claim-deferred-yield-recovery-run"}}
+{:ts "2026-06-15T12:04:43.429778354Z", :level :info, :message "scenario/start", :context {:id "s115-claim-deferred-yield-recovery", :ctx/scenario-id "s115-claim-deferred-yield-recovery", :ctx/run-id "s115-claim-deferred-yield-recovery-run"}}
+{:ts "2026-06-15T12:04:43.477547366Z", :level :info, :message "scenario/end", :context {:id "s118-withdraw-while-paused", :outcome :pass, :ctx/scenario-id "s118-withdraw-while-paused", :ctx/run-id "s118-withdraw-while-paused-run"}}
+{:ts "2026-06-15T12:04:43.477927961Z", :level :info, :message "scenario/start", :context {:id "s118-withdraw-while-paused", :ctx/scenario-id "s118-withdraw-while-paused", :ctx/run-id "s118-withdraw-while-paused-run"}}
+Suite: :suites/withdrawals
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s114-withdraw-fees-governance, s115-claim-deferred-yield-recovery, s118-withdraw-while-paused
+{:ts "2026-06-15T12:04:43.561284615Z", :level :info, :message "scenario/end", :context {:id "s01-baseline-happy-path", :outcome :pass, :ctx/scenario-id "s01-baseline-happy-path", :ctx/run-id "s01-baseline-happy-path-run"}}
+{:ts "2026-06-15T12:04:43.561692641Z", :level :info, :message "scenario/start", :context {:id "s01-baseline-happy-path", :ctx/scenario-id "s01-baseline-happy-path", :ctx/run-id "s01-baseline-happy-path-run"}}
+{:ts "2026-06-15T12:04:43.592092932Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.598077119Z", :level :info, :message "scenario/end", :context {:id "s02-dr3-dispute-release", :outcome :pass, :ctx/scenario-id "s02-dr3-dispute-release", :ctx/run-id "s02-dr3-dispute-release-run"}}
+{:ts "2026-06-15T12:04:43.598417898Z", :level :info, :message "scenario/start", :context {:id "s02-dr3-dispute-release", :ctx/scenario-id "s02-dr3-dispute-release", :ctx/run-id "s02-dr3-dispute-release-run"}}
+{:ts "2026-06-15T12:04:43.625528378Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.631122613Z", :level :info, :message "scenario/end", :context {:id "s03-dr3-dispute-refund", :outcome :pass, :ctx/scenario-id "s03-dr3-dispute-refund", :ctx/run-id "s03-dr3-dispute-refund-run"}}
+{:ts "2026-06-15T12:04:43.631515321Z", :level :info, :message "scenario/start", :context {:id "s03-dr3-dispute-refund", :ctx/scenario-id "s03-dr3-dispute-refund", :ctx/run-id "s03-dr3-dispute-refund-run"}}
+{:ts "2026-06-15T12:04:43.662924070Z", :level :info, :message "scenario/end", :context {:id "s04-dispute-timeout-autocancel", :outcome :pass, :ctx/scenario-id "s04-dispute-timeout-autocancel", :ctx/run-id "s04-dispute-timeout-autocancel-run"}}
+{:ts "2026-06-15T12:04:43.663216106Z", :level :info, :message "scenario/start", :context {:id "s04-dispute-timeout-autocancel", :ctx/scenario-id "s04-dispute-timeout-autocancel", :ctx/run-id "s04-dispute-timeout-autocancel-run"}}
+{:ts "2026-06-15T12:04:43.690882835Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.696432906Z", :level :debug, :message "guard/rejected", :context {:block-time 1180, :appeal-deadline 1240, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s05-pending-settlement-execute", :ctx/run-id "s05-pending-settlement-execute-run", :ctx/event-index 3, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:43.702550748Z", :level :info, :message "scenario/end", :context {:id "s05-pending-settlement-execute", :outcome :pass, :ctx/scenario-id "s05-pending-settlement-execute", :ctx/run-id "s05-pending-settlement-execute-run"}}
+{:ts "2026-06-15T12:04:43.702989193Z", :level :info, :message "scenario/start", :context {:id "s05-pending-settlement-execute", :ctx/scenario-id "s05-pending-settlement-execute", :ctx/run-id "s05-pending-settlement-execute-run"}}
+{:ts "2026-06-15T12:04:43.735075471Z", :level :info, :message "scenario/end", :context {:id "s06-mutual-cancel", :outcome :pass, :ctx/scenario-id "s06-mutual-cancel", :ctx/run-id "s06-mutual-cancel-run"}}
+{:ts "2026-06-15T12:04:43.735385531Z", :level :info, :message "scenario/start", :context {:id "s06-mutual-cancel", :ctx/scenario-id "s06-mutual-cancel", :ctx/run-id "s06-mutual-cancel-run"}}
+{:ts "2026-06-15T12:04:43.769623575Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.769938975Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s07-unauthorized-resolver-rejected", :ctx/run-id "s07-unauthorized-resolver-rejected-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.770560999Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.774892101Z", :level :info, :message "scenario/end", :context {:id "s07-unauthorized-resolver-rejected", :outcome :pass, :ctx/scenario-id "s07-unauthorized-resolver-rejected", :ctx/run-id "s07-unauthorized-resolver-rejected-run"}}
+{:ts "2026-06-15T12:04:43.775178145Z", :level :info, :message "scenario/start", :context {:id "s07-unauthorized-resolver-rejected", :ctx/scenario-id "s07-unauthorized-resolver-rejected", :ctx/run-id "s07-unauthorized-resolver-rejected-run"}}
+{:ts "2026-06-15T12:04:43.800023685Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbuyer", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.800332172Z", :level :debug, :message "guard/rejected", :context {:escrow-state :pending, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run", :ctx/event-index 1, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.805216146Z", :level :debug, :message "guard/rejected", :context {:escrow-state :disputed, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run", :ctx/event-index 3, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:43.806811121Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.811533558Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.811842546Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run", :ctx/event-index 6, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.812989468Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run", :ctx/event-index 8, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:43.813721351Z", :level :info, :message "scenario/end", :context {:id "s08-state-machine-attack-gauntlet", :outcome :pass, :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run"}}
+{:ts "2026-06-15T12:04:43.813997847Z", :level :info, :message "scenario/start", :context {:id "s08-state-machine-attack-gauntlet", :ctx/scenario-id "s08-state-machine-attack-gauntlet", :ctx/run-id "s08-state-machine-attack-gauntlet-run"}}
+{:ts "2026-06-15T12:04:43.858890276Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:43.863818714Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 2}}
+{:ts "2026-06-15T12:04:43.869821758Z", :level :info, :message "scenario/end", :context {:id "s09-multi-escrow-solvency", :outcome :pass, :ctx/scenario-id "s09-multi-escrow-solvency", :ctx/run-id "s09-multi-escrow-solvency-run"}}
+{:ts "2026-06-15T12:04:43.870273217Z", :level :info, :message "scenario/start", :context {:id "s09-multi-escrow-solvency", :ctx/scenario-id "s09-multi-escrow-solvency", :ctx/run-id "s09-multi-escrow-solvency-run"}}
+{:ts "2026-06-15T12:04:43.907017971Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:43.911405320Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "s10-double-finalize-rejected", :ctx/run-id "s10-double-finalize-rejected-run", :ctx/event-index 5, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:43.912069133Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "s10-double-finalize-rejected", :ctx/run-id "s10-double-finalize-rejected-run", :ctx/event-index 6, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:43.912833347Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:43.913066621Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 1, :error :transfer-not-in-dispute, :ctx/scenario-id "s10-double-finalize-rejected", :ctx/run-id "s10-double-finalize-rejected-run", :ctx/event-index 7, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:43.913896370Z", :level :info, :message "scenario/end", :context {:id "s10-double-finalize-rejected", :outcome :pass, :ctx/scenario-id "s10-double-finalize-rejected", :ctx/run-id "s10-double-finalize-rejected-run"}}
+{:ts "2026-06-15T12:04:43.914108323Z", :level :info, :message "scenario/start", :context {:id "s10-double-finalize-rejected", :ctx/scenario-id "s10-double-finalize-rejected", :ctx/run-id "s10-double-finalize-rejected-run"}}
+{:ts "2026-06-15T12:04:43.938954244Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:43.943276599Z", :level :info, :message "scenario/end", :context {:id "s11-zero-fee-edge-case", :outcome :pass, :ctx/scenario-id "s11-zero-fee-edge-case", :ctx/run-id "s11-zero-fee-edge-case-run"}}
+{:ts "2026-06-15T12:04:43.943775418Z", :level :info, :message "scenario/start", :context {:id "s11-zero-fee-edge-case", :ctx/scenario-id "s11-zero-fee-edge-case", :ctx/run-id "s11-zero-fee-edge-case-run"}}
+{:ts "2026-06-15T12:04:43.969269052Z", :level :info, :message "scenario/end", :context {:id "s12a-snapshot-isolation-fee-zero", :outcome :pass, :ctx/scenario-id "s12a-snapshot-isolation-fee-zero", :ctx/run-id "s12a-snapshot-isolation-fee-zero-run"}}
+{:ts "2026-06-15T12:04:43.969594411Z", :level :info, :message "scenario/start", :context {:id "s12a-snapshot-isolation-fee-zero", :ctx/scenario-id "s12a-snapshot-isolation-fee-zero", :ctx/run-id "s12a-snapshot-isolation-fee-zero-run"}}
+{:ts "2026-06-15T12:04:43.994313109Z", :level :info, :message "scenario/end", :context {:id "s12b-snapshot-isolation-fee-500", :outcome :pass, :ctx/scenario-id "s12b-snapshot-isolation-fee-500", :ctx/run-id "s12b-snapshot-isolation-fee-500-run"}}
+{:ts "2026-06-15T12:04:43.994702440Z", :level :info, :message "scenario/start", :context {:id "s12b-snapshot-isolation-fee-500", :ctx/scenario-id "s12b-snapshot-isolation-fee-500", :ctx/run-id "s12b-snapshot-isolation-fee-500-run"}}
+{:ts "2026-06-15T12:04:44.018770681Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.022436497Z", :level :debug, :message "guard/rejected", :context {:block-time 1180, :appeal-deadline 1240, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run", :ctx/event-index 3, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:44.026685513Z", :level :info, :message "scenario/end", :context {:id "s13-pending-settlement-refund", :outcome :pass, :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run"}}
+{:ts "2026-06-15T12:04:44.026976897Z", :level :info, :message "scenario/start", :context {:id "s13-pending-settlement-refund", :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run"}}
+{:ts "2026-06-15T12:04:44.050556188Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.055101026Z", :level :info, :message "scenario/end", :context {:id "s14-dr3-module-authorized", :outcome :pass, :ctx/scenario-id "s14-dr3-module-authorized", :ctx/run-id "s14-dr3-module-authorized-run"}}
+{:ts "2026-06-15T12:04:44.055431565Z", :level :info, :message "scenario/start", :context {:id "s14-dr3-module-authorized", :ctx/scenario-id "s14-dr3-module-authorized", :ctx/run-id "s14-dr3-module-authorized-run"}}
+{:ts "2026-06-15T12:04:44.080442791Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.080730628Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.081823759Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.086058297Z", :level :info, :message "scenario/end", :context {:id "s15-dr3-module-unauthorized-rejected", :outcome :pass, :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run"}}
+{:ts "2026-06-15T12:04:44.086328140Z", :level :info, :message "scenario/start", :context {:id "s15-dr3-module-unauthorized-rejected", :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run"}}
+{:ts "2026-06-15T12:04:44.112504122Z", :level :info, :message "scenario/end", :context {:id "s16-ieo-create-release", :outcome :pass, :ctx/scenario-id "s16-ieo-create-release", :ctx/run-id "s16-ieo-create-release-run"}}
+{:ts "2026-06-15T12:04:44.112827778Z", :level :info, :message "scenario/start", :context {:id "s16-ieo-create-release", :ctx/scenario-id "s16-ieo-create-release", :ctx/run-id "s16-ieo-create-release-run"}}
+{:ts "2026-06-15T12:04:44.141452279Z", :level :info, :message "scenario/end", :context {:id "s17-ieo-dispute-no-resolver-timeout", :outcome :pass, :ctx/scenario-id "s17-ieo-dispute-no-resolver-timeout", :ctx/run-id "s17-ieo-dispute-no-resolver-timeout-run"}}
+{:ts "2026-06-15T12:04:44.141794420Z", :level :info, :message "scenario/start", :context {:id "s17-ieo-dispute-no-resolver-timeout", :ctx/scenario-id "s17-ieo-dispute-no-resolver-timeout", :ctx/run-id "s17-ieo-dispute-no-resolver-timeout-run"}}
+{:ts "2026-06-15T12:04:44.165895694Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.170150300Z", :level :info, :message "scenario/end", :context {:id "s18-dr3-kleros-l0-resolves", :outcome :pass, :ctx/scenario-id "s18-dr3-kleros-l0-resolves", :ctx/run-id "s18-dr3-kleros-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.170443117Z", :level :info, :message "scenario/start", :context {:id "s18-dr3-kleros-l0-resolves", :ctx/scenario-id "s18-dr3-kleros-l0-resolves", :ctx/run-id "s18-dr3-kleros-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.195989761Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.196602217Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.200671701Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.200862003Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run", :ctx/event-index 4, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.201381472Z", :level :info, :message "scenario/end", :context {:id "s19-dr3-kleros-escalation-rejected-l0-resolves", :outcome :pass, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.201545694Z", :level :info, :message "scenario/start", :context {:id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.237763986Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.238336515Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 3, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.238808033Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.239212923Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.239370934Z", :level :debug, :message "guard/rejected", :context {:caller "0xl2", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.239987938Z", :level :info, :message "scenario/end", :context {:id "s20-dr3-kleros-max-escalation-guard", :outcome :pass, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run"}}
+{:ts "2026-06-15T12:04:44.240252632Z", :level :info, :message "scenario/start", :context {:id "s20-dr3-kleros-max-escalation-guard", :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run"}}
+{:ts "2026-06-15T12:04:44.267501766Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.275822650Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.285360650Z", :level :info, :message "scenario/end", :context {:id "s21-dr3-kleros-pending-cleared-on-escalation", :outcome :pass, :ctx/scenario-id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/run-id "s21-dr3-kleros-pending-cleared-on-escalation-run"}}
+{:ts "2026-06-15T12:04:44.285614123Z", :level :info, :message "scenario/start", :context {:id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/scenario-id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/run-id "s21-dr3-kleros-pending-cleared-on-escalation-run"}}
+{:ts "2026-06-15T12:04:44.311782279Z", :level :info, :message "scenario/end", :context {:id "s22-status-leak-agree-cancel-over-dispute", :outcome :pass, :ctx/scenario-id "s22-status-leak-agree-cancel-over-dispute", :ctx/run-id "s22-status-leak-agree-cancel-over-dispute-run"}}
+{:ts "2026-06-15T12:04:44.312096738Z", :level :info, :message "scenario/start", :context {:id "s22-status-leak-agree-cancel-over-dispute", :ctx/scenario-id "s22-status-leak-agree-cancel-over-dispute", :ctx/run-id "s22-status-leak-agree-cancel-over-dispute-run"}}
+{:ts "2026-06-15T12:04:44.335465508Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.336062113Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.339822559Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.340336156Z", :level :info, :message "scenario/end", :context {:id "s23-preemptive-escalation-blocked", :outcome :pass, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run"}}
+{:ts "2026-06-15T12:04:44.340472025Z", :level :info, :message "scenario/start", :context {:id "s23-preemptive-escalation-blocked", :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run"}}
+Suite: :suites/all-invariants
+Status: FAIL
+Scenarios: 0/24  (0.9 s)
+Failed: s01-baseline-happy-path, s02-dr3-dispute-release, s03-dr3-dispute-refund, s04-dispute-timeout-autocancel, s05-pending-settlement-execute, s06-mutual-cancel, s07-unauthorized-resolver-rejected, s08-state-machine-attack-gauntlet, s09-multi-escrow-solvency, s10-double-finalize-rejected, s11-zero-fee-edge-case, s12a-snapshot-isolation-fee-zero, s12b-snapshot-isolation-fee-500, s13-pending-settlement-refund, s14-dr3-module-authorized, s15-dr3-module-unauthorized-rejected, s16-ieo-create-release, s17-ieo-dispute-no-resolver-timeout, s18-dr3-kleros-l0-resolves, s19-dr3-kleros-escalation-rejected-l0-resolves, s20-dr3-kleros-max-escalation-guard, s21-dr3-kleros-pending-cleared-on-escalation, s22-status-leak-agree-cancel-over-dispute, s23-preemptive-escalation-blocked
+{:ts "2026-06-15T12:04:44.384803506Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.388514828Z", :level :info, :message "scenario/end", :context {:id "s14-dr3-module-authorized", :outcome :pass, :ctx/scenario-id "s14-dr3-module-authorized", :ctx/run-id "s14-dr3-module-authorized-run"}}
+{:ts "2026-06-15T12:04:44.388758652Z", :level :info, :message "scenario/start", :context {:id "s14-dr3-module-authorized", :ctx/scenario-id "s14-dr3-module-authorized", :ctx/run-id "s14-dr3-module-authorized-run"}}
+{:ts "2026-06-15T12:04:44.410826516Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.411045393Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.411649693Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.415279009Z", :level :info, :message "scenario/end", :context {:id "s15-dr3-module-unauthorized-rejected", :outcome :pass, :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run"}}
+{:ts "2026-06-15T12:04:44.415506552Z", :level :info, :message "scenario/start", :context {:id "s15-dr3-module-unauthorized-rejected", :ctx/scenario-id "s15-dr3-module-unauthorized-rejected", :ctx/run-id "s15-dr3-module-unauthorized-rejected-run"}}
+{:ts "2026-06-15T12:04:44.438273958Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.441739492Z", :level :info, :message "scenario/end", :context {:id "s18-dr3-kleros-l0-resolves", :outcome :pass, :ctx/scenario-id "s18-dr3-kleros-l0-resolves", :ctx/run-id "s18-dr3-kleros-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.441959070Z", :level :info, :message "scenario/start", :context {:id "s18-dr3-kleros-l0-resolves", :ctx/scenario-id "s18-dr3-kleros-l0-resolves", :ctx/run-id "s18-dr3-kleros-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.464077300Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.464606497Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.468787223Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.468985440Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run", :ctx/event-index 4, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.469474912Z", :level :info, :message "scenario/end", :context {:id "s19-dr3-kleros-escalation-rejected-l0-resolves", :outcome :pass, :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.469647841Z", :level :info, :message "scenario/start", :context {:id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/scenario-id "s19-dr3-kleros-escalation-rejected-l0-resolves", :ctx/run-id "s19-dr3-kleros-escalation-rejected-l0-resolves-run"}}
+{:ts "2026-06-15T12:04:44.491952155Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.492541306Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 3, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.492913645Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.493298878Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.493397626Z", :level :debug, :message "guard/rejected", :context {:caller "0xl2", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.493821713Z", :level :info, :message "scenario/end", :context {:id "s20-dr3-kleros-max-escalation-guard", :outcome :pass, :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run"}}
+{:ts "2026-06-15T12:04:44.493960637Z", :level :info, :message "scenario/start", :context {:id "s20-dr3-kleros-max-escalation-guard", :ctx/scenario-id "s20-dr3-kleros-max-escalation-guard", :ctx/run-id "s20-dr3-kleros-max-escalation-guard-run"}}
+{:ts "2026-06-15T12:04:44.514382349Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.521422476Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.528803982Z", :level :info, :message "scenario/end", :context {:id "s21-dr3-kleros-pending-cleared-on-escalation", :outcome :pass, :ctx/scenario-id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/run-id "s21-dr3-kleros-pending-cleared-on-escalation-run"}}
+{:ts "2026-06-15T12:04:44.529033750Z", :level :info, :message "scenario/start", :context {:id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/scenario-id "s21-dr3-kleros-pending-cleared-on-escalation", :ctx/run-id "s21-dr3-kleros-pending-cleared-on-escalation-run"}}
+{:ts "2026-06-15T12:04:44.550730397Z", :level :debug, :message "guard/rejected", :context {:pending-exists false, :dispute-level 0, :workflow-id 0, :error :no-resolution-to-appeal, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.551127343Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.554154113Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.554659174Z", :level :info, :message "scenario/end", :context {:id "s23-preemptive-escalation-blocked", :outcome :pass, :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run"}}
+{:ts "2026-06-15T12:04:44.554802186Z", :level :info, :message "scenario/start", :context {:id "s23-preemptive-escalation-blocked", :ctx/scenario-id "s23-preemptive-escalation-blocked", :ctx/run-id "s23-preemptive-escalation-blocked-run"}}
+{:ts "2026-06-15T12:04:44.579969588Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.589433197Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbadresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.589882192Z", :level :debug, :message "guard/rejected", :context {:caller "0xbadresolver", :dispute-level 1, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run", :ctx/event-index 4, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.590587794Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.598349745Z", :level :info, :message "scenario/end", :context {:id "s44-escalation-tier-mismatch-rejected", :outcome :pass, :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run"}}
+{:ts "2026-06-15T12:04:44.598582728Z", :level :info, :message "scenario/start", :context {:id "s44-escalation-tier-mismatch-rejected", :ctx/scenario-id "s44-escalation-tier-mismatch-rejected", :ctx/run-id "s44-escalation-tier-mismatch-rejected-run"}}
+{:ts "2026-06-15T12:04:44.621533723Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.630166932Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.630753909Z", :level :info, :message "scenario/end", :context {:id "s46a-settlement-before-escalation-window-edge", :outcome :pass, :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run"}}
+{:ts "2026-06-15T12:04:44.630901379Z", :level :info, :message "scenario/start", :context {:id "s46a-settlement-before-escalation-window-edge", :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run"}}
+{:ts "2026-06-15T12:04:44.654170850Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.666925802Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.667094082Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.667539270Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run", :ctx/event-index 6, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:44.668101299Z", :level :info, :message "scenario/end", :context {:id "s46b-escalation-before-settlement-window-edge", :outcome :pass, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run"}}
+{:ts "2026-06-15T12:04:44.668290669Z", :level :info, :message "scenario/start", :context {:id "s46b-escalation-before-settlement-window-edge", :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run"}}
+{:ts "2026-06-15T12:04:44.690373632Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.697920524Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.705536807Z", :level :info, :message "scenario/end", :context {:id "s48-max-escalation-exact-boundary", :outcome :pass, :ctx/scenario-id "s48-max-escalation-exact-boundary", :ctx/run-id "s48-max-escalation-exact-boundary-run"}}
+{:ts "2026-06-15T12:04:44.705785541Z", :level :info, :message "scenario/start", :context {:id "s48-max-escalation-exact-boundary", :ctx/scenario-id "s48-max-escalation-exact-boundary", :ctx/run-id "s48-max-escalation-exact-boundary-run"}}
+{:ts "2026-06-15T12:04:44.727853695Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.734388040Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.741234689Z", :level :debug, :message "guard/rejected", :context {:dispute-level 2, :workflow-id 0, :error :escalation-not-allowed, :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run", :ctx/event-index 6, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:44.741620543Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.744807668Z", :level :info, :message "scenario/end", :context {:id "s49-max-escalation-plus-one-rejected", :outcome :pass, :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run"}}
+{:ts "2026-06-15T12:04:44.744957563Z", :level :info, :message "scenario/start", :context {:id "s49-max-escalation-plus-one-rejected", :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run"}}
+{:ts "2026-06-15T12:04:44.765426705Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.773059680Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.779303402Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.783239061Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run", :ctx/event-index 7, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:44.783717542Z", :level :info, :message "scenario/end", :context {:id "s50-multi-hop-pending-cleared-every-hop", :outcome :pass, :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run"}}
+{:ts "2026-06-15T12:04:44.783867146Z", :level :info, :message "scenario/start", :context {:id "s50-multi-hop-pending-cleared-every-hop", :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run"}}
+Suite: :suites/dr3-critical
+Status: FAIL
+Scenarios: 0/13  (0.4 s)
+Failed: s14-dr3-module-authorized, s15-dr3-module-unauthorized-rejected, s18-dr3-kleros-l0-resolves, s19-dr3-kleros-escalation-rejected-l0-resolves, s20-dr3-kleros-max-escalation-guard, s21-dr3-kleros-pending-cleared-on-escalation, s23-preemptive-escalation-blocked, s44-escalation-tier-mismatch-rejected, s46a-settlement-before-escalation-window-edge, s46b-escalation-before-settlement-window-edge, s48-max-escalation-exact-boundary, s49-max-escalation-plus-one-rejected, s50-multi-hop-pending-cleared-every-hop
+{:ts "2026-06-15T12:04:44.809929502Z", :level :debug, :message "Submitting resolution", :context {:caller "0xlegacy", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.810164319Z", :level :debug, :message "guard/rejected", :context {:caller "0xlegacy", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s61-governance-snapshot-mid-dispute-immutability", :ctx/run-id "s61-governance-snapshot-mid-dispute-immutability-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.810763499Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.826314903Z", :level :info, :message "scenario/end", :context {:id "s61-governance-snapshot-mid-dispute-immutability", :outcome :pass, :ctx/scenario-id "s61-governance-snapshot-mid-dispute-immutability", :ctx/run-id "s61-governance-snapshot-mid-dispute-immutability-run"}}
+{:ts "2026-06-15T12:04:44.826568415Z", :level :info, :message "scenario/start", :context {:id "s61-governance-snapshot-mid-dispute-immutability", :ctx/scenario-id "s61-governance-snapshot-mid-dispute-immutability", :ctx/run-id "s61-governance-snapshot-mid-dispute-immutability-run"}}
+Suite: :suites/equivalence-governance-snapshot
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: s61-governance-snapshot-mid-dispute-immutability
+{:ts "2026-06-15T12:04:44.863446993Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.875661617Z", :level :info, :message "scenario/end", :context {:id "s64-replay-event-id-dedupe", :outcome :pass, :ctx/scenario-id "s64-replay-event-id-dedupe", :ctx/run-id "s64-replay-event-id-dedupe-run"}}
+{:ts "2026-06-15T12:04:44.875859394Z", :level :info, :message "scenario/start", :context {:id "s64-replay-event-id-dedupe", :ctx/scenario-id "s64-replay-event-id-dedupe", :ctx/run-id "s64-replay-event-id-dedupe-run"}}
+{:ts "2026-06-15T12:04:44.897091978Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.902915360Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.903117925Z", :level :debug, :message "guard/rejected", :context {:caller "0xresolver1", :dispute-level 1, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s116-superseded-pending-repeated-keeper", :ctx/run-id "s116-superseded-pending-repeated-keeper-run", :ctx/event-index 4, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.908194967Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s116-superseded-pending-repeated-keeper", :ctx/run-id "s116-superseded-pending-repeated-keeper-run", :ctx/event-index 6, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:44.908767757Z", :level :info, :message "scenario/end", :context {:id "s116-superseded-pending-repeated-keeper", :outcome :pass, :ctx/scenario-id "s116-superseded-pending-repeated-keeper", :ctx/run-id "s116-superseded-pending-repeated-keeper-run"}}
+{:ts "2026-06-15T12:04:44.908955133Z", :level :info, :message "scenario/start", :context {:id "s116-superseded-pending-repeated-keeper", :ctx/scenario-id "s116-superseded-pending-repeated-keeper", :ctx/run-id "s116-superseded-pending-repeated-keeper-run"}}
+{:ts "2026-06-15T12:04:44.934461050Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.945527269Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.945720617Z", :level :debug, :message "guard/rejected", :context {:caller "0xresolver1", :dispute-level 1, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s117-challenge-resolution-dedupe", :ctx/run-id "s117-challenge-resolution-dedupe-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:44.949730457Z", :level :info, :message "scenario/end", :context {:id "s117-challenge-resolution-dedupe", :outcome :pass, :ctx/scenario-id "s117-challenge-resolution-dedupe", :ctx/run-id "s117-challenge-resolution-dedupe-run"}}
+{:ts "2026-06-15T12:04:44.949978289Z", :level :info, :message "scenario/start", :context {:id "s117-challenge-resolution-dedupe", :ctx/scenario-id "s117-challenge-resolution-dedupe", :ctx/run-id "s117-challenge-resolution-dedupe-run"}}
+Suite: :suites/replay-dedupe
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s64-replay-event-id-dedupe, s116-superseded-pending-repeated-keeper, s117-challenge-resolution-dedupe
+{:ts "2026-06-15T12:04:44.991761841Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:44.999305727Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.009319593Z", :level :info, :message "scenario/end", :context {:id "s26-forking-strategist-l1-reversal", :outcome :pass, :ctx/scenario-id "s26-forking-strategist-l1-reversal", :ctx/run-id "s26-forking-strategist-l1-reversal-run"}}
+{:ts "2026-06-15T12:04:45.009610466Z", :level :info, :message "scenario/start", :context {:id "s26-forking-strategist-l1-reversal", :ctx/scenario-id "s26-forking-strategist-l1-reversal", :ctx/run-id "s26-forking-strategist-l1-reversal-run"}}
+{:ts "2026-06-15T12:04:45.044996524Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.052641202Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.062278311Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.066865640Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run", :ctx/event-index 7, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.067412952Z", :level :info, :message "scenario/end", :context {:id "s27-forking-strategist-l2-fork", :outcome :pass, :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run"}}
+{:ts "2026-06-15T12:04:45.067559070Z", :level :info, :message "scenario/start", :context {:id "s27-forking-strategist-l2-fork", :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run"}}
+{:ts "2026-06-15T12:04:45.102091363Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.108105728Z", :level :debug, :message "guard/rejected", :context {:block-time 1185, :appeal-deadline 1180, :workflow-id 0, :error :appeal-window-expired, :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run", :ctx/event-index 3, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.113256570Z", :level :info, :message "scenario/end", :context {:id "s28-forking-strategist-late-escalation-rejected", :outcome :pass, :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run"}}
+{:ts "2026-06-15T12:04:45.113469936Z", :level :info, :message "scenario/start", :context {:id "s28-forking-strategist-late-escalation-rejected", :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run"}}
+{:ts "2026-06-15T12:04:45.146609780Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.155145533Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.164535201Z", :level :info, :message "scenario/end", :context {:id "s29-forking-strategist-seller-escalates", :outcome :pass, :ctx/scenario-id "s29-forking-strategist-seller-escalates", :ctx/run-id "s29-forking-strategist-seller-escalates-run"}}
+{:ts "2026-06-15T12:04:45.164773244Z", :level :info, :message "scenario/start", :context {:id "s29-forking-strategist-seller-escalates", :ctx/scenario-id "s29-forking-strategist-seller-escalates", :ctx/run-id "s29-forking-strategist-seller-escalates-run"}}
+{:ts "2026-06-15T12:04:45.195784186Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.201528417Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.208690156Z", :level :info, :message "scenario/end", :context {:id "s30-forking-strategist-double-loss", :outcome :pass, :ctx/scenario-id "s30-forking-strategist-double-loss", :ctx/run-id "s30-forking-strategist-double-loss-run"}}
+{:ts "2026-06-15T12:04:45.208979827Z", :level :info, :message "scenario/start", :context {:id "s30-forking-strategist-double-loss", :ctx/scenario-id "s30-forking-strategist-double-loss", :ctx/run-id "s30-forking-strategist-double-loss-run"}}
+{:ts "2026-06-15T12:04:45.237057588Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.243263277Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.249744050Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.253139842Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run", :ctx/event-index 7, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.253652547Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run", :ctx/event-index 8, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.254105349Z", :level :info, :message "scenario/end", :context {:id "s31-forking-strategist-all-levels-confirm", :outcome :pass, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run"}}
+{:ts "2026-06-15T12:04:45.254245746Z", :level :info, :message "scenario/start", :context {:id "s31-forking-strategist-all-levels-confirm", :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run"}}
+{:ts "2026-06-15T12:04:45.278178940Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.286281899Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.291078848Z", :level :debug, :message "guard/rejected", :context {:block-time 1200, :appeal-deadline 1250, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run", :ctx/event-index 5, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.296363805Z", :level :info, :message "scenario/end", :context {:id "s32-forking-strategist-premature-settlement-rejected", :outcome :pass, :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run"}}
+{:ts "2026-06-15T12:04:45.296606507Z", :level :info, :message "scenario/start", :context {:id "s32-forking-strategist-premature-settlement-rejected", :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run"}}
+{:ts "2026-06-15T12:04:45.327321817Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.329909631Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.337622188Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.344424773Z", :level :info, :message "scenario/end", :context {:id "s33-forking-strategist-two-escrow-fork-isolation", :outcome :pass, :ctx/scenario-id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/run-id "s33-forking-strategist-two-escrow-fork-isolation-run"}}
+{:ts "2026-06-15T12:04:45.344620936Z", :level :info, :message "scenario/start", :context {:id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/scenario-id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/run-id "s33-forking-strategist-two-escrow-fork-isolation-run"}}
+{:ts "2026-06-15T12:04:45.379799660Z", :level :info, :message "scenario/end", :context {:id "s114-withdraw-fees-governance", :outcome :pass, :ctx/scenario-id "s114-withdraw-fees-governance", :ctx/run-id "s114-withdraw-fees-governance-run"}}
+{:ts "2026-06-15T12:04:45.379942722Z", :level :info, :message "scenario/start", :context {:id "s114-withdraw-fees-governance", :ctx/scenario-id "s114-withdraw-fees-governance", :ctx/run-id "s114-withdraw-fees-governance-run"}}
+Suite: :suites/forking-strategist
+Status: FAIL
+Scenarios: 0/9  (0.4 s)
+Failed: s26-forking-strategist-l1-reversal, s27-forking-strategist-l2-fork, s28-forking-strategist-late-escalation-rejected, s29-forking-strategist-seller-escalates, s30-forking-strategist-double-loss, s31-forking-strategist-all-levels-confirm, s32-forking-strategist-premature-settlement-rejected, s33-forking-strategist-two-escrow-fork-isolation, s114-withdraw-fees-governance
+{:ts "2026-06-15T12:04:45.405590108Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.412732670Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.420703718Z", :level :info, :message "scenario/end", :context {:id "s48-max-escalation-exact-boundary", :outcome :pass, :ctx/scenario-id "s48-max-escalation-exact-boundary", :ctx/run-id "s48-max-escalation-exact-boundary-run"}}
+{:ts "2026-06-15T12:04:45.420880976Z", :level :info, :message "scenario/start", :context {:id "s48-max-escalation-exact-boundary", :ctx/scenario-id "s48-max-escalation-exact-boundary", :ctx/run-id "s48-max-escalation-exact-boundary-run"}}
+{:ts "2026-06-15T12:04:45.442546424Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.450573239Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.459761363Z", :level :debug, :message "guard/rejected", :context {:dispute-level 2, :workflow-id 0, :error :escalation-not-allowed, :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run", :ctx/event-index 6, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.460325126Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.465958807Z", :level :info, :message "scenario/end", :context {:id "s49-max-escalation-plus-one-rejected", :outcome :pass, :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run"}}
+{:ts "2026-06-15T12:04:45.466169908Z", :level :info, :message "scenario/start", :context {:id "s49-max-escalation-plus-one-rejected", :ctx/scenario-id "s49-max-escalation-plus-one-rejected", :ctx/run-id "s49-max-escalation-plus-one-rejected-run"}}
+{:ts "2026-06-15T12:04:45.488276246Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.494866587Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.501529135Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.505643515Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run", :ctx/event-index 7, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.506134369Z", :level :info, :message "scenario/end", :context {:id "s50-multi-hop-pending-cleared-every-hop", :outcome :pass, :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run"}}
+{:ts "2026-06-15T12:04:45.506278002Z", :level :info, :message "scenario/start", :context {:id "s50-multi-hop-pending-cleared-every-hop", :ctx/scenario-id "s50-multi-hop-pending-cleared-every-hop", :ctx/run-id "s50-multi-hop-pending-cleared-every-hop-run"}}
+Suite: :suites/equivalence-escalation-boundaries
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s48-max-escalation-exact-boundary, s49-max-escalation-plus-one-rejected, s50-multi-hop-pending-cleared-every-hop
+{:ts "2026-06-15T12:04:45.528540777Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.531966015Z", :level :debug, :message "guard/rejected", :context {:block-time 1180, :appeal-deadline 1240, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run", :ctx/event-index 3, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.536153023Z", :level :info, :message "scenario/end", :context {:id "s13-pending-settlement-refund", :outcome :pass, :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run"}}
+{:ts "2026-06-15T12:04:45.536312617Z", :level :info, :message "scenario/start", :context {:id "s13-pending-settlement-refund", :ctx/scenario-id "s13-pending-settlement-refund", :ctx/run-id "s13-pending-settlement-refund-run"}}
+Suite: :suites/withdrawal-adversarial
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: s13-pending-settlement-refund
+{:ts "2026-06-15T12:04:45.573757152Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.576050025Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.578435585Z", :level :info, :message "scenario/end", :context {:id "s59-fot-rounding-multi-hop-conservation", :outcome :pass, :ctx/scenario-id "s59-fot-rounding-multi-hop-conservation", :ctx/run-id "s59-fot-rounding-multi-hop-conservation-run"}}
+{:ts "2026-06-15T12:04:45.578560783Z", :level :info, :message "scenario/start", :context {:id "s59-fot-rounding-multi-hop-conservation", :ctx/scenario-id "s59-fot-rounding-multi-hop-conservation", :ctx/run-id "s59-fot-rounding-multi-hop-conservation-run"}}
+Captured event evidence: slashing-s60-partial-withdraw-then-slash-ordering-4.json  (Quality: complete )
+{:ts "2026-06-15T12:04:45.601117097Z", :level :info, :message "scenario/end", :context {:id "s60-partial-withdraw-then-slash-ordering", :outcome :pass, :ctx/scenario-id "s60-partial-withdraw-then-slash-ordering", :ctx/run-id "s60-partial-withdraw-then-slash-ordering-run"}}
+{:ts "2026-06-15T12:04:45.601263355Z", :level :info, :message "scenario/start", :context {:id "s60-partial-withdraw-then-slash-ordering", :ctx/scenario-id "s60-partial-withdraw-then-slash-ordering", :ctx/run-id "s60-partial-withdraw-then-slash-ordering-run"}}
+{:ts "2026-06-15T12:04:45.622090007Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.624284604Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.626452038Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 2}}
+{:ts "2026-06-15T12:04:45.628620565Z", :level :debug, :message "guard/rejected", :context {:workflow-id 1, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-isolation-under-dispute-load", :ctx/run-id "s62-cross-token-isolation-under-dispute-load-run", :ctx/event-index 9, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.628914584Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-isolation-under-dispute-load", :ctx/run-id "s62-cross-token-isolation-under-dispute-load-run", :ctx/event-index 10, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.629167726Z", :level :debug, :message "guard/rejected", :context {:workflow-id 2, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-isolation-under-dispute-load", :ctx/run-id "s62-cross-token-isolation-under-dispute-load-run", :ctx/event-index 11, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.629445515Z", :level :info, :message "scenario/end", :context {:id "s62-cross-token-isolation-under-dispute-load", :outcome :pass, :ctx/scenario-id "s62-cross-token-isolation-under-dispute-load", :ctx/run-id "s62-cross-token-isolation-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.629527671Z", :level :info, :message "scenario/start", :context {:id "s62-cross-token-isolation-under-dispute-load", :ctx/scenario-id "s62-cross-token-isolation-under-dispute-load", :ctx/run-id "s62-cross-token-isolation-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.645433148Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.648784055Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run", :ctx/event-index 5, :ctx/event-type "challenge_resolution"}}
+{:ts "2026-06-15T12:04:45.649301760Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run", :ctx/event-index 6, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.650331510Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.653853482Z", :level :debug, :message "guard/rejected", :context {:workflow-id 1, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run", :ctx/event-index 8, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.654525110Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run", :ctx/event-index 9, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.654939278Z", :level :info, :message "scenario/end", :context {:id "s62-cross-token-fee-on-transfer-under-dispute-load", :outcome :pass, :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.655069957Z", :level :info, :message "scenario/start", :context {:id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/scenario-id "s62-cross-token-fee-on-transfer-under-dispute-load", :ctx/run-id "s62-cross-token-fee-on-transfer-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.674110440Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.676764971Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.679209653Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run", :ctx/event-index 6, :ctx/event-type "challenge_resolution"}}
+{:ts "2026-06-15T12:04:45.679512400Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run", :ctx/event-index 7, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.679808202Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.679864840Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run", :ctx/event-index 8, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:45.680098695Z", :level :debug, :message "guard/rejected", :context {:workflow-id 1, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run", :ctx/event-index 9, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.680331298Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run", :ctx/event-index 10, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.680672487Z", :level :info, :message "scenario/end", :context {:id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :outcome :pass, :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.680786314Z", :level :info, :message "scenario/start", :context {:id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/scenario-id "s62-cross-token-parallel-appeal-depths-under-dispute-load", :ctx/run-id "s62-cross-token-parallel-appeal-depths-under-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.690316870Z", :level :debug, :message "set-resolver-capacity", :context {:resolver "0xresolver", :max-concurrent 2, :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run", :ctx/event-index 0, :ctx/event-type "set_resolver_capacity"}}
+{:ts "2026-06-15T12:04:45.716138628Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.719871501Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run", :ctx/event-index 8, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.723558708Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 1}}
+{:ts "2026-06-15T12:04:45.727272695Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 2}}
+{:ts "2026-06-15T12:04:45.730704766Z", :level :debug, :message "guard/rejected", :context {:workflow-id 1, :error :no-pending-settlement, :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run", :ctx/event-index 12, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.731085882Z", :level :debug, :message "guard/rejected", :context {:workflow-id 2, :error :no-pending-settlement, :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run", :ctx/event-index 13, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.731558832Z", :level :info, :message "scenario/end", :context {:id "s62-resolver-capacity-concurrent-dispute-load", :outcome :pass, :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run"}}
+{:ts "2026-06-15T12:04:45.731717564Z", :level :info, :message "scenario/start", :context {:id "s62-resolver-capacity-concurrent-dispute-load", :ctx/scenario-id "s62-resolver-capacity-concurrent-dispute-load", :ctx/run-id "s62-resolver-capacity-concurrent-dispute-load-run"}}
+Suite: :suites/equivalence-economic-stress
+Status: FAIL
+Scenarios: 0/6  (0.2 s)
+Failed: s59-fot-rounding-multi-hop-conservation, s60-partial-withdraw-then-slash-ordering, s62-cross-token-isolation-under-dispute-load, s62-cross-token-fee-on-transfer-under-dispute-load, s62-cross-token-parallel-appeal-depths-under-dispute-load, s62-resolver-capacity-concurrent-dispute-load
+{:ts "2026-06-15T12:04:45.752642212Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.755544465Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.755650537Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s56-same-block-dual-resolution-order-invariant", :ctx/run-id "s56-same-block-dual-resolution-order-invariant-run", :ctx/event-index 3, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:45.756036131Z", :level :info, :message "scenario/end", :context {:id "s56-same-block-dual-resolution-order-invariant", :outcome :pass, :ctx/scenario-id "s56-same-block-dual-resolution-order-invariant", :ctx/run-id "s56-same-block-dual-resolution-order-invariant-run"}}
+{:ts "2026-06-15T12:04:45.756137343Z", :level :info, :message "scenario/start", :context {:id "s56-same-block-dual-resolution-order-invariant", :ctx/scenario-id "s56-same-block-dual-resolution-order-invariant", :ctx/run-id "s56-same-block-dual-resolution-order-invariant-run"}}
+{:ts "2026-06-15T12:04:45.769652272Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s58-escalation-after-terminal-hard-reject", :ctx/run-id "s58-escalation-after-terminal-hard-reject-run", :ctx/event-index 2, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:45.770120894Z", :level :info, :message "scenario/end", :context {:id "s58-escalation-after-terminal-hard-reject", :outcome :pass, :ctx/scenario-id "s58-escalation-after-terminal-hard-reject", :ctx/run-id "s58-escalation-after-terminal-hard-reject-run"}}
+{:ts "2026-06-15T12:04:45.770239609Z", :level :info, :message "scenario/start", :context {:id "s58-escalation-after-terminal-hard-reject", :ctx/scenario-id "s58-escalation-after-terminal-hard-reject", :ctx/run-id "s58-escalation-after-terminal-hard-reject-run"}}
+{:ts "2026-06-15T12:04:45.785068218Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.787484646Z", :level :debug, :message "guard/rejected", :context {:block-time 1180, :appeal-deadline 1180, :workflow-id 0, :error :appeal-window-expired, :ctx/scenario-id "s63-replay-idempotence-same-trace-double-run", :ctx/run-id "s63-replay-idempotence-same-trace-double-run-run", :ctx/event-index 3, :ctx/event-type "challenge_resolution"}}
+{:ts "2026-06-15T12:04:45.787842908Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.792130777Z", :level :info, :message "scenario/end", :context {:id "s63-replay-idempotence-same-trace-double-run", :outcome :pass, :ctx/scenario-id "s63-replay-idempotence-same-trace-double-run", :ctx/run-id "s63-replay-idempotence-same-trace-double-run-run"}}
+{:ts "2026-06-15T12:04:45.792252088Z", :level :info, :message "scenario/start", :context {:id "s63-replay-idempotence-same-trace-double-run", :ctx/scenario-id "s63-replay-idempotence-same-trace-double-run", :ctx/run-id "s63-replay-idempotence-same-trace-double-run-run"}}
+Suite: :suites/equivalence-ordering-terminal-determinism
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s56-same-block-dual-resolution-order-invariant, s58-escalation-after-terminal-hard-reject, s63-replay-idempotence-same-trace-double-run
+{:ts "2026-06-15T12:04:45.807326043Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.810088741Z", :level :info, :message "scenario/end", :context {:id "same-block-ordering", :outcome :pass, :ctx/scenario-id "same-block-ordering", :ctx/run-id "same-block-ordering-run"}}
+{:ts "2026-06-15T12:04:45.810308679Z", :level :info, :message "scenario/start", :context {:id "same-block-ordering", :ctx/scenario-id "same-block-ordering", :ctx/run-id "same-block-ordering-run"}}
+Suite: :suites/same-block-ordering
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: same-block-ordering
+{:ts "2026-06-15T12:04:45.833892588Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.836384320Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "s64-force-refund-then-illegal-release-attempt", :ctx/run-id "s64-force-refund-then-illegal-release-attempt-run", :ctx/event-index 3, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:45.836756338Z", :level :info, :message "scenario/end", :context {:id "s64-force-refund-then-illegal-release-attempt", :outcome :pass, :ctx/scenario-id "s64-force-refund-then-illegal-release-attempt", :ctx/run-id "s64-force-refund-then-illegal-release-attempt-run"}}
+{:ts "2026-06-15T12:04:45.836859805Z", :level :info, :message "scenario/start", :context {:id "s64-force-refund-then-illegal-release-attempt", :ctx/scenario-id "s64-force-refund-then-illegal-release-attempt", :ctx/run-id "s64-force-refund-then-illegal-release-attempt-run"}}
+{:ts "2026-06-15T12:04:45.850098187Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.855166832Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :ctx/run-id "s65-escalation-supersedes-old-pending-then-old-path-attempt-run", :ctx/event-index 4, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:45.855474147Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.855545292Z", :level :debug, :message "guard/rejected", :context {:caller "0xresolver1", :dispute-level 1, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :ctx/run-id "s65-escalation-supersedes-old-pending-then-old-path-attempt-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:45.858166290Z", :level :info, :message "scenario/end", :context {:id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :outcome :pass, :ctx/scenario-id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :ctx/run-id "s65-escalation-supersedes-old-pending-then-old-path-attempt-run"}}
+{:ts "2026-06-15T12:04:45.858279485Z", :level :info, :message "scenario/start", :context {:id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :ctx/scenario-id "s65-escalation-supersedes-old-pending-then-old-path-attempt", :ctx/run-id "s65-escalation-supersedes-old-pending-then-old-path-attempt-run"}}
+Suite: :suites/equivalence-money-path-integrity
+Status: FAIL
+Scenarios: 0/2  (0.0 s)
+Failed: s64-force-refund-then-illegal-release-attempt, s65-escalation-supersedes-old-pending-then-old-path-attempt
+{:ts "2026-06-15T12:04:45.874047271Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.880793739Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.890337510Z", :level :info, :message "scenario/start", :context {:id "padded-timelock-failure", :ctx/scenario-id "padded-timelock-failure", :ctx/run-id "padded-timelock-failure-run"}}
+Suite: :suites/escalation-collision
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: padded-timelock-failure
+{:ts "2026-06-15T12:04:45.920095699Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.923033590Z", :level :info, :message "scenario/end", :context {:id "s51-held-delta-monotonic-under-resolution", :outcome :pass, :ctx/scenario-id "s51-held-delta-monotonic-under-resolution", :ctx/run-id "s51-held-delta-monotonic-under-resolution-run"}}
+{:ts "2026-06-15T12:04:45.923209234Z", :level :info, :message "scenario/start", :context {:id "s51-held-delta-monotonic-under-resolution", :ctx/scenario-id "s51-held-delta-monotonic-under-resolution", :ctx/run-id "s51-held-delta-monotonic-under-resolution-run"}}
+{:ts "2026-06-15T12:04:45.941777548Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.946392270Z", :level :info, :message "scenario/end", :context {:id "s52-fee-delta-monotonic-under-fot", :outcome :pass, :ctx/scenario-id "s52-fee-delta-monotonic-under-fot", :ctx/run-id "s52-fee-delta-monotonic-under-fot-run"}}
+{:ts "2026-06-15T12:04:45.946580548Z", :level :info, :message "scenario/start", :context {:id "s52-fee-delta-monotonic-under-fot", :ctx/scenario-id "s52-fee-delta-monotonic-under-fot", :ctx/run-id "s52-fee-delta-monotonic-under-fot-run"}}
+{:ts "2026-06-15T12:04:45.964505809Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:45.971082955Z", :level :info, :message "scenario/end", :context {:id "s53-pending-create-clear-balance-consistency", :outcome :pass, :ctx/scenario-id "s53-pending-create-clear-balance-consistency", :ctx/run-id "s53-pending-create-clear-balance-consistency-run"}}
+{:ts "2026-06-15T12:04:45.971344203Z", :level :info, :message "scenario/start", :context {:id "s53-pending-create-clear-balance-consistency", :ctx/scenario-id "s53-pending-create-clear-balance-consistency", :ctx/run-id "s53-pending-create-clear-balance-consistency-run"}}
+Suite: :suites/equivalence-accounting-min
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s51-held-delta-monotonic-under-resolution, s52-fee-delta-monotonic-under-fot, s53-pending-create-clear-balance-consistency
+Suite: :suites/baseline-safety
+Status: PASS
+Scenarios: 0/0
+{:ts "2026-06-15T12:04:45.995066235Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.002459343Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run", :ctx/event-index 4, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-15T12:04:46.003008799Z", :level :info, :message "scenario/end", :context {:id "s46a-settlement-before-escalation-window-edge", :outcome :pass, :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run"}}
+{:ts "2026-06-15T12:04:46.003163994Z", :level :info, :message "scenario/start", :context {:id "s46a-settlement-before-escalation-window-edge", :ctx/scenario-id "s46a-settlement-before-escalation-window-edge", :ctx/run-id "s46a-settlement-before-escalation-window-edge-run"}}
+{:ts "2026-06-15T12:04:46.020973855Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.034438578Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.034571561Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run", :ctx/event-index 5, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:46.034963437Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run", :ctx/event-index 6, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:46.035377856Z", :level :info, :message "scenario/end", :context {:id "s46b-escalation-before-settlement-window-edge", :outcome :pass, :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run"}}
+{:ts "2026-06-15T12:04:46.035505829Z", :level :info, :message "scenario/start", :context {:id "s46b-escalation-before-settlement-window-edge", :ctx/scenario-id "s46b-escalation-before-settlement-window-edge", :ctx/run-id "s46b-escalation-before-settlement-window-edge-run"}}
+{:ts "2026-06-15T12:04:46.052261434Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.057799423Z", :level :info, :message "scenario/end", :context {:id "s47a-appeal-window-last-second-settlement", :outcome :pass, :ctx/scenario-id "s47a-appeal-window-last-second-settlement", :ctx/run-id "s47a-appeal-window-last-second-settlement-run"}}
+{:ts "2026-06-15T12:04:46.057981790Z", :level :info, :message "scenario/start", :context {:id "s47a-appeal-window-last-second-settlement", :ctx/scenario-id "s47a-appeal-window-last-second-settlement", :ctx/run-id "s47a-appeal-window-last-second-settlement-run"}}
+{:ts "2026-06-15T12:04:46.072570572Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.077358082Z", :level :info, :message "scenario/end", :context {:id "s47b-appeal-window-plus-one-rejected", :outcome :pass, :ctx/scenario-id "s47b-appeal-window-plus-one-rejected", :ctx/run-id "s47b-appeal-window-plus-one-rejected-run"}}
+{:ts "2026-06-15T12:04:46.077576087Z", :level :info, :message "scenario/start", :context {:id "s47b-appeal-window-plus-one-rejected", :ctx/scenario-id "s47b-appeal-window-plus-one-rejected", :ctx/run-id "s47b-appeal-window-plus-one-rejected-run"}}
+Suite: :suites/equivalence-race-pairs
+Status: FAIL
+Scenarios: 0/4  (0.1 s)
+Failed: s46a-settlement-before-escalation-window-edge, s46b-escalation-before-settlement-window-edge, s47a-appeal-window-last-second-settlement, s47b-appeal-window-plus-one-rejected
+{:ts "2026-06-15T12:04:46.097360336Z", :level :debug, :message "Submitting resolution", :context {:caller "0xattacker", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.103921181Z", :level :info, :message "scenario/end", :context {:id "governance-decay-exploit", :outcome :pass, :ctx/scenario-id "governance-decay-exploit", :ctx/run-id "governance-decay-exploit-run"}}
+{:ts "2026-06-15T12:04:46.104125600Z", :level :info, :message "scenario/start", :context {:id "governance-decay-exploit", :ctx/scenario-id "governance-decay-exploit", :ctx/run-id "governance-decay-exploit-run"}}
+Suite: :suites/governance-decay
+Status: FAIL
+Scenarios: 0/1  (0.0 s)
+Failed: governance-decay-exploit
+{:ts "2026-06-15T12:04:46.131947563Z", :level :info, :message "scenario/end", :context {:id "eq-v1-budget-balance-pass", :outcome :pass, :ctx/scenario-id "eq-v1-budget-balance-pass", :ctx/run-id "eq-v1-budget-balance-pass-run"}}
+{:ts "2026-06-15T12:04:46.132110443Z", :level :info, :message "scenario/start", :context {:id "eq-v1-budget-balance-pass", :ctx/scenario-id "eq-v1-budget-balance-pass", :ctx/run-id "eq-v1-budget-balance-pass-run"}}
+{:ts "2026-06-15T12:04:46.152105112Z", :level :info, :message "scenario/end", :context {:id "eq-v2-budget-balance-not-applicable", :outcome :pass, :ctx/scenario-id "eq-v2-budget-balance-not-applicable", :ctx/run-id "eq-v2-budget-balance-not-applicable-run"}}
+{:ts "2026-06-15T12:04:46.152491227Z", :level :info, :message "scenario/start", :context {:id "eq-v2-budget-balance-not-applicable", :ctx/scenario-id "eq-v2-budget-balance-not-applicable", :ctx/run-id "eq-v2-budget-balance-not-applicable-run"}}
+{:ts "2026-06-15T12:04:46.176650010Z", :level :info, :message "scenario/end", :context {:id "eq-v3-dominant-strategy-inconclusive", :outcome :pass, :ctx/scenario-id "eq-v3-dominant-strategy-inconclusive", :ctx/run-id "eq-v3-dominant-strategy-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.176934772Z", :level :info, :message "scenario/start", :context {:id "eq-v3-dominant-strategy-inconclusive", :ctx/scenario-id "eq-v3-dominant-strategy-inconclusive", :ctx/run-id "eq-v3-dominant-strategy-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.194959643Z", :level :debug, :message "Submitting resolution", :context {:caller "0xbuyer", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.195165124Z", :level :debug, :message "guard/rejected", :context {:escrow-state :pending, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "eq-v4-dominant-strategy-pass", :ctx/run-id "eq-v4-dominant-strategy-pass-run", :ctx/event-index 1, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-15T12:04:46.197884839Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-pending, :ctx/scenario-id "eq-v4-dominant-strategy-pass", :ctx/run-id "eq-v4-dominant-strategy-pass-run", :ctx/event-index 3, :ctx/event-type "release"}}
+{:ts "2026-06-15T12:04:46.198260263Z", :level :info, :message "scenario/end", :context {:id "eq-v4-dominant-strategy-pass", :outcome :pass, :ctx/scenario-id "eq-v4-dominant-strategy-pass", :ctx/run-id "eq-v4-dominant-strategy-pass-run"}}
+{:ts "2026-06-15T12:04:46.198353471Z", :level :info, :message "scenario/start", :context {:id "eq-v4-dominant-strategy-pass", :ctx/scenario-id "eq-v4-dominant-strategy-pass", :ctx/run-id "eq-v4-dominant-strategy-pass-run"}}
+{:ts "2026-06-15T12:04:46.214845915Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.217553417Z", :level :info, :message "scenario/end", :context {:id "eq-v5-incentive-compat-inconclusive", :outcome :pass, :ctx/scenario-id "eq-v5-incentive-compat-inconclusive", :ctx/run-id "eq-v5-incentive-compat-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.217708683Z", :level :info, :message "scenario/start", :context {:id "eq-v5-incentive-compat-inconclusive", :ctx/scenario-id "eq-v5-incentive-compat-inconclusive", :ctx/run-id "eq-v5-incentive-compat-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.240409752Z", :level :info, :message "scenario/end", :context {:id "eq-v6-spe-always-inconclusive", :outcome :pass, :ctx/scenario-id "eq-v6-spe-always-inconclusive", :ctx/run-id "eq-v6-spe-always-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.240595365Z", :level :info, :message "scenario/start", :context {:id "eq-v6-spe-always-inconclusive", :ctx/scenario-id "eq-v6-spe-always-inconclusive", :ctx/run-id "eq-v6-spe-always-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.258744903Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.261204564Z", :level :info, :message "scenario/end", :context {:id "eq-v7-collusion-resistance-inconclusive", :outcome :pass, :ctx/scenario-id "eq-v7-collusion-resistance-inconclusive", :ctx/run-id "eq-v7-collusion-resistance-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.261326716Z", :level :info, :message "scenario/start", :context {:id "eq-v7-collusion-resistance-inconclusive", :ctx/scenario-id "eq-v7-collusion-resistance-inconclusive", :ctx/run-id "eq-v7-collusion-resistance-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.282246105Z", :level :info, :message "scenario/end", :context {:id "eq-v8-individual-rationality-inconclusive", :outcome :pass, :ctx/scenario-id "eq-v8-individual-rationality-inconclusive", :ctx/run-id "eq-v8-individual-rationality-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.282424464Z", :level :info, :message "scenario/start", :context {:id "eq-v8-individual-rationality-inconclusive", :ctx/scenario-id "eq-v8-individual-rationality-inconclusive", :ctx/run-id "eq-v8-individual-rationality-inconclusive-run"}}
+{:ts "2026-06-15T12:04:46.302146665Z", :level :info, :message "scenario/end", :context {:id "eq-v9-nash-fail-attack-success", :outcome :pass, :ctx/scenario-id "eq-v9-nash-fail-attack-success", :ctx/run-id "eq-v9-nash-fail-attack-success-run"}}
+{:ts "2026-06-15T12:04:46.302326807Z", :level :info, :message "scenario/start", :context {:id "eq-v9-nash-fail-attack-success", :ctx/scenario-id "eq-v9-nash-fail-attack-success", :ctx/run-id "eq-v9-nash-fail-attack-success-run"}}
+{:ts "2026-06-15T12:04:46.324219709Z", :level :info, :message "scenario/end", :context {:id "eq-v10-incentive-compat-fail-attack-success", :outcome :pass, :ctx/scenario-id "eq-v10-incentive-compat-fail-attack-success", :ctx/run-id "eq-v10-incentive-compat-fail-attack-success-run"}}
+{:ts "2026-06-15T12:04:46.324457060Z", :level :info, :message "scenario/start", :context {:id "eq-v10-incentive-compat-fail-attack-success", :ctx/scenario-id "eq-v10-incentive-compat-fail-attack-success", :ctx/run-id "eq-v10-incentive-compat-fail-attack-success-run"}}
+{:ts "2026-06-15T12:04:46.347072547Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.351050767Z", :level :info, :message "scenario/end", :context {:id "eq-v11-spe-pass-honest-resolver", :outcome :pass, :ctx/scenario-id "eq-v11-spe-pass-honest-resolver", :ctx/run-id "eq-v11-spe-pass-honest-resolver-run"}}
+{:ts "2026-06-15T12:04:46.351174853Z", :level :info, :message "scenario/start", :context {:id "eq-v11-spe-pass-honest-resolver", :ctx/scenario-id "eq-v11-spe-pass-honest-resolver", :ctx/run-id "eq-v11-spe-pass-honest-resolver-run"}}
+{:ts "2026-06-15T12:04:46.372087218Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.375558624Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "eq-v12-spe-fail-slashed-resolver", :ctx/run-id "eq-v12-spe-fail-slashed-resolver-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-15T12:04:46.381065584Z", :level :info, :message "scenario/end", :context {:id "eq-v12-spe-fail-slashed-resolver", :outcome :pass, :ctx/scenario-id "eq-v12-spe-fail-slashed-resolver", :ctx/run-id "eq-v12-spe-fail-slashed-resolver-run"}}
+{:ts "2026-06-15T12:04:46.381211441Z", :level :info, :message "scenario/start", :context {:id "eq-v12-spe-fail-slashed-resolver", :ctx/scenario-id "eq-v12-spe-fail-slashed-resolver", :ctx/run-id "eq-v12-spe-fail-slashed-resolver-run"}}
+Suite: :suites/equilibrium-validation
+Status: FAIL
+Scenarios: 0/12  (0.3 s)
+Failed: eq-v1-budget-balance-pass, eq-v2-budget-balance-not-applicable, eq-v3-dominant-strategy-inconclusive, eq-v4-dominant-strategy-pass, eq-v5-incentive-compat-inconclusive, eq-v6-spe-always-inconclusive, eq-v7-collusion-resistance-inconclusive, eq-v8-individual-rationality-inconclusive, eq-v9-nash-fail-attack-success, eq-v10-incentive-compat-fail-attack-success, eq-v11-spe-pass-honest-resolver, eq-v12-spe-fail-slashed-resolver
+{:ts "2026-06-15T12:04:46.410093513Z", :level :error, :message "scenario/halt", :context {:id "s54-alias-poisoning-noncanonical-id-rejected", :seq 1, :reason :invariant-violation, :ctx/scenario-id "s54-alias-poisoning-noncanonical-id-rejected", :ctx/run-id "s54-alias-poisoning-noncanonical-id-rejected-run"}}
+{:ts "2026-06-15T12:04:46.410253487Z", :level :info, :message "scenario/start", :context {:id "s54-alias-poisoning-noncanonical-id-rejected", :ctx/scenario-id "s54-alias-poisoning-noncanonical-id-rejected", :ctx/run-id "s54-alias-poisoning-noncanonical-id-rejected-run"}}
+{:ts "2026-06-15T12:04:46.427372804Z", :level :info, :message "scenario/end", :context {:id "s55-alias-rebinding-after-create-blocked", :outcome :pass, :ctx/scenario-id "s55-alias-rebinding-after-create-blocked", :ctx/run-id "s55-alias-rebinding-after-create-blocked-run"}}
+{:ts "2026-06-15T12:04:46.427511328Z", :level :info, :message "scenario/start", :context {:id "s55-alias-rebinding-after-create-blocked", :ctx/scenario-id "s55-alias-rebinding-after-create-blocked", :ctx/run-id "s55-alias-rebinding-after-create-blocked-run"}}
+{:ts "2026-06-15T12:04:46.441647548Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.444114874Z", :level :debug, :message "guard/rejected", :context {:block-time 1179, :appeal-deadline 1180, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s57-pending-settlement-expiry-boundary-1s", :ctx/run-id "s57-pending-settlement-expiry-boundary-1s-run", :ctx/event-index 3, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:46.446696516Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id "s57-pending-settlement-expiry-boundary-1s", :ctx/run-id "s57-pending-settlement-expiry-boundary-1s-run", :ctx/event-index 5, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:46.446994904Z", :level :info, :message "scenario/end", :context {:id "s57-pending-settlement-expiry-boundary-1s", :outcome :pass, :ctx/scenario-id "s57-pending-settlement-expiry-boundary-1s", :ctx/run-id "s57-pending-settlement-expiry-boundary-1s-run"}}
+{:ts "2026-06-15T12:04:46.447086909Z", :level :info, :message "scenario/start", :context {:id "s57-pending-settlement-expiry-boundary-1s", :ctx/scenario-id "s57-pending-settlement-expiry-boundary-1s", :ctx/run-id "s57-pending-settlement-expiry-boundary-1s-run"}}
+Suite: :suites/equivalence-alias-boundaries
+Status: FAIL
+Scenarios: 0/3  (0.1 s)
+Failed: s54-alias-poisoning-noncanonical-id-rejected, s55-alias-rebinding-after-create-blocked, s57-pending-settlement-expiry-boundary-1s
+{:ts "2026-06-15T12:04:46.469937433Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.475469821Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v1-bounded-spe-pass-honest-resolver", :outcome :pass, :ctx/scenario-id "spe-reg-v1-bounded-spe-pass-honest-resolver", :ctx/run-id "spe-reg-v1-bounded-spe-pass-honest-resolver-run"}}
+{:ts "2026-06-15T12:04:46.475664962Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v1-bounded-spe-pass-honest-resolver", :ctx/scenario-id "spe-reg-v1-bounded-spe-pass-honest-resolver", :ctx/run-id "spe-reg-v1-bounded-spe-pass-honest-resolver-run"}}
+{:ts "2026-06-15T12:04:46.496438864Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v2-inconclusive-no-dispute", :outcome :pass, :ctx/scenario-id "spe-reg-v2-inconclusive-no-dispute", :ctx/run-id "spe-reg-v2-inconclusive-no-dispute-run"}}
+{:ts "2026-06-15T12:04:46.496621191Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v2-inconclusive-no-dispute", :ctx/scenario-id "spe-reg-v2-inconclusive-no-dispute", :ctx/run-id "spe-reg-v2-inconclusive-no-dispute-run"}}
+{:ts "2026-06-15T12:04:46.521020071Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.526121759Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v3-mixed-node-pass", :outcome :pass, :ctx/scenario-id "spe-reg-v3-mixed-node-pass", :ctx/run-id "spe-reg-v3-mixed-node-pass-run"}}
+{:ts "2026-06-15T12:04:46.526348460Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v3-mixed-node-pass", :ctx/scenario-id "spe-reg-v3-mixed-node-pass", :ctx/run-id "spe-reg-v3-mixed-node-pass-run"}}
+{:ts "2026-06-15T12:04:46.549539362Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.552846054Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "spe-reg-v4-fail-slashed-resolver-bounded", :ctx/run-id "spe-reg-v4-fail-slashed-resolver-bounded-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-15T12:04:46.558947395Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v4-fail-slashed-resolver-bounded", :outcome :pass, :ctx/scenario-id "spe-reg-v4-fail-slashed-resolver-bounded", :ctx/run-id "spe-reg-v4-fail-slashed-resolver-bounded-run"}}
+{:ts "2026-06-15T12:04:46.559133880Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v4-fail-slashed-resolver-bounded", :ctx/scenario-id "spe-reg-v4-fail-slashed-resolver-bounded", :ctx/run-id "spe-reg-v4-fail-slashed-resolver-bounded-run"}}
+{:ts "2026-06-15T12:04:46.578967161Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.584693829Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v5-both-concepts-pass", :outcome :pass, :ctx/scenario-id "spe-reg-v5-both-concepts-pass", :ctx/run-id "spe-reg-v5-both-concepts-pass-run"}}
+{:ts "2026-06-15T12:04:46.584867590Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v5-both-concepts-pass", :ctx/scenario-id "spe-reg-v5-both-concepts-pass", :ctx/run-id "spe-reg-v5-both-concepts-pass-run"}}
+{:ts "2026-06-15T12:04:46.607155092Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.614504527Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v6-backward-induction-two-node", :outcome :pass, :ctx/scenario-id "spe-reg-v6-backward-induction-two-node", :ctx/run-id "spe-reg-v6-backward-induction-two-node-run"}}
+{:ts "2026-06-15T12:04:46.614758421Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v6-backward-induction-two-node", :ctx/scenario-id "spe-reg-v6-backward-induction-two-node", :ctx/run-id "spe-reg-v6-backward-induction-two-node-run"}}
+{:ts "2026-06-15T12:04:46.636770178Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.642478370Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "spe-reg-v7-reputation-slash-fail", :ctx/run-id "spe-reg-v7-reputation-slash-fail-run", :ctx/event-index 5, :ctx/event-type "propose_fraud_slash"}}
+Captured event evidence: slashing-spe-reg-v7-reputation-slash-fail-7.json  (Quality: complete )
+Captured event evidence: fraud-slash-allocation-spe-reg-v7-reputation-slash-fail-7.json  (Quality: complete )
+{:ts "2026-06-15T12:04:46.656010872Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v7-reputation-slash-fail", :outcome :pass, :ctx/scenario-id "spe-reg-v7-reputation-slash-fail", :ctx/run-id "spe-reg-v7-reputation-slash-fail-run"}}
+{:ts "2026-06-15T12:04:46.656222174Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v7-reputation-slash-fail", :ctx/scenario-id "spe-reg-v7-reputation-slash-fail", :ctx/run-id "spe-reg-v7-reputation-slash-fail-run"}}
+{:ts "2026-06-15T12:04:46.686019387Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.690779375Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "spe-reg-v8-profile-matrix", :ctx/run-id "spe-reg-v8-profile-matrix-run", :ctx/event-index 5, :ctx/event-type "propose_fraud_slash"}}
+Captured event evidence: slashing-spe-reg-v8-profile-matrix-7.json  (Quality: complete )
+Captured event evidence: fraud-slash-allocation-spe-reg-v8-profile-matrix-7.json  (Quality: complete )
+{:ts "2026-06-15T12:04:46.699240717Z", :level :info, :message "scenario/end", :context {:id "spe-reg-v8-profile-matrix", :outcome :pass, :ctx/scenario-id "spe-reg-v8-profile-matrix", :ctx/run-id "spe-reg-v8-profile-matrix-run"}}
+{:ts "2026-06-15T12:04:46.699355435Z", :level :info, :message "scenario/start", :context {:id "spe-reg-v8-profile-matrix", :ctx/scenario-id "spe-reg-v8-profile-matrix", :ctx/run-id "spe-reg-v8-profile-matrix-run"}}
+Suite: :suites/spe-regression
+Status: FAIL
+Scenarios: 0/8  (0.3 s)
+Failed: spe-reg-v1-bounded-spe-pass-honest-resolver, spe-reg-v2-inconclusive-no-dispute, spe-reg-v3-mixed-node-pass, spe-reg-v4-fail-slashed-resolver-bounded, spe-reg-v5-both-concepts-pass, spe-reg-v6-backward-induction-two-node, spe-reg-v7-reputation-slash-fail, spe-reg-v8-profile-matrix
+{:ts "2026-06-15T12:04:46.721065648Z", :level :debug, :message "Submitting resolution", :context {:caller "0xattacker", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.725045452Z", :level :info, :message "scenario/end", :context {:id "governance-decay-explicit", :outcome :pass, :ctx/scenario-id "governance-decay-explicit", :ctx/run-id "governance-decay-explicit-run"}}
+{:ts "2026-06-15T12:04:46.725165881Z", :level :info, :message "scenario/start", :context {:id "governance-decay-explicit", :ctx/scenario-id "governance-decay-explicit", :ctx/run-id "governance-decay-explicit-run"}}
+{:ts "2026-06-15T12:04:46.742358858Z", :level :debug, :message "Submitting resolution", :context {:caller "0xresolver", :workflow-id 0}}
+{:ts "2026-06-15T12:04:46.744189392Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 86400, :ctx/scenario-id "governance-approved", :ctx/run-id "governance-approved-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-15T12:04:46.745990529Z", :level :debug, :message "guard/rejected", :context {:block-time 1241, :appeal-deadline 87520, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "governance-approved", :ctx/run-id "governance-approved-run", :ctx/event-index 5, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-15T12:04:46.746397403Z", :level :info, :message "scenario/start", :context {:id "governance-approved", :ctx/scenario-id "governance-approved", :ctx/run-id "governance-approved-run"}}
+Suite: :suites/governance-decay-explicit
+Status: FAIL
+Scenarios: 0/2  (0.0 s)
+Failed: governance-decay-explicit, governance-approved
+Regenerated golden reports for 113 trace runs across 25 suites.
+
+Remaining suite failures after golden save:
+  {:suite :suites/token-pathologies, :trace "fee-on-transfer-leak", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-validation, :trace "spe-v1-rational-appeal", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-validation, :trace "spe-v2-irrational-appeal", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-validation, :trace "spe-v3-multi-agent-regret", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-validation, :trace "spe-v4-no-strategic-node", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-validation, :trace "spe-v5-seller-rational-appeal", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-auth-paths, :trace "s43-auth-rejected-then-authorized-recovery", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-auth-paths, :trace "s44-escalation-tier-mismatch-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-auth-paths, :trace "s45-stale-module-snapshot-rejects-legacy-resolver", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/timelock-regression, :trace "timelock-regression", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/withdrawals, :trace "s114-withdraw-fees-governance", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/withdrawals, :trace "s115-claim-deferred-yield-recovery", :outcome :fail, :halt :invariant-violation, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/withdrawals, :trace "s118-withdraw-while-paused", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s01-baseline-happy-path", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s02-dr3-dispute-release", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s03-dr3-dispute-refund", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s04-dispute-timeout-autocancel", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s05-pending-settlement-execute", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s06-mutual-cancel", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s07-unauthorized-resolver-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s08-state-machine-attack-gauntlet", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s09-multi-escrow-solvency", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s10-double-finalize-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s11-zero-fee-edge-case", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s12a-snapshot-isolation-fee-zero", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s12b-snapshot-isolation-fee-500", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s13-pending-settlement-refund", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s14-dr3-module-authorized", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s15-dr3-module-unauthorized-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s16-ieo-create-release", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s17-ieo-dispute-no-resolver-timeout", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s18-dr3-kleros-l0-resolves", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s19-dr3-kleros-escalation-rejected-l0-resolves", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s20-dr3-kleros-max-escalation-guard", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s21-dr3-kleros-pending-cleared-on-escalation", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s22-status-leak-agree-cancel-over-dispute", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/all-invariants, :trace "s23-preemptive-escalation-blocked", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s14-dr3-module-authorized", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s15-dr3-module-unauthorized-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s18-dr3-kleros-l0-resolves", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s19-dr3-kleros-escalation-rejected-l0-resolves", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s20-dr3-kleros-max-escalation-guard", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s21-dr3-kleros-pending-cleared-on-escalation", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s23-preemptive-escalation-blocked", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s44-escalation-tier-mismatch-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s46a-settlement-before-escalation-window-edge", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s46b-escalation-before-settlement-window-edge", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s48-max-escalation-exact-boundary", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s49-max-escalation-plus-one-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/dr3-critical, :trace "s50-multi-hop-pending-cleared-every-hop", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-governance-snapshot, :trace "s61-governance-snapshot-mid-dispute-immutability", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/replay-dedupe, :trace "s64-replay-event-id-dedupe", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/replay-dedupe, :trace "s116-superseded-pending-repeated-keeper", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/replay-dedupe, :trace "s117-challenge-resolution-dedupe", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s26-forking-strategist-l1-reversal", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s27-forking-strategist-l2-fork", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s28-forking-strategist-late-escalation-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s29-forking-strategist-seller-escalates", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s30-forking-strategist-double-loss", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s31-forking-strategist-all-levels-confirm", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s32-forking-strategist-premature-settlement-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s33-forking-strategist-two-escrow-fork-isolation", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/forking-strategist, :trace "s114-withdraw-fees-governance", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-escalation-boundaries, :trace "s48-max-escalation-exact-boundary", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-escalation-boundaries, :trace "s49-max-escalation-plus-one-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-escalation-boundaries, :trace "s50-multi-hop-pending-cleared-every-hop", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/withdrawal-adversarial, :trace "s13-pending-settlement-refund", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s59-fot-rounding-multi-hop-conservation", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s60-partial-withdraw-then-slash-ordering", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s62-cross-token-isolation-under-dispute-load", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s62-cross-token-fee-on-transfer-under-dispute-load", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s62-cross-token-parallel-appeal-depths-under-dispute-load", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-economic-stress, :trace "s62-resolver-capacity-concurrent-dispute-load", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-ordering-terminal-determinism, :trace "s56-same-block-dual-resolution-order-invariant", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-ordering-terminal-determinism, :trace "s58-escalation-after-terminal-hard-reject", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-ordering-terminal-determinism, :trace "s63-replay-idempotence-same-trace-double-run", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/same-block-ordering, :trace "same-block-ordering", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-money-path-integrity, :trace "s64-force-refund-then-illegal-release-attempt", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-money-path-integrity, :trace "s65-escalation-supersedes-old-pending-then-old-path-attempt", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/escalation-collision, :trace "padded-timelock-failure", :outcome :fail, :halt :open-entities-at-end, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-accounting-min, :trace "s51-held-delta-monotonic-under-resolution", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-accounting-min, :trace "s52-fee-delta-monotonic-under-fot", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-accounting-min, :trace "s53-pending-create-clear-balance-consistency", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-race-pairs, :trace "s46a-settlement-before-escalation-window-edge", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-race-pairs, :trace "s46b-escalation-before-settlement-window-edge", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-race-pairs, :trace "s47a-appeal-window-last-second-settlement", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-race-pairs, :trace "s47b-appeal-window-plus-one-rejected", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/governance-decay, :trace "governance-decay-exploit", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v1-budget-balance-pass", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v2-budget-balance-not-applicable", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v3-dominant-strategy-inconclusive", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v4-dominant-strategy-pass", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v5-incentive-compat-inconclusive", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v6-spe-always-inconclusive", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v7-collusion-resistance-inconclusive", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v8-individual-rationality-inconclusive", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v9-nash-fail-attack-success", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v10-incentive-compat-fail-attack-success", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v11-spe-pass-honest-resolver", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equilibrium-validation, :trace "eq-v12-spe-fail-slashed-resolver", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-alias-boundaries, :trace "s54-alias-poisoning-noncanonical-id-rejected", :outcome :fail, :halt :invariant-violation, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-alias-boundaries, :trace "s55-alias-rebinding-after-create-blocked", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/equivalence-alias-boundaries, :trace "s57-pending-settlement-expiry-boundary-1s", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v1-bounded-spe-pass-honest-resolver", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v2-inconclusive-no-dispute", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v3-mixed-node-pass", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v4-fail-slashed-resolver-bounded", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v5-both-concepts-pass", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v6-backward-induction-two-node", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v7-reputation-slash-fail", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/spe-regression, :trace "spe-reg-v8-profile-matrix", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/governance-decay-explicit, :trace "governance-decay-explicit", :outcome :pass, :halt nil, :golden-drift? nil, :expectations nil, :theory nil}
+  {:suite :suites/governance-decay-explicit, :trace "governance-approved", :outcome :fail, :halt :open-entities-at-end, :golden-drift? nil, :expectations {:ok? false, :violations [{:type :terminal-mismatch, :path [:live-states 0], :expected "released", :op :=, :actual :disputed}]}, :theory nil}
