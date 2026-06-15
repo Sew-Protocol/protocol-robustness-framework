@@ -355,7 +355,7 @@ Runs unit tests across the framework, Sew protocol model, equilibrium checks, an
 ### 3. Run invariant scenarios
 
 ```bash
-clojure -M:run -- --invariants
+bb test:invariants
 ```
 
 Runs fast in-process invariant scenarios.
@@ -365,7 +365,7 @@ Runs fast in-process invariant scenarios.
 Start the gRPC simulation server:
 
 ```bash
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
+bb adv:server
 ```
 
 Run the Python failure-mode suite:
@@ -382,22 +382,10 @@ Run all dispute-resolution phases:
 ./run.sh all
 ```
 
-Run individual phases:
+Run individual phases using Babashka:
 
 ```bash
-./run.sh phase-f-dr
-./run.sh phase-c-dr
-./run.sh phase-e-dr
-./run.sh phase-m-dr
-```
-
-Or run phases directly through the Clojure CLI:
-
-```bash
-clojure -M:run -- --phase-f-dr
-clojure -M:run -- --phase-c-dr
-clojure -M:run -- --phase-e-dr
-clojure -M:run -- --phase-m-dr
+bb scenario:run-family <phase-name>
 ```
 
 ## Dispute-resolution validation phases
