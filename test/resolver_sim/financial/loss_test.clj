@@ -105,8 +105,8 @@
         r2 (loss/classify-loss loss-world :USDC)]
     (is (false? (loss/loss-active? r1)))
     (is (true? (loss/loss-active? r2)))
-    (is (false? (loss/loss-realized? r1)))
-    (is (true? (loss/loss-realized? r2)))))
+    (is (false? (loss/user-loss-realized? r1)))
+    (is (true? (loss/user-loss-realized? r2)))))
 
 
 (deftest reclaim-deferred-clears-shortfall-on-available

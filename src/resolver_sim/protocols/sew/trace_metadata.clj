@@ -320,13 +320,16 @@
    Structural type is derived from the declared role, defaulting to :observer.
    Falls back to :type for backward compatibility."
   [agent-map]
-  (case (or (:role agent-map) (:type agent-map) "observer")
-    "resolver"   :resolver
-    "governance" :governance
-    "keeper"     :keeper
-    "oracle"     :oracle
-    "challenger" :challenger
-    :observer))
+  (let [role (or (:role agent-map) (:type agent-map) "observer")]
+    (case role
+      "resolver"   :resolver
+      "governance" :governance
+      "keeper"     :keeper
+      "oracle"     :oracle
+      "challenger" :challenger
+      (do
+        (println "WARNING: Unrecognized actor role:" role)
+        :observer))))
 
 (defn classify-actor-role
   "Derive the behavioural :actor/role keyword from an agent map.
@@ -420,7 +423,7 @@
 ;; B4. Effect classifier
 ;; ---------------------------------------------------------------------------
 
-(defn effect-type
+(defn ^:deprecated effect-type
   "DEPRECATED — no longer called by classify-transition.
    :effect/type was removed from trace-metadata because accounting effects
    cannot be correctly derived from action name alone (e.g. execute_resolution

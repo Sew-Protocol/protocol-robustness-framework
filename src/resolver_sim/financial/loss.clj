@@ -220,8 +220,8 @@
   [loss-classification]
   (not= :normal (:loss/status loss-classification)))
 
-(defn loss-realized?
-  "True when loss has been realized (or is irrecoverable)."
+(defn user-loss-realized?
+  "True when loss has been realized or is irrecoverable, or user has explicitly realized their claim."
   [loss-classification]
   (boolean (and (loss-active? loss-classification)
                 (or (= :loss-realized (:loss/status loss-classification))

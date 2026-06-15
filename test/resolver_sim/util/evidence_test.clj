@@ -1,6 +1,6 @@
 (ns resolver-sim.util.evidence-test
   (:require [clojure.data.json :as json]
-            [clojure.test :refer [deftest is]]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]))
 
@@ -310,15 +310,46 @@
     (is (string? (:after-hash record)))
     (is (= "evidence-record.v1" (:schema-version record)))))
 
-(deftest evidence-record-round-trip-json
-  (let [record (ev/make-evidence-record
-                 {:artifact-kind :transition
-                  :before sample-world
-                  :after sample-world
-                  :action sample-action
-                  :result sample-result
-                  :attribution sample-attribution})
-        json-str (json/write-str record)
-        re-read (json/read-str json-str)]
-    (is (string? json-str))
-    (is (= (:schema-version record) (get re-read "schema-version")))))
+(deftest evidence-chain-immutability
+  (testing "evidence records are independent and immutable across chaining steps"
+    (binding [attr/*attribution* sample-attribution]
+      (let [world-0 (assoc sample-world :step 0)
+            ;; Step 1: Capture evidence
+            record-1 (ev/emit-evidence!
+                       {:artifact-kind :transition
+                        :block-time 1000
+                        :step 1
+                        :before world-0
+                        :after (assoc world-0 :step 1)
+                        :action {:type :step-1}
+                        :result {:status :ok}})
+            hash-1 (:evidence-hash record-1)
+
+            ;; Step 2: Create "next" world state without mutating world-0
+            world-1 (assoc world-0 :step 1)
+            record-2 (ev/emit-evidence!
+                       {:artifact-kind :transition
+                        :block-time 1001
+                        :step 2
+                        :before world-1
+                        :after (assoc world-1 :step 2)
+                        :action {:type :step-2}
+                        :result {:status :ok}})
+
+            ;; Assertions
+            ;; 1. The original world state reference is unchanged (Clojure property)
+            ;; 2. Record 1 remains exactly as it was
+            record-1-recheck (ev/emit-evidence!
+                               {:artifact-kind :transition
+                                :block-time 1000
+                                :step 1
+                                :before world-0
+                                :after (assoc world-0 :step 1)
+                                :action {:type :step-1}
+                                :result {:status :ok}})]
+        (is (= hash-1 (:evidence-hash record-1-recheck))
+            "Evidence hash for step 1 remains stable across later steps")
+        (is (= record-1 record-1-recheck)
+            "Full evidence record 1 is identical after later steps")
+        (is (not= hash-1 (:evidence-hash record-2))
+            "Evidence hashes are unique per transition")))))

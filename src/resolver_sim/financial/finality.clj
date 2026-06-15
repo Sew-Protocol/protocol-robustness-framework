@@ -67,19 +67,23 @@
     :finalizing 3
     :financially-final 4))
 
+(defn index-pending-slashes
+  [world]
+  (group-by :workflow-id (vals (get world :pending-fraud-slashes {}))))
+
+(defn- has-appeal-pending?
+  [indexed-slashes wf]
+  (some #(= :pending (:status %)) (get indexed-slashes wf)))
+
 (defn- open-gates
   "Determine which financial-finality gates are still open for a workflow in the given world."
-  [world workflow-id]
+  [world workflow-id indexed-slashes]
   (let [state     (t/escrow-state world workflow-id)
         pending   (t/get-pending world workflow-id)
         owner-id  (t/escrow-yield-owner-id workflow-id)
         yield-pos (get-in world [:yield/positions owner-id])
         has-pos?  (some? yield-pos)
-        has-unwinding? (= :unwinding (:status yield-pos))
-        has-appeal-pending? (fn [wf]
-                              (some #(and (= wf (:workflow-id %))
-                                         (= :pending (:status %)))
-                                    (vals (get world :pending-fraud-slashes {}))))]
+        has-unwinding? (= :unwinding (:status yield-pos))]
     (cond-> []
 
       ;; Gate: non-terminal state means outcome not yet determined
@@ -100,7 +104,7 @@
        (conj :yield-recovery)
 
        ;; Gate: slashing appeal still pending
-       (has-appeal-pending? workflow-id)
+       (has-appeal-pending? indexed-slashes workflow-id)
       (conj :slash-appeal))))
 
 (defn classify-financial-finality
@@ -114,7 +118,7 @@
       :reason                       string}"
   [world workflow-id]
   (let [state (t/escrow-state world workflow-id)
-        gates (open-gates world workflow-id)]
+        gates (open-gates world workflow-id (index-pending-slashes world))]
     (cond
       ;; No escrow at this workflow-id — trivially provisional
       (nil? state)

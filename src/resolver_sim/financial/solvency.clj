@@ -153,14 +153,14 @@
    (let [merged-balances  (or token-balances (prepare-balances world))
 
          solvency-result  (try (solvency-inv/solvency-holds? world merged-balances)
-                               (catch Exception e
-                                 {:holds? false :violations [{:reason (str "solvency-inv error: " (.getMessage e))}]}))
+                               (catch Exception _
+                                 {:holds? false :violations [{:reason "Internal solvency invariant evaluation failure"}]}))
 
          balance-result   (try (let [ratio (invariants/calculate-solvency-ratio world)]
                                  {:holds? (>= ratio 0.999) :ratio ratio})
-                               (catch Exception e
+                               (catch Exception _
                                  {:holds? false :ratio 1.0
-                                  :reason (str "balance error: " (.getMessage e))}))
+                                  :reason "Internal solvency ratio calculation failure"}))
 
          accounting-solvent? (and (:holds? solvency-result true)
                                  (:holds? balance-result true))
@@ -174,21 +174,19 @@
 
          commitment-valid? (and stored-commitment computed-commitment
                                (= stored-commitment computed-commitment))
+proof-status* (case proof-status
+                 (:nil :unproven) :unproven
+                 :valid    (if commitment-valid? :valid :invalid)
+                 :invalid  :invalid
+                 :mismatch :mismatch
+                 :unproven)
 
-         proof-status* (case proof-status
-                          (:nil :unproven) :unproven
-                          :valid    (if commitment-valid? :valid :invalid)
-                          :invalid  :invalid
-                          :mismatch :mismatch
-                          :unproven)
-
-         proof-valid? (case proof-status*
-                        (:nil :unproven) nil
-                        :invalid  false
-                        :mismatch false
-                        :valid    true
-                        nil)]
-
+proof-valid? (case proof-status*
+               :unproven nil
+               :invalid  false
+               :mismatch false
+               :valid    true
+               nil)]
      {:solvency/status
       (cond
         (not accounting-solvent?) :insolvent
