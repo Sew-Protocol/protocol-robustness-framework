@@ -1,166 +1,520 @@
 # Protocol Robustness Framework
 
-A framework for adversarial multi-actor scenario testing, specializing in the robustness analysis of escrow and dispute-resolution systems.
+A framework for adversarial multi-actor scenario testing, specializing in robustness analysis for escrow, dispute-resolution, and state-machine protocols.
 
 ## What this is
 
-This repository provides a **Protocol Robustness Framework**. It enables adversarial simulation, invariant checking, and deterministic replay to verify that complex state-machine systems (such as escrow and dispute resolution) remain reliable under real-world and adversarial conditions.
+The Protocol Robustness Framework enables adversarial simulation, invariant checking, and deterministic replay for complex protocol systems.
 
-It models how multiple actors interact over time — including strategic and adversarial behaviour — and verifies that the protocol maintains critical correctness, safety, and liveness guarantees.
+It is designed to answer a question that ordinary unit tests do not:
 
-The framework provides reusable building blocks for protocol engineering:
-- **Protocol Adapter Interface**: (`src/resolver_sim/protocols/protocol.clj`)
-- **Deterministic Replay Harness**: (`src/resolver_sim/contract_model/replay.clj`)
-- **Composable Fixture System**: (`data/fixtures/`)
+> Does the protocol still behave correctly when multiple participants act strategically, adversarially, or unexpectedly over time?
 
-*The repository includes a detailed Sew protocol model as the primary validation target. The Sew adapter (`protocols/sew/*`) is also the main worked example of how to implement the framework interfaces for a new protocol.*
+The framework models how actors interact across sequences of valid protocol actions, then verifies that the system maintains its critical correctness, safety, liveness, and accounting guarantees.
 
-## Why it exists
+It is especially useful for systems where failures do not come from invalid code paths, but from valid actions combining in unexpected, sequence-dependent ways.
 
-Traditional smart contract testing often answers:
-> “Does this function work?”
+## Framework building blocks
 
-Our framework answers:
-> “Does the protocol still work when participants behave strategically or adversarially over time?”
+The repository provides reusable components for protocol engineering and adversarial validation:
 
-For escrow and dispute resolution systems, failures rarely stem from invalid code; they arise from valid actions interacting in unexpected, sequence-dependent ways.
+* **Protocol Adapter Interface**
+  `src/resolver_sim/protocols/protocol.clj`
+
+* **Deterministic Replay Harness**
+  `src/resolver_sim/contract_model/replay.clj`
+
+* **Composable Fixture System**
+  `data/fixtures/`
+
+* **Invariant-Driven Validation**
+  Continuous checking of protocol guarantees during simulated execution.
+
+* **Golden Snapshotting**
+  Behavioural drift detection across protocol changes.
+
+* **Scenario and Replay Infrastructure**
+  Reproducible test cases for regression, adversarial exploration, and research-grade evidence generation.
+
+## Sew protocol model
+
+The repository includes a detailed Sew protocol model as the primary validation target.
+
+Sew is both:
+
+1. A protocol model for escrow and dispute-resolution robustness analysis.
+2. The main worked example showing how to implement the framework interfaces for a new protocol.
+
+The Sew adapter lives under:
+
+```text
+src/resolver_sim/protocols/sew/
+```
+
+When adapting the framework to another protocol, Sew should be treated as the reference implementation pattern.
+
+## Why this exists
+
+Traditional smart contract testing often asks:
+
+> Does this function work?
+
+The Protocol Robustness Framework asks:
+
+> Does the protocol still work when participants behave strategically or adversarially over time?
+
+For escrow, dispute-resolution, yield, settlement, and slashing systems, many failures emerge only through interaction:
+
+* Actions are individually valid.
+* State transitions are locally correct.
+* But the combined sequence creates unsafe, unfair, insolvent, or stuck states.
+
+This framework is designed to surface those failures before they reach production.
 
 ## What it verifies
 
-- **State Machine Correctness**: Transitions are validated against the formal protocol model.
-- **Invariant Enforcement**: Critical properties (e.g., bond liquidity, withdrawal safety, fee caps, time-locks) are continuously checked.
-- **Accounting Integrity**: Funds are conserved and reconciled across all transitions.
-- **Adversarial Liveness**: Detects conditions where assets become stuck due to rational or malicious behaviour.
-- **Deterministic Replay**: Scenarios are fully reproducible and replayed step-by-step.
-- **Model ↔ EVM Equivalence**: Execution traces are validated against production-grade Solidity implementations.
+The framework supports validation across several dimensions:
 
-### Game-theoretic validation scope
+* **State-machine correctness**
+  Transitions are checked against the formal protocol model.
 
-- **Trace-end analysis**: Provides proxy validation on realised traces.
-- **Consistency**: A `:pass` confirms the observed trace is consistent with claimed protocol properties.
-- **Analytical Limits**: Single-trace execution is not a formal proof of safety across all possible information sets. Concepts like Subgame Perfect Equilibrium (SPE) remain `:inconclusive` without supporting deviation evidence.
+* **Invariant enforcement**
+  Critical properties such as bond liquidity, withdrawal safety, fee caps, time-locks, accounting boundaries, and settlement rules are continuously checked.
 
-## Key Features
+* **Accounting integrity**
+  Funds, liabilities, fees, yield, slashing, and deferred claims are reconciled across transitions.
 
-- **Deterministic Fixture System**: Composable scenario suites for regression testing.
-- **Golden Snapshotting**: Detects behavioural drift across protocol changes.
-- **Invariant-Driven Testing**: Failures are defined by violated guarantees, not just incorrect outputs.
+* **Adversarial liveness**
+  Scenarios can detect conditions where assets become stuck due to rational, malicious, or strategic behaviour.
 
-## Current Status
+* **Deterministic replay**
+  Scenarios are reproducible and replayed step-by step.
 
-- **Core Framework**: Robust, in-process deterministic runner operational.
-- **Reference Implementation**: Sew Protocol (v1) fully integrated.
-- **SPE Equilibrium**: Bounded public-state epsilon-SPE proxy with counterexample generation active. Forward and backward-induction evaluation modes supported.
-- **Integration**: Python-based adversarial suite via gRPC bridge.
+* **Model ↔ EVM equivalence**
+  Execution traces can be validated against Solidity implementations where an EVM integration is available.
 
-## Development Workflow
+## Game-theoretic validation scope
 
-The project uses a multi-agent workspace model with `jj` (Jujutsu):
+The framework includes game-theoretic validation tools, but these should be interpreted carefully.
 
-- **agent-a/b/c/d** — parallel exploration workspaces for independent changes
-- **integration** — merge target where all agent workspaces are combined
-- **main** — release branch pushed to remote
+Current scope:
+
+* **Trace-end analysis**
+  Provides proxy validation on realised traces.
+
+* **Consistency checking**
+  A `:pass` confirms that an observed trace is consistent with claimed protocol properties.
+
+* **Bounded public-state epsilon-SPE proxy**
+  Supports bounded equilibrium-style checks over public state, including counterexample generation.
+
+* **Forward and backward-induction evaluation modes**
+  Used for structured strategic analysis over scenario traces.
+
+Important limitation:
+
+Single-trace execution is not a formal proof of safety across all possible information sets. Stronger claims such as full Subgame Perfect Equilibrium remain `:inconclusive` unless supported by sufficient deviation evidence.
+
+## Key features
+
+* Deterministic fixture-based scenario suites
+* Protocol adapter interface for reusable validation
+* Golden snapshots for behavioural drift detection
+* Invariant-driven testing
+* Deterministic replay
+* Adversarial and multi-actor scenario modelling
+* Optional evidence and artifact generation
+* Validation-root builder for structured result accumulation
+* Python adversarial suite integration through gRPC
+
+## Current status
+
+* **Core framework**: operational in-process deterministic runner.
+* **Reference protocol**: Sew protocol model integrated as the main validation target.
+* **Invariant system**: active across framework, Sew protocol, equilibrium, and yield modules.
+* **SPE proxy validation**: bounded public-state epsilon-SPE proxy with counterexample generation.
+* **Adversarial suite integration**: Python-based suite available through gRPC bridge.
+* **Artifact validation**: opt-in validation-root and artifact-registry validation available.
+
+## Validation State Root
+
+The framework includes an opt-in state monad and validation-root builder for structured result accumulation.
+
+This is used to collect validation results, evidence, metrics, warnings, errors, and suite metadata in a composable way.
+
+### Architecture
+
+```text
+util.state-monad
+  Pure state computation: state → [value state]
+
+        ↓
+
+validation.state
+  Semantic validation operations:
+  record-error, record-warning, record-pass, record-evidence, snapshot
+
+        ↓
+
+validation.root
+  Root builder:
+  build-root, finalize-root, derive-root-status
+
+        ↓
+
+validation.adapters.*
+  Domain adapters:
+  artifact-registry → validation-root
+
+        ↓
+
+validation.integration.*
+  CLI entry points and export integration
+```
+
+### State monad usage
+
+Namespace:
+
+```clojure
+resolver-sim.util.state-monad
+```
+
+Example:
+
+```clojure
+(require '[resolver-sim.util.state-monad :as sm])
+
+(sm/run-state
+  (sm/bind (sm/get-state)
+    (fn [s]
+      (sm/bind (sm/update-state assoc :validated? true)
+        (fn [_]
+          (sm/return (:run-id s))))))
+  {:run-id "abc"})
+
+;; => ["abc" {:run-id "abc" :validated? true}]
+```
+
+### Semantic validation operations
+
+Namespace:
+
+```clojure
+resolver-sim.validation.state
+```
+
+Example:
+
+```clojure
+(require '[resolver-sim.validation.state :as vs])
+
+(vs/exec-state
+  (vs/bind (vs/record-pass)
+    (fn [_]
+      (vs/bind
+        (vs/record-error {:key :yield/mismatch
+                          :severity :critical})
+        (fn [_]
+          (vs/snapshot)))))
+  {:status-keys #{}
+   :error-keys #{}
+   :warning-keys #{}
+   :errors []
+   :warnings []
+   :evidence []
+   :metrics {:checks 0
+             :passed 0
+             :failed 0
+             :warnings 0}
+   :extra {}
+   :suite/id nil
+   :suite/type nil})
+```
+
+### Validation root
+
+Namespace:
+
+```clojure
+resolver-sim.validation.root
+```
+
+Example:
+
+```clojure
+(require '[resolver-sim.validation.root :as root])
+(require '[resolver-sim.validation.state :as vs])
+
+(root/build-root
+  (vs/bind (vs/record-pass)
+    (fn [_]
+      (vs/record-evidence
+        {:check/id :yield/solvency
+         :status :passed}))))
+
+;; => {:status :passed,
+;;     :validation/root-version "validation-root.v1",
+;;     ...}
+```
+
+### Artifact registry validation
+
+Validate the default registry:
+
+```bash
+bb validation:artifact-registry
+```
+
+Validate a specific registry:
+
+```bash
+bb validation:artifact-registry results/runs/<run-id>/test-artifacts.json
+```
+
+Run a scenario with non-blocking artifact validation:
+
+```bash
+bb scenario:run S01_baseline-happy-path.json
+```
+
+### Validation design constraints
+
+* No production code outside `validation.*` calls `util.state-monad` directly.
+* `put-state` and `update-state` are not re-exported through `validation.state`.
+* Adapter layers use `validation.state` semantic operations only.
+* Validation is additive and non-blocking by default.
+* Registry validation currently uses schema-version dependency matching.
+
+## Development workflow
+
+The project supports a multi-agent workspace model using `jj` / Jujutsu.
+
+Typical workspace layout:
+
+```text
+agent-a
+agent-b
+agent-c
+agent-d
+integration
+main
+```
+
+Where:
+
+* `agent-*` workspaces are used for parallel exploration.
+* `integration` is the merge target where agent workspaces are combined.
+* `main` is the release branch pushed to remote.
 
 ### Workspace sync process
 
+Rebase an agent workspace onto `main`:
+
 ```bash
-# Rebase all agents onto main from their workspaces
 jj rebase -d main
+```
 
-# On integration: create a merge commit with all agents
+Create an integration merge with all agent workspaces:
+
+```bash
 jj new agent-a agent-b agent-c agent-d
+```
 
-# Resolve conflicts, then validate
+Resolve conflicts, then validate:
+
+```bash
 bb validate
 bb test:unit
+```
 
-# Push to main
+Push integration and main:
+
+```bash
 jj git push -B main -B integration
 ```
 
 ## Quick Start
 
 ### 1. Lint and structural validation
+
 ```bash
 bb validate
 ```
-Runs clj-kondo lint over src, test, notebooks, and dev sources.
+
+Runs clj-kondo lint over source, test, notebook, and development namespaces.
 
 ### 2. Run unit tests
+
 ```bash
 bb test:unit
 ```
-Runs all unit tests — framework, Sew protocol, equilibrium, and yield modules.
 
-### 3. Run invariant scenarios (fast, in-process)
+Runs unit tests across the framework, Sew protocol model, equilibrium checks, and yield modules.
+
+### 3. Run invariant scenarios
+
 ```bash
 clojure -M:run -- --invariants
 ```
 
-### 4. Adversarial exploration
-```bash
-# Start gRPC simulation server
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
+Runs fast in-process invariant scenarios.
 
-# Run failure-mode suite
+### 4. Run adversarial exploration
+
+Start the gRPC simulation server:
+
+```bash
+nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
+```
+
+Run the Python failure-mode suite:
+
+```bash
 python3 python/invariant_suite.py
 ```
 
-### 5. Dispute Resolution Robustness Validation (Monte Carlo)
+### 5. Run dispute-resolution robustness validation
+
+Run all dispute-resolution phases:
+
 ```bash
-# Run all DR phases (Economic Parameters, Corruption, Evidence, Fairness)
 ./run.sh all
+```
 
-# Or run individual phases
-./run.sh phase-f-dr  # Economic parameter validation sweep
-./run.sh phase-c-dr  # Corruption economics sweep
-./run.sh phase-e-dr  # Evidence integrity sweep
-./run.sh phase-m-dr  # Fairness analysis sweep
+Run individual phases:
 
-# Or via direct CLI
+```bash
+./run.sh phase-f-dr
+./run.sh phase-c-dr
+./run.sh phase-e-dr
+./run.sh phase-m-dr
+```
+
+Or run phases directly through the Clojure CLI:
+
+```bash
 clojure -M:run -- --phase-f-dr
 clojure -M:run -- --phase-c-dr
 clojure -M:run -- --phase-e-dr
 clojure -M:run -- --phase-m-dr
 ```
 
-**Dispute Resolution Phases (22 sub-phases total):**
+## Dispute-resolution validation phases
 
-- **Phase F (Economic Parameters)**: 6 sweeps validating safe parameter zones where malicious EV < 0
-  - F1: Detection Probability Sensitivity (0.1–0.9)
-  - F2: Bond Size Sweep (0.5×–10.0× escrow)
-  - F3: Fee Adequacy (50–1000 bps)
-  - F4: Escrow Concentration (100–1M)
-  - F5: Multi-resolver Equilibrium (1–100 resolvers)
-  - F6: Appeal Window Adequacy (0–10k blocks)
+The dispute-resolution suite currently includes 22 sub-phases across four major areas.
 
-- **Phase C (Corruption Economics)**: 6 sweeps validating cost-of-corruption exceeds profit
-  - C1: Bribery Cost Model (0.1×–2.0× escrow)
-  - C2: External Collusion (2–50 parties)
-  - C3: Layer Escalation Attack (1–5 rounds)
-  - C4: Detection Probability Trade-off (2D grid)
-  - C5: Profit-Maximizer Lifecycle (slash sweep)
-  - C6: Strategic Abstention (timeout penalty sweep)
+### Phase F: Economic Parameters
 
-- **Phase E (Evidence Integrity)**: 6 sweeps validating evidence layer robustness
-  - E1: Deadline Enforcement
-  - E2: Hash Mismatch Detection
-  - E3: Conflicting Evidence Resolution
-  - E4: Evidence Bloat Griefing Bounds (1KB–1GB)
-  - E5: Yield Accrual During Dispute (0%–10% APY)
-  - E6: Evidence Availability Guarantee
+Validates safe parameter zones where malicious expected value is negative.
 
-- **Phase M (Fairness Analysis)**: 4 sweeps validating procedural fairness
-  - M1: Access-to-Justice Validation (95%+ can afford appeals)
-  - M2: Asymmetric Information Cost (≤10% asymmetry)
-  - M3: Frivolous Appeal Discouragement (70%+ reduction)
-  - M4: Expert Availability & Cost (80%+ have supply)
+* F1: Detection probability sensitivity, from 0.1 to 0.9
+* F2: Bond size sweep, from 0.5× to 10.0× escrow value
+* F3: Fee adequacy, from 50 to 1000 bps
+* F4: Escrow concentration, from 100 to 1M
+* F5: Multi-resolver equilibrium, from 1 to 100 resolvers
+* F6: Appeal window adequacy, from 0 to 10k blocks
 
+### Phase C: Corruption Economics
+
+Validates whether cost of corruption exceeds profit.
+
+* C1: Bribery cost model, from 0.1× to 2.0× escrow value
+* C2: External collusion, from 2 to 50 parties
+* C3: Layer escalation attack, from 1 to 5 rounds
+* C4: Detection probability trade-off, using a 2D grid
+* C5: Profit-maximizer lifecycle, using slash sweeps
+* C6: Strategic abstention, using timeout penalty sweeps
+
+### Phase E: Evidence Integrity
+
+Validates robustness of the evidence layer.
+
+* E1: Deadline enforcement
+* E2: Hash mismatch detection
+* E3: Conflicting evidence resolution
+* E4: Evidence bloat griefing bounds, from 1KB to 1GB
+* E5: Yield accrual during dispute, from 0% to 10% APY
+* E6: Evidence availability guarantee
+
+### Phase M: Fairness Analysis
+
+Validates procedural fairness.
+
+* M1: Access-to-justice validation, targeting 95%+ affordability
+* M2: Asymmetric information cost, targeting ≤10% asymmetry
+* M3: Frivolous appeal discouragement, targeting 70%+ reduction
+* M4: Expert availability and cost, targeting 80%+ supply availability
 
 ## Documentation
-- `docs/README.md` — documentation index
-- `docs/SYSTEM_OVERVIEW.md` — narrative overview: two engines, findings, roadmap, technical architecture
-- `docs/ROBUSTNESS_FRAMEWORK.md` — adversarial validation and simulation architecture
-- `docs/testing/` — validation coverage and status
-- `docs/scenarios.md` — scenario index and protocol properties
-- `docs/overview/REUSABLE_COMPONENTS.md` — framework harness and adapter components
+
+* `docs/README.md` — documentation index
+* `docs/SYSTEM_OVERVIEW.md` — narrative overview: engines, findings, roadmap, and technical architecture
+* `docs/ROBUSTNESS_FRAMEWORK.md` — adversarial validation and simulation architecture
+* `docs/testing/` — validation coverage and status
+* `docs/scenarios.md` — scenario index and protocol properties
+* `docs/overview/REUSABLE_COMPONENTS.md` — framework harness and adapter overview
+
+## Repository orientation
+
+For new contributors, the most important distinction is:
+
+* The **framework** is the reusable protocol robustness infrastructure.
+* **Sew** is the primary validation target and worked example.
+
+A new protocol integration should usually start by studying:
+
+```text
+src/resolver_sim/protocols/protocol.clj
+src/resolver_sim/protocols/sew/
+src/resolver_sim/contract_model/replay.clj
+data/fixtures/
+```
+
+Then add protocol-specific:
+
+* adapters
+* fixtures
+* invariants
+* scenario suites
+* golden snapshots
+* artifact mappings, if needed
+
+## Intended use cases
+
+The framework is intended for:
+
+* protocol engineering teams
+* smart contract auditors
+* mechanism designers
+* security researchers
+* DeFi risk teams
+* dispute-resolution protocol teams
+* simulation-driven governance researchers
+
+It is most useful when the question is not simply whether a function is correct, but whether the protocol remains robust under strategic, adversarial, and time-dependent behaviour.
+
+## Status of claims
+
+This repository supports evidence-generating validation workflows, but validation claims should remain scoped to the evidence produced.
+
+A passing scenario means:
+
+* the realised trace satisfied the checked invariants;
+* the observed behaviour was consistent with the claimed property;
+* the run can be deterministically replayed, assuming the same fixture and execution environment.
+
+A passing scenario does not by itself prove:
+
+* global protocol safety;
+* full economic security;
+* full equilibrium correctness;
+* absence of all strategic deviations;
+* correctness across all possible information sets.
+
+Stronger claims require broader scenario coverage, deviation evidence, formal analysis, or production-equivalence validation.
+
+## License
+
+Apache 2
+

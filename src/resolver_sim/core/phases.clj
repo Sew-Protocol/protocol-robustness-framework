@@ -18,6 +18,7 @@
             [resolver-sim.sim.waterfall         :as waterfall]
             [resolver-sim.sim.governance-impact :as gov-impact]
             [resolver-sim.research.sew.economic.market-exit             :as market-exit]
+            [resolver-sim.validation.scenario-id :as sid]
             [resolver-sim.research.sew.adversarial.falsification-lite   :as falsification-lite]
             [resolver-sim.research.sew.adversarial.evidence-fog         :as evidence-fog]
             [resolver-sim.research.sew.adversarial.legitimacy-loop      :as legitimacy-loop]
@@ -115,7 +116,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-simulation [params output-dir]
-  (let [scenario-id (:scenario-id params "unnamed")
+  (let [scenario-id (sid/validate-scenario-id! (:scenario-id params "unnamed"))
         run-dir (results/create-run-directory output-dir scenario-id)
         rng (rng/make-rng (:rng-seed params))
 

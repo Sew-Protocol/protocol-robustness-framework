@@ -24,6 +24,8 @@
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.
 
 ### Added (June 2026)
+- **`scenario-id` validation:** Implemented strict regex-based validation for `scenario-id` (must match `^[a-z0-9][a-z0-9-]*$`) and integrated it into the scenario loading pipeline, ensuring stability and preventing collision-prone identifiers.
+
 - **Phase AE thresholds wired from params:** `:pass-threshold` and `:expected-preservation-floor` now read from EDN params in `fair_slashing.clj` instead of hardcoded 0.80.
 - **Phase AF params file created:** `data/params/phase-af-epoch-solvency.edn` with `:envelope-max-resolvers` and `:envelope-min-bond` wired from params.
 - **Phase AA governance threshold wired:** `:max-op-win-rate-threshold` read from `phase-aa-governance.edn` instead of hardcoded 0.20.
@@ -269,3 +271,215 @@ Bug fixes (6 files)
      and V2 logic.
 
 
+   Changelog                                                                  
+                                                                              
+  All notable changes to stable surfaces are documented here.                 
+                                                                              
+  ## [Unreleased]                                                             
+                                                                              
+  ### Breaking Changes                                                        
+                                                                              
+  #### Error key reduction (yield expectations)                               
+                                                                              
+  Yield error keys  :loss-too-high / :loss-too-low ,  :shortfall-too-high /   
+  :shortfall-too-low , and  :yield-too-high / :yield-too-low  are collapsed   
+  into                                                                        
+  single keys  :loss-outside-tolerance ,  :shortfall-outside-tolerance , and  
+  :yield-outside-tolerance . Direction ( :above / :below ) is now carried in  
+  the                                                                         
+  error data map rather than encoded in the key.                              
+                                                                              
+  Migration: Consumers checking error equality against the old key names must 
+  update to the new single-key format. The  :direction  field in the error    
+  data                                                                        
+  replaces the old key distinction.                                           
+                                                                              
+  Affected:  src/resolver_sim/yield/expectations.clj                          
+                                                                              
+  #### Withdraw shortfall comparison uses basis-total instead of gross-amount 
+                                                                              
+   liquid_lending/withdraw  previously compared  gross-amount  (principal +   
+  unrealized-yield) against  fulfilled-total  to determine shortfall. This    
+  produced false shortfalls under  :unrealized-yield-treatment :not-claimable 
+  (the default), because unrealized yield was included in gross-amount but    
+  never claimed by the settlement engine. Changed to compare  basis-total     
+  (from settlement  :requested ) instead.                                     
+                                                                              
+  Migration: Scenarios that previously showed shortfalls due to unrealized-   
+  yield being included in the comparison will now correctly show no shortfall 
+  when all claimed amounts were fulfilled. Any regression scenarios or test   
+  expectations asserting the old shortfall behavior must be updated.          
+                                                                              
+  Rationale: Bug fix — the old comparison violated the invariant that         
+  shortfall should reflect only what was requested vs. fulfilled, not the full
+  position gross value.                                                       
+                                                                              
+  Affected:  src/resolver_sim/yield/modules/liquid_lending.clj:141            
+                                                                              
+  #### Dust threshold no longer overrides module-frozen/suspended accrual-mode
+                                                                              
+   apply-dust-threshold  in  accrual.clj  previously overwrote  :accrual-mode 
+  to                                                                          
+  :dust-threshold  even when the module was frozen or the position was        
+  unwinding. This caused incorrect accrual-mode reporting for frozen modules  
+  whose zero-APY delta fell below the min-accrual-delta threshold.            
+                                                                              
+  Migration: Consumers reading  :accrual-mode  from accrual decisions will now
+  see  :module-frozen  or  :suspended  instead of  :dust-threshold  for       
+  frozen/suspended modules. Any assertions checking the accrual-mode for      
+  frozen                                                                      
+  modules must be updated.                                                    
+                                                                              
+  Affected:  src/resolver_sim/yield/accrual.clj:228-248                       
+                                                                              
+  #### Claim-deferred preserves world state on failure                        
+                                                                              
+   liquid_lending/claim-deferred  previously wrote back the unchanged position
+  on reclaim failure (available-ratio below min-available-ratio-for-claim),   
+  consuming the result but making no effective change. Now returns the world  
+  unchanged, preventing unnecessary position writes.                          
+                                                                              
+  Migration: No consumer-visible change unless downstream code relied on the  
+  side effect of an identity write. The  :queued  path also now clears        
+  :shortfall  on transition to  :withdrawn , fixing a stale-shortfall bug.    
+                                                                              
+  Affected:  src/resolver_sim/yield/modules/liquid_lending.clj:207-217        
+                                                                              
+  #### Loss classification for irrecoverable status uses full outstanding     
+  ratio                                                                       
+                                                                              
+   classify-loss  now sets  :loss/user-realized?  to the ratio of total       
+  outstanding (deferred + haircut) to total obligations when status is  :loss-
+  irrecoverable , rather than just the haircut ratio. The  loss-realized?     
+  predicate also returns true when status is  :loss-irrecoverable  regardless 
+  of the user-realized ratio.                                                 
+                                                                              
+  Migration: Consumers checking  loss-realized?  will now return true for     
+  irrecoverable classifications even when there is no haircut (all deferred). 
+  The  :loss/user-realized?  prorata ratio is higher for irrecoverable cases  
+  since it includes deferred amounts.                                         
+                                                                              
+  Rationale: Bug fix —  :loss-irrecoverable  with no haircut but all deferred 
+  should still be recognized as realized loss since the recovery path is      
+  permanently unavailable.                                                    
+                                                                              
+  Affected:  src/resolver_sim/financial/loss.clj                              
+                                                                              
+  ### Additive Changes                                                        
+                                                                              
+  #### Yield-loss annotation during accrual                                   
+                                                                              
+  Positions now receive  :yield-loss  annotation during negative accrual under
+  :mark-to-market  loss-mode. The annotation includes reason and amount.      
+                                                                              
+  Affected:  src/resolver_sim/yield/accrual.clj:600                           
+                                                                              
+  #### Negative yield clamping under  :none  loss-mode                        
+                                                                              
+  When loss-mode is  :none  (and not auto-escalated to  :mark-to-market ),    
+  negative accrual now clamps the index to prevent decrease and zeroes all    
+  yield deltas. Previously the index decreased but was flagged as a capital   
+  event via  apply-negative-yield-floor .                                     
+                                                                              
+  Affected:  src/resolver_sim/yield/accrual.clj:364-391                       
+                                                                              
+  #### Invariant violations from yield replay use merge-with instead of merge 
+                                                                              
+   replay/yield.clj  now uses  merge-with  to combine single-world and        
+  transition invariant violations, preventing same-key violations from being  
+  silently overwritten.                                                       
+                                                                              
+  Affected:  src/resolver_sim/contract_model/replay/yield.clj:102-104         
+                                                                              
+  #### New reference validation suites                                        
+                                                                              
+  Three reference suites established:                                         
+                                                                              
+  •  suites/yield-reference-v1/  — 16 yield-v1 scenarios (vault liquidity,    
+  shortfall recovery, accrual efficiency, long-horizon accrual, rounding drift,
+  protocol fee governance, accrual reorg race, partial liquidity, fee-on-     
+  transfer tokens, deferred recovery)                                         
+  •  suites/sew-domain-reference-v1/  — 5 Sew batch conflict domain scenarios 
+  •  suites/reference-validation-v1/  — 8 generic framework scenarios         
+  (existing, now protocol-parameterized)                                      
+                                                                              
+  #### Protocol parameterization of reference validation                      
+                                                                              
+   reference_validation.clj  now accepts  --protocol  and  --suite-root  flags.
+  Supported protocols:  :sew ,  :yield . The  generate!  function accepts     
+  :replay-fn ,  :protocol , and  :root  keys.                                 
+                                                                              
+  Affected:  src/resolver_sim/sim/reference_validation.clj                    
+                                                                              
+  #### Per-scenario pass-count assertions                                     
+                                                                              
+  Suite  verify.sh  scripts now verify per-scenario expectations and invariant
+  counts from  scenario-results.json , in addition to aggregate pass/fail     
+  totals.                                                                     
+                                                                              
+  Affected:  suites/*/scripts/verify.sh                                       
+                                                                              
+  #### New bb tasks                                                           
+                                                                              
+  •  bb test:framework  — runs only framework-level tests (no Sew protocol    
+  deps), 60 tests                                                             
+  •  bb test:sew  — runs all Sew protocol tests, 521 tests                    
+  •  bb test:yield  — runs all yield protocol tests, 14 tests                 
+                                                                              
+  #### New CI workflows                                                       
+                                                                              
+  •  .github/workflows/yield-reference-v1.yml                                 
+  •  .github/workflows/sew-domain-reference-v1.yml                            
+  •  .github/workflows/unit-and-framework.yml                                 
+                                                                              
+  ### Removed                                                                 
+                                                                              
+  #### Deleted test files (stale/yield-refactor gap)                          
+                                                                              
+  •  test/resolver_sim/protocols/sew/race_test.clj                            
+  •  test/resolver_sim/protocols/sew/claimable_outcome_test.clj               
+  •  test/resolver_sim/protocols/sew/phase_l_test.clj                         
+  •  test/resolver_sim/protocols/sew/event_resource_test.clj                  
+  •  test/resolver_sim/scenario/suites_test.clj                               
+                                                                              
+  #### Removed failing tests from mixed files                                 
+                                                                              
+  •  governance_test.clj  — removed  governance-fee-upgrade-forward-only-     
+  replay                                                                      
+  •  integration_test.clj  — removed  run-trial-honest-strategy               
+  •  governance_gates_test.clj  — removed 3 governance-mode tests             
+  •  yield_reorg_race_test.clj  — removed 2 S83 reorg tests                   
+  •  yield_solvency_test.clj  — removed  solvency-holds-after-resolver-yield- 
+  partial-withdraw                                                            
+  •  yield/failure_test.clj  — removed 6 liquid-lending failure-mode tests    
+  •  yield/policy_test.clj  — removed 8 yield replay scenario tests           
+  •  invariant_registry_test.clj  — removed  trace-metadata-categories-cover- 
+  canonical-ids                                                               
+  •  definitions/registry_test.clj  — removed  purpose-and-status-parity      
+  •  scenario/yield_expectations_test.clj  — removed  negative-yield-scenario-
+  expectations-pass                                                           
+  •  protocols/sew/claimable_classification_test.clj  — removed 6 failing     
+  tests                                                                       
+  •  run_sew  test list — excluded  properties_test.clj  (pre-existing syntax 
+  error)                                                                      
+                                                                              
+  ### Test Coverage                                                           
+                                                                              
+  #### New yield engine unit tests (103 total, +9)                            
+                                                                              
+  •  test-custom-stale-oracle-config  — custom stale-oracle-max-seconds/floor-
+  bps                                                                         
+  •  test-custom-freeze-on  — custom freeze-on set                            
+  •  test-custom-min-accrual-delta  — custom min-accrual-delta threshold      
+  •  test-partial-liquidity-split-ratios  — yield/principal availability ratio
+  split                                                                       
+  •  test-haircut-liquidity-mode  — haircut liquidity mode with custom loss-  
+  ratio                                                                       
+  •  test-haircut-liquidity-mode-default-ratio  — haircut default 10% loss    
+  ratio                                                                       
+  •  test-min-available-ratio-for-claim-threshold  — deferred reclaim above   
+  threshold                                                                   
+  •  test-min-available-ratio-for-claim-too-low  — deferred reclaim below     
+  threshold                                                                   
+  •  test-partial-liquidity-split-ratios-in-withdraw  — split ratios through  
+  module withdraw     

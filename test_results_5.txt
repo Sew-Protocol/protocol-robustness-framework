@@ -1,7 +1,0 @@
-Running Sew protocol unit tests...
-Syntax error compiling at (resolver_sim/protocols/sew/replay_test.clj:77:12).
-Unable to resolve symbol: alice in this context
-
-Full report at:
-/tmp/clojure-18089525690015948984.edn
-Error while executing task: test:sew

@@ -1,7 +1,0 @@
-Running Sew protocol unit tests...
-Syntax error compiling at (resolver_sim/scenario/equilibrium_test.clj:590:16).
-No such var: sb/sb/spe-projection
-
-Full report at:
-/tmp/clojure-9130339973576258280.edn
-Error while executing task: test:sew
