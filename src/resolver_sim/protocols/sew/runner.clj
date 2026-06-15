@@ -180,6 +180,14 @@
 
 (defn- resolution-loop
   "Run multi-round resolution with escalation.
+
+   Intentionally imperative (loop/recur) rather than monadic:
+   Clojure's recur only targets the closest enclosing loop or fn,
+   and cannot be used from within a monadic bind (sm/bind ... (fn [...]))
+   because bind introduces an intervening fn boundary.  Embedding
+   multi-round escalation inside the bind chain would force deeply
+   nested closures or a CPS transform — both worse than a plain loop.
+
    Returns {:world-after world :verdict-correct? bool
             :escalated? bool :escalation-level int}"
   [world wf-id from resolvers rng-fn strategy
@@ -230,6 +238,19 @@
 ;; Internal: monadic path — attribution-threaded version of run-lifecycle
 ;; ---------------------------------------------------------------------------
 
+;; Phase 2 boundary:
+;;
+;; The monadic runner carries attribution explicitly in AttributedState through
+;; setup transitions. Before entering the legacy-compatible resolution loop, the
+;; explicit attribution context is rebound via with-attribution so existing
+;; evidence/logging calls inside execute-resolution, escalate-dispute, and
+;; execute-pending-settlement observe the same context.
+;;
+;; This is intentional: Phase 2 guarantees runtime attribution propagation and
+;; parity. Phase 3 may replace dynamic fallback inside individual resolution
+;; evidence emitters with explicit context, but should do so incrementally with
+;; artifact-level parity tests.
+
 (defn- run-lifecycle-monadic
   "Monadic version of run-lifecycle threading AttributedState.
    Attribution is threaded through protocol transitions via the monadic chain.
@@ -256,14 +277,17 @@
                      (fn [raise-result]
                        (if-not (:ok raise-result)
                          (throw (ex-info "raise-dispute failed" raise-result))
-                         (sm/bind (am/get-inner-state)
-                           (fn [w2]
-                             (let [fee       (get-in w2 [:total-fees token] 0)
-                                   afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
-                                   {:keys [world-after verdict-correct? escalated? escalation-level]}
-                                   (resolution-loop w2 wf-id from resolvers
-                                                    rng-fn strategy
-                                                    escalation-prob-correct escalation-prob-wrong)
+                          (sm/bind (sm/get-state)
+                            (fn [attributed]
+                              (let [w2 (attr/unwrap-state attributed)
+                                    attr-ctx (attr/get-attribution attributed)]
+                                (attr/with-attribution attr-ctx
+                                  (let [fee       (get-in w2 [:total-fees token] 0)
+                                        afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
+                                        {:keys [world-after verdict-correct? escalated? escalation-level]}
+                                        (resolution-loop w2 wf-id from resolvers
+                                                         rng-fn strategy
+                                                         escalation-prob-correct escalation-prob-wrong)
                                    detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
                                    bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
                                    profit-honest (long fee)
@@ -288,7 +312,7 @@
                                  :cm/fee                fee
                                  :cm/afa                afa
                                  :cm/invariants-ok?     (:all-hold? inv-result)
-                                 :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))}))))))))))))
+                                  :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))}))))))))))))))
          initial-world
          initial-attr)]
     result))
