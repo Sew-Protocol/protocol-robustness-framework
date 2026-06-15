@@ -31,20 +31,28 @@
    :sweep      [:ctx/run-id :ctx/sweep-id :ctx/scenario-id]})
 
 (defn require-attribution!
-  "Assert that the current attribution context contains all required keys
+  "Assert that the attribution context contains all required keys
    for the given evidence kind. Returns the sanitized attribution on success.
-   Throws with :missing keys on failure."
-  ([] (require-attribution! :transition))
-  ([evidence-kind]
+   Throws with :missing keys on failure.
+
+   If explicit-attr is provided, it uses that; otherwise it falls back to
+   the dynamic *attribution* context."
+  ([evidence-kind] (require-attribution! evidence-kind nil))
+  ([evidence-kind explicit-attr]
    (let [required (get required-attribution evidence-kind [])
-         attr (attr/sanitize-attribution (attr/current-attribution))
+         ;; Use the provided attribution, or fallback to dynamic *attribution*
+         raw-attr (if explicit-attr
+                    (attr/get-attribution explicit-attr)
+                    (attr/current-attribution))
+         attr (attr/sanitize-attribution raw-attr)
          missing (seq (remove #(contains? attr %) required))]
      (when missing
        (throw (ex-info "Missing required attribution context for evidence"
                        {:evidence-kind evidence-kind
                         :missing (vec missing)
                         :attribution attr
-                        :required (vec required)})))
+                        :required (vec required)
+                        :explicit? (some? explicit-attr)})))
      attr)))
 
 ;; ── Stable Hashing ───────────────────────────────────────────────────────────
@@ -117,21 +125,22 @@
 
    Call shape:
      (emit-evidence!
-       {:artifact-kind :transition
-        :block-time    current-block-time
-        :step          current-step
-        :before        before-world
-        :after         after-world
-        :action        action-map
-        :result        result-map})
+       {:artifact-kind     :transition
+        :block-time        current-block-time
+        :step              current-step
+        :before            before-world
+        :after             after-world
+        :action            action-map
+        :result            result-map
+        :attribution-context (optional) AttributedState or attribution map})
 
    Returns the evidence record. Throws if required attribution keys are missing
    or if temporal context is absent."
-  [{:keys [artifact-kind block-time step] :as spec}]
+  [{:keys [artifact-kind block-time step attribution-context] :as spec}]
   (when-not (and block-time step)
     (throw (ex-info "Missing required temporal context (block-time/step) for evidence"
                     {:block-time block-time :step step})))
-  (let [attribution (require-attribution! (or artifact-kind :transition))]
+  (let [attribution (require-attribution! (or artifact-kind :transition) attribution-context)]
     (make-evidence-record (assoc spec :attribution attribution))))
 
 ;; ── Async Attribution Preservation ───────────────────────────────────────────

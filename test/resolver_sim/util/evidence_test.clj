@@ -28,6 +28,23 @@
 (def ^:private partial-attribution
   {:ctx/run-id "test-run-1"})
 
+;; ── Internal Context Embedding ───────────────────────────────────────────────
+
+(deftest test-attributed-state-wrapping
+  (let [state {:balance 100}
+        attribution {:ctx/run-id "run-1"}
+        attributed (attr/wrap-state state attribution)]
+    (is (= state (attr/unwrap-state attributed)))
+    (is (= attribution (:attribution attributed)))))
+
+(deftest test-get-attribution-from-attributed-state
+  (let [state {:balance 100}
+        attribution {:ctx/run-id "run-1"}
+        attributed (attr/wrap-state state attribution)]
+    (is (= attribution (attr/get-attribution attributed)))
+    (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
+      (is (= {:ctx/run-id "dynamic"} (attr/get-attribution nil))))))
+
 ;; ── require-attribution! ─────────────────────────────────────────────────────
 
 (deftest require-attribution-passes-with-complete-context
@@ -244,6 +261,41 @@
                     :result {:status :ok}})]
       (is (= "evidence-record.v1" (:schema-version record)))
       (is (string? (:evidence-hash record))))))
+
+(deftest emit-evidence-works-with-explicit-attribution
+  (let [explicit-attr {:ctx/run-id "run-1"
+                       :ctx/scenario-id "scen-1"
+                       :ctx/step 1
+                       :ctx/event-id "evt-1"}]
+    (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
+      (let [record (ev/emit-evidence!
+                     {:artifact-kind :transition
+                      :block-time 1000
+                      :step 1
+                      :before {}
+                      :after {}
+                      :action {}
+                      :result {}
+                      :attribution-context explicit-attr})]
+        (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
+
+(deftest emit-evidence-works-with-attributed-state
+  (let [explicit-attr {:ctx/run-id "run-1"
+                       :ctx/scenario-id "scen-1"
+                       :ctx/step 1
+                       :ctx/event-id "evt-1"}
+        attributed (attr/wrap-state {} explicit-attr)]
+    (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
+      (let [record (ev/emit-evidence!
+                     {:artifact-kind :transition
+                      :block-time 1000
+                      :step 1
+                      :before {}
+                      :after {}
+                      :action {}
+                      :result {}
+                      :attribution-context attributed})]
+        (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
 
 ;; ── wrap-attribution ─────────────────────────────────────────────────────────
 

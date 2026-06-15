@@ -14,28 +14,37 @@
 
 (defn capture-event-evidence!
   "Persist a structured evidence record for a critical transition.
-   Binds the current attribution envelope to the record."
-  [reason pre post inputs & [calc]]
-  (let [;; Analyze attribution quality against scenario requirements
-        requirements (into attr/required-evidence-keys attr/scenario-evidence-keys)
-        attr-report  (attr/current-evidence-attribution requirements)
-        
-        evidence {:schema_version      (evcfg/schema :event-evidence)
-                  :evidence/type       :transition-evidence
-                  :evidence/reason     reason
-                  :attribution         (:attribution attr-report)
-                  :attribution_quality (name (:quality attr-report))
-                  :missing_attribution (vec (map name (:missing attr-report)))
-                  :inputs              inputs
-                  :pre-state           pre
-                  :post-state          post
-                  :calculation         calc}
-        
-        out-dir  (str (evcfg/artifact-dir) "/event-evidence")
-        filename (evidence-filename {:attribution/context (:attribution attr-report)} reason)
-        f        (io/file out-dir filename)]
-    
-    (.mkdirs (io/file out-dir))
-    (spit f (json/write-str (attr/sanitize-attribution evidence) {:indent true}))
-    (println "Captured event evidence:" filename " (Quality:" (name (:quality attr-report)) ")")
-    evidence))
+   Binds the current attribution envelope to the record.
+   
+   Supports an optional explicit attribution-context, which if provided,
+   overrides the dynamic context."
+  ([reason pre post inputs] (capture-event-evidence! reason pre post inputs nil nil))
+  ([reason pre post inputs calc] (capture-event-evidence! reason pre post inputs calc nil))
+  ([reason pre post inputs calc attribution-context]
+   (let [;; Analyze attribution quality against scenario requirements
+         requirements (into attr/required-evidence-keys attr/scenario-evidence-keys)
+         ;; Resolve attribution (explicit or dynamic)
+         resolved-attr (if attribution-context
+                         (attr/get-attribution attribution-context)
+                         (attr/current-attribution))
+         attr-report  (attr/current-evidence-attribution requirements resolved-attr)
+         
+         evidence {:schema_version      (evcfg/schema :event-evidence)
+                   :evidence/type       :transition-evidence
+                   :evidence/reason     reason
+                   :attribution         (:attribution attr-report)
+                   :attribution_quality (name (:quality attr-report))
+                   :missing_attribution (vec (map name (:missing attr-report)))
+                   :inputs              inputs
+                   :pre-state           pre
+                   :post-state          post
+                   :calculation         calc}
+         
+         out-dir  (str (evcfg/artifact-dir) "/event-evidence")
+         filename (evidence-filename {:attribution/context (:attribution attr-report)} reason)
+         f        (io/file out-dir filename)]
+     
+     (.mkdirs (io/file out-dir))
+     (spit f (json/write-str (attr/sanitize-attribution evidence) {:indent true}))
+     (println "Captured event evidence:" filename " (Quality:" (name (:quality attr-report)) ")")
+     evidence)))

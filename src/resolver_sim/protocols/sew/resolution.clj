@@ -18,21 +18,49 @@
             [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.util.attribution            :as attr]
+            [resolver-sim.util.attributed-monad      :as am]
             [resolver-sim.time.context               :as time-ctx]
             [resolver-sim.io.event-evidence           :as evidence]))
 
-;; ---------------------------------------------------------------------------
-;; Internal: finalize helpers (no accounting — see lifecycle for that)
-;; ---------------------------------------------------------------------------
+(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability)
 
-(defn- finalize
-  "Internal: transition escrow to terminal state, release accounting.
-   direction — :released (to recipient) or :refunded (to sender)."
-  [world workflow-id direction]
-  (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
-    (-> world
-        (lc/finalize-escrow-accounting workflow-id direction)
-        (t/decrement-resolver-capacity resolver))))
+(defn rotate-dispute-resolver
+  "Governance-triggered resolver rotation for an in-flight dispute.
+   Records the rotation so invariants and scenarios can detect governance attacks."
+  [world workflow-id new-resolver]
+  (cond
+    (not (t/valid-workflow-id? world workflow-id))
+    (t/fail :invalid-workflow-id)
+
+    (not= :disputed (t/escrow-state world workflow-id))
+    (t/fail :transfer-not-in-dispute)
+
+    (:exists (t/get-pending world workflow-id))
+    (t/fail :resolution-already-pending)
+
+    (or (nil? new-resolver) (= "" new-resolver))
+    (t/fail :invalid-new-resolver)
+
+    :else
+    (let [old-resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])
+          same-resolver? (= old-resolver new-resolver)
+          last-rotation (last (get-in world [:resolver-rotations workflow-id]))
+          same-rotation? (and (not same-resolver?)
+                              (some? last-rotation)
+                              (= (:from last-rotation) old-resolver)
+                              (= (:to last-rotation) new-resolver))]
+      (if (or same-resolver? same-rotation?)
+        (assoc (t/ok world)
+               :old-resolver old-resolver
+               :new-resolver new-resolver
+               :idempotent? true)
+        (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
+              world'   (-> world
+                           (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
+                                     new-resolver)
+                           (update-in [:resolver-rotations workflow-id]
+                                      (fnil conj []) rotation))]
+          (assoc (t/ok world') :old-resolver old-resolver :new-resolver new-resolver))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: slashing helpers
@@ -939,6 +967,15 @@
 ;;   - Appends to world :resolver-rotations {workflow-id [{:from :to :at}]}
 ;; ---------------------------------------------------------------------------
 
+(defn- finalize
+  "Internal: transition escrow to terminal state, release accounting.
+   direction — :released (to recipient) or :refunded (to sender)."
+  [world workflow-id direction]
+  (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
+    (-> world
+        (lc/finalize-escrow-accounting workflow-id direction)
+        (t/decrement-resolver-capacity resolver))))
+
 (defn rotate-dispute-resolver
   "Governance-triggered resolver rotation for an in-flight dispute.
    Records the rotation so invariants and scenarios can detect governance attacks."
@@ -976,3 +1013,20 @@
                            (update-in [:resolver-rotations workflow-id]
                                       (fnil conj []) rotation))]
           (assoc (t/ok world') :old-resolver old-resolver :new-resolver new-resolver))))))
+
+;; ── Monadic Transitions ──────────────────────────────────────────────────────
+
+(defn execute-resolution-m
+  "Monadic version of execute-resolution."
+  [workflow-id caller is-release resolution-hash resolution-module-fn]
+  (am/update-with-result execute-resolution workflow-id caller is-release resolution-hash resolution-module-fn))
+
+(defn execute-pending-settlement-m
+  "Monadic version of execute-pending-settlement."
+  [workflow-id]
+  (am/update-with-result execute-pending-settlement workflow-id))
+
+(defn escalate-dispute-m
+  "Monadic version of escalate-dispute."
+  [workflow-id caller escalation-fn]
+  (am/update-with-result escalate-dispute workflow-id caller escalation-fn))
