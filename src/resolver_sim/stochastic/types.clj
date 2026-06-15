@@ -31,7 +31,6 @@
    [:slashing-detection-probability [:and number? [:>= 0] [:<= 1]]]
    [:fraud-detection-probability [:and number? [:>= 0] [:<= 1]]]
    [:fraud-slash-bps [:and number? [:>= 0] [:<= 10000]]]
-   [:l2-slash-bps [:and number? [:>= 0] [:<= 10000]]]
    [:reversal-detection-probability [:and number? [:>= 0] [:<= 1]]]
    [:reversal-slash-bps [:and number? [:>= 0] [:<= 10000]]]
    [:timeout-slash-bps [:and number? [:>= 0] [:<= 10000]]]
@@ -60,6 +59,12 @@
    [:detection-type {:optional true} [:enum :fraud :timeout :reversal]]
    [:timeout-detection-probability {:optional true} [:and number? [:>= 0] [:<= 1]]]
    [:yield-config {:optional true} map?]
+   [:save-samples? {:optional true} boolean?]
+   [:save-sweep? {:optional true} boolean?]
+   [:has-kleros? {:optional true} boolean?]
+   [:escrow-size {:optional true} [:>= 0]]
+   [:fraud-success-rate {:optional true} [:and number? [:>= 0] [:<= 1]]]
+   [:l2-slash-bps {:optional true} [:and number? [:>= 0] [:<= 10000]]]
 
    ;; Optional keys
    [:panel-size {:optional true} [:>= 0]]

@@ -79,7 +79,7 @@
             manifest {:ipfs-cid cid
                       :timestamp (System/currentTimeMillis)
                       :bundle-path export-tar-path}]
-        (spit "evidence-manifest.json" (json/write-str manifest :key-fn name))
+        (spit "evidence-manifest.json" (json/write-str manifest {:key-fn name :indent true}))
         (println "Published to IPFS")
         (println "\nCID:\n" cid)
         (println "\nGateway:\n" (str "https://ipfs.io/ipfs/" cid))

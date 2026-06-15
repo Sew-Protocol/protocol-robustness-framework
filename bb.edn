@@ -2,62 +2,86 @@
  {sim:run {:doc "Run a simulation with EDN params"
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
-   scenario:run
-   {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
-    :task (let [arg          (first *command-line-args*)
-                scenario-map {"kleros/preemptive-escalation-rejected-l0"
-                               "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
-                               ;; deprecated alias (pre-2026-06 rename)
-                               "kleros/escalation-race"
-                               "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-                scenario     (or (get scenario-map arg) arg)]
-            (when-not scenario
-              (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
-            (let [t0   (System/currentTimeMillis)
-                  exit (try
-                         (let [args (vec *command-line-args*)
-                                      ;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
-                                      alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
-                                      level-idx (.indexOf args "--result-display-level")
-                                      level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
-                                      alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
-                                      alias-val (when alias-idx (get alias-map (nth args alias-idx)))
-                                      chosen (or level-val alias-val)
-                                      cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
-                                                 chosen (conj "--result-display-level" chosen))]
-                                (apply clojure {:dir "." :extra-deps {}} cli-args))
-                         0
-                         (catch clojure.lang.ExceptionInfo e
-                           (or (:exit (ex-data e)) 1)))
-                  dur  (- (System/currentTimeMillis) t0)]
-              (shell "python3" "scripts/write_scenario_run_manifest.py"
-                     "--scenario"    scenario
-                     "--status"      (if (zero? exit) "pass" "fail")
-                     "--duration-ms" (str dur))
-              ;; validate the emitted artifact registry (additive, slug-filtered)
-              (try
-                (let [slug (some-> scenario
-                              (clojure.string/replace (re-pattern "^.*/") "")
-                              (clojure.string/replace (re-pattern "\\.json$") ""))
-                      runs-dir (java.io.File. "results/runs")
-                      dirs (when (.exists runs-dir)
-                             (->> (.listFiles runs-dir)
-                                  (filter (fn [x] (.isDirectory x)))
-                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
-                                  (sort-by (fn [x] (.lastModified x)))
-                                  vec))
-                      latest-run (last dirs)
-                      registry-path (when latest-run
-                                      (str (.getPath latest-run) "/test-artifacts.json"))]
-                  (if (and registry-path (.exists (java.io.File. registry-path)))
-                    (do
-                      (println (str "[artifact-registry-validation] Validating " registry-path))
-                      (apply clojure {:dir "." :extra-deps {}}
-                             ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
-                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
-                (catch Exception e
-                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
-             (when-not (zero? exit) (System/exit exit))))}
+    scenario:run
+    {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
+     :task (let [arg          (first *command-line-args*)
+                 scenario-map {"kleros/preemptive-escalation-rejected-l0"
+                                "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                                ;; deprecated alias (pre-2026-06 rename)
+                                "kleros/escalation-race"
+                                "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+                 scenario     (or (get scenario-map arg) arg)]
+             (when-not scenario
+               (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
+             (let [t0        (System/currentTimeMillis)
+                   output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
+                   exit (try
+                          (let [args (vec *command-line-args*)
+                                       ;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
+                                       alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                       level-idx (.indexOf args "--result-display-level")
+                                       level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                       alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                       alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                       chosen (or level-val alias-val)
+                                       cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                                  chosen (conj "--result-display-level" chosen))]
+                                (apply clojure {:dir "." :extra-deps {}}
+                                       (conj cli-args "--output-file" output-tmp)))
+                          0
+                          (catch clojure.lang.ExceptionInfo e
+                            (or (:exit (ex-data e)) 1)))
+                   dur  (- (System/currentTimeMillis) t0)]
+               ;; 1. Write the run manifest stubs (creates run-specific directory)
+               (shell "python3" "scripts/write_scenario_run_manifest.py"
+                      "--scenario"    scenario
+                      "--status"      (if (zero? exit) "pass" "fail")
+                      "--duration-ms" (str dur))
+               ;; 2. Extract scenario-scoped artifacts from the replay output
+               (try
+                 (let [slug (some-> scenario
+                               (clojure.string/replace (re-pattern "^.*/") "")
+                               (clojure.string/replace (re-pattern "\\.json$") ""))
+                       runs-dir (java.io.File. "results/runs")
+                       dirs (when (.exists runs-dir)
+                              (->> (.listFiles runs-dir)
+                                   (filter (fn [x] (.isDirectory x)))
+                                   (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                   (sort-by (fn [x] (.lastModified x)))
+                                   vec))
+                       latest-run (last dirs)]
+                   (when (and latest-run (.exists (java.io.File. output-tmp)))
+                     (shell "python3" "scripts/extract_scenario_artifacts.py"
+                            "--replay" output-tmp
+                            "--run-dir" (str (.getPath latest-run)))))
+                 (catch Exception e
+                   (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
+               ;; 3. Clean up temp file
+               (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil))
+               ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
+               (try
+                 (let [slug (some-> scenario
+                               (clojure.string/replace (re-pattern "^.*/") "")
+                               (clojure.string/replace (re-pattern "\\.json$") ""))
+                       runs-dir (java.io.File. "results/runs")
+                       dirs (when (.exists runs-dir)
+                              (->> (.listFiles runs-dir)
+                                   (filter (fn [x] (.isDirectory x)))
+                                   (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                   (sort-by (fn [x] (.lastModified x)))
+                                   vec))
+                       latest-run (last dirs)
+                       registry-path (when latest-run
+                                       (str (.getPath latest-run) "/test-artifacts.json"))]
+                   (if (and registry-path (.exists (java.io.File. registry-path)))
+                     (do
+                       (println (str "[artifact-registry-validation] Validating " registry-path))
+                       (apply clojure {:dir "." :extra-deps {}}
+                              ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                     (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+                 (catch Exception e
+                   (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
+               (when-not (zero? exit) (System/exit exit))))}
 
   scenario:run:family
   {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb scenario:run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"

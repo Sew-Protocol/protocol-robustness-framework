@@ -19,6 +19,7 @@
  :resolver-fee-bps 150          ; 1.5%
  :appeal-bond-bps 700           ; 7%
  :slash-multiplier 2.5
+ :l2-slash-bps 500
 
  ;; Appeal dynamics
  :appeal-probability-if-correct 0.05

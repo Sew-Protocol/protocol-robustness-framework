@@ -64,7 +64,7 @@
       "producer_key": "summary",
       "importance": "CORE",
       "verifies_against": ["test-run.v1", "projection.v1"],
-      "input_dependencies": ["test-run", "scenario-result"]
+      "input_dependencies": ["test-run"]
     },
     {
       "id": "validation-root",
