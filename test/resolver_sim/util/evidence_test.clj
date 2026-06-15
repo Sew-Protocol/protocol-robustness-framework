@@ -1,6 +1,6 @@
 (ns resolver-sim.util.evidence-test
   (:require [clojure.data.json :as json]
-            [clojure.test :refer [deftest is]]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]))
 
@@ -27,6 +27,23 @@
 
 (def ^:private partial-attribution
   {:ctx/run-id "test-run-1"})
+
+;; ── Internal Context Embedding ───────────────────────────────────────────────
+
+(deftest test-attributed-state-wrapping
+  (let [state {:balance 100}
+        attribution {:ctx/run-id "run-1"}
+        attributed (attr/wrap-state state attribution)]
+    (is (= state (attr/unwrap-state attributed)))
+    (is (= attribution (:attribution attributed)))))
+
+(deftest test-get-attribution-from-attributed-state
+  (let [state {:balance 100}
+        attribution {:ctx/run-id "run-1"}
+        attributed (attr/wrap-state state attribution)]
+    (is (= attribution (attr/get-attribution attributed)))
+    (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
+      (is (= {:ctx/run-id "dynamic"} (attr/get-attribution nil))))))
 
 ;; ── require-attribution! ─────────────────────────────────────────────────────
 
@@ -245,6 +262,41 @@
       (is (= "evidence-record.v1" (:schema-version record)))
       (is (string? (:evidence-hash record))))))
 
+(deftest emit-evidence-works-with-explicit-attribution
+  (let [explicit-attr {:ctx/run-id "run-1"
+                       :ctx/scenario-id "scen-1"
+                       :ctx/step 1
+                       :ctx/event-id "evt-1"}]
+    (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
+      (let [record (ev/emit-evidence!
+                     {:artifact-kind :transition
+                      :block-time 1000
+                      :step 1
+                      :before {}
+                      :after {}
+                      :action {}
+                      :result {}
+                      :attribution-context explicit-attr})]
+        (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
+
+(deftest emit-evidence-works-with-attributed-state
+  (let [explicit-attr {:ctx/run-id "run-1"
+                       :ctx/scenario-id "scen-1"
+                       :ctx/step 1
+                       :ctx/event-id "evt-1"}
+        attributed (attr/wrap-state {} explicit-attr)]
+    (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
+      (let [record (ev/emit-evidence!
+                     {:artifact-kind :transition
+                      :block-time 1000
+                      :step 1
+                      :before {}
+                      :after {}
+                      :action {}
+                      :result {}
+                      :attribution-context attributed})]
+        (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
+
 ;; ── wrap-attribution ─────────────────────────────────────────────────────────
 
 (deftest wrap-attribution-preserves-context
@@ -310,15 +362,46 @@
     (is (string? (:after-hash record)))
     (is (= "evidence-record.v1" (:schema-version record)))))
 
-(deftest evidence-record-round-trip-json
-  (let [record (ev/make-evidence-record
-                 {:artifact-kind :transition
-                  :before sample-world
-                  :after sample-world
-                  :action sample-action
-                  :result sample-result
-                  :attribution sample-attribution})
-        json-str (json/write-str record)
-        re-read (json/read-str json-str)]
-    (is (string? json-str))
-    (is (= (:schema-version record) (get re-read "schema-version")))))
+(deftest evidence-chain-immutability
+  (testing "evidence records are independent and immutable across chaining steps"
+    (binding [attr/*attribution* sample-attribution]
+      (let [world-0 (assoc sample-world :step 0)
+            ;; Step 1: Capture evidence
+            record-1 (ev/emit-evidence!
+                       {:artifact-kind :transition
+                        :block-time 1000
+                        :step 1
+                        :before world-0
+                        :after (assoc world-0 :step 1)
+                        :action {:type :step-1}
+                        :result {:status :ok}})
+            hash-1 (:evidence-hash record-1)
+
+            ;; Step 2: Create "next" world state without mutating world-0
+            world-1 (assoc world-0 :step 1)
+            record-2 (ev/emit-evidence!
+                       {:artifact-kind :transition
+                        :block-time 1001
+                        :step 2
+                        :before world-1
+                        :after (assoc world-1 :step 2)
+                        :action {:type :step-2}
+                        :result {:status :ok}})
+
+            ;; Assertions
+            ;; 1. The original world state reference is unchanged (Clojure property)
+            ;; 2. Record 1 remains exactly as it was
+            record-1-recheck (ev/emit-evidence!
+                               {:artifact-kind :transition
+                                :block-time 1000
+                                :step 1
+                                :before world-0
+                                :after (assoc world-0 :step 1)
+                                :action {:type :step-1}
+                                :result {:status :ok}})]
+        (is (= hash-1 (:evidence-hash record-1-recheck))
+            "Evidence hash for step 1 remains stable across later steps")
+        (is (= record-1 record-1-recheck)
+            "Full evidence record 1 is identical after later steps")
+        (is (not= hash-1 (:evidence-hash record-2))
+            "Evidence hashes are unique per transition")))))

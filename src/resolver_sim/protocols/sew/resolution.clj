@@ -18,21 +18,50 @@
             [resolver-sim.economics.payoffs           :as payoffs]
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.util.attribution            :as attr]
+            [resolver-sim.util.attributed-monad      :as am]
             [resolver-sim.time.context               :as time-ctx]
+            [resolver-sim.evidence.capture             :as cap]
             [resolver-sim.io.event-evidence           :as evidence]))
 
-;; ---------------------------------------------------------------------------
-;; Internal: finalize helpers (no accounting — see lifecycle for that)
-;; ---------------------------------------------------------------------------
+(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability)
 
-(defn- finalize
-  "Internal: transition escrow to terminal state, release accounting.
-   direction — :released (to recipient) or :refunded (to sender)."
-  [world workflow-id direction]
-  (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
-    (-> world
-        (lc/finalize-escrow-accounting workflow-id direction)
-        (t/decrement-resolver-capacity resolver))))
+(defn rotate-dispute-resolver
+  "Governance-triggered resolver rotation for an in-flight dispute.
+   Records the rotation so invariants and scenarios can detect governance attacks."
+  [world workflow-id new-resolver]
+  (cond
+    (not (t/valid-workflow-id? world workflow-id))
+    (t/fail :invalid-workflow-id)
+
+    (not= :disputed (t/escrow-state world workflow-id))
+    (t/fail :transfer-not-in-dispute)
+
+    (:exists (t/get-pending world workflow-id))
+    (t/fail :resolution-already-pending)
+
+    (or (nil? new-resolver) (= "" new-resolver))
+    (t/fail :invalid-new-resolver)
+
+    :else
+    (let [old-resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])
+          same-resolver? (= old-resolver new-resolver)
+          last-rotation (last (get-in world [:resolver-rotations workflow-id]))
+          same-rotation? (and (not same-resolver?)
+                              (some? last-rotation)
+                              (= (:from last-rotation) old-resolver)
+                              (= (:to last-rotation) new-resolver))]
+      (if (or same-resolver? same-rotation?)
+        (assoc (t/ok world)
+               :old-resolver old-resolver
+               :new-resolver new-resolver
+               :idempotent? true)
+        (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
+              world'   (-> world
+                           (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
+                                     new-resolver)
+                           (update-in [:resolver-rotations workflow-id]
+                                      (fnil conj []) rotation))]
+          (assoc (t/ok world') :old-resolver old-resolver :new-resolver new-resolver))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal: slashing helpers
@@ -891,17 +920,34 @@
                                      [{:id resolver
                                        :slashable-stake current-stake
                                        :available-slashable current-stake}]})]
-              (evidence/capture-event-evidence! :fraud-slash-allocation
-                {:pre-stake current-stake}
-                {:post-stake (- current-stake amount)
-                 :recovered-total (:recovered-total allocation)
-                 :unmet-total (:unmet-total allocation)}
-                {:slash-obligation amount
-                 :resolver resolver
-                 :workflow-id workflow-id
-                 :slash-id slash-id}
-                {:allocation allocation
-                 :formula "payoffs/calculate-prorata-slash-allocation"})
+              (let [evidence (-> (cap/evidence-base
+                                   {:type :fraud-slash :importance :core
+                                    :ctx (attr/current-attribution)})
+                                 (cap/cap-fields
+                                   {:scenario/id        (:ctx/scenario-id (attr/current-attribution))
+                                    :run/id             (:ctx/run-id (attr/current-attribution))
+                                    :event/seq          (:ctx/event-index (attr/current-attribution) 0)
+                                    :actor/id           resolver
+                                    :action/type        :slash-resolver
+                                    :caused-by/rule     :fraud-detected
+                                    :caused-by/action   :execute-resolution
+                                    :transition/id      (str "slash-" slash-id)
+                                    :financial/amount   amount
+                                    :financial/asset    :USDC
+                                    :replay/seed        (:ctx/replay-seed (attr/current-attribution))
+                                    :oracle/cursor      (:ctx/oracle-cursor (attr/current-attribution))
+                                    :oracle/mode        (:ctx/oracle-mode (attr/current-attribution))
+                                    :world/before-hash  (cap/stable-hash world)}))
+                                evidence (-> evidence
+                                            (assoc :transition/inputs {:pre-stake current-stake
+                                                                       :slash-obligation amount
+                                                                       :resolver resolver
+                                                                       :workflow-id workflow-id
+                                                                       :slash-id slash-id}))
+                                evidence (cap/cap-field evidence :world/after-hash
+                                                       (cap/stable-hash world'))
+                                evidence (cap/finalize-evidence evidence)]
+                (evidence/capture-event-evidence! evidence))
               (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation
@@ -938,6 +984,15 @@
 ;;   - Updates et.dispute-resolver to new-resolver
 ;;   - Appends to world :resolver-rotations {workflow-id [{:from :to :at}]}
 ;; ---------------------------------------------------------------------------
+
+(defn- finalize
+  "Internal: transition escrow to terminal state, release accounting.
+   direction — :released (to recipient) or :refunded (to sender)."
+  [world workflow-id direction]
+  (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
+    (-> world
+        (lc/finalize-escrow-accounting workflow-id direction)
+        (t/decrement-resolver-capacity resolver))))
 
 (defn rotate-dispute-resolver
   "Governance-triggered resolver rotation for an in-flight dispute.
@@ -976,3 +1031,20 @@
                            (update-in [:resolver-rotations workflow-id]
                                       (fnil conj []) rotation))]
           (assoc (t/ok world') :old-resolver old-resolver :new-resolver new-resolver))))))
+
+;; ── Monadic Transitions ──────────────────────────────────────────────────────
+
+(defn execute-resolution-m
+  "Monadic version of execute-resolution."
+  [workflow-id caller is-release resolution-hash resolution-module-fn]
+  (am/update-with-result execute-resolution workflow-id caller is-release resolution-hash resolution-module-fn))
+
+(defn execute-pending-settlement-m
+  "Monadic version of execute-pending-settlement."
+  [workflow-id]
+  (am/update-with-result execute-pending-settlement workflow-id))
+
+(defn escalate-dispute-m
+  "Monadic version of escalate-dispute."
+  [workflow-id caller escalation-fn]
+  (am/update-with-result escalate-dispute workflow-id caller escalation-fn))

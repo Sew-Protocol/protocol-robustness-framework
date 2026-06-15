@@ -1,24 +1,19 @@
 # Changelog
 
 ## [Unreleased]
-### Added
-- **Validation State-Root system:** New `resolver-sim.validation.suite-result` and `resolver-sim.validation.root` namespaces for canonical validation state reduction.
-- **Validation Emitter:** New `scripts/emit_validation_root.py` to aggregate suite results into `validation-root.json`.
-- **Validation Dashboard:** New `notebooks/validation_dashboard.clj` Clerk notebook to visualize aggregated validation results.
-- **CI Gating:** New `scripts/ci_gate_validation.py` added to the test pipeline to block CI if validation fails.
+- **Monadic Execution Path:** Enforcement of monadic execution path in simulation (`:attributed?` defaults to true), providing structural context propagation.
+- **Evidence Telemetry:** Integrated granular latency metrics for evidence capture, hashing, and serialization to monitor system performance overhead.
+- **Orphaned Evidence Detection:** Added post-scenario utility to reconcile evidence artifacts on disk with the artifact registry, preventing silent persistence failures.
+- **Proportional Slashing Invariance:** Added regression test to enforce atomicity and basis invariance during multi-party stake slashing.
 
 ### Changed
-- **Test Runner Integration:** Updated `scripts/test.sh` to emit per-suite JSON validation artifacts and run the validation-root emitter.
-- **Artifact Registry:** Updated `scripts/write_scenario_run_manifest.py` and the inlined registry in `scripts/test.sh` to include `validation-root` artifacts.
+- **Canonical Simulation Path:** Promoted `run-lifecycle-monadic` to the default execution path for all contract-model trials.
+- **Legacy Deprecation:** Marked legacy `run-lifecycle` as `@deprecated`, retained for emergency rollback.
 
 ### Fixed
-- **Data Shape Mismatch:** Corrected `emit-suite-result` in `fixtures.clj` to properly flatten check maps.
-- **Critical Error Detection:** Fixed Python emitter to correctly identify `failed-critical` status.
-- **Test Coverage:** Added comprehensive unit test coverage for validation namespaces.
-- **Workflow Robustness:** Restricted validation root emitter to run only when suite artifacts are present.
-- **Structural Integrity:** Resolved critical arity mismatches in `governance_impact.clj` and state management logic for multi-epoch simulations.
-- **Syntax/Structure:** Fixed unbalanced parentheses and invalid keyword literals across `properties_test.clj`, `theory_test.clj`, and `adversarial.clj`.
-- **Linting & Hygiene:** Cleaned up unused namespaces, duplicate requires, and unused bindings across the `resolver-sim` test suite to restore `bb validate` functionality.
+- **Proportional Slashing Atomicity:** Resolved state-instability regression where sequential slashing could inadvertently use a mutated stake basis for multi-party allocations.
+- **Runner Loop Synthesis:** Fixed syntax errors (parenthesis balancing) and resolution issues in `runner.clj` monadic implementation.
+- **Equilibrium Validator Coverage:** Fixed missing node classification issues in `spe-projection` to ensure proper subgame evaluation in the equilibrium test suite.
 
 ### Notes
 - **Maintenance Reminder:** After finishing each change, update this changelog in the same PR/commit before marking work complete.

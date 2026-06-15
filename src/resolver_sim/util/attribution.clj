@@ -17,6 +17,30 @@
   "Additional keys expected for scenario-based evidence."
   #{:ctx/scenario-id :ctx/event-index})
 
+;; ── Internal Context Embedding ───────────────────────────────────────────────
+
+(defrecord AttributedState [state attribution])
+
+(defn wrap-state
+  "Wraps raw state and attribution into an internal envelope."
+  [state attribution]
+  (->AttributedState state attribution))
+
+(defn unwrap-state
+  "Unwraps raw state from the internal envelope."
+  [attributed-state]
+  (if (instance? AttributedState attributed-state)
+    (:state attributed-state)
+    attributed-state))
+
+(defn get-attribution
+  "Retrieves attribution from an AttributedState or attribution map or dynamic context."
+  [attributed-state-or-map]
+  (cond
+    (instance? AttributedState attributed-state-or-map) (:attribution attributed-state-or-map)
+    (map? attributed-state-or-map) attributed-state-or-map
+    :else *attribution*))
+
 ;; ── Logic ────────────────────────────────────────────────────────────────────
 
 (defmacro with-attribution
@@ -50,7 +74,7 @@
         attr))
 
 (defn attribution-quality
-  "Analyze the current context against required keys.
+  "Analyze the provided attribution context against required keys.
    Returns {:quality :complete|:partial|:missing, :missing [...], :attribution {...}}"
   [attr requirements]
   (let [safe-attr (sanitize-attribution attr)
@@ -63,9 +87,12 @@
      :attribution safe-attr}))
 
 (defn current-evidence-attribution
-  "Helper for evidence capture modules to get a standardized attribution block."
-  ([] (current-evidence-attribution required-evidence-keys))
-  ([requirements] (attribution-quality *attribution* requirements)))
+  "Helper for evidence capture modules to get a standardized attribution block.
+   Accepts an optional explicit attribution map; falls back to *attribution*."
+  ([] (current-evidence-attribution required-evidence-keys nil))
+  ([requirements] (current-evidence-attribution requirements nil))
+  ([requirements explicit-attr]
+   (attribution-quality (or explicit-attr *attribution*) requirements)))
 
 ;; ── Logging & Helpers ────────────────────────────────────────────────────────
 

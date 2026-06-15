@@ -22,11 +22,11 @@ the protocol actually achieves those goals.
 
 Think of this as a **formal stress-test**. You give it a precise scenario — a sequence
 of actions taken by specific actors — and it runs the protocol logic step by step,
-checking 31 invariants after every action. An invariant is a property that must
+checking 30+ invariants after every action. An invariant is a property that must
 *always* hold: "no escrow can be released twice," "the contract can never owe more
 than it holds," "a resolver without authority cannot finalise a dispute."
 
-There are 96 built-in scenarios (S01–S100) covering the full lifecycle: honest
+There are 116 built-in scenarios (S01–S116) covering the full lifecycle: honest
 resolution, adversarial manipulation, governance failure, liveness under no-resolver
 conditions, and Kleros fallback. If a scenario produces a single invariant violation,
 the run fails.
@@ -60,7 +60,7 @@ That requires the deterministic engine.
 ## How the two engines relate
 
 The engines share the same fee, bond, and slashing formulas — verified by a suite of
-cross-engine calibration tests (769 assertions). When the Monte Carlo model says
+cross-engine calibration tests (over 700 assertions). When the Monte Carlo model says
 "malicious profit is negative on average," it is using identical arithmetic to the
 contract model. A calibration failure would surface as a test failure before it reached
 any results.
@@ -88,8 +88,8 @@ from two directions.
 ### What is solid
 
 **Deterministic engine — production-quality.**
-The 96-scenario invariant suite is the most reliable part of the codebase. Scenarios
-are named, documented, and independently runnable. The 31 invariant predicates mirror
+The 116-scenario invariant suite is the most reliable part of the codebase. Scenarios
+are named, documented, and independently runnable. The 30+ invariant predicates mirror
 the intended on-chain guards. This output is suitable for inclusion in a grant
 application or audit brief.
 

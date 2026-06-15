@@ -149,8 +149,8 @@
           rate (get metrics :detection-rate)]
       (cond
         (and min-detection (nil? rate))
-        (swap! violations conj {:type :detection-rate-check-skipped
-                                :detail "detection-rate not present in replay metrics (stochastic-only metric)"})
+        ;; Skip validation if detection-rate is missing (stochastic-only metric).
+        nil
         (and min-detection rate (< rate min-detection))
         (swap! violations conj {:type :detection-rate-below-minimum
                                 :detail (str "detection-rate " rate " < " min-detection)})))

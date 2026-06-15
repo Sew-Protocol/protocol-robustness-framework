@@ -34,14 +34,18 @@
   [{:keys [pre-wealth chosen-wealth agent action regret-threshold]
     :or {pre-wealth 0 chosen-wealth 200 agent "resolver"
          action "execute_resolution" regret-threshold 0}}]
-  {:raw-trace [{:world {:claimable {"e1" {agent pre-wealth}}}}
-               {:world {:claimable {"e1" {agent chosen-wealth}}}}]
-   :decisions [{:seq 1 :agent agent :action action}]
-   :terminal-world {:terminal? true
-                    :total-held-by-token {}
-                    :escrow-count 1}
-   :metrics {:attack-attempts 0 :attack-successes 0 :funds-lost 0
-             :invariant-violations 0}
-   :trace-summary {:halt-reason :all-terminal :events-count 2
-                   :actors [agent] :terminal-time 1100}
-   :spe-config {:regret-threshold regret-threshold}})
+  (let [attr {:ctx/run-id "test-run" :ctx/scenario-id "test" :ctx/event-index 1 :ctx/event-type action}]
+    {:raw-trace [{:world {:claimable {"e1" {agent pre-wealth}}} :attribution attr}
+                 {:world {:claimable {"e1" {agent chosen-wealth}}} :attribution attr}]
+     :decisions [{:seq 1 :agent agent :action action}]
+     :terminal-world {:terminal? true
+                      :total-held-by-token {}
+                      :escrow-count 1}
+     :metrics {:attack-attempts 0 :attack-successes 0 :funds-lost 0
+               :invariant-violations 0}
+     :trace-summary {:halt-reason :all-terminal :events-count 2
+                     :actors [agent] :terminal-time 1100}
+     :deviation-bundle {:meets-minimum? true}
+     :spe-config {:regret-threshold regret-threshold}
+     :protocol (sew/->SewProtocol)
+     :agents [alice bob resolver]}))

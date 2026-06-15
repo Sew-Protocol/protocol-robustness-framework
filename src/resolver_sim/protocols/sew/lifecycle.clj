@@ -82,32 +82,7 @@
 
 (def ^:const seconds-per-year 31536000)
 
-(defn accrue-yield
-  "Calculate and update accrued yield for an escrow based on time delta."
-  [world workflow-id]
-  (attr/with-attribution {:yield/target-type :escrow
-                          :yield/workflow-id workflow-id}
-    (let [snap (t/get-snapshot world workflow-id)
-          mid  (:yield-generation-module snap)]
-      (if (and mid (contains? (:yield/modules world) mid))
-        (let [et    (t/get-transfer world workflow-id)
-              now   (time-ctx/block-ts world)
-              last  (:last-accrual-time et now)
-              dt    (- now last)]
-          (if (pos? dt)
-            (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
-                                                          :module/id mid
-                                                          :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                          :token (:token et)
-                                                          :dt dt})
-                  oid    (t/escrow-yield-owner-id workflow-id)
-                  pos    (get-in world' [:yield/positions oid])
-                  accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))]
-              (-> world'
-                  (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
-                  (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued)))
-            world))
-        world))))
+(declare accrue-yield)
 
 (defn resolver-yield-owner-id
   "Canonical yield position owner id for resolver stake."
@@ -558,3 +533,83 @@
                               (t/decrement-resolver-capacity resolver)
                               (update :dispute-timestamps dissoc workflow-id))]
       (t/ok world-result))))
+
+;; ── Monadic Transitions ──────────────────────────────────────────────────────
+
+(require '[resolver-sim.util.state-monad :as monad]
+         '[resolver-sim.util.attributed-monad :as am])
+
+(defn create-escrow-m
+  "Monadic version of create-escrow."
+  [caller token to amount settings snapshot]
+  (am/update-with-result create-escrow caller token to amount settings snapshot))
+
+(defn raise-dispute-m
+  "Monadic version of raise-dispute."
+  [workflow-id caller]
+  (am/update-with-result raise-dispute workflow-id caller))
+
+(defn release-m
+  "Monadic version of release."
+  [workflow-id caller release-strategy-fn]
+  (am/update-with-result release workflow-id caller release-strategy-fn))
+
+(defn sender-cancel-m
+  "Monadic version of sender-cancel."
+  [workflow-id caller cancel-strategy]
+  (am/update-with-result sender-cancel workflow-id caller cancel-strategy))
+
+(defn recipient-cancel-m
+  "Monadic version of recipient-cancel."
+  [workflow-id caller cancel-strategy]
+  (am/update-with-result recipient-cancel workflow-id caller cancel-strategy))
+
+(defn auto-cancel-disputed-escrow-m
+  "Monadic version of auto-cancel-disputed-escrow."
+  [workflow-id]
+  (am/update-with-result auto-cancel-disputed-escrow workflow-id))
+
+(defn init-resolver-yield-accrual-time-m
+  "Monadic version of init-resolver-yield-accrual-time."
+  [resolver-addr]
+  (am/update-attributed #(init-resolver-yield-accrual-time % resolver-addr)))
+
+(defn accrue-resolver-yield-m
+  "Monadic version of accrue-resolver-yield."
+  [resolver-addr token]
+  (am/update-attributed #(accrue-resolver-yield % resolver-addr token)))
+
+(defn accrue-yield-monadic
+  "Monadic implementation of accrue-yield, threading AttributedState."
+  [workflow-id]
+  (monad/update-state
+   (fn [attributed-state]
+     (let [world (attr/unwrap-state attributed-state)
+           snap (t/get-snapshot world workflow-id)
+           mid  (:yield-generation-module snap)]
+       (if (and mid (contains? (:yield/modules world) mid))
+         (let [et    (t/get-transfer world workflow-id)
+               now   (time-ctx/block-ts world)
+               last  (:last-accrual-time et now)
+               dt    (- now last)]
+           (if (pos? dt)
+             (let [world' (yield-ops/apply-yield-op world {:op/type :yield/accrue
+                                                           :module/id mid
+                                                           :owner/id (t/escrow-yield-owner-id workflow-id)
+                                                           :token (:token et)
+                                                           :dt dt})
+                   oid    (t/escrow-yield-owner-id workflow-id)
+                   pos    (get-in world' [:yield/positions oid])
+                   accrued (+ (:unrealized-yield pos 0) (:realized-yield pos 0))
+                   world'' (-> world'
+                               (assoc-in [:escrow-transfers workflow-id :last-accrual-time] now)
+                               (assoc-in [:escrow-transfers workflow-id :accumulated-yield] accrued))]
+               (attr/wrap-state world'' (attr/get-attribution attributed-state)))
+             attributed-state))
+         attributed-state)))))
+
+(defn accrue-yield
+  "Calculate and update accrued yield for an escrow based on time delta."
+  [world workflow-id]
+  (let [attributed (attr/wrap-state world (attr/current-attribution))]
+    (attr/unwrap-state (monad/exec-state (accrue-yield-monadic workflow-id) attributed))))

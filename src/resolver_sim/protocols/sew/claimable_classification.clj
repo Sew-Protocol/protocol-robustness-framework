@@ -405,6 +405,8 @@
                   (for [[wf domain-map] (get-in world [:claimable-v2] {})
                         :let [claims (reduce + 0 (vals (get domain-map :liability/slash-bounty {})))]
                         :when (pos? claims)]
+                    ;; Note: Max capacity is global retained slash reserves.
+                    ;; Headroom represents capacity remaining in the global pool.
                     {:workflow_id wf :claims claims :max reserves :headroom (- reserves claims)}))]
     rows))
 

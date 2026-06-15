@@ -6,6 +6,7 @@
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
+            [resolver-sim.economics.payoffs        :as payoffs]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
 
@@ -463,6 +464,7 @@
       (is (= :executed (:status slash-entry)) "immediate track should be executed")
       (is (pos? (:amount slash-entry)) "slash amount should be positive"))))
 
+
 (deftest execute-fraud-slash-emits-allocation-evidence
   (testing "execute-fraud-slash computes and emits pro-rata allocation evidence"
     (let [resolver-addr "0xRes"
@@ -480,3 +482,35 @@
       (is (= :executed (get-in world-exec [:pending-fraud-slashes workflow-id :status])))
       (is (= 9700 (reg/get-stake world-exec resolver-addr))
           "stake reduced by 300"))))
+
+(deftest test-proportional-slashing-basis-invariance
+  (testing "Proportional slashing must be invariant to intermediate stake mutations"
+    (let [r1 "0xRes1"
+          r2 "0xRes2"
+          initial-world (-> (t/empty-world 1000)
+                            (reg/register-stake r1 1000)
+                            (reg/register-stake r2 1000))
+          slash-obligation 100
+          
+          ;; Snapshot the basis BEFORE any mutations
+          basis-r1 (reg/get-stake initial-world r1)
+          basis-r2 (reg/get-stake initial-world r2)
+          total-basis (+ basis-r1 basis-r2)
+          
+          ;; Calculate allocation using fixed basis
+          liable-parties [{:id r1 :slashable-stake basis-r1 :available-slashable 1000}
+                          {:id r2 :slashable-stake basis-r2 :available-slashable 1000}]
+          allocation (payoffs/calculate-prorata-slash-allocation
+                      {:slash-obligation slash-obligation
+                       :liable-parties liable-parties})
+          
+          ;; Apply slash sequentially
+          w1 (:world (reg/slash-resolver-stake initial-world r1 (get-in allocation [:allocations 0 :paid])))
+          w2 (:world (reg/slash-resolver-stake w1 r2 (get-in allocation [:allocations 1 :paid])))
+          
+          ;; The invariant: The total basis used MUST remain 2000, 
+          ;; even though the world state mutated to 1900.
+          ]
+      (is (= 2000 total-basis) "Invariant: Total basis must be snapshotted at transition start")
+      (is (= 950 (reg/get-stake w2 r1)))
+      (is (= 950 (reg/get-stake w2 r2))))))

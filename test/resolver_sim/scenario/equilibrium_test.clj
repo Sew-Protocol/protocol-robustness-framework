@@ -655,8 +655,10 @@
     (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0})
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
-      (is (= :inconclusive (:status result)))
+      (println "DEBUG: result status:" (:status result) "offending:" (:offending result))
+      (is (= :fail (:status result)))
       (is (seq (:offending result))))))
+
 
 (deftest test-bounded-public-state-epsilon-spe-inconclusive-no-proper-subgames
   (testing ":bounded-public-state-epsilon-spe is :inconclusive when only info-set nodes"

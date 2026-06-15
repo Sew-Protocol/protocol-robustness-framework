@@ -22,7 +22,10 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.accounting :as ac]
             [resolver-sim.protocols.sew.authority  :as auth]
-            [resolver-sim.protocols.sew.invariants :as inv]))
+            [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.util.attribution        :as attr]
+            [resolver-sim.util.state-monad        :as sm]
+            [resolver-sim.util.attributed-monad   :as am]))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical snapshot for simulation trials
@@ -66,6 +69,11 @@
 (defn- run-lifecycle
   "Drive one escrow trial through the contract model with optional escalation.
 
+   @deprecated Use run-lifecycle-monadic instead.  The monadic path threads
+   AttributedState through protocol transitions and produces artifact-grade
+   evidence records.  Legacy path retained for emergency rollback only —
+   will be removed after soak period.
+
    Uses Priority-3 authority (no custom-resolver): et.dispute-resolver is set
    directly on the escrow transfer and tracks through escalation rounds.
 
@@ -92,7 +100,7 @@
           ;; Attach the initial resolver via Priority-3 (et.dispute-resolver)
           w1        (assoc-in (:world cr) [:escrow-transfers wf-id :dispute-resolver] resolver-addr)
           fee       (get-in w1 [:total-fees token] 0)
-afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
+          afa       (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           resolvers (resolver-chain resolver-addr)
 
           ;; Step 2: Dispute is always raised in adversarial trials
@@ -101,14 +109,6 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           w2    (:world dr)
 
           ;; Step 3-N: Resolution loop with possible multi-round escalation.
-          ;;
-          ;; Each iteration:
-          ;;   a. Current resolver submits verdict (execute-resolution)
-          ;;   b. If verdict is deferred (pending-settlement created):
-          ;;      - Probabilistically escalate (escalate-dispute) → new resolver
-          ;;      - Or finalize by advancing time past appeal deadline
-          ;;   c. If verdict is immediate (final round or no appeal window):
-          ;;      - Done
           {w-final          :world-after
            verdict-correct? :verdict-correct?
            escalated?       :escalated?
@@ -116,34 +116,24 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           (loop [w     w2
                  level 0]
             (let [current-resolver (get-in w [:escrow-transfers wf-id :dispute-resolver])
-
-                  verdict-correct?
-                  (case strategy
-                    :honest    true
-                    :lazy      (< (rng-fn) 0.5)
-                    :malicious (< (rng-fn) 0.3)
-                    :collusive (< (rng-fn) 0.8))
-
+                  verdict-correct? (case strategy
+                                     :honest    true
+                                     :lazy      (< (rng-fn) 0.5)
+                                     :malicious (< (rng-fn) 0.3)
+                                     :collusive (< (rng-fn) 0.8))
                   is-release verdict-correct?
-
-                  ;; Submit resolution — deferred if appeal-window > 0 and not final round
                   rr           (res/execute-resolution w wf-id current-resolver is-release "0xhash" nil)
                   w-resolved   (if (:ok rr) (:world rr) w)
                   has-pending? (and (:ok rr) (:exists (t/get-pending w-resolved wf-id)))
-
-                  ;; Escalation only possible when verdict is deferred
                   esc-prob    (if verdict-correct? escalation-prob-correct escalation-prob-wrong)
                   escalate?   (and has-pending? (< (rng-fn) esc-prob))]
-
               (if escalate?
-                ;; Party escalates: clear pending, assign next resolver, continue loop
                 (let [next-resolver (get resolvers (inc level) "0xKleros")
                       er            (res/escalate-dispute w-resolved wf-id from
                                                           (fn [_ _ _ _]
                                                             {:ok true :new-resolver next-resolver}))]
                   (if (:ok er)
                     (recur (:world er) (inc level))
-                    ;; Escalation refused (level cap or other guard) — fall through to finalize
                     (let [w-fin (if has-pending?
                                   (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
                                         w-t (tm/advance w-resolved {:seconds (+ dl 1)})
@@ -154,10 +144,7 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
                        :verdict-correct? verdict-correct?
                        :escalated?       (> level 0)
                        :escalation-level level})))
-
-                ;; No escalation: finalize this round
                 (let [w-fin (if has-pending?
-                              ;; Advance time past appeal deadline and execute pending
                               (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
                                     w-t (tm/advance w-resolved {:seconds (+ dl 1)})
                                     er  (res/execute-pending-settlement w-t wf-id)]
@@ -168,18 +155,13 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
                    :escalated?       (> level 0)
                    :escalation-level level}))))
 
-          ;; Step 4: Detection + slashing (independent of escalation path)
           detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
           bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
           profit-honest (long fee)
           profit-malice (if detected? (long (- fee bond-amt)) (long fee))
-
-          ;; Step 5: Final invariant check
           final-state  (t/escrow-state w-final wf-id)
           inv-result   (inv/check-all w-final)]
-
       {:dispute-correct?      verdict-correct?
-       ;; appeal-triggered? is an alias for escalated? — same concept
        :appeal-triggered?     escalated?
        :escalated?            escalated?
        :escalation-level      escalation-level
@@ -192,12 +174,153 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
        :profit-honest         profit-honest
        :profit-malice         profit-malice
        :strategy              strategy
-       ;; Contract-model extras
        :cm/final-state        final-state
        :cm/fee                fee
        :cm/afa                afa
        :cm/invariants-ok?     (:all-hold? inv-result)
        :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))})))
+;; ---------------------------------------------------------------------------
+;; Internal: resolution loop (shared logic, imperative, not monadic)
+;; ---------------------------------------------------------------------------
+
+(defn- resolution-loop
+  "Run multi-round resolution with escalation.
+
+   Intentionally imperative (loop/recur) rather than monadic:
+   Clojure's recur only targets the closest enclosing loop or fn,
+   and cannot be used from within a monadic bind (sm/bind ... (fn [...]))
+   because bind introduces an intervening fn boundary.  Embedding
+   multi-round escalation inside the bind chain would force deeply
+   nested closures or a CPS transform — both worse than a plain loop.
+
+   Returns {:world-after world :verdict-correct? bool
+            :escalated? bool :escalation-level int}"
+  [world wf-id from resolvers rng-fn strategy
+   escalation-prob-correct escalation-prob-wrong]
+  (loop [w world
+         level 0]
+    (let [current-resolver (get-in w [:escrow-transfers wf-id :dispute-resolver])
+          verdict-correct? (case strategy
+                             :honest    true
+                             :lazy      (< (rng-fn) 0.5)
+                             :malicious (< (rng-fn) 0.3)
+                             :collusive (< (rng-fn) 0.8))
+          is-release verdict-correct?
+          rr           (res/execute-resolution w wf-id current-resolver is-release "0xhash" nil)
+          w-resolved   (if (:ok rr) (:world rr) w)
+          has-pending? (and (:ok rr) (:exists (t/get-pending w-resolved wf-id)))
+          esc-prob    (if verdict-correct? escalation-prob-correct escalation-prob-wrong)
+          escalate?   (and has-pending? (< (rng-fn) esc-prob))]
+      (if escalate?
+        (let [next-resolver (get resolvers (inc level) "0xKleros")
+              er            (res/escalate-dispute w-resolved wf-id from
+                                                  (fn [_ _ _ _]
+                                                    {:ok true :new-resolver next-resolver}))]
+          (if (:ok er)
+            (recur (:world er) (inc level))
+            (let [w-fin (if has-pending?
+                          (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
+                                w-t (tm/advance w-resolved {:seconds (+ dl 1)})
+                                er2 (res/execute-pending-settlement w-t wf-id)]
+                            (if (:ok er2) (:world er2) w-t))
+                          w-resolved)]
+              {:world-after w-fin
+               :verdict-correct? verdict-correct?
+               :escalated?       (> level 0)
+               :escalation-level level})))
+        (let [w-fin (if has-pending?
+                      (let [dl  (:appeal-deadline (t/get-pending w-resolved wf-id))
+                            w-t (tm/advance w-resolved {:seconds (+ dl 1)})
+                            er  (res/execute-pending-settlement w-t wf-id)]
+                        (if (:ok er) (:world er) w-t))
+                      w-resolved)]
+          {:world-after w-fin
+           :verdict-correct? verdict-correct?
+           :escalated?       (> level 0)
+           :escalation-level level})))))
+
+;; ---------------------------------------------------------------------------
+;; Internal: monadic path — attribution-threaded version of run-lifecycle
+;; ---------------------------------------------------------------------------
+
+;; Phase 2 boundary:
+;;
+;; The monadic runner carries attribution explicitly in AttributedState through
+;; setup transitions. Before entering the legacy-compatible resolution loop, the
+;; explicit attribution context is rebound via with-attribution so existing
+;; evidence/logging calls inside execute-resolution, escalate-dispute, and
+;; execute-pending-settlement observe the same context.
+;;
+;; This is intentional: Phase 2 guarantees runtime attribution propagation and
+;; parity. Phase 3 may replace dynamic fallback inside individual resolution
+;; evidence emitters with explicit context, but should do so incrementally with
+;; artifact-level parity tests.
+
+(defn- run-lifecycle-monadic
+  "Monadic version of run-lifecycle threading AttributedState.
+   Attribution is threaded through protocol transitions via the monadic chain.
+   The resolution loop is imperative (shared with the legacy path) since
+   loop/recur cannot be embedded inside monadic bind chains."
+  [rng-fn escrow-amount from to resolver-addr token snap appeal-bond-bps strategy
+   escalation-prob-correct escalation-prob-wrong detection-prob]
+  (let [wf-id 0
+        resolvers (resolver-chain resolver-addr)
+        initial-world (t/empty-world 1000)
+        initial-attr  {:ctx/run-id "monadic-trial"
+                       :ctx/strategy strategy
+                       :ctx/escrow-amount escrow-amount}
+        result
+        (am/eval-attributed
+         (sm/bind (lc/create-escrow-m from token to escrow-amount (t/make-escrow-settings {}) snap)
+           (fn [create-result]
+             (if-not (:ok create-result)
+               (throw (ex-info "create-escrow failed" create-result))
+               (sm/bind (am/update-attributed
+                         #(assoc-in % [:escrow-transfers wf-id :dispute-resolver] resolver-addr))
+                 (fn [_]
+                   (sm/bind (lc/raise-dispute-m wf-id from)
+                     (fn [raise-result]
+                       (if-not (:ok raise-result)
+                         (throw (ex-info "raise-dispute failed" raise-result))
+                          (sm/bind (sm/get-state)
+                            (fn [attributed]
+                              (let [w2 (attr/unwrap-state attributed)
+                                    attr-ctx (attr/get-attribution attributed)]
+                                (attr/with-attribution attr-ctx
+                                  (let [fee       (get-in w2 [:total-fees token] 0)
+                                        afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
+                                        {:keys [world-after verdict-correct? escalated? escalation-level]}
+                                        (resolution-loop w2 wf-id from resolvers
+                                                         rng-fn strategy
+                                                         escalation-prob-correct escalation-prob-wrong)
+                                   detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
+                                   bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
+                                   profit-honest (long fee)
+                                   profit-malice (if detected? (long (- fee bond-amt)) (long fee))
+                                   final-state   (t/escrow-state world-after wf-id)
+                                   inv-result    (inv/check-all world-after)]
+                               (sm/return
+                                {:dispute-correct?      verdict-correct?
+                                 :appeal-triggered?     escalated?
+                                 :escalated?            escalated?
+                                 :escalation-level      escalation-level
+                                 :slashed?              detected?
+                                 :frozen?               detected?
+                                 :escaped?              false
+                                 :slashing-pending?     false
+                                 :slashing-delay-weeks  0
+                                 :slashing-reason       (when detected? :fraud)
+                                 :profit-honest         profit-honest
+                                 :profit-malice         profit-malice
+                                 :strategy              strategy
+                                 :cm/final-state        final-state
+                                 :cm/fee                fee
+                                 :cm/afa                afa
+                                 :cm/invariants-ok?     (:all-hold? inv-result)
+                                  :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))}))))))))))))))
+         initial-world
+         initial-attr)]
+    result))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -216,12 +339,14 @@ afa (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
      :escalation-probability-if-correct — prob party escalates correct verdict (default 0.05)
      :escalation-probability-if-wrong   — prob party escalates wrong verdict (default 0.60)
      :strategy                         — :honest | :lazy | :malicious | :collusive
+     :attributed?                      — if true (default), use the monadic parallel path
 
    rng-fn — (fn [] → double in [0,1))"
   [rng-fn params]
   (let [snap    (make-trial-snapshot params)
-        strategy (get params :strategy :honest)]
-    (run-lifecycle
+        strategy (get params :strategy :honest)
+        run-fn (if (get params :attributed? true) run-lifecycle-monadic run-lifecycle)]
+    (run-fn
      rng-fn
      (get params :escrow-size 10000)
      "0xAlice"

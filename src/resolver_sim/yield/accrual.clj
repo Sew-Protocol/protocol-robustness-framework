@@ -656,18 +656,22 @@
      :accrual/position-id      — position-id
      :accrual/previous-index   — previous index (JSON-safe)
      :accrual/final-index      — final index (JSON-safe)"
-  [world decision]
-  (let [ctx {:accrual/accrual-mode (:accrual-mode decision)
-             :accrual/short-circuits (vec (:short-circuits decision))
-             :accrual/yield-delta (:final-accrual-delta decision)
-             :accrual/deferred-delta (:deferred-yield-delta decision 0)
-             :accrual/module-id (:module-id decision)
-             :accrual/token (:token decision)
-             :accrual/position-id (:position-id decision)
-             :accrual/now (:now decision)
-             :accrual/previous-index (m/ratio->json (:previous-index decision))
-             :accrual/final-index (m/ratio->json (:final-index decision))}]
-    (attr/with-attribution ctx
-      (let [world' (apply-accrual-decision world decision)]
-        (risk/capture-if-risk-event)
-        world'))))
+  ([world decision] (apply-accrual-decision-with-attribution world decision nil))
+  ([world decision attributed-state]
+   (let [ctx {:accrual/accrual-mode (:accrual-mode decision)
+              :accrual/short-circuits (vec (:short-circuits decision))
+              :accrual/yield-delta (:final-accrual-delta decision)
+              :accrual/deferred-delta (:deferred-yield-delta decision 0)
+              :accrual/module-id (:module-id decision)
+              :accrual/token (:token decision)
+              :accrual/position-id (:position-id decision)
+              :accrual/now (:now decision)
+              :accrual/previous-index (m/ratio->json (:previous-index decision))
+              :accrual/final-index (m/ratio->json (:final-index decision))}
+         explicit-attr (when (instance? resolver_sim.util.attribution.AttributedState attributed-state)
+                         (:attribution attributed-state))
+         final-ctx (merge explicit-attr ctx)]
+     (attr/with-attribution final-ctx
+       (let [world' (apply-accrual-decision world decision)]
+         (risk/capture-if-risk-event)
+         world')))))

@@ -119,18 +119,6 @@
       (is (<= (:paid (get allocs 0)) 50))
       (is (<= (:paid (get allocs 1)) 200)))))
 
-(deftest test-prorata-slash-uses-custom-basis
-  (testing "custom basis key works"
-    (let [result (payoffs/calculate-prorata-slash-allocation
-                  {:slash-obligation 100
-                   :basis :custom-stake
-                   :liable-parties
-                   [{:id :resolver-a :custom-stake 300 :available-slashable 100}
-                    {:id :resolver-b :custom-stake 100 :available-slashable 100}]})]
-      (is (= 400 (:total-basis result)))
-      (is (= 75 (:paid (get (:allocations result) 0))))
-      (is (= 25 (:paid (get (:allocations result) 1)))))))
-
 (deftest test-prorata-slash-uses-custom-cap-field
   (testing "custom cap-field works"
     (let [result (payoffs/calculate-prorata-slash-allocation
@@ -143,3 +131,52 @@
       (is (= 30 (:paid (get allocs 0))) "A capped at 30")
       (is (= 50 (:owed (get allocs 1))) "B owes 50")
       (is (= 50 (:paid (get allocs 1))) "B pays 50, no cap hit"))))
+
+(deftest test-prorata-slash-uses-custom-basis
+  (testing "custom basis key works"
+    (let [result (payoffs/calculate-prorata-slash-allocation
+                  {:slash-obligation 100
+                   :basis :custom-stake
+                   :liable-parties
+                   [{:id :resolver-a :custom-stake 300 :available-slashable 100}
+                    {:id :resolver-b :custom-stake 100 :available-slashable 100}]})]
+      (is (= 400 (:total-basis result)))
+      (is (= 75 (:paid (get (:allocations result) 0))))
+      (is (= 25 (:paid (get (:allocations result) 1)))))))
+
+(deftest test-prorata-slash-immutability
+  (testing "liable-parties input is not mutated"
+    (let [input-parties [{:id :resolver-a :slashable-stake 100 :available-slashable 100}]
+          _ (payoffs/calculate-prorata-slash-allocation
+             {:slash-obligation 50
+              :liable-parties input-parties})]
+      (is (= [{:id :resolver-a :slashable-stake 100 :available-slashable 100}] input-parties)
+          "Input map was mutated!"))))
+
+(deftest test-allocation-order-stability
+  (testing "allocation result is independent of liable-parties order"
+    (let [parties [{:id :a :slashable-stake 100 :available-slashable 100}
+                   {:id :b :slashable-stake 200 :available-slashable 200}
+                   {:id :c :slashable-stake 300 :available-slashable 300}]
+          spec {:slash-obligation 100
+                :liable-parties parties}
+          result1 (payoffs/calculate-prorata-slash-allocation spec)
+          result2 (payoffs/calculate-prorata-slash-allocation (assoc spec :liable-parties (reverse parties)))]
+      ;; Allocations might be in different order if we just check the list, 
+      ;; but the sum/result should be identical for the same party id.
+      (is (= (:recovered-total result1) (:recovered-total result2)))
+      (is (= (:unmet-total result1) (:unmet-total result2)))
+      (is (= (set (:allocations result1)) (set (:allocations result2)))))))
+
+(deftest test-allocation-linear-progression
+  (testing "linear progression of total basis"
+    (let [base-spec {:slash-obligation 1000
+                     :liable-parties
+                     [{:id :a :slashable-stake 100 :available-slashable 1000}]}
+          results (map (fn [i]
+                         (payoffs/calculate-prorata-slash-allocation
+                          (assoc-in base-spec [:liable-parties 0 :slashable-stake] (* 100 i))))
+                       (range 1 11))]
+      (doseq [res results]
+        (is (= 1000 (:recovered-total res)))))))
+
