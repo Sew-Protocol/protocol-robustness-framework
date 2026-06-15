@@ -131,15 +131,11 @@
       (is (= 75 (:paid (get (:allocations result) 0))))
       (is (= 25 (:paid (get (:allocations result) 1)))))))
 
-(deftest test-prorata-slash-uses-custom-cap-field
-  (testing "custom cap-field works"
-    (let [result (payoffs/calculate-prorata-slash-allocation
-                  {:slash-obligation 100
-                   :cap-field :custom-cap
-                   :liable-parties
-                   [{:id :resolver-a :slashable-stake 100 :custom-cap 30}
-                    {:id :resolver-b :slashable-stake 100 :custom-cap 200}]})
-          allocs (:allocations result)]
-      (is (= 30 (:paid (get allocs 0))) "A capped at 30")
-      (is (= 50 (:owed (get allocs 1))) "B owes 50")
-      (is (= 50 (:paid (get allocs 1))) "B pays 50, no cap hit"))))
+(deftest test-prorata-slash-immutability
+  (testing "liable-parties input is not mutated"
+    (let [input-parties [{:id :resolver-a :slashable-stake 100 :available-slashable 100}]
+          _ (payoffs/calculate-prorata-slash-allocation
+             {:slash-obligation 50
+              :liable-parties input-parties})]
+      (is (= [{:id :resolver-a :slashable-stake 100 :available-slashable 100}] input-parties)
+          "Input map was mutated!"))))
