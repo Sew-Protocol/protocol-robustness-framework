@@ -20,6 +20,7 @@
             [resolver-sim.util.attribution            :as attr]
             [resolver-sim.util.attributed-monad      :as am]
             [resolver-sim.time.context               :as time-ctx]
+            [resolver-sim.evidence.capture             :as cap]
             [resolver-sim.io.event-evidence           :as evidence]))
 
 (declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability)
@@ -919,17 +920,34 @@
                                      [{:id resolver
                                        :slashable-stake current-stake
                                        :available-slashable current-stake}]})]
-              (evidence/capture-event-evidence! :fraud-slash-allocation
-                {:pre-stake current-stake}
-                {:post-stake (- current-stake amount)
-                 :recovered-total (:recovered-total allocation)
-                 :unmet-total (:unmet-total allocation)}
-                {:slash-obligation amount
-                 :resolver resolver
-                 :workflow-id workflow-id
-                 :slash-id slash-id}
-                {:allocation allocation
-                 :formula "payoffs/calculate-prorata-slash-allocation"})
+              (let [evidence (-> (cap/evidence-base
+                                   {:type :fraud-slash :importance :core
+                                    :ctx (attr/current-attribution)})
+                                 (cap/cap-fields
+                                   {:scenario/id        (:ctx/scenario-id (attr/current-attribution))
+                                    :run/id             (:ctx/run-id (attr/current-attribution))
+                                    :event/seq          (:ctx/event-index (attr/current-attribution) 0)
+                                    :actor/id           resolver
+                                    :action/type        :slash-resolver
+                                    :caused-by/rule     :fraud-detected
+                                    :caused-by/action   :execute-resolution
+                                    :transition/id      (str "slash-" slash-id)
+                                    :financial/amount   amount
+                                    :financial/asset    :USDC
+                                    :replay/seed        (:ctx/replay-seed (attr/current-attribution))
+                                    :oracle/cursor      (:ctx/oracle-cursor (attr/current-attribution))
+                                    :oracle/mode        (:ctx/oracle-mode (attr/current-attribution))
+                                    :world/before-hash  (cap/stable-hash world)}))
+                                evidence (-> evidence
+                                            (assoc :transition/inputs {:pre-stake current-stake
+                                                                       :slash-obligation amount
+                                                                       :resolver resolver
+                                                                       :workflow-id workflow-id
+                                                                       :slash-id slash-id}))
+                                evidence (cap/cap-field evidence :world/after-hash
+                                                       (cap/stable-hash world'))
+                                evidence (cap/finalize-evidence evidence)]
+                (evidence/capture-event-evidence! evidence))
               (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation

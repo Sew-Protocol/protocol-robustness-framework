@@ -69,6 +69,11 @@
 (defn- run-lifecycle
   "Drive one escrow trial through the contract model with optional escalation.
 
+   @deprecated Use run-lifecycle-monadic instead.  The monadic path threads
+   AttributedState through protocol transitions and produces artifact-grade
+   evidence records.  Legacy path retained for emergency rollback only —
+   will be removed after soak period.
+
    Uses Priority-3 authority (no custom-resolver): et.dispute-resolver is set
    directly on the escrow transfer and tracks through escalation rounds.
 
@@ -334,13 +339,13 @@
      :escalation-probability-if-correct — prob party escalates correct verdict (default 0.05)
      :escalation-probability-if-wrong   — prob party escalates wrong verdict (default 0.60)
      :strategy                         — :honest | :lazy | :malicious | :collusive
-     :attributed?                      — if true, use the monadic parallel path
+     :attributed?                      — if true (default), use the monadic parallel path
 
    rng-fn — (fn [] → double in [0,1))"
   [rng-fn params]
   (let [snap    (make-trial-snapshot params)
         strategy (get params :strategy :honest)
-        run-fn (if (:attributed? params) run-lifecycle-monadic run-lifecycle)]
+        run-fn (if (get params :attributed? true) run-lifecycle-monadic run-lifecycle)]
     (run-fn
      rng-fn
      (get params :escrow-size 10000)
