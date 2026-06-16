@@ -24,7 +24,7 @@
                       (let [sc (gsc/build-scenario {:seed seed :max-steps max-steps :profile profile})
                             path (str out-dir "/gen-" (name profile) "-seed-" seed ".trace.json")]
                         (when-not dry-run?
-                          (spit path (json/write-str sc)))
+                          (spit path (json/write-str sc {:indent true})))
                         path))
                     runs)]
     {:written (count files) :files files :dry-run? dry-run?}))

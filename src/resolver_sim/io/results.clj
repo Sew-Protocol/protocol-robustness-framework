@@ -13,7 +13,7 @@
 (defn result->json-str
   "Serialize a simulation result/trace to a JSON string."
   [result]
-  (json/write-str result :key-fn kw->json-key :value-fn kw-val->str))
+  (json/write-str result :key-fn kw->json-key :value-fn kw-val->str :indent true))
 
 (defn create-run-directory
   "Create a timestamped output directory for a simulation run and return its path."

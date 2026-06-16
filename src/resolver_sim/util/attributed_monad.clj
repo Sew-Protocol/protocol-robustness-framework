@@ -30,7 +30,8 @@
    (fn [attributed]
      (let [state (attr/unwrap-state attributed)
            attr  (attr/get-attribution attributed)]
-       (attr/wrap-state (f state) attr)))))
+       (attr/with-attribution attr
+         (attr/wrap-state (f state) attr))))))
 
 (defn update-with-context
   "Monadic version of update-state that receives both state and attribution.
@@ -61,11 +62,12 @@
   [f & args]
   (fn [attributed]
     (let [world (attr/unwrap-state attributed)
-          attr  (attr/get-attribution attributed)
-          result (apply f world args)]
-      (if (:ok result)
-        [result (attr/wrap-state (:world result) attr)]
-        [result attributed]))))
+          attr  (attr/get-attribution attributed)]
+      (attr/with-attribution attr
+        (let [result (apply f world args)]
+          (if (:ok result)
+            [result (attr/wrap-state (:world result) attr)]
+            [result attributed]))))))
 
 (defn get-inner-state []
   (sm/bind (sm/get-state) (fn [a] (sm/return (attr/unwrap-state a)))))

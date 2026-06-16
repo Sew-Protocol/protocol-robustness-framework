@@ -11,8 +11,9 @@
 (def producer-id (evcfg/producer :claimable-classification))
 
 (defn- write-json! [path doc]
-  (let [f (io/file path)]
-    (.mkdirs (.getParentFile f))
+  (let [f (io/file path)
+        parent (.getParentFile f)]
+    (when parent (.mkdirs parent))
     (spit f (json/write-str doc {:indent true}))))
 
 (defn- current-git-sha []

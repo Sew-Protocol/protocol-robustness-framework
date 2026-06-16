@@ -170,4 +170,4 @@
         (let [w-yield (assoc-in w [:yield/positions "owner1"] {:status :unwinding})
               ;; Requires owner mapping
               w-yield-mapped (assoc w-yield :yield/owner-map {wf-id "owner1"})]
-          (is (contains? (set (#'fin/open-gates w-yield-mapped wf-id (fin/index-pending-slashes w-yield-mapped))) :yield-recovery)))))))
+          (is (contains? (set (#'fin/open-gates w-yield-mapped wf-id (fin/index-pending-slashes w-yield-mapped))) :yield-recovery))))))))

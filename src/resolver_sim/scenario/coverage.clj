@@ -31,7 +31,7 @@
   (let [[dir out] (->> args (remove #(= % "--")) vec)
         dir       (or dir "data/fixtures/traces")
         report    (coverage-report dir)
-        payload   (json/write-str report)
+        payload   (json/write-str report {:indent true})
         out       (or out (evcfg/artifact-path :coverage))]
     (.mkdirs (io/file (evcfg/artifact-dir)))
     (spit out payload)

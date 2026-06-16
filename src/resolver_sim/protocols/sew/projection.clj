@@ -48,7 +48,11 @@
   "Canonical terminal-world accessor for replay result payloads.
    Returns the world snapshot from the final trace entry, or nil when absent."
   [result]
-  (get-in result [:trace (dec (count (:trace result))) :world]))
+  (let [trace (:trace result)
+        last-entry (when (seq trace) (last trace))]
+    (println "DEBUG: terminal-world trace count:" (count trace))
+    (println "DEBUG: last entry has world?:" (some? (:world last-entry)))
+    (get-in result [:trace (dec (count (:trace result))) :world])))
 
 (defn- build-trace-context
   [result]

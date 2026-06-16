@@ -197,8 +197,7 @@
 (defn write-json-file
   [doc path]
   (io/make-parents path)
-  (with-open [w (io/writer path)]
-    (json/write doc w :key-fn name :value-fn json-value)))
+  (spit path (json/write-str doc {:indent true :key-fn name :value-fn json-value})))
 
 (defn export-scenario-files!
   "Write trace fixture and optional public scenarios/*.json for one scenario map."
