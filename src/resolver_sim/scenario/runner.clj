@@ -14,7 +14,9 @@
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.scenario.summary :as summary]
             [resolver-sim.scenario.normalize :as normalize]
-            [resolver-sim.scenario.theory :as theory]))
+            [resolver-sim.scenario.theory :as theory]
+            [resolver-sim.io.reasoning-registry :as registry]
+            [resolver-sim.io.reasoning-capsule :as capsule]))
 
 ;; ---------------------------------------------------------------------------
 ;; Attribute helpers — enrich result entries with clarifying annotations
@@ -202,10 +204,20 @@
                                  :details        [replay-result]}
                           scenario (assoc :scenario scenario))
           pass-entry    (assoc entry :pass? (scenario-pass? entry opts))
-          attr          (derive-resolution-attributes replay-result scenario)]
+          attr          (derive-resolution-attributes replay-result scenario)
+          capsule       (when-not (:pass? pass-entry)
+                          (let [world (:world replay-result)]
+                            (capsule/generate-capsule
+                             :scenario-id (:scenario-id replay-result)
+                             :protocol (:protocol scenario)
+                             :metrics-digest (:metrics replay-result)
+                             :diagnosis (str "Scenario failed: " name)
+                             :recommended-next-test "Review trace for invariant violations"
+                             :semantic-analysis (registry/classify-semantic-impact (:protocol scenario) world pass-entry))))
+          pass-entry*   (if capsule (assoc pass-entry :reasoning-capsule capsule) pass-entry)]
       (if attr
-        (apply with-attribute pass-entry (mapcat identity (seq attr)))
-        pass-entry))))
+        (apply with-attribute pass-entry* (mapcat identity (seq attr)))
+        pass-entry*))))
 
 (defn runner-opts-for-scenario
   "Default theory evaluation opts for a scenario map (fixture or JSON).

@@ -1,12 +1,7 @@
 (ns resolver-sim.util.attribution
   "Utilities for propagating contextual metadata across execution boundaries.
    Supports both diagnostic logging and research-grade evidence annotation.
-
-   Researcher-facing convention:
-   - Most protocol code should call capture-event-evidence! directly.
-   - Use with-attribution when adding local semantic context.
-   - Keys must be namespaced, e.g. :ctx/run-id, :subject/type.
-   - Returns the value of the body."
+   Transitioning from dynamic bindings to explicit context passing."
   (:require [resolver-sim.logging :as log]))
 
 (def ^:dynamic *attribution* {})
@@ -603,12 +598,16 @@
     attributed-state))
 
 (defn get-attribution
-  "Retrieves attribution from an AttributedState or attribution map or dynamic context."
-  [attributed-state-or-map]
-  (cond
-    (instance? AttributedState attributed-state-or-map) (:attribution attributed-state-or-map)
-    (map? attributed-state-or-map) attributed-state-or-map
-    :else *attribution*))
+  "Retrieves attribution from an AttributedState or attribution map or dynamic context.
+   If explicit-attr is provided, it takes precedence."
+  ([attributed-state-or-map]
+   (get-attribution attributed-state-or-map nil))
+  ([attributed-state-or-map explicit-attr]
+   (cond
+     (some? explicit-attr) explicit-attr
+     (instance? AttributedState attributed-state-or-map) (:attribution attributed-state-or-map)
+     (map? attributed-state-or-map) attributed-state-or-map
+     :else *attribution*)))
 
 
 
@@ -747,18 +746,22 @@
   ([requirements explicit-attr]
    (attribution-quality (or explicit-attr *attribution*) requirements)))
 
-;; ── Logging & Helpers ────────────────────────────────────────────────────────
+;; ── Logging & Helpers ────────────────────────────────────────────────
 
 (defn attribution-envelope
-  "Return a versioned, sanitized envelope of the current context."
-  []
-  {:attribution/version attribution-version
-   :attribution/context (sanitize-attribution *attribution*)})
+  "Return a versioned, sanitized envelope of the current context.
+   Accepts optional explicit attribution map."
+  ([] (attribution-envelope *attribution*))
+  ([attr]
+   {:attribution/version attribution-version
+    :attribution/context (sanitize-attribution attr)}))
 
 (defn annotate-evidence
-  "Attach the current attribution envelope to an evidence record."
-  [evidence]
-  (assoc evidence :attribution (attribution-envelope)))
+  "Attach the current attribution envelope to an evidence record.
+   Accepts optional explicit attribution map."
+  ([evidence] (annotate-evidence evidence *attribution*))
+  ([evidence attr]
+   (assoc evidence :attribution (attribution-envelope attr))))
 
 (defn log-with-attr [level msg & [data]]
   (log/log! level msg (merge data *attribution*)))
