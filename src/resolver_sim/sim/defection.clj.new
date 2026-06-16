@@ -1,0 +1,44 @@
+(defn- apply-load-optimal
+  [rng resolver-histories epoch {:keys [rate] :as cfg} params]
+  (let [load-snap (load-optimal-snapshot params cfg rng)
+        observed-strategies (set (map :strategy (vals resolver-histories)))]
+    (reduce-kv
+     (fn [acc id resolver]
+       (let [from     (:strategy resolver)
+             decision (select-next-strategy
+                        :load-optimal
+                        {:rate rate
+                         :rng rng
+                         :cfg cfg
+                         :load-snap load-snap
+                         :observed-strategies observed-strategies
+                         :epoch epoch}
+                        (assoc resolver :resolver-id id))
+             target   (:to decision)]
+         (cond
+           (:blocked? decision)
+           (-> acc
+               (assoc-in [:updated-histories id] resolver)
+               (cond-> (:diagnostic decision)
+                 (update :diagnostics conj (:diagnostic decision))))
+
+           (or (:skip? decision) (= from target))
+           (assoc-in acc [:updated-histories id] resolver)
+
+           :else
+           (let [event (strat-ev/build-strategy-transition-evidence
+                         {:world (:world params)
+                          :resolver-id id
+                          :from-strategy from
+                          :to-strategy target
+                          :reason (:reason decision)
+                          :trigger-event (:trigger decision)
+                          :attribution (attr/current-attribution)})]
+             (cap/capture-event-evidence! event)
+             (-> acc
+                 (assoc-in [:updated-histories id] (assoc resolver :strategy target))
+                 (update :defection-events conj
+                         (event-base epoch id from target :load-optimal
+                                     (:reason decision) load-snap rate)))))))
+     {:updated-histories {} :defection-events [] :diagnostics []}
+     resolver-histories)))

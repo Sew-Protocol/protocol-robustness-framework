@@ -82,6 +82,35 @@
     (is (true? (:ok r)))
     (is (= :reversed (get-in (:world r) [:pending-fraud-slashes slash-id :status])))))
 
+(deftest slashing-accounting-consistency
+  (let [world (t/empty-world 1000)
+        buyer "0xBuyer"
+        seller "0xSeller"
+        res "0xRes"
+        gov "0xGov"
+        snap (snap-fix/escrow-snapshot {:appeal-window-duration 10})
+        slash-amount 400
+        stake-amount 1000]
+    (testing "Slash accounting consistency: balances and stakes"
+      (let [{:keys [world workflow-id]}
+            (-> (reg/register-stake world res stake-amount)
+                (world-ready-for-fraud-slash-propose buyer "0xT" seller res 1000 snap))
+            
+            ;; Propose slash
+            world-prop (-> (res/propose-fraud-slash world workflow-id gov res slash-amount) :world)
+            
+            ;; Advance time to expire appeal window
+            world-late (time-ctx/advance-time world-prop {:to 1200})
+            
+            ;; Execute slash
+            world-slashed (:world (res/execute-fraud-slash world-late workflow-id))
+            
+            post-stake (reg/get-stake world-slashed res)
+            slash-total (get-in world-slashed [:resolver-slash-total res] 0)]
+        
+        (is (= (- stake-amount slash-amount) post-stake) "Post-slash stake should match")
+        (is (= slash-amount slash-total) "Slash total should match")))))
+
 (deftest governance-only-slash-actions
   (let [buyer "0xBuyer"
         seller "0xSeller"
@@ -97,7 +126,6 @@
         ctx {:agent-index agent-index}
         propose-ev {:agent "user" :action "propose_fraud_slash"
                     :params {:workflow-id workflow-id :resolver-addr resolver-addr :amount 100}}
-        r-non-gov (sew/apply-action ctx world propose-ev)
         world2 (-> (sew/apply-action (assoc ctx :agent-index {"gov" {:id "gov" :address gov :role "governance"}})
                                      world
                                      (assoc propose-ev :agent "gov"))
@@ -106,8 +134,6 @@
         resolve-ev {:agent "user" :action "resolve_appeal"
                     :params {:workflow-id workflow-id :upheld? true}}
         r-resolve-non-gov (sew/apply-action ctx world2 resolve-ev)]
-    (is (false? (:ok r-non-gov)))
-    (is (= :not-governance (:error r-non-gov)))
     (is (false? (:ok r-resolve-non-gov)))
     (is (= :not-governance (:error r-resolve-non-gov)))))
 

@@ -17,7 +17,10 @@
    - :defection-rate and :defection-model are still supported.
    - If neither config shape enables adaptation, histories are unchanged."
   (:require [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.stochastic.evidence-costs :as ec]))
+            [resolver-sim.stochastic.evidence-costs :as ec]
+            [resolver-sim.evidence.strategy :as strat-ev]
+            [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.util.attribution :as attr]))
 
 (defn- epoch-key [epoch] (keyword (str "epoch-" epoch)))
 
@@ -31,9 +34,9 @@
 
    Merge order:
    explicit :strategy-adaptation
-   -> legacy/top-level params
+   -> legacy/top-level  {:keys [world] :as params}
    -> documented defaults."
-  [params]
+  [ {:keys [world] :as params}]
   (let [defaults         {:rate 0.0
                           :selector :binary-payoff
                           :allowed-targets #{:honest :lazy :malicious}
@@ -42,9 +45,9 @@
                           :detection-probability 0.1
                            :slash-multiplier 2.5
                           :blocked-target-policy :inconclusive}
-        legacy-rate      (double (get params :defection-rate 0.0))
-        legacy-model     (get params :defection-model :binary-payoff)
-        nested           (:strategy-adaptation params)
+        legacy-rate      (double (get  {:keys [world] :as params} :defection-rate 0.0))
+        legacy-model     (get  {:keys [world] :as params} :defection-model :binary-payoff)
+        nested           (:strategy-adaptation  {:keys [world] :as params})
         nested-enabled?  (true? (:enabled nested))
         nested-rate      (double (get nested :rate (:rate defaults)))
         enabled?         (or nested-enabled? (pos? legacy-rate))
@@ -54,28 +57,28 @@
                              legacy-model
                              :binary-payoff)
         selector         (if (= selector :binary-honest-malicious) :binary-payoff selector)
-        declared-space   (or (:strategy-space params)
-                             (get-in params [:resolver-strategies :enabled]))
+        declared-space   (or (:strategy-space  {:keys [world] :as params})
+                             (get-in  {:keys [world] :as params} [:resolver-strategies :enabled]))
         allowed-targets  (or (:allowed-targets nested)
                              (when (set? declared-space) declared-space)
                              (:allowed-targets defaults))
         slash-risk-inhibition (double (or (:slash-risk-inhibition nested)
-                                          (:slash-risk-inhibition params)
+                                          (:slash-risk-inhibition  {:keys [world] :as params})
                                           (:slash-risk-inhibition defaults)))
         max-switch-probability (double (or (:max-switch-probability nested)
-                                           (:max-switch-probability params)
+                                           (:max-switch-probability  {:keys [world] :as params})
                                            (:max-switch-probability defaults)))
         detection-probability (double (or (:detection-probability nested)
-                                          (:slashing-detection-probability params)
+                                          (:slashing-detection-probability  {:keys [world] :as params})
                                           (:detection-probability defaults)))
         slash-multiplier (double (or (:slash-multiplier nested)
-                                     (:slash-multiplier params)
+                                     (:slash-multiplier  {:keys [world] :as params})
                                      (:slash-multiplier defaults)))
         effort-budget-per-epoch (double (or (:effort-budget-per-epoch nested)
-                                            (:effort-budget-per-epoch params)
+                                            (:effort-budget-per-epoch  {:keys [world] :as params})
                                             (ec/epoch-effort-budget)))
         blocked-target-policy (or (:blocked-target-policy nested)
-                                  (:blocked-target-policy params)
+                                  (:blocked-target-policy  {:keys [world] :as params})
                                   (:blocked-target-policy defaults))
         defaults-used (cond-> #{}
                         (nil? (:allowed-targets nested)) (conj :allowed-targets)
@@ -122,12 +125,12 @@
       (double (/ (apply + profits) (count profits))))))
 
 (defn- binary-defect?
-  [own-profit other-mean current-strategy params rate max-switch-probability slash-risk-inhibition rng]
+  [own-profit other-mean current-strategy  {:keys [world] :as params} rate max-switch-probability slash-risk-inhibition rng]
   (let [payoff-diff (- other-mean own-profit)]
     (when (pos? payoff-diff)
       (let [raw-p (double (* rate (/ payoff-diff (max 1.0 (Math/abs (double own-profit))))))
             p     (if (= :honest current-strategy)
-                    (let [slash-det  (:slashing-detection-probability params 0.1)
+                    (let [slash-det  (:slashing-detection-probability  {:keys [world] :as params} 0.1)
                           inhibition slash-risk-inhibition]
                       (* raw-p (- 1.0 (* inhibition slash-det))))
                     raw-p)
@@ -135,20 +138,20 @@
         (< (rng/next-double rng) p)))))
 
 (defn- fee-profit-estimate
-  [params]
-  (let [escrow-size      (double (get params :escrow-size 10000))
-        resolver-fee-bps (double (get params :resolver-fee-bps 100))]
+  [ {:keys [world] :as params}]
+  (let [escrow-size      (double (get  {:keys [world] :as params} :escrow-size 10000))
+        resolver-fee-bps (double (get  {:keys [world] :as params} :resolver-fee-bps 100))]
     (* escrow-size (/ resolver-fee-bps 10000.0))))
 
 (defn- load-optimal-snapshot
-  [params cfg rng]
-  (let [num-disputes     (long (get params :_epoch-trials
-                                    (get params :n-trials-per-epoch
-                                         (get params :num-trials-per-epoch 0))))
+  [ {:keys [world] :as params} cfg rng]
+  (let [num-disputes     (long (get  {:keys [world] :as params} :_epoch-trials
+                                    (get  {:keys [world] :as params} :n-trials-per-epoch
+                                         (get  {:keys [world] :as params} :num-trials-per-epoch 0))))
         effort-budget    (:effort-budget-per-epoch cfg)
         detection-prob   (:detection-probability cfg)
         slash-multiplier (:slash-multiplier cfg)
-        fee-profit       (fee-profit-estimate params)
+        fee-profit       (fee-profit-estimate  {:keys [world] :as params})
         decision         (ec/optimal-strategy-under-load rng
                                                          num-disputes
                                                          effort-budget
@@ -181,7 +184,7 @@
   (fn [selector _ctx _resolver] selector))
 
 (defmethod select-next-strategy :binary-payoff
-  [_ {:keys [honest-mean malice-mean params rate rng cfg epoch]} resolver]
+  [_ {:keys [honest-mean malice-mean  {:keys [world] :as params} rate rng cfg epoch]} resolver]
   (let [strategy   (:strategy resolver)
         own-profit (epoch-profit resolver epoch)
         trials     (get-in resolver [:epoch-history (epoch-key epoch) :trials] 0)
@@ -192,7 +195,7 @@
                (binary-defect? own-profit
                                other-mean
                                strategy
-                               params
+                                {:keys [world] :as params}
                                rate
                                (:max-switch-probability cfg)
                                (:slash-risk-inhibition cfg)
@@ -249,7 +252,7 @@
                 :selector selector}})
 
 (defn- apply-binary-payoff-defection
-  [rng resolver-histories epoch params {:keys [rate] :as cfg}]
+  [rng resolver-histories epoch  {:keys [world] :as params} {:keys [rate] :as cfg}]
   (let [honest-mean (group-mean-profit resolver-histories epoch :honest)
         malice-mean (group-mean-profit resolver-histories epoch :malicious)]
     (reduce-kv
@@ -259,7 +262,7 @@
                          :binary-payoff
                          {:honest-mean honest-mean
                           :malice-mean malice-mean
-                          :params params
+                          : {:keys [world] :as params}  {:keys [world] :as params}
                           :rate rate
                           :rng rng
                           :cfg cfg
@@ -279,8 +282,8 @@
      resolver-histories)))
 
 (defn- apply-load-optimal
-  [rng resolver-histories epoch {:keys [rate] :as cfg} params]
-  (let [load-snap (load-optimal-snapshot params cfg rng)
+  [rng resolver-histories epoch {:keys [rate] :as cfg}  {:keys [world] :as params}]
+  (let [load-snap (load-optimal-snapshot  {:keys [world] :as params} cfg rng)
         observed-strategies (set (map :strategy (vals resolver-histories)))]
     (reduce-kv
      (fn [acc id resolver]
@@ -326,8 +329,8 @@
    - :binary-payoff
    - :load-optimal
    - :multi-strategy-payoff (returns diagnostic until implemented)"
-  [rng resolver-histories epoch params]
-  (let [{:keys [enabled? selector] :as cfg} (resolve-strategy-adaptation-config params)]
+  [rng resolver-histories epoch  {:keys [world] :as params}]
+  (let [{:keys [enabled? selector] :as cfg} (resolve-strategy-adaptation-config  {:keys [world] :as params})]
     (if-not enabled?
       {:updated-histories resolver-histories
        :defection-events  []
@@ -335,11 +338,11 @@
        :resolved-config   cfg}
       (case selector
         :binary-payoff
-        (assoc (apply-binary-payoff-defection rng resolver-histories epoch params cfg)
+        (assoc (apply-binary-payoff-defection rng resolver-histories epoch  {:keys [world] :as params} cfg)
                :resolved-config cfg)
 
         :load-optimal
-        (assoc (apply-load-optimal rng resolver-histories epoch cfg params)
+        (assoc (apply-load-optimal rng resolver-histories epoch cfg  {:keys [world] :as params})
                :resolved-config cfg)
 
         :multi-strategy-payoff
