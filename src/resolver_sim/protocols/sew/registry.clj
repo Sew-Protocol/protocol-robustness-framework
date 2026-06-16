@@ -15,6 +15,7 @@
             [resolver-sim.economics.payoffs            :as payoffs]
             [resolver-sim.util.attribution         :as attr]
             [resolver-sim.util.math                 :as math]
+            [resolver-sim.evidence.capture         :as cap]
             [resolver-sim.io.event-evidence         :as evidence]))
 
 ;; ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@
      :action/type  :slash
      :evidence/reason :slashing}
     (let [current (get-stake world resolver-addr)
-          actual  (math/to-canonical (min (double current) (double amount)))
+          actual  (math/to-canonical (min current amount))
           token   (if workflow-id
                     (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
                     :USDC)
@@ -114,9 +115,20 @@
                       (cond-> sub-held? (acct/sub-held token actual)))]
 
       ;; Phase 6: Capture Slashing Evidence
-      (evidence/capture-event-evidence! :slashing
-                                       {:resolver-stake current}
-                                       {:resolver-stake (get-stake world' resolver-addr)}
-                                       {:requested-amount amount :actual-amount actual})
+      (let [evidence (-> (cap/evidence-base
+                          {:type :slashing :importance :core
+                           :ctx (attr/current-attribution)})
+                         (cap/cap-fields
+                          (cap/default-metadata
+                           (:ctx/scenario-id (attr/current-attribution))
+                           (:ctx/run-id (attr/current-attribution))
+                           :event-seq (:ctx/event-index (attr/current-attribution) 0)))
+                         (cap/cap-fields
+                          {:resolver-stake/before current
+                           :resolver-stake/after  (get-stake world' resolver-addr)
+                           :financial/requested-amount amount
+                           :financial/actual-amount    actual}))
+            evidence (cap/finalize-evidence evidence)]
+        (evidence/capture-event-evidence! evidence))
 
       (assoc (t/ok world') :slashed-from-stake actual)))))

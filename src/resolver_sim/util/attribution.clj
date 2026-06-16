@@ -45,7 +45,12 @@
 
 (defmacro with-attribution
   "Execute body with merged attribution context.
-   Inner keys override outer keys. Keys should be namespaced (e.g., :ctx/id)."
+   Performs a shallow merge of the new attribution context into the existing dynamic *attribution*.
+   - Inner scopes override outer scopes for identical keys.
+   - Nested maps are replaced entirely, not recursively merged.
+   - Attribution should be restricted to flat provenance/context keys (e.g., :ctx/id).
+   - Structured evidence should be built by evidence constructors, not via attribution updates.
+   Keys should be namespaced (e.g., :ctx/id)."
   [attr & body]
   `(binding [*attribution* (merge *attribution* ~attr)]
      ~@body))

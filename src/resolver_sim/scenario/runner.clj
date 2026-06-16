@@ -27,9 +27,11 @@
    Remaining args are alternating keyword-value pairs.
 
    Attributes are stored under `:attributes` and surfaced in verbose/audit reports.
-   Unlike `with-attribution` (dynamic binding for execution context), this is a
-   pure-data enrichment for post-hoc clarity — e.g. annotating a pass/fail result
-   with `:resolution/type :release` or `:dispute/level 0`.
+   - Performs a shallow merge of new attributes into the entry's `:attributes` map.
+   - Inner scopes (if called sequentially) override outer scopes for identical keys.
+   - Nested maps are replaced entirely, not recursively merged.
+   - Attributes should be restricted to flat provenance/context keys.
+   - Structured evidence should be built by evidence constructors.
 
    Returns the entry with an appended or merged `:attributes` map."
   [entry & kvs]

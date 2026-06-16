@@ -13,6 +13,7 @@
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.util.attribution :as attr]
+            [resolver-sim.evidence.capture :as cap]
             [resolver-sim.io.event-evidence :as evidence]))
 
 (declare sub-held record-fee record-claimable)
@@ -235,11 +236,20 @@
           :subject/id   challenger
           :action/type  :reward-bounty
           :evidence/reason :incentive-payout}
-         (evidence/capture-event-evidence! :incentive-payout
-                                          {:bounty-claimable 0}
-                                          {:bounty-claimable bounty}
-                                          {:slash-amount amount :bounty-bps bounty-bps}
-                                          {:formula "payoffs/calculate-bounty"})))
+         (let [evidence (-> (cap/evidence-base
+                             {:type :incentive-payout :importance :core
+                              :ctx (attr/current-attribution)})
+                            (cap/cap-fields
+                             (cap/default-metadata
+                              (:ctx/scenario-id (attr/current-attribution))
+                              (:ctx/run-id (attr/current-attribution))
+                              :event-seq (:ctx/event-index (attr/current-attribution) 0)))
+                            (cap/cap-fields
+                             {:financial/bounty-amount bounty
+                              :financial/slash-amount amount
+                              :financial/bounty-bps bounty-bps
+                              :formula/name "payoffs/calculate-bounty"}))]
+           (evidence/capture-event-evidence! (cap/finalize-evidence evidence)))))
      
      world')))
 

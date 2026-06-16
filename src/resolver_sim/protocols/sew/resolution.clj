@@ -924,10 +924,12 @@
                                    {:type :fraud-slash :importance :core
                                     :ctx (attr/current-attribution)})
                                  (cap/cap-fields
-                                   {:scenario/id        (:ctx/scenario-id (attr/current-attribution))
-                                    :run/id             (:ctx/run-id (attr/current-attribution))
-                                    :event/seq          (:ctx/event-index (attr/current-attribution) 0)
-                                    :actor/id           resolver
+                                  (cap/default-metadata
+                                   (:ctx/scenario-id (attr/current-attribution))
+                                   (:ctx/run-id (attr/current-attribution))
+                                   :event-seq (:ctx/event-index (attr/current-attribution) 0)))
+                                 (cap/cap-fields
+                                   {:actor/id           resolver
                                     :action/type        :slash-resolver
                                     :caused-by/rule     :fraud-detected
                                     :caused-by/action   :execute-resolution
