@@ -127,6 +127,15 @@ Single-trace execution is not a formal proof of safety across all possible infor
 * Validation-root builder for structured result accumulation
 * Python adversarial suite integration through gRPC
 
+## Advanced Capabilities & Observability
+
+The framework has evolved to provide robust tools for audit, traceability, and deeper analysis:
+
+*   **Cryptographic Solvency Layer**: New SHA-256 state commitments (`financial/solvency.clj`) enable live proof verification and audit-grade solvency tracking, ensuring the financial integrity of the protocol.
+*   **Production Evidence Workbench**: `notebooks/workbench-v2.clj` and `notebooks/evidence_explorer.clj` provide a data-driven, visual observability surface. It bridges high-level simulation metrics with raw, signed cryptographic evidence bundles, making complex analyses accessible.
+*   **IPFS Artifact Bundling**: Integrated `bb benchmark:publish-ipfs` pipeline automatically generates an `evidence-manifest.json` for workbench consumption, cryptographically binding every visual artifact to an immutable IPFS bundle. This enables shareable, verifiable evidence.
+*   **V2 Semantic Identity Architecture**: A formal shift to derived, immutable identifiers (`TransferId`, `DisputeId`, `ClaimId`) eliminates identity-confusion and rebinding vulnerabilities, ensuring strong data integrity across simulations and replays.
+
 ## Current status
 
 * **Core framework**: operational in-process deterministic runner.
