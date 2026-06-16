@@ -19,10 +19,12 @@
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
 (defn- evidence-filename
-  "Derive filename from evidence record metadata."
+  "Derive filename from evidence record metadata.
+   Sanitize evidence-type to avoid directory traversal issues."
   [evidence]
-  (let [reason (:evidence/type evidence "unknown")
-        sid    (:scenario/id evidence "unknown")
+  (let [reason (clojure.string/replace (name (:evidence/type evidence "unknown")) #":" "-")
+        reason (clojure.string/replace reason #"/" "-")
+        sid    (name (:scenario/id evidence "unknown"))
         idx    (:event/seq evidence "unknown")]
     (str reason "-" sid "-" idx ".json")))
 

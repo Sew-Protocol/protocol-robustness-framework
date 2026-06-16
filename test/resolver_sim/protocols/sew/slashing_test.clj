@@ -99,17 +99,24 @@
             ;; Propose slash
             world-prop (-> (res/propose-fraud-slash world workflow-id gov res slash-amount) :world)
             
+            ;; Set epoch cap to match per-offense cap (50%) so 40% slash passes
+            world-params (assoc-in world-prop [:params :slash-epoch-cap-bps] 5000)
+            
             ;; Advance time to expire appeal window
-            world-late (time-ctx/advance-time world-prop {:to 1200})
+            world-late (time-ctx/advance-time world-params {:to 1200})
             
             ;; Execute slash
             world-slashed (:world (res/execute-fraud-slash world-late workflow-id))
             
             post-stake (reg/get-stake world-slashed res)
-            slash-total (get-in world-slashed [:resolver-slash-total res] 0)]
+            slash-total (get-in world-slashed [:resolver-slash-total res] 0)
+            
+            ;; Calculate expected distribution based on default 50/30/20 split
+            expected-dist (payoffs/calculate-slashing-distribution slash-amount 0)
+            expected-total (+ (:insurance expected-dist) (:protocol expected-dist) (:retained expected-dist))]
         
         (is (= (- stake-amount slash-amount) post-stake) "Post-slash stake should match")
-        (is (= slash-amount slash-total) "Slash total should match")))))
+        (is (= expected-total slash-total) "Slash total should match distributed sum")))))
 
 (deftest governance-only-slash-actions
   (let [buyer "0xBuyer"

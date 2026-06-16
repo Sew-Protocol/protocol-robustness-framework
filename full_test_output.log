@@ -1,0 +1,798 @@
+Running unit tests (all — framework + Sew)...
+
+Testing resolver-sim.core-tests
+
+Testing resolver-sim.protocols.sew.replay-test
+{:ts "2026-06-17T15:19:33.936191442Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.939096607Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.959176247Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.959815850Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.977699039Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.978160061Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.989101364Z", :level :debug, :message "guard/rejected", :context {:workflow-id 999, :error :invalid-workflow-id, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 1, :ctx/event-type "release"}}
+{:ts "2026-06-17T15:19:33.990572989Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.990786166Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.999104945Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:33.999405099Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+DEBUG: slash-resolver-stake called for 0xResolver requested-amount 7960
+Captured event evidence: slashing hash: sha256:ffffff8cffffff96266c55ffffffafffffffb6fffffff409ffffff9846ffffffc7002b0f032effffffaeffffffd4ffffffa70104ffffffefffffff8bfffffffeffffffb0fffffffb23ffffff8a32ffffffb126
+{:ts "2026-06-17T15:19:34.028401560Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.028921545Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.048107335Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.054635910Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.054963987Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.070756648Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.071053145Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.089130285Z", :level :debug, :message "Submitting resolution", :context {:caller "0xMallory", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.089673554Z", :level :debug, :message "guard/rejected", :context {:caller "0xMallory", :dispute-level 0, :workflow-id 0, :error :not-authorized-resolver, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 2, :ctx/event-type "execute_resolution"}}
+{:ts "2026-06-17T15:19:34.090632247Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.097528585Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.097846644Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.106147328Z", :level :debug, :message "guard/rejected", :context {:workflow-id 999, :error :invalid-workflow-id, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 1, :ctx/event-type "release"}}
+{:ts "2026-06-17T15:19:34.112038744Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.112315654Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.128151898Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.128468113Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.142326194Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.142636147Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.155687666Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.155994262Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.171837520Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.172159937Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.184248384Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.184608212Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.195573342Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.195844220Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.217840394Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.223037513Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 100, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-17T15:19:34.240971599Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.241475703Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.256547736Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.260726006Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-17T15:19:34.270604157Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? false, :workflow-id 0, :slash-id 0}}
+DEBUG: slash-resolver-stake called for 0xResolver requested-amount 500
+Captured event evidence: slashing hash: sha256:ffffffc3ffffffc861ffffff807cffffffd5ffffff8dffffffc5ffffffc5ffffffa1ffffffa9ffffffddffffffbe13ffffffc5ffffffea2150ffffffb850387417ffffffc8ffffffa54b7d55105b50ffffffc4
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:34.292277304Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.292603197Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.306540520Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.311205371Z", :level :debug, :message "guard/rejected", :context {:caller "0xMallory", :workflow-id 0, :error :not-participant, :ctx/scenario-id nil, :ctx/run-id "-run", :ctx/event-index 3, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-17T15:19:34.321643091Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.321892819Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.329164986Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.339394919Z", :level :debug, :message "guard/rejected", :context {:workflow-id 0, :error :no-pending-settlement, :ctx/scenario-id nil, :ctx/run-id "-run", :ctx/event-index 4, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-17T15:19:34.340391926Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.351792247Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.352194066Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.380779321Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.387156897Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+DEBUG: slash-resolver-stake called for 0xResolver requested-amount 500
+Captured event evidence: slashing hash: sha256:ffffffeeffffffc3ffffffefffffff8affffffb9ffffffc5ffffffce6effffffd2ffffffe545546235ffffffff4d6024ffffffedfffffff41e1fffffffc9ffffffd0ffffffeb1fffffffa9ffffffd0ffffffad617304
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:34.405460520Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.405759401Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.412125255Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.412374953Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.420247237Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.423498334Z", :level :debug, :message "guard/rejected", :context {:block-time 1050, :appeal-deadline 1100, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 3, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-17T15:19:34.427221084Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.427463988Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.436558630Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.436891868Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.445062994Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.445432120Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.462501532Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.462762021Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.479844318Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.480060762Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.486811121Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.494675611Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.505252417Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver2", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.512868482Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.513189425Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.528812612Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.529008297Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.535546340Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.535767573Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.541710969Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.541926040Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.552125675Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.555444101Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 100, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-17T15:19:34.563264687Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.563509395Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.572016173Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.572225112Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+{:ts "2026-06-17T15:19:34.585402382Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.585664323Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.594782270Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.600331802Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.600483462Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.610760736Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.610923688Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.617869701Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.618003146Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.620735992Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.620822368Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.667014413Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.667203675Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.678868652Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.682266751Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-17T15:19:34.689371117Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id 0}}
+{:ts "2026-06-17T15:19:34.693707329Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.693940275Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.705508287Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.709014061Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+{:ts "2026-06-17T15:19:34.715277018Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? false, :workflow-id 0, :slash-id 0}}
+DEBUG: slash-resolver-stake called for 0xResolver requested-amount 500
+Captured event evidence: slashing hash: sha256:ffffffc3ffffffc861ffffff807cffffffd5ffffff8dffffffc5ffffffc5ffffffa1ffffffa9ffffffddffffffbe13ffffffc5ffffffea2150ffffffb850387417ffffffc8ffffffa54b7d55105b50ffffffc4
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:34.725228379Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.725375961Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.733688738Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.739131186Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.739306832Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.747726954Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.747900275Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.756960482Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.757137941Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.764434284Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.766008224Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1130, :appeal-window 120, :ctx/scenario-id "test", :ctx/run-id "test-run", :ctx/event-index 4, :ctx/event-type "propose_fraud_slash"}}
+DEBUG: slash-resolver-stake called for 0xResolver requested-amount 500
+Captured event evidence: slashing hash: sha256:ffffffeeffffffc3ffffffefffffff8affffffb9ffffffc5ffffffce6effffffd2ffffffe545546235ffffffff4d6024ffffffedfffffff41e1fffffffc9ffffffd0ffffffeb1fffffffa9ffffffd0ffffffad617304
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:34.775200703Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.775298360Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.778524249Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.781042575Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.784127184Z", :level :debug, :message "Submitting resolution", :context {:caller "0xResolver2", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.786670177Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id nil, :ctx/run-id "-run", :ctx/event-index 7, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-17T15:19:34.795182345Z", :level :info, :message "scenario/end", :context {:id "test", :outcome :pass, :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+{:ts "2026-06-17T15:19:34.795346219Z", :level :info, :message "scenario/start", :context {:id "test", :ctx/scenario-id "test", :ctx/run-id "test-run"}}
+
+Testing resolver-sim.protocols.sew.forking-strategist-expectations-test
+{:ts "2026-06-17T15:19:34.804447243Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.808582842Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.812291674Z", :level :info, :message "scenario/end", :context {:id "s26-forking-strategist-l1-reversal", :outcome :pass, :ctx/scenario-id "s26-forking-strategist-l1-reversal", :ctx/run-id "s26-forking-strategist-l1-reversal-run"}}
+{:ts "2026-06-17T15:19:34.812419188Z", :level :info, :message "scenario/start", :context {:id "s26-forking-strategist-l1-reversal", :ctx/scenario-id "s26-forking-strategist-l1-reversal", :ctx/run-id "s26-forking-strategist-l1-reversal-run"}}
+{:ts "2026-06-17T15:19:34.818331735Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.822242654Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.826687875Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.829202213Z", :level :debug, :message "guard/rejected", :context {:escrow-state :refunded, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run", :ctx/event-index 7, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-17T15:19:34.829499572Z", :level :info, :message "scenario/end", :context {:id "s27-forking-strategist-l2-fork", :outcome :pass, :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run"}}
+{:ts "2026-06-17T15:19:34.829614632Z", :level :info, :message "scenario/start", :context {:id "s27-forking-strategist-l2-fork", :ctx/scenario-id "s27-forking-strategist-l2-fork", :ctx/run-id "s27-forking-strategist-l2-fork-run"}}
+{:ts "2026-06-17T15:19:34.834997265Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.837322061Z", :level :debug, :message "guard/rejected", :context {:block-time 1185, :appeal-deadline 1180, :workflow-id 0, :error :appeal-window-expired, :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run", :ctx/event-index 3, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-17T15:19:34.840072080Z", :level :info, :message "scenario/end", :context {:id "s28-forking-strategist-late-escalation-rejected", :outcome :pass, :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run"}}
+{:ts "2026-06-17T15:19:34.840218009Z", :level :info, :message "scenario/start", :context {:id "s28-forking-strategist-late-escalation-rejected", :ctx/scenario-id "s28-forking-strategist-late-escalation-rejected", :ctx/run-id "s28-forking-strategist-late-escalation-rejected-run"}}
+{:ts "2026-06-17T15:19:34.846550599Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.850878696Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.856514925Z", :level :info, :message "scenario/end", :context {:id "s29-forking-strategist-seller-escalates", :outcome :pass, :ctx/scenario-id "s29-forking-strategist-seller-escalates", :ctx/run-id "s29-forking-strategist-seller-escalates-run"}}
+{:ts "2026-06-17T15:19:34.856764252Z", :level :info, :message "scenario/start", :context {:id "s29-forking-strategist-seller-escalates", :ctx/scenario-id "s29-forking-strategist-seller-escalates", :ctx/run-id "s29-forking-strategist-seller-escalates-run"}}
+{:ts "2026-06-17T15:19:34.862638004Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.865863893Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.875725402Z", :level :info, :message "scenario/end", :context {:id "s30-forking-strategist-double-loss", :outcome :pass, :ctx/scenario-id "s30-forking-strategist-double-loss", :ctx/run-id "s30-forking-strategist-double-loss-run"}}
+{:ts "2026-06-17T15:19:34.875915596Z", :level :info, :message "scenario/start", :context {:id "s30-forking-strategist-double-loss", :ctx/scenario-id "s30-forking-strategist-double-loss", :ctx/run-id "s30-forking-strategist-double-loss-run"}}
+{:ts "2026-06-17T15:19:34.881480388Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.885886023Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.890987188Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl2", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.894210923Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run", :ctx/event-index 7, :ctx/event-type "escalate_dispute"}}
+{:ts "2026-06-17T15:19:34.894738592Z", :level :debug, :message "guard/rejected", :context {:escrow-state :released, :workflow-id 0, :error :transfer-not-in-dispute, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run", :ctx/event-index 8, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-17T15:19:34.895198151Z", :level :info, :message "scenario/end", :context {:id "s31-forking-strategist-all-levels-confirm", :outcome :pass, :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run"}}
+{:ts "2026-06-17T15:19:34.895327819Z", :level :info, :message "scenario/start", :context {:id "s31-forking-strategist-all-levels-confirm", :ctx/scenario-id "s31-forking-strategist-all-levels-confirm", :ctx/run-id "s31-forking-strategist-all-levels-confirm-run"}}
+{:ts "2026-06-17T15:19:34.903126653Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.913358009Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.917366404Z", :level :debug, :message "guard/rejected", :context {:block-time 1200, :appeal-deadline 1250, :workflow-id 0, :error :appeal-window-not-expired, :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run", :ctx/event-index 5, :ctx/event-type "execute_pending_settlement"}}
+{:ts "2026-06-17T15:19:34.921835481Z", :level :info, :message "scenario/end", :context {:id "s32-forking-strategist-premature-settlement-rejected", :outcome :pass, :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run"}}
+{:ts "2026-06-17T15:19:34.922040974Z", :level :info, :message "scenario/start", :context {:id "s32-forking-strategist-premature-settlement-rejected", :ctx/scenario-id "s32-forking-strategist-premature-settlement-rejected", :ctx/run-id "s32-forking-strategist-premature-settlement-rejected-run"}}
+{:ts "2026-06-17T15:19:34.935673203Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.938467988Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl0", :workflow-id 1}}
+{:ts "2026-06-17T15:19:34.949635083Z", :level :debug, :message "Submitting resolution", :context {:caller "0xl1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.960378599Z", :level :info, :message "scenario/end", :context {:id "s33-forking-strategist-two-escrow-fork-isolation", :outcome :pass, :ctx/scenario-id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/run-id "s33-forking-strategist-two-escrow-fork-isolation-run"}}
+{:ts "2026-06-17T15:19:34.960732245Z", :level :info, :message "scenario/start", :context {:id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/scenario-id "s33-forking-strategist-two-escrow-fork-isolation", :ctx/run-id "s33-forking-strategist-two-escrow-fork-isolation-run"}}
+
+Testing resolver-sim.protocols.sew.slashing-test
+{:ts "2026-06-17T15:19:34.963540014Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.964039289Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 10}}
+DEBUG: slash-resolver-stake called for 0xRes requested-amount 200
+Captured event evidence: slashing hash: sha256:0a7721ffffffe43dfffffff5ffffffb557ffffffb2ffffff8effffffa3ffffffdd42ffffffb7fffffff479ffffffc025ffffff96ffffffddffffffea3668233602fffffff6fffffffa60ffffff997047
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:34.970770562Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id "0-reversal-0"}}
+{:ts "2026-06-17T15:19:34.972369039Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.973655158Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+{:ts "2026-06-17T15:19:34.976647020Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.976911195Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+{:ts "2026-06-17T15:19:34.979256169Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.980384858Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 100}}
+{:ts "2026-06-17T15:19:34.981578681Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 100}}
+DEBUG: slash-resolver-stake called for 0xRes1 requested-amount 50
+Captured event evidence: slashing hash: sha256:215f127b17ffffffa906ffffffa513276a061c65286effffffe3ffffffe46effffffcbffffff9c0dfffffffd4fffffff8f13217fffffff81ffffffabffffffb4ffffff86
+DEBUG: slash-resolver-stake called for 0xRes2 requested-amount 50
+Captured event evidence: slashing hash: sha256:ffffffeb47fffffff0ffffffd2466bffffff802667ffffffe6ffffffe250ffffff89ffffffadffffffc2ffffff94ffffffdcffffffb73028fffffffb02145fffffffc1fffffff23b7effffffe108fffffff2ffffffef
+{:ts "2026-06-17T15:19:34.984858142Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.985067984Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 10}}
+DEBUG: All slash totals= nil
+
+FAIL in (slashing-accounting-consistency) (slashing_test.clj:118)
+Slash accounting consistency: balances and stakes
+Post-slash stake should match
+expected: (= (- stake-amount slash-amount) post-stake)
+  actual: (not (= 600 0))
+
+FAIL in (slashing-accounting-consistency) (slashing_test.clj:119)
+Slash accounting consistency: balances and stakes
+Slash total should match distributed sum
+expected: (= expected-total slash-total)
+  actual: (not (= 400 0))
+{:ts "2026-06-17T15:19:34.991408589Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.991698063Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 100}}
+{:ts "2026-06-17T15:19:34.991860674Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id 0}}
+{:ts "2026-06-17T15:19:34.993461825Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.993730008Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+{:ts "2026-06-17T15:19:34.996131761Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.996376770Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+{:ts "2026-06-17T15:19:34.998507785Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:34.998694733Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 2000000}}
+DEBUG: slash-resolver-stake called for 0xRes0 requested-amount 5000
+Captured event evidence: slashing hash: sha256:ffffffe27bffffffc0ffffff96ffffff943948ffffffb4fffffffe0dffffffea05ffffffb4ffffffa6ffffff82ffffffba25ffffffae59ffffffb6ffffffca53ffffff86ffffffb6ffffffba6a0236ffffffeaffffff8966ffffffc4
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:35.001575011Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xRes0 requested-amount 1250
+Captured event evidence: slashing hash: sha256:ffffffefffffff8134ffffffba7a620069ffffffa1115e4416ffffff83776d2321ffffffa8ffffffe7fffffffd01ffffffe750ffffffbf252effffffa0ffffff847e1e07
+{:ts "2026-06-17T15:19:35.003732346Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.003935284Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 10}}
+{:ts "2026-06-17T15:19:35.004645012Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.004851006Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.005489647Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.005659141Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 100}}
+{:ts "2026-06-17T15:19:35.005774151Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? false, :workflow-id 0, :slash-id 0}}
+{:ts "2026-06-17T15:19:35.007765108Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.008007362Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 5000
+Captured event evidence: slashing hash: sha256:7cfffffffc69fffffff3fffffff0ffffffd7ffffffc92bffffffd8ffffff881bffffff915c181b061874ffffff8effffff97ffffffff45ffffff833a0441fffffffe02ffffffd3ffffffd6ffffffe75b
+{:ts "2026-06-17T15:19:35.010366112Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.010620188Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+{:ts "2026-06-17T15:19:35.013719124Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 42, :slash-id "42-reversal-0"}}
+{:ts "2026-06-17T15:19:35.014635176Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id "s1"}}
+{:ts "2026-06-17T15:19:35.015389489Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.015656630Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 100}}
+{:ts "2026-06-17T15:19:35.016268450Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.016516524Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 0}}
+DEBUG: slash-resolver-stake called for 0xRes requested-amount 300
+Captured event evidence: slashing hash: sha256:ffffffa1ffffff8350ffffffae1c1affffffde6ffffffff3ffffffab782b26630effffffc52fffffffeeffffff8c7842ffffff8f17ffffffa74fffffffb0ffffffef494148ffffffd625
+Captured event evidence: :slash/prorata-allocation hash: nil
+{:ts "2026-06-17T15:19:35.019689742Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.019851772Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 86400}}
+{:ts "2026-06-17T15:19:35.020436290Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id 0}}
+{:ts "2026-06-17T15:19:35.020783524Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL0Res", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.020963238Z", :level :debug, :message "Submitting resolution", :context {:caller "0xL1Res", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 2500
+Captured event evidence: slashing hash: sha256:ffffffefffffff914437ffffffde5effffff87fffffff64cffffffa8ffffffed7b3f21725110ffffffbcfffffff1fffffffa4113ffffff8affffffd52fffffffe22affffffa0ffffffcd13150b
+DEBUG: slash-resolver-stake called for 0xL0Res requested-amount 1875
+Captured event evidence: slashing hash: sha256:44ffffffb4ffffffa1ffffff944246ffffffcc19ffffffc3345c7e33ffffffdaffffffbb16fffffff0ffffffc6fffffffaffffffe45fffffffd02affffff827affffffbcffffff811afffffffe69ffffffe64b
+{:ts "2026-06-17T15:19:35.023356214Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id "0-reversal-0"}}
+
+Testing resolver-sim.protocols.sew.phase-k-test
+{:ts "2026-06-17T15:19:35.024416682Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.024613418Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xRes0 requested-amount 1250
+Captured event evidence: slashing hash: sha256:ffffffefffffff8134ffffffba7a620069ffffffa1115e4416ffffff83776d2321ffffffa8ffffffe7fffffffd01ffffffe750ffffffbf252effffffa0ffffff847e1e07
+{:ts "2026-06-17T15:19:35.028018650Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.028188265Z", :level :debug, :message "handle-fraud-slashing", :context {:now 1000, :appeal-window 86400}}
+DEBUG: slash-resolver-stake called for 0xRes requested-amount 5000
+Captured event evidence: slashing hash: sha256:46ffffffc7773a6121ffffff8dffffff91ffffffceffffff9d2740ffffffe3685803ffffffdfffffffaeffffffee64ffffffe03379ffffffb136036d6effffff8bfffffff7ffffffdfffffffd8
+Captured event evidence: :slash/prorata-allocation hash: nil
+
+Testing resolver-sim.protocols.sew.phase-m-test
+{:ts "2026-06-17T15:19:35.032131686Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.032437821Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.033109536Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes2", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.033921328Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.034304832Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.035103158Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.035615468Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+DEBUG: slash-resolver-stake called for 0xRes0 requested-amount 2000
+Captured event evidence: slashing hash: sha256:ffffff852dffffffc018ffffff86ffffffc2ffffffe1ffffff900bffffff8e15ffffffa25a0f762f17ffffffb80444ffffff8cfffffffc08ffffff8a362cffffffadffffffb649ffffffb3ffffffbbffffffb6
+{:ts "2026-06-17T15:19:35.037231017Z", :level :debug, :message "Submitting resolution", :context {:caller "0xRes1", :workflow-id 0}}
+{:ts "2026-06-17T15:19:35.037890679Z", :level :debug, :message "Resolving appeal", :context {:appeal-upheld? true, :workflow-id 0, :slash-id "0-reversal-0"}}
+
+Testing resolver-sim.scenario.expectations-test
+
+Testing resolver-sim.scenario.equilibrium-test
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: result status: :inconclusive offending: []
+
+FAIL in (test-bounded-public-state-epsilon-spe-fail-deviation) (equilibrium_test.clj:659)
+:bounded-public-state-epsilon-spe fails when regret exceeds threshold
+expected: (= :fail (:status result))
+  actual: (not (= :fail :inconclusive))
+
+FAIL in (test-bounded-public-state-epsilon-spe-fail-deviation) (equilibrium_test.clj:660)
+:bounded-public-state-epsilon-spe fails when regret exceeds threshold
+expected: (seq (:offending result))
+  actual: (not (seq []))
+DEBUG: terminal-world trace count: 4
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 4
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+
+FAIL in (test-spe-counterexamples-on-fail) (equilibrium_test.clj:620)
+:spe-counterexamples non-empty on profitable deviation
+expected: (seq (:spe-counterexamples obs))
+  actual: (not (seq []))
+
+FAIL in (test-spe-counterexamples-on-fail) (equilibrium_test.clj:622)
+:spe-counterexamples non-empty on profitable deviation
+expected: (= :profitable-deviation (:failure/type ce))
+  actual: (not (= :profitable-deviation nil))
+
+FAIL in (test-spe-counterexamples-on-fail) (equilibrium_test.clj:623)
+:spe-counterexamples non-empty on profitable deviation
+expected: (string? (:node/id ce))
+  actual: (not (string? nil))
+DEBUG: terminal-world trace count: 4
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 4
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 2
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+DEBUG: terminal-world trace count: 1
+DEBUG: last entry has world?: true
+
+Testing resolver-sim.sim.multi-epoch-test
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 8
+   Trials per epoch: 80
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-9, dominance=Infinity×
+   Epoch 2: honest=150, malice=-122, dominance=Infinity×
+   Epoch 3: honest=150, malice=-84, dominance=Infinity×
+   Epoch 4: honest=150, malice=-19, dominance=Infinity×
+   Epoch 5: honest=150, malice=-75, dominance=Infinity×
+   Epoch 6: honest=150, malice=-66, dominance=Infinity×
+   Epoch 7: honest=150, malice=-19, dominance=Infinity×
+   Epoch 8: honest=150, malice=-159, dominance=Infinity×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 3 (4 slashed, 0 natural)
+   Honest cumulative: 96000
+   Malice cumulative: -35250
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -35250 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=Infinity ≥ 1.2 at final epoch 8
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ❌ participation-stable                     exit-rate=30.0% ≥ 20%: significant resolver attrition
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (4/6 claims pass (2 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=60750 suggests outflow imbalance (honest=96000 malice=-35250)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=96000≥malice=-35250 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=96000 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 2
+   Trials per epoch: 20
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-188, dominance=Infinity×
+   Epoch 2: honest=150, malice=113, dominance=1.3×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 0 (0 slashed, 0 natural)
+   Honest cumulative: 6000
+   Malice cumulative: -1500
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -1500 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=1.33 ≥ 1.2 at final epoch 2
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ✅ participation-stable                     exit-rate=0.0% < 20%: resolver pool is stable
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (5/6 claims pass (1 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=4500 suggests outflow imbalance (honest=6000 malice=-1500)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=6000≥malice=-1500 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=6000 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 5
+   Trials per epoch: 100
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-30, dominance=Infinity×
+   Epoch 2: honest=150, malice=45, dominance=3.3×
+   Epoch 3: honest=150, malice=-90, dominance=Infinity×
+   Epoch 4: honest=150, malice=-60, dominance=Infinity×
+   Epoch 5: honest=150, malice=8, dominance=20.0×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 2 (2 slashed, 0 natural)
+   Honest cumulative: 75000
+   Malice cumulative: -2250
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -2250 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=20.00 ≥ 1.2 at final epoch 5
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ❌ participation-stable                     exit-rate=20.0% ≥ 20%: significant resolver attrition
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (4/6 claims pass (2 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=72750 suggests outflow imbalance (honest=75000 malice=-2250)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=75000≥malice=-2250 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=75000 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 5
+   Trials per epoch: 100
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-225, dominance=Infinity×
+   Epoch 2: honest=150, malice=15, dominance=10.0×
+   Epoch 3: honest=150, malice=-60, dominance=Infinity×
+   Epoch 4: honest=150, malice=-218, dominance=Infinity×
+   Epoch 5: honest=150, malice=-158, dominance=Infinity×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 0 (0 slashed, 0 natural)
+   Honest cumulative: 75000
+   Malice cumulative: -64500
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -64500 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=Infinity ≥ 1.2 at final epoch 5
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ✅ participation-stable                     exit-rate=0.0% < 20%: resolver pool is stable
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (5/6 claims pass (1 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=10500 suggests outflow imbalance (honest=75000 malice=-64500)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=75000≥malice=-64500 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=75000 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 2
+   Trials per epoch: 2000
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-118, dominance=Infinity×
+   Epoch 2: honest=150, malice=-118, dominance=Infinity×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 1 (1 slashed, 0 natural)
+   Honest cumulative: 600000
+   Malice cumulative: -334500
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ⚠️ strategy-adaptation-compatibility        
+  ✅ malice-net-profit-negative               Malice cumulative profit = -334500 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=Infinity ≥ 1.2 at final epoch 2
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ✅ participation-stable                     exit-rate=10.0% < 20%: resolver pool is stable
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (4/6 claims pass (1 fail, 1 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=265500 suggests outflow imbalance (honest=600000 malice=-334500)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=600000≥malice=-334500 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=600000 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 5
+   Trials per epoch: 50
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-90, dominance=Infinity×
+   Epoch 2: honest=150, malice=75, dominance=2.0×
+   Epoch 3: honest=150, malice=-150, dominance=Infinity×
+   Epoch 4: honest=150, malice=-30, dominance=Infinity×
+   Epoch 5: honest=150, malice=-75, dominance=Infinity×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 2 (1 slashed, 1 natural)
+   Honest cumulative: 37500
+   Malice cumulative: -9300
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -9300 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=Infinity ≥ 1.2 at final epoch 5
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ❌ participation-stable                     exit-rate=20.0% ≥ 20%: significant resolver attrition
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (4/6 claims pass (2 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=28200 suggests outflow imbalance (honest=37500 malice=-9300)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=37500≥malice=-9300 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=37500 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+🔁 Running Phase J: Multi-Epoch Reputation Simulation
+   Epochs: 5
+   Trials per epoch: 50
+   Initial resolvers: 10
+   Strategy mix: {:honest 0.6, :lazy 0.1, :malicious 0.2, :collusive 0.1}
+
+   Epoch 1: honest=150, malice=-90, dominance=Infinity×
+   Epoch 2: honest=150, malice=75, dominance=2.0×
+   Epoch 3: honest=150, malice=-150, dominance=Infinity×
+   Epoch 4: honest=150, malice=-30, dominance=Infinity×
+   Epoch 5: honest=150, malice=-75, dominance=Infinity×
+
+✓ Phase J complete. Final state:
+   Resolvers exited: 2 (1 slashed, 1 natural)
+   Honest cumulative: 37500
+   Malice cumulative: -9300
+   Win rate - honest: 100.0%
+   Win rate - malice: 0.0%
+
+
+── Stochastic Equilibrium Claims ─────────────────────────────────────────
+  ✅ strategy-adaptation-compatibility        no strategy-space mismatch detected for adaptation targets
+  ✅ malice-net-profit-negative               Malice cumulative profit = -9300 < 0: slashing deters net profit
+  ✅ honest-dominates                         dominance-ratio=Infinity ≥ 1.2 at final epoch 5
+  ✅ slashing-deters                          malice win-rate=0.0% < honest=100.0%: slashing reduces win frequency
+  ❌ participation-stable                     exit-rate=20.0% ≥ 20%: significant resolver attrition
+  ❌ honest-survival-rate                     honest survival=100.0% ≤ malice survival=100.0%
+
+  Overall: fail  (4/6 claims pass (2 fail, 0 inconclusive))
+
+── Mechanism-Property Proxies (multi-epoch population) ────────────────────
+  ❌ budget-balance                           net value sum=28200 suggests outflow imbalance (honest=37500 malice=-9300)
+  ✅ collusion-resistance                     malice pool ×1.00 of initial (≤1.1): no coalition growth detected
+  ✅ incentive-compatibility                  honest profit=37500≥malice=-9300 and win-rate=100.0%≥0.0%
+  ✅ individual-rationality                   honest cumulative profit=37500 > 0: participation individually rational
+
+  Mechanism proxies: fail
+───────────────────────────────────────────────────────────────────────────
+
+Testing resolver-sim.sim.defection-test
+
+Testing resolver-sim.sim.strategy-adaptation-test
+
+Testing resolver-sim.sim.waterfall-test
+
+Testing resolver-sim.io.scenario-fixture-parity-test
+
+Testing resolver-sim.contract-model.replay-batch-test
+{:ts "2026-06-17T15:19:35.942726519Z", :level :info, :message "scenario/end", :context {:id "batch-test", :outcome :pass, :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+{:ts "2026-06-17T15:19:35.942977048Z", :level :info, :message "scenario/start", :context {:id "batch-test", :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+{:ts "2026-06-17T15:19:35.948151293Z", :level :info, :message "scenario/end", :context {:id "batch-test", :outcome :pass, :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+{:ts "2026-06-17T15:19:35.948288766Z", :level :info, :message "scenario/start", :context {:id "batch-test", :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+{:ts "2026-06-17T15:19:35.987517655Z", :level :info, :message "scenario/end", :context {:id "batch-auto-cancel", :outcome :pass, :ctx/scenario-id "batch-auto-cancel", :ctx/run-id "batch-auto-cancel-run"}}
+{:ts "2026-06-17T15:19:35.987744018Z", :level :info, :message "scenario/start", :context {:id "batch-auto-cancel", :ctx/scenario-id "batch-auto-cancel", :ctx/run-id "batch-auto-cancel-run"}}
+{:ts "2026-06-17T15:19:35.993512740Z", :level :info, :message "scenario/end", :context {:id "batch-test-simple", :outcome :pass, :ctx/scenario-id "batch-test-simple", :ctx/run-id "batch-test-simple-run"}}
+{:ts "2026-06-17T15:19:35.993730897Z", :level :info, :message "scenario/start", :context {:id "batch-test-simple", :ctx/scenario-id "batch-test-simple", :ctx/run-id "batch-test-simple-run"}}
+{:ts "2026-06-17T15:19:36.002290055Z", :level :info, :message "scenario/end", :context {:id "batch-test", :outcome :pass, :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+{:ts "2026-06-17T15:19:36.002494015Z", :level :info, :message "scenario/start", :context {:id "batch-test", :ctx/scenario-id "batch-test", :ctx/run-id "batch-test-run"}}
+
+Testing resolver-sim.contract-model.replay-batch-sew-test
+{:ts "2026-06-17T15:19:36.035945035Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.040387881Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR1", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.045208750Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.051669656Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR1", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.058249459Z", :level :info, :message "scenario/end", :context {:id "batch-sew-test", :outcome :pass, :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.058521719Z", :level :info, :message "scenario/start", :context {:id "batch-sew-test", :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.098983686Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.104676353Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.109641057Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.115779526Z", :level :info, :message "scenario/start", :context {:id "batch-sew-test", :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.119198985Z", :level :debug, :message "set-resolver-capacity", :context {:resolver "0xR0", :max-concurrent 2, :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run", :ctx/event-index 0, :ctx/event-type "set_resolver_capacity"}}
+{:ts "2026-06-17T15:19:36.125621787Z", :level :debug, :message "set-resolver-capacity", :context {:resolver "0xR0", :max-concurrent 2, :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run", :ctx/event-index 0, :ctx/event-type "set_resolver_capacity"}}
+{:ts "2026-06-17T15:19:36.165186268Z", :level :info, :message "scenario/start", :context {:id "batch-sew-test", :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.212068323Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.215723002Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR1", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.219247842Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR2", :workflow-id 2}}
+{:ts "2026-06-17T15:19:36.222452621Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.225302892Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR1", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.229574581Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR2", :workflow-id 2}}
+{:ts "2026-06-17T15:19:36.233846680Z", :level :info, :message "scenario/end", :context {:id "batch-sew-test", :outcome :pass, :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.234059016Z", :level :info, :message "scenario/start", :context {:id "batch-sew-test", :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.250227236Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.253856095Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.256742585Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.260507535Z", :level :info, :message "scenario/end", :context {:id "batch-sew-test", :outcome :pass, :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+{:ts "2026-06-17T15:19:36.260710062Z", :level :info, :message "scenario/start", :context {:id "batch-sew-test", :ctx/scenario-id "batch-sew-test", :ctx/run-id "batch-sew-test-run"}}
+
+Testing resolver-sim.contract-model.replay-batch-appeal-test
+{:ts "2026-06-17T15:19:36.272536919Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.272678610Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.281313253Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.281501703Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.287186945Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.287328907Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.289612654Z", :level :debug, :message "set-resolver-capacity", :context {:resolver "0xR0", :max-concurrent 5, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run", :ctx/event-index 0, :ctx/event-type "set_resolver_capacity"}}
+{:ts "2026-06-17T15:19:36.299699704Z", :level :debug, :message "set-resolver-capacity", :context {:resolver "0xR0", :max-concurrent 5, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run", :ctx/event-index 0, :ctx/event-type "set_resolver_capacity"}}
+{:ts "2026-06-17T15:19:36.302166681Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.302337388Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.327177090Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.329805577Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 1}}
+{:ts "2026-06-17T15:19:36.331987549Z", :level :debug, :message "Submitting resolution", :context {:caller "0xR0", :workflow-id 0}}
+{:ts "2026-06-17T15:19:36.334585026Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.344261852Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.344470441Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.352266229Z", :level :info, :message "scenario/end", :context {:id "batch-resolver-test", :outcome :pass, :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+{:ts "2026-06-17T15:19:36.352423289Z", :level :info, :message "scenario/start", :context {:id "batch-resolver-test", :ctx/scenario-id "batch-resolver-test", :ctx/run-id "batch-resolver-test-run"}}
+
+Testing resolver-sim.contract-model.replay-batch-slash-domain-test
+{:ts "2026-06-17T15:19:36.357874173Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.358221247Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.362719419Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.362882982Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.367314947Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.367480634Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.372875130Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.373004818Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.378590460Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.378712012Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.382828895Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.382963172Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.387521259Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.387627432Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.392810403Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.392941835Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.396633073Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.396730820Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.400692547Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.400820912Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.406076042Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.406206311Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.410934052Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.411065373Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.415545931Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.415638679Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.419670820Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.419763116Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.427035984Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.427172305Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.432511946Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.432633659Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.437978811Z", :level :info, :message "scenario/end", :context {:id "slash-domain-test", :outcome :pass, :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+{:ts "2026-06-17T15:19:36.438123998Z", :level :info, :message "scenario/start", :context {:id "slash-domain-test", :ctx/scenario-id "slash-domain-test", :ctx/run-id "slash-domain-test-run"}}
+
+Ran 258 tests containing 1302 assertions.
+7 failures, 0 errors.
+Error while executing task: test:unit

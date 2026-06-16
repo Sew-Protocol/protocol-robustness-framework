@@ -922,10 +922,10 @@
                                        :slashable-stake current-stake
                                        :available-slashable current-stake}]})]
               (let [evidence (slashing-ev/build-prorata-slash-evidence
-                               {:world world
+                               {:world world-slashed
                                 :slash-id slash-id
                                 :workflow-id workflow-id
-                                :epoch (get-in world [:resolver-epoch-slashed resolver :epoch-start] 0)
+                                :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
                                 :trigger :fraud-slash
                                 :allocation-input {:slash-obligation amount :resolver resolver}
                                 :allocation-result allocation
