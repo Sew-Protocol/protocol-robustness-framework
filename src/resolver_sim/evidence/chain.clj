@@ -174,6 +174,34 @@
        :bytes (.length f)
         :mtime-utc (str (java.time.Instant/ofEpochMilli (.lastModified f)))})))
 
+(defn index-artifact-entry
+  "Produce a test-artifacts.json compatible artifact entry for an index file.
+   Returns nil if the file doesn't exist.
+   Use for index files like evidence-mechanisms.json, evidence-coverage-report.json."
+  [artifact-id filename schema-version importance]
+  (let [path (str (evcfg/artifact-dir) "/" filename)
+        f (io/file path)]
+    (when (.exists f)
+      {:id (name artifact-id)
+       :kind "evidence-index"
+       :path path
+       :schema-version schema-version
+       :producer "targeted-evidence.v1"
+       :importance importance
+       :sha256 (compute-file-sha256 path)
+       :bytes (.length f)
+       :mtime-utc (str (java.time.Instant/ofEpochMilli (.lastModified f)))})))
+
+(defn register-additional-artifact!
+  "Register an additional artifact entry in the evidence registry.
+   Useful for index files produced after the main registry is built.
+   The entry is persisted alongside the registry entries.
+   Returns the registry atom's current state."
+  [entry]
+  (when entry
+    (swap! evidence-registry-atom update :artifacts conj entry))
+  nil)
+
 (defn finalize-and-write!
   "Build the evidence registry from accumulated records, write it to disk,
    and return {:registry ... :artifact-entry ... :path ...}.

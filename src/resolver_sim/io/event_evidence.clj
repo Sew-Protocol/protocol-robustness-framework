@@ -20,6 +20,37 @@
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
+(defn qualified-key
+  "Serialize a Clojure keyword to a JSON key that preserves its namespace.
+   :evidence/type → \"evidence/type\"
+   Uses the full str representation (namespaced keyword → \"ns/name\") to
+   ensure round-trip fidelity with (json/read-str ... :key-fn keyword)."
+  [k]
+  (cond
+    (keyword? k) (if-let [ns (namespace k)] (str ns "/" (name k)) (name k))
+    (string? k) k
+    :else (str k)))
+
+(defn- read-evidence-json
+  "Read an evidence artifact JSON file and return the map with keyword keys.
+   Handles both qualified JSON keys (evidence/type) and legacy unqualified keys
+   (type) by normalizing unqualified keys to their namespaced equivalents
+   when the expected namespaced lookup is nil."
+  [f]
+  (let [data (json/read-str (slurp f) :key-fn keyword)]
+    ;; Normalize: if unqualified keys were stored (legacy format), promote
+    ;; :type → :evidence/type, :chain-seq → :evidence/chain-seq, etc.
+    (reduce-kv (fn [m k v]
+                 (if (and (keyword? k) (not (namespace k)))
+                   ;; Try to find a matching namespaced key by checking
+                   ;; common known prefixes for the unqualified name.
+                   (let [qualified (keyword "evidence" (name k))]
+                     (if (get data qualified)
+                       m ;; already present, skip legacy fallback
+                       (assoc m qualified v)))
+                   m))
+               data data)))
+
 (defn hash-world
   "Content hash of a world state for forensic anchoring.
    Uses pr-str directly (not canonicalize) because world state maps may have
@@ -262,7 +293,7 @@
               filename (evidence-filename e)
               f        (io/file out-dir filename)]
           (.mkdirs (io/file out-dir))
-          (spit f (json/write-str e {:indent true}))
+          (spit f (json/write-str e{:key-fn qualified-key :indent true}))
           (verify-write! e f)
           (record-serialize-latency! serialize-start)
           (record-capture-latency! capture-start)
@@ -284,7 +315,7 @@
              filename (evidence-filename evidence)
              f        (io/file out-dir filename)]
           (.mkdirs (io/file out-dir))
-          (spit f (json/write-str evidence {:indent true}))
+          (spit f (json/write-str evidence{:key-fn qualified-key :indent true}))
           (verify-write! evidence f)
           (record-serialize-latency! serialize-start)
           (record-capture-latency! capture-start)
@@ -306,23 +337,28 @@
    (build-evidence-links-index (str (evcfg/artifact-dir) "/event-evidence")))
   ([dir]
    (let [files (filter #(.isFile %) (file-seq (io/file dir)))
-         entries (keep (fn [f]
-                         (try
-                           (let [data (json/read-str (slurp f) :key-fn keyword)
-                                 gid (:evidence/group-id data)]
-                             (when gid
-                               {:group-id gid
-                                :layer (:evidence/layer data)
-                                :path (.getPath f)
-                                :hash (or (:evidence-hash data)
-                                          (:evidence/hash data))
-                                :event-type (:evidence/type data)
-                                :artifact-kind (:artifact-kind data)}))
-                           (catch Exception _ nil)))
-                       files)]
+          entries (keep (fn [f]
+                          (try
+                            (let [data (read-evidence-json f)
+                                  gid (:evidence/group-id data)]
+                              (when gid
+                                {:group-id gid
+                                 :layer (:evidence/layer data)
+                                 :path (.getPath f)
+                                 :hash (or (:evidence-hash data)
+                                           (:evidence/hash data))
+                                 :event-type (:evidence/type data)
+                                 :artifact-kind (:artifact-kind data)}))
+                            (catch Exception _ nil)))
+                      files)]
      (reduce (fn [acc entry]
-               (update-in acc [(:group-id entry) :artifacts] conj entry))
+               (update-in acc [(:group-id entry) :artifacts]
+                          (fnil conj [] entry)))
              {} entries))))
+
+(comment
+  ;; (build-evidence-links-index "results/test-artifacts/event-evidence")
+  )
 
 (defn write-evidence-links-index!
   "Build and persist the evidence links index to evidence-links.json.
@@ -332,7 +368,300 @@
         out-dir (or dir (str (evcfg/artifact-dir)))
         f (io/file out-dir "evidence-links.json")]
     (.mkdirs (io/file out-dir))
-    (spit f (json/write-str idx {:indent true}))
+    (spit f (json/write-str idx{:key-fn qualified-key :indent true}))
     (println "Wrote evidence links index:" (.getPath f))
+    (.getPath f)))
+
+;; ── Evidence Type → Mechanism Mapping ─────────────────────────────────────────
+;;
+;; Maps each :evidence/type keyword to a higher-level mechanism group.
+;; Used by find-evidence, mechanism index, and coverage report.
+;; Update this map when new evidence types are added.
+
+(def evidence-type->mechanism
+  {:stake-registered :staking
+   :stake-withdrawn :staking
+   :escrow-created :escrow-lifecycle
+   :escrow-released :escrow-lifecycle
+   :escrow-refunded :escrow-lifecycle
+   :dispute-raised :dispute-resolution
+   :dispute-escalated :dispute-resolution
+   :resolution-challenged :dispute-resolution
+   :fraud-slash-proposed :slashing
+   :fraud-slash-appealed :slashing
+   :slash-appeal/reversed :slashing
+   :slash-appeal/rejected :slashing
+   :bond-posted :bonding
+   :bond-slashed :bonding
+   :bond-returned :bonding
+   :yield-accrual :yield
+   :settlement-fill :settlement
+   :resolver-unfrozen :system
+   :resolver-unavailability-changed :system})
+
+(defn mechanism-for-type
+  "Look up the mechanism group for an evidence type.
+   Accepts keyword or string. Falls back to :uncategorized."
+  [etype]
+  (let [k (if (keyword? etype) etype (keyword etype))]
+    (or (evidence-type->mechanism k) :uncategorized)))
+
+;; ── Query API ─────────────────────────────────────────────────────────────────
+;;
+;; Researcher-facing discovery API for targeted evidence artifacts.
+;; All filters are optional and AND-combined.
+;;
+;; Usage:
+;;   (find-evidence :by-type :escrow-created)
+;;   (find-evidence :by-workflow 42 :by-chain-seq {:from 1 :to 10})
+;;   (find-evidence :by-group-id "S19-run:0:create_escrow" :include-body? true)
+
+(defn- artifact-summary
+  "Produce a lightweight summary of an evidence artifact.
+   Does NOT include the full body — researcher must opt in via :include-body?."
+  [data path]
+  (let [etype (:evidence/type data)]
+    (merge
+      {:id (some-> (:evidence/chain-self-hash data)
+                   (subs 0 16)
+                   (str "ev-"))
+       :evidence/type etype
+       :evidence/mechanism (mechanism-for-type etype)
+       :evidence/chain-seq (:evidence/chain-seq data)
+       :evidence/group-id (:evidence/group-id data)
+       :evidence/layer (:evidence/layer data)
+       :evidence/hash (or (:evidence-hash data) (:evidence/hash data))
+       :path path}
+      ;; Include subject keys when present
+      (when-let [sid (:subject/id data)] {:subject/id sid})
+      (when-let [stype (:subject/type data)] {:subject/type stype})
+      ;; Include any workflow-id from domain payload
+      (some (fn [k] (when-let [v (get data k)] {k v}))
+            [:escrow/workflow-id :finalize/workflow-id :bond/workflow-id
+             :dispute/workflow-id :appeal/slash-id :appeal-resolution/slash-id
+             :proposal/workflow-id :unfreeze/resolver
+             :challenge/workflow-id :escalation/workflow-id]))))
+
+(defn- matches-filter?
+  "Check a single evidence artifact map against one filter."
+  [data filter-type filter-val]
+  (case filter-type
+    :by-type
+    (= (name filter-val) (:evidence/type data))
+
+    :by-mechanism
+    (= filter-val (mechanism-for-type (keyword (:evidence/type data))))
+
+    :by-workflow
+    (let [w (and (number? filter-val) filter-val)]
+      (some (fn [k] (= w (get data k)))
+            [:escrow/workflow-id :finalize/workflow-id :bond/workflow-id
+             :dispute/workflow-id :appeal/slash-id :appeal-resolution/slash-id
+             :proposal/workflow-id]))
+
+    :by-group-id
+    (= filter-val (:evidence/group-id data))
+
+    :by-chain-seq
+    (let [s (:evidence/chain-seq data)]
+      (and (number? s)
+           (or (nil? (:from filter-val)) (>= s (:from filter-val)))
+           (or (nil? (:to filter-val)) (<= s (:to filter-val)))))
+
+    :by-run-id
+    (= filter-val (:run/id data))
+
+    :by-scenario-id
+    (= filter-val (:scenario/id data))
+
+    true))
+
+(defn find-evidence
+  "Search targeted evidence artifacts matching all given filters.
+   Filters are AND-combined. Returns a vector of lightweight summaries.
+   
+   Optional keyword arguments:
+   :by-type        — evidence type keyword or string
+   :by-mechanism   — mechanism keyword (e.g. :slashing, :escrow-lifecycle)
+   :by-workflow    — workflow-id integer
+   :by-group-id    — evidence group-id string
+   :by-chain-seq   — {:from N :to M} map (inclusive)
+   :by-run-id      — run-id string
+   :by-scenario-id — scenario-id string
+   :include-body?  — boolean, include full parsed artifact body
+   :artifact-dir   — override artifact directory path
+   
+   Examples:
+     (find-evidence :by-type :escrow-created)
+     (find-evidence :by-workflow 42)
+     (find-evidence :by-chain-seq {:from 1 :to 10} :include-body? true)"
+  [& {:keys [by-type by-mechanism by-workflow by-group-id by-chain-seq
+             by-run-id by-scenario-id include-body? artifact-dir]
+      :or {artifact-dir (str (evcfg/artifact-dir) "/event-evidence")
+           include-body? false}}]
+  (let [filters (concat
+                  (when by-type [:by-type by-type])
+                  (when by-mechanism [:by-mechanism by-mechanism])
+                  (when by-workflow [:by-workflow by-workflow])
+                  (when by-group-id [:by-group-id by-group-id])
+                  (when by-chain-seq [:by-chain-seq by-chain-seq])
+                  (when by-run-id [:by-run-id by-run-id])
+                  (when by-scenario-id [:by-scenario-id by-scenario-id]))]
+    (if-let [dir (io/file artifact-dir)]
+      (if (.isDirectory dir)
+        (let [files (filter #(.isFile %) (file-seq dir))]
+          (keep (fn [f]
+                  (try
+                    (let [data (read-evidence-json f)
+                          matches (every? (fn [[ft fv]] (matches-filter? data ft fv))
+                                          (partition 2 filters))]
+                      (when matches
+                        (if include-body?
+                          (assoc data :path (.getPath f))
+                          (artifact-summary data (.getPath f)))))
+                    (catch Exception _ nil)))
+                files))
+        [])
+      [])))
+
+;; ── Mechanism Index ───────────────────────────────────────────────────────────
+;;
+;; Groups evidence artifacts by mechanism for quick researcher discovery.
+;; Written post-run alongside evidence-links.json.
+
+(defn build-mechanism-index
+  "Group targeted evidence artifacts by mechanism.
+   Each group entry includes count and artifact summaries.
+   Mechanism is derived from :evidence/mechanism field if present,
+   falling back to evidence-type->mechanism mapping."
+  [& [dir]]
+  (let [files (filter #(.isFile %) (file-seq (io/file (or dir (str (evcfg/artifact-dir) "/event-evidence")))))
+        entries (keep (fn [f]
+                        (try
+                          (let [data (read-evidence-json f)
+                                etype (:evidence/type data)
+                                mech (or (:evidence/mechanism data)
+                                         (mechanism-for-type (keyword etype)))]
+                            (when mech
+                              {:mechanism mech
+                               :summary (artifact-summary data (.getPath f))}))
+                          (catch Exception _ nil)))
+                      files)]
+    (reduce (fn [acc entry]
+              (let [mech (:mechanism entry)
+                    sum (:summary entry)]
+                (-> acc
+                    (update-in [mech]
+                               (fnil #(update % :artifacts conj sum)
+                                     {:mechanism mech
+                                      :count 0
+                                      :artifacts []}))
+                    (update-in [mech :count] (fnil inc 0)))))
+            {} entries)))
+
+(defn write-mechanism-index!
+  "Build and persist the mechanism index to evidence-mechanisms.json.
+   Also registers the index in the chain registry for test-artifacts.json.
+   Returns the path to the written file."
+  [& [dir]]
+  (let [idx (build-mechanism-index dir)
+        out-dir (or dir (str (evcfg/artifact-dir)))
+        f (io/file out-dir "evidence-mechanisms.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str (sort-by key idx){:key-fn qualified-key :indent true}))
+    (println "Wrote mechanism index:" (.getPath f))
+    (chain/register-additional-artifact!
+      (chain/index-artifact-entry :evidence-mechanisms "evidence-mechanisms.json"
+                                  "evidence-index.v1" "DIAGNOSTIC"))
+    (.getPath f)))
+
+;; ── Coverage Report ───────────────────────────────────────────────────────────
+;;
+;; Post-run report that compares generic trace events, targeted evidence,
+;; and evidence links to identify coverage gaps.
+
+(defn- read-evidence-links-index
+  "Read evidence-links.json from the artifact directory."
+  [dir]
+  (let [f (io/file dir "evidence-links.json")]
+    (when (.exists f)
+      (try (json/read-str (slurp f) :key-fn keyword)
+           (catch Exception _ nil)))))
+
+(defn- generic-trace-event-count
+  "Approximate count of generic trace events from evidence-registry.json.
+   Uses :artifact-kind :transition entries in the registry."
+  [dir]
+  (let [f (io/file dir "evidence-registry.json")]
+    (if (.exists f)
+      (try
+        (let [reg (json/read-str (slurp f) :key-fn keyword)]
+          (count (:artifacts reg)))
+        (catch Exception _ 0))
+      0)))
+
+(defn build-evidence-coverage-report
+  "Analyze evidence artifacts in a run directory and produce a coverage report.
+   
+   The report includes:
+   - Total events with generic trace evidence
+   - Events with targeted protocol evidence
+   - Mechanism counts (number of artifacts per mechanism)
+   - Missing group-ids (events with generic trace but no targeted evidence)
+   - Warnings about potential gaps
+   
+   Returns a structured map suitable for JSON serialization."
+  [& [dir]]
+  (let [artifact-dir (or dir (str (evcfg/artifact-dir)))
+        ev-dir (str artifact-dir "/event-evidence")
+        generic-count (generic-trace-event-count artifact-dir)
+        links (read-evidence-links-index artifact-dir)
+        targeted-events (when links (count links))
+        group-ids (when links (keys links))
+        ;; Count by mechanism using the mechanism index
+        mech-idx (build-mechanism-index ev-dir)
+        mechanism-counts (into {} (map (fn [[k v]] [k (:count v)]) mech-idx))
+        ;; Build targeted type counts
+        type-counts (let [files (filter #(.isFile %) (file-seq (io/file ev-dir)))]
+                      (reduce (fn [acc f]
+                                (try
+                                  (let [data (read-evidence-json f)
+                                        etype (:evidence/type data)]
+                                    (if etype
+                                      (update-in acc [(name (keyword etype))] (fnil inc 0))
+                                      acc))
+                                  (catch Exception _ acc)))
+                              {} files))
+        total-targeted (reduce + 0 (vals type-counts))]
+    {:run-directory artifact-dir
+     :generic-trace-event-count generic-count
+     :targeted-evidence-count total-targeted
+     :targeted-group-count (or targeted-events 0)
+     :mechanism-counts mechanism-counts
+     :type-counts type-counts
+     :links-index-present? (some? links)
+     :warnings
+     (cond-> []
+       (zero? generic-count)
+       (conj "No generic trace artifacts found — evidence-registry.json may be missing")
+       (zero? total-targeted)
+       (conj "No targeted evidence artifacts found — event-evidence directory may be empty")
+       (and links (zero? targeted-events))
+        (conj "Evidence links index exists but contains no group-ids"))}))
+
+(defn write-evidence-coverage-report!
+  "Build and persist the evidence coverage report to evidence-coverage-report.json.
+   Also registers the report in the chain registry for test-artifacts.json.
+   Returns the path to the written file."
+  [& [dir]]
+  (let [report (build-evidence-coverage-report dir)
+        out-dir (or dir (str (evcfg/artifact-dir)))
+        f (io/file out-dir "evidence-coverage-report.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str report{:key-fn qualified-key :indent true}))
+    (println "Wrote evidence coverage report:" (.getPath f))
+    (chain/register-additional-artifact!
+      (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
+                                  "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
 
