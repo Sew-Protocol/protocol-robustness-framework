@@ -1,6 +1,33 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+- **`secure-checkpoint-update` extracted to `checkpoints.clj`:** Moved checkpoint creation logic (overwrite detection, append-only checkpoint-log, collision diagnostics) from private function in `replay.clj` to public function in `checkpoints.clj`. Added unit tests (`checkpoints_test.clj`, 5 tests, 20 assertions).
+- **`default-metadata` function to `capture.clj`:** Added missing `default-metadata` function for standardized evidence schema metadata generation (scenario-id, run-id, event-seq, timestamp, attribution context). Was introduced in agent-b-1 but lost during integration merge.
+- **Checkpoint-log threading in sequential replay:** `checkpoint-log` and `diagnostics` are now accumulated per-event and threaded through `recur`, populating the result map with full checkpoint history (previously discarded).
+
+### Changed
+- **`replay.clj` modular decomposition:** Split 751-line monolithic file into 8 focused namespaces under `contract_model/replay/`: `execution`, `temporal`, `metrics`, `analysis`, `validation`, `flags`, `checkpoints`, and `yield`. `replay.clj` now serves as a 271-line forwarding layer with re-exports.
+- **`execution.clj` wired as active kernel:** Previously dead code — `run-simulation-loop` and `process-step` existed as duplicates in both `replay.clj` and `execution.clj`, with `replay.clj`'s version being the active one. Now `replay-with-protocol` and `resume-from-snapshot` delegate to `execution/run-simulation-loop`. Removed ~2100 lines of dead code from `replay.clj`.
+- **`process-yield-step` delegation:** Removed duplicated dispatch/invariant/trace-entry logic from `yield.clj` (~50 lines). `run-yield-loop` now calls `execution/process-step` directly.
+- **`trace-entry->replay-event` relocated:** Body moved to `execution.clj`; re-exported from `replay.clj` via delegation.
+- **`flag-lookup` priority / falsy-value handling:** Rewrote `flag-lookup` in `flags.clj` to use `contains?`-based lookups instead of `or` chaining. Previously, flags set to `false` were indistinguishable from missing entries, causing `:strict-validation? false` from `minimal-replay-flags` to be silently overridden by `default-replay-flags`'s `true`. Priority order: explicit `replay-opts` direct keys > `:flags` sub-map > scenario options > minimal defaults.
+- **Theory validation gated behind `strict?`:** `:theory-missing-claim-id` and `:theory-missing-assumptions` checks in `validation.clj` now respect `strict-validation?`, allowing minimal-mode scenarios with incomplete theories to run.
+
+### Fixed
+- **Batch-path accumulator corruption:** Calls to `secure-checkpoint-update` in the batch reduce path passed individual map values (e.g., `:states` sub-map) instead of the full accumulator, corrupting the `:states` map with unrelated `:checkpoint-log` and `:diagnostics` keys. Changed to simple `assoc` for states/world-checkpoints in batch path.
+- **`IllegalArgumentException: Don't know how to create ISeq from: java.lang.Long` (11 test failures):** `cap/default-metadata` was placed inside a `->` threading pipeline that passed the evidence-base result as `scenario-id`, shifting all arguments and producing unbalanced `& rest` pairs. Fixed by extracting `meta-fields` to a separate `let` binding and merging into `cap/cap-fields`.
+- **`registry.clj` missing `cap` require:** Integration merge dropped `[resolver-sim.evidence.capture :as cap]` from registry's ns form, causing "No such namespace: cap" compilation error when the modern evidence pipeline was applied.
+- **`cap/default-metadata` missing from integration's `capture.clj`:** Function was introduced in agent-b-1 but absent from integration workspace's evidence capture namespace, causing compilation failure in `registry.clj` and `resolution.clj`.
+- **`simple-replay-opts-override` test assertion:** Checked `(contains? result :theory)` but theory evaluation produces `:status`, `:falsified?`, `:diagnostics` keys. Changed to `(= :not-falsified (:status result))`.
+- **Unused ns requires in `replay.clj`:** Removed 9 unused imports (`clojure.stacktrace`, `clojure.string`, `resolver-sim.evidence.capture`, `resolver-sim.definitions.registry`, `resolver-sim.scenario.schema-profile`, `resolver-sim.sim.dispatcher`, `resolver-sim.time.model`, `resolver-sim.time.context`, `resolver-sim.logging`).
+
+### Integration Merge Resolutions
+- **`resolution.clj` (slash evidence):** Resolved 2-sided conflict between agent-a (legacy `slashing-ev/build-prorata-slash-evidence`) and agent-b-1 (modern `cap/evidence-base` + `cap/cap-fields` pipeline). Kept agent-b-1's version with the `default-metadata` fix.
+- **`event_evidence.clj` (evidence-filename):** Resolved 2-sided conflict — merged agent-a's sanitization note with agent-b-1's collision-resistant format description. Merged agent-a's broader character sanitization (`#"[^a-zA-Z0-9]"`) with agent-b-1's sha256 short-hash structure.
+- **`registry.clj` (slash-resolver-stake):** Resolved 2-sided conflict. Updated to modern evidence pipeline, removed `double` wrapping in `to-canonical`, added missing `cap` require.
+
 - **Monadic Execution Path:** Enforcement of monadic execution path in simulation (`:attributed?` defaults to true), providing structural context propagation.
 - **Evidence Telemetry:** Integrated granular latency metrics for evidence capture, hashing, and serialization to monitor system performance overhead.
 - **Orphaned Evidence Detection:** Added post-scenario utility to reconcile evidence artifacts on disk with the artifact registry, preventing silent persistence failures.
