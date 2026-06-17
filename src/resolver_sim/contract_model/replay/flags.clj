@@ -55,14 +55,23 @@
          :world-checkpoint-policy :retain-all))
 
 (defn- flag-lookup
+  "Look up a replay flag `k` from the most specific source.
+   Uses `contains?` so that legitimately false values (e.g. :strict-validation? false)
+   are not mistaken for missing entries."
   [scenario replay-opts k default]
-  (or (get-in replay-opts [:flags k])
-      (get-in replay-opts [k])
-      (get-in scenario [:options :flags k])
-      (when (:minimal (or (get-in replay-opts [:minimal])
-                          (get-in scenario [:options :minimal])))
-        (get minimal-replay-flags k))
-      default))
+  (let [from-replay-flags (some-> replay-opts :flags (find k) val)
+        from-replay-opts  (some-> replay-opts (find k) val)
+        from-scenario     (some-> scenario :options :flags (find k) val)
+        from-minimal      (let [minimal? (or (get-in replay-opts [:minimal])
+                                             (get-in scenario [:options :minimal]))]
+                            (when minimal?
+                              (get minimal-replay-flags k)))]
+    (cond
+      (contains? replay-opts k)          from-replay-opts
+      (contains? (:flags replay-opts) k) from-replay-flags
+      (contains? (get-in scenario [:options :flags]) k) from-scenario
+      (some? from-minimal)               from-minimal
+      :else                              default)))
 
 (defn resolve-replay-flags
   "Merge explicit `replay-opts`, scenario `:options`, and defaults.

@@ -90,11 +90,13 @@
       {:ok false :error :adversarial-requires-analysis
        :detail "purpose :adversarial-robustness requires :theory or non-trivial :expectations"}
 
-      (and (:theory scenario) (not (get-in scenario [:theory :claim-id])))
+      (and strict?
+           (:theory scenario) (not (get-in scenario [:theory :claim-id])))
       {:ok false :error :theory-missing-claim-id
        :detail ":theory must include a :claim-id"}
 
-      (and (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
+      (and strict?
+           (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
       {:ok false :error :theory-missing-assumptions
        :detail ":theory must include an :assumptions vector (may be empty)"}
 
