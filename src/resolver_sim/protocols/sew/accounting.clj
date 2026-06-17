@@ -201,12 +201,29 @@
    inflow in the conservation-of-funds and held-delta-accounted invariants."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
-        {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)]
-    (-> world
-        (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
-        (update-in [:bond-fees token] (fnil + 0) fee)
-        (update-in [:total-bonds-posted token] (fnil + 0) amount)
-        (add-held token net))))
+        {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)
+        world' (-> world
+                   (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
+                   (update-in [:bond-fees token] (fnil + 0) fee)
+                   (update-in [:total-bonds-posted token] (fnil + 0) amount)
+                   (add-held token net))]
+    (attr/with-attribution {:subject/type :bond
+                            :subject/id (str workflow-id "-" appellant)
+                            :action/type :bond/post
+                            :evidence/reason :bond-posted}
+      (evidence/capture-event-evidence!
+        :bond-posted
+        {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                       :total-held (get-in world [:total-held token])}}
+        {:bond/after  {:bond-balance (get-in world' [:bond-balances workflow-id appellant] 0)
+                       :total-held (get-in world' [:total-held token])}}
+        {:bond/workflow-id workflow-id
+         :bond/appellant appellant
+         :bond/amount amount
+         :bond/fee fee
+         :bond/net net
+         :bond/token token}))
+    world'))
 
 (defn distribute-slashed-funds
   "Internal: distribute slashed funds according to configurable split.
@@ -260,6 +277,20 @@
                        (assoc-in [:bond-balances workflow-id appellant] 0)
                        (update-in [:bond-slashed workflow-id] (fnil + 0) amount)
                        (distribute-slashed-funds amount))]
+        (attr/with-attribution {:subject/type :bond
+                                :subject/id (str workflow-id "-" appellant)
+                                :action/type :bond/slash
+                                :evidence/reason :bond-slashed}
+          (evidence/capture-event-evidence!
+            :bond-slashed
+            {:bond/before {:bond-balance amount
+                           :bond-status :active}}
+            {:bond/after  {:bond-balance 0
+                           :bond-status :slashed}}
+            {:bond/workflow-id workflow-id
+             :bond/appellant appellant
+             :bond/amount amount
+             :bond/token token}))
         (assoc (t/ok world') :slashed amount)))))
 
 (defn return-bond
@@ -277,4 +308,18 @@
                        (sub-held token amount)
                        (assoc-in [:bond-balances workflow-id appellant] 0)
                        (record-claimable workflow-id appellant amount))]
+        (attr/with-attribution {:subject/type :bond
+                                :subject/id (str workflow-id "-" appellant)
+                                :action/type :bond/return
+                                :evidence/reason :bond-returned}
+          (evidence/capture-event-evidence!
+            :bond-returned
+            {:bond/before {:bond-balance amount
+                           :bond-status :active}}
+            {:bond/after  {:bond-balance 0
+                           :bond-status :returned}}
+            {:bond/workflow-id workflow-id
+             :bond/appellant appellant
+             :bond/amount amount
+             :bond/token token}))
         (assoc (t/ok world') :returned amount)))))

@@ -17,6 +17,8 @@
             [resolver-sim.util.math                 :as math]
             [resolver-sim.io.event-evidence         :as evidence]))
 
+(declare get-stake)
+
 ;; ---------------------------------------------------------------------------
 ;; Stake management
 ;; ---------------------------------------------------------------------------
@@ -24,14 +26,26 @@
 (defn register-stake
   "Deposit stake for a resolver address.
    Returns updated world.
-   
+    
    If yield-profile-id is provided, the stake will be managed by that yield module."
   ([world resolver-addr amount] (register-stake world resolver-addr amount nil))
   ([world resolver-addr amount yield-profile-id]
-   (let [world (update-in world [:resolver-stakes resolver-addr] (fnil + 0) amount)]
-     (if yield-profile-id
-       (assoc-in world [:resolver-yield-profiles resolver-addr] yield-profile-id)
-       world))))
+   (let [world' (-> world
+                    (update-in [:resolver-stakes resolver-addr] (fnil + 0) amount)
+                    (cond-> yield-profile-id
+                      (assoc-in [:resolver-yield-profiles resolver-addr] yield-profile-id)))]
+     (attr/with-attribution {:subject/type :resolver
+                             :subject/id resolver-addr
+                             :action/type :stake/register
+                             :evidence/reason :stake-registered}
+       (evidence/capture-event-evidence!
+         :stake-registered
+         {:stake/before (get-stake world resolver-addr)}
+         {:stake/after  (get-stake world' resolver-addr)}
+         {:stake/resolver resolver-addr
+          :stake/amount amount
+          :stake/yield-profile-id yield-profile-id}))
+     world')))
 
 (defn get-resolver-yield-profile
   "Returns the yield profile ID assigned to a resolver."
@@ -61,7 +75,18 @@
       (t/fail :insufficient-stake)
 
       :else
-      (t/ok (update-in world [:resolver-stakes resolver-addr] (fnil - 0) amount)))))
+      (let [world' (update-in world [:resolver-stakes resolver-addr] (fnil - 0) amount)]
+        (attr/with-attribution {:subject/type :resolver
+                                :subject/id resolver-addr
+                                :action/type :stake/withdraw
+                                :evidence/reason :stake-withdrawn}
+          (evidence/capture-event-evidence!
+            :stake-withdrawn
+            {:stake/before current}
+            {:stake/after  (get-stake world' resolver-addr)}
+            {:stake/resolver resolver-addr
+             :stake/amount amount}))
+        (t/ok world')))))
 
 (defn can-handle-escrow?
   "True if the resolver's stake is sufficient for the given escrow amount."

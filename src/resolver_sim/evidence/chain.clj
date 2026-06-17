@@ -17,7 +17,7 @@
 
 ;; ── Registry Atom ─────────────────────────────────────────────────────────
 
-(def ^:private evidence-registry-atom
+(def ^:dynamic ^:private evidence-registry-atom
   (atom {:artifacts []
          :evidence-hashes []
          :run-id nil
@@ -33,6 +33,18 @@
            :run-id run-id
            :run-label run-label})
   nil)
+
+(defmacro with-fresh-registry
+  "Execute body with a fresh evidence chain registry.
+   The outer registry is restored when body exits.
+   Useful for isolating runs and preventing cross-run contamination."
+  [& body]
+  `(let [fresh# (atom {:artifacts []
+                       :evidence-hashes []
+                       :run-id nil
+                       :run-label nil})]
+     (binding [evidence-registry-atom fresh#]
+       ~@body)))
 
 (defn registry-status
   "Return summary info from the current registry state: count, run-id."

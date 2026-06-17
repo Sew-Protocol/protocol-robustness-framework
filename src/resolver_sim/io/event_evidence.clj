@@ -13,8 +13,10 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.logging :as log]))
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,22 @@
   (swap! metrics update :serialize-count inc)
   (swap! metrics update :serialize-total-ns + (- (System/nanoTime) start-ns)))
 
+;; ── Chain Integration ─────────────────────────────────────────────────────────
+
+(defn- normalize-for-chain
+  "Add chain-compatible keys from namespaced evidence fields."
+  [evidence]
+  (cond-> evidence
+    (:evidence/hash evidence) (assoc :evidence-hash (:evidence/hash evidence))
+    (:evidence/type evidence) (assoc :artifact-kind (:evidence/type evidence))))
+
+(defn- validate-attribution!
+  "Log a warning if required attribution keys are missing."
+  [resolved-attr]
+  (when (and (map? resolved-attr) (nil? (:ctx/run-id resolved-attr)))
+    (log/warn! "capture-event-evidence! called without :ctx/run-id in attribution — evidence will be orphaned"
+               {:resolved-attr (dissoc resolved-attr :ctx/scenario-id)})))
+
 ;; ── Primary Capture API ──────────────────────────────────────────────────────
 
 (defn capture-event-evidence!
@@ -115,45 +133,47 @@
   ([reason pre post inputs calc ctx-or-opts]
    (let [capture-start (System/nanoTime)]
      (if (needs-internal-build? reason pre post inputs)
-       ;; Legacy positional path: build evidence internally
-       (let [resolved-attr (cond
-                             (and (map? ctx-or-opts) (:attribution-context ctx-or-opts))
-                             (attr/get-attribution (:attribution-context ctx-or-opts))
-                             (map? ctx-or-opts)
-                             ctx-or-opts
-                             (map? reason)
-                             (attr/get-attribution reason)
-                             :else
-                             (attr/current-attribution))
-             importance (if (map? ctx-or-opts) (:importance ctx-or-opts) :core)
-             hash-start (System/nanoTime)
-             before-hash (cap/stable-hash pre)
-             after-hash  (cap/stable-hash post)
-             _ (record-hash-latency! hash-start)
-             e (-> (cap/evidence-base {:type reason :importance importance
-                                        :ctx resolved-attr})
-                   (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
-                                    :run/id          (:ctx/run-id resolved-attr)
-                                    :trial/id        (:ctx/trial-id resolved-attr)
-                                    :event/seq       (:ctx/event-index resolved-attr 0)
-                                    :replay/seed     (:ctx/replay-seed resolved-attr)
-                                    :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
-                                    :oracle/mode     (:ctx/oracle-mode resolved-attr)
-                                    :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)}))
-                 e (assoc e :inputs inputs :pre-state pre :post-state post :calculation calc)
-                 e (cap/cap-field e :world/before-hash before-hash)
-                 e (cap/cap-field e :world/after-hash after-hash)
-                 e (cap/finalize-evidence e)
-             serialize-start (System/nanoTime)
-             out-dir  (str (evcfg/artifact-dir) "/event-evidence")
-             filename (evidence-filename e)
-             f        (io/file out-dir filename)]
-         (.mkdirs (io/file out-dir))
-         (spit f (json/write-str e {:indent true}))
-         (record-serialize-latency! serialize-start)
-         (record-capture-latency! capture-start)
-         (println "Captured event evidence:" (:evidence/type e) "hash:" (:evidence/hash e))
-         e)
+        ;; Legacy positional path: build evidence internally
+        (let [resolved-attr (cond
+                              (and (map? ctx-or-opts) (:attribution-context ctx-or-opts))
+                              (attr/get-attribution (:attribution-context ctx-or-opts))
+                              (map? ctx-or-opts)
+                              ctx-or-opts
+                              (map? reason)
+                              (attr/get-attribution reason)
+                              :else
+                              (attr/current-attribution))
+              _ (validate-attribution! resolved-attr)
+              importance (if (map? ctx-or-opts) (:importance ctx-or-opts) :core)
+              hash-start (System/nanoTime)
+              before-hash (cap/stable-hash pre)
+              after-hash  (cap/stable-hash post)
+              _ (record-hash-latency! hash-start)
+              e (-> (cap/evidence-base {:type reason :importance importance
+                                         :ctx resolved-attr})
+                    (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
+                                     :run/id          (:ctx/run-id resolved-attr)
+                                     :trial/id        (:ctx/trial-id resolved-attr)
+                                     :event/seq       (:ctx/event-index resolved-attr 0)
+                                     :replay/seed     (:ctx/replay-seed resolved-attr)
+                                     :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
+                                     :oracle/mode     (:ctx/oracle-mode resolved-attr)
+                                     :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)}))
+                  e (assoc e :inputs inputs :pre-state pre :post-state post :calculation calc)
+                  e (cap/cap-field e :world/before-hash before-hash)
+                  e (cap/cap-field e :world/after-hash after-hash)
+                  e (cap/finalize-evidence e)
+              serialize-start (System/nanoTime)
+              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
+              filename (evidence-filename e)
+              f        (io/file out-dir filename)]
+          (.mkdirs (io/file out-dir))
+          (spit f (json/write-str e {:indent true}))
+          (record-serialize-latency! serialize-start)
+          (record-capture-latency! capture-start)
+          (println "Captured event evidence:" (:evidence/type e) "hash:" (:evidence/hash e))
+          (chain/register-evidence! (normalize-for-chain e))
+          e)
        ;; Single-arg convention: reason is actually a pre-built evidence map
        (do (record-capture-latency! capture-start)
            (capture-event-evidence! reason)))))
@@ -169,4 +189,5 @@
          (record-serialize-latency! serialize-start)
          (record-capture-latency! capture-start)
          (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
+         (chain/register-evidence! (normalize-for-chain evidence))
          evidence)))))

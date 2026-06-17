@@ -8,6 +8,7 @@
      - capture-event-evidence! integration with builder"
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.evidence.chain :as chain]
             [resolver-sim.io.event-evidence :as evidence]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.util.evidence :as ev]
@@ -211,6 +212,7 @@
 ;; the durable persistence function.
 
 (deftest test-capture-with-prebuilt-evidence
+  (chain/reset-registry!)
   (testing "capture-event-evidence! accepts pre-built evidence map"
     (let [evidence (-> (cap/evidence-base {:type :test-capture :importance :core
                                             :ctx sample-attribution})

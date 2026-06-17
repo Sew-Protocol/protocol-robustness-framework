@@ -11,7 +11,8 @@
             [resolver-sim.stochastic.decision-quality :as dq]
             [resolver-sim.protocols.sew.research-models.information-cascade :as ic]
             [resolver-sim.protocols.sew.research-models.escalation-economics :as ee]
-            [resolver-sim.sim.engine :as proto]))
+            [resolver-sim.sim.engine :as proto]
+            [resolver-sim.util.evidence :as ev]))
 
 ;; ============ Test Parameters ============
 
@@ -163,7 +164,7 @@
                     :appeal-probability ap})
         
         ; Run all scenarios
-        results (pmap (fn [s]
+        results (ev/contextual-pmap (fn [s]
                        (run-single-test 42
                                       (:time-pressure s)
                                       (:reputation-weight s)

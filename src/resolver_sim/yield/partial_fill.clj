@@ -17,7 +17,8 @@
             [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.io.event-evidence :as evidence]))
 
 
 (def ^:private schema-version (evcfg/schema :partial-fill-decision))
@@ -380,4 +381,10 @@
              :settlement/token (:token position)
              :settlement/position-id (:owner/id position)}]
     (attr/with-attribution ctx
-      (apply-partial-fill world position decision))))
+      (let [world' (apply-partial-fill world position decision)]
+        (evidence/capture-event-evidence!
+          :settlement-fill
+          {:settlement/before (select-keys world [:total-held :yield/positions])}
+          {:settlement/after (select-keys world' [:total-held :yield/positions])}
+          {:settlement/decision decision})
+        world'))))
