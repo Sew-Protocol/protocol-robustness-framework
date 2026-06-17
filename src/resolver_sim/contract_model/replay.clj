@@ -131,10 +131,9 @@
 
 (defn trace-entry->replay-event
   "Strip trace metadata; return the minimal replay event shape.
-   Used by counterfactual fork replay so continuation steps do not carry
-   stale :world / :result fields from the main-line trace."
+   Delegates to execution/trace-entry->replay-event."
   [entry]
-  (select-keys entry [:seq :time :agent :action :params :save-id-as]))
+  (execution/trace-entry->replay-event entry))
 
 (defn replay-with-protocol
   "Replay a scenario map using tiered protocol implementations.

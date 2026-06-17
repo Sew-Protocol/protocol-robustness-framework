@@ -21,6 +21,12 @@
 (def ^:private batch-commit-policy :deterministic-first-wins)
 
 (defn- event-conflict-domains*
+  "Determine conflict domains for an event in a batch.
+   Protocols that satisfy BatchConflictModel provide their own domain set.
+   Fallback to #{[:global :unknown]} means all same-timestamp events from
+   protocols without batch support are treated as conflicting — safe default
+   that serializes execution. Protocols implementing BatchConflictModel can
+   return per-workflow or per-resolver domains for finer-grained concurrency."
   [protocol world event agent-index]
   (let [domains (when (satisfies? proto/BatchConflictModel protocol)
                   (proto/event-conflict-domains protocol world event agent-index))]
@@ -194,6 +200,17 @@
             :projection-hash ph
             :guard-context   (:guard-context result)}
           :halted? violated?})))))
+
+;; ---------------------------------------------------------------------------
+;; Trace utilities
+;; ---------------------------------------------------------------------------
+
+(defn trace-entry->replay-event
+  "Strip trace metadata; return the minimal replay event shape.
+   Used by counterfactual fork replay so continuation steps do not carry
+   stale :world / :result fields from the main-line trace."
+  [entry]
+  (select-keys entry [:seq :time :agent :action :params :save-id-as]))
 
 ;; ---------------------------------------------------------------------------
 ;; Simulation Loop
@@ -401,53 +418,63 @@
                       :world-checkpoints (:world-checkpoints batch-result)
                       :last-valid-world (:world batch-result)})))))
            (let [raw-event (first events)
-                 event (if (and supports-alias? (seq id-alias-map))
-                         (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
-                           (if (:ok res) (:event res) raw-event))
-                         raw-event)
-                 checkpoints' (get (replay-checkpoints/secure-checkpoint-update {:world-checkpoints world-checkpoints :checkpoint-log checkpoint-log :diagnostics diagnostics} :world-checkpoints event world) :world-checkpoints)
-                 step (process-step protocol context world event)
-                 entry0 (:trace-entry step)
-                 alias-key (:save-id-as raw-event)
-                 new-id (when (and alias-key supports-alias? (= :ok (:result entry0)))
-                          (proto/created-id protocol (:action raw-event) (:extra entry0)))
-                 new-alias-map (if (and alias-key new-id)
-                                 (assoc id-alias-map alias-key new-id)
-                                 id-alias-map)
-                 expected-failure? (and (= :rejected (:result entry0))
-                                        (contains? expected-errors-set
-                                                   [(:seq entry0) (:action entry0) (:error entry0)]))
-                 reject-phase (when (= :rejected (:result entry0))
-                                (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
-                 entry (cond-> entry0
-                         (= :rejected (:result entry0))
-                         (assoc :reject-class (:error entry0)
-                                :reject-phase reject-phase
-                                :expected-failure? expected-failure?
-                                :event-tags (conj (:event-tags entry0)
-                                                  (if expected-failure?
-                                                    :expected-revert
-                                                    :unexpected-revert))))
-                 new-trace (conj trace entry)
-                 new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
-                 new-world (:world step)
-                 new-states (get (replay-checkpoints/secure-checkpoint-update {:states states :checkpoint-log checkpoint-log :diagnostics diagnostics} :states event (proto/world-snapshot protocol new-world)) :states)]
-             (if (:halted? step)
-               (do
-                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
-                 (attr/with-attribution
-                   {:ctx/scenario-id scenario-id
-                    :ctx/run-id run-id}
-                   (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
-                 {:outcome :fail
-                  :scenario-id scenario-id
-                  :events-processed (count new-trace)
-                  :halted-at-seq (:seq event)
-                  :halt-reason :invariant-violation
-                  :trace new-trace
-                  :metrics new-metrics
-                  :execution {:mode :sequential}
-                  :protocol protocol
-                  :last-valid-world world
-                  :world-checkpoints checkpoints'})
-                (recur new-world (rest events) new-trace new-metrics new-states checkpoints' checkpoint-log diagnostics new-alias-map))))))))
+                  event (if (and supports-alias? (seq id-alias-map))
+                          (let [res (proto/resolve-id-alias protocol raw-event id-alias-map)]
+                            (if (:ok res) (:event res) raw-event))
+                          raw-event)
+                  cp-result (replay-checkpoints/secure-checkpoint-update
+                             {:world-checkpoints world-checkpoints :checkpoint-log checkpoint-log :diagnostics diagnostics}
+                             :world-checkpoints event world)
+                  checkpoints' (:world-checkpoints cp-result)
+                  log-after-wc (:checkpoint-log cp-result)
+                  diag-after-wc (:diagnostics cp-result)
+                  step (process-step protocol context world event)
+                  entry0 (:trace-entry step)
+                  alias-key (:save-id-as raw-event)
+                  new-id (when (and alias-key supports-alias? (= :ok (:result entry0)))
+                           (proto/created-id protocol (:action raw-event) (:extra entry0)))
+                  new-alias-map (if (and alias-key new-id)
+                                  (assoc id-alias-map alias-key new-id)
+                                  id-alias-map)
+                  expected-failure? (and (= :rejected (:result entry0))
+                                         (contains? expected-errors-set
+                                                    [(:seq entry0) (:action entry0) (:error entry0)]))
+                  reject-phase (when (= :rejected (:result entry0))
+                                 (if (:temporal-rule-id entry0) :temporal-rule :dispatch))
+                  entry (cond-> entry0
+                          (= :rejected (:result entry0))
+                          (assoc :reject-class (:error entry0)
+                                 :reject-phase reject-phase
+                                 :expected-failure? expected-failure?
+                                 :event-tags (conj (:event-tags entry0)
+                                                   (if expected-failure?
+                                                     :expected-revert
+                                                     :unexpected-revert))))
+                  new-trace (conj trace entry)
+                  new-metrics (metrics/accum-metrics protocol metrics event entry agent-index world)
+                  new-world (:world step)
+                  states-result (replay-checkpoints/secure-checkpoint-update
+                                 {:states states :checkpoint-log log-after-wc :diagnostics diag-after-wc}
+                                 :states event (proto/world-snapshot protocol new-world))
+                  new-states (:states states-result)
+                  checkpoint-log' (:checkpoint-log states-result)
+                  diagnostics' (:diagnostics states-result)]
+              (if (:halted? step)
+                (do
+                  (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
+                  (attr/with-attribution
+                    {:ctx/scenario-id scenario-id
+                     :ctx/run-id run-id}
+                    (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
+                  {:outcome :fail
+                   :scenario-id scenario-id
+                   :events-processed (count new-trace)
+                   :halted-at-seq (:seq event)
+                   :halt-reason :invariant-violation
+                   :trace new-trace
+                   :metrics new-metrics
+                   :execution {:mode :sequential}
+                   :protocol protocol
+                   :last-valid-world world
+                   :world-checkpoints checkpoints'})
+                (recur new-world (rest events) new-trace new-metrics new-states checkpoints' checkpoint-log' diagnostics' new-alias-map))))))))
