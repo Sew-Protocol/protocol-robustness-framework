@@ -28,8 +28,8 @@
     (let [scenario (assoc minimal-scenario :theory {:falsifies-if []})
           ;; Force evaluate-theory? to true even if :minimal true would disable it
           result (replay/simple-replay dummy/protocol scenario {:evaluate-theory? true})]
-      ;; If evaluate-theory? was true, result should have a :theory key
-      (is (contains? result :theory)))))
+      ;; If evaluate-theory? was true, theory evaluation should have produced output
+      (is (= :not-falsified (:status result))))))
 
 (deftest explicit-flags-override-minimal
   (let [scenario (assoc-in minimal-scenario [:options :flags]

@@ -921,16 +921,35 @@
                                      [{:id resolver
                                        :slashable-stake current-stake
                                        :available-slashable current-stake}]})]
-              (let [evidence (slashing-ev/build-prorata-slash-evidence
-                               {:world world-slashed
-                                :slash-id slash-id
-                                :workflow-id workflow-id
-                                :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                                :trigger :fraud-slash
-                                :allocation-input {:slash-obligation amount :resolver resolver}
-                                :allocation-result allocation
-                                :transition-dependencies []
-                                :attribution (attr/current-attribution)})]
+                (let [meta-fields (cap/default-metadata
+                                   (:ctx/scenario-id (attr/current-attribution))
+                                   (:ctx/run-id (attr/current-attribution))
+                                   :event-seq (:ctx/event-index (attr/current-attribution) 0))
+                       evidence (-> (cap/evidence-base
+                                     {:type :fraud-slash :importance :core
+                                      :ctx (attr/current-attribution)})
+                                    (cap/cap-fields
+                                     (merge meta-fields
+                                      {:actor/id           resolver
+                                       :action/type        :slash-resolver
+                                       :caused-by/rule     :fraud-detected
+                                       :caused-by/action   :execute-resolution
+                                       :transition/id      (str "slash-" slash-id)
+                                       :financial/amount   amount
+                                       :financial/asset    :USDC
+                                       :replay/seed        (:ctx/replay-seed (attr/current-attribution))
+                                       :oracle/cursor      (:ctx/oracle-cursor (attr/current-attribution))
+                                       :oracle/mode        (:ctx/oracle-mode (attr/current-attribution))
+                                       :world/before-hash  (cap/stable-hash world)})))
+                                 evidence (-> evidence
+                                             (assoc :transition/inputs {:pre-stake current-stake
+                                                                        :slash-obligation amount
+                                                                        :resolver resolver
+                                                                        :workflow-id workflow-id
+                                                                        :slash-id slash-id}))
+                                 evidence (cap/cap-field evidence :world/after-hash
+                                                        (cap/stable-hash world'))
+                                 evidence (cap/finalize-evidence evidence)]
                 (evidence/capture-event-evidence! evidence))
               (t/ok world'))))))))
 

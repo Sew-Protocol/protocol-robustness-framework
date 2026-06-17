@@ -19,14 +19,20 @@
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
 (defn- evidence-filename
-  "Derive filename from evidence record metadata.
-   Sanitize evidence-type to avoid directory traversal issues."
+  "Derive a collision-resistant filename from evidence record metadata.
+   Sanitize evidence-type to avoid directory traversal issues.
+   Format: ev-<transition-index>-<type>-<short-hash>.json"
   [evidence]
-  (let [reason (clojure.string/replace (name (:evidence/type evidence "unknown")) #":" "-")
-        reason (clojure.string/replace reason #"/" "-")
-        sid    (name (:scenario/id evidence "unknown"))
-        idx    (:event/seq evidence "unknown")]
-    (str reason "-" sid "-" idx ".json")))
+  (let [type      (:evidence/type evidence "unknown")
+        ;; Fallback to :event/seq if :transition/index is missing
+        idx       (or (:transition/index evidence) (:event/seq evidence) 0)
+        ;; Extract short hash from sha256 prefix
+        full-hash (:evidence/hash evidence "sha256:unknown")
+        short-hash (if (clojure.string/starts-with? full-hash "sha256:")
+                     (subs full-hash 7 15)
+                     "unknown")
+        reason    (clojure.string/replace type #"[^a-zA-Z0-9]" "-")]
+    (str "ev-" (format "%06d" (int idx)) "-" reason "-" short-hash ".json")))
 
 (defn- needs-internal-build?
   "Check if the call should use the legacy positional builder path.

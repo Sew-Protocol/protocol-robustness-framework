@@ -50,8 +50,6 @@
   [result]
   (let [trace (:trace result)
         last-entry (when (seq trace) (last trace))]
-    (println "DEBUG: terminal-world trace count:" (count trace))
-    (println "DEBUG: last entry has world?:" (some? (:world last-entry)))
     (get-in result [:trace (dec (count (:trace result))) :world])))
 
 (defn- build-trace-context
@@ -61,7 +59,7 @@
     (when world
       {:trace trace
        :world world
-       :world-checkpoints (:world-checkpoints result {})
+       :world-checkpoints (or (:checkpoint-log result) (:world-checkpoints result {}))
        :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
