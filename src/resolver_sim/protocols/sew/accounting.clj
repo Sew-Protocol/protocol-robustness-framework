@@ -222,7 +222,10 @@
          :bond/amount amount
          :bond/fee fee
          :bond/net net
-         :bond/token token}))
+         :bond/token token}
+        nil
+        {:world-before world
+         :world-after world'}))
     world'))
 
 (defn distribute-slashed-funds
@@ -256,7 +259,9 @@
                                           {:bounty-claimable 0}
                                           {:bounty-claimable bounty}
                                           {:slash-amount amount :bounty-bps bounty-bps}
-                                          {:formula "payoffs/calculate-bounty"})))
+                                          {:formula "payoffs/calculate-bounty"}
+                                          {:world-before world
+                                           :world-after world'})))
      
      world')))
 
@@ -290,7 +295,10 @@
             {:bond/workflow-id workflow-id
              :bond/appellant appellant
              :bond/amount amount
-             :bond/token token}))
+             :bond/token token}
+            nil
+            {:world-before world
+             :world-after world'}))
         (assoc (t/ok world') :slashed amount)))))
 
 (defn return-bond
@@ -321,5 +329,8 @@
             {:bond/workflow-id workflow-id
              :bond/appellant appellant
              :bond/amount amount
-             :bond/token token}))
+             :bond/token token}
+            nil
+            {:world-before world
+             :world-after world'}))
         (assoc (t/ok world') :returned amount)))))

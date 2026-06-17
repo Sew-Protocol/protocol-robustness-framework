@@ -198,23 +198,26 @@
                               :subject/id workflow-id
                               :action/type (keyword "escrow" (name direction))
                               :evidence/reason evidence-reason}
-        (evidence/capture-event-evidence!
-          evidence-reason
-          {:finalize/before
-           {:workflow-state (t/escrow-state world workflow-id)
-            :total-held (get-in world [:total-held token])
-            :resolver (:dispute-resolver et)}}
-          {:finalize/after
-           {:workflow-state (t/escrow-state result workflow-id)
-            :total-held (get-in result [:total-held token])}}
-          {:finalize/workflow-id workflow-id
-           :finalize/direction direction
-           :finalize/recipient recipient
-           :finalize/settled-amount settled-amt
-           :finalize/sub-held-amount sub-held-amt
-           :finalize/partial-yield? (boolean partial-yield?)
-           :finalize/shortfall? (boolean pos-shortfall)
-           :finalize/resolver (:dispute-resolver et)}))
+         (evidence/capture-event-evidence!
+           evidence-reason
+           {:finalize/before
+            {:workflow-state (t/escrow-state world workflow-id)
+             :total-held (get-in world [:total-held token])
+             :resolver (:dispute-resolver et)}}
+           {:finalize/after
+            {:workflow-state (t/escrow-state result workflow-id)
+             :total-held (get-in result [:total-held token])}}
+           {:finalize/workflow-id workflow-id
+            :finalize/direction direction
+            :finalize/recipient recipient
+            :finalize/settled-amount settled-amt
+            :finalize/sub-held-amount sub-held-amt
+            :finalize/partial-yield? (boolean partial-yield?)
+            :finalize/shortfall? (boolean pos-shortfall)
+            :finalize/resolver (:dispute-resolver et)}
+           nil
+           {:world-before world
+            :world-after result}))
       result)))
 
 (defn finalize-escrow-accounting
@@ -365,32 +368,35 @@
                                        :subject/id workflow-id
                                        :action/type :escrow/create
                                        :evidence/reason :escrow-created}
-                 (evidence/capture-event-evidence!
-                   :escrow-created
-                   {:escrow/before
-                    {:next-workflow-id (:next-workflow-id world)
-                     :total-held (get-in world [:total-held token])
-                     :resolver-stake (when resolver (reg/get-stake world resolver))}}
-                   {:escrow/after
-                    {:next-workflow-id (:next-workflow-id world'')
-                     :total-held (get-in world'' [:total-held token])
-                     :resolver-stake (when resolver (reg/get-stake world'' resolver))
-                     :created-workflow (select-keys created-wf
-                                                     [:token :to :from :amount-after-fee
-                                                      :initial-fee :dispute-resolver
-                                                      :auto-release-time :auto-cancel-time
-                                                      :escrow-state :last-accrual-time])}}
-                   {:escrow/workflow-id workflow-id
-                    :escrow/token token
-                    :escrow/amount amount
-                    :escrow/fee fee
-                    :escrow/amount-after-fee afa
-                    :escrow/resolver resolver
-                    :escrow/auto-release auto-rel
-                    :escrow/auto-cancel auto-can
-                    :escrow/yield-module ymid
-                    :escrow/yield-deposit-applied? yield-deposit-applied?
-                    :escrow/settings settings-ev})))
+                  (evidence/capture-event-evidence!
+                    :escrow-created
+                    {:escrow/before
+                     {:next-workflow-id (:next-workflow-id world)
+                      :total-held (get-in world [:total-held token])
+                      :resolver-stake (when resolver (reg/get-stake world resolver))}}
+                    {:escrow/after
+                     {:next-workflow-id (:next-workflow-id world'')
+                      :total-held (get-in world'' [:total-held token])
+                      :resolver-stake (when resolver (reg/get-stake world'' resolver))
+                      :created-workflow (select-keys created-wf
+                                                      [:token :to :from :amount-after-fee
+                                                       :initial-fee :dispute-resolver
+                                                       :auto-release-time :auto-cancel-time
+                                                       :escrow-state :last-accrual-time])}}
+                    {:escrow/workflow-id workflow-id
+                     :escrow/token token
+                     :escrow/amount amount
+                     :escrow/fee fee
+                     :escrow/amount-after-fee afa
+                     :escrow/resolver resolver
+                     :escrow/auto-release auto-rel
+                     :escrow/auto-cancel auto-can
+                     :escrow/yield-module ymid
+                     :escrow/yield-deposit-applied? yield-deposit-applied?
+                     :escrow/settings settings-ev}
+                    nil
+                    {:world-before world
+                     :world-after world''})))
              (assoc (t/ok world'') :workflow-id workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -428,7 +434,10 @@
                 {:dispute/workflow-id workflow-id
                  :dispute/caller caller
                  :dispute/resolver resolver
-                 :dispute/level (t/dispute-level world' workflow-id)}))
+                 :dispute/level (t/dispute-level world' workflow-id)}
+                nil
+                {:world-before world
+                 :world-after world'}))
             (t/ok world')))))))
 
 ;; ---------------------------------------------------------------------------

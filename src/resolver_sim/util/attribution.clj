@@ -558,7 +558,29 @@
 
    :unfreeze/resolver
    {:domain :unfreeze
-    :description "Resolver being unfrozen."}})
+    :description "Resolver being unfrozen."}
+
+   ;; World anchoring (full-state content hashes)
+   :world/before-full-hash
+   {:domain :world
+    :description "SHA-256 content hash of the full pre-state world — links targeted evidence to the generic trace."}
+
+   :world/after-full-hash
+   {:domain :world
+    :description "SHA-256 content hash of the full post-state world."}
+
+   ;; Evidence chain fields
+   :evidence/chain-seq
+   {:domain :evidence
+    :description "Sequential position in the targeted evidence chain for this run."}
+
+   :evidence/chain-prev-hash
+   {:domain :evidence
+    :description "Evidence-hash of the previous artifact in the run-scoped chain."}
+
+   :evidence/chain-self-hash
+   {:domain :evidence
+    :description "Self-referencing evidence-hash (excludes chain fields from the hash input)."}})
 
 (def known-attribution-namespaces
   "Set of known attribution key namespaces derived from the registry."

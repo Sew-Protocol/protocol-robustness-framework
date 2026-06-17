@@ -386,5 +386,8 @@
           :settlement-fill
           {:settlement/before (select-keys world [:total-held :yield/positions])}
           {:settlement/after (select-keys world' [:total-held :yield/positions])}
-          {:settlement/decision decision})
+          {:settlement/decision decision}
+          nil
+          {:world-before world
+           :world-after world'})
         world'))))

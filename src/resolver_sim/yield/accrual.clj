@@ -23,9 +23,9 @@
              [resolver-sim.yield.token :as tok]
              [resolver-sim.yield.loss :as loss]
              [resolver-sim.yield.risk :as risk-utils]
-              [resolver-sim.util.attribution :as attr]
-              [resolver-sim.yield.risk-monitor :as risk]
-              [resolver-sim.io.event-evidence :as evidence]))
+               [resolver-sim.util.attribution :as attr]
+               [resolver-sim.yield.risk-monitor :as risk]
+               [resolver-sim.io.event-evidence :as evidence]))
 
 
 (def ^:private schema-version "accrual-decision.v2")
@@ -674,10 +674,13 @@
          final-ctx (merge explicit-attr ctx)]
      (attr/with-attribution final-ctx
        (let [world' (apply-accrual-decision world decision)]
-         (evidence/capture-event-evidence!
-           :yield-accrual
-           {:accrual/before (select-keys world [:total-held :resolver-stakes :yield-state])}
-           {:accrual/after  (select-keys world' [:total-held :resolver-stakes :yield-state])}
-           {:accrual/decision (dissoc decision :world)})
+          (evidence/capture-event-evidence!
+            :yield-accrual
+            {:accrual/before (select-keys world [:total-held :resolver-stakes :yield-state])}
+            {:accrual/after  (select-keys world' [:total-held :resolver-stakes :yield-state])}
+            {:accrual/decision (dissoc decision :world)}
+            nil
+            {:world-before world
+             :world-after world'})
          (risk/capture-if-risk-event)
          world')))))

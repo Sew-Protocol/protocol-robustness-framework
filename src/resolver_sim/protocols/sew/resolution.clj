@@ -24,7 +24,7 @@
             [resolver-sim.evidence.slashing           :as slashing-ev]
             [resolver-sim.io.event-evidence           :as evidence]))
 
-(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability)
+(declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability cleanup-orphaned-slashes)
 
 (defn rotate-dispute-resolver
   "Governance-triggered resolver rotation for an in-flight dispute.
@@ -214,8 +214,8 @@
         (seq (vals (get-in world [:previous-decisions wf-id] {}))))))
 
 (defn- active-manual-fraud-slash?
-  [world workflow-id]
-  (let [existing (get-in world [:pending-fraud-slashes (t/normalize-workflow-id workflow-id)])]
+  [world slash-id]
+  (let [existing (get-in world [:pending-fraud-slashes slash-id])]
     (and existing (#{:pending :appealed} (:status existing)))))
 
 (defn- handle-fraud-slashing
@@ -229,7 +229,7 @@
    
    Emits :fraud-slash-proposed evidence and stores the evidence hash on the
    pending entry for causal linking by execute-fraud-slash."
-  [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
+   [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
   (let [now (time-ctx/block-ts world)
         evidence-map (evidence/capture-event-evidence!
                        :fraud-slash-proposed
@@ -239,7 +239,10 @@
                         :proposal/amount slash-amt
                         :proposal/status :pending
                         :proposal/deadline (+ now appeal-window)
-                        :proposal/workflow-id workflow-id})
+                        :proposal/workflow-id workflow-id}
+                       nil
+                       {:world-before world
+                        :world-after world})
         evidence-hash (:evidence/hash evidence-map)]
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
     (assoc-in world [:pending-fraud-slashes slash-id]
@@ -312,7 +315,10 @@
            :unavailability/circuit-breaker-triggered? (and (not breaker-was-active?) breaker-active?)
            :unavailability/circuit-breaker-cleared? (and breaker-was-active? (not breaker-active?))
            :unavailability/pct-bps pct-bps
-           :unavailability/threshold-bps threshold})))
+           :unavailability/threshold-bps threshold}
+          nil
+          {:world-before world
+           :world-after world'''})))
     world'''))
 
 (defn circuit-breaker-active?
@@ -471,9 +477,11 @@
                     :workflow-id workflow-id)
 
         :else
-        (t/ok (if (:is-release pending)
-                (finalize world workflow-id :released)
-                (finalize world workflow-id :refunded)))))))
+        (let [world' (if (:is-release pending)
+                       (finalize world workflow-id :released)
+                       (finalize world workflow-id :refunded))
+              world'' (cleanup-orphaned-slashes world' workflow-id)]
+          (t/ok world''))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal building block: _validateAndPrepareEscalation deletes
@@ -599,7 +607,10 @@
                :challenge/to-level new-level
                :challenge/new-resolver new-resolver
                :challenge/bond-amount bond-amt
-               :challenge/escalation-count esc-count}))
+               :challenge/escalation-count esc-count}
+              nil
+              {:world-before world
+               :world-after world'}))
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))
@@ -766,19 +777,22 @@
                                    :subject/id workflow-id
                                    :action/type :dispute/escalate
                                    :evidence/reason :dispute-escalated}
-             (evidence/capture-event-evidence!
-               :dispute-escalated
-               {:escalation/before {:dispute-level current-level
-                                    :resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])}}
-               {:escalation/after  {:dispute-level new-level
-                                    :resolver new-resolver}}
-               {:escalation/workflow-id workflow-id
-                :escalation/caller caller
-                :escalation/from-level current-level
-                :escalation/to-level new-level
-                :escalation/new-resolver new-resolver
-                :escalation/bond-amount bond-amt
-                :escalation/escalation-count esc-count}))
+              (evidence/capture-event-evidence!
+                :dispute-escalated
+                {:escalation/before {:dispute-level current-level
+                                     :resolver (get-in world [:escrow-transfers workflow-id :dispute-resolver])}}
+                {:escalation/after  {:dispute-level new-level
+                                     :resolver new-resolver}}
+                {:escalation/workflow-id workflow-id
+                 :escalation/caller caller
+                 :escalation/from-level current-level
+                 :escalation/to-level new-level
+                 :escalation/new-resolver new-resolver
+                 :escalation/bond-amount bond-amt
+                 :escalation/escalation-count esc-count}
+                nil
+                {:world-before world
+                 :world-after world'}))
            (assoc (t/ok world')
                   :new-level    new-level
                   :new-resolver new-resolver))))))
@@ -836,7 +850,10 @@
                :appeal/workflow-id workflow-id
                :appeal/resolver caller
                :appeal/bond-amount bond-amount
-               :appeal/bond-token token}))
+               :appeal/bond-token token}
+              nil
+              {:world-before world
+               :world-after world''}))
           (t/ok world''))))))
 
 (defn propose-fraud-slash
@@ -935,19 +952,22 @@
                                         :subject/id slash-id
                                         :action/type :slash/resolve-appeal
                                         :evidence/reason (keyword "slash-appeal" (name outcome))}
-                  (evidence/capture-event-evidence!
-                    (keyword "slash-appeal" (name outcome))
-                    {:appeal-resolution/before {:slash-status (:status pending)
-                                                 :appeal-bond-held bond-held}}
-                    {:appeal-resolution/after  {:slash-status outcome
-                                                 :appeal-bond-held 0}}
-                    {:appeal-resolution/slash-id slash-id
-                     :appeal-resolution/workflow-id wf-id
-                     :appeal-resolution/resolver resolver
-                     :appeal-resolution/outcome outcome
-                     :appeal-resolution/bond-forfeited? (and (not= :reversed outcome) (pos? bond-held))
-                     :appeal-resolution/bond-amount bond-held
-                     :appeal-resolution/bond-token bond-token}))
+                   (evidence/capture-event-evidence!
+                     (keyword "slash-appeal" (name outcome))
+                     {:appeal-resolution/before {:slash-status (:status pending)
+                                                  :appeal-bond-held bond-held}}
+                     {:appeal-resolution/after  {:slash-status outcome
+                                                  :appeal-bond-held 0}}
+                     {:appeal-resolution/slash-id slash-id
+                      :appeal-resolution/workflow-id wf-id
+                      :appeal-resolution/resolver resolver
+                      :appeal-resolution/outcome outcome
+                      :appeal-resolution/bond-forfeited? (and (not= :reversed outcome) (pos? bond-held))
+                      :appeal-resolution/bond-amount bond-held
+                      :appeal-resolution/bond-token bond-token}
+                     nil
+                     {:world-before world
+                      :world-after world'}))
                 (t/ok world'))]
           (cond
             appeal-upheld?
@@ -970,6 +990,18 @@
             :else
             (let [world' (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending)]
               (emit-appeal-resolution! world' :rejected-no-bond))))))))
+
+(defn- cleanup-orphaned-slashes
+  "Cleanup orphaned pending reversal slashes for a finalized workflow."
+  [world workflow-id]
+  (if (t/terminal-state? world workflow-id)
+    (update world :pending-fraud-slashes
+            (fn [slashes]
+              (into {} (remove (fn [[slash-id slash]]
+                                 (and (= :pending (:status slash))
+                                      (.startsWith ^String (name slash-id) (str workflow-id "-reversal-"))))
+                               slashes))))
+    world))
 
 (defn execute-fraud-slash
   "Execute a previously proposed fraud slash after the timelock/appeal window.
@@ -1017,7 +1049,8 @@
                                       (assoc-in [:resolver-frozen-until resolver]
                                                 (+ (time-ctx/block-ts world) freeze-duration))
                                       (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
-                                      (update-unavailability resolver true))
+                                      (update-unavailability resolver true)
+                                      (cleanup-orphaned-slashes workflow-id))
                   allocation      (payoffs/calculate-prorata-slash-allocation
                                     {:slash-obligation amount
                                      :liable-parties
@@ -1034,8 +1067,11 @@
                                 :allocation-result allocation
                                 :transition-dependencies (filterv some?
                                                                           [(:proposal-evidence-hash pending)])
-                                :attribution (attr/current-attribution)})]
-                (evidence/capture-event-evidence! evidence))
+                                 :attribution (attr/current-attribution)})
+                      evidence (assoc evidence
+                                 :world/before-full-hash (evidence/hash-world world)
+                                 :world/after-full-hash (evidence/hash-world world-slashed))]
+                 (evidence/capture-event-evidence! evidence))
               (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation
@@ -1071,7 +1107,10 @@
           :resolver-unfrozen
           {:unfreeze/before {:frozen-until (get-in world [:resolver-frozen-until resolver])}}
           {:unfreeze/after  {:frozen-until 0}}
-          {:unfreeze/resolver resolver})))
+          {:unfreeze/resolver resolver}
+          nil
+          {:world-before world
+           :world-after world'})))
     (t/ok world')))
 
 ;; ---------------------------------------------------------------------------

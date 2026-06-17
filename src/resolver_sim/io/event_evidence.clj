@@ -20,6 +20,17 @@
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
+(defn hash-world
+  "Content hash of a world state for forensic anchoring.
+   Uses pr-str directly (not canonicalize) because world state maps may have
+   mixed key types (keyword, integer, string) that sorted-map cannot compare."
+  [world]
+  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
+    (.update digest (.getBytes (pr-str world) "UTF-8"))
+    (apply str (map (partial format "%02x") (.digest digest)))))
+
+;; ── Helpers ──────────────────────────────────────────────────────────────────
+
 (defn- evidence-filename
   "Derive filename from evidence record metadata.
    Sanitize evidence-type to avoid directory traversal issues."
@@ -35,6 +46,46 @@
    Positional calls have keyword :reason, map :pre, map :post, map :inputs."
   [reason pre post inputs]
   (and (keyword? reason) (map? pre) (map? post) (map? inputs)))
+
+;; ── Capture Verification ──────────────────────────────────────────────────────
+;;
+;; Post-write verification confirms the artifact actually hit disk.
+;; Mode is controlled by *write-verification*:
+;;   :none     — skip verification
+;;   :exists   — check file exists and is non-empty
+;;   :readback — read file back and compare hashes
+;;
+;; Default :exists.  Set to :readback for research artifact runs.
+;;   (binding [ev/*write-verification* :readback]
+;;     (capture-event-evidence! ...))
+
+(def ^:dynamic *write-verification* :exists)
+
+(defn- verify-write!
+  "Verify that an evidence artifact was written correctly.
+   Throws on verification failure."
+  [evidence path]
+  (case *write-verification*
+    :none
+    nil
+
+    :exists
+    (when (or (not (.exists path)) (zero? (.length path)))
+      (throw (ex-info "Evidence write verification failed"
+                      {:path (str path)
+                       :exists (.exists path)
+                       :length (when (.exists path) (.length path))
+                       :evidence-type (:evidence/type evidence)})))
+
+    :readback
+    (let [written (json/read-str (slurp path) :key-fn keyword)]
+      (when (not= (dissoc evidence :persistence)
+                  (dissoc written :persistence))
+        (throw (ex-info "Evidence readback mismatch"
+                        {:path (str path)
+                         :evidence-type (:evidence/type evidence)
+                         :expected-keys (keys (dissoc evidence :persistence))
+                         :actual-keys (keys (dissoc written :persistence))}))))))
 
 ;; ── Performance Metrics ──────────────────────────────────────────────────────
 ;;
@@ -90,7 +141,38 @@
   (swap! metrics update :serialize-count inc)
   (swap! metrics update :serialize-total-ns + (- (System/nanoTime) start-ns)))
 
-;; ── Chain Integration ─────────────────────────────────────────────────────────
+;; ── Evidence Chain Cursor ─────────────────────────────────────────────────────
+;;
+;; Run-scoped evidence chain: every targeted artifact gets a sequence number,
+;; the previous artifact's hash, and its own hash.  This enables a researcher
+;; to detect missing or inserted artifacts using only the artifact directory.
+;;
+;; The cursor is an atom; call reset-chain-cursor! at the start of each run.
+;; Example from dispatcher entry point:
+;;   (event-evidence/reset-chain-cursor!)
+
+(def ^:private chain-cursor
+  (atom {:seq 0 :last-hash nil}))
+
+(defn reset-chain-cursor!
+  "Reset the evidence chain cursor for a new run."
+  []
+  (reset! chain-cursor {:seq 0 :last-hash nil}))
+
+(defn- inject-chain-fields
+  "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
+   :evidence/chain-self-hash to the evidence map using the cursor."
+  [evidence]
+  (let [{:keys [seq last-hash]} @chain-cursor
+        seq-no (inc seq)
+        self-hash (:evidence/hash evidence)]
+    (swap! chain-cursor assoc :seq seq-no :last-hash self-hash)
+    (assoc evidence
+      :evidence/chain-seq seq-no
+      :evidence/chain-prev-hash last-hash
+      :evidence/chain-self-hash self-hash)))
+
+;; ── Chain Registry Integration ────────────────────────────────────────────────
 
 (defn- normalize-for-chain
   "Add chain-compatible keys from namespaced evidence fields."
@@ -134,60 +216,71 @@
    (let [capture-start (System/nanoTime)]
      (if (needs-internal-build? reason pre post inputs)
         ;; Legacy positional path: build evidence internally
-        (let [resolved-attr (cond
+        (let [hash-opts? (and (map? ctx-or-opts)
+                              (or (:world-before ctx-or-opts)
+                                  (:world-after ctx-or-opts)))
+              resolved-attr (cond
                               (and (map? ctx-or-opts) (:attribution-context ctx-or-opts))
                               (attr/get-attribution (:attribution-context ctx-or-opts))
-                              (map? ctx-or-opts)
+                              (and (map? ctx-or-opts) (not hash-opts?))
                               ctx-or-opts
                               (map? reason)
                               (attr/get-attribution reason)
                               :else
                               (attr/current-attribution))
               _ (validate-attribution! resolved-attr)
-              importance (if (map? ctx-or-opts) (:importance ctx-or-opts) :core)
+              importance (if (map? ctx-or-opts) (or (:importance ctx-or-opts) :core) :core)
               hash-start (System/nanoTime)
               before-hash (cap/stable-hash pre)
               after-hash  (cap/stable-hash post)
               _ (record-hash-latency! hash-start)
               e (-> (cap/evidence-base {:type reason :importance importance
-                                         :ctx resolved-attr})
-                    (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
-                                     :run/id          (:ctx/run-id resolved-attr)
-                                     :trial/id        (:ctx/trial-id resolved-attr)
-                                     :event/seq       (:ctx/event-index resolved-attr 0)
-                                     :replay/seed     (:ctx/replay-seed resolved-attr)
-                                     :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
-                                     :oracle/mode     (:ctx/oracle-mode resolved-attr)
-                                     :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)}))
-                  e (assoc e :inputs inputs :pre-state pre :post-state post :calculation calc)
-                  e (cap/cap-field e :world/before-hash before-hash)
-                  e (cap/cap-field e :world/after-hash after-hash)
-                  e (cap/finalize-evidence e)
+                                     :ctx resolved-attr})
+                (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
+                                 :run/id          (:ctx/run-id resolved-attr)
+                                 :trial/id        (:ctx/trial-id resolved-attr)
+                                 :event/seq       (:ctx/event-index resolved-attr 0)
+                                 :replay/seed     (:ctx/replay-seed resolved-attr)
+                                 :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
+                                 :oracle/mode     (:ctx/oracle-mode resolved-attr)
+                                 :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)})
+                (assoc :inputs inputs :pre-state pre :post-state post :calculation calc)
+                (cap/cap-field :world/before-hash before-hash)
+                (cap/cap-field :world/after-hash after-hash)
+                (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
+                        (assoc :world/before-full-hash (hash-world (:world-before ctx-or-opts)))
+                        (and (map? ctx-or-opts) (:world-after ctx-or-opts))
+                        (assoc :world/after-full-hash (hash-world (:world-after ctx-or-opts))))
+                (cap/finalize-evidence)
+                (inject-chain-fields))
               serialize-start (System/nanoTime)
               out-dir  (str (evcfg/artifact-dir) "/event-evidence")
               filename (evidence-filename e)
               f        (io/file out-dir filename)]
           (.mkdirs (io/file out-dir))
           (spit f (json/write-str e {:indent true}))
+          (verify-write! e f)
           (record-serialize-latency! serialize-start)
           (record-capture-latency! capture-start)
           (println "Captured event evidence:" (:evidence/type e) "hash:" (:evidence/hash e))
           (chain/register-evidence! (normalize-for-chain e))
           e)
-       ;; Single-arg convention: reason is actually a pre-built evidence map
+        ;; Single-arg convention: reason is actually a pre-built evidence map
        (do (record-capture-latency! capture-start)
            (capture-event-evidence! reason)))))
   ([evidence]
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
-       (let [serialize-start (System/nanoTime)
+       (let [evidence (inject-chain-fields evidence)
+             serialize-start (System/nanoTime)
              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
              filename (evidence-filename evidence)
              f        (io/file out-dir filename)]
-         (.mkdirs (io/file out-dir))
-         (spit f (json/write-str evidence {:indent true}))
-         (record-serialize-latency! serialize-start)
-         (record-capture-latency! capture-start)
-         (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
-         (chain/register-evidence! (normalize-for-chain evidence))
-         evidence)))))
+          (.mkdirs (io/file out-dir))
+          (spit f (json/write-str evidence {:indent true}))
+          (verify-write! evidence f)
+          (record-serialize-latency! serialize-start)
+          (record-capture-latency! capture-start)
+          (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
+          (chain/register-evidence! (normalize-for-chain evidence))
+          evidence)))))

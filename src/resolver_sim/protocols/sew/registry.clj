@@ -38,13 +38,16 @@
                              :subject/id resolver-addr
                              :action/type :stake/register
                              :evidence/reason :stake-registered}
-       (evidence/capture-event-evidence!
-         :stake-registered
-         {:stake/before (get-stake world resolver-addr)}
-         {:stake/after  (get-stake world' resolver-addr)}
-         {:stake/resolver resolver-addr
-          :stake/amount amount
-          :stake/yield-profile-id yield-profile-id}))
+        (evidence/capture-event-evidence!
+          :stake-registered
+          {:stake/before (get-stake world resolver-addr)}
+          {:stake/after  (get-stake world' resolver-addr)}
+          {:stake/resolver resolver-addr
+           :stake/amount amount
+           :stake/yield-profile-id yield-profile-id}
+          nil
+          {:world-before world
+           :world-after world'}))
      world')))
 
 (defn get-resolver-yield-profile
@@ -85,7 +88,10 @@
             {:stake/before current}
             {:stake/after  (get-stake world' resolver-addr)}
             {:stake/resolver resolver-addr
-             :stake/amount amount}))
+             :stake/amount amount}
+            nil
+            {:world-before world
+             :world-after world'}))
         (t/ok world')))))
 
 (defn can-handle-escrow?
@@ -141,5 +147,8 @@
        (evidence/capture-event-evidence! :slashing
                                         {:resolver-stake current}
                                         {:resolver-stake (get-stake world' resolver-addr)}
-                                        {:requested-amount amount :actual-amount actual}))
+                                        {:requested-amount amount :actual-amount actual}
+                                        nil
+                                        {:world-before world
+                                         :world-after world'}))
      (assoc (t/ok world') :slashed-from-stake actual))))
