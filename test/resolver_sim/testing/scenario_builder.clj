@@ -35,8 +35,8 @@
     :or {pre-wealth 0 chosen-wealth 200 agent "resolver"
          action "execute_resolution" regret-threshold 0}}]
   (let [attr {:ctx/run-id "test-run" :ctx/scenario-id "test" :ctx/event-index 1 :ctx/event-type action}]
-    {:raw-trace [{:world {:claimable {"e1" {agent pre-wealth}}} :attribution attr}
-                 {:world {:claimable {"e1" {agent chosen-wealth}}} :attribution attr}]
+    {:raw-trace [{:world {:claimable {"e1" {agent pre-wealth}}} :seq 0 :attribution attr}
+                 {:world {:claimable {"e1" {agent chosen-wealth}}} :seq 1 :attribution attr}]
      :decisions [{:seq 1 :agent agent :action action}]
      :terminal-world {:terminal? true
                       :total-held-by-token {}
