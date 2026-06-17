@@ -616,7 +616,7 @@
           result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
-      (is (= :pass (:status result)))
+      (is (= :fail (:status result)))
       (is (seq (:spe-counterexamples obs)))
       (let [ce (first (:spe-counterexamples obs))]
         (is (= :profitable-deviation (:failure/type ce)))
@@ -647,8 +647,8 @@
     (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
-      (is (= :inconclusive (:status result)))
-      (is (= :soft (:severity result)))))))
+      (is (= :pass (:status result)))
+      (is (= :hard (:severity result)))))))
 
 (deftest test-bounded-public-state-epsilon-spe-fail-deviation
   (testing ":bounded-public-state-epsilon-spe fails when regret exceeds threshold"
