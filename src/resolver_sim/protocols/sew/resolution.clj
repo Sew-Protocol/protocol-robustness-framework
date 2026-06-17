@@ -999,7 +999,7 @@
             (fn [slashes]
               (into {} (remove (fn [[slash-id slash]]
                                  (and (= :pending (:status slash))
-                                      (.startsWith ^String (name slash-id) (str workflow-id "-reversal-"))))
+                                      (.startsWith (str slash-id) (str workflow-id "-reversal-"))))
                                slashes))))
     world))
 

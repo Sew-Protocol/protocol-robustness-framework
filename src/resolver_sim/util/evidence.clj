@@ -114,8 +114,10 @@
               :action-hash action-hash
               :result result
               :result-hash result-hash}
-        evidence-hash (stable-hash base)]
-    (assoc base :evidence-hash evidence-hash)))
+        evidence-hash (stable-hash base)
+        group-id (:ctx/evidence-group-id attribution)]
+    (cond-> (assoc base :evidence-hash evidence-hash)
+      group-id (assoc :evidence/group-id group-id :evidence/layer :generic-trace))))
 
 ;; ── Evidence Emission ────────────────────────────────────────────────────────
 

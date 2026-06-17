@@ -178,11 +178,14 @@
 
       (let [{world-t :world} (advance-world-time world event-time)
             time-after       {:block-ts event-time}
+            scenario-id (get-in world [:params :scenario-id])
+            run-id      (str scenario-id "-run")
             result     (attr/with-attribution
-                        {:ctx/scenario-id (get-in world [:params :scenario-id])
-                         :ctx/run-id      (str (get-in world [:params :scenario-id]) "-run")
-                         :ctx/event-index (:seq event)
-                         :ctx/event-type  (:action event)}
+                         {:ctx/scenario-id      scenario-id
+                          :ctx/run-id           run-id
+                          :ctx/event-index      (:seq event)
+                          :ctx/event-type       (:action event)
+                          :ctx/evidence-group-id (str run-id ":" (:seq event) ":" (:action event))}
                         (try
                          (sim-dispatcher/apply-action-with-evidence protocol context world-t event)
                          (catch Exception e

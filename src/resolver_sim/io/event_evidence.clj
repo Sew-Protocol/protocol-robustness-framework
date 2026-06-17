@@ -35,9 +35,10 @@
   "Derive filename from evidence record metadata.
    Sanitize evidence-type to avoid directory traversal issues."
   [evidence]
-  (let [reason (clojure.string/replace (name (:evidence/type evidence "unknown")) #":" "-")
+  (let [etype (:evidence/type evidence)
+        reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
         reason (clojure.string/replace reason #"/" "-")
-        sid    (name (:scenario/id evidence "unknown"))
+        sid    (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
         idx    (:event/seq evidence "unknown")]
     (str reason "-" sid "-" idx ".json")))
 
@@ -250,7 +251,10 @@
                 (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
                         (assoc :world/before-full-hash (hash-world (:world-before ctx-or-opts)))
                         (and (map? ctx-or-opts) (:world-after ctx-or-opts))
-                        (assoc :world/after-full-hash (hash-world (:world-after ctx-or-opts))))
+                        (assoc :world/after-full-hash (hash-world (:world-after ctx-or-opts)))
+                        (:ctx/evidence-group-id resolved-attr)
+                        (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
+                               :evidence/layer :targeted-protocol))
                 (cap/finalize-evidence)
                 (inject-chain-fields))
               serialize-start (System/nanoTime)
@@ -271,8 +275,11 @@
   ([evidence]
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
-       (let [evidence (inject-chain-fields evidence)
-             serialize-start (System/nanoTime)
+        (let [group-id (:ctx/evidence-group-id (attr/current-attribution))
+              evidence (cond-> evidence
+                         group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
+              evidence (inject-chain-fields evidence)
+              serialize-start (System/nanoTime)
              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
              filename (evidence-filename evidence)
              f        (io/file out-dir filename)]
@@ -284,3 +291,48 @@
           (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
           (chain/register-evidence! (normalize-for-chain evidence))
           evidence)))))
+
+;; ── Evidence Links Index ──────────────────────────────────────────────────────
+;;
+;; Post-run index that groups generic-trace and targeted-protocol evidence by
+;; :evidence/group-id.  Lets researchers navigate from a dispatcher trace event
+;; to all targeted evidence captured during that same replay event.
+
+(defn build-evidence-links-index
+  "Scan the event-evidence directory and group artifacts by :evidence/group-id.
+   Returns a map keyed by group-id, each entry listing both generic-trace and
+   targeted-protocol artifacts with their paths and hashes."
+  ([]
+   (build-evidence-links-index (str (evcfg/artifact-dir) "/event-evidence")))
+  ([dir]
+   (let [files (filter #(.isFile %) (file-seq (io/file dir)))
+         entries (keep (fn [f]
+                         (try
+                           (let [data (json/read-str (slurp f) :key-fn keyword)
+                                 gid (:evidence/group-id data)]
+                             (when gid
+                               {:group-id gid
+                                :layer (:evidence/layer data)
+                                :path (.getPath f)
+                                :hash (or (:evidence-hash data)
+                                          (:evidence/hash data))
+                                :event-type (:evidence/type data)
+                                :artifact-kind (:artifact-kind data)}))
+                           (catch Exception _ nil)))
+                       files)]
+     (reduce (fn [acc entry]
+               (update-in acc [(:group-id entry) :artifacts] conj entry))
+             {} entries))))
+
+(defn write-evidence-links-index!
+  "Build and persist the evidence links index to evidence-links.json.
+   Returns the path to the written file."
+  [& [dir]]
+  (let [idx (build-evidence-links-index dir)
+        out-dir (or dir (str (evcfg/artifact-dir)))
+        f (io/file out-dir "evidence-links.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str idx {:indent true}))
+    (println "Wrote evidence links index:" (.getPath f))
+    (.getPath f)))
+
