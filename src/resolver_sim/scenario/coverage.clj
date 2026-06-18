@@ -16,7 +16,8 @@
             [clojure.string    :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.scenario.schema-profile :as schema-profile]))
+            [resolver-sim.scenario.schema-profile :as schema-profile]
+            [resolver-sim.logging :as log]))
 
 (declare coverage-report)
 
@@ -101,7 +102,9 @@
                                 m)))
                           idx
                           entries))
-                (catch Exception _
+                (catch Exception e
+                  (log/warn! :scenario-index-read-failed
+                    {:path (str f) :error (.getMessage e)})
                   idx)))
             {}
             scenario-files)))
@@ -138,7 +141,9 @@
                            (if (seq tags) tags (or (:threat-tags fallback-meta) [])))
          :transitions    (if (seq transitions) transitions (or (:transitions fallback-meta) []))
          :guards         guards}))
-    (catch Exception _
+    (catch Exception e
+      (log/warn! :trace-metadata-read-failed
+        {:file (.getName file) :error (.getMessage e)})
       nil)))
 
 (defn- scenario-outcome-label [{:keys [id]}]

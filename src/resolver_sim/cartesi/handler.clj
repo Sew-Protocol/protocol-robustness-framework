@@ -1,7 +1,8 @@
 (ns resolver-sim.cartesi.handler
   (:require [clojure.data.json :as json]
             [resolver-sim.contract-model.replay :as replay]
-            [resolver-sim.protocols.registry :as preg])
+            [resolver-sim.protocols.registry :as preg]
+            [resolver-sim.logging :as log])
   (:import [java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers]
            [java.net URI]
            [java.nio.charset StandardCharsets])
@@ -62,11 +63,12 @@
                  (let [outcome (:outcome result)
                        s' (-> s
                               (update :total-simulations inc)
-                              (update (case outcome
-                                        :pass :passes
-                                        :fail :fails
-                                        :invalid :invalids
-                                        :passes) inc)) ;; Default to passes if unknown for now
+                        (update (case outcome
+                                  :pass :passes
+                                  :fail :fails
+                                  :invalid :invalids
+                                  (do (log/warn! :unknown-outcome {:outcome outcome})
+                                      :invalids)) inc))
                        history (:history s')
                        entry {:id (:scenario-id result)
                               :outcome (if (keyword? outcome) (name outcome) outcome)

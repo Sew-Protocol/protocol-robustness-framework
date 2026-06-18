@@ -18,7 +18,8 @@
    Layering: sim/* only. File I/O via resolver-sim.io.audit-outputs."
   (:require [resolver-sim.sim.trajectory :as trajectory]
             [clojure.string               :as str]
-            [resolver-sim.evidence.config :as evcfg])
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.logging :as log])
   (:import [java.security MessageDigest]
            [java.math BigInteger]))
 
@@ -238,7 +239,9 @@
           p   (.start pb)
           out (slurp (.getInputStream p))]
       (str/trim out))
-    (catch Exception _ "unknown")))
+    (catch Exception e
+      (log/warn! :git-sha-resolution-failed {:error (.getMessage e)})
+      "unknown")))
 
 (defn- sha256-hex
   "Return SHA-256 hex digest of string s."

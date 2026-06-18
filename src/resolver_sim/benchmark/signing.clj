@@ -3,7 +3,8 @@
             [buddy.core.keys :as keys]
             [buddy.core.codecs :as codecs]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [resolver-sim.logging :as log])
   (:import (org.bouncycastle.crypto.util OpenSSHPrivateKeyUtil OpenSSHPublicKeyUtil PrivateKeyInfoFactory SubjectPublicKeyInfoFactory)
            (org.bouncycastle.crypto.params Ed25519PrivateKeyParameters Ed25519PublicKeyParameters)
            (org.bouncycastle.util.io.pem PemReader)
@@ -48,13 +49,19 @@
       (throw (ex-info "Key is not an Ed25519 public key" {:class (class params)})))))
 
 (defn- load-private-key [path password]
-  (let [content (try (slurp path) (catch Exception _ ""))]
+  (let [content (try (slurp path)
+                     (catch Exception e
+                       (log/warn! :private-key-read-failed {:path path :error (.getMessage e)})
+                       ""))]
     (if (str/includes? content "BEGIN OPENSSH PRIVATE KEY")
       (load-openssh-ed25519-private-key path)
       (keys/private-key path password))))
 
 (defn- load-public-key [path]
-  (let [content (try (slurp path) (catch Exception _ ""))]
+  (let [content (try (slurp path)
+                     (catch Exception e
+                       (log/warn! :public-key-read-failed {:path path :error (.getMessage e)})
+                       ""))]
     (cond
       (str/starts-with? content "ssh-ed25519")
       (load-ssh-public-key path)

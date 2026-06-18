@@ -9,7 +9,8 @@
   (:require [resolver-sim.evidence.chain :as chain]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.util.evidence :as ev]))
+            [resolver-sim.util.evidence :as ev]
+            [resolver-sim.logging :as log]))
 
 (defn apply-action-with-evidence
   "Dispatch an action through the protocol layer and emit a content-hashed
@@ -41,6 +42,8 @@
                           :action action
                           :result (dissoc result :world)}))
                      (catch Exception e
+                       (log/error! :evidence-emission-failed
+                         {:action action :step (:seq event) :error (.getMessage e)})
                        nil)))
          _ (when evidence (chain/register-evidence! evidence))]
     (assoc result :evidence evidence)))

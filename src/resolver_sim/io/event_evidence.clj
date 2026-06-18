@@ -305,6 +305,7 @@
                         (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
                                :evidence/layer :targeted-protocol))
                 (cap/finalize-evidence)
+                (cap/require-fields)
                 (inject-chain-fields))
               serialize-start (System/nanoTime)
               out-dir  (str (evcfg/artifact-dir) "/event-evidence")
@@ -324,7 +325,8 @@
   ([evidence]
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
-         (let [group-id (:ctx/evidence-group-id (attr/current-attribution))
+         (let [evidence (cap/require-fields evidence)
+               group-id (:ctx/evidence-group-id (attr/current-attribution))
                evidence (cond-> evidence
                           group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
                evidence (inject-chain-fields evidence)
@@ -350,31 +352,42 @@
 (defn build-evidence-links-index
   "Scan the event-evidence directory and group artifacts by :evidence/group-id.
    Returns a map keyed by group-id, each entry listing both generic-trace and
-   targeted-protocol artifacts with their paths and hashes."
+   targeted-protocol artifacts with their paths and hashes.
+   Returns {:degraded true, :read-errors N, ...} if any artifacts could not be read."
   ([]
    (build-evidence-links-index (str (evcfg/artifact-dir) "/event-evidence")))
   ([dir]
-   (let [files (filter #(.isFile %) (file-seq (io/file dir)))
-          entries (keep (fn [f]
-                          (try
-                            (let [data (read-evidence-json f)
-                                  gid (:evidence/group-id data)]
-                              (when gid
-                                {:group-id gid
-                                 :layer (:evidence/layer data)
-                                 :path (.getPath f)
-                                 :hash (or (:evidence-hash data)
-                                           (:evidence/hash data))
-                                 :event-type (:evidence/type data)
-                                 :artifact-kind (:artifact-kind data)}))
-                            (catch Exception _ nil)))
-                      files)]
-     (reduce (fn [acc entry]
-               (update acc (:group-id entry)
-                       (fn [group]
-                         (update (or group {:artifacts []})
-                                 :artifacts conj entry))))
-             {} entries))))
+   (let [dir-file (io/file dir)]
+     (if-not (.isDirectory dir-file)
+       (do (log/warn! :evidence-links-dir-not-found {:path dir})
+           {:degraded true :error :directory-not-found})
+       (let [files (filter #(.isFile %) (file-seq dir-file))
+             results (keep (fn [f]
+                             (try
+                               (let [data (read-evidence-json f)
+                                     gid (:evidence/group-id data)]
+                                 (when gid
+                                   {:group-id gid
+                                    :layer (:evidence/layer data)
+                                    :path (.getPath f)
+                                    :hash (or (:evidence-hash data)
+                                              (:evidence/hash data))
+                                    :event-type (:evidence/type data)
+                                    :artifact-kind (:artifact-kind data)
+                                    :ok true}))
+                               (catch Exception e
+                                 (log/warn! :evidence-read-failed
+                                   {:path (str f) :error (.getMessage e)})
+                                 nil)))
+                           files)
+             read-errors (count (remove :ok results))]
+         (reduce (fn [acc entry]
+                   (update acc (:group-id entry)
+                           (fn [group]
+                             (update (or group {:artifacts []})
+                                     :artifacts conj (dissoc entry :ok)))))
+                 (if (pos? read-errors) {:degraded true :read-errors read-errors} {})
+                 results))))))
 
 (comment
   ;; (build-evidence-links-index "results/test-artifacts/event-evidence")
@@ -525,33 +538,50 @@
    :matched    — entries that were found in captured artifacts
    :missing    — expected entries not found
    :unexpected — captured evidence types not declared as expected
+   :degraded   — true if some artifacts could not be read (partial results)
    
-   When the scenario has no :expected-evidence, returns nil."
+   When the scenario has no :expected-evidence, returns nil.
+   Returns {:degraded true :error :directory-not-found} when dir does not exist."
   [scenario & [artifact-dir]]
   (let [expected (:expected-evidence scenario)
-        dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))]
+        dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
+        dir-file (io/file dir)]
     (when (seq expected)
-      (let [captured-types (into #{}
-                                 (keep :evidence/type)
-                                 (keep (fn [f]
-                                         (try (read-evidence-json f)
-                                              (catch Exception _ nil)))
-                                       (filter #(.isFile %)
-                                               (file-seq (io/file dir)))))
-            expected-types (set (map :type expected))]
-        {:declared expected
-         :matched (filter #(contains? captured-types (:type %)) expected)
-         :missing (remove #(contains? captured-types (:type %)) expected)
-         :unexpected (remove #(contains? expected-types %) captured-types)}))))
+      (if-not (.isDirectory dir-file)
+        (do (log/warn! :verify-evidence-dir-not-found {:path dir})
+            {:declared expected :matched [] :missing expected :unexpected #{}
+             :degraded true :error :directory-not-found})
+        (let [results (keep (fn [f]
+                              (try (read-evidence-json f)
+                                   (catch Exception e
+                                     (log/warn! :evidence-read-failed
+                                       {:path (str f) :error (.getMessage e)})
+                                     nil)))
+                            (filter #(.isFile %) (file-seq dir-file)))
+              captured-types (into #{} (keep :evidence/type) results)
+              expected-types (set (map :type expected))
+              read-errors (count (filter (fn [f]
+                                          (try (read-evidence-json f) false
+                                               (catch Exception _ true)))
+                                        (filter #(.isFile %) (file-seq dir-file))))]
+          (cond-> {:declared expected
+                   :matched (filter #(contains? captured-types (:type %)) expected)
+                   :missing (remove #(contains? captured-types (:type %)) expected)
+                   :unexpected (remove #(contains? expected-types %) captured-types)}
+            (pos? read-errors) (assoc :degraded true :read-errors read-errors)))))))
 
 (defn- read-all-artifacts
   "Read all valid evidence artifacts from a directory.
-   Returns a vector of parsed maps, each with :path added."
+   Returns a vector of parsed maps, each with :path added.
+   Corrupt or unparseable files are logged at :warn and skipped."
   [dir]
   (vec (keep (fn [f]
                (try (let [d (read-evidence-json f)]
                       (assoc d :path (.getPath f)))
-                    (catch Exception _ nil)))
+                    (catch Exception e
+                      (log/warn! :evidence-read-failed
+                        {:path (str f) :error (.getMessage e)})
+                      nil)))
              (filter #(.isFile %) (file-seq (io/file dir))))))
 
 ;; ── Cross-Run Evidence Diff ───────────────────────────────────────────────────
@@ -617,7 +647,10 @@
                         (try (let [d (read-evidence-json f)]
                                (when (contains? gids (:evidence/group-id d))
                                  {:data d :file f}))
-                             (catch Exception _ nil)))
+                             (catch Exception e
+                               (log/warn! :evidence-bundle-export-skipped
+                                 {:path (str f) :error (.getMessage e)})
+                               nil)))
                       files)]
     (.mkdirs (io/file output-dir))
     (doseq [{:keys [data file]} (sort-by (comp :evidence/chain-seq :data) matched)]
@@ -675,7 +708,10 @@
                 (filter #(.isFile %) (file-seq (io/file dir))))
         artifacts (keep (fn [f]
                           (try (read-evidence-json f)
-                               (catch Exception _ nil)))
+                               (catch Exception e
+                                 (log/warn! :linked-evidence-read-failed
+                                   {:path (str f) :error (.getMessage e)})
+                                 nil)))
                         files)
         grouped (filter #(= (:evidence/group-id %) group-id) artifacts)]
     (when (seq grouped)
@@ -825,17 +861,20 @@
     (if-let [dir (io/file artifact-dir)]
       (if (.isDirectory dir)
         (let [files (filter #(.isFile %) (file-seq dir))]
-          (keep (fn [f]
-                  (try
-                    (let [data (read-evidence-json f)
-                          matches (every? (fn [[ft fv]] (matches-filter? data ft fv))
-                                          (partition 2 filters))]
-                      (when matches
-                        (if include-body?
-                          (assoc data :path (.getPath f))
-                          (artifact-summary data (.getPath f)))))
-                    (catch Exception _ nil)))
-                files))
+      (keep (fn [f]
+               (try
+                 (let [data (read-evidence-json f)
+                       matches (every? (fn [[ft fv]] (matches-filter? data ft fv))
+                                       (partition 2 filters))]
+                   (when matches
+                     (if include-body?
+                       (assoc data :path (.getPath f))
+                       (artifact-summary data (.getPath f)))))
+                 (catch Exception e
+                   (log/warn! :find-evidence-read-failed
+                     {:path (str f) :error (.getMessage e)})
+                   nil)))
+             files))
         [])
       [])))
 
@@ -860,7 +899,10 @@
                             (when mech
                               {:mechanism mech
                                :summary (artifact-summary data (.getPath f))}))
-                          (catch Exception _ nil)))
+                          (catch Exception e
+                            (log/warn! :mechanism-index-read-failed
+                              {:path (str f) :error (.getMessage e)})
+                            nil)))
                       files)]
     (reduce (fn [acc entry]
               (let [mech (:mechanism entry)
@@ -896,24 +938,32 @@
 ;; and evidence links to identify coverage gaps.
 
 (defn- read-evidence-links-index
-  "Read evidence-links.json from the artifact directory."
+  "Read evidence-links.json from the artifact directory.
+   Returns nil if the file does not exist or cannot be parsed."
   [dir]
   (let [f (io/file dir "evidence-links.json")]
     (when (.exists f)
       (try (json/read-str (slurp f) :key-fn keyword)
-           (catch Exception _ nil)))))
+           (catch Exception e
+             (log/warn! :evidence-links-index-corrupt
+               {:path (str f) :error (.getMessage e)})
+             nil)))))
 
 (defn- generic-trace-event-count
   "Approximate count of generic trace events from evidence-registry.json.
-   Uses :artifact-kind :transition entries in the registry."
+   Uses :artifact-kind :transition entries in the registry.
+   Returns 0 on error — sets :degraded true on the coverage report."
   [dir]
   (let [f (io/file dir "evidence-registry.json")]
     (if (.exists f)
       (try
         (let [reg (json/read-str (slurp f) :key-fn keyword)]
-          (count (:artifacts reg)))
-        (catch Exception _ 0))
-      0)))
+          {:count (count (:artifacts reg))})
+        (catch Exception e
+          (log/warn! :registry-corrupt
+            {:path (str f) :error (.getMessage e)})
+          {:count 0 :degraded true}))
+      {:count 0})))
 
 (defn build-evidence-coverage-report
   "Analyze evidence artifacts in a run directory and produce a coverage report.
@@ -929,7 +979,8 @@
   [& [dir]]
   (let [artifact-dir (or dir (str (evcfg/artifact-dir)))
         ev-dir (str artifact-dir "/event-evidence")
-        generic-count (generic-trace-event-count artifact-dir)
+        generic-result (generic-trace-event-count artifact-dir)
+        generic-count (:count generic-result)
         links (read-evidence-links-index artifact-dir)
         targeted-events (when links (count links))
         group-ids (when links (keys links))
@@ -937,6 +988,7 @@
         mech-idx (build-mechanism-index ev-dir)
         mechanism-counts (into {} (map (fn [[k v]] [k (:count v)]) mech-idx))
         ;; Build targeted type counts
+        read-errors (atom 0)
         type-counts (let [files (filter #(.isFile %) (file-seq (io/file ev-dir)))]
                       (reduce (fn [acc f]
                                 (try
@@ -945,24 +997,30 @@
                                     (if etype
                                       (update-in acc [(name (keyword etype))] (fnil inc 0))
                                       acc))
-                                  (catch Exception _ acc)))
+                                  (catch Exception e
+                                    (swap! read-errors inc)
+                                    (log/warn! :coverage-report-read-failed
+                                      {:path (str f) :error (.getMessage e)})
+                                    acc)))
                               {} files))
-        total-targeted (reduce + 0 (vals type-counts))]
-    {:run-directory artifact-dir
-     :generic-trace-event-count generic-count
-     :targeted-evidence-count total-targeted
-     :targeted-group-count (or targeted-events 0)
-     :mechanism-counts mechanism-counts
-     :type-counts type-counts
-     :links-index-present? (some? links)
-     :warnings
-     (cond-> []
-       (zero? generic-count)
-       (conj "No generic trace artifacts found — evidence-registry.json may be missing")
-       (zero? total-targeted)
-       (conj "No targeted evidence artifacts found — event-evidence directory may be empty")
-       (and links (zero? targeted-events))
-        (conj "Evidence links index exists but contains no group-ids"))}))
+        total-targeted (reduce + 0 (vals type-counts))
+        degraded (or (:degraded generic-result) (pos? @read-errors))]
+    (cond-> {:run-directory artifact-dir
+             :generic-trace-event-count generic-count
+             :targeted-evidence-count total-targeted
+             :targeted-group-count (or targeted-events 0)
+             :mechanism-counts mechanism-counts
+             :type-counts type-counts
+             :links-index-present? (some? links)
+             :warnings
+             (cond-> []
+               (zero? generic-count)
+               (conj "No generic trace artifacts found — evidence-registry.json may be missing")
+               (zero? total-targeted)
+               (conj "No targeted evidence artifacts found — event-evidence directory may be empty")
+               (and links (zero? targeted-events))
+               (conj "Evidence links index exists but contains no group-ids"))}
+      degraded (assoc :degraded true :read-errors @read-errors))))
 
 (defn write-evidence-coverage-report!
   "Build and persist the evidence coverage report to evidence-coverage-report.json.

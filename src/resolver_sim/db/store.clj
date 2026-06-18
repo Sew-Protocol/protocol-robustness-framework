@@ -23,7 +23,8 @@
      XTDB pgwire endpoint.  Pass nil as the datasource to skip all writes
      (useful in tests and offline simulation runs)."
   (:require [next.jdbc              :as jdbc]
-            [resolver-sim.db.xtdb   :as xtdb]))
+            [resolver-sim.db.xtdb   :as xtdb]
+            [resolver-sim.logging   :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Schema helpers
@@ -42,7 +43,8 @@
                "sim_temporal_coverage"]]
     (try
       (jdbc/execute! ds [(str "DELETE FROM " tbl)])
-      (catch Exception _))))
+      (catch Exception e
+        (log/warn! :db-truncate-failed {:table tbl :error (.getMessage e)})))))
 
 ;; ---------------------------------------------------------------------------
 ;; sim_trial_results — writes

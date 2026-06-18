@@ -693,14 +693,27 @@
 (defn current-attribution [] *attribution*)
 
 (defn sanitize-attribution
-  "Drop non-namespaced or non-serializable values from attribution map."
+  "Drop non-namespaced or non-serializable values from attribution map.
+   Logs a warning for each dropped entry so invalid keys are visible
+   at serialize time, not just when inspecting artifacts."
   [attr]
-  (into {}
-        (filter (fn [[k v]]
-                  (and (keyword? k)
-                       (namespace k)
-                       (artifact-safe-value? v))))
-        attr))
+  (let [safe (into {}
+                (filter (fn [[k v]]
+                          (let [valid? (and (keyword? k)
+                                            (namespace k)
+                                            (artifact-safe-value? v))]
+                            (when-not valid?
+                              (log/log! :warn "sanitize-attribution dropping invalid entry"
+                                        {:key k
+                                         :value-type (some-> v type str)
+                                         :reason (cond
+                                                   (not (keyword? k)) :key-not-keyword
+                                                   (not (namespace k)) :key-not-namespaced
+                                                   (not (artifact-safe-value? v)) :value-not-artifact-safe
+                                                   :else :unknown)}))
+                            valid?)))
+                        attr)]
+    safe))
 
 (defn attribution-quality
   "Analyze the provided attribution context against required keys.
