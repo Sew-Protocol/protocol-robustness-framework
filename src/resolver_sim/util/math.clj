@@ -2,9 +2,10 @@
   "Canonical financial arithmetic helpers to prevent non-deterministic precision drift.")
 
 (defn to-canonical
-  "Round down (floor) to long to ensure deterministic integer truncation."
-  [f]
-  (long (Math/floor (double f))))
+  "Ensure deterministic integer truncation.
+   Accepts arbitrary-precision integers."
+  [n]
+  (bigint n))
 
 (defn to-bps
   "Convert basis points to a multiplier."

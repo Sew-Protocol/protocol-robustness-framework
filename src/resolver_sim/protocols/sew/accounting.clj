@@ -13,6 +13,7 @@
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.util.attribution :as attr]
+            [resolver-sim.evidence.capture :as cap]
             [resolver-sim.io.event-evidence :as evidence]))
 
 (declare sub-held record-fee record-claimable)
@@ -255,15 +256,15 @@
           :subject/id   challenger
           :action/type  :reward-bounty
           :evidence/reason :incentive-payout}
-         (evidence/capture-event-evidence! :incentive-payout
-                                          {:bounty-claimable 0}
-                                          {:bounty-claimable bounty}
-                                          {:slash-amount amount :bounty-bps bounty-bps}
-                                          {:formula "payoffs/calculate-bounty"}
-                                          {:world-before world
-                                           :world-after world'})))
-     
-     world')))
+          (evidence/capture-event-evidence! :incentive-payout
+                                           {:bounty-claimable 0}
+                                           {:bounty-claimable bounty}
+                                           {:slash-amount amount :bounty-bps bounty-bps}
+                                           {:formula "payoffs/calculate-bounty"}
+                                           {:world-before world
+                                             :world-after world'})))
+      
+      world')))
 
 (defn slash-bond
   "Slash the posted bond for a losing appellant.

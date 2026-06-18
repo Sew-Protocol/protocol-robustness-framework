@@ -480,8 +480,26 @@ run_triage() {
 }
 
 run_suites() {
-  echo "Suite runner: not wired as standalone CI gate (use routed-suites instead)."
-  return 0
+  require_clojure || return $?
+  echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
+  local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
+
+  clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [suites $suite_filter
+      results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
+      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
+  (doseq [[suite-id result] results]
+    (f/emit-suite-result suite-id result)
+    (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
+    (when-not (:ok? result)
+      (doseq [r (:results result)]
+        (when (not= :pass (:outcome r))
+          (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
+  (when any-fail (System/exit 1)))"
+  # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
+  touch -m "notebooks/report.clj" 2>/dev/null || true
+  return $?
 }
 
 run_routed_suites() {

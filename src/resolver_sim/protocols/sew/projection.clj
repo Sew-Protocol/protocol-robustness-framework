@@ -50,8 +50,6 @@
   [result]
   (let [trace (:trace result)
         last-entry (when (seq trace) (last trace))]
-    (println "DEBUG: terminal-world trace count:" (count trace))
-    (println "DEBUG: last entry has world?:" (some? (:world last-entry)))
     (get-in result [:trace (dec (count (:trace result))) :world])))
 
 (defn- build-trace-context
@@ -61,7 +59,7 @@
     (when world
       {:trace trace
        :world world
-       :world-checkpoints (:world-checkpoints result {})
+       :world-checkpoints (or (:checkpoint-log result) (:world-checkpoints result {}))
        :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])
@@ -144,9 +142,9 @@
         (reduce (fn [m [resolver d]]
                   (if (neg? d)
                     (cond
-                      (withdrawal-event? action) (update-in m [resolver :withdrawn] + (- d))
-                      (slash-event? action) (update-in m [resolver :slashed] + (- d))
-                      :else m)
+                       (withdrawal-event? action) (update-in m [resolver :withdrawn] (fnil + 0) (- d))
+                       (slash-event? action) (update-in m [resolver :slashed] (fnil + 0) (- d))
+                       :else m)
                     m))
                 stake-flow
                 deltas)]
@@ -438,16 +436,13 @@
           :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
           :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
 
-         :story-facts
-         {:scenario-classification
-          (cond
-            (pos? (get metrics :attack-successes 0)) :adversarial-success
-            (pos? (get metrics :rejected-attacks 0)) :adversarial-deflected
-            :else :neutral)
-          :attack-attempts (get metrics :attack-attempts 0)
-          :attack-successes (get metrics :attack-successes 0)
-          :rejected-attacks (get metrics :rejected-attacks 0)
-          :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
+          :story-facts
+          {:scenario-classification
+           (cond
+             (pos? (get metrics :attack-successes 0)) :adversarial-success
+             (pos? (get metrics :rejected-attacks 0)) :adversarial-deflected
+             :else :neutral)
+           :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
           :funds-drift-total (get-in funds-ledger [:conservation :drift-total])
           :coalition-net-profit (let [mval (get metrics :coalition-net-profit)]
                                   (if (some? mval) mval coalition-net-profit))

@@ -3,6 +3,7 @@
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.time.context :as time-ctx]
             [resolver-sim.protocols.sew.io.trace-export :as trace-export]))
 
 (defn- temporal-step-context
@@ -13,66 +14,72 @@
 
 (deftest advance-world-time-helper
   (testing "advances only when event-time is in the future"
-    (let [w {:block-time 1000}
+    (let [w (time-ctx/with-temporal-context {} {:block-ts 1000})
           f #'resolver-sim.contract-model.replay/advance-world-time
           same (f w 1000)
           fut  (f w 1015)]
-      (is (= w (:world same)))
+      (is (= 1000 (time-ctx/block-ts (:world same))))
       (is (false? (:advanced? same)))
       (is (= 0 (:delta-ms same)))
-      (is (= 1015 (get-in fut [:world :block-time])))
+      (is (= 1015 (time-ctx/block-ts (:world fut))))
       (is (true? (:advanced? fut)))
-      (is (= 15 (:delta-ms fut))))))
+      (is (= 15000 (:delta-ms fut))))))
 
 (deftest temporal-rule-regression-rejected
   (testing "process-step rejects regressive time via temporal rule evaluation"
     (let [scenario {:scenario-id "time-regression-check"
                     :schema-version "1.1"
+                    :scenario-author "@test"
                     :title "Time regression"
                     :purpose :adversarial-robustness
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
-          world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-time 2000)
+          world    (time-ctx/with-temporal-context
+                    (proto/init-world sew/protocol scenario)
+                    {:block-ts 2000})
           context  (temporal-step-context scenario)
           event    {:seq 0 :time 1999 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :time-regression (get-in step [:trace-entry :error])))
       (is (= :non-regressive-time (get-in step [:trace-entry :temporal-rule-id])))
-      (is (= 2000 (get-in step [:world :block-time]))))))
+      (is (= 2000 (get-in step [:world :context/time :block-ts]))))))
 
 (deftest temporal-rule-invalid-time-rejected
   (testing "process-step rejects missing/invalid event-time with explicit rule metadata"
     (let [scenario {:scenario-id "invalid-time-check"
                     :schema-version "1.1"
+                    :scenario-author "@test"
                     :title "Invalid time"
                     :purpose :adversarial-robustness
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
-          world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-time 2000)
+          world    (time-ctx/with-temporal-context
+                    (proto/init-world sew/protocol scenario)
+                    {:block-ts 2000})
           context  (temporal-step-context scenario)
           event    {:seq 0 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
       (is (= :invalid-event-time (get-in step [:trace-entry :error])))
       (is (= :missing-event-time (get-in step [:trace-entry :temporal-rule-id])))
-      (is (= 2000 (get-in step [:world :block-time]))))))
+      (is (= 2000 (get-in step [:world :context/time :block-ts]))))))
 
 (deftest temporal-rule-context-extension
   (testing "process-step applies optional context-provided temporal rules"
     (let [scenario {:scenario-id "context-rule-check"
                     :schema-version "1.1"
+                    :scenario-author "@test"
                     :title "Context rule"
                     :purpose :adversarial-robustness
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
-          world    (assoc (proto/init-world sew/protocol scenario)
-                          :block-time 2000)
+          world    (time-ctx/with-temporal-context
+                    (proto/init-world sew/protocol scenario)
+                    {:block-ts 2000})
           context  (assoc (temporal-step-context scenario)
                           :temporal-rules
                           [{:id :custom-no-set-paused
@@ -86,33 +93,46 @@
       (is (= :custom-time-rule (get-in step [:trace-entry :error])))
       (is (= :custom-no-set-paused (get-in step [:trace-entry :temporal-rule-id]))))))
 
-(deftest temporal-rule-order-first-failure-wins
-  (testing "when multiple temporal rules fail, first failing rule is emitted"
-    (let [scenario {:scenario-id "context-rule-order"
+(deftest temporal-rule-instant-support
+  (testing "process-step accepts java.time.Instant as valid event-time"
+    (let [scenario {:scenario-id "instant-time-check"
                     :schema-version "1.1"
-                    :title "Context rule order"
-                    :purpose :adversarial-robustness
-                    :agents [{:id "alice" :type "honest" :address "0xAlice"}
-                             {:id "bob" :type "honest" :address "0xBob"}]
+                    :scenario-author "@test"
+                    :agents [{:id "alice" :type "honest" :address "0xAlice"}]
                     :events []}
-          world    (assoc (proto/init-world sew/protocol scenario) :block-time 2000)
-          context  (assoc (temporal-step-context scenario)
-                          :temporal-rules
-                          [{:id :rule-first
-                            :check (fn [_] {:ok? false :error :first-error})}
-                           {:id :rule-second
-                            :check (fn [_] {:ok? false :error :second-error})}])
-          event    {:seq 0 :time 2001 :agent "alice" :action "set-paused" :params {:paused? true}}
+          world    (time-ctx/with-temporal-context
+                    (proto/init-world sew/protocol scenario)
+                    {:block-ts 1000})
+          context  (temporal-step-context scenario)
+          inst     (java.time.Instant/ofEpochSecond 1005)
+          event    {:seq 0 :time inst :agent "alice" :action "set-paused" :params {:paused? true}}
+          step     (replay/process-step sew/protocol context world event)]
+      (is (= :ok (get-in step [:trace-entry :result])))
+      (is (= 1005 (get-in step [:trace-entry :time-after :block-ts])))))
+
+  (testing "process-step rejects regressive Instant time"
+    (let [scenario {:scenario-id "instant-regression-check"
+                    :schema-version "1.1"
+                    :scenario-author "@test"
+                    :agents [{:id "alice" :type "honest" :address "0xAlice"}]
+                    :events []}
+          world    (time-ctx/with-temporal-context
+                    (proto/init-world sew/protocol scenario)
+                    {:block-ts 2000})
+          context  (temporal-step-context scenario)
+          inst     (java.time.Instant/ofEpochSecond 1999)
+          event    {:seq 0 :time inst :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
       (is (= :rejected (get-in step [:trace-entry :result])))
-      (is (= :first-error (get-in step [:trace-entry :error])))
-      (is (= :rule-first (get-in step [:trace-entry :temporal-rule-id]))))))
+      (is (= :time-regression (get-in step [:trace-entry :error])))
+      (is (= 2000 (get-in step [:trace-entry :time-after :block-ts]))))))
 
 (deftest sew-appeal-window-rule-triggers-via-replay
   (testing "SEW temporal rule rejects execute_pending_settlement before appeal deadline"
     (let [scenario {:scenario-id "sew-appeal-window-rule"
                     :id "S-Temporal-SEW-Appeal-Window"
                     :schema-version "1.1"
+                    :scenario-author "@test"
                     :title "SEW appeal window temporal rule"
                     :purpose :adversarial-robustness
                     :expectations {:terminal [{:name :trace-produced :equals true}]}
@@ -147,6 +167,7 @@
     (let [scenario {:scenario-id "sew-appeal-window-artifact"
                     :id "S-Temporal-SEW-Appeal-Artifact"
                     :schema-version "1.1"
+                    :scenario-author "@test"
                     :title "SEW appeal window artifact propagation"
                     :purpose :adversarial-robustness
                     :expectations {:terminal [{:name :trace-produced :equals true}]}

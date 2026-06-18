@@ -64,31 +64,22 @@
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
 (defn- evidence-filename
-  "Derive filename from evidence record metadata.
-   Sanitize evidence-type to avoid directory traversal issues."
+  "Derive a collision-resistant filename from evidence record metadata.
+   Sanitize evidence-type to avoid directory traversal issues.
+   Format: ev-<transition-index>-<type>-<short-hash>.json"
   [evidence]
-  (let [etype (:evidence/type evidence)
-        reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
-        reason (clojure.string/replace reason #"/" "-")
-        sid    (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
-        idx    (:event/seq evidence "unknown")]
-    (str reason "-" sid "-" idx ".json")))
+   (let [etype (:evidence/type evidence)
+         reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
+         reason (clojure.string/replace reason #"/" "-")
+         sid    (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
+         idx    (:event/seq evidence "unknown")]
+     (str reason "-" sid "-" idx ".json")))
 
 (defn- needs-internal-build?
   "Check if the call should use the legacy positional builder path.
    Positional calls have keyword :reason, map :pre, map :post, map :inputs."
   [reason pre post inputs]
   (and (keyword? reason) (map? pre) (map? post) (map? inputs)))
-
-;; ── Capture Verification ──────────────────────────────────────────────────────
-;;
-;; Post-write verification confirms the artifact actually hit disk.
-;; Mode is controlled by *write-verification*:
-;;   :none     — skip verification
-;;   :exists   — check file exists and is non-empty
-;;   :readback — read file back and compare hashes
-;;
-;; Default :exists.  Set to :readback for research artifact runs.
 ;;   (binding [ev/*write-verification* :readback]
 ;;     (capture-event-evidence! ...))
 

@@ -55,6 +55,22 @@
   #{:scenario/id :run/id :event/seq
     :evidence/type :evidence/importance})
 
+(defn default-metadata
+  "Generate standardized, schema-compliant metadata for evidence export.
+   Merges dynamic context with current attribution state."
+  [scenario-id run-id & {:keys [event-seq] :or {event-seq 0}}]
+  (let [attribution (attr/current-attribution)]
+    (merge
+     {:evidence/schema-version (evcfg/schema :event-evidence)
+      :scenario/id             scenario-id
+      :run/id                  run-id
+      :event/seq               event-seq
+      :evidence/timestamp      (str (java.time.Instant/now))
+      :attribution/subject     (:subject/id attribution)
+      :attribution/action      (:action/type attribution)
+      :evidence/reason         (:evidence/reason attribution)}
+     (:data attribution))))
+
 ;; ── Evidence Base ────────────────────────────────────────────────────────────
 
 (defn evidence-base

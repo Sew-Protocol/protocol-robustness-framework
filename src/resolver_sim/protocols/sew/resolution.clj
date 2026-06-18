@@ -1057,21 +1057,21 @@
                                      [{:id resolver
                                        :slashable-stake current-stake
                                        :available-slashable current-stake}]})]
-              (let [evidence (slashing-ev/build-prorata-slash-evidence
-                               {:world world-slashed
-                                :slash-id slash-id
-                                :workflow-id workflow-id
-                                :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                                :trigger :fraud-slash
-                                :allocation-input {:slash-obligation amount :resolver resolver}
-                                :allocation-result allocation
-                                :transition-dependencies (filterv some?
-                                                                          [(:proposal-evidence-hash pending)])
+               (let [evidence (slashing-ev/build-prorata-slash-evidence
+                                {:world world-slashed
+                                 :slash-id slash-id
+                                 :workflow-id workflow-id
+                                 :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
+                                 :trigger :fraud-slash
+                                 :allocation-input {:slash-obligation amount :resolver resolver}
+                                 :allocation-result allocation
+                                 :transition-dependencies (filterv some?
+                                                                            [(:proposal-evidence-hash pending)])
                                  :attribution (attr/current-attribution)})
                       evidence (assoc evidence
                                  :world/before-full-hash (evidence/hash-world world)
                                  :world/after-full-hash (evidence/hash-world world-slashed))]
-                 (evidence/capture-event-evidence! evidence))
+                  (evidence/capture-event-evidence! evidence))
               (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation

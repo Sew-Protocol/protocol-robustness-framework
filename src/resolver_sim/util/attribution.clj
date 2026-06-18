@@ -610,7 +610,7 @@
     (map? attributed-state-or-map) attributed-state-or-map
     :else *attribution*))
 
-;; ── Artifact Safety ──────────────────────────────────────────────────────────
+
 
 (defn artifact-safe-value?
   "Predicate for values safe to include in persisted JSON/EDN artifacts."

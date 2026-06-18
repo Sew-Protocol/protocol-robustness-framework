@@ -1,9 +1,29 @@
 (ns resolver-sim.contract-model.replay.checkpoints
-  "World-checkpoint retention for replay results.
+  "Checkpoint creation and retention for replay results.
 
    Checkpoints are captured for every event during replay but may be trimmed
    before results are returned. SPE fork replay only needs pre-decision worlds
-   at strategic action seqs.")
+   at strategic action seqs."
+  (:require [resolver-sim.evidence.capture :as cap]))
+
+(defn secure-checkpoint-update
+  "Update a checkpoint map (states/checkpoints) with overwrite detection
+   and append-only logging to :checkpoint-log."
+  [acc key-field event checkpoint-data]
+  (let [m (get acc key-field)
+        seq-val (:seq event)
+        already-exists? (contains? m seq-val)]
+    (-> acc
+        (update key-field assoc seq-val checkpoint-data)
+        (update :checkpoint-log (fnil conj [])
+                {:checkpoint/index (count (get acc :checkpoint-log []))
+                 :event/seq        seq-val
+                 :event/id         (:event/id event)
+                 :world/hash       (cap/stable-hash checkpoint-data)
+                 :checkpoint/type  :post-event})
+        (cond-> already-exists?
+          (update-in [:diagnostics :checkpoint-collisions] (fnil conj [])
+                     {:seq seq-val :target key-field})))))
 
 (def ^:private strategic-checkpoint-actions
   #{"raise_dispute" "escalate_dispute" "execute_resolution"})

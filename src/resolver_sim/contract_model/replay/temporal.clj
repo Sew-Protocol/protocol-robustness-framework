@@ -26,14 +26,16 @@
 (def ^:private temporal-rules
   [{:id :missing-event-time
     :check (fn [{:keys [event-time]}]
-             (if (number? event-time)
+             (if (or (number? event-time) (instance? java.time.Instant event-time))
                {:ok? true}
                {:ok? false :error :invalid-event-time}))}
    {:id :non-regressive-time
     :check (fn [{:keys [event-time now]}]
-             (if (< event-time now)
-               {:ok? false :error :time-regression}
-               {:ok? true}))}])
+             (let [event-ts (if (number? event-time) (long event-time)
+                                (.getEpochSecond ^java.time.Instant event-time))]
+               (if (< event-ts now)
+                 {:ok? false :error :time-regression}
+                 {:ok? true})))}])
 
 (defn effective-temporal-rules
   "Base temporal rules + optional protocol/context-provided rules.

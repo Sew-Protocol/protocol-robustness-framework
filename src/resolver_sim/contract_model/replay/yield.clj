@@ -4,17 +4,15 @@
    Validates that each `yield_accrue` event's `:dt` matches the `:time` delta
    from the previous event. Provider scenarios should use `replay-yield-scenario`
    (or `simple-replay` on yield-v1, which delegates here)."
-  (:require [clojure.stacktrace :as st]
-            [resolver-sim.logging :as log]
+  (:require [resolver-sim.logging :as log]
             [resolver-sim.contract-model.replay.analysis :as analysis]
+            [resolver-sim.contract-model.replay.execution :as execution]
             [resolver-sim.contract-model.replay.flags :as replay-flags]
             [resolver-sim.contract-model.replay.metrics :as metrics]
-            [resolver-sim.contract-model.replay.temporal :as temporal]
             [resolver-sim.contract-model.replay.validation :as validation]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.protocols.yield :as yp]
-            [resolver-sim.yield.risk-monitor :as risk]
-            [resolver-sim.time.context :as time-ctx]))
+            [resolver-sim.yield.risk-monitor :as risk]))
 
 (def ^:private yield-replay-flags replay-flags/minimal-replay-flags)
 
@@ -65,54 +63,6 @@
       (not (:ok align)) align
       :else {:ok true})))
 
-(defn- trace-entry
-  [protocol world-before event result-kw error-kw detail violations world-after]
-  {:seq           (:seq event)
-   :time          (:time event)
-   :time-before   {:block-ts (time-ctx/block-ts world-before)}
-   :time-after    {:block-ts (time-ctx/block-ts world-after)}
-   :agent         (:agent event)
-   :action        (:action event)
-   :params        (:params event)
-   :transition/id (analysis/action->transition-id (:action event))
-   :result        result-kw
-   :error         error-kw
-   :detail        detail
-   :invariants-ok? (empty? violations)
-   :violations    (when (seq violations) violations)
-   :world         (proto/world-snapshot protocol world-after)})
-
-(defn- process-yield-step
-  [protocol context world event]
-  (let [event-time (:time event)
-        world-t    (:world (temporal/advance-world-time world event-time))
-        result (try
-                 (proto/dispatch-action protocol context world-t event)
-                 (catch Exception e
-                   (log/error! "yield-replay dispatch exception"
-                               {:error (.getMessage e) :seq (:seq event) :action (:action event)})
-                   {:ok false
-                    :error :dispatch-exception
-                    :detail {:message (.getMessage e)
-                             :stack   (with-out-str (st/print-stack-trace e))}}))
-        ok?        (:ok result)
-        world-next (if (and ok? (:world result)) (:world result) world-t)
-        inv-single (when ok? (proto/check-invariants-single protocol world-next))
-        inv-trans  (when ok? (proto/check-invariants-transition protocol world-t world-next))
-        violated?  (and ok? (not (and (:ok? inv-single) (:ok? inv-trans))))
-        violations (when violated?
-                     (merge-with (fn [a b] (if (sequential? a) (concat a [b]) [a b]))
-                       (when-not (:ok? inv-single) (:violations inv-single))
-                       (when-not (:ok? inv-trans) (:violations inv-trans))))
-        result-kw  (cond violated? :invariant-violated ok? :ok :else :rejected)
-        error-kw   (when-not ok? (:error result))
-        final-world (if violated? world-t world-next)]
-    {:ok?    (and ok? (not violated?))
-     :world  final-world
-     :trace-entry (trace-entry protocol world event result-kw error-kw
-                               (:detail result) violations final-world)
-     :halted? violated?}))
-
 (defn- run-yield-loop
   [protocol context scenario-id events world0]
   (loop [world world0
@@ -129,7 +79,7 @@
        :protocol protocol
        :world world}
       (let [event (first events)
-            step   (process-yield-step protocol context world event)
+            step   (execution/process-step protocol context world event)
             {:keys [ok? world trace-entry halted?]} step
             metrics' (metrics/accum-metrics protocol metrics event trace-entry
                                             (:agent-index context) world)

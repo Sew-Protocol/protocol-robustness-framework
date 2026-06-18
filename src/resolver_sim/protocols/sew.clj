@@ -714,6 +714,19 @@
     :not-participant
     :not-authorized-resolver})
 
+(def ^:private adversarial-capable-actions
+  "Actions that can constitute an attack when performed by a
+   labeled adversarial agent. Benign setup/utility actions
+   (create_escrow, release, register_stake, etc.) are excluded
+   to prevent false positives in attack-attempts counting."
+  #{:raise_dispute
+    :execute_resolution
+    :escalate_dispute
+    :slash
+    :auto_cancel_disputed
+    :slash_resolver
+    :freeze_resolver})
+
 ;; ---------------------------------------------------------------------------
 ;; SewProtocol Implementation (Tiered)
 ;; ---------------------------------------------------------------------------
@@ -877,10 +890,12 @@
   proto/EconomicModel
 
   (adversarial-event? [_ event agent]
-    (boolean (or (:adversarial? event)
-                 (= "malicious" (:strategy agent))
-                 (= "attacker"  (:role agent))
-                 (= "attacker"  (:type agent)))))
+    (let [action-kw (keyword (:action event))]
+      (boolean (or (:adversarial? event)
+                   (and (contains? adversarial-capable-actions action-kw)
+                        (or (= "malicious" (:strategy agent))
+                            (= "attacker"  (:role agent))
+                            (= "attacker"  (:type agent))))))))
 
   (classify-event [_ event result-kw error-kw]
     (let [action    (:action event)
