@@ -992,9 +992,9 @@
               (emit-appeal-resolution! world' :rejected-no-bond))))))))
 
 (defn- cleanup-orphaned-slashes
-  "Cleanup orphaned pending reversal slashes for a finalized workflow."
+  "Cleanup orphaned pending reversal slashes for a truly terminal escrow (released/refunded)."
   [world workflow-id]
-  (if (t/terminal-state? world workflow-id)
+  (if (#{:released :refunded} (t/escrow-state world workflow-id))
     (update world :pending-fraud-slashes
             (fn [slashes]
               (into {} (remove (fn [[slash-id slash]]
@@ -1125,7 +1125,13 @@
 
 (defn- finalize
   "Internal: transition escrow to terminal state, release accounting.
-   direction — :released (to recipient) or :refunded (to sender)."
+   direction — :released (to recipient) or :refunded (to sender).
+   
+   NOTE: cleanup-orphaned-slashes is deliberately NOT called here.
+   It runs in execute-pending-settlement (which calls finalize then cleanup).
+   Calling it in finalize would remove pending Track 2 reversal slashes
+   that were just created by handle-reversal-slashing in the same
+   execute-resolution call (final-round path)."
   [world workflow-id direction]
   (let [resolver (:dispute-resolver (t/get-transfer world workflow-id))]
     (-> world

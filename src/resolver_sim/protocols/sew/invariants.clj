@@ -480,7 +480,7 @@
                     appeal-dl      (or (:appeal-deadline ev) 0)
                     status         (:status ev)
                     pending-ok?    (and (pos? proposed-at)
-                                        (> appeal-dl proposed-at))
+                                        (>= appeal-dl proposed-at))
                     executed-ok?   (pos? proposed-at)
                     reversed-ok?   (pos? proposed-at)
                     valid?
