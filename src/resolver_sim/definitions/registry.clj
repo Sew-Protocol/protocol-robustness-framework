@@ -165,9 +165,39 @@
                         :default-severity :high
                         :class :safety}
    :invariant/finality {:invariant/id :invariant/finality
-                        :label "Finality"
-                        :default-severity :medium
-                        :class :liveness}})
+                         :label "Finality"
+                         :default-severity :medium
+                         :class :liveness}
+   :invariant/evidence-on-state-change
+   {:invariant/id :invariant/evidence-on-state-change
+    :label "Evidence on state change"
+    :default-severity :high
+    :class :safety}
+   :invariant/no-duplicate-dispute
+   {:invariant/id :invariant/no-duplicate-dispute
+    :label "No duplicate dispute"
+    :default-severity :high
+    :class :safety}
+   :invariant/appeal-requires-prior-resolution
+   {:invariant/id :invariant/appeal-requires-prior-resolution
+    :label "Appeal requires prior resolution"
+    :default-severity :high
+    :class :safety}
+   :invariant/resolver-decision-attributable
+   {:invariant/id :invariant/resolver-decision-attributable
+    :label "Resolver decision attributable"
+    :default-severity :medium
+    :class :safety}
+   :invariant/appeal-reversal-detectable
+   {:invariant/id :invariant/appeal-reversal-detectable
+    :label "Appeal reversal detectable"
+    :default-severity :medium
+    :class :liveness}
+   :invariant/finality-blocked-during-appeal
+   {:invariant/id :invariant/finality-blocked-during-appeal
+    :label "Finality blocked during appeal"
+    :default-severity :high
+    :class :safety}})
 
 (def invariant-metadata
   {:invariant/conservation
@@ -178,6 +208,24 @@
     :related-scenario-families [:economic-solvency :threat-detected]}
    :invariant/finality
    {:related-transitions [:release :execute_resolution :execute_pending_settlement :automate_timed_actions]
+    :related-scenario-families [:scenario-deep-dive :deadline-boundary]}
+   :invariant/evidence-on-state-change
+   {:related-transitions [:raise_dispute :submit_evidence :execute_resolution :escalate_dispute]
+    :related-scenario-families [:scenario-deep-dive :deadline-boundary]}
+   :invariant/no-duplicate-dispute
+   {:related-transitions [:raise_dispute]
+    :related-scenario-families [:scenario-deep-dive]}
+   :invariant/appeal-requires-prior-resolution
+   {:related-transitions [:escalate_dispute]
+    :related-scenario-families [:scenario-deep-dive :deadline-boundary]}
+   :invariant/resolver-decision-attributable
+   {:related-transitions [:execute_resolution :escalate_dispute]
+    :related-scenario-families [:scenario-deep-dive :collusion]}
+   :invariant/appeal-reversal-detectable
+   {:related-transitions [:escalate_dispute :execute_resolution]
+    :related-scenario-families [:scenario-deep-dive :theory-falsification]}
+   :invariant/finality-blocked-during-appeal
+   {:related-transitions [:execute_pending_settlement]
     :related-scenario-families [:scenario-deep-dive :deadline-boundary]}})
 
 (def claims

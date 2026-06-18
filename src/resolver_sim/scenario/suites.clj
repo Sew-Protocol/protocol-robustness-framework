@@ -15,6 +15,27 @@
    "scenarios/yield/Y06_liquidity-shortage-deposit-blocked.json"
    "scenarios/yield/Y07_monthly-accrual-one-year.json"])
 
+(def ^:private dispute-resolution-scenario-paths
+  ["scenarios/S-DR-001-basic-release-ruling.json"
+   "scenarios/S-DR-002-basic-refund-ruling.json"
+   "scenarios/S-DR-003-duplicate-dispute-rejected.json"
+   "scenarios/S-DR-004-timeout-default-resolution.json"
+   "scenarios/S-DR-010-missing-evidence.json"
+   "scenarios/S-DR-011-contradictory-evidence.json"
+   "scenarios/S-DR-012-late-evidence-rejected.json"
+   "scenarios/S-DR-013-evidence-at-deadline.json"
+   "scenarios/S-DR-020-false-claimant-slashed.json"
+   "scenarios/S-DR-021-griefing-claim-cost.json"
+   "scenarios/S-DR-022-lazy-counterparty-timeout.json"
+   "scenarios/S-DR-030-biased-resolver-appealed.json"
+   "scenarios/S-DR-031-colluding-resolver-detected.json"
+   "scenarios/S-DR-032-resolver-insufficient-stake.json"
+   "scenarios/S-DR-040-finality-blocked-during-appeal.json"
+   "scenarios/S-DR-041-finality-after-appeal-window.json"
+   "scenarios/S-DR-042-duplicate-claim-after-finality-rejected.json"
+   "scenarios/S-DR-043-payout-shortfall-deferred.json"
+   "scenarios/S-DR-044-slash-obligation-unmet-recorded.json"])
+
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"
    "scenarios/S78_yield-negative-yield-release-path.json"
@@ -34,7 +55,9 @@
 
 (def suites
   "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}."
-  {:sew-yield-scenarios      {:paths yield-scenario-paths
+  {:dispute-resolution-scenarios {:paths dispute-resolution-scenario-paths
+                                   :protocol-id "sew-v1"}
+   :sew-yield-scenarios      {:paths yield-scenario-paths
                               :protocol-id "sew-v1"}
    :yield-provider-scenarios {:paths yield-provider-scenario-paths
                               :protocol-id "yield-v1"}})

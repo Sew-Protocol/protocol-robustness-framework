@@ -83,7 +83,15 @@
     :shortfall-fidelity
     :migration-parity
     :single-resolution-payout-consistent
-    :fraud-slash-executions-accounted})
+    :fraud-slash-executions-accounted
+    ;; Dispute lifecycle invariants
+    :evidence-on-state-change
+    :no-duplicate-dispute
+    :appeal-requires-prior-resolution
+    :resolver-decision-attributable
+    :appeal-reversal-detectable
+    :evidence-deadline-enforced
+    :finality-blocked-during-appeal})
 
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
@@ -1437,9 +1445,16 @@
                  :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
                  :reversal-slash-disabled        (reversal-slash-disabled? world)
                  :resolver-capacity              (resolver-capacity-invariant? world)
-                 :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
-                 :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
-                  :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
+                  :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
+                  :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
+                  :evidence-on-state-change            (dispute/evidence-on-state-change? world)
+                  :no-duplicate-dispute                (dispute/no-duplicate-dispute? world)
+                  :appeal-requires-prior-resolution    (dispute/appeal-requires-prior-resolution? world)
+                  :resolver-decision-attributable      (dispute/resolver-decision-attributable? world)
+                  :appeal-reversal-detectable          (dispute/appeal-reversal-detectable? world)
+                  :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
+                  :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
+                   :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
                   :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
                                                     (if (map? r) r {:holds? r :violations nil}))}
          

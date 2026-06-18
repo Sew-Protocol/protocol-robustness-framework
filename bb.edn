@@ -291,6 +291,9 @@
   test:invariants {:doc "Run canonical deterministic invariant target (S01–S41)"
                    :task (shell "./scripts/test.sh invariants")}
 
+  test:dispute-resolution {:doc "Run dispute resolution coverage scenarios (S-DR-*)"
+                           :task (shell "./scripts/test.sh dispute-resolution")}
+
   test:suites {:doc "Run canonical fixture suites target"
                :task (shell "./scripts/test.sh suites")}
 
