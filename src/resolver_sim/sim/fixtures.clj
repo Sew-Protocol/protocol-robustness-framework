@@ -93,10 +93,8 @@
      (if (contains? seen x)
        (throw (ex-info "Circular fixture reference" {:key x :seen seen}))
        ;; Normalize JSON-loaded fixtures to fix type mismatches
-       (let [loaded (load-fixture x)
-             normalized (if (.endsWith (fixture-key->path x) ".json")
-                          (normalize-scenario loaded)
-                          loaded)]
+        (let [loaded (load-fixture x)
+              normalized (normalize-scenario loaded)]
          (compose-suite normalized (conj seen x))))
 
      (map? x)

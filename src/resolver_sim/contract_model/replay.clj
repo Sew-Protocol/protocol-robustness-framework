@@ -25,7 +25,8 @@
                 [resolver-sim.util.attribution :as attr]
                [resolver-sim.yield.risk-monitor :as risk]
                [resolver-sim.evidence.chain :as chain]
-               [resolver-sim.io.event-evidence :as event-evidence]))
+               [resolver-sim.io.event-evidence :as event-evidence]
+               [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -189,14 +190,21 @@
            {:ctx/scenario-id scenario-id
             :ctx/run-id run-id}
            (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
-         (let [result (if (:evaluate-expectations? flags true)
-                        (finalize-scenario-result scenario trimmed-result flags)
-                        trimmed-result)]
-            ;; Phase 2: Register Theory Evaluation and Results
-            (when-let [theory (:diagnostics result)]
-              (let [f (io/file (evcfg/artifact-path :theory-eval))]
-                (.mkdirs (.getParentFile f))
-                (spit f (json/write-str theory {:indent true}))))
+          (let [result (if (:evaluate-expectations? flags true)
+                         (finalize-scenario-result scenario trimmed-result flags)
+                         trimmed-result)]
+             ;; Phase 2: Register Theory Evaluation and Results
+             ;; TODO: Move this I/O to the caller level — replay-with-protocol
+             ;; should be a pure computation.
+             (when-let [theory (:diagnostics result)]
+               (try
+                 (let [f (io/file (evcfg/artifact-path :theory-eval))]
+                   (.mkdirs (.getParentFile f))
+                   (spit f (json/write-str theory {:indent true})))
+                 (catch Exception e
+                   (log/warn! :theory-diagnostics-write-failed
+                     {:path (evcfg/artifact-path :theory-eval)
+                      :error (.getMessage e)}))))
            
              (assoc result :risk-events (risk/events)))))))))))
 

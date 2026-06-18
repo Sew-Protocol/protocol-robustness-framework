@@ -90,9 +90,11 @@
      :malice-p50 (quantile sorted-malice 0.50)
      :malice-p75 (quantile sorted-malice 0.75)
 
-     :honest-wins (count (filter #(> % 0) (map - profits-honest profits-malice)))
-     :dominance-ratio (if (zero? mean-malice) Double/POSITIVE_INFINITY
-                        (double (/ mean-honest mean-malice)))
+     :mean-profit-difference (double (mean (map - profits-honest profits-malice)))
+     :dominance-ratio (cond
+                        (or (Double/isNaN mean-malice) (Double/isNaN mean-honest)) Double/NaN
+                        (zero? mean-malice) Double/POSITIVE_INFINITY
+                        :else (double (/ mean-honest mean-malice)))
 
      :appeal-rate (double (/ appeal-count n-trials))
      :escalation-rate (double (/ escalation-count n-trials))

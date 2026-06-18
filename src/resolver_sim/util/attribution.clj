@@ -674,11 +674,14 @@
    - Use with-attribution when adding local semantic context.
    - Keys must be namespaced, e.g. :ctx/run-id, :subject/type.
    - Inner keys override outer keys.
+   - Invalid entries (non-namespaced keys, non-serializable values)
+     are warned at bind time and dropped before merge so they do not
+     propagate to downstream consumers.
    - Returns the value of the body."
   [attr & body]
   `(let [a# ~attr]
      (warn-invalid-attribution! a#)
-     (binding [*attribution* (merge *attribution* a#)]
+     (binding [*attribution* (merge *attribution* (sanitize-attribution a#))]
        ~@body)))
 
 (defmacro with-attribution-strict
@@ -717,16 +720,24 @@
 
 (defn attribution-quality
   "Analyze the provided attribution context against required keys.
-   Returns {:quality :complete|:partial|:missing, :missing [...], :attribution {...}}"
+   Returns {:quality :complete|:partial|:missing, :missing [...], :attribution {...}}
+   Invalid entries (non-namespaced keys, non-serializable values) are dropped
+   by sanitize-attribution and a warning is logged for each."
   [attr requirements]
-  (let [safe-attr (sanitize-attribution attr)
-        missing   (seq (remove #(contains? safe-attr %) requirements))]
-    {:quality (cond
-                (nil? missing) :complete
-                (seq safe-attr) :partial
-                :else :missing)
-     :missing missing
-     :attribution safe-attr}))
+  (let [invalid (seq (invalid-attribution-entries attr))]
+    (when invalid
+      (doseq [[k v] invalid]
+        (log/log! :warn "attribution-quality: invalid entry dropped before quality check"
+                  {:key k :value-type (some-> v type str)})))
+    (let [safe-attr (sanitize-attribution attr)
+          missing   (seq (remove #(contains? safe-attr %) requirements))]
+      {:quality (cond
+                  (nil? missing) :complete
+                  (seq safe-attr) :partial
+                  :else :missing)
+       :missing missing
+       :attribution safe-attr
+       :invalid-entries (count invalid)})))
 
 (defn current-evidence-attribution
   "Helper for evidence capture modules to get a standardized attribution block.

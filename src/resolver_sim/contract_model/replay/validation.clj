@@ -135,9 +135,9 @@
        :detail {:initial-block-time init-time
                 :violations (mapv :time (filter #(< (:time %) init-time) events))}}
 
-      ;; (some #(not (contains? known-ids (:agent %))) events)
-      ;; {:ok false :error :unknown-agent-in-event
-      ;;  :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
+      (some #(not (contains? known-ids (:agent %))) events)
+      {:ok false :error :unknown-agent-in-event
+       :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
 
 
       ;; Population metrics in single-trace theory → hard error (silent inconclusive otherwise).

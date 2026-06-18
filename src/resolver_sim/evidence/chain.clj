@@ -13,7 +13,8 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [resolver-sim.benchmark.hashing :as h]
-            [resolver-sim.evidence.config :as evcfg]))
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.logging :as log]))
 
 ;; ── Registry Atom ─────────────────────────────────────────────────────────
 
@@ -78,17 +79,23 @@
   "Register an evidence record (map from emit-evidence!) into the chain registry.
    Returns the evidence-hash. The registry tracks every evidence record produced
    during a run, enabling the full content-addressed chain to be built later.
-   Idempotent: duplicate evidence-hashes are silently ignored."
+   Idempotent: duplicate evidence-hashes are silently ignored.
+   Logs a warning when evidence has no hash — the record will not be registered."
   [evidence]
   (let [eh (:evidence-hash evidence)]
-    (when (and eh (string? eh))
-      (swap! evidence-registry-atom
-             (fn [reg]
-               (if (some #(= eh (:evidence-hash %)) (:artifacts reg))
-                 reg
-                 (-> reg
-                     (update :artifacts conj (evidence->artifact-entry evidence))
-                     (update :evidence-hashes conj eh))))))
+    (if (and eh (string? eh))
+      (do (swap! evidence-registry-atom
+                 (fn [reg]
+                   (if (some #(= eh (:evidence-hash %)) (:artifacts reg))
+                     reg
+                     (-> reg
+                         (update :artifacts conj (evidence->artifact-entry evidence))
+                         (update :evidence-hashes conj eh)))))
+          eh)
+      (do (log/warn! :evidence-register-missing-hash
+            {:evidence-type (:evidence/type evidence)
+             :artifact-kind (:artifact-kind evidence)})
+          eh))
     eh))
 
 ;; ── Registry Builder ──────────────────────────────────────────────────────

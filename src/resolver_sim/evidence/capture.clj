@@ -17,29 +17,21 @@
    
    See also resolver-sim.io.event-evidence for durable persistence."
   (:require [clojure.walk :as walk]
+            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.util.attribution :as attr]))
 
 ;; ── Stable Hashing ───────────────────────────────────────────────────────────
-
-(defn- canonicalize
-  "Recursively sort map keys for deterministic serialization."
-  [data]
-  (walk/postwalk
-    (fn [x]
-      (if (map? x)
-        (into (sorted-map) x)
-        x))
-    data))
+;;
+;; Delegates to resolver-sim.benchmark.hashing for the single canonical
+;; implementation. The prefixed variant is used for schema-compliant
+;; evidence hashes; callers that need plain hex use hashing/stable-hash directly.
 
 (defn stable-hash
-  "Compute a deterministic, content-addressed hash of any Clojure value.
-   Same input always produces the same hex string, across JVM invocations.
-   Output is prefixed with 'sha256:' for schema compliance."
+  "Compute a deterministic, content-addressed hash with 'sha256:' prefix.
+   Delegates to benchmark.hashing/stable-hash-prefixed."
   [x]
-  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (pr-str (canonicalize x)) "UTF-8"))
-    (str "sha256:" (apply str (map (partial format "%02x") (map int (.digest digest)))))))
+  (hashing/stable-hash-prefixed x))
 
 ;; ── Required Fields ──────────────────────────────────────────────────────────
 

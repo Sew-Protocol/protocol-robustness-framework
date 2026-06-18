@@ -9,6 +9,7 @@
    See `make-evidence-record` for the canonical evidence record shape, and
    `emit-evidence!` for the primary emission API."
   (:require [clojure.walk :as walk]
+            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.util.attribution :as attr])
   (:import [java.security MessageDigest]))
@@ -56,29 +57,16 @@
      attr)))
 
 ;; ── Stable Hashing ───────────────────────────────────────────────────────────
-
-(defn- canonicalize
-  "Recursively sort map keys for deterministic serialization."
-  [data]
-  (walk/postwalk
-    (fn [x]
-      (if (map? x)
-        (into (sorted-map) x)
-        x))
-    data))
-
-(defn- sha256-hex
-  "Return the SHA-256 hex digest of a UTF-8 string."
-  [s]
-  (let [digest (.digest (MessageDigest/getInstance "SHA-256")
-                        (.getBytes s "UTF-8"))]
-    (apply str (map (partial format "%02x") digest))))
+;;
+;; Delegates to resolver-sim.benchmark.hashing for the single canonical
+;; implementation.
 
 (defn stable-hash
   "Compute a deterministic, content-addressed hash of any Clojure value.
-   Same input always produces the same hex string, across JVM invocations."
+   Same input always produces the same hex string, across JVM invocations.
+   Delegates to benchmark.hashing/stable-hash."
   [x]
-  (sha256-hex (pr-str (canonicalize x))))
+  (hashing/stable-hash x))
 
 ;; ── Evidence Record ──────────────────────────────────────────────────────────
 

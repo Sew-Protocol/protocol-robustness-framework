@@ -27,7 +27,8 @@
    Every operation function signature:
      (fn [world workflow-id ...args] -> {:ok bool :world world' :error keyword})"
   (:require [clojure.string :as str]
-            [resolver-sim.time.context :as time-ctx]))
+            [resolver-sim.time.context :as time-ctx]
+            [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Safe numeric coercion (shared across invariants, projection, classification)
@@ -36,12 +37,17 @@
 (defn safe-parse-long
   "Coerce a value to long, handling JSON-deserialized strings.
    Uses Long/parseLong for exact integer parsing — avoids Double/parseDouble
-   which loses precision for uint256-scale values (> 2^53)."
+   which loses precision for uint256-scale values (> 2^53).
+   Logs a warning on unparseable input — 0 return is ambiguous but safe
+   (0 is a valid workflow-id in the SEW domain)."
   [x]
   (cond
     (number? x) (long x)
-    (string? x) (try (Long/parseLong x) (catch Exception _ 0))
-    :else 0))
+    (string? x) (try (Long/parseLong x)
+                     (catch Exception e
+                       (log/warn! :safe-parse-failed {:input x :error (.getMessage e)})
+                       0))
+    :else (do (log/warn! :safe-parse-unexpected-type {:input x :type (type x)}) 0)))
 
 ;; ---------------------------------------------------------------------------
 ;; Semantic ID Phantom Types

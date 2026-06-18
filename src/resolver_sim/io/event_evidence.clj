@@ -79,11 +79,15 @@
    Format: ev-<transition-index>-<type>-<short-hash>.json"
   [evidence]
    (let [etype (:evidence/type evidence)
-         reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
-         reason (clojure.string/replace reason #"/" "-")
-         sid    (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
-         idx    (:event/seq evidence "unknown")]
-     (str reason "-" sid "-" idx ".json")))
+          reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
+          reason (-> reason
+                     (clojure.string/replace #"/" "-")
+                     (clojure.string/replace #"\\.\\." ""))
+          sid    (-> (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
+                     (clojure.string/replace #"/" "-")
+                     (clojure.string/replace #"\\.\\." ""))
+          idx    (:event/seq evidence "unknown")]
+      (str reason "-" sid "-" idx ".json")))
 
 (defn- needs-internal-build?
   "Check if the call should use the legacy positional builder path.
@@ -305,7 +309,6 @@
                         (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
                                :evidence/layer :targeted-protocol))
                 (cap/finalize-evidence)
-                (cap/require-fields)
                 (inject-chain-fields))
               serialize-start (System/nanoTime)
               out-dir  (str (evcfg/artifact-dir) "/event-evidence")
@@ -326,7 +329,9 @@
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
          (let [evidence (cap/require-fields evidence)
-               group-id (:ctx/evidence-group-id (attr/current-attribution))
+               resolved-attr (attr/current-attribution)
+               _ (validate-attribution! resolved-attr)
+               group-id (:ctx/evidence-group-id attr/*attribution*)
                evidence (cond-> evidence
                           group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
                evidence (inject-chain-fields evidence)

@@ -31,7 +31,7 @@
     :else v))
 
 (defn- normalize-seq [v]
-  (if (string? v) (Integer/parseInt v) v))
+  (if (string? v) (try (Integer/parseInt v) (catch Exception _ v)) v))
 
 (defn- normalize-expected-errors
   [scenario]

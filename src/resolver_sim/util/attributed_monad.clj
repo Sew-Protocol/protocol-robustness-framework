@@ -46,11 +46,13 @@
 (defn with-context
   "Wraps a state computation m such that it runs with an additional
    merged attribution context.
-   Note: This doesn't use dynamic binding, it merges into the AttributedState."
+   Note: This doesn't use dynamic binding, it merges into the AttributedState.
+   Invalid keys in ctx are warned at merge time."
   [ctx m]
   (fn [attributed]
     (let [state (attr/unwrap-state attributed)
           attr  (attr/get-attribution attributed)
+          _     (attr/warn-invalid-attribution! ctx)
           new-attr (merge attr ctx)]
       (m (attr/wrap-state state new-attr)))))
 
