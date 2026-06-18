@@ -159,11 +159,12 @@
   "Finalize an evidence record before persistence.
    
    1. Canonicalizes all values for deterministic output
-   2. Computes composite :evidence/hash over all other fields
+   2. Computes composite :evidence/hash over all other fields except
+      :evidence/timestamp (metadata, not content)
    3. Optionally chains with :evidence/prev-hash
    
    Returns the finalized evidence map."
   [evidence]
-  (let [hash-input (dissoc evidence :evidence/hash)
+  (let [hash-input (dissoc evidence :evidence/hash :evidence/timestamp)
         evidence-hash (stable-hash hash-input)]
     (assoc evidence :evidence/hash evidence-hash)))

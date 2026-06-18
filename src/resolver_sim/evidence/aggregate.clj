@@ -10,9 +10,11 @@
   (cap/stable-hash content))
 
 (defn extract-decision-frame
-  "Extract the decision frame (world state metadata) from the world."
+  "Extract the decision frame (world state metadata) from the world.
+   The frame/id is derived from the world content hash for deterministic
+   content-addressing — same world always produces the same frame."
   [world]
-  {:frame/id (str (java.util.UUID/randomUUID))
+  {:frame/id (str "frame-" (cap/stable-hash world) "-" (:step world 0))
    :step (:step world 0)
    :block-ts (time-ctx/block-ts world)
    :world/hash (cap/stable-hash world)})

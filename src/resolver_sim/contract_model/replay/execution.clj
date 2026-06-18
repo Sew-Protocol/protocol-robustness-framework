@@ -357,7 +357,7 @@
                                                        :id-alias-map (let [m (:id-alias-map acc)]
                                                                        (cond-> m
                                                                          (and alias-key new-id) (assoc alias-key new-id)
-                                                                         (and agent-alias-key new-agent-addr) (assoc alias-key new-agent-addr))))
+                                                                         (and agent-alias-key new-agent-addr) (assoc agent-alias-key new-agent-addr))))
                                                 (update :trace conj entry)
                                                 (assoc :metrics (metrics/accum-metrics protocol (:metrics acc) event entry agent-index working-world))
                                                 (assoc :states (assoc (:states acc) (:seq event) (proto/world-snapshot protocol new-world)))

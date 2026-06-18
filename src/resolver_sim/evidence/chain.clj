@@ -238,16 +238,27 @@
     {:present false}))
 
 (defn evidence-chain-integrity
-  "Full chain integrity check: verify every evidence record's hash is
-   consistent and all hashes are registered. Returns a summary map."
+  "Full chain integrity check: verify the registry hash is consistent,
+   every evidence hash is non-nil and well-formed, and all component
+   hashes are present. Returns a summary map.
+   Note: individual evidence content hashes are verified at the disk
+   level by verify-chain-integrity in resolver-sim.io.event-evidence."
   [registry]
   (let [artifacts (:artifacts registry)
         reg-valid (:valid (verify-registry-hash registry))
         all-hashes (map :evidence-hash artifacts)
-        all-present? (every? (fn [eh]
-                               (some #(= eh (:evidence-hash %)) artifacts))
-                             all-hashes)]
+        all-non-nil (every? some? all-hashes)
+        all-well-formed (every? #(re-matches #"^[0-9a-f]{64}$" (or % "")) all-hashes)
+        all-with-component-hashes (every? (fn [a]
+                                            (and (:context-hash a)
+                                                 (:before-hash a)
+                                                 (:after-hash a)
+                                                 (:action-hash a)
+                                                 (:result-hash a)))
+                                          artifacts)]
     {:registry-hash-valid reg-valid
      :artifact-count (count artifacts)
-     :all-hashes-registered all-present?
-     :chain-intact (and reg-valid all-present?)}))
+     :all-hashes-non-nil all-non-nil
+     :all-hashes-well-formed all-well-formed
+     :all-with-component-hashes all-with-component-hashes
+     :chain-intact (and reg-valid all-non-nil all-well-formed)}))

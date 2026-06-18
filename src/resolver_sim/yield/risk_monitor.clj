@@ -13,6 +13,15 @@
   []
   (clojure.core/reset! *risk-events* []))
 
+(defmacro with-fresh-risk-context
+  "Execute body with a fresh risk-events atom isolated from surrounding scope.
+   The outer atom is restored when body exits.
+   Use at the start of a replay run to prevent cross-run contamination."
+  [& body]
+  `(let [fresh# (atom [])]
+     (binding [*risk-events* fresh#]
+       ~@body)))
+
 
 (defn events
   "Return accumulated risk events as a vector of maps."

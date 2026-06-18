@@ -13,6 +13,7 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.set :as set]
+            [clojure.walk :as walk]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
@@ -53,12 +54,21 @@
                data data)))
 
 (defn hash-world
-  "Content hash of a world state for forensic anchoring.
-   Uses pr-str directly (not canonicalize) because world state maps may have
-   mixed key types (keyword, integer, string) that sorted-map cannot compare."
+  "Content hash of a world state for deterministic forensic anchoring.
+   Canonicalizes map keys so the same logical world always produces the
+   same hash across JVM invocations. Falls back to stable sort for maps
+   with mixed key types that sorted-map cannot compare."
   [world]
-  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (pr-str world) "UTF-8"))
+  (let [canon (walk/postwalk
+               (fn [x]
+                 (if (map? x)
+                   (try (into (sorted-map) x)
+                        (catch ClassCastException _
+                          (into (array-map) (sort-by (fn [[k _]] (str k)) x))))
+                   x))
+               world)
+        digest (java.security.MessageDigest/getInstance "SHA-256")]
+    (.update digest (.getBytes (pr-str canon) "UTF-8"))
     (apply str (map (partial format "%02x") (.digest digest)))))
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
@@ -195,14 +205,20 @@
 
 (defn- inject-chain-fields
   "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
-   :evidence/chain-self-hash to the evidence map using the cursor."
+   :evidence/chain-self-hash to the evidence map using the cursor.
+   Uses a single atomic swap! to prevent race conditions on the
+   sequence counter and prev-hash chain linking."
   [evidence]
-  (let [{:keys [seq last-hash]} @chain-cursor
-        seq-no (inc seq)
-        self-hash (:evidence/hash evidence)]
-    (swap! chain-cursor assoc :seq seq-no :last-hash self-hash)
+  (let [self-hash (:evidence/hash evidence)
+        {:keys [seq last-hash]}
+        (swap! chain-cursor
+               (fn [cursor]
+                 (let [new-seq (inc (:seq cursor))]
+                   {:seq new-seq
+                    :last-hash self-hash
+                    :prev-hash (:last-hash cursor)})))]
     (assoc evidence
-      :evidence/chain-seq seq-no
+      :evidence/chain-seq seq
       :evidence/chain-prev-hash last-hash
       :evidence/chain-self-hash self-hash)))
 
@@ -295,7 +311,7 @@
               filename (evidence-filename e)
               f        (io/file out-dir filename)]
           (.mkdirs (io/file out-dir))
-          (spit f (json/write-str e{:key-fn qualified-key :indent true}))
+          (spit f (json/write-str e {:key-fn qualified-key :indent true}))
           (verify-write! e f)
           (record-serialize-latency! serialize-start)
           (record-capture-latency! capture-start)
@@ -308,16 +324,16 @@
   ([evidence]
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
-        (let [group-id (:ctx/evidence-group-id (attr/current-attribution))
-              evidence (cond-> evidence
-                         group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
-              evidence (inject-chain-fields evidence)
-              serialize-start (System/nanoTime)
-             out-dir  (str (evcfg/artifact-dir) "/event-evidence")
-             filename (evidence-filename evidence)
-             f        (io/file out-dir filename)]
-          (.mkdirs (io/file out-dir))
-          (spit f (json/write-str evidence{:key-fn qualified-key :indent true}))
+         (let [group-id (:ctx/evidence-group-id (attr/current-attribution))
+               evidence (cond-> evidence
+                          group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
+               evidence (inject-chain-fields evidence)
+               serialize-start (System/nanoTime)
+              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
+              filename (evidence-filename evidence)
+              f        (io/file out-dir filename)]
+           (.mkdirs (io/file out-dir))
+           (spit f (json/write-str evidence {:key-fn qualified-key :indent true}))
           (verify-write! evidence f)
           (record-serialize-latency! serialize-start)
           (record-capture-latency! capture-start)
@@ -373,12 +389,29 @@
         out-dir (or dir (str (evcfg/artifact-dir)))
         f (io/file out-dir "evidence-links.json")]
     (.mkdirs (io/file out-dir))
-    (spit f (json/write-str idx{:key-fn qualified-key :indent true}))
+    (spit f (json/write-str idx {:key-fn qualified-key :indent true}))
     (println "Wrote evidence links index:" (.getPath f))
     (chain/register-additional-artifact!
       (chain/index-artifact-entry :evidence-links "evidence-links.json"
                                   "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
+
+;; ── Content Hash Verification Helper ──────────────────────────────────────────
+
+(defn- canonicalize-for-verification
+  "Canonicalize an evidence artifact for hash re-computation.
+   Converts keywords to strings (matching JSON serialization behavior)
+   and sorts map keys for deterministic ordering.
+   This allows the re-computed hash to match the original hash computed
+   by finalize-evidence before JSON serialization."
+  [data]
+  (walk/postwalk
+    (fn [v]
+      (cond
+        (instance? clojure.lang.Keyword v) (name v)
+        (map? v) (into (sorted-map) v)
+        :else v))
+    data))
 
 ;; ── Post-hoc Chain Integrity Verification ──────────────────────────────────────
 ;;
@@ -390,7 +423,8 @@
   "Verify the evidence chain from artifacts alone.
    
    Reads all artifacts, sorts by :evidence/chain-seq, and checks:
-   1. Each artifact's :evidence/chain-self-hash matches its :evidence/hash
+   1. Each artifact's evidence-hash matches a re-computed hash of its content
+      (excluding :evidence/hash, :evidence/chain-self-hash, :evidence/chain-prev-hash)
    2. Each artifact's :evidence/chain-prev-hash matches the previous artifact's
       :evidence/chain-self-hash (or :evidence/hash)
    3. No gaps in :evidence/chain-seq numbering
@@ -398,61 +432,77 @@
    Returns a map:
    :valid       — true if all checks pass
    :artifact-count — total artifacts with chain fields
-   :self-hash-valid — count of artifacts with matching self-hash
+   :content-hash-valid — count of artifacts with content-verified hashes
    :prev-hash-valid — count of artifacts with matching prev->previous link
    :gaps        — list of missing chain-seq numbers
-   :violations  — list of {:chain-seq N :reason ...} maps"
+   :violations  — list of {:chain-seq N :reason ...} maps
+   
+   Throws if artifact-dir does not exist (fail-closed)."
   [& [artifact-dir]]
   (let [dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
-        artifacts (sort-by :evidence/chain-seq
-                           (keep (fn [f]
-                                   (try (read-evidence-json f)
-                                        (catch Exception _ nil)))
-                                 (filter #(.isFile %) (file-seq (io/file dir)))))
-        with-chain (filter :evidence/chain-seq artifacts)
-        sorted (sort-by :evidence/chain-seq with-chain)
-        ;; Check 1: self-hash matches evidence-hash
-        self-hash-ok (filter (fn [a] (= (:evidence/chain-self-hash a)
-                                        (:evidence/hash a))) sorted)
-        self-hash-bad (remove (fn [a] (= (:evidence/chain-self-hash a)
-                                         (:evidence/hash a))) sorted)
-        ;; Check 2: prev-hash links to previous artifact
-        prev-results (mapv (fn [a prev]
-                             {:artifact a
-                              :valid (= (:evidence/chain-prev-hash a)
-                                        (or (:evidence/chain-self-hash prev)
-                                            (:evidence/hash prev)))})
-                           sorted (cons nil sorted))
-        prev-valid (count (filter :valid (rest prev-results)))
-        prev-bad (remove :valid (rest prev-results))
-        ;; Check 3: sequence gaps
-        seqs (sort (map :evidence/chain-seq sorted))
-        gaps (if (seq seqs)
-               (let [expected (range (first seqs) (inc (last seqs)))]
-                 (remove (set seqs) expected))
-               [])
-        violations (concat
-                     (map (fn [a] {:chain-seq (:evidence/chain-seq a)
-                                   :reason (str "Self-hash mismatch: "
-                                                (:evidence/chain-self-hash a)
-                                                " != " (:evidence/hash a))})
-                          self-hash-bad)
-                     (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
-                                    :reason (str "Prev-hash mismatch: "
-                                                 (:evidence/chain-prev-hash (:artifact r))
-                                                 " does not link to previous")})
-                          prev-bad)
-                     (map (fn [g] {:chain-seq g
-                                    :reason (str "Gap in chain: seq " g " missing")})
-                          gaps))]
-    {:valid (and (empty? self-hash-bad) (empty? prev-bad) (empty? gaps))
-     :artifact-count (count sorted)
-     :self-hash-valid (count self-hash-ok)
-     :self-hash-failed (count self-hash-bad)
-     :prev-hash-valid prev-valid
-     :prev-hash-failed (count prev-bad)
-     :gaps (vec gaps)
-     :violations (vec violations)}))
+        dir-file (io/file dir)]
+    (when-not (.isDirectory dir-file)
+      (throw (ex-info "Cannot verify chain integrity: artifact directory not found"
+                      {:path (str dir)})))
+    (let [artifacts (sort-by :evidence/chain-seq
+                             (keep (fn [f]
+                                     (try (read-evidence-json f)
+                                          (catch Exception e
+                                            (throw (ex-info "Failed to read evidence artifact"
+                                                            {:path (str f) :error (.getMessage e)})))))
+                                   (filter #(.isFile %) (file-seq dir-file))))
+          with-chain (filter :evidence/chain-seq artifacts)
+          sorted (sort-by :evidence/chain-seq with-chain)
+          ;; Check 1: content hash — re-compute hash from artifact content
+          content-ok (filter (fn [a]
+                               (let [content (dissoc a :evidence/hash
+                                                      :evidence/chain-self-hash
+                                                      :evidence/chain-prev-hash)
+                                     expected (cap/stable-hash (canonicalize-for-verification content))]
+                                 (= expected (:evidence/hash a))))
+                             sorted)
+          content-bad (remove (fn [a]
+                                (let [content (dissoc a :evidence/hash
+                                                       :evidence/chain-self-hash
+                                                       :evidence/chain-prev-hash)
+                                      expected (cap/stable-hash (canonicalize-for-verification content))]
+                                  (= expected (:evidence/hash a))))
+                              sorted)
+          ;; Check 2: prev-hash links to previous artifact
+          prev-results (mapv (fn [a prev]
+                               {:artifact a
+                                :valid (= (:evidence/chain-prev-hash a)
+                                          (or (:evidence/chain-self-hash prev)
+                                              (:evidence/hash prev)))})
+                             sorted (cons nil sorted))
+          prev-valid (count (filter :valid (rest prev-results)))
+          prev-bad (remove :valid (rest prev-results))
+          ;; Check 3: sequence gaps
+          seqs (sort (map :evidence/chain-seq sorted))
+          gaps (if (seq seqs)
+                 (let [expected (range (first seqs) (inc (last seqs)))]
+                   (remove (set seqs) expected))
+                 [])
+          violations (concat
+                       (map (fn [a] {:chain-seq (:evidence/chain-seq a)
+                                     :reason (str "Content hash mismatch — evidence content has been modified")})
+                            content-bad)
+                       (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
+                                     :reason (str "Prev-hash mismatch: "
+                                                  (:evidence/chain-prev-hash (:artifact r))
+                                                  " does not link to previous")})
+                            prev-bad)
+                       (map (fn [g] {:chain-seq g
+                                     :reason (str "Gap in chain: seq " g " missing")})
+                            gaps))]
+      {:valid (and (empty? content-bad) (empty? prev-bad) (empty? gaps))
+       :artifact-count (count sorted)
+       :content-hash-valid (count content-ok)
+       :content-hash-failed (count content-bad)
+       :prev-hash-valid prev-valid
+       :prev-hash-failed (count prev-bad)
+       :gaps (vec gaps)
+       :violations (vec violations)})))
 
 ;; ── Scenario Evidence Verification ────────────────────────────────────────────
 ;;
@@ -833,7 +883,7 @@
         out-dir (or dir (str (evcfg/artifact-dir)))
         f (io/file out-dir "evidence-mechanisms.json")]
     (.mkdirs (io/file out-dir))
-    (spit f (json/write-str (sort-by key idx){:key-fn qualified-key :indent true}))
+    (spit f (json/write-str (sort-by key idx) {:key-fn qualified-key :indent true}))
     (println "Wrote mechanism index:" (.getPath f))
     (chain/register-additional-artifact!
       (chain/index-artifact-entry :evidence-mechanisms "evidence-mechanisms.json"
@@ -923,7 +973,7 @@
         out-dir (or dir (str (evcfg/artifact-dir)))
         f (io/file out-dir "evidence-coverage-report.json")]
     (.mkdirs (io/file out-dir))
-    (spit f (json/write-str report{:key-fn qualified-key :indent true}))
+    (spit f (json/write-str report {:key-fn qualified-key :indent true}))
     (println "Wrote evidence coverage report:" (.getPath f))
     (chain/register-additional-artifact!
       (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"

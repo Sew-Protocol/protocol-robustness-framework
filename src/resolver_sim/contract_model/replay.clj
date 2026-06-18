@@ -23,7 +23,9 @@
                 [resolver-sim.protocols.protocol :as proto]
                 [resolver-sim.protocols.registry :as preg]
                 [resolver-sim.util.attribution :as attr]
-               [resolver-sim.yield.risk-monitor :as risk]))
+               [resolver-sim.yield.risk-monitor :as risk]
+               [resolver-sim.evidence.chain :as chain]
+               [resolver-sim.io.event-evidence :as event-evidence]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -142,8 +144,10 @@
    Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
    ([protocol scenario replay-opts]
-    (risk/clear!)
-    (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
+    (chain/with-fresh-registry
+      (event-evidence/with-fresh-chain-cursor
+        (risk/with-fresh-risk-context
+          (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
          vocab              (if (satisfies? proto/EconomicModel protocol)
                               (proto/metric-vocabulary protocol)
                               #{})
@@ -194,7 +198,7 @@
                 (.mkdirs (.getParentFile f))
                 (spit f (json/write-str theory {:indent true}))))
            
-           (assoc result :risk-events (risk/events))))))))
+             (assoc result :risk-events (risk/events)))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
