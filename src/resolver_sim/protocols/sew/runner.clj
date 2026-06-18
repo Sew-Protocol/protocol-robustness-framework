@@ -99,7 +99,8 @@
     (let [wf-id     0
           ;; Attach the initial resolver via Priority-3 (et.dispute-resolver)
           w1        (assoc-in (:world cr) [:escrow-transfers wf-id :dispute-resolver] resolver-addr)
-          fee       (get-in w1 [:total-fees token] 0)
+          tk        (keyword token)
+      fee       (get-in w1 [:total-fees tk] 0)
           afa       (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           resolvers (resolver-chain resolver-addr)
 
@@ -287,7 +288,8 @@
                               (let [w2 (attr/unwrap-state attributed)
                                     attr-ctx (attr/get-attribution attributed)]
                                 (attr/with-attribution attr-ctx
-                                  (let [fee       (get-in w2 [:total-fees token] 0)
+                                  (let [tk        (keyword token)
+                                        fee       (get-in w2 [:total-fees tk] 0)
                                         afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
                                         {:keys [world-after verdict-correct? escalated? escalation-level]}
                                         (resolution-loop w2 wf-id from resolvers

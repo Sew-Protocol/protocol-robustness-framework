@@ -1,6 +1,6 @@
 services:
   xtdb:
-    image: ghcr.io/xtdb/xtdb
+    image: ghcr.io/xtdb/xtdb@sha256:15b6aa9d37d1e1a4e21748788db9275a57b87c339e5eb66d86376cf1e6899816
     ports:
       - "5432:5432"
     environment:

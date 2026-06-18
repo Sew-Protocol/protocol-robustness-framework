@@ -521,7 +521,22 @@
                     (clojure "-M:telemetry-seed" "20"))}
 
   test:integration {:doc "Run DB integration tests"
-                    :task (clojure "-M:test" "-e" "(require 'clojure.test 'resolver-sim.db.telemetry-integration-test) (clojure.test/run-tests 'resolver-sim.db.telemetry-integration-test)")}
+                     :task (clojure "-M:test" "-e" "(require 'clojure.test 'resolver-sim.db.telemetry-integration-test) (clojure.test/run-tests 'resolver-sim.db.telemetry-integration-test)")}
+
+  xtdb:up {:doc "Start XTDB via Docker Compose"
+           :task (shell "docker compose up -d xtdb")}
+
+  xtdb:stop {:doc "Stop XTDB container"
+             :task (shell "docker compose stop xtdb")}
+
+  xtdb:down {:doc "Stop and remove XTDB container"
+             :task (shell "docker compose down xtdb")}
+
+  xtdb:logs {:doc "Tail XTDB container logs"
+             :task (shell "docker compose logs -f xtdb")}
+
+  xtdb:ps {:doc "Check XTDB container status"
+           :task (shell "docker compose ps xtdb")}
 
   notebook:focus
   {:doc "Focus the provenance notebook on a specific run-id. Usage: bb notebook:focus <run-id>"
