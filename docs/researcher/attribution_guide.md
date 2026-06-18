@@ -117,7 +117,7 @@ This throws immediately if any key is non-namespaced or any value is artifact-un
 
 ## Reference: known attribution keys
 
-Defined in `resolver-sim.util.attribution/known-attribution-keys`:
+Defined in `resolver-sim.util.attribution/known-attribution-keys` (provenance context):
 
 | Key | Namespace | Description |
 |-----|-----------|-------------|
@@ -129,12 +129,14 @@ Defined in `resolver-sim.util.attribution/known-attribution-keys`:
 | `:subject/id` | `:subject` | Stable entity identifier |
 | `:action/type` | `:action` | Semantic operation being performed |
 | `:evidence/reason` | `:evidence` | Reason for capturing evidence |
-| `:yield/target-type` | `:yield` | Yield target type (`:resolver`) |
-| `:yield/resolver-addr` | `:yield` | Resolver address for yield accrual |
-| `:accrual/*` | `:accrual` | Accrual decision fields (mode, token, deltas, indices) |
-| `:settlement/*` | `:settlement` | Settlement fields (filled, deferred, haircut, shortage) |
 
-Click [source](../src/resolver_sim/util/attribution.clj) for the full registry with descriptions.
+Payload keys (inside evidence `:before` / `:after` / `:inputs` maps) are registered separately
+in `known-evidence-payload-keys` — these describe what changed, not where it came from.
+Key domains include `:yield/*`, `:accrual/*`, `:settlement/*`, `:escrow/*`, `:finalize/*`,
+`:stake/*`, `:appeal/*`, `:appeal-resolution/*`, `:escalation/*`, `:challenge/*`, `:bond/*`,
+`:dispute/*`, `:unavailability/*`, `:unfreeze/*`, `:world/*`, `:proposal/*`, `:evidence/*`.
+
+Click [source](../../src/resolver_sim/util/attribution.clj) for the full registries with descriptions.
 
 ## How it works
 

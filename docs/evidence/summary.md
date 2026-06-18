@@ -109,9 +109,9 @@ All three highlighted failures share the same root cause: **each individual tran
 ## All Scenarios Passing
 
 ```
-33/33 scenarios passed  (0.6s total)
+116/116 scenarios passed  (2.1s total)
   Invariant violations: 0
-  git: 31ba27b (ethereum) · 2026-04-15T17:40:32Z
+  date: 2026-06-15
 ```
 
 See [full-suite-run.json](../../results/evidence/full-suite-run.json) for complete machine-readable output.

@@ -34,6 +34,11 @@
 - **`contextual-pmap` adopted in `falsification_revised.clj`:** Replaced raw `pmap` with `ev/contextual-pmap` for attribution context propagation across workers.
 - **`:or` destructuring hardened in `evidence-base`:** `(name (or importance :diagnostic))` prevents NPE when importance is nil.
 
+### Fixed (2026-06-19)
+- **Yield deposit `:total-held` double-counting:** Liquid-lending module's `deposit` updated `:total-held`, but `create-escrow` already called `add-held` for the same amount. Removed the redundant update from `liquid_lending.clj:62`. Fixed `s115-claim-deferred-yield-recovery` invariant violations.
+- **`slash-status-consistent?` invariant fix:** `(> appeal-dl proposed-at)` → `(>= appeal-dl proposed-at)`. Zero-length appeal windows (`appeal-window-duration: 0`, the default) produced `deadline = proposed-at`, violating the strict inequality. Fixed `governance-approved` scenario halt.
+- **`cleanup-orphaned-slashes` removed from `finalize`:** The call was removing pending Track 2 reversal slashes created by `handle-reversal-slashing` in the same `execute-resolution` call (final-round path). The cleanup already runs in `execute-pending-settlement` where it belongs.
+
 ### Fixed (2026-06-18)
 - **`cleanup-orphaned-slashes` ClassCastException:** `(name slash-id)` on integer keys (fraud slashes stored under workflow-id) threw `Long cannot be cast to Named`. Fixed to `(str slash-id)`.
 - **`evidence-filename` ClassCastException:** `(name (:evidence/type evidence ...))` on non-keyword types. Added keyword guard.

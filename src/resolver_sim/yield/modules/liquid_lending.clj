@@ -43,7 +43,9 @@
 ;; deposit
 ;; ---------------------------------------------------------------------------
 (defn deposit
-  "Create a yield position using the new position model (ratio-based entry-index)."
+  "Create a yield position using the new position model (ratio-based entry-index).
+   Does NOT update :total-held — create-escrow already called add-held for the
+   escrow amount.  Updating :total-held here would double-count."
   [world module op]
   (let [oid    (:owner/id op)
         amount (:amount op)
@@ -51,15 +53,13 @@
         mid    (:module/id module)
         index  (m/ratio (or (get-in-token world [:yield/indices] mid token) 1))
         shares (m/shares-from-principal-and-index (long amount) index)]
-    (-> world
-        (assoc-in [:yield/positions oid]
-                  (pos/make-position {:owner/id oid
-                                     :module/id mid
-                                     :token token
-                                     :principal (long amount)
-                                     :shares shares
-                                     :entry-index index}))
-        (update-in [:total-held token] (fnil + 0) (long amount)))))
+    (assoc-in world [:yield/positions oid]
+              (pos/make-position {:owner/id oid
+                                 :module/id mid
+                                 :token token
+                                 :principal (long amount)
+                                 :shares shares
+                                 :entry-index index}))))
 
 
 ;; ---------------------------------------------------------------------------

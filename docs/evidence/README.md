@@ -17,23 +17,33 @@ These are **not theoretical vulnerabilities**. Each scenario is a deterministic,
 | [detailed/F7-profit-threshold-strike.md](detailed/F7-profit-threshold-strike.md) | Economic | Rational resolver withdrawal | [f7-run.json](../../results/evidence/f7-run.json) |
 | [detailed/F10-cascade-escalation.md](detailed/F10-cascade-escalation.md) | Liveness | Capacity-limited arbitrator flood | [f10-run.json](../../results/evidence/f10-run.json) |
 
-Full suite output (all 33 scenarios): [full-suite-run.json](../../results/evidence/full-suite-run.json)
+Full suite output (all 116 scenarios): [full-suite-run.json](../../results/evidence/full-suite-run.json)
 
 ---
 
 ## Reproducing the Evidence
 
 ```bash
-# Start the Clojure gRPC server
-nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
-sleep 8
+# Run canonical test gate (all targets)
+./scripts/test.sh
 
-# Run a specific scenario
-cd python
-python invariant_suite.py --scenario F3 --json ../results/evidence/f3-run.json
+# Run specific scenario pair comparison
+bb trace:diff \
+  ./data/fixtures/traces/s01-baseline-happy-path.trace.json \
+  ./data/fixtures/traces/governance-decay-exploit.trace.json \
+  results/trace-compare/s01-vs-governance-decay
 
-# Run all 33 scenarios
-python invariant_suite.py --json ../results/evidence/full-suite-run.json
+# Run invariant suite (deterministic scenarios S01–S41+)
+bb test:invariants
+
+# Run full fixture suites (all 116 scenarios)
+bb test:suites
+
+# Generate evidence artifacts for a single scenario
+bb evidence:build --scenario data/fixtures/traces/s08-state-machine-attack-gauntlet.trace.json
+
+# Run adversarial profitability sweep
+bb adv:sweep
 ```
 
-Every run is stamped with git SHA, Python version, and UTC timestamp. Output is deterministic — the same commit produces identical results on any machine.
+Every run is stamped with git SHA and UTC timestamp. Output is deterministic — the same commit produces identical results on any machine.

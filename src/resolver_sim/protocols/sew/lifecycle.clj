@@ -331,6 +331,7 @@
                                 :auto-cancel-time  auto-can
                                 :last-accrual-time (time-ctx/block-ts world)
                                 :escrow-state      :pending})
+                ymid          (:yield-generation-module snapshot)
                 world'        (-> world
                                   (assoc :next-workflow-id (inc workflow-id))
                                   (assoc-in [:escrow-transfers workflow-id] et)
@@ -342,7 +343,6 @@
                                   (add-fee token fee)
                                   (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
-                ymid          (:yield-generation-module snapshot)
                 world''       (if (and ymid
                                        (t/yield-preset-yield-enabled? (:yield-preset settings))
                                        (contains? (:yield/modules world') ymid))
