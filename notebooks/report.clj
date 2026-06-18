@@ -251,39 +251,54 @@
 (clerk/html
  (common/safe-render
   "Evidence Control Panel"
-  (fn []
-    (let [summary    test-summary
-          rd         (:risk_digest summary)
-          sc         (:status_counts summary)
-          critical-n (count (:critical_findings rd))
-          warning-n  (count (:warnings rd))
-          gate-rag   (if summary
-                       (if (= "pass" (str (:overall_status summary))) :green :red)
-                       :amber)
-          risk-rag   (cond (nil? rd) :amber (pos? critical-n) :red :else :green)
-          warn-rag   (cond (nil? rd) :amber (pos? warning-n) :amber :else :green)
-          golden-n   (count golden-reports)
-          trace-n    (count all-traces)
-          corpus-rag (if (zero? trace-n) :amber :green)
-          total-inv  (reduce + (map #(get-in % [:metrics :invariant-violations] 0)
-                                    (vals (or golden-reports {}))))
-          funds-rag  (cond (zero? golden-n) :amber (pos? total-inv) :red :else :green)
-          replay-outcomes (frequencies (map :outcome (vals (or golden-reports {}))))
-          replay-pass-n (get replay-outcomes :pass 0)
-          replay-fail-n (get replay-outcomes :fail 0)
-          replay-missing-n (- trace-n golden-n)
-          replay-rag (cond
-                       (pos? replay-fail-n) :red
-                       (pos? replay-missing-n) :amber
-                       :else :green)
-          expected-negative-n (count (filter #(= :expected-negative
-                                                  (:status-kind (scenario-row->rag % (get golden-reports (:id %)))))
-                                            (or all-traces [])))
-          vuln-count (count (filter #(= "theory-falsification" (:purpose %))
-                                    (or all-traces [])))
-          vuln-rag   (if (pos? vuln-count) :amber :green)
-          run-id     (or (:run_id summary) "—")
-          decision   (or (:acceptance_decision summary) "UNKNOWN")]
+   (fn []
+     (let [summary    test-summary
+           rd         (:risk_digest summary)
+           sc         (:status_counts summary)
+           critical-n (count (:critical_findings rd))
+           warning-n  (count (:warnings rd))
+           gate-rag   (if summary
+                        (if (= "pass" (str (:overall_status summary))) :green :red)
+                        :amber)
+           risk-rag   (cond (nil? rd) :amber (pos? critical-n) :red :else :green)
+           warn-rag   (cond (nil? rd) :amber (pos? warning-n) :amber :else :green)
+           trace-n    (count all-traces)
+           corpus-rag (if (zero? trace-n) :amber :green)
+           ;; Corpus-visible counts: only golden reports that have a matching trace
+           ;; (orphan goldens with no trace metadata are excluded from visible counts)
+           trace-ids  (set (map :id all-traces))
+           corpus-goldens (into {} (filter (fn [[k _]] (contains? trace-ids k)) golden-reports))
+           ;; Total counts: all golden reports including orphans (no matching trace)
+           total-golden-n (count golden-reports)
+           total-inv  (reduce + (map #(get-in % [:metrics :invariant-violations] 0)
+                                     (vals (or golden-reports {}))))
+           orphan-n   (max 0 (- total-golden-n trace-n))
+           ;; Visible corpus counts (trace-matched goldens only)
+           corpus-golden-n (count corpus-goldens)
+           corpus-inv (reduce + (map #(get-in % [:metrics :invariant-violations] 0)
+                                     (vals corpus-goldens)))
+           corpus-outcomes (frequencies (map :outcome (vals corpus-goldens)))
+           corpus-pass-n (get corpus-outcomes :pass 0)
+           corpus-fail-n (get corpus-outcomes :fail 0)
+           funds-rag  (cond (zero? corpus-golden-n) :amber (pos? corpus-inv) :red :else :green)
+           replay-missing-n (- trace-n corpus-golden-n)
+           replay-rag (cond
+                        (pos? corpus-fail-n) :red
+                        (pos? replay-missing-n) :amber
+                        :else :green)
+           expected-negative-n (count (filter #(= :expected-negative
+                                                   (:status-kind (scenario-row->rag % (get golden-reports (:id %)))))
+                                             (or all-traces [])))
+           vuln-count (count (filter #(= "theory-falsification" (:purpose %))
+                                     (or all-traces [])))
+           vuln-rag   (if (pos? vuln-count) :amber :green)
+           run-id     (or (:run_id summary) "—")
+           decision   (or (:acceptance_decision summary) "UNKNOWN")
+           ;; Derive a corpus-aware decision that reflects visible evidence state
+           corpus-decision (cond
+                             (pos? corpus-fail-n) "CORPUS_FAIL"
+                             (pos? replay-missing-n) "CORPUS_INCOMPLETE"
+                             :else (str decision))]
       [:div
        [:h2 "Evidence Control Panel"]
        [:p {:style {:color "#555" :fontSize "0.9em"}}
@@ -298,38 +313,44 @@
        [:div {:style {:fontSize "0.82em" :color "#444" :marginBottom "12px"
                       :fontFamily "monospace" :background "#f5f5f5"
                       :padding "6px 10px" :borderRadius "3px"}}
-        (str "Run ID: " run-id " │ Decision: " decision
+        (str "Run ID: " run-id " │ CI decision: " decision
+             " │ Corpus: " corpus-decision
              " │ Targets: " (get-in sc [:targets :total] "—")
-             " │ traces=" trace-n ", golden=" golden-n)]
-       (render-card
-        {:label "Top-level interpretation"
-         :rag   (if (or (pos? replay-fail-n) (pos? replay-missing-n)) :red :green)
-         :value (if (or (pos? replay-fail-n) (pos? replay-missing-n))
-                  "CI targets passed, but replay corpus contains validation failures or missing evidence"
-                  "CI targets and replay corpus are aligned")
-         :note  "Do not interpret PASS_CLEAN alone as protocol-clean. Evaluate replay corpus status and scenario matrix together."})
+             " │ traces=" trace-n ", corpus-golden=" corpus-golden-n
+             (if (pos? orphan-n) (str " (+" orphan-n " orphan)") ""))]
+        (render-card
+         {:label "Top-level interpretation"
+          :rag   (if (or (pos? corpus-fail-n) (pos? replay-missing-n)) :red :green)
+          :value (cond
+                   (pos? corpus-fail-n) (str "Corpus shows " corpus-fail-n " validation failure(s) — see triage below")
+                   (pos? replay-missing-n) "Corpus has traces without replay outcomes — evidence incomplete"
+                   :else "CI targets and replay corpus are aligned")
+          :note  (str "CI decision: " decision ". Corpus decision: " corpus-decision ". "
+                      "The CI gate only tracks target exit codes; corpus health is independent.")})
        (render-card
         {:label "CI target gate"
          :rag   gate-rag
          :value (str (get-in sc [:targets :pass] "—")
                      "/" (get-in sc [:targets :total] "—") " targets pass")
          :note  "Hard gate: did all canonical test targets complete successfully? Source: test-summary.json"})
-       (render-card
-        {:label "Replay corpus status"
-         :rag   replay-rag
-         :value (str replay-pass-n " pass, " replay-fail-n " fail, " replay-missing-n " missing golden")
-         :note  "Scenario replay/evidence status from golden corpus. Failures/missing data keep evidence status non-clean even when CI gate passes."})
+        (render-card
+         {:label "Replay corpus status (visible)"
+          :rag   replay-rag
+          :value (str corpus-pass-n " pass, " corpus-fail-n " fail, " replay-missing-n " missing golden"
+                      (if (pos? orphan-n) (str " (" orphan-n " orphan)") ""))
+          :note  "Counts from trace-matched goldens only. Orphan goldens (no trace metadata) are excluded from this tally."})
        (render-card
         {:label "Structured risk digest criticals"
          :rag   risk-rag
          :value (str critical-n)
-         :note  (str "Structured critical findings in risk_digest. "
-                     (if (pos? critical-n) "Review test-summary.json immediately." "Clean."))})
-       (render-card
-        {:label "Replay validation failures requiring investigation"
-         :rag   (if (pos? replay-fail-n) :red :green)
-         :value (str replay-fail-n)
-         :note  "Count of scenarios with status-kind :validation (requires investigation)."})
+          :note  (str "Structured critical findings in risk_digest. "
+                      (if (pos? critical-n) "Review test-summary.json immediately." "Clean."))})
+        (render-card
+         {:label "Replay validation failures requiring investigation"
+          :rag   (if (pos? corpus-fail-n) :red :green)
+          :value (str corpus-fail-n)
+          :note  (str "Visible corpus failures (trace-matched). "
+                      (if (pos? orphan-n) (str orphan-n " orphan goldens excluded — see corpus coverage card.") ""))})
        (render-card
         {:label "Expected-negative findings"
          :rag   (if (pos? expected-negative-n) :amber :green)
@@ -339,18 +360,21 @@
         {:label "Warnings"
          :rag   warn-rag
          :value (str warning-n " warning(s)")
-         :note  "Warning count from risk_digest. Amber = warnings present; does not imply protocol failure."})
-       (render-card
-        {:label "Trace corpus coverage"
-         :rag   corpus-rag
-         :value (str trace-n " traces; " golden-n " with golden outcome")
-         :note  (str (- trace-n golden-n) " traces have no golden report (amber in matrix). "
-                     "Source: data/fixtures/traces/ and data/fixtures/golden/")})
-       (render-card
-        {:label "Invariant conservation"
-         :rag   funds-rag
-         :value (str "Total invariant violations across corpus: " total-inv)
-         :note  "Aggregated violations from all golden reports. Non-zero = protocol invariant breached — investigate."})
+          :note  "Warning count from risk_digest. Amber = warnings present; does not imply protocol failure."})
+        (render-card
+         {:label "Trace corpus coverage"
+          :rag   corpus-rag
+          :value (str trace-n " traces; " corpus-golden-n " with matching golden"
+                      (if (pos? orphan-n) (str " (+" orphan-n " orphan golden)") ""))
+          :note  (str replay-missing-n " traces lack replay outcomes; "
+                      orphan-n " golden reports have no matching trace metadata. "
+                      "Source: data/fixtures/traces/ and data/fixtures/golden/")})
+        (render-card
+         {:label "Invariant conservation (visible corpus)"
+          :rag   funds-rag
+          :value (str corpus-inv " violation(s) across " corpus-golden-n " trace-matched golden reports")
+          :note  (str "Total (including orphans): " total-inv ". "
+                      "Non-zero = protocol invariant breached — investigate.")})
        (render-card
         {:label "Theory-falsification scenarios declared"
          :rag   vuln-rag
@@ -368,8 +392,9 @@
     (let [traces (or all-traces [])
           golds (or golden-reports {})
           total-traces (count traces)
-          golden-count (count golds)
-          missing-count (max 0 (- total-traces golden-count))
+          trace-ids (set (map :id traces))
+          matched-golden-n (count (into {} (filter (fn [[k _]] (contains? trace-ids k)) golds)))
+          missing-count (- total-traces matched-golden-n)
           with-golden (keep #(get golds (:id %)) traces)
           outcomes (frequencies (map :outcome with-golden))
           pass-count (get outcomes :pass 0)
@@ -384,15 +409,17 @@
         "Separate corpus-level evidence summary to track replay outcome coverage and quality independently of CI target status."]
        [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b" :borderRadius "6px" :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em"}}
         [:strong "Coverage statement: "]
-        (str "Only " golden-count "/" total-traces
-             " traces currently have replay outcome artifacts. Coverage is broad at trace metadata level, but evidence-backed replay coverage is partial.")]
+        (str matched-golden-n "/" total-traces
+             " traces have matching replay outcome artifacts; "
+             (- (count golds) matched-golden-n) " golden reports have no matching trace."
+             " Coverage is broad at trace metadata level, but evidence-backed replay coverage is partial.")]
        [:div {:style {:display "grid" :gridTemplateColumns "repeat(auto-fit, minmax(180px, 1fr))" :gap "10px" :marginBottom "10px"}}
         (render-card {:label "Evidence status" :rag evidence-rag :value (name evidence-rag)
                       :note "Red: replay fails present. Amber: missing replay outcomes. Green: full evidence-backed pass."})
         (render-card {:label "Trace metadata coverage" :rag (if (pos? total-traces) :green :amber)
                       :value (str total-traces " traces") :note "Total scenarios discovered in trace metadata."})
-        (render-card {:label "Replay outcome coverage" :rag (if (zero? missing-count) :green :amber)
-                      :value (str golden-count "/" total-traces) :note "Scenarios with golden replay artifacts."})
+         (render-card {:label "Replay outcome coverage" :rag (if (zero? missing-count) :green :amber)
+                       :value (str matched-golden-n "/" total-traces) :note "Trace-matched golden reports."})
         (render-card {:label "Replay failures" :rag (if (pos? fail-count) :red :green)
                       :value (str fail-count) :note "Golden outcomes marked :fail."})
         (render-card {:label "Missing replay artifacts" :rag (if (pos? missing-count) :amber :green)
@@ -421,17 +448,18 @@
                           (id-prefix? id "s21")
                           (id-prefix? id "s22")
                           (id-prefix? id "s23")))
-          rows (->> (or all-traces [])
-                    (filter #(selected? (:id %)))
-                    (map (fn [t]
-                           (let [golden (get golden-reports (:id t))
-                                 verdict (scenario-row->rag t golden)]
-                             {:id (:id t)
-                              :title (:title t)
-                              :status-kind (:status-kind verdict)
-                              :replay-outcome (if golden (name (:outcome golden)) "missing")
-                              :failure-class (classify-validation-failure t golden (:status-kind verdict))})))
-                    (sort-by :id))]
+           rows (->> (or all-traces [])
+                     (filter #(selected? (:id %)))
+                     (keep (fn [t]
+                             (let [golden (get golden-reports (:id t))
+                                   verdict (scenario-row->rag t golden)]
+                               (when (and golden (= :fail (:outcome golden)))
+                                 {:id (:id t)
+                                  :title (:title t)
+                                  :status-kind (:status-kind verdict)
+                                  :replay-outcome (name (:outcome golden))
+                                  :failure-class (classify-validation-failure t golden (:status-kind verdict))}))))
+                     (sort-by :id))]
       [:div
        [:h2 "Validation Work Queue (Top 10)"]
        [:p {:style {:fontSize "0.84em" :color "#555"}}
@@ -722,7 +750,7 @@
                              replay-ok? (and golden (not= :fail (:outcome golden)))
                              invariants-pass? (boolean (and golden (zero? (get-in golden [:metrics :invariant-violations] 0))))
                              likely-class (classify-validation-failure t golden status-kind)]
-                         (when (= status-kind :validation)
+                          (when (and (= status-kind :validation) (not replay-ok?))
                            {:id (:id t)
                             :title (:title t)
                             :threat-tags (if (seq (:threat-tags t))

@@ -74,7 +74,13 @@
 (defn- update-transfer
   "Apply f to the EscrowTransfer map for workflow-id."
   [world workflow-id f & args]
-  (apply update-in world [:escrow-transfers workflow-id] f args))
+  (let [path [:escrow-transfers workflow-id]]
+    (if-some [cur (get-in world path)]
+      (apply update-in world path f args)
+      (throw (ex-info "No escrow-transfer found; cannot apply transition"
+                       {:workflow-id workflow-id
+                        :f           (pr-str f)
+                        :args        args})))))
 
 (defn- set-escrow-state
   "Set :escrow-state for workflow-id.  Asserts via the transition graph —

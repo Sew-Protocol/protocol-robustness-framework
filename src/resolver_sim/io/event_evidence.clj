@@ -549,14 +549,13 @@
                       files)]
     (reduce (fn [acc entry]
               (let [mech (:mechanism entry)
-                    sum (:summary entry)]
-                (-> acc
-                    (update-in [mech]
-                               (fnil #(update % :artifacts conj sum)
-                                     {:mechanism mech
-                                      :count 0
-                                      :artifacts []}))
-                    (update-in [mech :count] (fnil inc 0)))))
+                    sum  (:summary entry)
+                    init {:mechanism mech :artifacts [] :count 0}
+                    cur  (get acc mech init)]
+                (assoc acc mech
+                       (-> cur
+                           (update :artifacts conj sum)
+                           (update :count inc)))))
             {} entries)))
 
 (defn write-mechanism-index!

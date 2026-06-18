@@ -57,6 +57,10 @@
   {:extra-paths ["scripts"]
    :main-opts ["-m" "scripts.sync-invariant-trace-fixtures"]}
 
+  :generate-missing-traces
+  {:extra-paths ["scripts"]
+   :main-opts ["-m" "scripts.generate-missing-traces"]}
+
   :generate-scenario-docs
   {:extra-paths ["scripts"]
    :main-opts ["-m" "scripts.generate-scenario-index-docs"]}

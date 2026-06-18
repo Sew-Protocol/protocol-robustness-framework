@@ -160,11 +160,24 @@
                  (System/exit 1)))))}
 
   artifacts:refresh
-  {:doc "Explicitly refresh results/test-artifacts via canonical suites target"
-  :task (shell "./scripts/test.sh suites")}
+  {:doc "Refresh results/test-artifacts and golden reports by running all canonical fixture suites in :save mode.
+         Outputs new .report.edn files to data/fixtures/golden/ and emits test artifacts.
+         Also touches notebooks/report.clj to trigger Clerk re-evaluation if the server is running."
+   :task (shell "./scripts/test.sh suites")}
+
+  regenerate-goldens
+  {:doc "Regenerate golden report files (data/fixtures/golden/*.report.edn) by running all fixture suites in :save mode.
+         The golden reports are the pinned per-scenario replay outcomes that the report notebook loads.
+         Run this after fixing a failing scenario to update its golden artifact.
+         Touches notebooks/report.clj afterward so a running Clerk server re-evaluates the report notebook.
+         See also: scripts/regenerate_goldens.clj, deps.edn :regenerate-goldens alias."
+   :task (shell "clojure" "-M:regenerate-goldens")}
 
   evidence:build
-  {:doc "Build evidence output for a named scenario alias. Usage: bb evidence:build --scenario <alias|scenario-path> [--output-file <path>]"
+  {:doc "Run a single scenario with invariants and emit evidence artifacts.
+          Output: results/evidence/<slug>.result.json, results/runs/<slug>/, results/test-artifacts/.
+          Does NOT update golden reports (data/fixtures/golden/) or notify Clerk — use `bb regenerate-goldens` for that.
+          Usage: bb evidence:build --scenario <alias|scenario-path> [--output-file <path>]"
    :task (let [args         (vec *command-line-args*)
                scenario-idx (.indexOf args "--scenario")
                output-idx   (.indexOf args "--output-file")
@@ -176,9 +189,13 @@
                               "kleros/escalation-race"
                               "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
                scenario     (or (get scenario-map raw-scenario) raw-scenario)
-               output-file  (or (when (<= 0 output-idx)
-                                 (nth args (inc output-idx) nil))
-                               "results/evidence/kleros-preemptive-escalation-rejected-l0.result.json")]
+               output-file  (let [given (when (<= 0 output-idx)
+                                          (nth args (inc output-idx) nil))]
+                              (or given
+                                  (let [slug (some-> scenario
+                                                 (clojure.string/replace (re-pattern "^.*/") "")
+                                                 (clojure.string/replace (re-pattern "\\.json$") ""))]
+                                    (str "results/evidence/" slug ".result.json"))))]
            (when-not scenario
              (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
            (shell "mkdir -p results/evidence")
@@ -239,6 +256,13 @@
 
   fixtures:sync {:doc "Sync trace.json + scenarios/*.json from Clojure invariant scenario source"
                  :task (clojure {:dir "."} "-M:sync-trace-fixtures")}
+
+  fixtures:generate-traces
+  {:doc "Generate .trace.json files for golden reports that lack matching trace metadata.
+         Scans data/fixtures/golden/*.report.edn, finds orphans (no matching trace),
+         replays the matching scenario from scenarios/*.json, and writes the trace file.
+         After completion, touches notebooks/report.clj to notify Clerk."
+   :task (clojure {:dir "."} "-M:generate-missing-traces")}
 
   docs:scenarios {:doc "Regenerate S01–S23 table in docs/scenarios.md from doc-summaries.clj"
                   :task (clojure {:dir "."} "-M:generate-scenario-docs")}

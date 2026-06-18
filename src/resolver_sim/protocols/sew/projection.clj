@@ -144,9 +144,9 @@
         (reduce (fn [m [resolver d]]
                   (if (neg? d)
                     (cond
-                      (withdrawal-event? action) (update-in m [resolver :withdrawn] + (- d))
-                      (slash-event? action) (update-in m [resolver :slashed] + (- d))
-                      :else m)
+                       (withdrawal-event? action) (update-in m [resolver :withdrawn] (fnil + 0) (- d))
+                       (slash-event? action) (update-in m [resolver :slashed] (fnil + 0) (- d))
+                       :else m)
                     m))
                 stake-flow
                 deltas)]
