@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added (2026-06-19)
+- **Scenario Evidence Verification:** `verify-scenario-evidence` compares `:expected-evidence` declared on scenario metadata against captured artifacts. Reports `:matched`, `:missing`, `:unexpected` entries.
+- **Cross-Run Evidence Diff:** `diff-evidence-directories` compares two artifact directories by evidence-hash. Reports `:added`, `:missing`, `:changed`, `:unchanged` with summary counts.
+- **Evidence Bundle Export:** `export-evidence-bundle` copies artifacts matching one or more group-ids into a portable directory with `manifest.json` for sharing with collaborators.
+- **Post-hoc Chain Verification:** `verify-chain-integrity` reads all artifacts, validates `:evidence/chain-self-hash` matches `:evidence/hash`, and verifies `:evidence/chain-prev-hash` links against the previous artifact in sequence order.
+- **`with-fresh-chain-cursor` macro:** Dynamic chain cursor isolation per run, matching `chain/with-fresh-registry` pattern.
+
 ### Added (2026-06-18)
 - **Evidence Query API:** `find-evidence` with 9 AND-combined filters (`:by-type`, `:by-mechanism`, `:by-workflow`, `:by-group-id`, `:by-chain-seq`, `:by-run-id`, `:by-scenario-id`, `:include-body?`, `:artifact-dir`). Returns lightweight artifact summaries by default; full body opt-in.
 - **Mechanism Index:** `build-mechanism-index` / `write-mechanism-index!` grouping artifacts by `:evidence/mechanism`, falling back to type→mechanism mapping. Persisted as `evidence-mechanisms.json`.

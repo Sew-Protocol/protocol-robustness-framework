@@ -368,3 +368,193 @@
     (is (.exists (io/file path)))
     (let [report (json/read-str (slurp path) :key-fn keyword)]
       (is (contains? report :targeted-evidence-count)))))
+
+;; ── Chain Integrity: \"Can I verify the evidence chain from artifacts alone?\" ─
+
+(defn- setup-chain-artifacts
+  "Write a valid 3-artifact chain into dir."
+  [dir]
+  (.mkdirs (java.io.File. dir))
+  (let [base {:evidence/schema-version "event-evidence.v1"}
+        a1 (assoc base :evidence/type "escrow-created"
+                  :evidence/chain-seq 1
+                  :evidence/chain-prev-hash nil
+                  :evidence/chain-self-hash "h1"
+                  :evidence/hash "h1"
+                  :evidence/group-id "g1")
+        a2 (assoc base :evidence/type "escrow-released"
+                  :evidence/chain-seq 2
+                  :evidence/chain-prev-hash "h1"
+                  :evidence/chain-self-hash "h2"
+                  :evidence/hash "h2"
+                  :evidence/group-id "g1")
+        a3 (assoc base :evidence/type "dispute-raised"
+                  :evidence/chain-seq 3
+                  :evidence/chain-prev-hash "h2"
+                  :evidence/chain-self-hash "h3"
+                  :evidence/hash "h3"
+                  :evidence/group-id "g1")]
+    (doseq [m [a1 a2 a3]]
+      (spit (io/file dir (str "ev-" (:evidence/hash m) ".json"))
+            (json/write-str m {:key-fn evidence/qualified-key :indent true})))))
+
+(deftest chain-integrity-valid-chain
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
+        _ (setup-chain-artifacts dir)
+        result (evidence/verify-chain-integrity dir)]
+    (is (:valid result) "Valid chain passes")
+    (is (= 3 (:artifact-count result)))
+    (is (empty? (:violations result)))))
+
+(deftest chain-integrity-gap
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
+        _ (setup-chain-artifacts dir)]
+    ;; Delete artifact with chain-seq 2
+    (doseq [f (.listFiles (java.io.File. dir))]
+      (when (.contains (.getName f) "h2")
+        (.delete f)))
+    (let [result (evidence/verify-chain-integrity dir)]
+      (is (not (:valid result)) "Chain with gap is invalid")
+      (is (some #(= 2 %) (:gaps result)) "Seq 2 reported as gap"))))
+
+(deftest chain-integrity-self-hash-mismatch
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
+        _ (setup-chain-artifacts dir)]
+    ;; Tamper with the first artifact: re-write with wrong self-hash
+    (let [path (str dir "/ev-h1.json")
+          data (json/read-str (slurp path) :key-fn keyword)
+          tampered (assoc data :evidence/chain-self-hash "tampered")]
+      (spit (java.io.File. path)
+            (json/write-str tampered {:key-fn evidence/qualified-key :indent true}))
+      (let [result (evidence/verify-chain-integrity dir)]
+        (is (not (:valid result)) "Tampered chain is invalid")
+        (is (= 1 (:self-hash-failed result)) "Self-hash mismatch detected")))))
+
+;; ── Scenario Evidence Verification: \"Did this scenario produce expected evidence?\" ─
+
+(deftest scenario-evidence-verification-matches-all
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ev-" (java.util.UUID/randomUUID))
+        _ (setup-artifacts! dir)
+        scenario {:expected-evidence
+                  [{:type "escrow-created" :importance :core}
+                   {:type "escrow-released" :importance :core}
+                   {:type "stake-registered" :importance :diagnostic}
+                   {:type "dispute-raised" :importance :core}]}
+        result (evidence/verify-scenario-evidence scenario dir)]
+    (is (some? result))
+    (is (= 4 (count (:matched result))) "All 4 expected types matched")
+    (is (empty? (:missing result)) "No missing entries")
+    (is (seq (:unexpected result)) "Has unexpected types (transition generic trace)")))
+
+(deftest scenario-evidence-verification-detects-missing
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ev-" (java.util.UUID/randomUUID))
+        _ (setup-artifacts! dir)
+        scenario {:expected-evidence
+                  [{:type "nonexistent-type" :importance :core}
+                   {:type "another-missing" :importance :diagnostic}]}
+        result (evidence/verify-scenario-evidence scenario dir)]
+    (is (some? result))
+    (is (empty? (:matched result)) "No matched entries")
+    (is (= 2 (count (:missing result))) "Both expected types missing")))
+
+(deftest scenario-evidence-verification-no-expected-evidence
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ev-" (java.util.UUID/randomUUID))
+        _ (setup-artifacts! dir)
+        scenario {}  ;; No :expected-evidence key
+        result (evidence/verify-scenario-evidence scenario dir)]
+    (is (nil? result) "No :expected-evidence returns nil")))
+
+;; ── Cross-Run Evidence Diff: \"What changed between two runs?\" ───────────
+
+(defn- setup-diff-dirs
+  "Create two artifact directories with overlapping and unique artifacts."
+  [dir-a dir-b]
+  (let [base {:evidence/schema-version "event-evidence.v1"}
+        common (assoc base :evidence/type "escrow-created"
+                      :evidence/chain-seq 1
+                      :evidence/group-id "g1"
+                      :evidence/hash "abc111")
+        only-a (assoc base :evidence/type "stake-registered"
+                      :evidence/chain-seq 2
+                      :evidence/group-id "g1"
+                      :evidence/hash "abc222")
+        only-b (assoc base :evidence/type "dispute-raised"
+                      :evidence/chain-seq 3
+                      :evidence/group-id "g1"
+                      :evidence/hash "abc333")]
+    (doseq [[dir entries] [[dir-a [common only-a]] [dir-b [common only-b]]]]
+      (.mkdirs (java.io.File. dir))
+      (doseq [m entries]
+        (spit (io/file dir (str (:evidence/hash m) ".json"))
+              (json/write-str m {:key-fn evidence/qualified-key :indent true}))))))
+
+(deftest diff-finds-added-missing-and-common
+  (let [dir-a (str (System/getProperty "java.io.tmpdir") "/qol-da-" (java.util.UUID/randomUUID))
+        dir-b (str (System/getProperty "java.io.tmpdir") "/qol-db-" (java.util.UUID/randomUUID))
+        _ (setup-diff-dirs dir-a dir-b)
+        result (evidence/diff-evidence-directories dir-a dir-b)]
+    (is (some? result))
+    (is (= 1 (count (:added result))) "One artifact added in B")
+    (is (= 1 (count (:missing result))) "One artifact missing from B")
+    (is (= 1 (count (:unchanged result))) "One artifact unchanged")
+    (is (= 1 (:b-only (:summary result))))))
+
+(deftest diff-identical-directories
+  (let [dir-a (str (System/getProperty "java.io.tmpdir") "/qol-da-" (java.util.UUID/randomUUID))
+        dir-b (str (System/getProperty "java.io.tmpdir") "/qol-db-" (java.util.UUID/randomUUID))
+        base {:evidence/schema-version "event-evidence.v1"}
+        art (assoc base :evidence/type "escrow-created"
+                   :evidence/chain-seq 1
+                   :evidence/group-id "g1"
+                   :evidence/hash "abc111")]
+    (.mkdirs (java.io.File. dir-a))
+    (.mkdirs (java.io.File. dir-b))
+    (doseq [dir [dir-a dir-b]]
+      (spit (io/file dir "a.json")
+            (json/write-str art {:key-fn evidence/qualified-key :indent true})))
+    (let [result (evidence/diff-evidence-directories dir-a dir-b)]
+      (is (zero? (count (:added result))) "No added")
+      (is (zero? (count (:missing result))) "No missing")
+      (is (= 1 (count (:unchanged result))) "One unchanged"))))
+
+(deftest diff-empty-directories
+  (let [dir-a (str (System/getProperty "java.io.tmpdir") "/qol-da-" (java.util.UUID/randomUUID))
+        dir-b (str (System/getProperty "java.io.tmpdir") "/qol-db-" (java.util.UUID/randomUUID))]
+    (.mkdirs (java.io.File. dir-a))
+    (.mkdirs (java.io.File. dir-b))
+    (let [result (evidence/diff-evidence-directories dir-a dir-b)]
+      (is (zero? (count (:added result))))
+      (is (zero? (count (:missing result))))
+      (is (zero? (count (:unchanged result)))))))
+
+;; ── Evidence Bundle Export: \"Share this event's evidence with a collaborator\" ─
+
+(deftest export-bundle-creates-manifest
+  (let [src (str (System/getProperty "java.io.tmpdir") "/qol-eb-" (java.util.UUID/randomUUID))
+        out (str (System/getProperty "java.io.tmpdir") "/qol-eb-out-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group src)
+        result (evidence/export-evidence-bundle gid out src)]
+    (is (= out result) "Returns output directory path")
+    (is (.exists (io/file out "manifest.json")) "Manifest file exists")
+    (let [manifest (json/read-str (slurp (io/file out "manifest.json")) :key-fn keyword)]
+      (is (= 4 (:artifact-count manifest)) "All 4 artifacts exported")
+      (is (= gid (first (:group-ids manifest))) "Group-id in manifest"))))
+
+(deftest export-bundle-multiple-group-ids
+  (let [src (str (System/getProperty "java.io.tmpdir") "/qol-eb-" (java.util.UUID/randomUUID))
+        out (str (System/getProperty "java.io.tmpdir") "/qol-eb-out-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group src)
+        result (evidence/export-evidence-bundle ["g1" "nonexistent"] out src)]
+    (is (= out result))
+    (let [files (.listFiles (java.io.File. out))]
+      (is (some #(= "manifest.json" (.getName %)) files)))))
+
+(deftest export-bundle-missing-group-id
+  (let [src (str (System/getProperty "java.io.tmpdir") "/qol-eb-" (java.util.UUID/randomUUID))
+        out (str (System/getProperty "java.io.tmpdir") "/qol-eb-out-" (java.util.UUID/randomUUID))
+        _ (.mkdirs (java.io.File. src))
+        result (evidence/export-evidence-bundle "nonexistent-group" out src)]
+    (is (= out result))
+    (let [files (.listFiles (java.io.File. out))]
+      (is (= 1 (count files)) "Only manifest.json written")
+      (is (= "manifest.json" (.getName (first files)))))))

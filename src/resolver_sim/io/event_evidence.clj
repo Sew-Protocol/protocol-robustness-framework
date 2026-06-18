@@ -12,6 +12,7 @@
      - event-evidence.v1 schema compliance"
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.set :as set]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
@@ -382,7 +383,216 @@
     (println "Wrote evidence links index:" (.getPath f))
     (.getPath f)))
 
-;; ── Cross-Layer Evidence Linking ──────────────────────────────────────────────
+;; ── Post-hoc Chain Integrity Verification ──────────────────────────────────────
+;;
+;; Scans all targeted evidence artifacts in a directory, validates internal
+;; hash consistency and chain linking.  Detects missing, inserted, or
+;; tampered artifacts.
+
+(defn verify-chain-integrity
+  "Verify the evidence chain from artifacts alone.
+   
+   Reads all artifacts, sorts by :evidence/chain-seq, and checks:
+   1. Each artifact's :evidence/chain-self-hash matches its :evidence/hash
+   2. Each artifact's :evidence/chain-prev-hash matches the previous artifact's
+      :evidence/chain-self-hash (or :evidence/hash)
+   3. No gaps in :evidence/chain-seq numbering
+   
+   Returns a map:
+   :valid       — true if all checks pass
+   :artifact-count — total artifacts with chain fields
+   :self-hash-valid — count of artifacts with matching self-hash
+   :prev-hash-valid — count of artifacts with matching prev->previous link
+   :gaps        — list of missing chain-seq numbers
+   :violations  — list of {:chain-seq N :reason ...} maps"
+  [& [artifact-dir]]
+  (let [dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
+        artifacts (sort-by :evidence/chain-seq
+                           (keep (fn [f]
+                                   (try (read-evidence-json f)
+                                        (catch Exception _ nil)))
+                                 (filter #(.isFile %) (file-seq (io/file dir)))))
+        with-chain (filter :evidence/chain-seq artifacts)
+        sorted (sort-by :evidence/chain-seq with-chain)
+        ;; Check 1: self-hash matches evidence-hash
+        self-hash-ok (filter (fn [a] (= (:evidence/chain-self-hash a)
+                                        (:evidence/hash a))) sorted)
+        self-hash-bad (remove (fn [a] (= (:evidence/chain-self-hash a)
+                                         (:evidence/hash a))) sorted)
+        ;; Check 2: prev-hash links to previous artifact
+        prev-results (mapv (fn [a prev]
+                             {:artifact a
+                              :valid (= (:evidence/chain-prev-hash a)
+                                        (or (:evidence/chain-self-hash prev)
+                                            (:evidence/hash prev)))})
+                           sorted (cons nil sorted))
+        prev-valid (count (filter :valid (rest prev-results)))
+        prev-bad (remove :valid (rest prev-results))
+        ;; Check 3: sequence gaps
+        seqs (sort (map :evidence/chain-seq sorted))
+        gaps (if (seq seqs)
+               (let [expected (range (first seqs) (inc (last seqs)))]
+                 (remove (set seqs) expected))
+               [])
+        violations (concat
+                     (map (fn [a] {:chain-seq (:evidence/chain-seq a)
+                                   :reason (str "Self-hash mismatch: "
+                                                (:evidence/chain-self-hash a)
+                                                " != " (:evidence/hash a))})
+                          self-hash-bad)
+                     (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
+                                    :reason (str "Prev-hash mismatch: "
+                                                 (:evidence/chain-prev-hash (:artifact r))
+                                                 " does not link to previous")})
+                          prev-bad)
+                     (map (fn [g] {:chain-seq g
+                                    :reason (str "Gap in chain: seq " g " missing")})
+                          gaps))]
+    {:valid (and (empty? self-hash-bad) (empty? prev-bad) (empty? gaps))
+     :artifact-count (count sorted)
+     :self-hash-valid (count self-hash-ok)
+     :self-hash-failed (count self-hash-bad)
+     :prev-hash-valid prev-valid
+     :prev-hash-failed (count prev-bad)
+     :gaps (vec gaps)
+     :violations (vec violations)}))
+
+;; ── Scenario Evidence Verification ────────────────────────────────────────────
+;;
+;; Scenarios may declare :expected-evidence — an array of evidence types the
+;; scenario is expected to produce.  verify-scenario-evidence compares the
+;; declared expectations against the captured artifacts.
+;;
+;; Example scenario metadata:
+;;   :expected-evidence [{:type "escrow-created", :importance :core}
+;;                       {:type "escrow-released", :importance :core}]
+
+(defn verify-scenario-evidence
+  "Compare :expected-evidence declared on a scenario against captured artifacts.
+   
+   scenario — a scenario map (after normalization) with optional :expected-evidence
+   artifact-dir — path to the event-evidence directory
+   
+   Returns a map:
+   :declared   — the full :expected-evidence vector (nil if absent)
+   :matched    — entries that were found in captured artifacts
+   :missing    — expected entries not found
+   :unexpected — captured evidence types not declared as expected
+   
+   When the scenario has no :expected-evidence, returns nil."
+  [scenario & [artifact-dir]]
+  (let [expected (:expected-evidence scenario)
+        dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))]
+    (when (seq expected)
+      (let [captured-types (into #{}
+                                 (keep :evidence/type)
+                                 (keep (fn [f]
+                                         (try (read-evidence-json f)
+                                              (catch Exception _ nil)))
+                                       (filter #(.isFile %)
+                                               (file-seq (io/file dir)))))
+            expected-types (set (map :type expected))]
+        {:declared expected
+         :matched (filter #(contains? captured-types (:type %)) expected)
+         :missing (remove #(contains? captured-types (:type %)) expected)
+         :unexpected (remove #(contains? expected-types %) captured-types)}))))
+
+(defn- read-all-artifacts
+  "Read all valid evidence artifacts from a directory.
+   Returns a vector of parsed maps, each with :path added."
+  [dir]
+  (vec (keep (fn [f]
+               (try (let [d (read-evidence-json f)]
+                      (assoc d :path (.getPath f)))
+                    (catch Exception _ nil)))
+             (filter #(.isFile %) (file-seq (io/file dir))))))
+
+;; ── Cross-Run Evidence Diff ───────────────────────────────────────────────────
+;;
+;; Compare evidence from two runs (or directories) to find added, missing, and
+;; changed artifacts.  Useful for regression analysis.
+
+(defn diff-evidence-directories
+  "Compare evidence artifacts between two directories.
+   
+   dir-a — baseline directory (\"before\")
+   dir-b — comparison directory (\"after\")
+   
+   Returns a map:
+   :added       — artifacts in B not in A
+   :missing     — artifacts in A not in B
+   :changed     — artifacts in both but with different content (by evidence-hash)
+   :unchanged   — artifacts with same evidence-hash in both
+   :summary     — {:a-only N, :b-only N, :common N, :changed N, :unchanged N}"
+  [dir-a dir-b]
+  (let [a (read-all-artifacts dir-a)
+        b (read-all-artifacts dir-b)
+        hash-a (into {} (map (fn [a] [(:evidence/hash a) a]) a))
+        hash-b (into {} (map (fn [a] [(:evidence/hash a) a]) b))
+        hashes-a (set (keys hash-a))
+        hashes-b (set (keys hash-b))
+        common (set/intersection hashes-a hashes-b)
+        a-only (set/difference hashes-a hashes-b)
+        b-only (set/difference hashes-b hashes-a)]
+    {:added (sort-by :evidence/chain-seq (vals (select-keys hash-b b-only)))
+     :missing (sort-by :evidence/chain-seq (vals (select-keys hash-a a-only)))
+     :changed (sort-by :evidence/chain-seq
+                       (filter (fn [h] (not= (dissoc (get hash-a h) :path)
+                                             (dissoc (get hash-b h) :path)))
+                               common))
+     :unchanged (sort-by :evidence/chain-seq (vals (select-keys hash-b common)))
+     :summary {:a-only (count a-only) :b-only (count b-only)
+               :common (count common) :unchanged (count common)
+               :changed (count (filter (fn [h] (not= (get hash-a h) (get hash-b h))) common))}}))
+
+;; ── Evidence Bundle Export ────────────────────────────────────────────────────
+;;
+;; Export a set of evidence artifacts (by group-id) into a portable directory
+;; for sharing with collaborators.
+
+(defn export-evidence-bundle
+  "Copy evidence artifacts matching the given group-ids into an output directory.
+   
+   group-ids   — one or more :evidence/group-id strings to filter by
+   output-dir  — directory to write the bundle into
+   artifact-dir   — source event-evidence directory (optional)
+   
+   Returns the path to output-dir.
+   
+   The bundle directory contains:
+   - All matching JSON artifacts (renamed to chain-seq for stable ordering)
+   - manifest.json with source metadata and artifact list"
+  [group-ids output-dir & [artifact-dir]]
+  (let [src (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
+        gids (set (if (coll? group-ids) group-ids [group-ids]))
+        files (filter #(.isFile %) (file-seq (io/file src)))
+        matched (keep (fn [f]
+                        (try (let [d (read-evidence-json f)]
+                               (when (contains? gids (:evidence/group-id d))
+                                 {:data d :file f}))
+                             (catch Exception _ nil)))
+                      files)]
+    (.mkdirs (io/file output-dir))
+    (doseq [{:keys [data file]} (sort-by (comp :evidence/chain-seq :data) matched)]
+      (let [seq-no (or (:evidence/chain-seq data) 0)
+            etype (:evidence/type data)
+            fname (str (format "%04d" seq-no) "-" (name (keyword etype)) ".json")]
+        (io/copy file (io/file output-dir fname))))
+    ;; Write manifest
+    (let [manifest {:schema-version "evidence-bundle.v1"
+                    :exported-at (str (java.time.Instant/now))
+                    :group-ids (vec gids)
+                    :artifact-count (count matched)
+                    :artifacts (vec (for [{:keys [data]} (sort-by (comp :evidence/chain-seq :data) matched)]
+                                     {:group-id (:evidence/group-id data)
+                                      :evidence-type (:evidence/type data)
+                                      :chain-seq (:evidence/chain-seq data)
+                                      :evidence-hash (:evidence/hash data)}))}]
+      (spit (io/file output-dir "manifest.json")
+            (json/write-str manifest {:key-fn qualified-key :indent true})))
+    (println "Exported" (count matched) "evidence artifacts to" output-dir)
+    output-dir))
+
 
 (defn linked-evidence-group
   "Researcher-facing helper for inspecting one replay event.
