@@ -1,5 +1,5 @@
 {:golden-schema-version "2.0",
- :suite-id :suites/equivalence-escalation-boundaries,
+ :suite-id :suites/dr3-critical,
  :trace-id "s50-multi-hop-pending-cleared-every-hop",
  :final-state-hash "70uZn2ORJ5lJZZBslO+SMOziuXHgKvkc6iXcm76Up34=",
  :metrics

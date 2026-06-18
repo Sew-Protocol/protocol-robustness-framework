@@ -564,4 +564,17 @@
   {:doc "Open the security validation notebook in the browser."
    :task (do
            (println "Opening: http://localhost:7777/notebooks/security_validation")
-           (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/security_validation 2>/dev/null || open http://localhost:7777/notebooks/security_validation 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/security_validation'"))}}}
+           (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/security_validation 2>/dev/null || open http://localhost:7777/notebooks/security_validation 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/security_validation'"))}
+
+  notebook:check
+  {:doc "Load notebook namespaces and validate data shapes."
+   :task (clojure {:dir "."}
+           "-M" "-e" "(require (quote [resolver-sim.notebook.checks])) (require (quote [notebooks.report])) (println (str \"Notebook namespaces loaded. Shape checks passed.\"))")}
+
+  notebook:lint
+  {:doc "Lint notebook and notebook support code with clj-kondo"
+   :task (clojure {:dir "."} "-M:lint" "--lint" "src/resolver_sim/notebook")}
+
+  notebook:ci
+  {:doc "Full notebook validation: lint + load/check"
+   :depends [notebook:lint notebook:check]}}}

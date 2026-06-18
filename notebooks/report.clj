@@ -1,12 +1,18 @@
-;; # Sew Protocol — Evidence Workbook
+;; # Protocol Robustness Framework — Validation Report
 ;;
 ;; **Audience:** Protocol reviewers, security researchers, contributors.
 ;;
-;; **Purpose:** At-a-glance evidence surface for a validation run. Every
-;; status indicator is paired with what it means, what it does *not* mean,
+;; **Purpose:** Unified evidence surface across the two protocol domains:
+;;
+;; | Domain | Coverage | Scope |
+;; |--------|----------|-------|
+;; | **SEW** (Settlement Escrow Workflow) | 130 scenarios | Escrow lifecycle, disputes, resolution, governance, forking strategist, SPE, equilibrium |
+;; | **General Yield Module** | 22 scenarios | Yield accrual, shortfall handling, partial liquidity, deferred claims, AAVE integration |
+;;
+;; Every status indicator is paired with what it means, what it does *not* mean,
 ;; and the source artifact it is derived from.
 ;;
-;; **Not a marketing dashboard.** This notebook does not smooth over known
+;; This notebook does not smooth over known
 ;; vulnerabilities or present results as "green = safe". Red can mean a
 ;; hard validation failure *or* a successful theory-falsification finding —
 ;; always inspect `status-kind` before interpreting colour.
@@ -20,16 +26,24 @@
 ;;
 ;; If an artifact is absent, the relevant panel shows amber (missing data),
 ;; not red. Missing data is not the same as a protocol problem.
+;;
+;; Red in this report has *two* meanings that must not be conflated:
+;;
+;; 1. **Validation failure** — invariant violated, unexpected outcome, funds drift.
+;; 2. **Successful falsification** — expected-negative scenario proving a known limit.
+;;
+;; Always inspect the `status-kind` column before acting on colour alone.
 
-;; Settings: default-code-visibility = :hide (hidden) or :show (visible)
-^{:nextjournal.clerk/visibility {:code :hide :result :show}}
+^{:nextjournal.clerk/toc true
+  :nextjournal.clerk/visibility {:code :fold}}
 (ns notebooks.report
   (:require [nextjournal.clerk :as clerk]
             [clojure.java.io :as io]
-            [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.notebooks.ui :as ui]
             [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebook.views :as views]
+            [resolver-sim.notebook.checks :as checks]
             [resolver_sim.notebooks.speds.data :as speds-data]))
 
 (clerk/html (ui/notebook-navigation "Report Notebook"))
@@ -59,16 +73,18 @@
 ;; ---
 ;; ## Artifact Loading
 
-^{:nextjournal.clerk/visibility {:result :hide}}
-(def test-summary (speds-data/load-summary))
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
+(def test-summary
+  (-> (speds-data/load-summary)
+      (checks/assert-test-summary!)))
 
-^{:nextjournal.clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def coverage-data (speds-data/load-coverage))
 
-^{:nextjournal.clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def equivalence-summary (speds-data/load-equivalence))
 
-^{:nextjournal.clerk/visibility {:result :hide}}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
   (map (fn [d]
          {:id          (or (:scenario-id d)
@@ -82,172 +98,21 @@
           :trace-file  (:_filename d)})
        (speds-data/load-all-traces)))
 
-^{:nextjournal.clerk/visibility {:result :hide}}
-(def golden-reports (speds-data/load-all-golden-reports))
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
+(def golden-reports
+  (-> (speds-data/load-all-golden-reports)
+      (checks/assert-golden-reports!)))
 
 ;; ---
-;; ## R/A/G Status Helpers (pure, auditable)
-
-(defn rag-status
-  "Returns :green, :amber, or :red from a keyword, map {:rag/status kw}, or default amber."
-  [x]
-  (cond
-    (keyword? x) (case x
-                   (:green :pass :ok :hold)             :green
-                   (:amber :warn :missing :inconclusive) :amber
-                   (:red :fail :error :violation)        :red
-                   :amber)
-    (map? x)     (rag-status (or (:rag x) (:status x) :amber))
-    :else         :amber))
-
-(defn status-emoji [rag]
-  (case rag :green "🟢" :amber "🟠" :red "🔴" "⚪"))
-
-(defn status-label [rag]
-  (case rag
-    :green "Pass"
-    :amber "Inconclusive / Warning"
-    :red   "Fail / Finding"
-    "Unknown"))
-
-(defn status-kind-label [k]
-  (case k
-    :validation        "Validation"
-    :research-finding  "Research finding"
-    :expected-negative "Expected negative"
-    :missing-data      "Missing data"
-    (str k)))
-
-(defn target-status->rag [s]
-  (case (str s)
-    "pass"    :green
-    "fail"    :red
-    "unknown" :amber
-    :amber))
-
-(defn risk-digest->rag [digest]
-  (cond
-    (nil? digest)                     :amber
-    (seq (:critical_findings digest)) :red
-    (seq (:warnings digest))          :amber
-    :else                              :green))
-
-(defn scenario-purpose->status-kind [purpose]
-  (case (str purpose)
-    "regression"             :validation
-    "adversarial-robustness" :validation
-    "theory-falsification"   :expected-negative
-    "research"               :research-finding
-    :validation))
-
-(defn scenario-row->rag
-  "Derives RAG + status-kind + reason for a scenario row.
-  Returns {:rag kw :status-kind kw :reason str}."
-  [{:keys [purpose]} golden]
-  (let [kind       (scenario-purpose->status-kind purpose)
-        outcome    (:outcome golden)
-        violations (get-in golden [:metrics :invariant-violations] 0)
-        atk-succ   (get-in golden [:metrics :attack-successes] 0)]
-    (cond
-      (nil? golden)
-      {:rag :amber :status-kind :missing-data
-       :reason "No golden report — replay outcome unknown"}
-
-      (pos? violations)
-      {:rag :red :status-kind :validation
-       :reason (str "Invariant violation(s): " violations)}
-
-      (and (= purpose "theory-falsification") (pos? atk-succ))
-      {:rag :red :status-kind :expected-negative
-       :reason (str "Theory falsified — attack succeeded (" atk-succ
-                    "). Expected evidence, not a CI failure.")}
-
-      (and (= outcome :pass) (pos? atk-succ) (not= purpose "theory-falsification"))
-      {:rag :amber :status-kind :research-finding
-       :reason (str "Attack succeeded (" atk-succ ") but invariants held — research finding")}
-
-      (= outcome :pass)
-      {:rag :green :status-kind kind :reason "Invariants pass; outcome as expected"}
-
-      (= outcome :fail)
-      {:rag :red :status-kind :validation
-       :reason "Unexpected failure — invariant or expectation not met"}
-
-      :else
-      {:rag :amber :status-kind :missing-data
-       :reason (str "Outcome: " (pr-str outcome))})))
-
-(defn classify-validation-failure
-  "Evidence-aware, low-confidence-first failure class derivation.
-   Returns — when available data does not strongly support a class label."
-  [{:keys [threat-tags]} golden status-kind]
-  (let [tags (set (map #(-> % name str/lower-case) (or threat-tags [])))
-        tag-text (str/join " " tags)
-        outcome (:outcome golden)
-        reverts (get-in golden [:metrics :reverts] 0)
-        resolutions (get-in golden [:metrics :resolutions-executed] 0)
-        tag-has? (fn [needle] (str/includes? tag-text needle))]
-    (cond
-      (= status-kind :missing-data)
-      "no replay artifact"
-
-      (not= status-kind :validation)
-      "—"
-
-      (= outcome :pass)
-      "—"
-
-      (and (= outcome :fail) (pos? reverts) (zero? resolutions))
-      "likely unexpected revert / missing terminal state"
-
-      (or (tag-has? "timeout") (tag-has? "deadline"))
-      "timeout behavior mismatch"
-
-      (or (tag-has? "appeal") (tag-has? "escalation"))
-      "escalation lifecycle mismatch"
-
-      (or (tag-has? "authorization")
-          (tag-has? "unauthorized")
-          (tag-has? "auth"))
-      "authorization policy mismatch"
-
-      (or (tag-has? "state-leak")
-          (tag-has? "state_leak")
-          (tag-has? "status-leak")
-          (tag-has? "state-machine")
-          (tag-has? "guard"))
-      "state machine guard mismatch"
-
-      :else
-      "—")))
-
-;; ---
-;; ## Card / Layout Helpers
-
-(defn- card-style [rag]
-  (let [border (case rag :green "#16a34a" :red "#dc2626" "#d97706")
-        bg     (case rag :green "#f0fdf4" :red "#fef2f2" "#fffbeb")
-        color  (case rag :green "#14532d" :red "#7f1d1d" "#78350f")]
-    {:borderLeft   (str "4px solid " border)
-     :background   bg
-     :color        color
-     :padding      "12px 16px"
-     :borderRadius "4px"
-     :marginBottom "8px"}))
-
-(defn render-card [{:keys [label rag value note]}]
-  [:div {:style (card-style rag)}
-   [:div {:style {:display "flex" :alignItems "baseline" :gap "8px"}}
-    [:span {:style {:fontSize "1.1em"}} (status-emoji rag)]
-    [:strong label]
-    [:span {:style {:fontSize "0.95em" :opacity "0.85"}} value]]
-   (when note
-     [:div {:style {:fontSize "0.82em" :marginTop "4px" :opacity "0.8"}} note])])
+;; ## Display helpers — all delegated to resolver-sim.notebook.views
+;; (views/rag-status, status-emoji, status-label, status-kind-label,
+;;  target-status->rag, risk-digest->rag, render-card,
+;;  scenario-row->rag, classify-validation-failure, triage-next-action)
 
 ;; ---
 ;; ## 1. Evidence Control Panel
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Evidence Control Panel"
@@ -287,7 +152,7 @@
                         (pos? replay-missing-n) :amber
                         :else :green)
            expected-negative-n (count (filter #(= :expected-negative
-                                                   (:status-kind (scenario-row->rag % (get golden-reports (:id %)))))
+                                                   (:status-kind (views/scenario-row->rag % (get golden-reports (:id %)))))
                                              (or all-traces [])))
            vuln-count (count (filter #(= "theory-falsification" (:purpose %))
                                      (or all-traces [])))
@@ -301,7 +166,7 @@
                              :else (str decision))]
       [:div
        [:h2 "Evidence Control Panel"]
-       [:p {:style {:color "#555" :fontSize "0.9em"}}
+       [:p {:style {:color "#f1f5f9" :fontSize "0.9em"}}
         "Aggregated status from the most recent validation run. "
         "Inspect each panel for detail before acting on colour alone."]
        [:div {:style {:background "#eff6ff" :border "1px solid #93c5fd" :borderRadius "6px"
@@ -310,7 +175,7 @@
         "PASS_CLEAN means the configured CI targets completed successfully. "
         "It does not mean every trace in the evidence corpus has a passing golden replay. "
         "The corpus includes additional research and replay artifacts whose status is reported separately in this workbook."]
-       [:div {:style {:fontSize "0.82em" :color "#444" :marginBottom "12px"
+       [:div {:style {:fontSize "0.82em" :color "#f1f5f9" :marginBottom "12px"
                       :fontFamily "monospace" :background "#f5f5f5"
                       :padding "6px 10px" :borderRadius "3px"}}
         (str "Run ID: " run-id " │ CI decision: " decision
@@ -318,7 +183,7 @@
              " │ Targets: " (get-in sc [:targets :total] "—")
              " │ traces=" trace-n ", corpus-golden=" corpus-golden-n
              (if (pos? orphan-n) (str " (+" orphan-n " orphan)") ""))]
-        (render-card
+        (views/render-card
          {:label "Top-level interpretation"
           :rag   (if (or (pos? corpus-fail-n) (pos? replay-missing-n)) :red :green)
           :value (cond
@@ -327,41 +192,41 @@
                    :else "CI targets and replay corpus are aligned")
           :note  (str "CI decision: " decision ". Corpus decision: " corpus-decision ". "
                       "The CI gate only tracks target exit codes; corpus health is independent.")})
-       (render-card
+       (views/render-card
         {:label "CI target gate"
          :rag   gate-rag
          :value (str (get-in sc [:targets :pass] "—")
                      "/" (get-in sc [:targets :total] "—") " targets pass")
          :note  "Hard gate: did all canonical test targets complete successfully? Source: test-summary.json"})
-        (render-card
+        (views/render-card
          {:label "Replay corpus status (visible)"
           :rag   replay-rag
           :value (str corpus-pass-n " pass, " corpus-fail-n " fail, " replay-missing-n " missing golden"
                       (if (pos? orphan-n) (str " (" orphan-n " orphan)") ""))
           :note  "Counts from trace-matched goldens only. Orphan goldens (no trace metadata) are excluded from this tally."})
-       (render-card
+       (views/render-card
         {:label "Structured risk digest criticals"
          :rag   risk-rag
          :value (str critical-n)
           :note  (str "Structured critical findings in risk_digest. "
                       (if (pos? critical-n) "Review test-summary.json immediately." "Clean."))})
-        (render-card
+        (views/render-card
          {:label "Replay validation failures requiring investigation"
           :rag   (if (pos? corpus-fail-n) :red :green)
           :value (str corpus-fail-n)
           :note  (str "Visible corpus failures (trace-matched). "
                       (if (pos? orphan-n) (str orphan-n " orphan goldens excluded — see corpus coverage card.") ""))})
-       (render-card
+       (views/render-card
         {:label "Expected-negative findings"
          :rag   (if (pos? expected-negative-n) :amber :green)
          :value (str expected-negative-n)
          :note  "Count of scenarios with status-kind :expected-negative (theory-falsification evidence)."})
-       (render-card
+       (views/render-card
         {:label "Warnings"
          :rag   warn-rag
          :value (str warning-n " warning(s)")
           :note  "Warning count from risk_digest. Amber = warnings present; does not imply protocol failure."})
-        (render-card
+        (views/render-card
          {:label "Trace corpus coverage"
           :rag   corpus-rag
           :value (str trace-n " traces; " corpus-golden-n " with matching golden"
@@ -369,13 +234,13 @@
           :note  (str replay-missing-n " traces lack replay outcomes; "
                       orphan-n " golden reports have no matching trace metadata. "
                       "Source: data/fixtures/traces/ and data/fixtures/golden/")})
-        (render-card
+        (views/render-card
          {:label "Invariant conservation (visible corpus)"
           :rag   funds-rag
           :value (str corpus-inv " violation(s) across " corpus-golden-n " trace-matched golden reports")
           :note  (str "Total (including orphans): " total-inv ". "
                       "Non-zero = protocol invariant breached — investigate.")})
-       (render-card
+       (views/render-card
         {:label "Theory-falsification scenarios declared"
          :rag   vuln-rag
          :value (str vuln-count " theory-falsification scenario(s)")
@@ -384,7 +249,7 @@
 ;; ---
 ;; ## 2. Corpus Evidence Status
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Corpus Evidence Status"
@@ -405,7 +270,7 @@
                          :else :green)]
       [:div
        [:h2 "Corpus Evidence Status"]
-       [:p {:style {:fontSize "0.85em" :color "#555"}}
+       [:p {:style {:fontSize "0.85em" :color "#f1f5f9"}}
         "Separate corpus-level evidence summary to track replay outcome coverage and quality independently of CI target status."]
        [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b" :borderRadius "6px" :padding "10px 12px" :marginBottom "10px" :fontSize "0.84em"}}
         [:strong "Coverage statement: "]
@@ -414,23 +279,23 @@
              (- (count golds) matched-golden-n) " golden reports have no matching trace."
              " Coverage is broad at trace metadata level, but evidence-backed replay coverage is partial.")]
        [:div {:style {:display "grid" :gridTemplateColumns "repeat(auto-fit, minmax(180px, 1fr))" :gap "10px" :marginBottom "10px"}}
-        (render-card {:label "Evidence status" :rag evidence-rag :value (name evidence-rag)
+        (views/render-card {:label "Evidence status" :rag evidence-rag :value (name evidence-rag)
                       :note "Red: replay fails present. Amber: missing replay outcomes. Green: full evidence-backed pass."})
-        (render-card {:label "Trace metadata coverage" :rag (if (pos? total-traces) :green :amber)
+        (views/render-card {:label "Trace metadata coverage" :rag (if (pos? total-traces) :green :amber)
                       :value (str total-traces " traces") :note "Total scenarios discovered in trace metadata."})
-         (render-card {:label "Replay outcome coverage" :rag (if (zero? missing-count) :green :amber)
+         (views/render-card {:label "Replay outcome coverage" :rag (if (zero? missing-count) :green :amber)
                        :value (str matched-golden-n "/" total-traces) :note "Trace-matched golden reports."})
-        (render-card {:label "Replay failures" :rag (if (pos? fail-count) :red :green)
+        (views/render-card {:label "Replay failures" :rag (if (pos? fail-count) :red :green)
                       :value (str fail-count) :note "Golden outcomes marked :fail."})
-        (render-card {:label "Missing replay artifacts" :rag (if (pos? missing-count) :amber :green)
+        (views/render-card {:label "Missing replay artifacts" :rag (if (pos? missing-count) :amber :green)
                       :value (str missing-count) :note "Traces lacking golden outcome artifacts."})
-        (render-card {:label "Replay passes" :rag :green :value (str pass-count)
+        (views/render-card {:label "Replay passes" :rag :green :value (str pass-count)
                       :note "Golden outcomes marked :pass."})]]))))
 
 ;; ---
 ;; ## 3. Validation Work Queue (Top 10)
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Validation Work Queue (Top 10)"
@@ -452,17 +317,17 @@
                      (filter #(selected? (:id %)))
                      (keep (fn [t]
                              (let [golden (get golden-reports (:id t))
-                                   verdict (scenario-row->rag t golden)]
+                                   verdict (views/scenario-row->rag t golden)]
                                (when (and golden (= :fail (:outcome golden)))
                                  {:id (:id t)
                                   :title (:title t)
                                   :status-kind (:status-kind verdict)
                                   :replay-outcome (name (:outcome golden))
-                                  :failure-class (classify-validation-failure t golden (:status-kind verdict))}))))
+                                  :failure-class (views/classify-validation-failure t golden (:status-kind verdict))}))))
                      (sort-by :id))]
       [:div
        [:h2 "Validation Work Queue (Top 10)"]
-       [:p {:style {:fontSize "0.84em" :color "#555"}}
+       [:p {:style {:fontSize "0.84em" :color "#f1f5f9"}}
         "Primary reviewer queue promoted ahead of the full matrix: s04, s14–s15, s17, s18–s21, s22, s23."]
        (if (seq rows)
          [:div {:style {:overflowX "auto"}}
@@ -480,14 +345,14 @@
                                  :background (if (= :validation (:status-kind r)) "#fef2f2" "#fff7ed")}}
                     [:td {:style {:padding "5px 8px" :fontFamily "monospace" :whiteSpace "nowrap"}} (:id r)]
                     [:td {:style {:padding "5px 8px"}} (:title r)]
-                    [:td {:style {:padding "5px 8px"}} (status-kind-label (:status-kind r))]
+                    [:td {:style {:padding "5px 8px"}} (views/status-kind-label (:status-kind r))]
                     [:td {:style {:padding "5px 8px" :textAlign "center"}} (:replay-outcome r)]
                     [:td {:style {:padding "5px 8px"}} (:failure-class r)] ]))]]
          (ui/callout :amber [:div "No queue scenarios found in current trace corpus."]))]))) )
 
 ;; Debug panel for notebook sync/path drift issues.
 ;; This makes the data source explicit so stale sessions / wrong working dir are obvious.
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Queue Data Source Debug"
@@ -537,34 +402,44 @@
 ;; Theory-falsification scenarios marked `:expected-negative` are red as
 ;; evidence of a known protocol boundary, not a build breakage.
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Scenario Matrix"
   (fn []
     (let [traces (or all-traces [])
           golds (or golden-reports {})
-          rows (for [t traces
-                     :let [golden (get golds (:id t))
-                           verdict (scenario-row->rag t golden)
-                           rag (:rag verdict)
-                           kind (:status-kind verdict)
-                           reason (:reason verdict)
-                           failure-class (classify-validation-failure t golden kind)
-                           tags (if (seq (:threat-tags t))
-                                  (str/join ", " (map name (:threat-tags t)))
-                                  "—")
-                           inv-v (if golden (str (get-in golden [:metrics :invariant-violations] 0)) "—")
-                           atk-s (if golden (str (get-in golden [:metrics :attack-successes] 0)) "—")
-                           outcome (if golden (name (:outcome golden)) "—")
-                           bg (case rag :green "#f0fdf4" :amber "#fffbeb" :red "#fef2f2" "white")]]
-                 {:kind (cond
-                          (= kind :validation) :validation-failure
-                          (= kind :expected-negative) :expected-negative
-                          (= kind :missing-data) :missing-golden
-                          :else :passing-validation)
-                  :status (status-emoji rag)
-                  :status-kind (status-kind-label kind)
+           yield? (fn [t]
+                    (let [text (str/lower-case (str (:id t) " " (:title t) " "
+                                                    (str/join " " (map name (:threat-tags t)))))]
+                      (or (str/includes? text "yield")
+                          (str/includes? text "accrual")
+                          (str/includes? text "shortfall")
+                          (str/includes? text "liquidity")
+                          (str/includes? text "aave"))))
+           rows (for [t traces
+                      :let [golden (get golds (:id t))
+                            verdict (views/scenario-row->rag t golden)
+                            rag (:rag verdict)
+                            kind (:status-kind verdict)
+                            reason (:reason verdict)
+                            domain (if (yield? t) "Yield" "SEW")
+                            failure-class (views/classify-validation-failure t golden kind)
+                            tags (if (seq (:threat-tags t))
+                                   (str/join ", " (map name (:threat-tags t)))
+                                   "—")
+                            inv-v (if golden (str (get-in golden [:metrics :invariant-violations] 0)) "—")
+                            atk-s (if golden (str (get-in golden [:metrics :attack-successes] 0)) "—")
+                            outcome (if golden (name (:outcome golden)) "—")
+                            bg (case rag :green "#f0fdf4" :amber "#fffbeb" :red "#fef2f2" "white")]]
+                  {:kind (cond
+                           (= kind :validation) :validation-failure
+                           (= kind :expected-negative) :expected-negative
+                           (= kind :missing-data) :missing-golden
+                           :else :passing-validation)
+                   :domain domain
+                  :status (views/status-emoji rag)
+                  :status-kind (views/status-kind-label kind)
                   :id (:id t)
                   :title (:title t)
                   :purpose (:purpose t)
@@ -638,14 +513,15 @@
                                 [:thead
                                  (into [:tr {:style {:background "#f3f4f6" :textAlign "left"}}]
                                        (map #(vector :th {:style {:padding "6px 8px"}} %)
-                                            (if validation?
-                                              ["Status" "status-kind" "ID" "Title" "Purpose" "Failure class" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]
-                                              ["Status" "status-kind" "ID" "Title" "Purpose" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]))) ]
+                                                (if validation?
+                                                ["Status" "status-kind" "Domain" "ID" "Title" "Purpose" "Failure class" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]
+                                                ["Status" "status-kind" "Domain" "ID" "Title" "Purpose" "Threat tags" "Inv.viol" "Atk.succ" "Outcome" "Reason"]))) ]
                                 (into [:tbody]
                                       (for [r rows']
                                         [:tr {:style {:background (:bg r)}}
                                          [:td {:style {:textAlign "center" :fontSize "1.1em"}} (:status r)]
-                                         [:td {:style {:fontSize "0.75em" :color "#555"}} (:status-kind r)]
+                                         [:td {:style {:fontSize "0.75em" :color "#f1f5f9"}} (:status-kind r)]
+                                         [:td {:style {:fontSize "0.72em" :fontWeight "600" :color (if (= "Yield" (:domain r)) "#0891b2" "#6b7280")}} (:domain r)]
                                          [:td {:style {:fontFamily "monospace" :fontSize "0.8em" :whiteSpace "nowrap"}} (:id r)]
                                          [:td {:style {:fontSize "0.82em" :maxWidth "220px"}} (:title r)]
                                          [:td {:style {:fontSize "0.78em"}} (:purpose r)]
@@ -655,7 +531,7 @@
                                          [:td {:style {:textAlign "center"}} (:inv-v r)]
                                          [:td {:style {:textAlign "center"}} (:atk-s r)]
                                          [:td {:style {:fontSize "0.78em"}} (:outcome r)]
-                                         [:td {:style {:fontSize "0.72em" :color "#555" :maxWidth "220px"}} (:reason r)]]))]]
+                                         [:td {:style {:fontSize "0.72em" :color "#f1f5f9" :maxWidth "220px"}} (:reason r)]]))]]
                               [:div {:style {:fontSize "0.84em" :color "#64748b" :marginTop "6px"}} "None in this section."])])]
       [:div
        [:h2 "Scenario Matrix"]
@@ -666,7 +542,7 @@
         [:a {:href "#scenario-expected-negative" :style {:marginRight "10px"}} "Expected-negative"]
         [:a {:href "#scenario-passing" :style {:marginRight "10px"}} "Passing"]
         [:a {:href "#scenario-missing"} "Missing"]]
-       [:p {:style {:fontSize "0.85em" :color "#555"}}
+       [:p {:style {:fontSize "0.85em" :color "#f1f5f9"}}
         "One row per scenario trace. "
         [:strong "Red ≠ CI failure"] " — inspect status-kind column. "
         "Rows without a golden report show amber (missing data, not failure)."]
@@ -720,21 +596,11 @@
                       "No missing scenarios in this bucket."])])))]]))))
 
 ;; ---
-;; ## 4. Validation Failures Triage
+;; ## 5. Validation Failures Triage
 
-(defn triage-next-action
-  "Reviewer-oriented next action from likely failure class."
-  [likely-class invariants-pass?]
-  (cond
-    (not invariants-pass?) "Escalate: investigate invariant breach and funds/accounting state first"
-    (= likely-class "unexpected revert") "Inspect revert reason and authorization/guard preconditions"
-    (= likely-class "missing terminal state") "Trace terminal transition path and verify fixture completion conditions"
-    (= likely-class "unauthorized path accepted/rejected mismatch") "Reconcile auth policy expectations vs observed path outcome"
-    (= likely-class "timeout behavior mismatch") "Review deadlines/timeout boundary assumptions and event ordering"
-    (= likely-class "escalation lifecycle mismatch") "Audit escalation lifecycle transitions and pending-state clearing"
-    :else "Compare expected outcome contract vs replay artifact for mismatch source"))
+;; triage-next-action moved to resolver-sim.notebook.views
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Validation Failures Triage"
@@ -745,11 +611,11 @@
           (->> traces
                (keep (fn [t]
                        (let [golden (get golds (:id t))
-                             verdict (scenario-row->rag t golden)
+                             verdict (views/scenario-row->rag t golden)
                              status-kind (:status-kind verdict)
                              replay-ok? (and golden (not= :fail (:outcome golden)))
                              invariants-pass? (boolean (and golden (zero? (get-in golden [:metrics :invariant-violations] 0))))
-                             likely-class (classify-validation-failure t golden status-kind)]
+                             likely-class (views/classify-validation-failure t golden status-kind)]
                           (when (and (= status-kind :validation) (not replay-ok?))
                            {:id (:id t)
                             :title (:title t)
@@ -761,11 +627,11 @@
                             :reverts (if golden (get-in golden [:metrics :reverts] 0) "—")
                             :resolutions (if golden (get-in golden [:metrics :resolutions-executed] 0) "—")
                             :likely-class likely-class
-                            :next-action (triage-next-action likely-class invariants-pass?)}))))
+                            :next-action (views/triage-next-action likely-class invariants-pass?)}))))
                (sort-by (juxt (fn [r] (if (:invariants-pass r) 1 0)) :id)))]
       [:div
        [:h2 "Validation Failures Triage"]
-       [:p {:style {:fontSize "0.84em" :color "#555"}}
+       [:p {:style {:fontSize "0.84em" :color "#f1f5f9"}}
         "Reviewer-priority queue for validation failures. Focus here first when replay corpus is non-clean."]
        (if (seq triage-rows)
          [:div {:style {:overflowX "auto"}}
@@ -797,13 +663,13 @@
          (ui/callout :green [:div "No validation-failure rows detected in current corpus."]))]))))
 
 ;; ---
-;; ## 5. Substatus Detail
+;; ## 6. Substatus Detail
 ;;
 ;; Expanded columns for scenarios with a golden report.
 ;; Helps distinguish: protocol invariant pass, research claim status,
 ;; adversarial success, and accounting metrics.
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Substatus Detail"
@@ -838,7 +704,7 @@
              [:td {:style {:textAlign "center" :padding "4px 8px"}} (get m :resolutions-executed 0)]])]
       [:div
        [:h2 "Substatus Detail"]
-       [:p {:style {:fontSize "0.85em" :color "#555"}}
+       [:p {:style {:fontSize "0.85em" :color "#f1f5f9"}}
         "Per-scenario substatus for all scenarios with golden reports. "
         "Columns: replay-ok, invariants-pass, attack-successes, volume, disputes, reverts, resolutions."]
        [:div {:style {:overflowX "auto"}}
@@ -851,44 +717,13 @@
          (into [:tbody] rows)]]]))))
 
 ;; ---
-;; ## 4. Research Interpretation Layer
-;;
-;; This section explains the dual semantics of red in this workbook.
-
-^{:nextjournal.clerk/visibility {:code :hide}}
-(clerk/html
- (common/safe-render
-  "Research Interpretation Layer"
-  (fn []
-    [:div {:style {:background "#fffbeb" :border "1px solid #f59e0b"
-                   :borderRadius "6px" :padding "16px 20px" :margin "16px 0"}}
-     [:h3 {:style {:marginTop "0" :color "#78350f"}} "⚠ Research Interpretation Note"]
-     [:p "Red in this workbook can mean one of two things:"]
-     [:ol
-      [:li [:strong "A validation failure"] " — an invariant was violated, funds drifted, or an expected outcome was not met. These require investigation."]
-      [:li [:strong "A successful falsification / vulnerability finding"] " — a scenario designed to demonstrate a known protocol limitation. "
-       "This is expected evidence, not a build breakage."]]
-     [:p "Always inspect " [:code "status-kind"] " before interpreting colour:"]
-     [:ul
-      [:li [:code ":validation"] " — hard gate check; red = requires investigation"]
-      [:li [:code ":expected-negative"] " — theory-falsification; red = expected evidence of known limitation"]
-      [:li [:code ":research-finding"] " — model/hypothesis result; amber/red = inconclusive or partial result"]
-      [:li [:code ":missing-data"] " — artifact absent; amber = incomplete evidence, not failure"]]
-     [:p {:style {:fontSize "0.85em" :color "#555"}}
-      "Examples: "
-      [:em "governance-decay-exploit"] " red → vulnerability evidence (expected, not CI fail). "
-      [:em "invariants"] " target red → hard validation failure. "
-      [:em "funds-drift ≠ 0"] " red → accounting failure. "
-      [:em "missing artifact"] " amber → incomplete evidence."]])))
-
-;; ---
-;; ## 5. Funds / Accounting Panel
+;; ## 7. Funds / Accounting Panel
 ;;
 ;; Framework-level reconciliation view. Conservation is modeled — it tracks
 ;; invariant-violation counts, not live ledger entries.
 ;; Bucket interpretation is adapter-defined.
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Funds / Accounting Panel"
@@ -912,7 +747,7 @@
                                with-golden)]
       [:div
        [:h2 "Funds / Accounting Panel"]
-       [:p {:style {:fontSize "0.85em" :color "#555"}}
+       [:p {:style {:fontSize "0.85em" :color "#f1f5f9"}}
         "Framework-level reconciliation view. "
         "Conservation is modeled — tracks invariant-violation counts, not live ledger entries. "
         "Bucket interpretation is adapter-defined."]
@@ -927,22 +762,22 @@
          [:tr {:style {:background (if conservation? "#f0fdf4" "#fef2f2")}}
           [:td {:style {:padding "5px 10px"}} "invariant-conservation-holds?"]
           [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str conservation?)]
-          [:td {:style {:padding "5px 10px" :textAlign "center"}} (status-emoji funds-rag)]
+          [:td {:style {:padding "5px 10px" :textAlign "center"}} (views/status-emoji funds-rag)]
           [:td {:style {:padding "5px 10px" :fontSize "0.85em"}} "Modeled: zero invariant violations across all golden reports"]]
          [:tr {:style {:background (if (zero? drift-total) "#f0fdf4" "#fef2f2")}}
           [:td {:style {:padding "5px 10px"}} "total-invariant-violations"]
           [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str drift-total)]
-          [:td {:style {:padding "5px 10px" :textAlign "center"}} (status-emoji (if (zero? drift-total) :green :red))]
+          [:td {:style {:padding "5px 10px" :textAlign "center"}} (views/status-emoji (if (zero? drift-total) :green :red))]
           [:td {:style {:padding "5px 10px" :fontSize "0.85em"}} "Aggregate across all golden corpus entries"]]
          [:tr {:style {:background (if (pos? missing-n) "#fffbeb" "white")}}
           [:td {:style {:padding "5px 10px"}} "scenarios-missing-golden-report"]
           [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str missing-n)]
-          [:td {:style {:padding "5px 10px" :textAlign "center"}} (status-emoji (if (zero? missing-n) :green :amber))]
+          [:td {:style {:padding "5px 10px" :textAlign "center"}} (views/status-emoji (if (zero? missing-n) :green :amber))]
           [:td {:style {:padding "5px 10px" :fontSize "0.85em"}} "Accounting projection not available for all scenarios"]]
          [:tr
           [:td {:style {:padding "5px 10px"}} "scenarios-with-golden-report"]
           [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str golden-n)]
-          [:td {:style {:padding "5px 10px" :textAlign "center"}} (status-emoji :green)]
+          [:td {:style {:padding "5px 10px" :textAlign "center"}} (views/status-emoji :green)]
           [:td {:style {:padding "5px 10px" :fontSize "0.85em"}} "Covered by golden report artifact"]]]]
        (when (seq viol-rows)
          [:div {:style {:background "#fef2f2" :border "1px solid #dc2626"
@@ -950,14 +785,14 @@
           [:strong "⚠ Invariant violations found in:"]
           (into [:ul] (map #(vector :li {:style {:fontFamily "monospace" :fontSize "0.85em"}} (:id %))
                            viol-rows))])
-       [:p {:style {:fontSize "0.78em" :color "#666" :marginTop "8px" :fontStyle "italic"}}
+       [:p {:style {:fontSize "0.78em" :color "#cbd5e1" :marginTop "8px" :fontStyle "italic"}}
         "Framework-level reconciliation view; bucket interpretation is adapter-defined. "
         "See docs/overview/USE_OF_FUNDS.md for accounting semantics."]]))))
 
 ;; ---
-;; ## 6. Coverage Summary
+;; ## 8. Coverage Summary
 
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Coverage Summary"
@@ -971,7 +806,7 @@
             tag-freq   (or (:threat-tag-freq cov) {})]
         [:div
          [:h2 "Coverage Summary"]
-         [:p {:style {:fontSize "0.85em" :color "#555"}}
+         [:p {:style {:fontSize "0.85em" :color "#f1f5f9"}}
           "Transition and threat-tag coverage derived from trace corpus. "
           "Source: results/test-artifacts/coverage.json"]
          [:div {:style {:display "flex" :gap "16px" :flexWrap "wrap" :marginBottom "12px"}}
@@ -996,7 +831,7 @@
             [:span {:style {:fontFamily "monospace" :fontSize "0.85em"}}
              (str/join ", " (map name unhit))]])
          [:details
-          [:summary {:style {:cursor "pointer" :fontSize "0.85em" :color "#555"}}
+          [:summary {:style {:cursor "pointer" :fontSize "0.85em" :color "#f1f5f9"}}
            "Show transition hit frequencies"]
           [:table {:style {:borderCollapse "collapse" :fontSize "0.82em" :marginTop "6px"}}
            [:thead
@@ -1010,38 +845,9 @@
                     [:td {:style {:padding "3px 10px" :textAlign "right"}} (str n)]]))]]])))))
 
 ;; ---
-;; ## 7. Replay / Temporal Inspection — Reserved
-;;
-;; *Not yet implemented.* Reserved for the replay timeline inspector,
-;; state-transition viewer, and first-divergence finder.
-;;
-;; Intended contents:
-;; - Scenario selector
-;; - Ordered event list (from trace events array)
-;; - Before/after world state summary
-;; - First divergence point between counterfactual pairs
-;; - Invariant snapshots over time
+;; ## 9. Reproducibility / Provenance Panel
 
-^{:nextjournal.clerk/visibility {:code :hide}}
-(clerk/html
- [:div {:style {:background "#f8fafc" :border "1px dashed #94a3b8"
-                :borderRadius "6px" :padding "16px 20px" :color "#475569"}}
-  [:h3 {:style {:marginTop "0"}} "⏱ Replay / Temporal Inspection — Reserved"]
-  [:p "This section will provide:"]
-  [:ul
-   [:li "Scenario selector for individual trace playback"]
-   [:li "Ordered event list from the trace events array"]
-   [:li "Before / after world-state summary at each step"]
-   [:li "First divergence point between counterfactual pairs"]
-   [:li "Invariant snapshots over simulation time"]]
-  [:p {:style {:fontSize "0.82em" :fontStyle "italic"}}
-   "Evidence is already present in data/fixtures/traces/*.trace.json (events arrays). "
-   "Implementation deferred to a later phase of the workbook."]])
-
-;; ---
-;; ## 8. Reproducibility / Provenance Panel
-
-^{:nextjournal.clerk/visibility {:code :hide}}
+^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
  (common/safe-render
   "Reproducibility / Provenance"
@@ -1080,8 +886,8 @@
                                 :background "#f3f4f6" :width "200px"}} k]
                   [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} v]
                   (when (seq note)
-                    [:td {:style {:padding "5px 10px" :fontSize "0.82em" :color "#666"}} note])])
+                    [:td {:style {:padding "5px 10px" :fontSize "0.82em" :color "#cbd5e1"}} note])])
                rows))]
-       [:p {:style {:fontSize "0.78em" :color "#666" :marginTop "8px"}}
+       [:p {:style {:fontSize "0.78em" :color "#cbd5e1" :marginTop "8px"}}
         "To reproduce: " [:code "clojure -M:run -- --invariants"] " (deterministic) or "
         [:code "scripts/monte-carlo/test-all.sh"] " (stochastic phases)."]]))))

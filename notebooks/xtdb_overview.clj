@@ -55,51 +55,51 @@
 
          [:h2 "Outcome Breakdown (trial facts)"]
          (if (:ok? out-r)
-           [:table {:style {:borderCollapse "collapse" :fontSize "0.85em" :width "100%"}}
-            [:thead [:tr {:style {:backgroundColor "#f1f5f9"}}
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Outcome"]
-                     [:th {:style {:padding "6px 10px" :textAlign "right"}} "Count"]]]
+           [:table {:style {:borderCollapse "collapse" :fontSize "0.85em" :width "100%" :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
+            [:thead [:tr {:style {:backgroundColor "#0f172a"}}
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Outcome"]
+                     [:th {:style {:padding "8px 12px" :textAlign "right" :color "#ffffff"}} "Count"]]]
             (into [:tbody]
                   (for [{:keys [outcome count]} (:rows out-r)]
-                    [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
-                     [:td {:style {:padding "5px 10px"}} (str outcome)]
-                     [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str count)]]))]
+                    [:tr {:style {:borderBottom "1px solid #334155"}}
+                     [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str outcome)]
+                     [:td {:style {:padding "6px 12px" :textAlign "right" :fontFamily "monospace" :color "#e2e8f0"}} (str count)]]))]
            (ui/callout :amber [:div "Could not query outcome breakdown."]))
 
          [:h2 "Recent Batches"]
          (if (:ok? bat-r)
-           [:table {:style {:borderCollapse "collapse" :fontSize "0.83em" :width "100%"}}
-            [:thead [:tr {:style {:backgroundColor "#f1f5f9"}}
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Batch ID"]
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Protocol"]
-                     [:th {:style {:padding "6px 10px" :textAlign "right"}} "Trials"]
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Latest Valid Time"]]]
+           [:table {:style {:borderCollapse "collapse" :fontSize "0.83em" :width "100%" :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
+            [:thead [:tr {:style {:backgroundColor "#0f172a"}}
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Batch ID"]
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Protocol"]
+                     [:th {:style {:padding "8px 12px" :textAlign "right" :color "#ffffff"}} "Trials"]
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Latest Valid Time"]]]
             (into [:tbody]
                   (for [{:keys [batch_id protocol_id trial_count latest_valid_from]} (:rows bat-r)]
-                    [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
-                     [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str batch_id)]
-                     [:td {:style {:padding "5px 10px"}} (str protocol_id)]
-                     [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str trial_count)]
-                     [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str latest_valid_from)]]))]
+                    [:tr {:style {:borderBottom "1px solid #334155"}}
+                     [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str batch_id)]
+                     [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str protocol_id)]
+                     [:td {:style {:padding "6px 12px" :textAlign "right" :fontFamily "monospace" :color "#e2e8f0"}} (str trial_count)]
+                     [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str latest_valid_from)]]))]
            (ui/callout :amber [:div "Could not query recent batches."]))
 
          [:h2 "Recent Temporal Runs"]
          (if (:ok? run-r)
-           [:table {:style {:borderCollapse "collapse" :fontSize "0.82em" :width "100%"}}
-            [:thead [:tr {:style {:backgroundColor "#f1f5f9"}}
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Run ID"]
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Scenario"]
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Outcome"]
-                     [:th {:style {:padding "6px 10px" :textAlign "right"}} "Seed"]
-                     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Git SHA"]]]
+           [:table {:style {:borderCollapse "collapse" :fontSize "0.82em" :width "100%" :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
+            [:thead [:tr {:style {:backgroundColor "#0f172a"}}
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Run ID"]
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Scenario"]
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Outcome"]
+                     [:th {:style {:padding "8px 12px" :textAlign "right" :color "#ffffff"}} "Seed"]
+                     [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Git SHA"]]]
             (into [:tbody]
                   (for [{:keys [_id scenario_id outcome seed git_sha]} (:rows run-r)]
-                    [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
-                     [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str _id)]
-                     [:td {:style {:padding "5px 10px"}} (str scenario_id)]
-                     [:td {:style {:padding "5px 10px"}} (str outcome)]
-                     [:td {:style {:padding "5px 10px" :textAlign "right" :fontFamily "monospace"}} (str seed)]
-                     [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str git_sha)]]))]
+                    [:tr {:style {:borderBottom "1px solid #334155"}}
+                     [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str _id)]
+                     [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str scenario_id)]
+                     [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str outcome)]
+                     [:td {:style {:padding "6px 12px" :textAlign "right" :fontFamily "monospace" :color "#e2e8f0"}} (str seed)]
+                     [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str git_sha)]]))]
            (ui/callout :amber [:div "Could not query temporal runs."]))
 
          (ui/callout

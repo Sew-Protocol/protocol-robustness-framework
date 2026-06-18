@@ -1,12 +1,14 @@
 (ns resolver-sim.benchmark.repo
   (:require [clojure.java.shell :refer [sh]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.vcs :as vcs]))
 
 (defn- git [& args]
-  (let [{:keys [exit out err]} (apply sh "git" args)]
-    (if (zero? exit)
-      (str/trim out)
-      nil)))
+  (try
+    (let [{:keys [exit out]} (apply sh "git" args)]
+      (when (zero? exit)
+        (some-> out str/trim not-empty)))
+    (catch Exception _ nil)))
 
 (defn- get-lockfile-hashes [root]
   (let [lockfiles ["deps.edn" "package-lock.json" "Cargo.lock" "requirements.txt"]]
@@ -18,11 +20,8 @@
                 lockfiles))))
 
 (defn metadata []
-  (let [root    (git "rev-parse" "--show-toplevel")
-        commit  (git "rev-parse" "HEAD")
-        branch  (git "rev-parse" "--abbrev-ref" "HEAD")
+  (let [r       (vcs/root)
         tag     (git "describe" "--tags" "--exact-match")
-        dirty?  (not (str/blank? (git "status" "--short")))
         remotes (when-let [remote-out (git "remote" "-v")]
                   (->> (str/split-lines remote-out)
                        (map #(str/split % #"\s+"))
@@ -30,10 +29,10 @@
                        distinct
                        vec))]
     {:repo
-     {:root    root
-      :commit  commit
-      :branch  branch
+     {:root    r
+      :commit  (vcs/commit-sha)
+      :branch  (vcs/branch)
       :tag     tag
-      :dirty?  dirty?
+      :dirty?  (vcs/dirty?)
       :remotes remotes
-      :lockfiles (get-lockfile-hashes root)}}))
+      :lockfiles (get-lockfile-hashes r)}}))

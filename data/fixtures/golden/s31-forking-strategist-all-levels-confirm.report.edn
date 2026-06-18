@@ -54,7 +54,8 @@
  {:equilibrium-reasons {},
   :diagnostics
   {:validation-errors
-   ("invalid :op >" ":assumptions must be a vector of keywords"),
+   ("invalid :op > in metric leaf"
+    ":assumptions must be a vector of keywords"),
    :claim-status :evaluated,
    :falsification-status :not-falsified,
    :evidence-completeness :complete,

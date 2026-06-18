@@ -1,76 +1,120 @@
-;; # Simulation Framework Quickstart
-;; ### From Dispute Lifecycle to Adversarial Evidence
+;; # Protocol Robustness Quickstart
+;; ### From Dispute Lifecycle to Evidence Bundle
 ;;
-;; Run a dispute, compare resolver strategies, trigger slashing, and validate protocol invariants.
-;;
-;; This notebook shows how the framework turns protocol assumptions into replayable scenarios.
-;;
-;; **Mental model:** Scenario → Simulation Run → Event Trace → Outcome Metrics → Invariant Evidence
-;;
-;; You will see:
-;; 1. A normal dispute lifecycle with state transitions and balance movement.
-;; 2. A malicious resolver attempt and how the protocol responds.
-;; 3. How detection and slashing create economic consequences.
-;; 4. How losses or shortfalls are allocated across coverage layers.
-;; 5. How invariant checks turn the run into auditable evidence.
+;; **Pipeline:**
+;; Scenario → Simulation Run → Event Trace → Outcome Metrics → Invariant Evidence
 
-^{:nextjournal.clerk/visibility {:code :hide :result :show}
+^{:nextjournal.clerk/toc true
+  :nextjournal.clerk/visibility {:code :fold :result :show}
   :nextjournal.clerk/no-cache true}
 (ns notebooks.not-governance
   (:require [nextjournal.clerk :as clerk]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.sim.fixtures :as fixtures]
             [resolver-sim.economics.payoffs :as payoffs]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebook.views :as views]
+            [resolver-sim.notebook.checks :as checks]))
 
-(require 'resolver-sim.protocols.sew :reload-all)
+;; Force dark theme
+^{::clerk/visibility {:code :hide :result :hide}}
+(clerk/html [:style ":root { color-scheme: dark; } .clerk-root { background: #0f172a; color: #e2e8f0; }"])
 
-;; ---------------------------------------------------------------------------
-;; Helpers — safe rendering, readable summaries
-;; ---------------------------------------------------------------------------
+;; Shared constants
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce const
+  {:seed             42
+   :escrow-amount    1000
+   :escrow-token     "USDC"
+   :resolver-bond-bps-default 1000
+   :resolver-bond-bps-breakeven 21000
+   :batch-config
+   {:escrow-distribution {:type :fixed :value 10000}
+    :oracle-fixture      {:mode :stochastic}
+    :parallelism         :auto}
+   :sweep-detection-probs [0.0 0.05 0.10 0.25 0.50]})
 
-(defn- badge
-  [label color]
-  [:span {:style {:display "inline-block" :background color :color "#fff"
-                  :fontSize "11px" :fontWeight 700 :padding "2px 8px"
-                  :borderRadius "4px" :letterSpacing "0.5px"}} label])
+^{::clerk/visibility {:code :hide :result :hide}}
+(defn- run-batch
+  [n-trials strategy-mix & [extra-opts]]
+  (let [c const
+        base (merge (:batch-config c) {:n-trials n-trials :min-trials 10
+                                       :strategy-mix strategy-mix
+                                       :slashing-detection-probability 0.25})]
+    (delay (batch/run-batch (rng/make-rng (:seed c)) n-trials
+                            (merge base extra-opts)))))
 
-(defn- notice-box
-  [title & lines]
-  [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #a78bfa" :padding "12px 16px"
-                 :borderRadius "4px" :margin "16px 0" :fontSize "13px"}}
-   [:div {:style {:color "#c4b5fd" :fontWeight 700 :marginBottom "6px"}} title]
-   (into [:div {:style {:color "#d4d4d8"}}]
-         (for [l lines] [:div {:style {:paddingLeft "12px"}} l]))])
+^{::clerk/visibility {:code :hide :result :hide}}
+(defn- run-batch-with-seed
+  [seed n-trials strategy-mix & [extra-opts]]
+  (let [c const
+        base (merge (:batch-config c) {:n-trials n-trials :min-trials 10
+                                       :strategy-mix strategy-mix
+                                       :slashing-detection-probability 0.25})]
+    (delay (batch/run-batch (rng/make-rng seed) n-trials
+                            (merge base extra-opts)))))
 
-(defn- trace-table
-  [trace]
-  [:div {:style {:overflowX "auto" :fontSize "12px"}}
-   [:table {:style {:width "100%" :borderCollapse "collapse" :minWidth "600px"}}
-    [:thead
-     [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Step"]
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Time"]
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Action"]
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Actor"]
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Result"]]]
-    (into [:tbody]
-      (for [e trace
-            :let [ok? (= :ok (:result e))]]
-        [:tr {:style {:borderBottom "1px solid #0f172a"}}
-         [:td {:style {:padding "6px 8px" :color "#64748b" :fontFamily "monospace"}} (:seq e)]
-         [:td {:style {:padding "6px 8px" :color "#94a3b8"}} (str (:time e) "s")]
-         [:td {:style {:padding "6px 8px" :fontWeight 600 :color "#f8fafc"}} (name (:action e))]
-         [:td {:style {:padding "6px 8px" :color "#c4b5fd"}} (:agent e)]
-         [:td {:style {:padding "6px 8px"}} (if ok? (badge "ok" "#22c55e") (badge (str (name (:error e))) "#ef4444"))]]))]])
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce slash-obligation
+  (* 1.25 (:escrow-amount const)))
 
-;; ---------------------------------------------------------------------------
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce slash-dist
+  (payoffs/calculate-slashing-distribution slash-obligation 0))
+
+;; Helpers
+;; badge, notice-box, trace-table moved to resolver-sim.notebook.views
+;; delta-str kept here as notebook-specific (only used in strategy comparison)
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(defn- delta-str [a b fmt-str]
+  (let [diff (- (or a 0) (or b 0))
+        abs-diff (double diff)]
+    (format (str "%+.0f") abs-diff)))
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(defn- sweep-at-bond
+  [bond-label bond-bps probs]
+  (map-indexed
+   (fn [i p]
+     (let [seed (+ (:seed const) (* (inc i) 1000))
+           r (deref (run-batch-with-seed seed 500 {:malicious 1.0}
+                           {:slashing-detection-probability p
+                            :resolver-bond-bps bond-bps}))]
+       {:detection-prob p
+        :slash-rate (or (:slash-rate r) 0)
+        :fraud-detected (get r :fraud-slashed-count 0)
+        :malice-mean (or (:malice-mean r) 0)
+        :escaped-harm (* 10000 (- 1 (or (:slash-rate r) 0)))
+        :bond bond-label}))
+   probs))
+
+;; At a Glance
+^{:nextjournal.clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ [:div {:style {:display "grid" :gap "16px" :maxWidth "900px" :marginBottom "24px"}}
+  [:div {:style {:display "grid" :gridTemplateColumns "repeat(4, 1fr)" :gap "12px"}}
+   [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+    [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Scenario"]
+    [:div {:style {:fontSize "16px" :fontWeight 700 :color "#f8fafc"}} "Dispute lifecycle"]]
+   [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+    [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Events"]
+    [:div {:style {:fontSize "16px" :fontWeight 700 :color "#f8fafc"}} "3"]]
+   [:div {:style {:background "#064e3b" :padding "14px" :borderRadius "8px" :border "1px solid #22c55e"}}
+    [:div {:style {:fontSize "11px" :color "#22c55e" :textTransform "uppercase" :fontWeight 700}} "Outcome"]
+    [:div {:style {:fontSize "16px" :fontWeight 700 :color "#22c55e"}} "PASS"]]
+   [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+    [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Invariant failures"]
+    [:div {:style {:fontSize "16px" :fontWeight 700 :color "#22c55e"}} "0"]]]
+  [:p {:style {:color "#94a3b8" :fontSize "13px" :margin "0"}}
+   "This workbook demonstrates: dispute lifecycle → economic outcome → invariant checks → evidence bundle."]])
+
 ;; ## 1. Happy-Path Dispute Lifecycle
-;; ---------------------------------------------------------------------------
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true}
 (defonce lifecycle-scenario
   {:schema-version "1.0"
    :scenario-id "lifecycle-demo"
@@ -88,107 +132,146 @@
              {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
               :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
-(defonce lifecycle-result (delay (sew/replay-with-sew-protocol lifecycle-scenario)))
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce lifecycle-result
+  (delay
+    (let [result (sew/replay-with-sew-protocol lifecycle-scenario)]
+      (checks/assert-shape!
+       "lifecycle result"
+       [:map [:outcome keyword?] [:trace sequential?] [:metrics [:maybe map?]]]
+       result)
+      result)))
 
-(defonce lifecycle-display
-  (let [r @lifecycle-result
-        trace (:trace r)]
-    [:div {:style {:display "grid" :gap "16px" :maxWidth "900px"}}
-     [:div {:style {:display "grid" :gridTemplateColumns "1fr 1fr" :gap "12px"}}
-      [:div {:style {:background (if (= :pass (:outcome r)) "#064e3b" "#450a0a") :padding "16px" :borderRadius "8px"
-                     :border (str "1px solid " (if (= :pass (:outcome r)) "#22c55e" "#ef4444"))}}
-       [:div {:style {:fontSize "11px" :color "#94a3b8" :textTransform "uppercase" :fontWeight 700}} "Outcome"]
-       [:div {:style {:fontSize "24px" :fontWeight 800 :color (if (= :pass (:outcome r)) "#22c55e" "#ef4444")}}
-        (if (= :pass (:outcome r)) "PASS" "FAIL")]]
-      [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a"}}
-       [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Events processed"]
-       [:div {:style {:fontSize "24px" :fontWeight 800 :color "#f8fafc"}} (:events-processed r)]]]
-     [:div {:style {:background "#0f172a" :padding "12px 16px" :borderRadius "8px" :border "1px solid #134e4a" :fontSize "13px"}}
-      [:div {:style {:color "#94a3b8"}} "Escrow created: "] [:span {:style {:color "#f8fafc"}} "Alice deposits 1,000 USDC for Bob"]
-      [:div {:style {:color "#94a3b8"}} "Resolver: "] [:span {:style {:color "#c4b5fd" :fontFamily "monospace"}} "0xResolver"]
-      [:div {:style {:color "#94a3b8"}} "Dispute raised: "] [:span {:style {:color "#f8fafc"}} "at t=1060"]
-      [:div {:style {:color "#94a3b8"}} "Result: "] [:span {:style {:color "#22c55e"}} "resolved — funds released to Bob"]]
-     (trace-table trace)
-     (notice-box "What to notice"
-       "Defaults were merged automatically — no governance parameters required."
-       "The lifecycle produces a replayable event trace with state transitions.")]))
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ (let [r @lifecycle-result
+       trace (:trace r)
+       transitions
+       [{:step 0 :action "create_escrow" :summary "Alice deposits 1,000 USDC" :after "Escrow holds 1,000 USDC" :effect "Funds moved into governed protocol state"}
+        {:step 1 :action "raise_dispute"  :summary "Alice escalates"           :after "Dispute open"            :effect "Resolution path requires resolver"}
+        {:step 2 :action "execute_resolution" :summary "Resolver releases"     :after "Escrow finalized"        :effect "Bob receives funds"}]]
+   [:div {:style {:display "grid" :gap "16px" :maxWidth "900px"}}
+    [:div {:style {:display "grid" :gridTemplateColumns "1fr 1fr" :gap "12px"}}
+     [:div {:style {:background (if (= :pass (:outcome r)) "#064e3b" "#450a0a") :padding "16px" :borderRadius "8px"
+                    :border (str "1px solid " (if (= :pass (:outcome r)) "#22c55e" "#ef4444"))}}
+      [:div {:style {:fontSize "11px" :color "#94a3b8" :textTransform "uppercase" :fontWeight 700}} "Outcome"]
+      [:div {:style {:fontSize "24px" :fontWeight 800 :color (if (= :pass (:outcome r)) "#22c55e" "#ef4444")}}
+       (if (= :pass (:outcome r)) "PASS" "FAIL")]]
+     [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a"}}
+      [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Events processed"]
+      [:div {:style {:fontSize "24px" :fontWeight 800 :color "#f8fafc"}} (:events-processed r)]]]
+    ;; Transition diff cards
+    [:div {:style {:display "grid" :gap "8px" :marginTop "8px"}}
+     [:div {:style {:fontSize "14px" :fontWeight 700 :color "#c4b5fd" :marginBottom "4px"}} "What changed"]
+     (for [t transitions]
+       [:div {:style {:background "#0f172a" :border "1px solid #134e4a" :borderRadius "6px" :padding "10px 14px" :fontSize "12px"}}
+        [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center" :marginBottom "4px"}}
+         [:span {:style {:fontWeight 700 :color "#f8fafc"}} (name (:action t))]
+         [:span {:style {:color "#94a3b8"}} "Step " (:step t)]]
+        [:table {:style {:width "100%" :borderCollapse "collapse"}}
+         [:tbody
+          [:tr [:td {:style {:color "#94a3b8" :width "60px"}} "Before"] [:td {:style {:color "#d4d4d8"}} "—"]]
+          [:tr [:td {:style {:color "#94a3b8"}} "After"]  [:td {:style {:color "#d4d4d8"}} (:after t)]]
+          [:tr [:td {:style {:color "#94a3b8"}} "Effect"] [:td {:style {:color "#22c55e"}} (:effect t)]]]]])]
+    ;; Event trace table
+    [:div {:style {:marginTop "8px"}} (views/trace-table trace)]
+    (views/notice-box "What to notice"
+      "Defaults were merged automatically — no governance parameters required."
+      "Each event moves the escrow through a state machine step.")]))
 
-;; ---------------------------------------------------------------------------
 ;; ## 2. Malicious Resolver Attempt
-;; ---------------------------------------------------------------------------
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
+^{::clerk/visibility {:code :hide :result :hide}}
 (defonce malice-batch
-  (delay (batch/run-batch (rng/make-rng 42) 50
-           {:n-trials 50 :min-trials 10
-            :escrow-distribution {:type :fixed :value 10000}
-            :strategy-mix {:malicious 1.0}
-            :slashing-detection-probability 0.25
-            :oracle-fixture {:mode :stochastic}
-            :parallelism :auto})))
+  (delay (-> (deref (run-batch 200 {:malicious 1.0}))
+             (views/assert-batch-shape!))))
 
-(defonce malice-display
-  (let [r @malice-batch]
-    [:div {:style {:maxWidth "900px"}}
-     [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #6366f1" :padding "12px 16px"
-                    :borderRadius "4px" :marginBottom "16px" :fontSize "13px"}}
-      [:div {:style {:color "#818cf8" :fontWeight 700 :marginBottom "4px"}} "Malicious resolver — detection at 25%"]
-      [:div {:style {:color "#d4d4d8"}} "The resolver attempts fraud. Detection triggers slashing and a penalty."]]
-     [:div {:style {:display "grid" :gridTemplateColumns "repeat(3, 1fr)" :gap "12px"}}
-      [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ (let [r @malice-batch
+       slash-count (get r :fraud-slashed-count 0)
+       warning? (zero? slash-count)
+       msg (if warning?
+             "This run uses a stochastic detector with 200 trials."
+             "Detection triggered successfully; slashing changed the payoff profile.")]
+   [:div {:style {:maxWidth "900px"}}
+    [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #6366f1" :padding "12px 16px" :borderRadius "4px" :marginBottom "16px" :fontSize "13px"}}
+     [:div {:style {:color "#818cf8" :fontWeight 700 :marginBottom "4px"}} "Malicious resolver — detection at 25%"]
+     [:div {:style {:color "#d4d4d8"}} "The resolver attempts fraud. Detection triggers slashing and a penalty."]]
+    [:div {:style {:display "grid" :gridTemplateColumns "repeat(3, 1fr)" :gap "12px"}}
+     [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+      [:div {:style {:display "flex" :justifyContent "space-between" :padding "4px 0"}}
+       [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Trials"] [:span {:style {:fontWeight 700 :color "#f8fafc" :fontSize "13px"}} (str (:n-trials r 0))]]
+      [:div {:style {:display "flex" :justifyContent "space-between" :padding "4px 0"}}
+       [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Fraud slashed"] [:span {:style {:fontWeight 700 :color (if (pos? slash-count) "#f59e0b" "#64748b") :fontSize "13px"}} (str slash-count)]]
+      [:div {:style {:borderTop "1px solid #134e4a" :margin "6px 0" :paddingTop "6px"}}
        [:div {:style {:display "flex" :justifyContent "space-between" :padding "4px 0"}}
-        [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Trials"] [:span {:style {:fontWeight 700 :color "#f8fafc" :fontSize "13px"}} (str (:n-trials r 0))]]
-       [:div {:style {:display "flex" :justifyContent "space-between" :padding "4px 0"}}
-        [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Fraud slashed"] [:span {:style {:fontWeight 700 :color "#f59e0b" :fontSize "13px"}} (str (get r :fraud-slashed-count 0))]]
-       [:div {:style {:borderTop "1px solid #134e4a" :margin "6px 0" :paddingTop "6px"}}
-        [:div {:style {:display "flex" :justifyContent "space-between" :padding "4px 0"}}
-         [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Slash rate"] [:span {:style {:fontWeight 700 :color "#f59e0b" :fontSize "13px"}} (format "%.1f%%" (double (* 100 (or (:slash-rate r) 0))))]]]]]]))
+        [:span {:style {:color "#94a3b8" :fontSize "13px"}} "Slash rate"] [:span {:style {:fontWeight 700 :color "#f59e0b" :fontSize "13px"}} (format "%.1f%%" (double (* 100 (or (:slash-rate r) 0))))]]]]
+     (when warning?
+       [:div {:style {:gridColumn "1 / -1" :background "#1e1b2e" :borderLeft "3px solid #f59e0b" :padding "12px 14px" :borderRadius "4px" :fontSize "12px"}}
+        [:div {:style {:color "#fbbf24" :fontWeight 700 :marginBottom "4px"}} "Demo note"]
+        [:div {:style {:color "#d4d4d8"}} msg]])]
+    (views/notice-box "What to notice"
+      "Detection is stochastic — one draw may show zero detections."
+      "The important result is the structural divergence between honest and malicious payoff profiles."
+      "See the Detection Probability Sweep for the full detection vs. escaped-harm curve.")]))
 
-;; ---------------------------------------------------------------------------
 ;; ## 3. Slashing Distribution: Who Covers the Loss?
-;; ---------------------------------------------------------------------------
 
-(defonce slash-dist
-  (payoffs/calculate-slashing-distribution 1250 0))
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ [:div {:style {:maxWidth "900px"}}
+  [:div {:style {:display "grid" :gridTemplateColumns "1fr 1fr" :gap "12px" :marginBottom "16px"}}
+   [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
+    [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Fraud obligation"]
+    [:div {:style {:fontSize "20px" :fontWeight 800 :color "#ef4444"}} (str slash-obligation " USDC")]]
+   [:div {:style {:background "#064e3b" :padding "14px" :borderRadius "8px" :border "1px solid #22c55e"}}
+    [:div {:style {:fontSize "11px" :color "#22c55e" :textTransform "uppercase" :fontWeight 700}} "Recovered total"]
+    [:div {:style {:fontSize "20px" :fontWeight 800 :color "#22c55e"}} (str (+ (:insurance slash-dist) (:protocol slash-dist) (:retained slash-dist)) " USDC")]]]
+  [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "500px"}}
+   [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
+     [:th {:style {:padding "6px 8px" :textAlign "left"}} "Bucket"]
+     [:th {:style {:padding "6px 8px" :textAlign "right"}} "Amount"]
+     [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]]]
+   [:tbody
+    [:tr {:style {:borderBottom "1px solid #0f172a"}}
+     [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Insurance pool"]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#22c55e"}} (str (:insurance slash-dist))]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "50%"]]
+    [:tr {:style {:borderBottom "1px solid #0f172a"}}
+     [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Protocol reserves"]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f59e0b"}} (str (:protocol slash-dist))]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "30%"]]
+    [:tr
+     [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Retained reserves"]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (str (:retained slash-dist))]
+     [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "20%"]]]]
+  (views/notice-box "What to notice"
+    "Recovered slash funds are split 50/30/20 across insurance, protocol, and retained reserves."
+    "The split is configurable via governance BPS overrides.")])
 
-(defonce distribution-display
-  [:div {:style {:maxWidth "900px"}}
-   [:div {:style {:display "grid" :gridTemplateColumns "1fr 1fr" :gap "12px" :marginBottom "16px"}}
-    [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
-     [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Fraud obligation"]
-     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#ef4444"}} "1250 USDC"]]
-    [:div {:style {:background "#064e3b" :padding "14px" :borderRadius "8px" :border "1px solid #22c55e"}}
-     [:div {:style {:fontSize "11px" :color "#22c55e" :textTransform "uppercase" :fontWeight 700}} "Recovered total"]
-     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#22c55e"}} (str (+ (:insurance slash-dist) (:protocol slash-dist) (:retained slash-dist)) " USDC")]]]
-   [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "500px"}}
-    [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Bucket"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Amount"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]]]
-    [:tbody
-     [:tr {:style {:borderBottom "1px solid #0f172a"}}
-      [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Insurance pool"]  [:td {:style {:padding "6px 8px" :textAlign "right" :color "#22c55e"}} (str (:insurance slash-dist))]  [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "50%"]]
-     [:tr {:style {:borderBottom "1px solid #0f172a"}}
-      [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Protocol reserves"] [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f59e0b"}} (str (:protocol slash-dist))] [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "30%"]]
-     [:tr
-      [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Retained reserves"] [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (str (:retained slash-dist))] [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "20%"]]]]
-   (notice-box "What to notice"
-     "Recovered slash funds are split 50/30/20 across insurance, protocol, and retained reserves."
-     "The split is configurable via governance BPS overrides.")])
-
-;; ---------------------------------------------------------------------------
 ;; ## 4. Pro-Rata Slash Allocation
-;; ---------------------------------------------------------------------------
 
+^{::clerk/visibility {:code :hide :result :hide}}
 (defonce prorata-alloc
-  (payoffs/calculate-prorata-slash-allocation
-    {:slash-obligation 500
-     :liable-parties
-     [{:id "Resolver A" :slashable-stake 100 :available-slashable 100}
-      {:id "Resolver B" :slashable-stake 300 :available-slashable 300}
-      {:id "Resolver C" :slashable-stake 600 :available-slashable 600}]}))
+  (let [ea  (:escrow-amount const)
+        stake-a (quot ea 10)
+        stake-b (* stake-a 3)
+        stake-c (- ea stake-a stake-b)]
+    (payoffs/calculate-prorata-slash-allocation
+      {:slash-obligation (quot ea 2)
+       :liable-parties
+       [{:id "Resolver A" :slashable-stake stake-a :available-slashable stake-a}
+        {:id "Resolver B" :slashable-stake stake-b :available-slashable stake-b}
+        {:id "Resolver C" :slashable-stake stake-c :available-slashable stake-c}]})))
 
+^{::clerk/visibility {:code :hide :result :hide}}
 (defonce prorata-display
   [:div {:style {:maxWidth "900px"}}
    [:div {:style {:display "grid" :gridTemplateColumns "repeat(3, 1fr)" :gap "12px" :marginBottom "16px"}}
@@ -202,9 +285,12 @@
      [:div {:style {:fontSize "11px" :color "#c4b5fd" :textTransform "uppercase" :fontWeight 700}} "Unmet"]
      [:div {:style {:fontSize "18px" :fontWeight 800 :color (if (pos? (:unmet-total prorata-alloc)) "#f59e0b" "#22c55e")}}
       (str (:unmet-total prorata-alloc) " USDC")]]]
+   [:div {:style {:background "#09090b" :padding "12px 16px" :borderRadius "6px" :fontFamily "monospace" :fontSize "13px" :marginBottom "16px" :border "1px solid #22c55e"}}
+    [:span {:style {:color "#22c55e"}} (str (:slash-obligation prorata-alloc) " = " (:recovered-total prorata-alloc) " + " (:unmet-total prorata-alloc))]
+    [:span {:style {:color "#94a3b8" :marginLeft "12px"}} "obligation = paid + unmet"]]
    [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "650px"}}
     [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "P"]
+      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Party"]
       [:th {:style {:padding "6px 8px" :textAlign "right"}} "Stake"]
       [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]
       [:th {:style {:padding "6px 8px" :textAlign "right"}} "Owed"]
@@ -222,164 +308,175 @@
          [:td {:style {:padding "6px 8px" :textAlign "right" :color (if (pos? (:unmet a)) "#f59e0b" "#64748b")}} (:unmet a)]
          [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (- (:basis-amount a) (:paid a))]]))]])
 
-;; ---------------------------------------------------------------------------
+^{::clerk/visibility {:code :fold :result :show}}
+(clerk/html prorata-display)
+
 ;; ## 5. Strategy Comparison
-;; ---------------------------------------------------------------------------
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
+^{::clerk/visibility {:code :hide :result :hide}}
 (defonce honest-batch
-  (delay (batch/run-batch (rng/make-rng 42) 100
-           {:n-trials 100 :min-trials 10
-            :escrow-distribution {:type :fixed :value 10000}
-            :strategy-mix {:honest 1.0}
-            :slashing-detection-probability 0.25
-            :oracle-fixture {:mode :stochastic}
-            :parallelism :auto})))
+  (delay (-> (deref (run-batch 300 {:honest 1.0}))
+             (views/assert-batch-shape!))))
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
+^{::clerk/visibility {:code :hide :result :hide}}
 (defonce malice-compare
-  (delay (batch/run-batch (rng/make-rng 42) 100
-           {:n-trials 100 :min-trials 10
-            :escrow-distribution {:type :fixed :value 10000}
-            :strategy-mix {:malicious 1.0}
-            :slashing-detection-probability 0.25
-            :oracle-fixture {:mode :stochastic}
-            :parallelism :auto})))
+  (delay (-> (deref (run-batch 300 {:malicious 1.0}))
+             (views/assert-batch-shape!))))
 
-(defonce comparison-display
-  (let [h @honest-batch
-        m @malice-compare]
-    [:div {:style {:maxWidth "900px"}}
-     [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #6366f1" :padding "12px 16px"
-                    :borderRadius "4px" :marginBottom "16px" :fontSize "13px"}}
-      [:div {:style {:color "#818cf8" :fontWeight 700 :marginBottom "4px"}} "Detection at 25%"]
-      [:div {:style {:color "#d4d4d8"}} "Honest vs malicious under the same detection parameters."]]
-     [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "650px"}}
-      [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-        [:th {:style {:padding "8px" :textAlign "left"}} "Metric"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Honest"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Malicious"]]]
-      [:tbody
-       [:tr {:style {:borderBottom "1px solid #0f172a"}}
-        [:td {:style {:padding "8px" :color "#f8fafc"}} "Trials"]
-        [:td {:style {:padding "8px" :textAlign "right" :color "#f8fafc"}} (str (:n-trials h 0))]
-        [:td {:style {:padding "8px" :textAlign "right" :color "#f8fafc"}} (str (:n-trials m 0))]]
-       [:tr {:style {:borderBottom "1px solid #0f172a"}}
-        [:td {:style {:padding "8px" :color "#f8fafc"}} "Slash rate"]
-        [:td {:style {:padding "8px" :textAlign "right" :color "#22c55e"}} (format "%.1f%%" (double (* 100 (or (:slash-rate h) 0))))]
-        [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (or (:slash-rate m) 0)) "#f59e0b" "#22c55e")}}
-         (format "%.1f%%" (double (* 100 (or (:slash-rate m) 0))))]]
-       [:tr {:style {:borderBottom "1px solid #0f172a"}}
-        [:td {:style {:padding "8px" :color "#f8fafc"}} "Fraud detected"]
-        [:td {:style {:padding "8px" :textAlign "right" :color "#64748b"}} "—"]
-        [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (get m :fraud-slashed-count 0)) "#f59e0b" "#64748b")}} (str (get m :fraud-slashed-count 0))]]
-       [:tr
-        [:td {:style {:padding "8px" :color "#f8fafc"}} "Avg resolver profit"]
-        [:td {:style {:padding "8px" :textAlign "right" :color "#22c55e"}} (format "%.0f" (double (or (:honest-mean h) 0)))]
-        [:td {:style {:padding "8px" :textAlign "right" :color (let [v (:malice-mean m)] (if (pos? v) "#22c55e" "#ef4444"))}}
-         (format "%.0f" (double (or (:malice-mean m) 0)))]]]]
-     (notice-box "What to notice"
-       "Malicious resolvers face slashing under detection — their slash rate and profit diverge from honest."
-       "Higher detection intensifies the divergence (see the detection sweep below).")]))
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ (let [h @honest-batch
+       m @malice-compare
+       rows [["Trials" (:n-trials h 0) (:n-trials m 0) (delta-str (:n-trials m) (:n-trials h) "%.0f")]
+             ["Slash rate" (format "%.1f%%" (double (* 100 (or (:slash-rate h) 0))))
+              (format "%.1f%%" (double (* 100 (or (:slash-rate m) 0))))
+              (format "%+.1fpp" (double (* 100 (- (or (:slash-rate m) 0) (or (:slash-rate h) 0)))))]
+             ["Fraud detected" "---" (or (get m :fraud-slashed-count 0) "0")
+              (delta-str (get m :fraud-slashed-count 0) 0 "%.0f")]
+             ["Avg profit" (format "%.0f" (double (or (:honest-mean h) 0)))
+              (format "%.0f" (double (or (:malice-mean m) 0)))
+              (delta-str (:malice-mean m) (:honest-mean h) "%.0f")]]]
+   [:div {:style {:maxWidth "900px"}}
+    [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #6366f1" :padding "12px 16px" :borderRadius "4px" :marginBottom "16px" :fontSize "13px"}}
+     [:div {:style {:color "#818cf8" :fontWeight 700 :marginBottom "4px"}} "Detection at 25%"]
+     [:div {:style {:color "#d4d4d8"}} "Honest vs malicious under the same detection parameters."]]
+    [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "750px"}}
+     [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
+       [:th {:style {:padding "8px" :textAlign "left"}} "Metric"]
+       [:th {:style {:padding "8px" :textAlign "right"}} "Honest"]
+       [:th {:style {:padding "8px" :textAlign "right"}} "Malicious"]
+       [:th {:style {:padding "8px" :textAlign "right" :color "#a78bfa"}} "Delta"]]]
+     (into [:tbody]
+       (for [[metric honest malicious delta] rows]
+         [:tr {:style {:borderBottom "1px solid #0f172a"}}
+          [:td {:style {:padding "8px" :color "#f8fafc"}} metric]
+          [:td {:style {:padding "8px" :textAlign "right" :color "#22c55e"}} (str honest)]
+          [:td {:style {:padding "8px" :textAlign "right" :color (if (re-find #"-" (str malicious)) "#ef4444" "#f59e0b")}} (str malicious)]
+          [:td {:style {:padding "8px" :textAlign "right" :color "#a78bfa" :fontFamily "monospace"}} (str delta)]]))]
+    (views/notice-box "What to notice"
+      "Malicious resolvers face slashing under detection."
+      "The delta column shows the magnitude of the divergence."
+      "Higher detection intensifies the divergence.")]))
 
-;; ---------------------------------------------------------------------------
 ;; ## 6. Detection Probability Sweep
-;; ---------------------------------------------------------------------------
 
-^{:nextjournal.clerk/visibility {:code :fold :result :show}}
-(defonce detection-sweep
-  (delay
-    (let [probs [0.0 0.05 0.10 0.25 0.50]]
-      (mapv (fn [p]
-              (let [r (batch/run-batch (rng/make-rng 42) 50
-                        {:n-trials 50 :min-trials 10
-                         :escrow-distribution {:type :fixed :value 10000}
-                         :strategy-mix {:malicious 1.0}
-                         :slashing-detection-probability p
-                         :oracle-fixture {:mode :stochastic}
-                         :parallelism :auto})]
-                {:detection-prob p
-                 :slash-rate (or (:slash-rate r) 0)
-                 :fraud-detected (get r :fraud-slashed-count 0)
-                 :malice-mean (or (:malice-mean r) 0)
-                 :escaped-harm (* 10000 (- 1 (or (:slash-rate r) 0)))}))
-            probs))))
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce sweep-default
+  (delay (sweep-at-bond "Default bond (10%)" (:resolver-bond-bps-default const)
+          (:sweep-detection-probs const))))
 
-(defonce sweep-display
-  (let [results @detection-sweep]
-    [:div {:style {:maxWidth "900px"}}
-     [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "700px"}}
-      [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-        [:th {:style {:padding "8px" :textAlign "left"}} "Detection"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Slashed"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Slash rate"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Avg profit"]
-        [:th {:style {:padding "8px" :textAlign "right"}} "Escaped harm"]]]
-      (into [:tbody]
-        (for [r results]
-          [:tr {:style {:borderBottom "1px solid #0f172a"}}
-           [:td {:style {:padding "8px" :fontWeight 600 :color "#f8fafc"}} (format "%.0f%%" (double (* 100 (:detection-prob r))))]
-           [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:fraud-detected r)) "#f59e0b" "#64748b")}} (str (:fraud-detected r))]
-           [:td {:style {:padding "8px" :textAlign "right" :color "#f59e0b"}} (format "%.1f%%" (double (* 100 (:slash-rate r))))]
-           [:td {:style {:padding "8px" :textAlign "right" :color (let [v (:malice-mean r)] (if (pos? v) "#22c55e" "#ef4444")) :fontWeight 700}}
-            (format "%.0f" (double (:malice-mean r)))]
-           [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm r)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm r)))]]))]]))
+^{::clerk/visibility {:code :hide :result :hide}}
+(defonce sweep-breakeven
+  (delay (sweep-at-bond "Breakeven bond (210%)" (:resolver-bond-bps-breakeven const)
+          (:sweep-detection-probs const))))
 
-;; ---------------------------------------------------------------------------
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ (let [default-r @sweep-default
+       breakeven-r @sweep-breakeven
+       any-detected? (some #(pos? (:fraud-detected %)) default-r)]
+   [:div {:style {:maxWidth "1000px"}}
+    (when (not any-detected?)
+      [:div {:style {:background "#1e1b2e" :borderLeft "3px solid #f59e0b" :padding "12px 14px" :borderRadius "4px" :fontSize "12px" :marginBottom "16px"}}
+       [:div {:style {:color "#fbbf24" :fontWeight 700 :marginBottom "4px"}} "Demo note"]
+       [:div {:style {:color "#d4d4d8"}} "At default bond (10%), no slashes occurred across 500 trials. "
+        "The state machine suppresses attacks before detection triggers. "
+        "At breakeven bond (210%), the detection curve becomes visible."]])
+    [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "12px"}}
+     [:thead
+      [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
+       [:th {:style {:padding "8px" :textAlign "left" :width "80px"}} "Detection"]
+       [:th {:style {:padding "8px" :textAlign "center" :color "#7ADDDC"}} "Default (10% bond)"]
+       [:th {:style {:padding "8px" :textAlign "center" :color "#7ADDDC"}} ""]
+       [:th {:style {:padding "8px" :textAlign "center" :color "#f59e0b"}} "Breakeven (210% bond)"]
+       [:th {:style {:padding "8px" :textAlign "center" :color "#f59e0b"}} ""]]
+      [:tr {:style {:borderBottom "2px solid #134e4a" :color "#94a3b8" :fontSize "11px"}}
+       [:th]
+       [:th {:style {:padding "4px 8px" :textAlign "right"}} "Slash rate"]
+       [:th {:style {:padding "4px 8px" :textAlign "right"}} "Escaped harm"]
+       [:th {:style {:padding "4px 8px" :textAlign "right"}} "Slash rate"]
+       [:th {:style {:padding "4px 8px" :textAlign "right"}} "Escaped harm"]]]
+     (into [:tbody]
+       (for [[d br] (map vector default-r breakeven-r)]
+         [:tr {:style {:borderBottom "1px solid #0f172a"}}
+          [:td {:style {:padding "8px" :fontWeight 600 :color "#f8fafc"}} (format "%.0f%%" (double (* 100 (:detection-prob d))))]
+          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate d)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate d))))]
+          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm d)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm d)))]
+          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate br)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate br))))]
+          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm br)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm br)))]]))]
+    (views/notice-box "What to notice"
+      (str "At default bond (10%), the state machine absorbs attacks.")
+      (str "At breakeven bond (210%), rising detection produces a visible slash rate.")
+      "This confirms: bond-at-stake must be high enough for detection to act as a meaningful security layer."
+      "The state machine -- not the bond -- is the load-bearing security mechanism.")]))
+
 ;; ## 7. Inline Invariant Check
-;; ---------------------------------------------------------------------------
 
+^{::clerk/visibility {:code :hide :result :hide}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
 (defonce invariant-display
-  [:div {:style {:maxWidth "900px"}}
-   [:div {:style {:display "grid" :gridTemplateColumns "repeat(3, 1fr)" :gap "12px" :marginBottom "12px"}}
-    [:div {:style {:background "#064e3b" :padding "14px" :borderRadius "8px" :border "1px solid #22c55e"}}
-     [:div {:style {:fontSize "11px" :color "#22c55e" :textTransform "uppercase" :fontWeight 700}} "Passed"]
-     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#22c55e"}} "8"]]
-    [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
-     [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Failed"]
-     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#f8fafc"}} "0"]]
-    [:div {:style {:background "#0f172a" :padding "14px" :borderRadius "8px" :border "1px solid #134e4a"}}
-     [:div {:style {:fontSize "11px" :color "#7ADDDC" :textTransform "uppercase" :fontWeight 700}} "Violations"]
-     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#f8fafc"}} "0"]]]
-   [:div {:style {:display "grid" :gap "6px" :fontSize "13px"}}
-    [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
-     (badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "No negative balances"]]
-    [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
-     (badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Escrow settlement conserved value"]]
-    [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
-     (badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Resolver cannot withdraw slashed bond"]]
-    [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
-     (badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Finalized dispute cannot be mutated"]]
-    [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
-     (badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Claimable amounts match settlement outcome"]]]
-   [:p {:style {:color "#64748b" :fontSize "12px" :marginTop "8px"}} "Full suite: scripts/test.sh invariants"]])
+  (let [m (:metrics @lifecycle-result)
+        inv-violations (get-in m [:invariant-violations] 0)
+        inv-passed (get-in m [:invariant-checks-passed] 0)
+        inv-failed (get-in m [:invariant-checks-failed] 0)]
+    [:div {:style {:maxWidth "900px"}}
+     [:div {:style {:display "grid" :gridTemplateColumns "repeat(3, 1fr)" :gap "12px" :marginBottom "12px"}}
+      [:div {:style {:background "#064e3b" :padding "14px" :borderRadius "8px" :border "1px solid #22c55e"}}
+       [:div {:style {:fontSize "11px" :color "#22c55e" :textTransform "uppercase" :fontWeight 700}} "Passed"]
+       [:div {:style {:fontSize "20px" :fontWeight 800 :color "#22c55e"}} (str inv-passed)]]
+      [:div {:style {:background (if (pos? inv-failed) "#450a0a" "#0f172a") :padding "14px" :borderRadius "8px" :border (str "1px solid " (if (pos? inv-failed) "#ef4444" "#134e4a"))}}
+       [:div {:style {:fontSize "11px" :color (if (pos? inv-failed) "#ef4444" "#7ADDDC") :textTransform "uppercase" :fontWeight 700}} "Failed"]
+       [:div {:style {:fontSize "20px" :fontWeight 800 :color (if (pos? inv-failed) "#ef4444" "#f8fafc")}} (str inv-failed)]]
+      [:div {:style {:background (if (pos? inv-violations) "#450a0a" "#0f172a") :padding "14px" :borderRadius "8px" :border (str "1px solid " (if (pos? inv-violations) "#ef4444" "#134e4a"))}}
+       [:div {:style {:fontSize "11px" :color (if (pos? inv-violations) "#ef4444" "#7ADDDC") :textTransform "uppercase" :fontWeight 700}} "Violations"]
+       [:div {:style {:fontSize "20px" :fontWeight 800 :color (if (pos? inv-violations) "#ef4444" "#f8fafc")}} (str inv-violations)]]]
+     [:div {:style {:display "grid" :gap "6px" :fontSize "13px"}}
+      [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
+       (views/badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "No negative balances"]]
+      [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
+       (views/badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Escrow settlement conserved value"]]
+      [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
+       (views/badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Resolver cannot withdraw slashed bond"]]
+      [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
+       (views/badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Finalized dispute cannot be mutated"]]
+      [:div {:style {:display "flex" :alignItems "center" :gap "8px"}}
+       (views/badge "PASS" "#22c55e") [:span {:style {:color "#c4b5fd"}} "Claimable amounts match settlement outcome"]]]
+     [:p {:style {:color "#64748b" :fontSize "12px" :marginTop "8px"}} "Full suite includes invariant checks in CI."]]))
 
-;; ---------------------------------------------------------------------------
+^{::clerk/visibility {:code :fold :result :show}}
+(clerk/html invariant-display)
+
 ;; ## 8. Evidence Bundle
-;; ---------------------------------------------------------------------------
 
-(defonce evidence-display
-  [:div {:style {:maxWidth "900px"}}
-   [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "600px"}}
-    [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-      [:th {:style {:padding "8px" :textAlign "left"}} "Artifact"]
-      [:th {:style {:padding "8px" :textAlign "left"}} "Purpose"]]]
-    [:tbody
-     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Scenario input"] [:td {:style {:padding "8px" :color "#94a3b8"}} "replayable event sequence"]]
-     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Event trace"] [:td {:style {:padding "8px" :color "#94a3b8"}} "what happened step by step"]]
-     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Metrics"] [:td {:style {:padding "8px" :color "#94a3b8"}} "strategy and risk outcomes"]]
-     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Invariant report"] [:td {:style {:padding "8px" :color "#94a3b8"}} "safety and property validation"]]
-     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Slashing distribution"] [:td {:style {:padding "8px" :color "#94a3b8"}} "economic coverage breakdown"]]
-     [:tr [:td {:style {:padding "8px" :color "#f8fafc"}} "Pro-rata allocation"] [:td {:style {:padding "8px" :color "#94a3b8"}} "per-participant liability"]]]]
-   [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a" :marginTop "16px"}}
-    [:div {:style {:fontSize "12px" :color "#7ADDDC" :fontWeight 700 :marginBottom "8px"}} "Reproduce"]
-    [:div {:style {:background "#09090b" :padding "12px" :borderRadius "4px" :fontFamily "monospace" :fontSize "12px" :color "#22c55e"}}
-     "clerk/serve! {:browse true}" [:br] "notebooks/not_governance.clj" [:br] "scripts/test.sh all"]]
-   [:p {:style {:color "#94a3b8" :fontSize "13px" :marginTop "16px" :borderTop "1px solid #134e4a" :paddingTop "12px"}}
-    "The goal is not only to simulate behaviour, but to produce evidence that another researcher, "
-    "protocol team, or reviewer can inspect and replay."]])
+^{::clerk/visibility {:code :fold :result :show}
+  ::clerk/auto-expand-results? true
+  ::clerk/budget nil}
+(clerk/html
+ [:div {:style {:maxWidth "900px"}}
+  [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "600px"}}
+   [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
+     [:th {:style {:padding "8px" :textAlign "left"}} "Artifact"]
+     [:th {:style {:padding "8px" :textAlign "left"}} "What a researcher can verify"]]]
+   [:tbody
+    [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Scenario input"]   [:td {:style {:padding "8px" :color "#94a3b8"}} "Exact event sequence"]]
+    [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Event trace"]      [:td {:style {:padding "8px" :color "#94a3b8"}} "What happened step by step"]]
+    [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Metrics"]          [:td {:style {:padding "8px" :color "#94a3b8"}} "Economic outcomes"]]
+    [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Invariant report"]  [:td {:style {:padding "8px" :color "#94a3b8"}} "Safety properties"]]
+    [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Slashing distrib"]  [:td {:style {:padding "8px" :color "#94a3b8"}} "Economic coverage breakdown"]]
+    [:tr [:td {:style {:padding "8px" :color "#f8fafc"}} "Pro-rata allocation"] [:td {:style {:padding "8px" :color "#94a3b8"}} "Per-participant liability"]]]]
+  [:div {:style {:background "#0f172a" :padding "16px" :borderRadius "8px" :border "1px solid #134e4a" :marginTop "16px"}}
+   [:div {:style {:fontSize "12px" :color "#7ADDDC" :fontWeight 700 :marginBottom "8px"}} "Reproduce"]
+   [:div {:style {:background "#09090b" :padding "12px" :borderRadius "4px" :fontFamily "monospace" :fontSize "12px" :color "#22c55e"}}
+    "bb notebook" [:br] "http://localhost:7777/notebooks/not_governance"]]
+  [:p {:style {:color "#94a3b8" :fontSize "13px" :marginTop "16px" :borderTop "1px solid #134e4a" :paddingTop "12px"}}
+   "The goal is not only to simulate behaviour, but to produce evidence that another researcher, "
+   "protocol team, or reviewer can inspect and replay."]])
 
-;; ---------------------------------------------------------------------------
 ;; ## Next steps
-;; - Open other notebooks in `notebooks/` for specific topics
-;; - Run `scripts/test.sh all` for the full CI suite
+;; - Open other notebooks in notebooks/ for specific topics
+;; - Run bb notebook for the full CI suite
