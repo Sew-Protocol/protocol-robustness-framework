@@ -183,13 +183,23 @@
 ;; Example from dispatcher entry point:
 ;;   (event-evidence/reset-chain-cursor!)
 
-(def ^:private chain-cursor
+(def ^:dynamic ^:private chain-cursor
   (atom {:seq 0 :last-hash nil}))
 
 (defn reset-chain-cursor!
-  "Reset the evidence chain cursor for a new run."
+  "Reset the evidence chain cursor for a new run.
+   Idempotent — safe to call multiple times."
   []
   (reset! chain-cursor {:seq 0 :last-hash nil}))
+
+(defmacro with-fresh-chain-cursor
+  "Execute body with a fresh evidence chain cursor.
+   The outer cursor is restored when body exits.
+   Use at the start of a replay run alongside chain/with-fresh-registry."
+  [& body]
+  `(let [fresh# (atom {:seq 0 :last-hash nil})]
+     (binding [chain-cursor fresh#]
+       ~@body)))
 
 (defn- inject-chain-fields
   "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
@@ -372,11 +382,59 @@
     (println "Wrote evidence links index:" (.getPath f))
     (.getPath f)))
 
-;; ── Evidence Type → Mechanism Mapping ─────────────────────────────────────────
-;;
-;; Maps each :evidence/type keyword to a higher-level mechanism group.
-;; Used by find-evidence, mechanism index, and coverage report.
-;; Update this map when new evidence types are added.
+;; ── Cross-Layer Evidence Linking ──────────────────────────────────────────────
+
+(defn linked-evidence-group
+  "Researcher-facing helper for inspecting one replay event.
+  
+   Given an :evidence/group-id, returns the generic transition trace and
+   all targeted evidence artifacts captured for that same event.
+
+   This function does not create or modify links. It is a read-only projection
+   over existing event-evidence files.
+
+   Returns nil when no artifacts exist for the group-id.
+
+   Given an :evidence/group-id, finds every artifact in the event-evidence directory
+   whose :evidence/group-id matches.  Returns nil if no artifacts are found.
+   
+   Returns a map with:
+   :group-id       — the supplied group-id
+   :generic-trace  — the artifact whose :evidence/layer is \"generic-trace\" or :generic-trace, or nil
+   :targeted       — vector of all non-generic-trace artifacts, sorted by :evidence/chain-seq
+   :diagnostics    — light-weight summary:
+                     :generic-trace-found?  boolean
+                     :targeted-count        number
+                     :artifact-count        total number of artifacts in the group
+   
+   Malformed JSON files are silently skipped.
+   
+   Usage:
+     (linked-evidence-group \"S19-run:3:raise_dispute\")
+     (linked-evidence-group \"S19-run:3:raise_dispute\" \"/path/to/event-evidence\")"
+  [group-id & [artifact-dir]]
+  (let [dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
+        files (when (.isDirectory (io/file dir))
+                (filter #(.isFile %) (file-seq (io/file dir))))
+        artifacts (keep (fn [f]
+                          (try (read-evidence-json f)
+                               (catch Exception _ nil)))
+                        files)
+        grouped (filter #(= (:evidence/group-id %) group-id) artifacts)]
+    (when (seq grouped)
+      (let [generic (some #(when (or (= "generic-trace" (:evidence/layer %))
+                                     (= :generic-trace (:evidence/layer %)))
+                              %)
+                          grouped)
+            targeted (vec (sort-by :evidence/chain-seq
+                                   (remove #(= % generic) grouped)))]
+        {:group-id group-id
+         :generic-trace generic
+         :targeted targeted
+         :diagnostics {:generic-trace-found? (some? generic)
+                        :targeted-count (count targeted)
+                        :artifact-count (count grouped)}}))))
+
 
 (def evidence-type->mechanism
   {:stake-registered :staking

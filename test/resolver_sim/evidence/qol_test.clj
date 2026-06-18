@@ -241,6 +241,124 @@
     (let [idx (json/read-str (slurp path) :key-fn keyword)]
       (is (seq idx)))))
 
+;; ── Cross-Layer Linking: \"What happened in this replay event?\" ──────────
+
+(defn- setup-linked-group
+  "Write artifacts for linked-evidence-group tests into dir.
+   Returns the group-id the artifacts share."
+  [dir]
+  (.mkdirs (java.io.File. dir))
+  (let [gid "test:0:create_escrow"
+        base {:evidence/schema-version "event-evidence.v1"}
+        generic (assoc base :evidence/type "transition"
+                       :evidence/chain-seq nil
+                       :evidence/group-id gid
+                       :evidence/layer "generic-trace"
+                       :evidence/hash "gen001"
+                       :action {:type :create_escrow})
+        escrow (assoc base :evidence/type "escrow-created"
+                      :evidence/chain-seq 1
+                      :evidence/group-id gid
+                      :evidence/layer "targeted-protocol"
+                      :evidence/hash "abc111"
+                      :escrow/workflow-id 0)
+        stake (assoc base :evidence/type "stake-registered"
+                     :evidence/chain-seq 3
+                     :evidence/group-id gid
+                     :evidence/layer "targeted-protocol"
+                     :evidence/hash "abc333"
+                     :stake/resolver "0xRes")
+        dispute (assoc base :evidence/type "dispute-raised"
+                       :evidence/chain-seq 2
+                       :evidence/group-id gid
+                       :evidence/layer "targeted-protocol"
+                       :evidence/hash "abc222"
+                       :dispute/workflow-id 0)]
+    (doseq [m [generic escrow dispute stake]]
+      (spit (io/file dir (str "ev-" (:evidence/hash m) ".json"))
+            (json/write-str m {:key-fn evidence/qualified-key :indent true})))
+    gid))
+
+(deftest linked-group-returns-nil-for-missing-group
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        result (evidence/linked-evidence-group "nonexistent-group" dir)]
+    (is (nil? result) "Missing group-id returns nil")))
+
+(deftest linked-group-returns-generic-and-targeted
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group dir)
+        result (evidence/linked-evidence-group gid dir)]
+    (is (some? result) "Result is not nil")
+    (is (= gid (:group-id result)) "Group-id matches")
+    (is (some? (:generic-trace result)) "Generic trace is present")
+    (is (= "transition" (:evidence/type (:generic-trace result))) "Generic trace type is transition")
+    (is (= 3 (:targeted-count (:diagnostics result)))
+        "Three targeted artifacts found")
+    (is (= 4 (:artifact-count (:diagnostics result)))
+        "Four total artifacts found")))
+
+(deftest linked-group-sorts-targeted-by-chain-seq
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group dir)
+        result (evidence/linked-evidence-group gid dir)
+        chain-seqs (map :evidence/chain-seq (:targeted result))]
+    (is (= [1 2 3] chain-seqs) "Targeted artifacts sorted by chain-seq")))
+
+(deftest linked-group-tolerates-malformed-files
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group dir)]
+    ;; Write a malformed JSON file into the directory
+    (spit (io/file dir "corrupt.json") "{not valid json}")
+    (let [result (evidence/linked-evidence-group gid dir)]
+      (is (some? result) "Malformed files do not prevent valid results")
+      (is (= 4 (:artifact-count (:diagnostics result)))
+          "Malformed file is silently skipped"))))
+
+(deftest linked-group-accepts-keyword-layer
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        gid "test:keyword-layer"
+        base {:evidence/schema-version "event-evidence.v1"}
+        generic (assoc base :evidence/type "transition"
+                       :evidence/group-id gid
+                       :evidence/layer :generic-trace
+                       :evidence/hash "gen001")
+        escrow (assoc base :evidence/type "escrow-created"
+                      :evidence/chain-seq 1
+                      :evidence/group-id gid
+                      :evidence/layer :targeted-protocol
+                      :evidence/hash "abc111")]
+    (.mkdirs (java.io.File. dir))
+    (doseq [m [generic escrow]]
+      (spit (io/file dir (str "ev-" (:evidence/hash m) ".json"))
+            (json/write-str m {:key-fn evidence/qualified-key :indent true})))
+    (let [result (evidence/linked-evidence-group gid dir)]
+      (is (some? result) "Keyword :evidence/layer is accepted")
+      (is (:generic-trace-found? (:diagnostics result)) "Generic trace found with keyword layer"))))
+
+(deftest linked-group-targeted-only-no-generic
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))
+        gid "test:targeted-only"
+        base {:evidence/schema-version "event-evidence.v1"}
+        escrow (assoc base :evidence/type "escrow-created"
+                      :evidence/chain-seq 1
+                      :evidence/group-id gid
+                      :evidence/layer "targeted-protocol"
+                      :evidence/hash "abc111")]
+    (.mkdirs (java.io.File. dir))
+    (spit (io/file dir "ev-abc111.json")
+          (json/write-str escrow {:key-fn evidence/qualified-key :indent true}))
+    (let [result (evidence/linked-evidence-group gid dir)]
+      (is (some? result) "Result is not nil")
+      (is (nil? (:generic-trace result)) "No generic trace when none exists")
+      (is (false? (:generic-trace-found? (:diagnostics result))) "diagnostics reflects missing trace")
+      (is (= 1 (:targeted-count (:diagnostics result))) "One targeted artifact"))))
+
+(deftest linked-group-empty-directory
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-link-" (java.util.UUID/randomUUID))]
+    (.mkdirs (java.io.File. dir))
+    (let [result (evidence/linked-evidence-group "any-id" dir)]
+      (is (nil? result) "Empty directory returns nil"))))
+
 (deftest write-coverage-report-creates-file
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-test-" (java.util.UUID/randomUUID))
         ev-dir (str dir "/event-evidence")
