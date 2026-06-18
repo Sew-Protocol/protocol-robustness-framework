@@ -126,4 +126,4 @@
                             :financial/actual-amount    actual}))
              evidence (cap/finalize-evidence evidence)]
          (evidence/capture-event-evidence! evidence))
-       (assoc (t/ok world') :slashed-from-stake actual))))
+       (assoc (t/ok world') :slashed-from-stake actual)))))
