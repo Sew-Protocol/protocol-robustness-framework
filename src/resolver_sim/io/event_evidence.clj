@@ -363,8 +363,10 @@
                             (catch Exception _ nil)))
                       files)]
      (reduce (fn [acc entry]
-               (update-in acc [(:group-id entry) :artifacts]
-                          (fnil conj [] entry)))
+               (update acc (:group-id entry)
+                       (fn [group]
+                         (update (or group {:artifacts []})
+                                 :artifacts conj entry))))
              {} entries))))
 
 (comment
@@ -373,6 +375,7 @@
 
 (defn write-evidence-links-index!
   "Build and persist the evidence links index to evidence-links.json.
+   Also registers the index in the chain registry for test-artifacts.json.
    Returns the path to the written file."
   [& [dir]]
   (let [idx (build-evidence-links-index dir)
@@ -381,6 +384,9 @@
     (.mkdirs (io/file out-dir))
     (spit f (json/write-str idx{:key-fn qualified-key :indent true}))
     (println "Wrote evidence links index:" (.getPath f))
+    (chain/register-additional-artifact!
+      (chain/index-artifact-entry :evidence-links "evidence-links.json"
+                                  "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
 
 ;; ── Post-hoc Chain Integrity Verification ──────────────────────────────────────

@@ -359,6 +359,29 @@
     (let [result (evidence/linked-evidence-group "any-id" dir)]
       (is (nil? result) "Empty directory returns nil"))))
 
+;; ── Evidence Links Index: persistable cross-layer index for VCS tracking ──
+
+(deftest write-links-index-creates-file
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group dir)
+        path (evidence/write-evidence-links-index! dir)]
+    (is (string? path))
+    (is (.exists (io/file path)))
+    (let [idx (json/read-str (slurp path) :key-fn keyword)]
+      (is (seq idx) "Links index has entries")
+      (is (some #(-> % val :artifacts seq) idx) "Entries have artifact lists"))))
+
+(deftest links-index-groups-by-group-id
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group dir)
+        idx (evidence/build-evidence-links-index dir)]
+    (is (= 1 (count idx)) "All artifacts share one group-id")
+    (let [gid (first (keys idx))
+          group (get idx gid)]
+      (is (= 4 (count (:artifacts group))) "Group has 4 artifacts")
+      (is (some #(= "generic-trace" (:layer %)) (:artifacts group)) "Has generic-trace")
+      (is (some #(= "targeted-protocol" (:layer %)) (:artifacts group)) "Has targeted-protocol"))))
+
 (deftest write-coverage-report-creates-file
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-test-" (java.util.UUID/randomUUID))
         ev-dir (str dir "/event-evidence")
