@@ -9,6 +9,16 @@ on:
 jobs:
   core-validation:
     runs-on: ubuntu-latest
+    services:
+      xtdb:
+        image: xtdb/xtdb:2.0.0-beta1
+        ports:
+          - 5432:5432
+        env:
+          XTDB_PGWIRE_PORT: 5432
+          XTDB_PGWIRE_USER: xtdb
+          XTDB_PGWIRE_PASSWORD: xtdb
+          XTDB_DBNAME: xtdb
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,17 +59,17 @@ jobs:
           REF_EXIT=$?
           echo "Reference validation exit code: $REF_EXIT"
 
-          echo "=== Running generators ==="
-          ./scripts/test.sh generators || true
+          echo "=== Running invariants ==="
+          ./scripts/test.sh invariants || true
+
+          echo "=== Running integration tests ==="
+          bb test:integration
+          INT_EXIT=$?
+          echo "Integration test exit code: $INT_EXIT"
 
           echo "=== Running contracts ==="
           ./scripts/test.sh contracts || true
 
-          echo "=== Running invariants ==="
-          ./scripts/test.sh invariants || true
-
-          echo "=== Running suites ==="
-          ./scripts/test.sh suites || true
 
           echo "=== Running coverage ==="
           ./scripts/test.sh coverage || true

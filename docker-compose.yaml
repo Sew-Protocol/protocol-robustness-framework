@@ -1,0 +1,10 @@
+services:
+  xtdb:
+    image: ghcr.io/xtdb/xtdb
+    ports:
+      - "5432:5432"
+    environment:
+      - XTDB_PGWIRE_PORT=5432
+      - XTDB_PGWIRE_USER=xtdb
+      - XTDB_PGWIRE_PASSWORD=xtdb
+      - XTDB_DBNAME=xtdb

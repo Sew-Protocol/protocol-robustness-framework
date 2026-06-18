@@ -311,6 +311,80 @@
     (is (= :rejected (get-in r [:trace 2 :result])))
     (is (= 0 (get-in r [:metrics :invariant-violations])))))
 
+;; ---------------------------------------------------------------------------
+;; Section 5b: Attack-attempts false-positive regression tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-attacker-benign-action-not-counted
+  "A labeled attacker doing a benign action (create_escrow) must NOT
+   increment attack-attempts or attack-successes."
+  (let [r (sew/replay-with-sew-protocol
+           (sb/sc :agents [alice bob mallory resolver]
+               :events
+               [{:seq 0 :time 1000 :agent "mallory" :action "create_escrow"
+                  :params {:token "0xUSDC" :to "0xBob" :amount 5000}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :ok (get-in r [:trace 0 :result])))
+    (is (= 0 (get-in r [:metrics :attack-attempts]))
+        "benign action by attacker must not count as attack attempt")
+    (is (= 0 (get-in r [:metrics :attack-successes]))
+        "benign action by attacker must not count as attack success")))
+
+(deftest test-adversarial-dispute-by-attacker-counted
+  "A labeled attacker raising a dispute that gets rejected must still
+   increment attack-attempts."
+  (let [r (sew/replay-with-sew-protocol
+           (sb/sc :agents [alice bob mallory]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                  :params {:token "0xUSDC" :to "0xBob" :amount 3000}}
+                {:seq 1 :time 1001 :agent "alice" :action "release"
+                  :params {:workflow-id 0}}
+                ;; Mallory tries dispute after release — genuinely adversarial action
+                {:seq 2 :time 1002 :agent "mallory" :action "raise_dispute"
+                  :params {:workflow-id 0}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= :rejected (get-in r [:trace 2 :result])))
+    (is (= 1 (get-in r [:metrics :attack-attempts]))
+        "adversarial-capable action by attacker must count as attack attempt")
+    (is (= 0 (get-in r [:metrics :attack-successes]))
+        "rejected adversarial action must not count as success")
+    (is (= 1 (get-in r [:metrics :rejected-attacks])))))
+
+(deftest test-explicitly-adversarial-event-always-counted
+  "An event with :adversarial? true must always count as attack attempt,
+   regardless of agent type or action."
+  (let [r (sew/replay-with-sew-protocol
+           (sb/sc :agents [alice bob]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                  :params {:token "0xUSDC" :to "0xBob" :amount 5000}
+                  :adversarial? true}]))]
+    (is (= :pass (:outcome r)))
+    (is (= 1 (get-in r [:metrics :attack-attempts]))
+        "explicitly adversarial event must count as attack attempt")
+    (is (= 1 (get-in r [:metrics :attack-successes]))
+        "accepted adversarial event must count as attack success")))
+
+(deftest test-honest-agent-never-counted
+  "An honest agent doing any action (even adversarial-capable) must NOT
+   increment attack-attempts."
+  (let [r (sew/replay-with-sew-protocol
+           (sb/sc :agents [alice bob resolver]
+               :events
+               [{:seq 0 :time 1000 :agent "alice" :action "create_escrow"
+                  :params {:token "0xUSDC" :to "0xBob" :amount 5000
+                            :custom-resolver "0xResolver"}}
+                ;; Honest agent raises legitimate dispute
+                {:seq 1 :time 1001 :agent "alice" :action "raise_dispute"
+                  :params {:workflow-id 0}}
+                ;; Honest resolver executes resolution
+                {:seq 2 :time 1002 :agent "resolver" :action "execute_resolution"
+                  :params {:workflow-id 0 :is-release true}}]))]
+    (is (= :pass (:outcome r)))
+    (is (= 0 (get-in r [:metrics :attack-attempts]))
+        "honest agent actions must not count as attack attempts")))
+
 (deftest test-unknown-agent-in-action-is-revert-not-halt
   ;; Unknown agent passes validation because it's not in the event list
   ;; at the scenario level but IS here (we're testing process-step directly)

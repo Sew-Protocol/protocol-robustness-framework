@@ -15,6 +15,7 @@
         io.grpc/grpc-netty-shaded         {:mvn/version "1.64.0"}
         io.grpc/grpc-stub                 {:mvn/version "1.64.0"}
         com.github.seancorfield/next.jdbc {:mvn/version "1.3.939"}
+        org.postgresql/postgresql         {:mvn/version "42.7.2"}
 
         ;; data tooling (recommended)
         scicloj/tablecloth                {:mvn/version "7.029.2"}

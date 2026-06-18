@@ -32,7 +32,8 @@
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.scenario.equilibrium :as equilibrium]
             [resolver-sim.scenario.theory-eval :as theory-eval]
-            [resolver-sim.scenario.theory-result :as theory-result]))
+            [resolver-sim.scenario.theory-result :as theory-result]
+            [resolver-sim.scenario.theory-validation :as tv]))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared value helpers (also used by scenario.expectations)
@@ -61,76 +62,14 @@
     (string? m)  (keyword m)
     :else (to-kw m)))
 
-(def ^:private valid-ops #{:= :> :< :>= :<= :not=})
-
-(defn- validate-predicate-shape
-  "Validate a single predicate map. Returns nil or an error string."
-  [pred depth]
-  (when (pos? depth)
-    (cond
-      (:metric pred)
-      (cond
-        (nil? (:metric pred)) "nil :metric in metric leaf"
-        (not (contains? pred :op)) "missing :op in metric leaf"
-        (not (valid-ops (:op pred))) (str "invalid :op " (:op pred))
-        :else nil)
-
-      (:state pred)
-      (let [s (:state pred)]
-        (cond
-          (not (map? s)) "expected :state to be a map"
-          (not (contains? s :query)) "missing :query in :state"
-          (not (contains? s :op)) "missing :op in :state"
-          (not (valid-ops (:op s))) (str "invalid :op " (:op s))
-          :else nil))
-
-      (:and pred) (first (keep #(validate-predicate-shape % (dec depth)) (:and pred)))
-      (:or pred) (first (keep #(validate-predicate-shape % (dec depth)) (:or pred)))
-      (:not pred) (validate-predicate-shape (:not pred) (dec depth))
-      (:implies pred) (or (validate-predicate-shape (:if pred) (dec depth))
-                          (validate-predicate-shape (:then pred) (dec depth)))
-      (:always pred) (validate-predicate-shape (:always pred) (dec depth))
-      (:eventually pred) (validate-predicate-shape (:eventually pred) (dec depth))
-
-      (:after pred)
-      (let [a (:after pred)]
-        (cond
-          (not (map? a)) "expected :after to be a map"
-          (not (string? (:event a))) "expected :event in :after to be a string"
-          :else (validate-predicate-shape (:predicate a) (dec depth))))
-
-      (:before pred)
-      (let [b (:before pred)]
-        (cond
-          (not (map? b)) "expected :before to be a map"
-          (not (string? (:event b))) "expected :event in :before to be a string"
-          :else (validate-predicate-shape (:predicate b) (dec depth))))
-
-      :else "unrecognized predicate shape")))
-
-
 (defn- validate-theory-block
-  "Validate a theory block. Returns nil or a vector of error strings."
+  "Validate a theory block.
+   Delegates to resolver-sim.scenario.theory-validation/validate-theory.
+   Returns nil or a vector of error strings."
   [theory]
-  (when (some? theory)
-    (let [errors (cond-> []
-                   (contains? theory :falsifies-if)
-                   (conj (let [conds (:falsifies-if theory)
-                               e (if (vector? conds)
-                                   (first (keep #(validate-predicate-shape % 10) conds))
-                                   (validate-predicate-shape conds 10))]
-                           (when e e)))
-
-                   (contains? theory :claim-id)
-                   (conj (let [c (:claim-id theory)]
-                           (when (and (some? c) (not (or (keyword? c) (string? c))))
-                             ":claim-id must be a keyword or string")))
-
-                   (contains? theory :assumptions)
-                   (conj (let [a (:assumptions theory)]
-                           (when (and (some? a) (not (every? keyword? a)))
-                             ":assumptions must be a vector of keywords"))))]
-      (seq (filter string? errors)))))
+  (let [result (tv/validate-theory theory)]
+    (when-not (:valid? result)
+      (:errors result))))
 
 
 (defn try-number

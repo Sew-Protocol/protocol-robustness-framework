@@ -491,6 +491,14 @@
                  (shell "clj -M:lint")
                  (shell "clj -M:eastwood"))}
 
+  db:setup {:doc "Truncate XTDB and seed with sample telemetry"
+            :task (do
+                    (clojure "-M" "-e" "(require 'resolver-sim.db.store 'resolver-sim.db.xtdb) (resolver-sim.db.store/truncate! (resolver-sim.db.xtdb/->datasource))")
+                    (clojure "-M:telemetry-seed" "20"))}
+
+  test:integration {:doc "Run DB integration tests"
+                    :task (clojure "-M:test" "-e" "(require 'clojure.test 'resolver-sim.db.telemetry-integration-test) (clojure.test/run-tests 'resolver-sim.db.telemetry-integration-test)")}
+
   notebook:focus
   {:doc "Focus the provenance notebook on a specific run-id. Usage: bb notebook:focus <run-id>"
    :task (let [run-id (first *command-line-args*)]

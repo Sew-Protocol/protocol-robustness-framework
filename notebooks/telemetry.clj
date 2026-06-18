@@ -7,7 +7,16 @@
 
 ;; Deterministic synchronized workbench state.
 ^{:nextjournal.clerk/sync true}
-(defonce !ui-state (atom ui/default-ui-state))
+(defonce !ui-state (atom (assoc ui/default-ui-state :valid-time "")))
+
+(defn render-ui-controls [state-atom]
+  [:div {:style {:display "flex" :gap "10px" :marginBottom "10px"}}
+   [:div
+    [:label {:style {:display "block" :fontSize "0.8em"}} "Valid Time (ISO)"]
+    [:input {:type "text"
+             :placeholder "YYYY-MM-DDTHH:MM:SSZ"
+             :value (:valid-time @state-atom)
+             :onChange #(swap! state-atom assoc :valid-time (.. % -target -value))}]]])
 
 (defn ds-result []
   (try
@@ -26,9 +35,16 @@
       (merge dsr {:rows [] :sql sqlvec})
       (try
         (require '[next.jdbc])
+        ;; Using next.jdbc/execute! directly.
+        ;; For queries, we need to handle valid-time.
         {:ok? true :rows ((resolve 'next.jdbc/execute!) ds sqlvec) :sql sqlvec}
         (catch Throwable e
           {:ok? false :rows [] :error (or (.getMessage e) (str e)) :sql sqlvec})))))
+
+(defn get-bitemporal-sql [base-sql valid-at]
+  (if (str/blank? valid-at)
+    base-sql
+    (str base-sql " FOR VALID_TIME AS OF TIMESTAMP '" valid-at "'")))
 
 (defn to-uuid [x]
   (try
@@ -86,7 +102,7 @@
 
 ^{:nextjournal.clerk/no-cache true}
 (let [ui-state @!ui-state
-      {:keys [filters pagination selected-trial-id]} ui-state
+      {:keys [filters pagination selected-trial-id valid-time]} ui-state
       limit (-> (get pagination :limit 100) (max 1) (min 1000))
       dsr (ds-result)
       trial-cols-r (table-columns-result "sim_trial_results")
@@ -100,25 +116,24 @@
            (:ok? event-cols-r)
            (empty? trial-cols-missing)
            (empty? event-cols-missing))
-      trials-r (query-result ["SELECT COUNT(*) AS count FROM sim_trial_results"])
-      events-r (query-result ["SELECT COUNT(*) AS count FROM sim_entity_events"])
-      protocols-r (query-result ["SELECT COUNT(DISTINCT protocol_id) AS count FROM sim_trial_results"])
-      qres (query-result [(str "SELECT _id, batch_id, protocol_id, outcome, invariants_ok, divergence "
-                               "FROM sim_trial_results ORDER BY _id DESC LIMIT " limit)])
+      trials-r (query-result [(get-bitemporal-sql "SELECT COUNT(*) AS count FROM sim_trial_results" valid-time)])
+      events-r (query-result [(get-bitemporal-sql "SELECT COUNT(*) AS count FROM sim_entity_events" valid-time)])
+      protocols-r (query-result [(get-bitemporal-sql "SELECT COUNT(DISTINCT protocol_id) AS count FROM sim_trial_results" valid-time)])
+      qres (query-result [(get-bitemporal-sql "SELECT _id, batch_id, protocol_id, outcome, invariants_ok, divergence FROM sim_trial_results ORDER BY _id DESC" valid-time)
+                          (str " LIMIT " limit)])
       base-rows (:rows qres)
       filtered-rows (apply-filters base-rows filters)
       table-rows (mapv trial-row->view filtered-rows)
       selected-id (or selected-trial-id (:trial-id (first table-rows)))
       tid (to-uuid selected-id)
-      t-res (if tid (query-result ["SELECT * FROM sim_trial_results WHERE _id = ?" tid]) {:ok? true :rows []})
-      e-res (if tid (query-result ["SELECT * FROM sim_entity_events WHERE trial_id = ? ORDER BY block_time ASC" tid]) {:ok? true :rows []})
+      t-res (if tid (query-result [(get-bitemporal-sql "SELECT * FROM sim_trial_results WHERE _id = ?" valid-time) tid]) {:ok? true :rows []})
+      e-res (if tid (query-result [(get-bitemporal-sql "SELECT * FROM sim_entity_events WHERE trial_id = ?" valid-time) tid]) {:ok? true :rows []})
       trial (first (:rows t-res))
       events (mapv event-row->view (:rows e-res))]
   (clerk/html
    [:div
     [:h1 "Simulation Telemetry Workbench"]
-    [:p {:style {:fontSize "0.9em" :color "#444"}}
-     "Deterministic exploratory notebook with synchronized UI query state."]
+    (render-ui-controls !ui-state)
     (ui/notebook-navigation "Telemetry Trial Timeline")
 
     [:div {:style {:marginBottom "10px" :padding "10px" :background "#f8fafc" :border "1px solid #cbd5e1" :borderRadius "4px"}}
