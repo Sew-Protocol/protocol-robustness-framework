@@ -703,7 +703,8 @@
     :transfer-not-in-dispute
     :invalid-state-for-release
     :invalid-state-for-refund
-    :resolution-without-settlement})
+    :resolution-without-settlement
+    :invalid-resolver})
 
 (def ^:private sew-guard-error-codes
   #{:no-resolution-to-appeal

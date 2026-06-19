@@ -33,14 +33,18 @@
                                     "S-DR-052-custom-resolver-bypasses-module"
                                     "S-DR-053-module-false-fallthrough"
                                     "S-DR-054-missing-escalation-level"
-                                    "S-DR-060-rotate-resolver-mid-dispute"]}
+                                    "S-DR-060-rotate-resolver-mid-dispute"
+                                    "S-DR-062-rotate-resolver-rejected"
+                                    "S-DR-070-empty-string-resolver-rejected"]}
    :finality           {:label "Finality and payout correctness"
                         :scenarios ["S-DR-040-finality-blocked-during-appeal"
                                     "S-DR-041-finality-after-appeal-window"
                                     "S-DR-042-duplicate-claim-after-finality-rejected"
                                     "S-DR-043-payout-shortfall-deferred"
                                     "S-DR-044-slash-obligation-unmet-recorded"
-                                    "S-DR-061-slash-propose-execute"]}})
+                                    "S-DR-061-slash-propose-execute"
+                                    "S-DR-063-slash-appeal-upheld"
+                                    "S-DR-064-slash-appeal-rejected-executed"]}})
 
 (def coverage-gaps
   "Known research gaps that cannot yet be tested because the model lacks

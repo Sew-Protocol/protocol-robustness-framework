@@ -263,6 +263,7 @@ params.
 | Gap | Location | Risk | Status |
 |-----|----------|------|--------|
 | `:disputed → :resolved` untested | `state_machine.clj:306-309` | **None** — dead transition | Documented as intentional |
+| `rotate-dispute-resolver` never tested | `resolution.clj:28-64` | **Medium** | ✅ S-DR-060 (happy path), S-DR-062 (rejected guards) |
 | `challenge-resolution` with nil `escalation-fn` | `resolution.clj:558` | **Low** | ✅ S-DR-051 |
 | Mode D (module + Kleros both set) | `sew.clj:754-775` | **Medium** | ✅ S-DR-050 |
 | Module false fallthrough | `authority.clj:104-108` | **Low** | ✅ S-DR-053 |
@@ -270,24 +271,27 @@ params.
 | Custom resolver bypasses module | `authority.clj:91-94` | **Low** | ✅ S-DR-052 |
 | `:pending → :refunded` thin coverage | `state_machine.clj` | **Low** | ✅ S-DR-055 |
 | `submit-evidence` on non-disputed escrow | `resolution.clj:200` | **Low** | ✅ S-DR-056 |
-| Empty string resolution-module | `sew.clj:761`, `authority.clj:106` | **Low** — validation concern | Add schema validation |
+| Empty-string custom-resolver | `authority.clj:92-93`, `lifecycle.clj:312` | **Low** | ✅ S-DR-070 + guard added in lifecycle.clj |
 | `automate_timed_actions` multiplexer | `resolution.clj:632-660` | **Low** — trivial priority logic | Monitor if multiplexer changes |
 
 ---
 
-## 4. Recommended additions
+## 4. Recommendations implemented
 
-### Short-term (low effort, high value)
+| Scenario | Gap | File |
+|----------|-----|------|
+| S-DR-050 | Mode D (module + Kleros both set) | ✅ |
+| S-DR-051 | challenge-resolution with nil escalation-fn | ✅ |
+| S-DR-052 | Custom resolver bypasses resolution module | ✅ |
+| S-DR-053 | Module false fallthrough to dispute-resolver | ✅ |
+| S-DR-054 | Missing escalation-resolvers level | ✅ |
+| S-DR-060 | rotate-dispute-resolver governance override | ✅ |
+| S-DR-062 | rotate-dispute-resolver rejection guards | ✅ |
+| S-DR-063 | slash-appeal lifecycle (propose→appeal→upheld→reversed) | ✅ |
+| S-DR-064 | slash-appeal lifecycle (propose→appeal→rejected→executed) | ✅ |
+| S-DR-070 | empty-string custom-resolver rejected at creation | ✅ + lifecycle guard |
 
-1. **S-DR-050-resolution-module-plus-kleros** — Scenario with both
-   `resolution-module` and `escalation-resolvers` set in `protocol-params`.
-   Verify that the kleros module governs L0 and escalation resolves correctly.
-
-2. **S-DR-051-challenge-without-escalation** — Scenario that calls
-   `challenge_resolution` when no `escalation-resolvers` are configured.
-   Expect `:escalation-not-configured`.
-
-### Already tracked in DISPUTE_RESOLUTION_COVERAGE.md
+### Remaining gaps in DISPUTE_RESOLUTION_COVERAGE.md
 
 - `:evidence-deadline` — no evidence-window-duration param (coverage gap)
 - `:resolver-response-deadline` — no resolver-response-window param

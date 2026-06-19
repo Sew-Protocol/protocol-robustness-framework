@@ -309,6 +309,9 @@
             bond-bps      (:resolver-bond-bps snapshot 0)
             stake         (if resolver (reg/get-stake world resolver) 0)]
             (cond
+            (= "" resolver)
+            (t/fail :invalid-resolver)
+
             (and resolver (t/resolver-at-capacity? world resolver))
             (t/fail :resolver-at-capacity)
 

@@ -43,7 +43,11 @@
    "scenarios/S-DR-055-sender-cancel-refund.json"
    "scenarios/S-DR-056-evidence-non-disputed-rejected.json"
    "scenarios/S-DR-060-rotate-resolver-mid-dispute.json"
-   "scenarios/S-DR-061-slash-propose-execute.json"])
+   "scenarios/S-DR-061-slash-propose-execute.json"
+   "scenarios/S-DR-062-rotate-resolver-rejected.json"
+   "scenarios/S-DR-063-slash-appeal-upheld.json"
+   "scenarios/S-DR-064-slash-appeal-rejected-executed.json"
+   "scenarios/S-DR-070-empty-string-resolver-rejected.json"])
 
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"
