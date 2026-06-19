@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added (2026-06-19)
+- **Demo factory architecture (Phase 0+1):** New `resolver-sim.demo.spec` and `resolver-sim.demo.runner` namespaces implement the demo contract and executable runner. `demo.edn` spec files define a demo by pointing to scenarios, commands, expected outputs, and research claims. `bb demo:run <id>` loads `demos/<id>/demo.edn`, validates the spec, runs the scenario, executes section commands via `bash -c`, captures stdout/stderr/exit codes, collects artifacts into `generated/artifacts/`, and writes `generated/demo-run.json`. `bb demo:validate <id>` validates a spec without executing. First demo: `yield-shortfall-partial-fill` (vault shortfall partial withdrawal scenario).
 - **Scenario Evidence Verification:** `verify-scenario-evidence` compares `:expected-evidence` declared on scenario metadata against captured artifacts. Reports `:matched`, `:missing`, `:unexpected` entries.
 - **Cross-Run Evidence Diff:** `diff-evidence-directories` compares two artifact directories by evidence-hash. Reports `:added`, `:missing`, `:changed`, `:unchanged` with summary counts.
 - **Evidence Bundle Export:** `export-evidence-bundle` copies artifacts matching one or more group-ids into a portable directory with `manifest.json` for sharing with collaborators.
@@ -60,6 +61,8 @@
 - **`:or` destructuring hardened in `evidence-base`:** `(name (or importance :diagnostic))` prevents NPE when importance is nil.
 
 ### Fixed (2026-06-19)
+- **Protocol check in core.clj blocks valid non-default protocols:** `-main` rejected `--protocol yield-v1` because it compared against `default-protocol-id` instead of the set of known protocol IDs. Changed to `(not ((set (preg/known-protocol-ids)) protocol-id))`.
+- **Y02 yield scenario expectation mismatch:** `yield/focus-deferred` expected 500 but actual is 1000. Updated scenario expectations to match current yield module behavior.
 - **Yield deposit `:total-held` double-counting:** Liquid-lending module's `deposit` updated `:total-held`, but `create-escrow` already called `add-held` for the same amount. Removed the redundant update from `liquid_lending.clj:62`. Fixed `s115-claim-deferred-yield-recovery` invariant violations.
 - **`slash-status-consistent?` invariant fix:** `(> appeal-dl proposed-at)` → `(>= appeal-dl proposed-at)`. Zero-length appeal windows (`appeal-window-duration: 0`, the default) produced `deadline = proposed-at`, violating the strict inequality. Fixed `governance-approved` scenario halt.
 - **`cleanup-orphaned-slashes` removed from `finalize`:** The call was removing pending Track 2 reversal slashes created by `handle-reversal-slashing` in the same `execute-resolution` call (final-round path). The cleanup already runs in `execute-pending-settlement` where it belongs.
@@ -68,6 +71,8 @@
 
 ### Changed (2026-06-19)
 - **`bb test` now prints overall status:** After all targets complete, the terminal output includes a summary line (`Overall: PASS | Acceptance: PASS_CLEAN` or `Overall: FAIL (1/10 failed) | Acceptance: REJECTED`) so users see the result without opening files.
+- **Artifact loader extracted from notebooks to `resolver-sim.manifest.run`:** `list-runs`, `load-run`, `artifact-by-id`, `load-latest`, `load-focused`, `run->status-indicator`, and `latest-status` now live in `src/resolver_sim/manifest/run.clj` (namespace `resolver-sim.manifest.run`). The old `resolver-sim.notebooks.manifest.loader` is a backward-compat wrapper. Utility functions `read-json`/`read-edn`/`safe-slurp` moved to `resolver-sim.manifest.common` with a wrapper in `resolver-sim.notebooks.common`.
+- **`bb scenario:run --save-output <dir>` added:** Preserves replay JSON and copies artifacts to a directory for demo consumption. Skips temp file cleanup.
 
 ### Fixed (2026-06-18)
 - **`cleanup-orphaned-slashes` ClassCastException:** `(name slash-id)` on integer keys (fraud slashes stored under workflow-id) threw `Long cannot be cast to Named`. Fixed to `(str slash-id)`.

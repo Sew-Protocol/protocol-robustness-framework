@@ -1,0 +1,46 @@
+{:demo/id :yield-shortfall-partial-fill
+ :demo/title "Vault Shortfall and Partial Withdrawal"
+ :demo/audience :researchers
+ :demo/version "demo.v1"
+
+ :research/question
+ "When a yield module enters shortfall, how does the protocol handle withdrawal requests?"
+
+ :research/claims
+ [{:claim/id :partial-fill-preserves-funds
+   :text "Available liquidity is allocated pro-rata; unfilled amounts become deferred claims."
+   :evidence [:summary :claimable-classification]}
+
+  {:claim/id :deferred-claims-trackable
+   :text "Deferred withdrawal amounts remain explicit in the claimable classification."
+   :evidence [:claimable-classification]}]
+
+ :scenario
+ {:id "Y02_vault-shortfall-partial-withdraw"
+  :command "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios/Y02_vault-shortfall-partial-withdraw.json --output-file demos/yield-shortfall-partial-fill/generated/replay-output.json"}
+
+ :sections
+ [{:id :setup
+   :title "Scenario Setup"
+   :explain "Two depositors (OwnerA, OwnerB) deposit into a shared Aave v3 yield module.  OwnerA deposits 1000 USDC, OwnerB deposits 2000 USDC."
+   :commands ["cat scenarios/Y02_vault-shortfall-partial-withdraw.json"]}
+
+  {:id :inject-shortfall
+   :title "Inject Liquidity Shortfall"
+   :explain "Governance sets the yield module to shortfall mode with 50% available liquidity.  This simulates a DeFi liquidity crisis where only half the deposited funds are immediately redeemable."
+   :commands []}
+
+  {:id :withdraw
+   :title "Withdraw During Shortfall"
+   :explain "OwnerA requests a full withdrawal while the module is in shortfall.  The protocol fulfills 50% (500 USDC) immediately and defers the remaining 500 USDC as a claimable deferred amount."
+   :commands []}
+
+  {:id :inspect
+   :title "Inspect Outcomes"
+   :explain "Check the claimable classification to verify that deferred amounts are tracked correctly and that no funds were silently lost."
+   :commands ["cat results/test-artifacts/claimable-classification.json"]}]
+
+ :outputs
+ {:format [:markdown]
+  :include-terminal-output true
+  :include-evidence-links true}}

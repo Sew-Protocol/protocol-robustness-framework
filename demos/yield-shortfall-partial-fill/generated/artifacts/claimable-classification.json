@@ -1,0 +1,1842 @@
+{
+  "schema_version": "claimable-classification.v2",
+  "incentives_summary": {
+    "category": "incentive",
+    "class_ids": [
+      "bond_forfeit",
+      "fees_protocol",
+      "fees_resolver",
+      "liability_challenge_bounty",
+      "liability_slash_bounty",
+      "liability_slash_reserve",
+      "yield_protocol_fee",
+      "yield_resolver_incentive"
+    ],
+    "domains": [
+      "forfeit",
+      "protocol",
+      "resolver",
+      "challenge-bounty",
+      "slash",
+      "slash-bounty",
+      "protocol-fee",
+      "resolver-incentive"
+    ]
+  },
+  "shortfall_policy": {
+    "mode": "partial-liquidity-supported",
+    "allocation": "fulfilled-plus-deferred",
+    "rounding_policy": "floor-to-asset-decimals.v1"
+  },
+  "observations_status": "terminal-aggregated",
+  "deferred_amount_semantics": "Deferred shortfall \/ yield fulfillment is tracked off current pull-claimable balance until claimed.",
+  "terminal_observations": {
+    "scenario_highlights": [
+      {
+        "scenario_id": "S70  large-escrow-resolution",
+        "outcome": "pass",
+        "total_claimable": 985000,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 985000,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 985000
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 985000,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 985000,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 985000
+                },
+                "by_address": {
+                  "0xseller": 985000
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 985000
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 985000,
+                "max": 985000,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 15000,
+                "headroom": 15000
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 985000,
+          "classified_claimable_total": 985000,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S99  large-escrow-fee-impact",
+        "outcome": "pass",
+        "total_claimable": 985000,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 985000,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 985000
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 985000,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 985000,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 985000
+                },
+                "by_address": {
+                  "0xseller": 985000
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 985000
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 985000,
+                "max": 985000,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 15000,
+                "headroom": 15000
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 985000,
+          "classified_claimable_total": 985000,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S90  resolver-capacity-stress",
+        "outcome": "pass",
+        "total_claimable": 118200,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 118200,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 118200
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 49250,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 49250,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 49250
+                },
+                "by_address": {
+                  "0xseller1": 49250
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 49250
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 49250,
+                "max": 49250,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 750,
+                "headroom": 750
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 39400,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 39400,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 39400
+                },
+                "by_address": {
+                  "0xseller2": 39400
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 39400
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 39400,
+                "max": 39400,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 600,
+                "headroom": 600
+              }
+            }
+          },
+          {
+            "workflow_id": 2,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 29550,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 29550,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 29550
+                },
+                "by_address": {
+                  "0xseller3": 29550
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 29550
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 29550,
+                "max": 29550,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 450,
+                "headroom": 450
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 118200,
+          "classified_claimable_total": 118200,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S37  profit-maximizer-two-resolver-split-outcomes",
+        "outcome": "pass",
+        "total_claimable": 13790,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 13790,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 13790
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 7880,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 7880,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 7880
+                },
+                "by_address": {
+                  "0xseller": 7880
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 7880
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 7880,
+                "max": 7880,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 120,
+                "headroom": 120
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 5910,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 5910,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 5910
+                },
+                "by_address": {
+                  "0xseller": 5910
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 5910
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 5910,
+                "max": 5910,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 90,
+                "headroom": 90
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 13790,
+          "classified_claimable_total": 13790,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S33  forking-strategist-two-escrow-fork-isolation",
+        "outcome": "pass",
+        "total_claimable": 9850,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 9850,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 9850
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "refunded",
+            "total_claimable": 5910,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 5910,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 5910
+                },
+                "by_address": {
+                  "0xbuyer0": 5910
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 5910
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 5910,
+                "max": 5910,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 90,
+                "headroom": 90
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 3940,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 3940,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 3940
+                },
+                "by_address": {
+                  "0xseller": 3940
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 3940
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 3940,
+                "max": 3940,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 60,
+                "headroom": 60
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 9850,
+          "classified_claimable_total": 9850,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S42  resolver-buyer-bribery-loop",
+        "outcome": "pass",
+        "total_claimable": 9850,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 9850,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 9850
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 9850,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 9850,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 9850
+                },
+                "by_address": {
+                  "0xseller": 9850
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 9850
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 9850,
+                "max": 9850,
+                "headroom": 0
+              },
+              "bond-boundary": {
+                "claims": 0,
+                "max": 100,
+                "headroom": 100
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 250,
+                "headroom": 250
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 9850,
+          "classified_claimable_total": 9850,
+          "bond_locked_total": 100,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S79  partial-resolution-release",
+        "outcome": "pass",
+        "total_claimable": 9850,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 9850,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 9850
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 9850,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 9850,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 9850
+                },
+                "by_address": {
+                  "0xseller": 9850
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 9850
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 9850,
+                "max": 9850,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 150,
+                "headroom": 150
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 9850,
+          "classified_claimable_total": 9850,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S67  reentrancy-callback",
+        "outcome": "pass",
+        "total_claimable": 9850,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 9850,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 9850
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 9850,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 9850,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 9850
+                },
+                "by_address": {
+                  "0xattacker": 9850
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 9850
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 9850,
+                "max": 9850,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 150,
+                "headroom": 150
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 9850,
+          "classified_claimable_total": 9850,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S62_cross-token-parallel-appeal-depths-under-dispute-load",
+        "outcome": "pass",
+        "total_claimable": 9358,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 9358,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "DAI": 3448,
+              "USDC": 5910
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "refunded",
+            "total_claimable": 5910,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 5910,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 5910
+                },
+                "by_address": {
+                  "0xbuyerX": 5910
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 5910
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 5910,
+                "max": 5910,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 90,
+                "headroom": 90
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "DAI",
+            "terminal_state": "released",
+            "total_claimable": 3448,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 3448,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "DAI": 3448
+                },
+                "by_address": {
+                  "0xsellerY": 3448
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 3448
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 3448,
+                "max": 3448,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 52,
+                "headroom": 52
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 9358,
+          "classified_claimable_total": 9358,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S51c deadline-matrix-execute-then-escalate",
+        "outcome": "pass",
+        "total_claimable": 8865,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 8865,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 8865
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          },
+          {
+            "workflow_id": 2,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 8865,
+          "classified_claimable_total": 8865,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S51d deadline-matrix-escalate-then-execute",
+        "outcome": "pass",
+        "total_claimable": 8865,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 8865,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 8865
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          },
+          {
+            "workflow_id": 2,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 2955,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 2955,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 2955
+                },
+                "by_address": {
+                  "0xseller": 2955
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 2955
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 2955,
+                "max": 2955,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 45,
+                "headroom": 45
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 8865,
+          "classified_claimable_total": 8865,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S62_cross-token-fee-on-transfer-under-dispute-load",
+        "outcome": "pass",
+        "total_claimable": 8865,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 8865,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDT_FEE": 4925,
+              "USDC": 3940
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDT_FEE",
+            "terminal_state": "refunded",
+            "total_claimable": 4925,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 4925,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDT_FEE": 4925
+                },
+                "by_address": {
+                  "0xbuyerA": 4925
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 4925
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 4925,
+                "max": 4925,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 75,
+                "headroom": 75
+              }
+            }
+          },
+          {
+            "workflow_id": 1,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 3940,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 3940,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 3940
+                },
+                "by_address": {
+                  "0xsellerB": 3940
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 3940
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 3940,
+                "max": 3940,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 60,
+                "headroom": 60
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 8865,
+          "classified_claimable_total": 8865,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S25  profit-maximizer-slash-lifecycle",
+        "outcome": "pass",
+        "total_claimable": 7880,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 7880,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 7880
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 7880,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 7880,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 7880
+                },
+                "by_address": {
+                  "0xseller": 7880
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 7880
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 7880,
+                "max": 7880,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 120,
+                "headroom": 120
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 7880,
+          "classified_claimable_total": 7880,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S34  profit-maximizer-unchallenged-slash",
+        "outcome": "pass",
+        "total_claimable": 7880,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 7880,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 7880
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 7880,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 7880,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 7880
+                },
+                "by_address": {
+                  "0xseller": 7880
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 7880
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 7880,
+                "max": 7880,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 120,
+                "headroom": 120
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 7880,
+          "classified_claimable_total": 7880,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      },
+      {
+        "scenario_id": "S35  profit-maximizer-governance-wins-appeal",
+        "outcome": "pass",
+        "total_claimable": 7880,
+        "by_class": {
+          "settlement_principal": {
+            "total_claimable": 7880,
+            "scenarios_nonzero": 1,
+            "by_token": {
+              "USDC": 7880
+            }
+          }
+        },
+        "workflows": [
+          {
+            "workflow_id": 0,
+            "token": "USDC",
+            "terminal_state": "released",
+            "total_claimable": 7880,
+            "by_domain": {
+              "principal": {
+                "total_claimable": 7880,
+                "scenarios_nonzero": 0,
+                "by_token": {
+                  "USDC": 7880
+                },
+                "by_address": {
+                  "0xseller": 7880
+                }
+              }
+            },
+            "by_class": {
+              "settlement_principal": {
+                "total_claimable": 7880
+              }
+            },
+            "boundary_headroom": {
+              "settlement-principal-boundary": {
+                "claims": 7880,
+                "max": 7880,
+                "headroom": 0
+              },
+              "fee-boundary": {
+                "claims": 0,
+                "max": 120,
+                "headroom": 120
+              }
+            }
+          }
+        ],
+        "funds_ledger": {
+          "terminal_value_total": 7880,
+          "classified_claimable_total": 7880,
+          "bond_locked_total": 0,
+          "conservation_holds": false
+        },
+        "boundaries_all_hold": true
+      }
+    ],
+    "scenario_count": 113,
+    "terminal_world_count": 113,
+    "boundaries": {
+      "settlement-principal-boundary": {
+        "all_hold": true,
+        "failure_count": 0,
+        "worlds_checked": 113
+      },
+      "settlement-yield-boundary": {
+        "all_hold": true,
+        "failure_count": 0,
+        "worlds_checked": 113
+      },
+      "liability-slash-boundary": {
+        "all_hold": true,
+        "failure_count": 0,
+        "worlds_checked": 113
+      },
+      "bond-boundary": {
+        "all_hold": true,
+        "failure_count": 0,
+        "worlds_checked": 113
+      },
+      "fee-boundary": {
+        "all_hold": true,
+        "failure_count": 0,
+        "worlds_checked": 113
+      }
+    },
+    "workflow_count": 135,
+    "by_domain": {
+      "principal": {
+        "total_claimable": 2608102,
+        "scenarios_nonzero": 103,
+        "by_token": {
+          "USDC": 2586431,
+          "USDT_FEE": 12313,
+          "DAI": 9358
+        }
+      },
+      "resolver": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "shortfall": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "protocol": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "yield": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "challenge-bounty": {
+        "total_claimable": 1100,
+        "scenarios_nonzero": 5,
+        "by_token": {
+          "USDC": 1100
+        }
+      },
+      "refund": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "forfeit": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "resolver-incentive": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "slash": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "slash-bounty": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "protocol-fee": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      }
+    },
+    "coverage_matrix": {
+      "yield_resolver_incentive": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "fees_resolver": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "bond_refund": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "settlement_principal": {
+        "exercised": true,
+        "total_claimable": 2608102
+      },
+      "liability_slash_reserve": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "fees_protocol": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "liability_challenge_bounty": {
+        "exercised": true,
+        "total_claimable": 1100
+      },
+      "bond_forfeit": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "settlement_yield": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "yield_protocol_fee": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "liability_slash_bounty": {
+        "exercised": false,
+        "total_claimable": 0
+      },
+      "reserve_shortfall": {
+        "exercised": false,
+        "total_claimable": 0
+      }
+    },
+    "funds_ledger": {
+      "bond_locked_total": 500,
+      "terminal_world_count": 113,
+      "withdrawn_note": "Per-token held\/released\/refunded\/withdrawn summed across scenarios \u2014 not one physical ledger.",
+      "by_token": {
+        "USDC": {
+          "held": 262060,
+          "released": 0,
+          "refunded": 0,
+          "withdrawn": 0,
+          "bond-posted": 0,
+          "bond-slashed": 0
+        },
+        "USDT_FEE": {
+          "held": 0,
+          "released": 0,
+          "refunded": 0,
+          "withdrawn": 0,
+          "bond-posted": 0,
+          "bond-slashed": 0
+        },
+        "DAI": {
+          "held": 0,
+          "released": 0,
+          "refunded": 0,
+          "withdrawn": 0,
+          "bond-posted": 0,
+          "bond-slashed": 0
+        }
+      },
+      "unclassified_claimable_total": 0,
+      "legacy_claimable_note": "terminal_value_total sums legacy :claimable; classified_* sums :claimable-v2 domains only.",
+      "classified_claimable_total": 2609202,
+      "aggregation": "sum-across-terminal-worlds",
+      "terminal_value_total": 2608102
+    },
+    "scenario_result_path": null,
+    "by_class": {
+      "yield_resolver_incentive": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "fees_resolver": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "bond_refund": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "settlement_principal": {
+        "total_claimable": 2608102,
+        "scenarios_nonzero": 103,
+        "by_token": {
+          "USDC": 2586431,
+          "USDT_FEE": 12313,
+          "DAI": 9358
+        }
+      },
+      "liability_slash_reserve": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "fees_protocol": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "liability_challenge_bounty": {
+        "total_claimable": 1100,
+        "scenarios_nonzero": 5,
+        "by_token": {
+          "USDC": 1100
+        }
+      },
+      "bond_forfeit": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "settlement_yield": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "yield_protocol_fee": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "liability_slash_bounty": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "reserve_shortfall": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      }
+    },
+    "unclassified_claimable_total": 0,
+    "warnings": [],
+    "scenarios_passed": 116,
+    "domains_discovered": [],
+    "scope": "terminal-worlds",
+    "accrued_fees": {
+      "total": 40940,
+      "by_token": {
+        "USDC": 40611,
+        "USDT_FEE": 187,
+        "DAI": 142
+      },
+      "note": "Accrued protocol fees via record-fee; parallel to :fees\/protocol claimable domain."
+    },
+    "classified_claimable_total": 2609202,
+    "coverage_status": "2-classes-with-nonzero-claimable",
+    "escrow_yield_outcome_counts": {},
+    "boundary_headroom": {
+      "settlement-principal-boundary": {
+        "min_headroom_across_worlds": 0,
+        "worlds_at_cap": 125,
+        "workflows_tracked": 129,
+        "all_hold": true,
+        "sample_violations": []
+      },
+      "settlement-yield-boundary": {
+        "min_headroom_across_worlds": null,
+        "worlds_at_cap": 0,
+        "workflows_tracked": 0,
+        "all_hold": true,
+        "sample_violations": []
+      },
+      "liability-slash-boundary": {
+        "min_headroom_across_worlds": null,
+        "worlds_at_cap": 0,
+        "workflows_tracked": 0,
+        "all_hold": true,
+        "sample_violations": []
+      },
+      "bond-boundary": {
+        "min_headroom_across_worlds": 100,
+        "worlds_at_cap": 0,
+        "workflows_tracked": 5,
+        "all_hold": true,
+        "sample_violations": []
+      },
+      "fee-boundary": {
+        "min_headroom_across_worlds": 0,
+        "worlds_at_cap": 8,
+        "workflows_tracked": 129,
+        "all_hold": true,
+        "sample_violations": []
+      }
+    },
+    "aggregation": "sum-across-terminal-worlds",
+    "scenario_id_status": "from-summary-entry-name",
+    "by_incentive_class": {
+      "yield_resolver_incentive": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "fees_resolver": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "liability_slash_reserve": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "fees_protocol": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "liability_challenge_bounty": {
+        "total_claimable": 1100,
+        "scenarios_nonzero": 5,
+        "by_token": {
+          "USDC": 1100
+        }
+      },
+      "bond_forfeit": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "yield_protocol_fee": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      },
+      "liability_slash_bounty": {
+        "total_claimable": 0,
+        "scenarios_nonzero": 0
+      }
+    },
+    "aggregation_note": "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable.",
+    "terminal_value_total": 2608102,
+    "scenario_id": "S01  baseline-happy-path"
+  },
+  "provenance": {
+    "producer": "claimable-classification-emitter.v2",
+    "classifier_version": "claimable-classification-emitter.v2.1",
+    "produced_at": "2026-06-19T12:07:25.178322066Z",
+    "run_id": "20260619-130306",
+    "git_sha": "01529b44d2dd176dc851d25e0faf926a06dca6c5"
+  },
+  "canonical_domains": [
+    "forfeit",
+    "refund",
+    "protocol",
+    "resolver",
+    "challenge-bounty",
+    "slash",
+    "slash-bounty",
+    "shortfall",
+    "principal",
+    "yield",
+    "protocol-fee",
+    "resolver-incentive"
+  ],
+  "classes": {
+    "reserve_shortfall": {
+      "category": "reserve",
+      "claimable_v2_domains": [
+        "shortfall"
+      ],
+      "v1_class": null,
+      "boundary_reason": "Deferred shortfall repair; not current pull-claimable until fulfilled.",
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "source": "shortfall-repair",
+      "delivery_model": "pull",
+      "risk_class": "shortfall-reserve",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "protocol",
+        "pool"
+      ]
+    },
+    "liability_challenge_bounty": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "challenge-bounty"
+      ],
+      "v1_class": null,
+      "boundary_reason": "Challenge bounty; bounded by appeal lifecycle, no dedicated boundary row.",
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "source": "appeal-challenge",
+      "delivery_model": "pull",
+      "risk_class": "challenge-bounty",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "challenger"
+      ]
+    },
+    "fees_resolver": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "resolver"
+      ],
+      "v1_class": "resolver_payment",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "resolver_payment"
+      },
+      "source": "dispute-resolution",
+      "delivery_model": "pull",
+      "risk_class": "service-compensation",
+      "boundary_invariant": "fee-boundary",
+      "recipient_types": [
+        "resolver"
+      ]
+    },
+    "yield_resolver_incentive": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "resolver-incentive"
+      ],
+      "v1_class": "resolver_payment",
+      "boundary_reason": "Yield resolver incentive; no dedicated fee-boundary row.",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "resolver_payment"
+      },
+      "source": "yield",
+      "delivery_model": "pull",
+      "risk_class": "yield-derived-incentive",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "resolver"
+      ]
+    },
+    "liability_slash_reserve": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "slash"
+      ],
+      "v1_class": null,
+      "boundary_reason": "Slash reserve inflow; pairs with liability-slash-boundary for bounty outflows.",
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "source": "slash-pool",
+      "note": "Insurance-pool slash reserves (shortfall repair inflow)",
+      "delivery_model": "pull",
+      "risk_class": "slash-reserve",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "protocol",
+        "pool"
+      ]
+    },
+    "liability_slash_bounty": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "slash-bounty"
+      ],
+      "v1_class": null,
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "source": "slash-distribution",
+      "delivery_model": "pull",
+      "risk_class": "slash-bounty",
+      "boundary_invariant": "liability-slash-boundary",
+      "recipient_types": [
+        "challenger",
+        "governance"
+      ]
+    },
+    "settlement_principal": {
+      "category": "settlement",
+      "claimable_v2_domains": [
+        "principal"
+      ],
+      "v1_class": "escrow_principal",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "escrow_principal"
+      },
+      "source": "settlement",
+      "delivery_model": "pull",
+      "risk_class": "user-withdrawable",
+      "boundary_invariant": "settlement-principal-boundary",
+      "recipient_types": [
+        "party"
+      ]
+    },
+    "bond_forfeit": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "forfeit"
+      ],
+      "v1_class": null,
+      "boundary_reason": "Bond forfeit inflow; bond-boundary covers refund path only.",
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "source": "appeal-bond",
+      "delivery_model": "pull",
+      "risk_class": "bond-forfeit",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "protocol",
+        "pool"
+      ]
+    },
+    "bond_refund": {
+      "category": "bond",
+      "claimable_v2_domains": [
+        "refund"
+      ],
+      "v1_class": "bond_refund",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "bond_refund"
+      },
+      "source": "appeal-bond",
+      "delivery_model": "pull",
+      "risk_class": "bond-return",
+      "boundary_invariant": "bond-boundary",
+      "recipient_types": [
+        "disputant"
+      ]
+    },
+    "settlement_yield": {
+      "category": "settlement",
+      "claimable_v2_domains": [
+        "yield"
+      ],
+      "v1_class": "escrow_yield",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "escrow_yield"
+      },
+      "source": "yield",
+      "shortfall_outcome": "may-be-partially-deferred",
+      "delivery_model": "pull",
+      "risk_class": "yield-derived",
+      "boundary_invariant": "settlement-yield-boundary",
+      "recipient_types": [
+        "party",
+        "protocol"
+      ]
+    },
+    "yield_protocol_fee": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "protocol-fee"
+      ],
+      "v1_class": null,
+      "boundary_reason": "Yield protocol fee slice; fee-boundary applies to :fees\/* domains.",
+      "v1_mapping": {
+        "status": "new-in-v2"
+      },
+      "authorized_withdrawer": "protocol-governance",
+      "source": "yield",
+      "delivery_model": "pull",
+      "risk_class": "protocol-revenue",
+      "boundary_invariant": null,
+      "recipient_types": [
+        "protocol"
+      ]
+    },
+    "fees_protocol": {
+      "category": "incentive",
+      "claimable_v2_domains": [
+        "protocol"
+      ],
+      "v1_class": "protocol_fee",
+      "v1_mapping": {
+        "status": "mapped",
+        "v1_class": "protocol_fee"
+      },
+      "authorized_withdrawer": "protocol-governance",
+      "source": "fee",
+      "delivery_model": "pull",
+      "risk_class": "protocol-revenue",
+      "boundary_invariant": "fee-boundary",
+      "recipient_types": [
+        "protocol"
+      ]
+    }
+  },
+  "classifier_version": "claimable-classification-emitter.v2.1"
+}
