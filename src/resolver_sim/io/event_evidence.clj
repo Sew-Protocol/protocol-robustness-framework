@@ -674,6 +674,8 @@
 (def evidence-type->mechanism
   {:stake-registered :staking
    :stake-withdrawn :staking
+   :slashing :slashing
+   :incentive-payout :bonding
    :escrow-created :escrow-lifecycle
    :escrow-released :escrow-lifecycle
    :escrow-refunded :escrow-lifecycle

@@ -772,13 +772,16 @@
   (let [reg {:entries [{:evidence/id "e1" :evidence/type :test :hash/content "a"
                         :file/path "test.json" :evidence/layer :generic-trace}
                        {:evidence/id "e2" :evidence/type :test :hash/content "b"
-                        :file/path "test2.json" :evidence/layer :targeted-protocol}]
+                        :file/path "test2.json" :evidence/layer :targeted-protocol
+                        :subject/type :resolver :subject/id "r1" :action/type :slash
+                        :scenario/id "s1" :run/id "r1" :event/index 0}]
              :indexes {:by-group-id {"g1" ["e1"]}}}
         strict (reg-val/validate-evidence-registry reg :strict true :artifact-dir "/tmp")]
-    (is (= :failed (:status strict)) "Strict mode fails on missing metadata")
-    (let [failed-checks (filter #(= :failed (:status %)) (:checks strict))]
-      (is (some #(= "targeted-entries-have-subject-type" (:id %)) failed-checks)
-          "Missing subject/type promoted to failure"))))
+    (is (= :failed (:status strict)) "Strict mode fails on ancillary warnings")
+    (let [failed-strict (filter #(= :failed (:status %)) (:checks strict))
+          promoted (filter #(.contains (:id %) "reason") failed-strict)]
+      (is (some #(= "targeted-entries-have-reason" (:id %)) promoted)
+          "Missing evidence/reason promoted to failure by strict mode"))))
 
 (deftest strict-mode-excludes-diff-layer
   (let [reg {:entries [{:evidence/id "d1" :evidence/type :state-diff

@@ -94,7 +94,8 @@
             ev-files (filter #(.isFile %) (file-seq ev-dir-file))
             diff-files (when diff-dir-file
                          (filter #(.isFile %) (file-seq diff-dir-file)))
-            all-files (concat ev-files diff-files)
+            all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
+                            (concat ev-files diff-files))
             artifacts (vec (sort-by :evidence/chain-seq
                                     (keep (fn [f]
                                             (try (io-evidence/read-evidence-json f)

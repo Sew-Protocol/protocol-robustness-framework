@@ -41,36 +41,40 @@
      {:id "every-entry-has-type" :status (if c2 :passed :failed) :detail {:count (count entries) :missing (count (remove :evidence/type entries))}}
      {:id "every-entry-has-content-hash" :status (if c3 :passed :failed) :detail {:count (count entries) :missing (count (remove :hash/content entries))}}
      {:id "every-entry-has-path" :status (if c4 :passed :failed) :detail {:count (count entries) :missing (count (remove :file/path entries))}}
-     {:id "every-path-exists" :status (if c5 :passed :failed) :detail {:entries (count entries) :missing (count (remove (fn [e] (.exists (io/file artifact-dir ".." (:file/path e)))) entries))}}
+     {:id "every-path-exists" :status (if c5 :passed :failed) :detail {:entries (count entries) :missing (count (remove (fn [e] (.exists (io/file artifact-dir (:file/path e)))) entries))}}
      {:id "no-duplicate-evidence-ids" :status (if c6 :passed :failed) :detail {:total (count entries) :unique (count (set (map :evidence/id entries)))}}]))
 
-(defn- check-recommended
-  "Run all recommended checks. Returns a vector of check result maps with :warning status."
+(defn- check-attribution
+  "Run attribution completeness checks. Returns a vector of check result maps.
+   These were previously :recommended but are now :required."
   [registry]
   (let [entries (:entries registry)
         targeted (filter #(= :targeted-protocol (:evidence/layer %)) entries)
-        ;; Every entry has :scenario/id
         w1 (remove :scenario/id entries)
-        ;; Every entry has :run/id
         w2 (remove :run/id entries)
-        ;; Every entry has :event/index
         w3 (remove :event/index entries)
-        ;; Every targeted entry has :subject/type
         w4 (remove :subject/type targeted)
-        ;; Every targeted entry has :subject/id
         w5 (remove :subject/id targeted)
-        ;; Every targeted entry has :action/type
-        w6 (remove :action/type targeted)
-        ;; Every group-id resolves to at least one entry
+        w6 (remove :action/type targeted)]
+    [{:id "entries-have-scenario-id" :status (if (empty? w1) :passed :failed) :detail {:total (count entries) :missing (count w1)}}
+     {:id "entries-have-run-id" :status (if (empty? w2) :passed :failed) :detail {:total (count entries) :missing (count w2)}}
+     {:id "entries-have-event-index" :status (if (empty? w3) :passed :failed) :detail {:total (count entries) :missing (count w3)}}
+     {:id "targeted-entries-have-subject-type" :status (if (empty? w4) :passed :failed) :detail {:targeted (count targeted) :missing (count w4)}}
+     {:id "targeted-entries-have-subject-id" :status (if (empty? w5) :passed :failed) :detail {:targeted (count targeted) :missing (count w5)}}
+     {:id "targeted-entries-have-action-type" :status (if (empty? w6) :passed :failed) :detail {:targeted (count targeted) :missing (count w6)}}]))
+
+(defn- check-recommended
+  "Run all recommended checks. Returns a vector of check result maps with :warning status.
+   Attribution completeness checks (scenario-id, run-id, event-index, subject, action)
+   moved to check-required — only ancillary checks remain here."
+  [registry]
+  (let [entries (:entries registry)
+        targeted (filter #(= :targeted-protocol (:evidence/layer %)) entries)
+        w1 (remove :evidence/reason targeted)
         gids (set (keep :evidence/group-id entries))
         group-idx (:by-group-id (:indexes registry))
         gid-ok (every? (fn [gid] (seq (get group-idx gid))) gids)]
-    [{:id "entries-have-scenario-id" :status (if (empty? w1) :passed :warning) :detail {:missing (count w1)}}
-     {:id "entries-have-run-id" :status (if (empty? w2) :passed :warning) :detail {:missing (count w2)}}
-     {:id "entries-have-event-index" :status (if (empty? w3) :passed :warning) :detail {:missing (count w3)}}
-     {:id "targeted-entries-have-subject-type" :status (if (empty? w4) :passed :warning) :detail {:targeted (count targeted) :missing (count w4)}}
-     {:id "targeted-entries-have-subject-id" :status (if (empty? w5) :passed :warning) :detail {:targeted (count targeted) :missing (count w5)}}
-     {:id "targeted-entries-have-action-type" :status (if (empty? w6) :passed :warning) :detail {:targeted (count targeted) :missing (count w6)}}
+    [{:id "targeted-entries-have-reason" :status (if (empty? w1) :passed :warning) :detail {:targeted (count targeted) :missing (count w1)}}
      {:id "group-ids-resolve" :status (if gid-ok :passed :warning) :detail {:group-ids (count gids) :unresolved (count (remove (fn [gid] (seq (get group-idx gid))) gids))}}]))
 
 (defn- check-diagnostic
@@ -138,7 +142,7 @@
                          (remove #(= :diff (:evidence/layer %)) entries)
                          entries)
         strict-registry (assoc registry :entries strict-entries)
-        required-ch (check-required strict-registry dir)
+        required-ch (concat (check-required strict-registry dir) (check-attribution strict-registry))
         recommended-ch (check-recommended strict-registry)
         diagnostic-ch (check-diagnostic strict-registry)
         all-ch (concat required-ch recommended-ch diagnostic-ch)
