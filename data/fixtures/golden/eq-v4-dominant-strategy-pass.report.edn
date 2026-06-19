@@ -53,7 +53,7 @@
  :theory
  {:equilibrium-reasons {},
   :diagnostics
-  {:validation-errors ("invalid :op >"),
+  {:validation-errors ("invalid :op > in metric leaf"),
    :claim-status :evaluated,
    :falsification-status :not-falsified,
    :evidence-completeness :complete,

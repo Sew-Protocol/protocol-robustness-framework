@@ -92,7 +92,33 @@
    [:bond-mix-min-stable-bps {:optional true} [:>= 0]]
    [:escalation-bond-bps {:optional true} [:>= 0]]
    [:minimum-challenge-bond {:optional true} [:>= 0]]
-   [:max-dispute-level {:optional true} [:>= 0]]])
+    [:max-dispute-level {:optional true} [:>= 0]]
+
+    ;; Sweep / analysis configuration keys (not protocol params but present in param files)
+    [:scenario-name {:optional true} string?]
+    [:difficulty-distribution {:optional true} map?]
+    [:correlation-parameter {:optional true} number?]
+    [:effort-budget-per-epoch {:optional true} number?]
+    [:load-level {:optional true} keyword?]
+    [:attacker-budget-fraction {:optional true} number?]
+    [:seed {:optional true} integer?]
+    [:num-epochs {:optional true} integer?]
+    [:num-trials-per-epoch {:optional true} integer?]
+    [:n-epochs {:optional true} integer?]
+    [:n-trials-per-epoch {:optional true} integer?]
+    [:n-resolvers {:optional true} integer?]
+    [:max-op-win-rate-threshold {:optional true} number?]
+    [:detection-decay-rate {:optional true} number?]
+    [:governance-capacity {:optional true} integer?]
+    [:disputes-per-epoch {:optional true} integer?]
+    [:floor-threshold {:optional true} number?]
+    [:junior-counts {:optional true} vector?]
+    [:detection-probs {:optional true} vector?]
+    [:senior-bond-sizes {:optional true} vector?]
+    [:junior-bond {:optional true} number?]
+    [:deterrence-threshold {:optional true} number?]
+    [:pass-fraction {:optional true} number?]
+    [:spike-ratio-threshold {:optional true} number?]])
 
 
 ;; Trial outcome record
