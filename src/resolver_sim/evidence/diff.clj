@@ -17,7 +17,7 @@
 
 (declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
 
-;; ── Structural Diff Algorithm ────────────────────────────────────────────────
+;; ?? Structural Diff Algorithm ????????????????????????????????????????????????
 
 (defn- safe-bytes
   "Total bytes of a top-level value for size comparison."
@@ -56,7 +56,7 @@
                    (assoc c :before nil :after nil))]
     (hash stripped)))
 
-;; ── Diff Artifact Builder ────────────────────────────────────────────────────
+;; ?? Diff Artifact Builder ????????????????????????????????????????????????????
 
 (defn build-diff-artifact
   "Build a single diff-evidence artifact map."
@@ -86,7 +86,7 @@
      :diff/changes (vec changes)
      :hash/diff diff-sha256}))
 
-;; ── Builder ──────────────────────────────────────────────────────────────────
+;; ?? Builder ??????????????????????????????????????????????????????????????????
 
 (defn build-diff-evidence
   "Generate diff-evidence artifacts from a replay trace.
@@ -115,7 +115,7 @@
                                           idx group-id changes))))
       pairs)))
 
-;; ── Diff Index ────────────────────────────────────────────────────────────────
+;; ?? Diff Index ????????????????????????????????????????????????????????????????
 
 (defn build-diff-index
   "Build a lightweight index of diff artifacts by event index.
@@ -132,7 +132,7 @@
                        {} diffs)]
     {:by-event-index by-idx}))
 
-;; ── Write + Register ─────────────────────────────────────────────────────────
+;; ?? Write + Register ?????????????????????????????????????????????????????????
 
 (defn write-diff-evidence!
   "Generate and persist diff-evidence artifacts from a replay trace.
@@ -161,7 +161,7 @@
     {:diff-count (count diffs)
      :paths (mapv (fn [d] (str "diff-evidence/" (:evidence/id d) ".json")) diffs)}))
 
-;; ── Path Classification ───────────────────────────────────────────────────────
+;; ?? Path Classification ???????????????????????????????????????????????????????
 ;;
 ;; Known world-state path prefixes and their domain classification.
 ;; Used by classify-diff-paths and build-domain-summary to produce
@@ -208,13 +208,16 @@
    {:path-prefix :appeal-bonds-forfeited-insurance :domain :bonding :label "Forfeited bonds"}
    {:path-prefix :workflow-snapshots :domain :escrow :label "Workflow snapshots"}
    {:path-prefix :previous-workflow-snapshots :domain :escrow :label "Previous snapshots"}
-   ;; Internal / noisy paths — filtered from summaries but kept in changes
+   ;; Internal / noisy paths ? filtered from summaries but kept in changes
    {:path-prefix :context :domain :internal :label "Temporal/execution context" :suppress-from-summary? true}
    {:path-prefix :params :domain :internal :label "Protocol parameters" :suppress-from-summary? true}
    {:path-prefix :agents :domain :internal :label "Agent state" :suppress-from-summary? true}
    {:path-prefix :sequencer :domain :internal :label "Sequencer state" :suppress-from-summary? true}
    {:path-prefix :block-time :domain :internal :label "Temporal clock" :suppress-from-summary? true}
    {:path-prefix :temporal :domain :internal :label "Temporal context" :suppress-from-summary? true}])
+
+(declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
+
 
 (defn- classify-path
   "Classify a path vector (e.g. [:total-held :USDC]) into a domain, label, and
@@ -235,19 +238,19 @@
             (assoc c :domain :unknown :label "Other")))
         changes))
 
-;; ── Domain Summaries ──────────────────────────────────────────────────────────
+;; ?? Domain Summaries ??????????????????????????????????????????????????????????
 
 (defn build-domain-summary
   "Group diff changes by domain and produce a compact summary.
    
    Returns a map keyed by domain keyword with:
-     :domain       — domain keyword
-     :label        — human-readable label
-     :changed      — count of changed paths
-     :added        — count of added paths
-     :removed      — count of removed paths
-     :total        — total changes in this domain
-     :suppressed?  — true if this domain is filtered from researcher summaries"
+     :domain       ? domain keyword
+     :label        ? human-readable label
+     :changed      ? count of changed paths
+     :added        ? count of added paths
+     :removed      ? count of removed paths
+     :total        ? total changes in this domain
+     :suppressed?  ? true if this domain is filtered from researcher summaries"
   [classified-changes]
   (let [by-domain (group-by :domain classified-changes)
         sup? (set (keep :domain (filter :suppress-from-summary? (map classify-path (map :path classified-changes)))))]
@@ -262,7 +265,7 @@
                           :suppressed? (contains? sup? domain)}]))
           by-domain)))
 
-;; ── Updated Diff Artifact Builder ────────────────────────────────────────────
+;; ?? Updated Diff Artifact Builder ????????????????????????????????????????????
 
 (defn build-enhanced-diff-artifact
   "Like build-diff-artifact but includes classified paths and domain summaries.
@@ -288,7 +291,7 @@
                            :suppressed-added suppressed-added
                            :suppressed-removed suppressed-removed))))
 
-;; ── Invariant Result Linking ─────────────────────────────────────────────────
+;; ?? Invariant Result Linking ?????????????????????????????????????????????????
 ;;
 ;; Links invariant results from replay traces into the evidence registry.
 ;; Invariant results are already present in trace entries as :violations and
@@ -296,7 +299,7 @@
 ;; be merged into the evidence registry's :indexes map.
 ;;
 ;; Usage:
-;;   (build-invariant-links trace)  → {:by-event-index {...} :by-invariant-id {...}}
+;;   (build-invariant-links trace)  ? {:by-event-index {...} :by-invariant-id {...}}
 
 (defn trace-has-invariants?
   "Check if a trace entry carries invariant results."
@@ -317,10 +320,10 @@
   "Extract invariant results from a replay trace and produce an index.
    
    Returns a map with:
-   :by-event-index — event-index -> {:invariants-ok? bool :invariant-ids [...]}
-   :by-invariant-id — inv-id -> [{:event/index N :holds? bool :violation-count N}]
+   :by-event-index ? event-index -> {:invariants-ok? bool :invariant-ids [...]}
+   :by-invariant-id ? inv-id -> [{:event/index N :holds? bool :violation-count N}]
    
-   No changes to invariant capture — purely post-processing over the trace."
+   No changes to invariant capture ? purely post-processing over the trace."
   [trace]
   (let [events (keep-indexed
                 (fn [idx entry]
@@ -353,11 +356,11 @@
 (defn merge-invariant-links
   "Merge invariant link indexes into an existing evidence registry.
    
-   registry — the registry map (with :indexes)
-   trace    — the replay trace
+   registry ? the registry map (with :indexes)
+   trace    ? the replay trace
    
    Returns the registry with invariant links added to :indexes.
-   The invariant links are additive — no existing indexes are modified."
+   The invariant links are additive ? no existing indexes are modified."
   [registry trace]
   (let [links (build-invariant-links trace)]
     (if (empty? (:by-event-index links))
@@ -365,70 +368,167 @@
       (update-in registry [:indexes :by-invariant]
                  merge {:links links}))))
 
-;; ── Semantic Classification ──────────────────────────────────────────────────
+;; ?? Semantic Classification ??????????????????????????????????????????????????
 ;;
 ;; Adds a :classification field to each diff change indicating the nature
 ;; of the change from a researcher's perspective.
 ;;
 ;; Classification values:
-;;   :expected            — Normal state mutation from this event type
-;;   :unexpected          — State mutation that is notable for this event type
-;;   :invariant-relevant  — Change that affects invariant checks (balances, claims)
-;;   :financial-boundary  — Change at a financial domain boundary
-;;   :diagnostic-only     — Internal/administrative, not analysis-relevant
-;;   :unknown             — Cannot classify, researcher should inspect
+;;   :expected            ? Normal state mutation from this event type
+;;   :unexpected          ? State mutation that is notable for this event type
+;;   :invariant-relevant  ? Change that affects invariant checks (balances, claims)
+;;   :financial-boundary  ? Change at a financial domain boundary
+;;   :diagnostic-only     ? Internal/administrative, not analysis-relevant
+;;   :unknown             ? Cannot classify, researcher should inspect
+
+
+
+(declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
+
+;; ?? Structural Diff Algorithm ????????????????????????????????????????????????
+
+(defn- safe-bytes
+  "Total bytes of a top-level value for size comparison."
+  [v]
+  (try (count (pr-str v)) (catch Exception _ 0)))
+
+
+;; ── Path Classification ───────────────────────────────────────────────────────
+
+(def ^:private path-classification-rules
+  [{:path-prefix :total-held :domain :financial :label "Balances held"}
+   {:path-prefix :total-principal-deposited :domain :financial :label "Principal deposited"}
+   {:path-prefix :total-bonds-posted :domain :financial :label "Bonds posted"}
+   {:path-prefix :total-fot-fees :domain :financial :label "FoT fees"}
+   {:path-prefix :total-yield-generated :domain :yield :label "Yield generated"}
+   {:path-prefix :claimable :domain :claimable :label "Claimable balances"}
+   {:path-prefix :resolver-stakes :domain :resolver :label "Resolver stakes"}
+   {:path-prefix :resolver-frozen-until :domain :resolver :label "Resolver freeze state"}
+   {:path-prefix :resolver-capacities :domain :resolver :label "Resolver capacity"}
+   {:path-prefix :resolver-unavailable :domain :resolver :label "Resolver unavailability"}
+   {:path-prefix :resolver-yield-profiles :domain :resolver :label "Resolver yield profiles"}
+   {:path-prefix :resolver-epoch-slashed :domain :slashing :label "Epoch slashing"}
+   {:path-prefix :resolver-slash-total :domain :slashing :label "Slash totals"}
+   {:path-prefix :pending-fraud-slashes :domain :slashing :label "Pending fraud slashes"}
+   {:path-prefix :appeal-bond-custody :domain :bonding :label "Appeal bond custody"}
+   {:path-prefix :bond-balances :domain :bonding :label "Bond balances"}
+   {:path-prefix :bond-slashed :domain :bonding :label "Slashed bonds"}
+   {:path-prefix :bond-fees :domain :bonding :label "Bond fees"}
+   {:path-prefix :escrow-transfers :domain :escrow :label "Escrow transfers"}
+   {:path-prefix :dispute-levels :domain :dispute :label "Dispute levels"}
+   {:path-prefix :pending-settlements :domain :dispute :label "Pending settlements"}
+   {:path-prefix :superseded-pending-settlements :domain :dispute :label "Superseded settlements"}
+   {:path-prefix :previous-decisions :domain :dispute :label "Previous decisions"}
+   {:path-prefix :next-workflow-id :domain :escrow :label "Next workflow ID"}
+   {:path-prefix :total-fees-received :domain :financial :label "Fees received"}
+   {:path-prefix :total-breached :domain :risk :label "Breach counter"}
+   {:path-prefix :circuit-breaker :domain :risk :label "Circuit breaker"}
+   {:path-prefix :unavailability-stats :domain :risk :label "Unavailability stats"}
+   {:path-prefix :yield :domain :yield :label "Yield module state"}
+   {:path-prefix :module-snapshots :domain :escrow :label "Module snapshots"}
+   {:path-prefix :evidence-updated? :domain :slashing :label "Evidence updated flags"}
+   {:path-prefix :escrow-settings :domain :escrow :label "Escrow settings"}
+   {:path-prefix :last-escalation-block-time :domain :dispute :label "Last escalation time"}
+   {:path-prefix :bond-posted-by-workflow :domain :bonding :label "Bonds by workflow"}
+   {:path-prefix :appeal-bond-distributions-by-token :domain :bonding :label "Bond distributions"}
+   {:path-prefix :appeal-bonds-forfeited-insurance :domain :bonding :label "Forfeited bonds"}
+   {:path-prefix :workflow-snapshots :domain :escrow :label "Workflow snapshots"}
+   {:path-prefix :previous-workflow-snapshots :domain :escrow :label "Previous snapshots"}
+   {:path-prefix :context :domain :internal :label "Temporal/execution context" :suppress-from-summary? true}
+   {:path-prefix :params :domain :internal :label "Protocol parameters" :suppress-from-summary? true}
+   {:path-prefix :agents :domain :internal :label "Agent state" :suppress-from-summary? true}
+   {:path-prefix :sequencer :domain :internal :label "Sequencer state" :suppress-from-summary? true}
+   {:path-prefix :block-time :domain :internal :label "Temporal clock" :suppress-from-summary? true}
+   {:path-prefix :temporal :domain :internal :label "Temporal context" :suppress-from-summary? true}])
+
+(defn- classify-path
+  [path]
+  (some (fn [rule]
+          (when (= (:path-prefix rule) (first path))
+            (select-keys rule [:domain :label :suppress-from-summary?])))
+        path-classification-rules))
+
+(defn classify-diff-changes
+  [changes]
+  (mapv (fn [c]
+          (if-let [cls (classify-path (:path c))]
+            (assoc c :domain (:domain cls) :label (:label cls))
+            (assoc c :domain :unknown :label "Other")))
+        changes))
+
+(defn build-domain-summary
+  [classified-changes]
+  (let [by-domain (group-by :domain classified-changes)
+        sup? (set (keep :domain (filter :suppress-from-summary? (map classify-path (map :path classified-changes)))))]
+    (into (sorted-map)
+          (map (fn [[domain changes]]
+                 [domain {:domain domain
+                          :label (or (some #(:label %) (filter #(= domain (:domain %)) (map classify-path (map :path changes)))) (name domain))
+                          :changed (count (filter #(= :changed (:op %)) changes))
+                          :added (count (filter #(= :added (:op %)) changes))
+                          :removed (count (filter #(= :removed (:op %)) changes))
+                          :total (count changes)
+                          :suppressed? (contains? sup? domain)}]))
+          by-domain)))
+
+(defn build-enhanced-diff-artifact
+  [trace-entry before-world after-world event-index group-id changes]
+  (let [classified (classify-diff-changes changes)
+        domains (build-domain-summary classified)
+        base (build-diff-artifact trace-entry before-world after-world event-index group-id changes)
+        suppressed-total (reduce + 0 (map :total (filter :suppressed? (vals domains))))
+        suppressed-changed (reduce + 0 (map :changed (filter :suppressed? (vals domains))))
+        suppressed-added (reduce + 0 (map :added (filter :suppressed? (vals domains))))
+        suppressed-removed (reduce + 0 (map :removed (filter :suppressed? (vals domains))))]
+    (assoc base
+      :diff/changes classified
+      :diff/domains domains
+      :diff/summary (assoc (:diff/summary base)
+                           :suppressed-paths suppressed-total
+                           :suppressed-changed suppressed-changed
+                           :suppressed-added suppressed-added
+                           :suppressed-removed suppressed-removed))))
+
+;; ── Semantic Classification ──────────────────────────────────────────────────
 
 (def ^:private event-type-classification
-  "Events where specific path changes are :expected (normal).
-   path-prefix → set of event actions where changes are expected.
-   Unknown event/path combinations get :unexpected: classification."
-  {:total-held              #{:create_escrow :release :refund :sender-cancel
-                              :recipient-cancel :execute_pending_settlement
-                              :slash_resolver :execute_fraud_slash :finalize
-                              :deposit :withdraw :post_appeal_bond}
+  {:total-held #{:create_escrow :release :refund :sender-cancel
+                 :recipient-cancel :execute_pending_settlement
+                 :slash_resolver :execute_fraud_slash :finalize
+                 :deposit :withdraw :post_appeal_bond}
    :total-principal-deposited #{:create_escrow}
-   :total-bonds-posted       #{:post_appeal_bond :escalate_dispute :challenge_resolution}
-   :total-yield-generated    #{:accrue_yield :execute_pending_settlement :finalize}
-   :total-fees-received      #{:create_escrow}
-   :total-fot-fees           #{:create_escrow :release :refund}
-   :total-breached           #{:slash_resolver :execute_fraud_slash :finalize}
-   :resolver-stakes          #{:register_stake :withdraw_stake :slash_resolver
-                               :execute_fraud_slash :handle_reversal_slashing}
-   :resolver-frozen-until    #{:execute_fraud_slash :unfreeze_resolver}
-   :resolver-capacities      #{:raise_dispute :execute_resolution :finalize}
-   :resolver-epoch-slashed   #{:execute_fraud_slash}
-   :resolver-slash-total     #{:execute_fraud_slash}
-   :pending-fraud-slashes    #{:propose_fraud_slash :appeal_slash :resolve_appeal
-                               :execute_fraud_slash}
-   :appeal-bond-custody      #{:appeal_slash :resolve_appeal}
-   :bond-balances            #{:post_appeal_bond :slash_bond :return_bond}
-   :bond-slashed             #{:slash_bond}
-   :bond-fees                #{:post_appeal_bond}
-   :escrow-transfers         #{:create_escrow :raise_dispute :execute_resolution
-                               :execute_pending_settlement :release :refund
-                               :sender_cancel :recipient_cancel}
-   :dispute-levels           #{:escalate_dispute :challenge_resolution}
-   :pending-settlements      #{:execute_resolution :execute_pending_settlement
-                               :escalate_dispute :challenge_resolution}
-   :previous-decisions       #{:execute_resolution}
-   :next-workflow-id         #{:create_escrow}
-   :claimable                #{:execute_pending_settlement :release :refund
-                               :claim_deferred_yield :return_bond :slash_bond}
-   :yield                    #{:deposit :withdraw :accrue_yield
-                               :execute_pending_settlement :finalize}
-   :circuit-breaker          #{:slash_resolver :execute_fraud_slash :update_unavailability}
-   :evidence-updated?        #{:execute_resolution :propose_fraud_slash :handle_reversal_slashing}})
+   :total-bonds-posted #{:post_appeal_bond :escalate_dispute :challenge_resolution}
+   :total-yield-generated #{:accrue_yield :execute_pending_settlement :finalize}
+   :total-fees-received #{:create_escrow :withdraw_fees}
+   :total-fot-fees #{:create_escrow :release :refund}
+   :total-breached #{:slash_resolver :execute_fraud_slash :finalize}
+   :resolver-stakes #{:register_stake :withdraw_stake :slash_resolver
+                      :execute_fraud_slash :handle_reversal_slashing}
+   :resolver-frozen-until #{:execute_fraud_slash :unfreeze_resolver}
+   :resolver-capacities #{:raise_dispute :execute_resolution :finalize}
+   :resolver-epoch-slashed #{:execute_fraud_slash}
+   :resolver-slash-total #{:execute_fraud_slash}
+   :pending-fraud-slashes #{:propose_fraud_slash :appeal_slash :resolve_appeal :execute_fraud_slash}
+   :appeal-bond-custody #{:appeal_slash :resolve_appeal}
+   :bond-balances #{:post_appeal_bond :slash_bond :return_bond}
+   :bond-slashed #{:slash_bond}
+   :bond-fees #{:post_appeal_bond}
+   :escrow-transfers #{:create_escrow :raise_dispute :execute_resolution
+                       :execute_pending_settlement :release :refund
+                       :sender_cancel :recipient_cancel}
+   :dispute-levels #{:escalate_dispute :challenge_resolution}
+   :pending-settlements #{:execute_resolution :execute_pending_settlement
+                          :escalate_dispute :challenge_resolution}
+   :previous-decisions #{:execute_resolution}
+   :next-workflow-id #{:create_escrow}
+   :claimable #{:execute_pending_settlement :release :refund
+                :claim_deferred_yield :return_bond :slash_bond
+                :withdraw_escrow :auto_cancel :auto_cancel_disputed}
+   :yield #{:deposit :withdraw :accrue_yield :execute_pending_settlement :finalize}
+   :circuit-breaker #{:slash_resolver :execute_fraud_slash :update_unavailability}
+   :evidence-updated? #{:execute_resolution :propose_fraud_slash :handle_reversal_slashing}})
 
 (defn classify-change
-  "Classify a single diff change into a semantic category.
-   
-   Uses the change's :path (first element) and the event's :action
-   to determine whether the change is :expected, :unexpected,
-   :invariant-relevant, :financial-boundary, or :diagnostic-only.
-   
-   Changes to internal/noisy paths are always :diagnostic-only.
-   Financial domain changes are always :invariant-relevant.
-   Known event+path combinations are :expected; unknown are :unexpected."
   [change event-action]
   (let [path-prefix (first (:path change))
         rule (some #(when (= (:path-prefix %) path-prefix) %) path-classification-rules)
@@ -444,49 +544,78 @@
       :else (if is-financial? :financial-boundary :unexpected))))
 
 (defn classify-diff-changes-semantic
-  "Add :classification to each change in the changes vector.
-   Also promotes :expected changes to include :financial-boundary
-   if they cross a financial threshold."
   [changes event-action]
   (mapv (fn [c]
           (let [base-class (classify-change c event-action)]
             (assoc c :classification base-class)))
         changes))
 
-;; ── Updated Domain Summary ──────────────────────────────────────────────────
-
 (defn build-enhanced-domain-summary
-  "Build domain summary with classification breakdown.
-   
-   In addition to per-domain counts from build-domain-summary, adds
-   :by-classification — a map of classification -> count across all domains."
   [classified-changes]
   (let [domain-summary (build-domain-summary classified-changes)
         by-cls (frequencies (map :classification classified-changes))
         total (count classified-changes)]
-    (assoc domain-summary
-           :by-classification by-cls
-           :total-classified total)))
-
-;; ── Updated Enhanced Diff Artifact Builder ──────────────────────────────────
+    (assoc domain-summary :by-classification by-cls :total-classified total)))
 
 (defn build-fully-classified-diff-artifact
-  "Like build-fully-classified-diff-artifact but with semantic classification
-   on each change and a :by-classification breakdown in the domain summary.
-   
-   Adds:
-   - :classification on each entry in :diff/changes
-   - :by-classification in :diff/domains"
   [trace-entry before-world after-world event-index group-id changes]
   (let [event-action (:action trace-entry)
         action-kw (if (keyword? event-action) event-action (keyword (name event-action)))
         semantic-changes (classify-diff-changes-semantic changes action-kw)
         base (build-enhanced-diff-artifact trace-entry before-world after-world
                                            event-index group-id semantic-changes)
-        ;; Use the domain-classified changes from base for the summary
         domain-summary-with-class (build-enhanced-domain-summary (:diff/changes base))]
     (assoc base
       :diff/changes semantic-changes
       :diff/domains domain-summary-with-class
       :diff/summary (assoc (:diff/summary base)
                            :by-classification (:by-classification domain-summary-with-class)))))
+
+;; ── Invariant Result Linking ─────────────────────────────────────────────────
+
+(defn trace-has-invariants?
+  [trace-entry]
+  (contains? trace-entry :violations))
+
+(defn- extract-violation-summary
+  [inv-id violation]
+  (let [viols (:violations violation [])
+        holds? (:holds? violation true)]
+    {:invariant/id (name inv-id)
+     :invariant/holds? holds?
+     :invariant/violation-count (count viols)
+     :invariant/violations (when (seq viols) (take 3 viols))}))
+
+(defn build-invariant-links
+  [trace]
+  (let [events (keep-indexed
+                (fn [idx entry]
+                  (when (trace-has-invariants? entry)
+                    (let [v (:violations entry)]
+                      (when (map? v)
+                        [idx {:violations v
+                              :invariants-ok? (:invariants-ok? entry true)
+                              :action (:action entry)}]))))
+                trace)]
+    (if (empty? events)
+      {:by-event-index {} :by-invariant-id {}}
+      (let [by-event (reduce (fn [acc [idx {:keys [violations invariants-ok?]}]]
+                               (assoc acc idx {:invariants-ok? invariants-ok?
+                                               :invariant-ids (vec (keys violations))
+                                               :invariant-summaries (mapv (fn [[k v]] (extract-violation-summary k v)) (seq violations))}))
+                             {} events)
+            by-inv-id (reduce (fn [acc [idx {:keys [violations]}]]
+                                (reduce-kv (fn [acc2 inv-id v]
+                                             (update acc2 inv-id conj
+                                                     (merge {:event/index idx} (extract-violation-summary inv-id v))))
+                                           acc violations))
+                              {} events)]
+        {:by-event-index by-event
+         :by-invariant-id by-inv-id}))))
+
+(defn merge-invariant-links
+  [registry trace]
+  (let [links (build-invariant-links trace)]
+    (if (empty? (:by-event-index links))
+      registry
+      (update-in registry [:indexes :by-invariant] merge {:links links}))))

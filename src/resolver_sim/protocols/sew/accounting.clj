@@ -71,6 +71,17 @@
       (let [world' (-> world
                        (assoc-in [:total-fees token] 0)
                        (update-in [:total-withdrawn token] (fnil + 0) amount))]
+        (attr/with-attribution {:subject/type :token
+                                :subject/id token
+                                :action/type :fees/withdraw
+                                :evidence/reason :fees-withdrawn}
+          (cap/capture-event-evidence!
+            :fees-withdrawn
+            {:fee/before {:total-fees amount}}
+            {:fee/after {:total-fees 0
+                         :total-withdrawn (get-in world' [:total-withdrawn token])}}
+            {:fee/token token
+             :fee/amount amount}))
         (assoc (t/ok world') :amount amount)))))
 
 ;; ---------------------------------------------------------------------------
@@ -177,6 +188,21 @@
                              (assoc-in [:claimable wf-id addr] 0)
                              (clear-claimable-v2-for-addr wf-id addr)
                              (update-in [:total-withdrawn token] (fnil + 0) amount))]
+              (attr/with-attribution {:subject/type :escrow
+                                      :subject/id wf-id
+                                      :action/type :escrow/withdraw
+                                      :evidence/reason :escrow-withdrawn}
+                (cap/capture-event-evidence!
+                  :escrow-withdrawn
+                  {:withdraw/before {:claimable amount
+                                     :workflow-id wf-id
+                                     :recipient addr}}
+                  {:withdraw/after {:claimable (get-in world' [:claimable wf-id addr])
+                                    :total-withdrawn (get-in world' [:total-withdrawn token])}}
+                  {:withdraw/workflow-id wf-id
+                   :withdraw/recipient addr
+                   :withdraw/token token
+                   :withdraw/amount amount}))
               (assoc (t/ok world') :amount amount))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -265,6 +291,27 @@
       
       world')))
 
+(defn- reject-bond-evidence!
+  "Capture evidence for a rejected bond operation."
+  [world token workflow-id appellant amount error-kw action-type evidence-type]
+  (attr/with-attribution {:subject/type :bond
+                          :subject/id (str workflow-id "-" appellant)
+                          :action/type action-type
+                          :evidence/reason error-kw}
+    (cap/capture-event-evidence!
+      evidence-type
+      {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                     :bond-status :active}}
+      {:bond/after  {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                     :bond-status :unchanged}}
+      {:bond/workflow-id workflow-id
+       :bond/appellant appellant
+       :bond/amount amount
+       :bond/error error-kw}
+      nil
+      {:world-before world
+       :world-after world})))
+
 (defn slash-bond
   "Slash the posted bond for a losing appellant.
    Moves balance from :bond-balances to :bond-slashed (for incentive distribution)
@@ -276,7 +323,8 @@
         et     (t/get-transfer world workflow-id)
         token  (:token et)]
     (if (zero? amount)
-      (t/fail :no-bond-to-slash)
+      (do (reject-bond-evidence! world token workflow-id appellant amount :no-bond-to-slash :bond/slash-rejected :bond-slash-rejected)
+          (t/fail :no-bond-to-slash))
       (let [world' (-> world
                        (sub-held token amount)
                        (assoc-in [:bond-balances workflow-id appellant] 0)
@@ -311,7 +359,8 @@
         et     (t/get-transfer world workflow-id)
         token  (:token et)]
     (if (zero? amount)
-      (t/fail :no-bond-to-return)
+      (do (reject-bond-evidence! world token workflow-id appellant amount :no-bond-to-return :bond/return-rejected :bond-return-rejected)
+          (t/fail :no-bond-to-return))
       (let [world' (-> world
                        (sub-held token amount)
                        (assoc-in [:bond-balances workflow-id appellant] 0)

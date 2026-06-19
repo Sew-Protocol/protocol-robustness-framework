@@ -19,6 +19,24 @@
 
 (declare get-stake)
 
+(defn reject-evidence!
+  "Capture evidence for a rejected guard in withdraw-stake."
+  [world resolver-addr amount error-kw]
+  (attr/with-attribution {:subject/type :resolver
+                          :subject/id resolver-addr
+                          :action/type :stake/withdraw-rejected
+                          :evidence/reason error-kw}
+    (cap/capture-event-evidence!
+      :stake-withdraw-rejected
+      {:stake/before (get-stake world resolver-addr)}
+      {:stake/after (get-stake world resolver-addr)}
+      {:stake/resolver resolver-addr
+       :stake/amount amount
+       :stake/error error-kw}
+      nil
+      {:world-before world
+       :world-after world})))
+
 ;; ---------------------------------------------------------------------------
 ;; Stake management
 ;; ---------------------------------------------------------------------------
@@ -72,10 +90,12 @@
   (let [current (get-stake world resolver-addr)]
     (cond
       (or (nil? amount) (not (number? amount)) (<= amount 0))
-      (t/fail :invalid-amount)
+      (do (reject-evidence! world resolver-addr amount :invalid-amount)
+          (t/fail :invalid-amount))
 
       (> amount current)
-      (t/fail :insufficient-stake)
+      (do (reject-evidence! world resolver-addr amount :insufficient-stake)
+          (t/fail :insufficient-stake))
 
       :else
       (let [world' (update-in world [:resolver-stakes resolver-addr] (fnil - 0) amount)]

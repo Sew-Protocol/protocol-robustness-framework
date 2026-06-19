@@ -51,16 +51,42 @@
                               (= (:from last-rotation) old-resolver)
                               (= (:to last-rotation) new-resolver))]
       (if (or same-resolver? same-rotation?)
-        (assoc (t/ok world)
-               :old-resolver old-resolver
-               :new-resolver new-resolver
-               :idempotent? true)
+        (do
+          (attr/with-attribution {:subject/type :dispute
+                                  :subject/id workflow-id
+                                  :action/type :resolver/rotate-idempotent
+                                  :evidence/reason :resolver-rotation}
+            (cap/capture-event-evidence!
+              :resolver-rotation
+              {:rotation/before {:resolver old-resolver}}
+              {:rotation/after {:resolver new-resolver}}
+              {:rotation/workflow-id workflow-id
+               :rotation/from old-resolver
+               :rotation/to new-resolver
+               :rotation/idempotent? true}))
+          (assoc (t/ok world)
+                 :old-resolver old-resolver
+                 :new-resolver new-resolver
+                 :idempotent? true))
         (let [rotation {:from old-resolver :to new-resolver :at (time-ctx/block-ts world)}
               world'   (-> world
                            (assoc-in [:escrow-transfers workflow-id :dispute-resolver]
                                      new-resolver)
                            (update-in [:resolver-rotations workflow-id]
                                       (fnil conj []) rotation))]
+          (attr/with-attribution {:subject/type :dispute
+                                  :subject/id workflow-id
+                                  :action/type :resolver/rotate
+                                  :evidence/reason :resolver-rotation}
+            (cap/capture-event-evidence!
+              :resolver-rotation
+              {:rotation/before {:resolver old-resolver}}
+              {:rotation/after {:resolver new-resolver}}
+              {:rotation/workflow-id workflow-id
+               :rotation/from old-resolver
+               :rotation/to new-resolver
+               :rotation/idempotent? false
+               :rotation/at (:at rotation)}))
           (assoc (t/ok world') :old-resolver old-resolver :new-resolver new-resolver))))))
 
 ;; ---------------------------------------------------------------------------
@@ -90,7 +116,23 @@
 
 (defn- guard-fail [error-kw & {:as ctx}]
   (attr/log-with-attr :debug "guard/rejected" (assoc ctx :error error-kw))
-  (assoc (t/fail error-kw) :guard-context ctx))
+  (let [result (assoc (t/fail error-kw) :guard-context ctx)
+        subject-type (or (:subject-type ctx) :guard)
+        subject-id (or (:subject-id ctx) (:workflow-id ctx) (:resolver ctx) "unknown")]
+    (attr/with-attribution {:subject/type subject-type
+                            :subject/id subject-id
+                            :action/type :guard/reject
+                            :evidence/reason error-kw}
+      (cap/capture-event-evidence!
+        :guard-rejected
+        {:guard/before {:error error-kw :context (dissoc ctx :world)}}
+        {:guard/after {:error error-kw}}
+        {:guard/error error-kw
+         :guard/context (dissoc ctx :world)}
+        nil
+        {:world-before (:world ctx)
+         :world-after (:world ctx)}))
+    result))
 
 (defn- handle-reversal-slashing
   "Handles the outcome of a reversed decision.
@@ -200,8 +242,19 @@
     (t/fail :transfer-not-in-dispute)
 
     :else
-    (t/ok (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
-            evidence-hash (assoc-in [:evidence-hashes workflow-id] evidence-hash)))))
+    (let [world' (cond-> (assoc-in world [:evidence-updated? workflow-id] true)
+                   evidence-hash (assoc-in [:evidence-hashes workflow-id] evidence-hash))]
+      (attr/with-attribution {:subject/type :dispute
+                              :subject/id workflow-id
+                              :action/type :dispute/submit-evidence
+                              :evidence/reason :evidence-submitted}
+        (cap/capture-event-evidence!
+          :evidence-submitted
+          {:evidence/before {:evidence-updated? (get-in world [:evidence-updated? workflow-id] false)}}
+          {:evidence/after {:evidence-updated? true :evidence-hash evidence-hash}}
+          {:evidence/workflow-id workflow-id
+           :evidence/hash evidence-hash}))
+      (t/ok world'))))
 
 (defn- fraud-slash-workflow-eligible?
   "Manual fraud slash requires the workflow to have entered the dispute path:
@@ -863,42 +916,58 @@
    escrow dispute-resolver, positive amount, no other pending/appealed slash on workflow-id.
    Timelock length uses :appeal-window-duration from the escrow module snapshot."
   [world workflow-id caller resolver-addr amount]
-  (let [wf-id (t/normalize-workflow-id workflow-id)]
+  (let [wf-id (t/normalize-workflow-id workflow-id)
+        reject!
+        (fn [error-kw & extra-ctx]
+          (attr/with-attribution {:subject/type :resolver
+                                  :subject/id resolver-addr
+                                  :action/type :slash/propose-rejected
+                                  :evidence/reason error-kw}
+            (cap/capture-event-evidence!
+              :fraud-slash-rejected
+              {:slash/proposal {:workflow-id wf-id :caller caller :resolver resolver-addr :amount amount}}
+              {:slash/error error-kw}
+              (merge {:slash/error error-kw :slash/workflow-id wf-id
+                      :slash/resolver resolver-addr :slash/amount amount}
+                     (apply hash-map extra-ctx))
+              nil
+              {:world-before world :world-after world}))
+          (t/fail error-kw))]
     (cond
       (or (nil? caller) (= "" caller))
-      (t/fail :missing-caller-context)
+      (reject! :missing-caller-context)
 
       (not (t/valid-workflow-id? world wf-id))
-      (t/fail :invalid-workflow-id)
+      (reject! :invalid-workflow-id)
 
       (not (fraud-slash-workflow-eligible? world wf-id))
-      (t/fail :workflow-not-slashable)
+      (reject! :workflow-not-slashable)
 
       (active-manual-fraud-slash? world wf-id)
-      (t/fail :slash-already-pending)
+      (reject! :slash-already-pending)
 
       (or (nil? amount) (not (number? amount)) (<= amount 0))
-      (t/fail :invalid-slash-amount)
+      (reject! :invalid-slash-amount)
 
       :else
       (let [dispute-resolver (get-in world [:escrow-transfers wf-id :dispute-resolver])]
         (cond
           (or (nil? dispute-resolver) (= "" dispute-resolver))
-          (t/fail :invalid-resolver-addr)
+          (reject! :invalid-resolver-addr :dispute-resolver dispute-resolver)
 
           (not= dispute-resolver resolver-addr)
-          (t/fail :slash-resolver-mismatch)
+          (reject! :slash-resolver-mismatch :dispute-resolver dispute-resolver :expected resolver-addr)
 
           :else
           (let [current-stake (reg/get-stake world dispute-resolver)
                 max-bps       (get-in world [:params :max-slash-per-offense-bps] 5000)]
             (cond
               (<= current-stake 0)
-              (t/fail :insufficient-resolver-stake)
+              (reject! :insufficient-resolver-stake :current-stake current-stake)
 
               ;; Per-offense cap: governance slash may not exceed 50% of current stake
               (> (* amount 10000) (* current-stake max-bps))
-              (t/fail :slash-exceeds-max-per-offense)
+              (reject! :slash-exceeds-max-per-offense :current-stake current-stake :max-bps max-bps)
 
               :else
               (let [snap              (t/get-snapshot world wf-id)

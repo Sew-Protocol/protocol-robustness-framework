@@ -90,6 +90,7 @@ run_unit() {
   clojure -M:test -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
+(require '[resolver-sim.protocol-alignment-test])
 (require '[resolver-sim.protocols.sew.replay-test])
 (require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
 (require '[resolver-sim.scenario.expectations-test])
@@ -109,6 +110,7 @@ run_unit() {
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
+                'resolver-sim.protocol-alignment-test
                 'resolver-sim.protocols.sew.replay-test
                 'resolver-sim.protocols.sew.forking-strategist-expectations-test
                 'resolver-sim.protocols.sew.slashing-test
@@ -137,6 +139,7 @@ run_framework() {
   clojure -M:test -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
+(require '[resolver-sim.protocol-alignment-test])
 (require '[resolver-sim.time.context-test])
 (require '[resolver-sim.time.model-test])
 (require '[resolver-sim.sim.multi-epoch-test])
@@ -147,6 +150,7 @@ run_framework() {
 (require '[resolver-sim.contract-model.replay-batch-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
+                'resolver-sim.protocol-alignment-test
                 'resolver-sim.time.context-test
                 'resolver-sim.time.model-test
                 'resolver-sim.sim.multi-epoch-test
