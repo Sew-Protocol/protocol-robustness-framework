@@ -8,6 +8,8 @@
   "threat-tags" : ["dispute-resolution", "resolution-module", "governance", "rotation"],
   "tags" : ["suite/dispute-resolution", "coverage/resolver-integrity"],
   "agents" : [ {
+    "id" : "governance", "address" : "0xgov", "role" : "governance"
+  }, {
     "id" : "buyer", "address" : "0xbuyer", "strategy" : "honest"
   }, {
     "id" : "seller", "address" : "0xseller", "strategy" : "honest"
@@ -35,7 +37,7 @@
     "seq" : 1, "time" : 1060, "agent" : "buyer", "action" : "raise_dispute",
     "params" : { "workflow-id" : 0 }
   }, {
-    "seq" : 2, "time" : 1090, "agent" : "buyer", "action" : "rotate_dispute_resolver",
+    "seq" : 2, "time" : 1090, "agent" : "governance", "action" : "rotate_dispute_resolver",
     "params" : { "workflow-id" : 0, "new-resolver" : "0xnewresolver" }
   }, {
     "seq" : 3, "time" : 1120, "agent" : "new-resolver", "action" : "execute_resolution",

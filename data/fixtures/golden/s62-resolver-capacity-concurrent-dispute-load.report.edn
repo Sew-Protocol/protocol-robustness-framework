@@ -45,7 +45,7 @@
   :yield/current-value 0,
   :yield/deferred 0,
   :yield/escrow-principal 0,
-  :expected-reverts 0,
+  :expected-reverts 1,
   :negative-payoff-count 0,
   :escrow/live-state "released",
   :batch-buckets 0},

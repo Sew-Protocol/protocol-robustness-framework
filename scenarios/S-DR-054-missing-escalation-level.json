@@ -4,7 +4,7 @@
   "initial-block-time" : 1000,
   "scenario-title" : "Missing escalation level — escalation-resolvers has levels 0 and 2 but no level 1",
   "scenario-purpose" : "Verify that when escalation-resolvers is missing a middle level (level 1), escalation from level 0 fails with :escalation-not-allowed because no resolver is mapped for level 1.",
-  "purpose" : "theory-falsification",
+  "purpose" : "adversarial-robustness",
   "threat-tags" : ["dispute-resolution", "resolution-module", "escalation", "guard"],
   "tags" : ["suite/dispute-resolution", "coverage/resolver-integrity"],
   "expected-errors" : [ {

@@ -4,7 +4,7 @@
   "initial-block-time" : 1000,
   "scenario-title" : "Challenge without escalation — challenge-resolution when no escalation-resolvers configured",
   "scenario-purpose" : "Verify that challenge-resolution returns :escalation-not-configured when no escalation-resolvers are set in protocol-params (nil escalation-fn). This mirrors the escalate-discipline path tested in S77.",
-  "purpose" : "theory-falsification",
+  "purpose" : "adversarial-robustness",
   "threat-tags" : ["dispute-resolution", "resolution-module", "challenge", "guard"],
   "tags" : ["suite/dispute-resolution", "coverage/resolver-integrity"],
   "expected-errors" : [ {

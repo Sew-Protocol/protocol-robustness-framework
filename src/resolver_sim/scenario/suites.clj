@@ -47,7 +47,13 @@
    "scenarios/S-DR-062-rotate-resolver-rejected.json"
    "scenarios/S-DR-063-slash-appeal-upheld.json"
    "scenarios/S-DR-064-slash-appeal-rejected-executed.json"
-   "scenarios/S-DR-070-empty-string-resolver-rejected.json"])
+   "scenarios/S-DR-070-empty-string-resolver-rejected.json"
+   "scenarios/S-DR-071-governance-rotate-biased-ruling.json"
+   "scenarios/S-DR-072-resolver-unavailable-timeout.json"
+   "scenarios/S-DR-073-capacity-exhaustion-permanent-lock.json"
+   "scenarios/S-DR-074-governance-capacity-bypass.json"
+   "scenarios/S-DR-075-insufficient-bond-deterrence.json"
+   "scenarios/S-DR-076-non-governance-rotate-rejected.json"])
 
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"

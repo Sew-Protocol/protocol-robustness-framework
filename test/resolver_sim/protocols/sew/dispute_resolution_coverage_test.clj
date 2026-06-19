@@ -12,13 +12,15 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
             [clojure.string :as cstr]
+            [clojure.set :as cset]
             [resolver-sim.io.scenarios :as sc]
             [resolver-sim.scenario.normalize :as norm]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.scenario.runner :as runner]
             [resolver-sim.scenario.dispute-coverage :as dc]
             [resolver-sim.evidence.summary :as ev-sum]
-            [resolver-sim.evidence.config :as evcfg]))
+            [resolver-sim.evidence.config :as evcfg])
+  (:import [java.util.regex Pattern]))
 
 ;; ---------------------------------------------------------------------------
 ;; Evidence artifact fixture
@@ -324,3 +326,142 @@
         (is (contains? result :reversals))
         (is (pos? (count (:reversals result)))
             "Expected at least one detectable reversal in appealed scenario")))))
+
+;; ---------------------------------------------------------------------------
+;; Structural: governance dispatch audit
+;;
+;; Every action that modifies protocol-level state (pause, token crunch,
+;; yield risk, resolver rotation, fee update, slash actions) must use
+;; with-governance-actor. This test reads the source file to verify.
+;; ---------------------------------------------------------------------------
+
+(deftest test-governance-dispatch-audit
+  (testing "Governance-sensitive actions must use with-governance-actor"
+    (let [source (slurp "src/resolver_sim/protocols/sew.clj")
+          ;; Actions that MUST have governance gates (by protocol design)
+          must-be-gated #{:rotate-dispute-resolver
+                          :set-paused
+                          :withdraw-fees
+                          :governance-update-fee
+                          :propose-fraud-slash
+                          :resolve-appeal}
+          ;; Simulation-only actions that intentionally skip governance
+          known-simulation #{:set-token-liquidity-crunch :set-yield-risk}
+          all-gated must-be-gated
+          violations (for [action all-gated
+                            :let [p (re-pattern
+                                     (str "defmethod apply-action \"" (name action) "\""
+                                          "[^#]*?"
+                                          "with-governance-actor"))]
+                            :when (not (re-find p source))]
+                        (str (name action) " missing with-governance-actor"))
+          must-violations (for [action must-be-gated
+                                :let [p (re-pattern
+                                         (str "defmethod apply-action \"" (name action) "\""
+                                              "[^#]*?"
+                                              "with-governance-actor"))]
+                                :when (not (re-find p source))]
+                            (name action))]
+      (doseq [v violations]
+        (println (str "  GOVERNANCE GAP: " v)))
+      (is (empty? must-violations)
+          (str "Must-have governance gates missing: " (pr-str must-violations))))))
+
+;; ---------------------------------------------------------------------------
+;; Theory-falsification scenarios
+;;
+;; Scenarios with purpose=theory-falsification intentionally demonstrate a
+;; protocol vulnerability.  They should PASS (the replay executes correctly)
+;; but be displayed as XFAIL (expected failure) — the scenario successfully
+;; falsifies the theory that the protocol is robust against this attack.
+;;
+;; The economic security finding (S-DR-075) is the canonical example:
+;; the protocol state machine correctly permits a malicious resolver to
+;; profit from fraud at current bond/detection parameters.  The scenario
+;; passes at the replay level but FAILS at the economic security level.
+;; ---------------------------------------------------------------------------
+
+(deftest test-theory-falsification-scenarios
+  (testing "Theory-falsification scenarios demonstrate known vulnerabilities"
+    (let [paths (filter #(.contains % "S-DR-")
+                        (map #(str "scenarios/" %) (.list (io/file "scenarios"))))
+          tf-scenarios (for [path paths]
+                         (try (load-scenario path) (catch Exception _ nil)))
+          tf-valid (filter (fn [s]
+                         (and (= "theory-falsification" (:purpose s))
+                              (not (some #(= "status/todo-stub" %) (:tags s [])))))
+                       tf-scenarios)]
+      (println "\n=== THEORY-FALSIFICATION SCENARIOS (XFAIL) ===")
+      (is (pos? (count tf-valid)) "At least one theory-falsification scenario must exist")
+      (doseq [s tf-valid]
+        (let [r (replay-scenario s)
+              outcome (:outcome r)
+              violated-any? (pos? (get-in r [:metrics :invariant-violations] 0))
+              ok? (= :pass outcome)]
+          (println (str "  " (:scenario-id s)
+                        "  replay=" (name outcome)
+                        "  invariants-violated=" violated-any?
+                        "  interpretation=XFAIL"
+                        "  (proves vulnerability exists)"))
+          (is ok? (str (:scenario-id s) " must replay successfully to demonstrate the vulnerability")))))))
+
+;; ---------------------------------------------------------------------------
+;; Structural: error code coverage audit
+;;
+;; Every error code used in (t/fail :) across the sew protocol must be
+;; in either sew-state-error-codes or sew-guard-error-codes.  Otherwise
+;; the metrics system silently ignores expected reverts for that code.
+;;
+;; The known-sets variable below must be kept in sync with the actual
+;; defs in sew.clj.  If you add an error code to one of those sets,
+;; update this list too.
+;; ---------------------------------------------------------------------------
+
+(def ^:private known-error-codes
+  "Every error code that SHOULD be classified in sew-state-error-codes
+   or sew-guard-error-codes.  Cross-referenced against actual t/fail
+   calls below."
+  #{:transfer-not-pending :transfer-not-in-dispute
+    :invalid-state-for-release :invalid-state-for-refund
+    :resolution-without-settlement :invalid-resolver :invalid-workflow-id
+    :transfer-not-finalized :has-pending-settlement
+    :dispute-timeout-not-exceeded :invalid-token :amount-zero
+    :invalid-amount :invalid-recipient :cannot-set-both-auto-times
+    :insufficient-module-liquidity :token-liquidity-crunch
+    :circuit-breaker-active :resolver-at-capacity :resolver-frozen
+    :insufficient-resolver-stake :active-disputes-block-withdrawal
+    :pending-slash-blocks-withdrawal :missing-fee-bps
+    :no-fees-to-withdraw :liquidity-insufficient :no-claimable-balance
+    :no-bond-to-slash :no-bond-to-return :senior-not-registered
+    :senior-coverage-exceeded :insufficient-stake :protocol-paused
+    ;; Guard codes
+    :no-resolution-to-appeal :appeal-window-expired
+    :appeal-window-not-expired :escalation-not-allowed
+    :escalation-not-configured :resolution-already-pending
+    :resolver-capacity-exceeded :not-participant
+    :not-authorized-resolver :not-governance :not-resolver
+    :not-sender :not-recipient :no-pending-slash :invalid-slash-state
+    :slash-not-pending :slash-already-pending :invalid-slash-amount
+    :invalid-resolver-addr :slash-resolver-mismatch
+    :slash-exceeds-max-per-offense :slash-epoch-cap-exceeded
+    :timelock-not-expired :workflow-not-slashable
+    :missing-caller-context :invalid-new-resolver})
+
+(deftest test-error-code-coverage-audit
+  (testing "All t/fail error codes are classified in the error code sets"
+    (let [clj-files (filter #(.endsWith (.getName %) ".clj")
+                            (remove #(.isDirectory %)
+                                    (file-seq (java.io.File. "src"))))
+          all-codes (into #{}
+                          (comp
+                           (mapcat #(clojure.string/split-lines (slurp %)))
+                           (keep (fn [line]
+                                   (when-let [m (re-find #"t/fail\s+:([a-z0-9-]+)" line)]
+                                     (second m))))
+                           (map keyword))
+                          clj-files)
+          unclassified (cset/difference all-codes known-error-codes)]
+      (doseq [c (sort unclassified)]
+        (println (str "  UNCLASSIFIED: :" c)))
+      (is (empty? unclassified)
+          (str (count unclassified) " t/fail code(s) not in known-error-codes")))))

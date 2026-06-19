@@ -23,7 +23,8 @@
    :strategic          {:label "Strategic disputants"
                         :scenarios ["S-DR-020-false-claimant-slashed"
                                     "S-DR-021-griefing-claim-cost"
-                                    "S-DR-022-lazy-counterparty-timeout"]}
+                                    "S-DR-022-lazy-counterparty-timeout"
+                                    "S-DR-072-resolver-unavailable-timeout"]}
    :resolver-integrity {:label "Resolver integrity"
                         :scenarios ["S-DR-030-biased-resolver-appealed"
                                     "S-DR-031-colluding-resolver-detected"
@@ -35,7 +36,10 @@
                                     "S-DR-054-missing-escalation-level"
                                     "S-DR-060-rotate-resolver-mid-dispute"
                                     "S-DR-062-rotate-resolver-rejected"
-                                    "S-DR-070-empty-string-resolver-rejected"]}
+                                    "S-DR-070-empty-string-resolver-rejected"
+                                    "S-DR-071-governance-rotate-biased-ruling"
+                                    "S-DR-074-governance-capacity-bypass"
+                                    "S-DR-076-non-governance-rotate-rejected"]}
    :finality           {:label "Finality and payout correctness"
                         :scenarios ["S-DR-040-finality-blocked-during-appeal"
                                     "S-DR-041-finality-after-appeal-window"
@@ -44,7 +48,9 @@
                                     "S-DR-044-slash-obligation-unmet-recorded"
                                     "S-DR-061-slash-propose-execute"
                                     "S-DR-063-slash-appeal-upheld"
-                                    "S-DR-064-slash-appeal-rejected-executed"]}})
+                                    "S-DR-064-slash-appeal-rejected-executed"
+                                    "S-DR-073-capacity-exhaustion-permanent-lock"
+                                    "S-DR-075-insufficient-bond-deterrence"]}})
 
 (def coverage-gaps
   "Known research gaps that cannot yet be tested because the model lacks
