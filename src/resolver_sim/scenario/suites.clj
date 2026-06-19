@@ -34,7 +34,16 @@
    "scenarios/S-DR-041-finality-after-appeal-window.json"
    "scenarios/S-DR-042-duplicate-claim-after-finality-rejected.json"
    "scenarios/S-DR-043-payout-shortfall-deferred.json"
-   "scenarios/S-DR-044-slash-obligation-unmet-recorded.json"])
+   "scenarios/S-DR-044-slash-obligation-unmet-recorded.json"
+   "scenarios/S-DR-050-resolution-module-plus-kleros.json"
+   "scenarios/S-DR-051-challenge-without-escalation.json"
+   "scenarios/S-DR-052-custom-resolver-bypasses-module.json"
+   "scenarios/S-DR-053-module-false-fallthrough.json"
+   "scenarios/S-DR-054-missing-escalation-level.json"
+   "scenarios/S-DR-055-sender-cancel-refund.json"
+   "scenarios/S-DR-056-evidence-non-disputed-rejected.json"
+   "scenarios/S-DR-060-rotate-resolver-mid-dispute.json"
+   "scenarios/S-DR-061-slash-propose-execute.json"])
 
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"

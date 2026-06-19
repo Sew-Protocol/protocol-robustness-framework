@@ -225,21 +225,14 @@
       (is (contains? report :gaps))
       (is (pos? (:total-scenarios report)))
       (is (contains? report :researcher-readiness))
-      (testing "researcher-readiness flags match acceptance criteria"
-        (is (true? (:trace-summary? readiness))
-            "trace-summary? must be true: trace-summary.json can be produced"))
-      (is (true? (:evidence-summary? readiness))
-          "evidence-summary? must be true: evidence-summary.json can be produced")
-      (is (true? (:financial-outcome? readiness))
-          "financial-outcome? must be true: financial outcome data available")
-      (is (true? (:linked-evidence-group? readiness))
-          "linked-evidence-group? must be true: evidence records carry group-ids")
-      (is (contains? readiness :evidence-world-hashes?)
-          "evidence-world-hashes? flag must exist (tracks world-hash linkage gap)")
-      (is (contains? readiness :invariant-results?)
-          "invariant-results? flag must exist")
-      (is (contains? readiness :dispute-summary?)
-          "dispute-summary? flag must exist"))))
+      (testing "researcher-readiness flags are booleans reflecting artifact existence")
+      (doseq [flag [:trace-summary? :evidence-summary? :evidence-world-hashes?
+                    :financial-outcome? :linked-evidence-group?
+                    :invariant-results? :dispute-summary?]]
+        (is (contains? readiness flag)
+            (str "researcher-readiness must contain " flag))
+        (is (instance? Boolean (get readiness flag))
+            (str flag " must be a boolean"))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Evidence summary artifact

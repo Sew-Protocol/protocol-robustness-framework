@@ -710,6 +710,7 @@
     :appeal-window-expired
     :appeal-window-not-expired
     :escalation-not-allowed
+    :escalation-not-configured
     :resolution-already-pending
     :not-participant
     :not-authorized-resolver})

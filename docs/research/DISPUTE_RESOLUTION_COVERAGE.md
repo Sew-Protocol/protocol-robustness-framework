@@ -55,6 +55,7 @@ Verifies the fundamental dispute flow from open to final.
 | S-DR-002 | basic-refund-ruling | Dispute raised → resolver rules refund → settlement finalizes | ✅ |
 | S-DR-003 | duplicate-dispute-rejected | Second `raise_dispute` on same escrow fails with state-machine error | ✅ |
 | S-DR-004 | timeout-default-resolution | No resolver action → timeout → keeper auto-cancels | ✅ |
+| S-DR-055 | sender-cancel-refund | Sender cancels non-disputed escrow → refunded | ✅ |
 
 **Invariant expectations:**
 - `:dispute-level-bounded` — level stays in [0, max-dispute-level]
@@ -70,6 +71,7 @@ Tests how the protocol behaves when evidence quality varies.
 |----|----------|-------|-------------|
 | S-DR-010 | missing-evidence | `submit-evidence` with no hash; record accepted | ✅ |
 | S-DR-011 | contradictory-evidence | Multiple `submit-evidence` calls with different hashes | ✅ |
+| S-DR-056 | evidence-non-disputed-rejected | `submit-evidence` on pending (non-disputed) escrow rejected | ✅ |
 | S-DR-012 | late-evidence-rejected | Submit after resolution deadline | ❌ *See gap |
 | S-DR-013 | evidence-at-deadline | Submit exactly at the deadline boundary | ❌ *See gap |
 
@@ -93,6 +95,9 @@ Tests that the protocol correctly handles adversarial participant strategies.
 | S-DR-020 | false-claimant-slashed | Seller proposes fraud slash against false-claimant buyer | ✅ |
 | S-DR-021 | griefing-claim-cost | Buyer raises frivolous dispute; no financial gain | ✅ |
 | S-DR-022 | lazy-counterparty-timeout | Counterparty never responds; timeout path triggers | ✅ |
+| S-DR-052 | custom-resolver-bypasses-module | Custom resolver bypasses resolution module via Priority 1 | ✅ |
+| S-DR-053 | module-false-fallthrough | Module returns false, falls through to dispute-resolver | ✅ |
+| S-DR-054 | missing-escalation-level | escalation-resolvers missing level 1 → clean rejection | ✅ |
 
 **Invariant expectations:**
 - `:slash-status-consistent` — slash lifecycle coherent
