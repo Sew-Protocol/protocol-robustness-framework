@@ -104,7 +104,7 @@
                               :status :warning
                               :warning-key :registry/orphan-file
                               :message "orphan file"}]
-                 :metadata {:run-id "20260614" :artifact-count 5}}
+                  :metadata {:run-id "20260614" :artifact-count 5}}
           root   (adapter/registry-result->validation-root result)]
       (is (= :failed (:status root)))
       (is (contains? (:error-keys root) :registry/dangling-dependency))
@@ -125,7 +125,7 @@
                              (merge {:status :warning :warning-key :w1
                                      :message "warn1"} {:check/id :c4})
                              (merge {:status :passed} {:check/id :c5})]
-                 :metadata {:run-id "r1" :artifact-count 10}}
+                  :metadata {:run-id "r1" :artifact-count 10}}
           root   (adapter/registry-result->validation-root result)]
       (is (= 3 (get-in root [:metrics :passed])))
       (is (= 1 (get-in root [:metrics :failed])))

@@ -22,28 +22,28 @@
   [world]
   (let [violations
         (into []
-          (keep
-            (fn [[oid pos]]
-              (let [mid (:module/id pos)
-                    tok (:token pos)
-                    risk (get-in world [:yield/risk mid tok] {})
-                    sf   (:shortfall pos)
-                    sf-model (get-in world [:yield/shortfall-models mid tok])
-                    mtm? (= :mark-to-market (risk/effective-loss-mode risk))
-                    
+              (keep
+               (fn [[oid pos]]
+                 (let [mid (:module/id pos)
+                       tok (:token pos)
+                       risk (get-in world [:yield/risk mid tok] {})
+                       sf   (:shortfall pos)
+                       sf-model (get-in world [:yield/shortfall-models mid tok])
+                       mtm? (= :mark-to-market (risk/effective-loss-mode risk))
+
                     ;; If principal-loss model and recoverable=false, 
                     ;; we expect negative unrealized/principal.
-                    authorized-impairment? (and (= (:type sf-model) :principal-loss)
-                                                (not (:recoverable sf-model true)))
-                    
-                    issues (cond-> []
-                            (and (not authorized-impairment?) (neg? (:principal pos 0))) (conj :negative-principal)
-                            (neg? (:shares pos 0)) (conj :negative-shares)
-                            (neg? (:realized-yield pos 0)) (conj :negative-realized-yield)
-                            (and (not mtm?) (not authorized-impairment?) (neg? (:unrealized-yield pos 0))) (conj :negative-unrealized-yield))]
-                (when (seq issues)
-                  {:owner-id oid :issues issues})))
-          (:yield/positions world {})))]
+                       authorized-impairment? (and (= (:type sf-model) :principal-loss)
+                                                   (not (:recoverable sf-model true)))
+
+                       issues (cond-> []
+                                (and (not authorized-impairment?) (neg? (:principal pos 0))) (conj :negative-principal)
+                                (neg? (:shares pos 0)) (conj :negative-shares)
+                                (neg? (:realized-yield pos 0)) (conj :negative-realized-yield)
+                                (and (not mtm?) (not authorized-impairment?) (neg? (:unrealized-yield pos 0))) (conj :negative-unrealized-yield))]
+                   (when (seq issues)
+                     {:owner-id oid :issues issues})))
+               (:yield/positions world {})))]
     {:holds? (empty? violations) :violations (vec violations)}))
 
 (defn check-realized-non-negative
@@ -86,7 +86,6 @@
                 true)))
           (vals (:yield/positions world {}))))
 
-
 (defn check-value-conservation
   "Conservation invariant: shortfall components are non-negative and
    deferred-amount (when present) does not exceed the position expected
@@ -127,7 +126,7 @@
   [world pos]
   (let [risk (get-in world [:yield/risk (:module/id pos) (:token pos)] {})
         mtm? (or (= :mark-to-market (risk/effective-loss-mode risk))
-               (neg? (:unrealized-yield pos 0)))]
+                 (neg? (:unrealized-yield pos 0)))]
     (if mtm?
       (max 0 (+ (:principal pos 0) (:unrealized-yield pos 0) (:realized-yield pos 0)))
       (+ (:principal pos 0) (:realized-yield pos 0)))))
@@ -201,7 +200,7 @@
   (let [world* (normalize-world-for-check world)
         scenario-id (get-in world [:params :scenario-id])
         expected-failures (set (map keyword
-                               (get-in world [:params :expected-failures scenario-id] [])))]
+                                    (get-in world [:params :expected-failures scenario-id] [])))]
     (into {}
           (for [id inv-ids]
             (let [f (get check-fns id)

@@ -250,8 +250,8 @@
         failure-epoch (:detection-failure-epoch params nil)
         should-fail? (and failure-epoch (>= epoch failure-epoch))
         decay-multiplier (if should-fail?
-                          0.0
-                          (Math/pow (- 1.0 decay-rate) (dec epoch)))
+                           0.0
+                           (Math/pow (- 1.0 decay-rate) (dec epoch)))
         decayed-params
         (-> params
             (assoc :slashing-detection-probability

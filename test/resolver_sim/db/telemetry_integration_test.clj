@@ -80,19 +80,19 @@
           _h (dotimes [i 3]
                (let [tid    (str batch2 "-h-" i)
                      params {:block-time 2000 :escrow-size 50000
-                              :strategy :honest :appeal-bond-bps 0
-                              :appeal-probability-if-correct 0.0
-                              :appeal-probability-if-wrong   0.0
-                              :slashing-detection-probability 0.0}
+                             :strategy :honest :appeal-bond-bps 0
+                             :appeal-probability-if-correct 0.0
+                             :appeal-probability-if-wrong   0.0
+                             :slashing-detection-probability 0.0}
                      res    (runner/run-trial (fn [] 0.9) params)]
                  (tel/record-trial! *ds* sew/protocol batch2 tid params res)))
           _m (dotimes [i 2]
                (let [tid    (str batch2 "-m-" i)
                      params {:block-time 3000 :escrow-size 50000
-                              :strategy :malicious :appeal-bond-bps 500
-                              :appeal-probability-if-correct 0.0
-                              :appeal-probability-if-wrong   0.0
-                              :slashing-detection-probability 0.0}
+                             :strategy :malicious :appeal-bond-bps 500
+                             :appeal-probability-if-correct 0.0
+                             :appeal-probability-if-wrong   0.0
+                             :slashing-detection-probability 0.0}
                      res    (runner/run-trial (fn [] 0.9) params)]
                  (tel/record-trial! *ds* sew/protocol batch2 tid params res)))
           all    (sew-db/sew-trial-outcomes *ds* {:batch-id batch2})

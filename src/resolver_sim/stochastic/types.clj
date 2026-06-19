@@ -92,67 +92,66 @@
    [:bond-mix-min-stable-bps {:optional true} [:>= 0]]
    [:escalation-bond-bps {:optional true} [:>= 0]]
    [:minimum-challenge-bond {:optional true} [:>= 0]]
-    [:max-dispute-level {:optional true} [:>= 0]]
+   [:max-dispute-level {:optional true} [:>= 0]]
 
     ;; Sweep / analysis configuration keys (not protocol params but present in param files)
-    [:scenario-name {:optional true} string?]
-    [:difficulty-distribution {:optional true} map?]
-    [:correlation-parameter {:optional true} number?]
-    [:effort-budget-per-epoch {:optional true} number?]
-    [:load-level {:optional true} keyword?]
-    [:attacker-budget-fraction {:optional true} number?]
-    [:seed {:optional true} integer?]
-    [:num-epochs {:optional true} integer?]
-    [:num-trials-per-epoch {:optional true} integer?]
-    [:n-epochs {:optional true} integer?]
-    [:n-trials-per-epoch {:optional true} integer?]
-    [:n-resolvers {:optional true} integer?]
-    [:max-op-win-rate-threshold {:optional true} number?]
-    [:detection-decay-rate {:optional true} number?]
-    [:governance-capacity {:optional true} integer?]
-    [:disputes-per-epoch {:optional true} integer?]
-    [:floor-threshold {:optional true} number?]
-    [:junior-counts {:optional true} vector?]
-    [:detection-probs {:optional true} vector?]
-    [:senior-bond-sizes {:optional true} vector?]
-    [:junior-bond {:optional true} number?]
-    [:deterrence-threshold {:optional true} number?]
-    [:pass-fraction {:optional true} number?]
-    [:spike-ratio-threshold {:optional true} number?]])
-
+   [:scenario-name {:optional true} string?]
+   [:difficulty-distribution {:optional true} map?]
+   [:correlation-parameter {:optional true} number?]
+   [:effort-budget-per-epoch {:optional true} number?]
+   [:load-level {:optional true} keyword?]
+   [:attacker-budget-fraction {:optional true} number?]
+   [:seed {:optional true} integer?]
+   [:num-epochs {:optional true} integer?]
+   [:num-trials-per-epoch {:optional true} integer?]
+   [:n-epochs {:optional true} integer?]
+   [:n-trials-per-epoch {:optional true} integer?]
+   [:n-resolvers {:optional true} integer?]
+   [:max-op-win-rate-threshold {:optional true} number?]
+   [:detection-decay-rate {:optional true} number?]
+   [:governance-capacity {:optional true} integer?]
+   [:disputes-per-epoch {:optional true} integer?]
+   [:floor-threshold {:optional true} number?]
+   [:junior-counts {:optional true} vector?]
+   [:detection-probs {:optional true} vector?]
+   [:senior-bond-sizes {:optional true} vector?]
+   [:junior-bond {:optional true} number?]
+   [:deterrence-threshold {:optional true} number?]
+   [:pass-fraction {:optional true} number?]
+   [:spike-ratio-threshold {:optional true} number?]])
 
 ;; Trial outcome record
 (defrecord TrialOutcome
-  [resolver-strategy
-   dispute-correct?
-   appeal-triggered?
-   slashed?
-   honest-profit
-   malice-profit
-   fee-earned
-   slashing-loss])
+           [resolver-strategy
+            dispute-correct?
+            appeal-triggered?
+            slashed?
+            honest-profit
+            malice-profit
+            fee-earned
+            slashing-loss])
 
 ;; Batch aggregation record
 (defrecord BatchSummary
-  [n-trials
-   mean-honest
-   mean-malice
-   std-honest
-   std-malice
-   appeal-rate
-   slash-rate
-   honest-wins-fraction
-   collusion-success-rate])
+           [n-trials
+            mean-honest
+            mean-malice
+            std-honest
+            std-malice
+            appeal-rate
+            slash-rate
+            honest-wins-fraction
+            collusion-success-rate])
 
 ;; Run metadata record
 (defrecord RunMetadata
-  [scenario-id
-   git-commit
-   git-dirty?
-   jvm-version
-   timestamp
-   seed
-   params])
+           [scenario-id
+            git-commit
+            git-dirty?
+            jvm-version
+            timestamp
+            seed
+            params])
 
 ;; Defaults
 (def default-params
@@ -207,11 +206,11 @@
     (when-not (validator scenario)
       (throw (ex-info (format "Invalid scenario parameters: %s" (me/humanize explanation))
                       {:explanation (me/humanize explanation)})))
-    
+
     ;; Mitigation for repeat-last
     (when (and (= (:oracle-roll-on-exhaustion scenario) :repeat-last)
                (:evidence-quality? scenario))
       (throw (ex-info "Invalid scenario: :repeat-last is incompatible with :evidence-quality? true. Use :throw instead."
                       {:scenario-id (:scenario-id scenario)})))
-    
+
     (detection/validate-oracle-params! scenario)))

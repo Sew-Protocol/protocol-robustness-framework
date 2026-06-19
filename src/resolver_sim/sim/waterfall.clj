@@ -91,7 +91,7 @@
    Returns: Available coverage amount"
   [senior]
   (let [max-coverage (* (:bond-amount senior 0)
-                       (:utilization-factor senior 0.5))
+                        (:utilization-factor senior 0.5))
         used (:coverage-used senior 0)
         available (max 0 (- max-coverage used))]
     (double available)))
@@ -143,17 +143,17 @@
         phase1 (apply-junior-slash junior slash-amount)
         junior-slashed (:actually-slashed phase1)
         shortage (:shortage phase1)
-        
+
         ;; Phase 2: Slash senior if needed (and available)
         phase2 (if (and (> shortage 0) senior)
                  (apply-senior-slash senior shortage)
                  {:senior-slashed 0
                   :unmet-obligation shortage
                   :new-senior senior})
-        
+
         senior-slashed (:senior-slashed phase2)
         unmet (:unmet-obligation phase2)]
-    
+
     {:junior (:new-resolver phase1)
      :senior (:new-senior phase2)
      :junior-paid (double junior-slashed)
@@ -183,7 +183,7 @@
         resolver (get resolvers resolver-id)
         senior-id (or (:senior-id event) (:senior-delegation resolver))
         senior (when senior-id (get seniors senior-id))]
-    
+
     (if (nil? resolver)
       ;; Resolver not found - shouldn't happen
       {:resolvers resolvers
@@ -192,26 +192,26 @@
                       :senior-paid 0
                       :unmet-obligation (:slash-amount event)
                       :error :resolver-not-found}}
-      
+
       ;; Process waterfall slash
       (let [result (apply-waterfall-slash
-                     (assoc resolver :current-epoch (:epoch event 0))
-                     (when senior (assoc senior :current-epoch (:epoch event 0)))
-                     (:slash-amount event))
-            
+                    (assoc resolver :current-epoch (:epoch event 0))
+                    (when senior (assoc senior :current-epoch (:epoch event 0)))
+                    (:slash-amount event))
+
             updated-resolvers (assoc resolvers resolver-id (:junior result))
             updated-seniors (if (and senior-id (:senior result))
-                             (assoc seniors senior-id (:senior result))
-                             seniors)]
-        
+                              (assoc seniors senior-id (:senior result))
+                              seniors)]
+
         {:resolvers updated-resolvers
          :seniors updated-seniors
          :event-result {:junior-paid (:junior-paid result)
-                       :senior-paid (:senior-paid result)
-                       :unmet-obligation (:unmet-obligation result)
-                       :reason (:reason event)
-                       :resolver-id resolver-id
-                       :senior-id senior-id}}))))
+                        :senior-paid (:senior-paid result)
+                        :unmet-obligation (:unmet-obligation result)
+                        :reason (:reason event)
+                        :resolver-id resolver-id
+                        :senior-id senior-id}}))))
 
 ;; ---
 ;; Per-epoch cap enforcement
@@ -308,26 +308,26 @@
         n-per-senior (/ n-juniors (max 1 (:n-seniors params 5)))
         mc-kwargs (merge
                     ;; base: all common-kwargs params (includes new-evidence-probability)
-                    (apply hash-map (ck/common-kwargs params))
+                   (apply hash-map (ck/common-kwargs params))
                     ;; waterfall-specific overrides where defaults differ from common-kwargs
-                    {:reversal-detection-probability (:reversal-detection-probability params 0.02)
-                     :timeout-slash-bps (:timeout-slash-bps params 25)}
+                   {:reversal-detection-probability (:reversal-detection-probability params 0.02)
+                    :timeout-slash-bps (:timeout-slash-bps params 25)}
                     ;; remaining oracle fixture keys not covered by common-kwargs
-                    (when-let [f (:oracle-fixture params)]
-                      {:oracle-fixture f})
-                    (when (:oracle-mode params)
-                      {:oracle-mode (:oracle-mode params)})
-                    (when (:oracle-roll-on-exhaustion params)
-                      {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
-                    (when (:oracle-scope params)
-                      {:oracle-scope (:oracle-scope params)}))
+                   (when-let [f (:oracle-fixture params)]
+                     {:oracle-fixture f})
+                   (when (:oracle-mode params)
+                     {:oracle-mode (:oracle-mode params)})
+                   (when (:oracle-roll-on-exhaustion params)
+                     {:oracle-roll-on-exhaustion (:oracle-roll-on-exhaustion params)})
+                   (when (:oracle-scope params)
+                     {:oracle-scope (:oracle-scope params)}))
         result (reduce
                 (fn [[state rng] trial-idx]
                   ;; Fork per-trial RNG so escrow/strategy draws don't shift
                   ;; dispute resolution rolls across trials.  Each trial is
                   ;; reproducible independently of neighboring trials.
-                   (let [[trial-rng rng-next] (rng/split-rng rng)
-                         junior-idx (mod trial-idx n-juniors)
+                  (let [[trial-rng rng-next] (rng/split-rng rng)
+                        junior-idx (mod trial-idx n-juniors)
                         senior-idx (int (/ junior-idx n-per-senior))
                         resolver-id (str "j" senior-idx "_" (mod junior-idx n-per-senior))
                         senior-id   (str "s" senior-idx)
@@ -371,25 +371,25 @@
                               :strategy strategy}
                              (:resolvers state)
                              (:seniors state))]
-                         [{:resolvers resolvers
-                           :seniors seniors
-                           :events (conj (:events state)
-                                         (assoc event-result
-                                                :escrow-wei escrow-wei
-                                                :strategy strategy
-                                                :slashed? true
-                                                :oracle-exhausted? oracle-exhausted?
-                                                :oracle-warnings oracle-warnings))}
-                          rng-next])
+                        [{:resolvers resolvers
+                          :seniors seniors
+                          :events (conj (:events state)
+                                        (assoc event-result
+                                               :escrow-wei escrow-wei
+                                               :strategy strategy
+                                               :slashed? true
+                                               :oracle-exhausted? oracle-exhausted?
+                                               :oracle-warnings oracle-warnings))}
+                         rng-next])
                        ;; Not slashed or no bond loss: pool unchanged, record dispute
-                       [(update state :events conj
-                                {:slashed? false
-                                 :reason (:slashing-reason outcome)
-                                 :strategy strategy
-                                 :escrow-wei escrow-wei
-                                 :oracle-exhausted? oracle-exhausted?
-                                 :oracle-warnings oracle-warnings})
-                        rng-next])))
+                      [(update state :events conj
+                               {:slashed? false
+                                :reason (:slashing-reason outcome)
+                                :strategy strategy
+                                :escrow-wei escrow-wei
+                                :oracle-exhausted? oracle-exhausted?
+                                :oracle-warnings oracle-warnings})
+                       rng-next])))
                 [{:resolvers (:juniors pool) :seniors (:seniors pool) :events []}
                  rng-inst]
                 (range n-trials))
@@ -419,49 +419,49 @@
       :waterfall-saturation-pct double
       :coverage-adequacy-score double}"
   [resolvers seniors events]
-  
+
   (let [junior-resolvers (filter #(not (:is-senior? (val %))) resolvers)
         senior-resolvers (filter #(:is-senior? (val %)) seniors)
-        
+
         ;; Junior stats
         n-juniors (count junior-resolvers)
         exhausted (count (filter #(:is-exhausted? (val %)) junior-resolvers))
         avg-bond-remaining (if (empty? junior-resolvers)
-                            0.0
-                            (double (/ (reduce + (map #(:bond-remaining (val %) 0) junior-resolvers))
-                                      (count junior-resolvers))))
-        
+                             0.0
+                             (double (/ (reduce + (map #(:bond-remaining (val %) 0) junior-resolvers))
+                                        (count junior-resolvers))))
+
         ;; Senior stats
         total-seniors (count senior-resolvers)
         coverage-usages (map #(let [senior (val %)
                                     available (calculate-available-coverage senior)
-                                    max-coverage (* (:bond-amount senior 0) 
-                                                   (:utilization-factor senior 0.5))
+                                    max-coverage (* (:bond-amount senior 0)
+                                                    (:utilization-factor senior 0.5))
                                     used (:coverage-used senior 0)]
-                               (if (zero? max-coverage) 0.0
-                                 (/ used max-coverage)))
-                           senior-resolvers)
+                                (if (zero? max-coverage) 0.0
+                                    (/ used max-coverage)))
+                             senior-resolvers)
         avg-coverage-pct (if (empty? coverage-usages)
-                          0.0
-                          (double (* 100.0 (/ (reduce + coverage-usages) (count coverage-usages)))))
+                           0.0
+                           (double (* 100.0 (/ (reduce + coverage-usages) (count coverage-usages)))))
         at-capacity (count (filter #(>= % 0.95) coverage-usages))
-        
+
         ;; Event stats
         total-events (count events)
         slashed-by-junior (reduce + (map #(:junior-paid %) events))
         slashed-by-senior (reduce + (map #(:senior-paid %) events))
         total-unmet (reduce + (map #(:unmet-obligation %) events))
-        
+
         ;; Derived metrics
         total-slashed (+ slashed-by-junior slashed-by-senior)
         waterfall-saturation (if (zero? total-slashed)
-                              0.0
-                              (double (* 100.0 (/ slashed-by-senior total-slashed))))
+                               0.0
+                               (double (* 100.0 (/ slashed-by-senior total-slashed))))
         adequacy (cond
-            (zero? total-events) 100.0
-            (zero? total-slashed) 0.0  ; No payout despite events = 0% adequacy
-            :else (double (* 100.0 (- 1.0 (/ total-unmet total-slashed)))))]
-    
+                   (zero? total-events) 100.0
+                   (zero? total-slashed) 0.0  ; No payout despite events = 0% adequacy
+                   :else (double (* 100.0 (- 1.0 (/ total-unmet total-slashed)))))]
+
     {:juniors-exhausted-count exhausted
      :juniors-exhausted-pct (if (zero? n-juniors)
                               0.0
@@ -496,31 +496,31 @@
         senior-bond (:senior-bond-amount params 100000)
         junior-bond (:junior-bond-amount params 500)
         util-factor (:utilization-factor params 0.5)]
-    
+
     {:seniors (into {}
-                (for [i (range n-seniors)]
-                  [(str "s" i)
-                   {:resolver-id (str "s" i)
-                    :is-senior? true
-                    :bond-amount (double senior-bond)
-                    :utilization-factor (double util-factor)
-                    :initial-bond (double senior-bond)
-                    :coverage-used 0.0
-                    :slash-history []
-                    :epoch 0}]))
-     
+                    (for [i (range n-seniors)]
+                      [(str "s" i)
+                       {:resolver-id (str "s" i)
+                        :is-senior? true
+                        :bond-amount (double senior-bond)
+                        :utilization-factor (double util-factor)
+                        :initial-bond (double senior-bond)
+                        :coverage-used 0.0
+                        :slash-history []
+                        :epoch 0}]))
+
      :juniors (into {}
-                (for [s (range n-seniors)
-                      j (range n-juniors-per-senior)]
-                  [(str "j" s "_" j)
-                   {:resolver-id (str "j" s "_" j)
-                    :is-senior? false
-                    :initial-bond (double junior-bond)
-                    :bond-remaining (double junior-bond)
-                    :senior-delegation (str "s" s)
-                    :is-exhausted? false
-                    :slash-history []
-                    :epoch 0}]))}))
+                    (for [s (range n-seniors)
+                          j (range n-juniors-per-senior)]
+                      [(str "j" s "_" j)
+                       {:resolver-id (str "j" s "_" j)
+                        :is-senior? false
+                        :initial-bond (double junior-bond)
+                        :bond-remaining (double junior-bond)
+                        :senior-delegation (str "s" s)
+                        :is-exhausted? false
+                        :slash-history []
+                        :epoch 0}]))}))
 
 (comment
   ;; Example usage:
@@ -529,17 +529,17 @@
                 :senior-bond-amount 100000
                 :junior-bond-amount 500
                 :utilization-factor 0.5}
-        
+
         {:keys [seniors juniors]} (initialize-waterfall-pool params)
-        
+
         event {:resolver-id "j0_0"
                :senior-id "s0"
                :slash-amount 50
                :reason :fraud
                :epoch 1}]
-    
+
     ;; Process single event
     (process-slash-event event juniors seniors)
-    
+
     ;; Calculate metrics
     (aggregate-waterfall-metrics juniors seniors [event])))

@@ -35,10 +35,10 @@
                   :utilization-factor 0.5}
           pool (waterfall/initialize-waterfall-pool params)
           events (vec (repeat 5 {:resolver-id "j0_0"
-                                  :senior-id "s0"
-                                  :slash-amount 200
-                                  :reason :fraud
-                                  :epoch 0}))
+                                 :senior-id "s0"
+                                 :slash-amount 200
+                                 :reason :fraud
+                                 :epoch 0}))
           {:keys [resolvers seniors events]} (process-events pool events)
           junior-remaining (get-in resolvers ["j0_0" :bond-remaining])
           junior-paid-total (reduce + (map :junior-paid events))

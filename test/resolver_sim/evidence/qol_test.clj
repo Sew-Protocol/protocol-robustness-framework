@@ -107,7 +107,7 @@
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-test-" (java.util.UUID/randomUUID))
         _ (setup-artifacts! dir)
         results (evidence/find-evidence :by-type :escrow-created :include-body? true
-                                         :artifact-dir dir)]
+                                        :artifact-dir dir)]
     (is (= 1 (count results)))
     (is (= 1000 (:escrow/amount (first results))) "include-body? reveals full fields")))
 
@@ -197,7 +197,7 @@
 
 (deftest coverage-report-empty-directory
   (let [report (evidence/build-evidence-coverage-report
-                 (str (System/getProperty "java.io.tmpdir") "/qol-empty-" (java.util.UUID/randomUUID)))]
+                (str (System/getProperty "java.io.tmpdir") "/qol-empty-" (java.util.UUID/randomUUID)))]
     (is (zero? (:generic-trace-event-count report)))
     (is (zero? (:targeted-evidence-count report)))))
 
@@ -205,11 +205,11 @@
 
 (deftest static-coverage-finds-missing-evidence
   (let [report (coverage/check-evidence-coverage
-                 "src/resolver_sim/protocols/sew/resolution.clj"
-                 :allowed-missing #{'rotate-dispute-resolver
-                                    'cleanup-orphaned-slashes
-                                    'update-unavailability
-                                    'withdraw-stake})]
+                "src/resolver_sim/protocols/sew/resolution.clj"
+                :allowed-missing #{'rotate-dispute-resolver
+                                   'cleanup-orphaned-slashes
+                                   'update-unavailability
+                                   'withdraw-stake})]
     (is (number? (:total-fns report)))
     (is (number? (:functions-with-evidence report)))
     ;; Report should include warnings for read-only/helper fns
@@ -220,16 +220,16 @@
 
 (deftest static-coverage-allows-missing
   (let [report (coverage/check-evidence-coverage
-                 "src/resolver_sim/protocols/sew/registry.clj"
-                 :allowed-missing #{'get-stake 'get-resolver-yield-profile
-                                    'resolver-in-escrow?})]
+                "src/resolver_sim/protocols/sew/registry.clj"
+                :allowed-missing #{'get-stake 'get-resolver-yield-profile
+                                   'resolver-in-escrow?})]
     (is (number? (:total-fns report)))
     (is (nil? (some #(re-find #"\?$" (:name %)) (:ci-failures report)))
         "Predicate functions are warnings, not CI failures")))
 
 (deftest static-coverage-directory-scan
   (let [reports (coverage/check-directory-coverage
-                  "src/resolver_sim/protocols/sew/")]
+                 "src/resolver_sim/protocols/sew/")]
     (is (seq reports))
     (is (some #(.endsWith (:file %) "resolution.clj") reports))
     (is (some #(.endsWith (:file %) "registry.clj") reports))
@@ -406,11 +406,11 @@
   [m]
   (let [content (dissoc m :evidence/hash :evidence/chain-self-hash :evidence/chain-prev-hash)
         canon (walk/postwalk
-                (fn [v]
-                  (cond (instance? clojure.lang.Keyword v) (name v)
-                        (map? v) (into (sorted-map) v)
-                        :else v))
-                content)]
+               (fn [v]
+                 (cond (instance? clojure.lang.Keyword v) (name v)
+                       (map? v) (into (sorted-map) v)
+                       :else v))
+               content)]
     (cap/stable-hash canon)))
 
 (defn- setup-chain-artifacts
@@ -431,11 +431,11 @@
                   :evidence/chain-prev-hash "h2"
                   :evidence/group-id "g1")
         a1 (assoc a1 :evidence/hash (compute-content-hash a1)
-                      :evidence/chain-self-hash (compute-content-hash a1))
+                  :evidence/chain-self-hash (compute-content-hash a1))
         a2 (assoc a2 :evidence/hash (compute-content-hash a2)
-                      :evidence/chain-self-hash (compute-content-hash a2))
+                  :evidence/chain-self-hash (compute-content-hash a2))
         a3 (assoc a3 :evidence/hash (compute-content-hash a3)
-                      :evidence/chain-self-hash (compute-content-hash a3))
+                  :evidence/chain-self-hash (compute-content-hash a3))
         ;; Update prev-hashes to use actual computed hashes
         a2 (assoc a2 :evidence/chain-prev-hash (:evidence/hash a1))
         a3 (assoc a3 :evidence/chain-prev-hash (:evidence/hash a2))]
@@ -708,8 +708,6 @@
         trace [{:violations nil :invariants-ok? true}]
         merged (diff/merge-invariant-links registry trace)]
     (is (= registry merged) "No-violation trace leaves registry unchanged")))
-
-
 
 ;; ── Semantic Classification: classify-change and classify-diff-changes-semantic ─
 

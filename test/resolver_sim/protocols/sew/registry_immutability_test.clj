@@ -11,11 +11,11 @@
           ;; Capture state before
           before-stake (reg/get-stake world "0xRes")
           before-world (assoc-in world [:meta :test-marker] :before-state)
-          
+
           ;; Perform slash
           result (reg/slash-resolver-stake before-world "0xRes" 500)
           after-world (:world result)]
-      
+
       (is (= 1000 before-stake) "Original world stake remains unchanged")
       (is (= :before-state (get-in before-world [:meta :test-marker])) "Original world marker remains unchanged")
       (is (= 500 (reg/get-stake after-world "0xRes")) "New world stake reflects slash")

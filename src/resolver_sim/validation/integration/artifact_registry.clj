@@ -193,9 +193,9 @@
         metadata    (merge meta (:extra-metadata opts))]
     (adapter/registry-result->validation-root
      {:checks   (into [{:check/id :registry/artifacts-present
-                         :status   (if (seq artifacts) :passed :failed)
-                         :error-key :registry/no-artifacts
-                         :message  (str (count artifacts) " artifact(s) in registry")}]
+                        :status   (if (seq artifacts) :passed :failed)
+                        :error-key :registry/no-artifacts
+                        :message  (str (count artifacts) " artifact(s) in registry")}]
                       (concat (dangling-dependencies artifacts)
                               (ambiguous-schema-versions artifacts)
                               (:extra-checks opts)))

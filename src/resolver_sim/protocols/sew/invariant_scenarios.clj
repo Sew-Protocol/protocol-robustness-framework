@@ -20,125 +20,125 @@
 ;; ---------------------------------------------------------------------------
 
 (def all-scenarios
-    "Ordered list of [display-name scenario-or-pair] entries.
+  "Ordered list of [display-name scenario-or-pair] entries.
     Pairs (S12) are two scenarios that must both pass to count as one passing test.
     Single entries are plain scenario maps."
-    [["S01  baseline-happy-path"                      baseline/s01]
-    ["S02  dr3-dispute-release"                      baseline/s02]
-    ["S03  dr3-dispute-refund"                       baseline/s03]
-    ["S04  dispute-timeout-autocancel"               baseline/s04]
-    ["S05  pending-settlement-execute"               baseline/s05]
-    ["S06  mutual-cancel"                            baseline/s06]
-    ["S07  unauthorized-resolver-rejected"           baseline/s07]
-    ["S08  state-machine-attack-gauntlet"            baseline/s08]
-    ["S09  multi-escrow-solvency"                    baseline/s09]
-    ["S10  double-finalize-rejected"                 baseline/s10]
-    ["S11  zero-fee-edge-case"                       baseline/s11]
-    ["S12  governance-snapshot-isolation"            [baseline/s12a baseline/s12b]]
-    ["S13  pending-settlement-refund"                baseline/s13]
-    ["S14  dr3-module-authorized"                    baseline/s14]
-    ["S15  dr3-module-unauthorized-rejected"         baseline/s15]
-    ["S16  ieo-create-release"                       baseline/s16]
-    ["S17  ieo-dispute-no-resolver-timeout"          baseline/s17]
-    ["S18  dr3-kleros-l0-resolves"                   baseline/s18]
-    ["S19  dr3-kleros-escalation-rejected-l0-resolves" baseline/s19]
-    ["S20  dr3-kleros-max-escalation-guard"          baseline/s20]
-    ["S21  dr3-kleros-pending-cleared-on-escalation" baseline/s21]
-    ["S22  status-leak-agree-cancel-over-dispute"    baseline/s22]
-    ["S23  preemptive-escalation-blocked"            baseline/s23]
-    ["S24  resolver-stake-depletion-cascade"         adversarial/s24]
-    ["S25  profit-maximizer-slash-lifecycle"         adversarial/s25]
-    ["S26  forking-strategist-l1-reversal"           adversarial/s26]
-    ["S27  forking-strategist-l2-fork"               adversarial/s27]
-    ["S28  forking-strategist-late-escalation-rejected" adversarial/s28]
-    ["S29  forking-strategist-seller-escalates"      adversarial/s29]
-    ["S30  forking-strategist-double-loss"           adversarial/s30]
-    ["S31  forking-strategist-all-levels-confirm"    adversarial/s31]
-    ["S32  forking-strategist-premature-settlement-rejected" adversarial/s32]
-    ["S33  forking-strategist-two-escrow-fork-isolation" adversarial/s33]
-    ["S34  profit-maximizer-unchallenged-slash"          adversarial/s34]
-    ["S35  profit-maximizer-governance-wins-appeal"      adversarial/s35]
-    ["S36  profit-maximizer-pre-window-execute-rejected" adversarial/s36]
-    ["S37  profit-maximizer-two-resolver-split-outcomes" adversarial/s37]
-    ["S38  dr3-bond-mix-valid"                           adversarial/s38]
-    ["S39  dr3-senior-coverage-delegation"               adversarial/s39]
-    ["S40  dr3-freeze-post-slash"                        adversarial/s40]
-    ["S41  dr3-reversal-slash-disabled"                  adversarial/s41]
-    ["S42  resolver-buyer-bribery-loop"                  adversarial/s42]
-    ["S43  auth-rejected-then-authorized-recovery"       gaps/s43]
-    ["S44  escalation-tier-mismatch-rejected"            gaps/s44]
-    ["S45  stale-module-snapshot-rejects-legacy"         gaps/s45-stale-module-snapshot]
-    ["S45  flash-loan-stake-inflation"                   adversarial/s45]
-    ["S46  reorg-idempotence"                            adversarial/s46]
-    ["S46  settlement-vs-escalation-window-edge"         [gaps/s46a gaps/s46b]]
-    ["S47  appeal-window-boundary-pair"                  [gaps/s47a gaps/s47b]]
-    ["S48  max-escalation-exact-boundary"                gaps/s48]
-    ["S49  appeal-deadline-boundary"                     extended/s49]
-    ["S50  false-assertion-unchallenged"                 extended/s50]
-    ["S51  same-block-challenge-finalize-race"          extended/s51]
-    ["S51b same-block-escalate-finalize-inverse"        extended/s51-inverse]
-    ["S51c deadline-matrix-execute-then-escalate"       extended/s51c-deadline-matrix-execute-then-escalate]
-    ["S51d deadline-matrix-escalate-then-execute"       extended/s51d-deadline-matrix-escalate-then-execute]
-    ["S52  yield-accrued-during-dispute"                extended/s52]
-    ["S53  reentrant-withdrawal-guard"                  extended/s53]
-    ["S54  multi-claim-ledger-isolation"                extended/s54]
-    ["S55  resolver-unavailable-timeout-fallback"       extended/s55]
-    ["S56  rapid-resolver-rotation"                     extended/s56]
-    ["S57  corruption-cost-vs-profit"                   extended/s57]
-    ["S58  watchdog-valid-challenge"                    extended/s58]
-    ["S59  watchdog-false-challenge-loss"               extended/s59]
-    ["S60  resolver-abstention-timeout-griefing"        extended/s60]
-    ["S61  fee-on-transfer-token-handling"              extended/s61]
-    ["S62  multi-appeal-escalation-chain"               extended/s62]
-    ["S62_cross-token-isolation-under-dispute-load"     extended/s62-cross-token-isolation-under-dispute-load]
-    ["S62_cross-token-fee-on-transfer-under-dispute-load" extended/s62-cross-token-fee-on-transfer-under-dispute-load]
-    ["S62_cross-token-parallel-appeal-depths-under-dispute-load" extended/s62-cross-token-parallel-appeal-depths-under-dispute-load]
-    ["S62_resolver-capacity-concurrent-dispute-load"  extended/s62-resolver-capacity-concurrent-dispute-load]
-    ["S63  frivolous-appeal-slashing"                   extended/s63]
-    ["S64  minimal-bond-edge-case"                      extended/s64]
-    ["S65  appeal-after-settlement-rejected"            extended/s65]
-    ["S68  double-settlement-guard"                     extended/s68]
-    ["S69  stale-dispute-cleanup"                       extended/s69]
-    ["S70  large-escrow-resolution"                     extended/s70]
-    ["S71  zero-fee-settlement"                         extended/s71]
-    ["S72  challenge-during-appeal-window"              extended/s72]
-    ["S73  challenge-after-appeal-window-closed"        extended/s73]
-    ["S74  multi-escrow-parallel-disputes"              extended/s74]
-    ["S75  receiver-cancels-after-dispute"              extended/s75]
-    ["S76  sender-cancel-during-appeal"                extended/s76]
-    ["S77  escalation-rejected-wrong-layer"             extended/s77]
-    ["S78  many-appeals-eventually-rejects"             extended/s78]
-    ["S79  partial-resolution-release"                 extended/s79]
-    ["S80  disputed-escrow-expiry-settlement"           extended/s80]
-    ["S81  appeal-deadline-boundary-before"             extended/s81]
-    ["S82  appeal-deadline-boundary-exact"              extended/s82]
-    ["S83  appeal-deadline-boundary-after"              extended/s83]
-    ["S84  false-assertion-unchallenged"                extended/s84]
-    ["S85  watchdog-challenges-resolution"              extended/s85]
-    ["S86  reentrant-withdrawal-guard"                  extended/s86]
-    ["S87  cross-escrow-isolation"                      extended/s87]
-    ["S88  resolution-with-conflicting-evidence"        extended/s88]
-    ["S89  dispute-resolution-with-zero-appeal-window"  extended/s89]
-    ["S90  resolver-capacity-stress"                    extended/s90]
-    ["S91  governance-snapshot-dispute-state"           extended/s91]
-    ["S92  settlement-zero-amount-edge"                 extended/s92]
-    ["S93  multiple-appeals-with-refund"                extended/s93]
-    ["S94  dispute-timeout-auto-refund"                 extended/s94]
-    ["S95  resolution-challenge-and-counter"            extended/s95]
-    ["S96  multi-token-dispute"                         extended/s96]
-    ["S97  appeal-after-settlement-attempt"             extended/s97]
-    ["S98  receiver-cancel-after-auto-cancel"           extended/s98]
-    ["S99  large-escrow-fee-impact"                     extended/s99]
-    ["S100 deny-then-resolver-releases"                 extended/s100]
-    ["S101 reversal-slash-track1-enabled"             reversal/s101]
-    ["S102 reversal-challenge-bounty"                 reversal/s102]
-    ["S103 l2-reversal-slash-ids"                       reversal/s103]
-    ["S104 executed-reversal-slash-not-appealable"      reversal/s104]
-    ["S105 escalate-challenger-on-reversal"             reversal/s105]
-    ["S106 reversal-track2-evidence-appeal"             reversal/s106]
-    ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
-    ["S66  cooldown-boundary-reorg"                      adversarial/s66]
-    ["S67  reentrancy-callback"                          adversarial/s67]])
+  [["S01  baseline-happy-path"                      baseline/s01]
+   ["S02  dr3-dispute-release"                      baseline/s02]
+   ["S03  dr3-dispute-refund"                       baseline/s03]
+   ["S04  dispute-timeout-autocancel"               baseline/s04]
+   ["S05  pending-settlement-execute"               baseline/s05]
+   ["S06  mutual-cancel"                            baseline/s06]
+   ["S07  unauthorized-resolver-rejected"           baseline/s07]
+   ["S08  state-machine-attack-gauntlet"            baseline/s08]
+   ["S09  multi-escrow-solvency"                    baseline/s09]
+   ["S10  double-finalize-rejected"                 baseline/s10]
+   ["S11  zero-fee-edge-case"                       baseline/s11]
+   ["S12  governance-snapshot-isolation"            [baseline/s12a baseline/s12b]]
+   ["S13  pending-settlement-refund"                baseline/s13]
+   ["S14  dr3-module-authorized"                    baseline/s14]
+   ["S15  dr3-module-unauthorized-rejected"         baseline/s15]
+   ["S16  ieo-create-release"                       baseline/s16]
+   ["S17  ieo-dispute-no-resolver-timeout"          baseline/s17]
+   ["S18  dr3-kleros-l0-resolves"                   baseline/s18]
+   ["S19  dr3-kleros-escalation-rejected-l0-resolves" baseline/s19]
+   ["S20  dr3-kleros-max-escalation-guard"          baseline/s20]
+   ["S21  dr3-kleros-pending-cleared-on-escalation" baseline/s21]
+   ["S22  status-leak-agree-cancel-over-dispute"    baseline/s22]
+   ["S23  preemptive-escalation-blocked"            baseline/s23]
+   ["S24  resolver-stake-depletion-cascade"         adversarial/s24]
+   ["S25  profit-maximizer-slash-lifecycle"         adversarial/s25]
+   ["S26  forking-strategist-l1-reversal"           adversarial/s26]
+   ["S27  forking-strategist-l2-fork"               adversarial/s27]
+   ["S28  forking-strategist-late-escalation-rejected" adversarial/s28]
+   ["S29  forking-strategist-seller-escalates"      adversarial/s29]
+   ["S30  forking-strategist-double-loss"           adversarial/s30]
+   ["S31  forking-strategist-all-levels-confirm"    adversarial/s31]
+   ["S32  forking-strategist-premature-settlement-rejected" adversarial/s32]
+   ["S33  forking-strategist-two-escrow-fork-isolation" adversarial/s33]
+   ["S34  profit-maximizer-unchallenged-slash"          adversarial/s34]
+   ["S35  profit-maximizer-governance-wins-appeal"      adversarial/s35]
+   ["S36  profit-maximizer-pre-window-execute-rejected" adversarial/s36]
+   ["S37  profit-maximizer-two-resolver-split-outcomes" adversarial/s37]
+   ["S38  dr3-bond-mix-valid"                           adversarial/s38]
+   ["S39  dr3-senior-coverage-delegation"               adversarial/s39]
+   ["S40  dr3-freeze-post-slash"                        adversarial/s40]
+   ["S41  dr3-reversal-slash-disabled"                  adversarial/s41]
+   ["S42  resolver-buyer-bribery-loop"                  adversarial/s42]
+   ["S43  auth-rejected-then-authorized-recovery"       gaps/s43]
+   ["S44  escalation-tier-mismatch-rejected"            gaps/s44]
+   ["S45  stale-module-snapshot-rejects-legacy"         gaps/s45-stale-module-snapshot]
+   ["S45  flash-loan-stake-inflation"                   adversarial/s45]
+   ["S46  reorg-idempotence"                            adversarial/s46]
+   ["S46  settlement-vs-escalation-window-edge"         [gaps/s46a gaps/s46b]]
+   ["S47  appeal-window-boundary-pair"                  [gaps/s47a gaps/s47b]]
+   ["S48  max-escalation-exact-boundary"                gaps/s48]
+   ["S49  appeal-deadline-boundary"                     extended/s49]
+   ["S50  false-assertion-unchallenged"                 extended/s50]
+   ["S51  same-block-challenge-finalize-race"          extended/s51]
+   ["S51b same-block-escalate-finalize-inverse"        extended/s51-inverse]
+   ["S51c deadline-matrix-execute-then-escalate"       extended/s51c-deadline-matrix-execute-then-escalate]
+   ["S51d deadline-matrix-escalate-then-execute"       extended/s51d-deadline-matrix-escalate-then-execute]
+   ["S52  yield-accrued-during-dispute"                extended/s52]
+   ["S53  reentrant-withdrawal-guard"                  extended/s53]
+   ["S54  multi-claim-ledger-isolation"                extended/s54]
+   ["S55  resolver-unavailable-timeout-fallback"       extended/s55]
+   ["S56  rapid-resolver-rotation"                     extended/s56]
+   ["S57  corruption-cost-vs-profit"                   extended/s57]
+   ["S58  watchdog-valid-challenge"                    extended/s58]
+   ["S59  watchdog-false-challenge-loss"               extended/s59]
+   ["S60  resolver-abstention-timeout-griefing"        extended/s60]
+   ["S61  fee-on-transfer-token-handling"              extended/s61]
+   ["S62  multi-appeal-escalation-chain"               extended/s62]
+   ["S62_cross-token-isolation-under-dispute-load"     extended/s62-cross-token-isolation-under-dispute-load]
+   ["S62_cross-token-fee-on-transfer-under-dispute-load" extended/s62-cross-token-fee-on-transfer-under-dispute-load]
+   ["S62_cross-token-parallel-appeal-depths-under-dispute-load" extended/s62-cross-token-parallel-appeal-depths-under-dispute-load]
+   ["S62_resolver-capacity-concurrent-dispute-load"  extended/s62-resolver-capacity-concurrent-dispute-load]
+   ["S63  frivolous-appeal-slashing"                   extended/s63]
+   ["S64  minimal-bond-edge-case"                      extended/s64]
+   ["S65  appeal-after-settlement-rejected"            extended/s65]
+   ["S68  double-settlement-guard"                     extended/s68]
+   ["S69  stale-dispute-cleanup"                       extended/s69]
+   ["S70  large-escrow-resolution"                     extended/s70]
+   ["S71  zero-fee-settlement"                         extended/s71]
+   ["S72  challenge-during-appeal-window"              extended/s72]
+   ["S73  challenge-after-appeal-window-closed"        extended/s73]
+   ["S74  multi-escrow-parallel-disputes"              extended/s74]
+   ["S75  receiver-cancels-after-dispute"              extended/s75]
+   ["S76  sender-cancel-during-appeal"                extended/s76]
+   ["S77  escalation-rejected-wrong-layer"             extended/s77]
+   ["S78  many-appeals-eventually-rejects"             extended/s78]
+   ["S79  partial-resolution-release"                 extended/s79]
+   ["S80  disputed-escrow-expiry-settlement"           extended/s80]
+   ["S81  appeal-deadline-boundary-before"             extended/s81]
+   ["S82  appeal-deadline-boundary-exact"              extended/s82]
+   ["S83  appeal-deadline-boundary-after"              extended/s83]
+   ["S84  false-assertion-unchallenged"                extended/s84]
+   ["S85  watchdog-challenges-resolution"              extended/s85]
+   ["S86  reentrant-withdrawal-guard"                  extended/s86]
+   ["S87  cross-escrow-isolation"                      extended/s87]
+   ["S88  resolution-with-conflicting-evidence"        extended/s88]
+   ["S89  dispute-resolution-with-zero-appeal-window"  extended/s89]
+   ["S90  resolver-capacity-stress"                    extended/s90]
+   ["S91  governance-snapshot-dispute-state"           extended/s91]
+   ["S92  settlement-zero-amount-edge"                 extended/s92]
+   ["S93  multiple-appeals-with-refund"                extended/s93]
+   ["S94  dispute-timeout-auto-refund"                 extended/s94]
+   ["S95  resolution-challenge-and-counter"            extended/s95]
+   ["S96  multi-token-dispute"                         extended/s96]
+   ["S97  appeal-after-settlement-attempt"             extended/s97]
+   ["S98  receiver-cancel-after-auto-cancel"           extended/s98]
+   ["S99  large-escrow-fee-impact"                     extended/s99]
+   ["S100 deny-then-resolver-releases"                 extended/s100]
+   ["S101 reversal-slash-track1-enabled"             reversal/s101]
+   ["S102 reversal-challenge-bounty"                 reversal/s102]
+   ["S103 l2-reversal-slash-ids"                       reversal/s103]
+   ["S104 executed-reversal-slash-not-appealable"      reversal/s104]
+   ["S105 escalate-challenger-on-reversal"             reversal/s105]
+   ["S106 reversal-track2-evidence-appeal"             reversal/s106]
+   ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
+   ["S66  cooldown-boundary-reorg"                      adversarial/s66]
+   ["S67  reentrancy-callback"                          adversarial/s67]])
 
     ;; ---------------------------------------------------------------------------
 
@@ -156,77 +156,77 @@
 (def scenario-type-registry
   "Type metadata for all S01–S100 invariant scenarios, keyed by scenario-id."
   {;; ── Baseline: standard happy-path protocol flows ───────────────────────
-    "s01-baseline-happy-path"                {:scenario/type :baseline}
-    "s02-dr3-dispute-release"                {:scenario/type :baseline}
-    "s03-dr3-dispute-refund"                 {:scenario/type :baseline}
-    "s04-dispute-timeout-autocancel"         {:scenario/type :baseline}
-    "s05-pending-settlement-execute"         {:scenario/type :baseline}
-    "s06-mutual-cancel"                      {:scenario/type :baseline}
-    "s13-pending-settlement-refund"          {:scenario/type :baseline}
-    "s16-ieo-create-release"                 {:scenario/type :baseline}
-    "s17-ieo-dispute-no-resolver-timeout"    {:scenario/type :baseline}
-    "s18-dr3-kleros-l0-resolves"             {:scenario/type :baseline}
-    "s46-reorg-idempotence"                  {:scenario/type :baseline}
+   "s01-baseline-happy-path"                {:scenario/type :baseline}
+   "s02-dr3-dispute-release"                {:scenario/type :baseline}
+   "s03-dr3-dispute-refund"                 {:scenario/type :baseline}
+   "s04-dispute-timeout-autocancel"         {:scenario/type :baseline}
+   "s05-pending-settlement-execute"         {:scenario/type :baseline}
+   "s06-mutual-cancel"                      {:scenario/type :baseline}
+   "s13-pending-settlement-refund"          {:scenario/type :baseline}
+   "s16-ieo-create-release"                 {:scenario/type :baseline}
+   "s17-ieo-dispute-no-resolver-timeout"    {:scenario/type :baseline}
+   "s18-dr3-kleros-l0-resolves"             {:scenario/type :baseline}
+   "s46-reorg-idempotence"                  {:scenario/type :baseline}
 
     ;; ── Edge-case: permission checks, boundary conditions, state guards ────
-    "s07-unauthorized-resolver-rejected"     {:scenario/type :edge-case}
-    "s08-state-machine-attack-gauntlet"      {:scenario/type :edge-case}
-    "s10-double-finalize-rejected"           {:scenario/type :edge-case}
-    "s11-zero-fee-edge-case"                 {:scenario/type :edge-case}
-    "s12a-snapshot-isolation-fee-zero"             {:scenario/type :edge-case}
-    "s12b-snapshot-isolation-fee-500"              {:scenario/type :edge-case}
-    "s14-dr3-module-authorized"              {:scenario/type :edge-case}
-    "s15-dr3-module-unauthorized-rejected"   {:scenario/type :edge-case}
-    "s19-dr3-kleros-escalation-rejected-l0-resolves" {:scenario/type :edge-case}
-    "s20-dr3-kleros-max-escalation-guard"    {:scenario/type :edge-case}
-    "s21-dr3-kleros-pending-cleared-on-escalation"   {:scenario/type :edge-case}
-    "s22-status-leak-agree-cancel-over-dispute" {:scenario/type :edge-case}
-    "s23-preemptive-escalation-blocked"      {:scenario/type :edge-case}
-    "s66-cooldown-boundary-reorg"            {:scenario/type :edge-case}
+   "s07-unauthorized-resolver-rejected"     {:scenario/type :edge-case}
+   "s08-state-machine-attack-gauntlet"      {:scenario/type :edge-case}
+   "s10-double-finalize-rejected"           {:scenario/type :edge-case}
+   "s11-zero-fee-edge-case"                 {:scenario/type :edge-case}
+   "s12a-snapshot-isolation-fee-zero"             {:scenario/type :edge-case}
+   "s12b-snapshot-isolation-fee-500"              {:scenario/type :edge-case}
+   "s14-dr3-module-authorized"              {:scenario/type :edge-case}
+   "s15-dr3-module-unauthorized-rejected"   {:scenario/type :edge-case}
+   "s19-dr3-kleros-escalation-rejected-l0-resolves" {:scenario/type :edge-case}
+   "s20-dr3-kleros-max-escalation-guard"    {:scenario/type :edge-case}
+   "s21-dr3-kleros-pending-cleared-on-escalation"   {:scenario/type :edge-case}
+   "s22-status-leak-agree-cancel-over-dispute" {:scenario/type :edge-case}
+   "s23-preemptive-escalation-blocked"      {:scenario/type :edge-case}
+   "s66-cooldown-boundary-reorg"            {:scenario/type :edge-case}
 
     ;; ── Stress: solvency, multi-escrow, depletion ─────────────────────────
-    "s09-multi-escrow-solvency"              {:scenario/type :stress}
-    "s24-resolver-stake-depletion-cascade"   {:scenario/type :stress}
-    "s38-dr3-bond-mix-valid"                 {:scenario/type :stress}
-    "s39-dr3-senior-coverage-delegation"     {:scenario/type :stress}
-    "s40-dr3-freeze-post-slash"              {:scenario/type :stress}
-    "s41-dr3-reversal-slash-disabled"        {:scenario/type :stress}
-    "s101-reversal-slash-track1-enabled"   {:scenario/type :stress}
-    "s102-reversal-challenge-bounty"       {:scenario/type :stress}
-    "s103-l2-reversal-slash-ids"           {:scenario/type :stress}
-    "s104-executed-reversal-slash-not-appealable" {:scenario/type :edge-case}
-    "s105-escalate-challenger-on-reversal" {:scenario/type :stress}
-    "s106-reversal-track2-evidence-appeal" {:scenario/type :adversarial}
-    "s107-reversal-track2-appeal-rejected-executes" {:scenario/type :adversarial}
+   "s09-multi-escrow-solvency"              {:scenario/type :stress}
+   "s24-resolver-stake-depletion-cascade"   {:scenario/type :stress}
+   "s38-dr3-bond-mix-valid"                 {:scenario/type :stress}
+   "s39-dr3-senior-coverage-delegation"     {:scenario/type :stress}
+   "s40-dr3-freeze-post-slash"              {:scenario/type :stress}
+   "s41-dr3-reversal-slash-disabled"        {:scenario/type :stress}
+   "s101-reversal-slash-track1-enabled"   {:scenario/type :stress}
+   "s102-reversal-challenge-bounty"       {:scenario/type :stress}
+   "s103-l2-reversal-slash-ids"           {:scenario/type :stress}
+   "s104-executed-reversal-slash-not-appealable" {:scenario/type :edge-case}
+   "s105-escalate-challenger-on-reversal" {:scenario/type :stress}
+   "s106-reversal-track2-evidence-appeal" {:scenario/type :adversarial}
+   "s107-reversal-track2-appeal-rejected-executes" {:scenario/type :adversarial}
 
     ;; ── Adversarial: profit-maximizer ─────────────────────────────────────
-    "s25-profit-maximizer-slash-lifecycle"
-    {:scenario/type    :adversarial
+   "s25-profit-maximizer-slash-lifecycle"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:multi-step :capital-efficient}}
 
-    "s34-profit-maximizer-unchallenged-slash"
-    {:scenario/type    :adversarial
+   "s34-profit-maximizer-unchallenged-slash"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:stealthy :capital-efficient}}
 
-    "s35-profit-maximizer-governance-wins-appeal"
-    {:scenario/type    :adversarial
+   "s35-profit-maximizer-governance-wins-appeal"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:adaptive :multi-step}}
 
-    "s36-profit-maximizer-pre-window-execute-rejected"
-    {:scenario/type    :adversarial
+   "s36-profit-maximizer-pre-window-execute-rejected"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:capital-efficient}}
 
-    "s37-profit-maximizer-two-resolver-split-outcomes"
-    {:scenario/type    :adversarial
+   "s37-profit-maximizer-two-resolver-split-outcomes"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:multi-step :high-capital}}
 
-    "s67-reentrancy-callback"
-    {:scenario/type    :adversarial
+   "s67-reentrancy-callback"
+   {:scenario/type    :adversarial
     :adversary/type   :profit-maximizer
     :adversary/traits #{:reentrancy :callback}}
 
@@ -270,7 +270,7 @@
    {:scenario/type    :adversarial
     :adversary/type   :forking-strategist
     :adversary/traits #{:multi-step :capital-efficient}}
-   
+
    ;; ── Adversarial: Collusion Stress ───────────────────────────────────
    "s42-resolver-buyer-bribery-loop"
    {:scenario/type    :adversarial
@@ -308,7 +308,7 @@
    "s48-max-escalation-exact-boundary"
    {:scenario/type :escalation-mechanism
     :tests #{:max-level :escalation-acceptance}}
-   
+
    ;; ── Adversarial: Stake Stress ───────────────────────────────────
    "s45-flash-loan-stake-inflation"
    {:scenario/type    :adversarial

@@ -11,19 +11,19 @@
    re-used here.
 
    This namespace is pure — no I/O, no DB, no side effects."
-   (:require [clojure.string :as str]
+  (:require [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.scenario.projection :as proj]
-             [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
-             [resolver-sim.protocols.sew.invariants :as inv]
+            [resolver-sim.protocols.sew.claimable-outcome :as claim-outcome]
+            [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.trace-metadata :as meta]
-             [resolver-sim.protocols.sew.types :as t]
-             [resolver-sim.yield.evidence :as ye]
-              [resolver-sim.yield.accounting :as acct]
-              [resolver-sim.yield.risk :as yrisk]
-             [resolver-sim.financial.finality :as ff]
-             [resolver-sim.financial.loss :as fl]
-             [resolver-sim.time.context :as time-ctx]))
+            [resolver-sim.protocols.sew.types :as t]
+            [resolver-sim.yield.evidence :as ye]
+            [resolver-sim.yield.accounting :as acct]
+            [resolver-sim.yield.risk :as yrisk]
+            [resolver-sim.financial.finality :as ff]
+            [resolver-sim.financial.loss :as fl]
+            [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew terminal-state vocabulary
@@ -142,9 +142,9 @@
         (reduce (fn [m [resolver d]]
                   (if (neg? d)
                     (cond
-                       (withdrawal-event? action) (update-in m [resolver :withdrawn] (fnil + 0) (- d))
-                       (slash-event? action) (update-in m [resolver :slashed] (fnil + 0) (- d))
-                       :else m)
+                      (withdrawal-event? action) (update-in m [resolver :withdrawn] (fnil + 0) (- d))
+                      (slash-event? action) (update-in m [resolver :slashed] (fnil + 0) (- d))
+                      :else m)
                     m))
                 stake-flow
                 deltas)]
@@ -236,7 +236,7 @@
      :haircut-total (reduce + 0 (map #(long (get % :haircut-amount 0)) rows))
      :reasons reasons
      :positions (mapv position-projection-fields positions)
-           :rounding-policy (evcfg/rounding-policy)}))
+     :rounding-policy (evcfg/rounding-policy)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Sew trace-end projection
@@ -265,176 +265,176 @@
    1-arity form is provided for backward compatibility; protocol defaults to nil."
   ([result] (trace-end-projection nil result))
   ([protocol result]
-  (when-let [{:keys [trace world metrics agents halt-reason world-checkpoints]} (build-trace-context result)]
-      (let [live-states  (get world :live-states {})
-            scenario-id  (get-in world [:params :scenario-id] "unknown")
-            p-params     (get world :params {})
-            escrows      (into {} (map (fn [[id s]] [id (keyword (or s ""))]) live-states))
-            all-terminal (every? (fn [[_ s]] (terminal-state? s)) escrows)
+   (when-let [{:keys [trace world metrics agents halt-reason world-checkpoints]} (build-trace-context result)]
+     (let [live-states  (get world :live-states {})
+           scenario-id  (get-in world [:params :scenario-id] "unknown")
+           p-params     (get world :params {})
+           escrows      (into {} (map (fn [[id s]] [id (keyword (or s ""))]) live-states))
+           all-terminal (every? (fn [[_ s]] (terminal-state? s)) escrows)
 
-            agents-by-id (reduce (fn [m a]
-                                   (let [id   (or (:id a) "")
-                                         addr (or (:address a) id)]
-                                     (assoc m id addr)))
-                                 {}
-                                 agents)
+           agents-by-id (reduce (fn [m a]
+                                  (let [id   (or (:id a) "")
+                                        addr (or (:address a) id)]
+                                    (assoc m id addr)))
+                                {}
+                                agents)
 
-            escalation-levels
-            (into #{} (keep (fn [entry]
-                              (let [action (get entry :action "")]
-                                (when (escalation-event? action)
-                                  (get-in entry [:extra :level]))))
-                            trace))
+           escalation-levels
+           (into #{} (keep (fn [entry]
+                             (let [action (get entry :action "")]
+                               (when (escalation-event? action)
+                                 (get-in entry [:extra :level]))))
+                           trace))
 
-            actors
-            (into #{} (keep :agent trace))
+           actors
+           (into #{} (keep :agent trace))
 
             ;; Strategic decision nodes — Sew-specific action vocabulary.
-            decisions (vec (keep (fn [entry]
-                                   (when (strategic-action? (:action entry))
-                                     (let [agent-id (:agent entry)
-                                           addr     (get agents-by-id agent-id agent-id)]
-                                        (assoc (select-keys entry [:seq :time :agent :action :params :extra])
-                                              :address addr))))
-                                  trace))
+           decisions (vec (keep (fn [entry]
+                                  (when (strategic-action? (:action entry))
+                                    (let [agent-id (:agent entry)
+                                          addr     (get agents-by-id agent-id agent-id)]
+                                      (assoc (select-keys entry [:seq :time :agent :action :params :extra])
+                                             :address addr))))
+                                trace))
 
-            {:keys [transitions token-deltas pending-lifecycle stake-flow]}
-            (derive-transition-summaries trace world)
-            shortfall-summary (derive-shortfall-summary world)
-            escrow-yield-outcomes (claim-outcome/outcomes-by-workflow world)
+           {:keys [transitions token-deltas pending-lifecycle stake-flow]}
+           (derive-transition-summaries trace world)
+           shortfall-summary (derive-shortfall-summary world)
+           escrow-yield-outcomes (claim-outcome/outcomes-by-workflow world)
 
-            coalition-addrs
-            (into #{}
-                  (keep (fn [a]
-                          (when (proj/classify-coalition-actor? a)
-                            (or (:address a) (:id a)))))
-                  agents)
+           coalition-addrs
+           (into #{}
+                 (keep (fn [a]
+                         (when (proj/classify-coalition-actor? a)
+                           (or (:address a) (:id a)))))
+                 agents)
 
-            payoff-ledger
-            (reduce (fn [acc [a b]]
-                      (let [action      (str (or (:action b) ""))
-                            actor       (or (:agent b) "unknown")
-                            addr        (get agents-by-id actor actor)
+           payoff-ledger
+           (reduce (fn [acc [a b]]
+                     (let [action      (str (or (:action b) ""))
+                           actor       (or (:agent b) "unknown")
+                           addr        (get agents-by-id actor actor)
 
-                            held-d      (proj/map-delta (get-in a [:world :total-held] {}) (get-in b [:world :total-held] {}))
-                            held-neg    (reduce + 0 (map (fn [[_ d]] (if (neg? d) (- d) 0)) held-d))
-                            held-pos    (reduce + 0 (map (fn [[_ d]] (if (pos? d) d 0)) held-d))
+                           held-d      (proj/map-delta (get-in a [:world :total-held] {}) (get-in b [:world :total-held] {}))
+                           held-neg    (reduce + 0 (map (fn [[_ d]] (if (neg? d) (- d) 0)) held-d))
+                           held-pos    (reduce + 0 (map (fn [[_ d]] (if (pos? d) d 0)) held-d))
 
-                            fee-d       (proj/map-delta (get-in a [:world :total-fees] {}) (get-in b [:world :total-fees] {}))
-                            fee-inc     (reduce + 0 (map (fn [[_ d]] (if (pos? d) d 0)) fee-d))
+                           fee-d       (proj/map-delta (get-in a [:world :total-fees] {}) (get-in b [:world :total-fees] {}))
+                           fee-inc     (reduce + 0 (map (fn [[_ d]] (if (pos? d) d 0)) fee-d))
 
-                            stakes-d    (proj/map-delta (get-in a [:world :resolver-stakes] {}) (get-in b [:world :resolver-stakes] {}))
-                            stake-delta (long (get stakes-d addr 0))
-                            slash?      (and (slash-event? action) (neg? stake-delta))
+                           stakes-d    (proj/map-delta (get-in a [:world :resolver-stakes] {}) (get-in b [:world :resolver-stakes] {}))
+                           stake-delta (long (get stakes-d addr 0))
+                           slash?      (and (slash-event? action) (neg? stake-delta))
 
-                            bonds-a     (proj/nested-sum-by-actor (get-in a [:world :bond-balances] {}))
-                            bonds-b     (proj/nested-sum-by-actor (get-in b [:world :bond-balances] {}))
-                            bond-delta  (- (long (get bonds-b addr 0)) (long (get bonds-a addr 0)))
+                           bonds-a     (proj/nested-sum-by-actor (get-in a [:world :bond-balances] {}))
+                           bonds-b     (proj/nested-sum-by-actor (get-in b [:world :bond-balances] {}))
+                           bond-delta  (- (long (get bonds-b addr 0)) (long (get bonds-a addr 0)))
 
-                            claim-a     (proj/nested-sum-by-actor (get-in a [:world :claimable] {}))
-                            claim-b     (proj/nested-sum-by-actor (get-in b [:world :claimable] {}))
-                            claim-delta (- (long (get claim-b addr 0)) (long (get claim-a addr 0)))
+                           claim-a     (proj/nested-sum-by-actor (get-in a [:world :claimable] {}))
+                           claim-b     (proj/nested-sum-by-actor (get-in b [:world :claimable] {}))
+                           claim-delta (- (long (get claim-b addr 0)) (long (get claim-a addr 0)))
 
-                            inflow      (+ (max 0 claim-delta) held-neg)
-                            outflow     (+ (max 0 (- claim-delta)) held-pos)
+                           inflow      (+ (max 0 claim-delta) held-neg)
+                           outflow     (+ (max 0 (- claim-delta)) held-pos)
 
-                            fee-paid    (if (pos? fee-inc) fee-inc 0)
-                            fee-recv    0
-                            slash-loss  (if (and slash? (neg? stake-delta)) (- stake-delta) 0)
-                            bond-lock   (max 0 bond-delta)
-                            bond-release (max 0 (- bond-delta))]
-                        (-> acc
-                            (update-in [addr :inflows] (fnil + 0) inflow)
-                            (update-in [addr :outflows] (fnil + 0) outflow)
-                            (update-in [addr :fees-paid] (fnil + 0) fee-paid)
-                            (update-in [addr :fees-received] (fnil + 0) fee-recv)
-                            (update-in [addr :slash-penalties] (fnil + 0) slash-loss)
-                            (update-in [addr :bond-lock-delta] (fnil + 0) bond-lock)
-                            (update-in [addr :bond-release-delta] (fnil + 0) bond-release))))
-                    {}
-                    transitions)
+                           fee-paid    (if (pos? fee-inc) fee-inc 0)
+                           fee-recv    0
+                           slash-loss  (if (and slash? (neg? stake-delta)) (- stake-delta) 0)
+                           bond-lock   (max 0 bond-delta)
+                           bond-release (max 0 (- bond-delta))]
+                       (-> acc
+                           (update-in [addr :inflows] (fnil + 0) inflow)
+                           (update-in [addr :outflows] (fnil + 0) outflow)
+                           (update-in [addr :fees-paid] (fnil + 0) fee-paid)
+                           (update-in [addr :fees-received] (fnil + 0) fee-recv)
+                           (update-in [addr :slash-penalties] (fnil + 0) slash-loss)
+                           (update-in [addr :bond-lock-delta] (fnil + 0) bond-lock)
+                           (update-in [addr :bond-release-delta] (fnil + 0) bond-release))))
+                   {}
+                   transitions)
 
-            payoff-ledger
-            (reduce-kv (fn [m addr row]
-                         (let [net (- (+ (:inflows row 0)
-                                         (:fees-received row 0)
-                                         (:bond-release-delta row 0))
-                                      (+ (:outflows row 0)
-                                         (:fees-paid row 0)
-                                         (:slash-penalties row 0)
-                                         (:bond-lock-delta row 0)))]
-                           (assoc m addr (assoc row :net-payoff net))))
-                       {}
-                       payoff-ledger)
+           payoff-ledger
+           (reduce-kv (fn [m addr row]
+                        (let [net (- (+ (:inflows row 0)
+                                        (:fees-received row 0)
+                                        (:bond-release-delta row 0))
+                                     (+ (:outflows row 0)
+                                        (:fees-paid row 0)
+                                        (:slash-penalties row 0)
+                                        (:bond-lock-delta row 0)))]
+                          (assoc m addr (assoc row :net-payoff net))))
+                      {}
+                      payoff-ledger)
 
-            negative-payoff-count
-            (count (filter (fn [[_ row]] (neg? (long (:net-payoff row 0)))) payoff-ledger))
+           negative-payoff-count
+           (count (filter (fn [[_ row]] (neg? (long (:net-payoff row 0)))) payoff-ledger))
 
-            coalition-net-profit
-            (when (seq coalition-addrs)
-              (reduce + 0
-                      (for [addr coalition-addrs]
-                        (long (get-in payoff-ledger [addr :net-payoff] 0)))))
+           coalition-net-profit
+           (when (seq coalition-addrs)
+             (reduce + 0
+                     (for [addr coalition-addrs]
+                       (long (get-in payoff-ledger [addr :net-payoff] 0)))))
 
-            workflow-outcomes
-            (into {}
-                  (map (fn [[wf st]]
-                         [wf {:terminal-state st
-                              :path (case st
-                                      :released :release
-                                      :refunded :refund
-                                      :cancelled :cancel
-                                      :timeout :timeout
-                                      :non-terminal)}])
-                       escrows))]
+           workflow-outcomes
+           (into {}
+                 (map (fn [[wf st]]
+                        [wf {:terminal-state st
+                             :path (case st
+                                     :released :release
+                                     :refunded :refund
+                                     :cancelled :cancel
+                                     :timeout :timeout
+                                     :non-terminal)}])
+                      escrows))]
 
-        (let [snapshot-routing (build-yield-routing-view world)
-              snapshot-topology (build-module-snapshot-topology world)
-              {:keys [funds-ledger-summary yield-evidence]} (build-evidence world)
-              funds-ledger funds-ledger-summary]
-          {:terminal-world
-         {:escrows             escrows
-          :total-held-by-token (get world :total-held {})
-          :total-fees-by-token (get world :total-fees {})
-          :escrow-amounts      (get world :escrow-amounts {})
-          :dispute-resolvers   (get world :dispute-resolvers {})
-          :dispute-levels      (get world :dispute-levels {})
+       (let [snapshot-routing (build-yield-routing-view world)
+             snapshot-topology (build-module-snapshot-topology world)
+             {:keys [funds-ledger-summary yield-evidence]} (build-evidence world)
+             funds-ledger funds-ledger-summary]
+         {:terminal-world
+          {:escrows             escrows
+           :total-held-by-token (get world :total-held {})
+           :total-fees-by-token (get world :total-fees {})
+           :escrow-amounts      (get world :escrow-amounts {})
+           :dispute-resolvers   (get world :dispute-resolvers {})
+           :dispute-levels      (get world :dispute-levels {})
            :module-topology-by-workflow snapshot-topology
            :yield-routing-by-workflow snapshot-routing
-          :pending-count       (get world :pending-count 0)
-          :resolver-stakes     (get world :resolver-stakes {})
-          :terminal?           all-terminal
-          :all-terminal-states (into #{} (filter terminal-state? (vals escrows)))}
+           :pending-count       (get world :pending-count 0)
+           :resolver-stakes     (get world :resolver-stakes {})
+           :terminal?           all-terminal
+           :all-terminal-states (into #{} (filter terminal-state? (vals escrows)))}
 
-         :metrics
-         {:total-escrows               (get metrics :total-escrows 0)
-          :total-volume                (get metrics :total-volume 0)
-          :disputes-triggered          (get metrics :disputes-triggered 0)
-          :resolutions-executed        (get metrics :resolutions-executed 0)
-          :pending-settlements-executed (get metrics :pending-settlements-executed 0)
-          :attack-attempts             (get metrics :attack-attempts 0)
-          :attack-successes            (get metrics :attack-successes 0)
-          :rejected-attacks            (get metrics :rejected-attacks 0)
-          :reverts                     (get metrics :reverts 0)
-          :invariant-violations        (get metrics :invariant-violations 0)
-          :double-settlements          (get metrics :double-settlements 0)
-          :invalid-state-transitions   (get metrics :invalid-state-transitions 0)
-          :funds-lost                  (get metrics :funds-lost 0)
-          :coalition-net-profit        (let [mval (get metrics :coalition-net-profit)]
+          :metrics
+          {:total-escrows               (get metrics :total-escrows 0)
+           :total-volume                (get metrics :total-volume 0)
+           :disputes-triggered          (get metrics :disputes-triggered 0)
+           :resolutions-executed        (get metrics :resolutions-executed 0)
+           :pending-settlements-executed (get metrics :pending-settlements-executed 0)
+           :attack-attempts             (get metrics :attack-attempts 0)
+           :attack-successes            (get metrics :attack-successes 0)
+           :rejected-attacks            (get metrics :rejected-attacks 0)
+           :reverts                     (get metrics :reverts 0)
+           :invariant-violations        (get metrics :invariant-violations 0)
+           :double-settlements          (get metrics :double-settlements 0)
+           :invalid-state-transitions   (get metrics :invalid-state-transitions 0)
+           :funds-lost                  (get metrics :funds-lost 0)
+           :coalition-net-profit        (let [mval (get metrics :coalition-net-profit)]
                                           (if (some? mval) mval coalition-net-profit))
-          :negative-payoff-count       (let [mval (get metrics :negative-payoff-count)]
+           :negative-payoff-count       (let [mval (get metrics :negative-payoff-count)]
                                           (if (some? mval) mval negative-payoff-count))}
 
-         :trace-summary
-         {:events-count      (count trace)
-          :actors            actors
-          :dispute-count     (get metrics :disputes-triggered 0)
-          :escalation-levels escalation-levels
-          :terminal-time     (time-ctx/block-ts world)
-          :halt-reason       halt-reason
-          :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
-          :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
-          :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
+          :trace-summary
+          {:events-count      (count trace)
+           :actors            actors
+           :dispute-count     (get metrics :disputes-triggered 0)
+           :escalation-levels escalation-levels
+           :terminal-time     (time-ctx/block-ts world)
+           :halt-reason       halt-reason
+           :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
+           :funds-drift-total         (get-in funds-ledger [:conservation :drift-total])
+           :funds-drift-by-token      (get-in funds-ledger [:conservation :drift-by-token])}
 
           :story-facts
           {:scenario-classification
@@ -443,34 +443,34 @@
              (pos? (get metrics :rejected-attacks 0)) :adversarial-deflected
              :else :neutral)
            :funds-conservation-holds? (get-in funds-ledger [:conservation :holds?])
-          :funds-drift-total (get-in funds-ledger [:conservation :drift-total])
-          :coalition-net-profit (let [mval (get metrics :coalition-net-profit)]
-                                  (if (some? mval) mval coalition-net-profit))
-          :negative-payoff-count (let [mval (get metrics :negative-payoff-count)]
-                                   (if (some? mval) mval negative-payoff-count))
-          :terminal-state-counts (frequencies (vals escrows))
-          :terminal-time (time-ctx/block-ts world)}
+           :funds-drift-total (get-in funds-ledger [:conservation :drift-total])
+           :coalition-net-profit (let [mval (get metrics :coalition-net-profit)]
+                                   (if (some? mval) mval coalition-net-profit))
+           :negative-payoff-count (let [mval (get metrics :negative-payoff-count)]
+                                    (if (some? mval) mval negative-payoff-count))
+           :terminal-state-counts (frequencies (vals escrows))
+           :terminal-time (time-ctx/block-ts world)}
 
-         :money-movement-summary
-         {:workflow-outcomes workflow-outcomes
-          :post-dispute-transfers {:unknown {:to-sender 0 :to-recipient 0 :fees 0}}
-          :pending-lifecycle {:unknown pending-lifecycle}
+          :money-movement-summary
+          {:workflow-outcomes workflow-outcomes
+           :post-dispute-transfers {:unknown {:to-sender 0 :to-recipient 0 :fees 0}}
+           :pending-lifecycle {:unknown pending-lifecycle}
 
-         :shortfall-summary shortfall-summary
-          :token-deltas token-deltas}
+           :shortfall-summary shortfall-summary
+           :token-deltas token-deltas}
 
-         :payoff-ledger-summary
-         {:per-actor payoff-ledger
-          :negative-payoff-count negative-payoff-count
-          :coalition-net-profit coalition-net-profit}
+          :payoff-ledger-summary
+          {:per-actor payoff-ledger
+           :negative-payoff-count negative-payoff-count
+           :coalition-net-profit coalition-net-profit}
 
-         :stake-flow-summary stake-flow
+          :stake-flow-summary stake-flow
 
-         :protocol protocol
-         :agents agents
-         :protocol-params p-params
-         :scenario-id scenario-id
-         :decisions decisions
+          :protocol protocol
+          :agents agents
+          :protocol-params p-params
+          :scenario-id scenario-id
+          :decisions decisions
           :raw-trace trace
           :world-checkpoints world-checkpoints
           :funds-ledger-summary funds-ledger
@@ -531,17 +531,17 @@
               (for [token (sort tokens)
                     :let [tok-kw (keyword token)]]
                 [token {:held         (+ (t/safe-parse-long (get held token 0))
-                                          (t/safe-parse-long (get held tok-kw 0)))
-                         :released     (+ (t/safe-parse-long (get released token 0))
-                                          (t/safe-parse-long (get released tok-kw 0)))
-                         :refunded     (+ (t/safe-parse-long (get refunded token 0))
-                                          (t/safe-parse-long (get refunded tok-kw 0)))
-                         :withdrawn    (+ (t/safe-parse-long (get withdrawn token 0))
-                                          (t/safe-parse-long (get withdrawn tok-kw 0)))
-                         :bond-posted  (+ (t/safe-parse-long (get posted token 0))
-                                          (t/safe-parse-long (get posted tok-kw 0)))
-                         :bond-slashed (+ (t/safe-parse-long (get slashed-by-token token 0))
-                                          (t/safe-parse-long (get slashed-by-token tok-kw 0)))}]))
+                                         (t/safe-parse-long (get held tok-kw 0)))
+                        :released     (+ (t/safe-parse-long (get released token 0))
+                                         (t/safe-parse-long (get released tok-kw 0)))
+                        :refunded     (+ (t/safe-parse-long (get refunded token 0))
+                                         (t/safe-parse-long (get refunded tok-kw 0)))
+                        :withdrawn    (+ (t/safe-parse-long (get withdrawn token 0))
+                                         (t/safe-parse-long (get withdrawn tok-kw 0)))
+                        :bond-posted  (+ (t/safe-parse-long (get posted token 0))
+                                         (t/safe-parse-long (get posted tok-kw 0)))
+                        :bond-slashed (+ (t/safe-parse-long (get slashed-by-token token 0))
+                                         (t/safe-parse-long (get slashed-by-token tok-kw 0)))}]))
         claimable-total
         (reduce + 0 (for [wf (vals (:claimable world {}))
                           amt (vals wf)]

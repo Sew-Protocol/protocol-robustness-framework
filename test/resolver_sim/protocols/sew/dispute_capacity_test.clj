@@ -45,10 +45,10 @@
   ([world] (make-escrow world {}))
   ([world settings-overrides]
    (let [r (lc/create-escrow
-             world
-             alice usdc bob 1000
-             (merge base-settings settings-overrides {:custom-resolver resolver})
-             base-snapshot)]
+            world
+            alice usdc bob 1000
+            (merge base-settings settings-overrides {:custom-resolver resolver})
+            base-snapshot)]
      (is (:ok r) "create-escrow must succeed")
      (:world r))))
 

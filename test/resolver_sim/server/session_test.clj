@@ -211,15 +211,15 @@
     (create! sid)
     (dotimes [i n]
       (.submit pool
-        (reify Runnable
-          (run [_]
-            (.countDown latch)
-            (.await latch)            ; start all threads simultaneously
-            (let [evt {:seq i :time (+ 1000 (* i 10)) :agent "buyer"
-                       :action "create_escrow"
-                       :params {:token "USDC" :to "0xseller" :amount 100}}
-                  r   (session/step-session! sid evt)]
-              (swap! results conj r))))))
+               (reify Runnable
+                 (run [_]
+                   (.countDown latch)
+                   (.await latch)            ; start all threads simultaneously
+                   (let [evt {:seq i :time (+ 1000 (* i 10)) :agent "buyer"
+                              :action "create_escrow"
+                              :params {:token "USDC" :to "0xseller" :amount 100}}
+                         r   (session/step-session! sid evt)]
+                     (swap! results conj r))))))
     (.shutdown pool)
     (.awaitTermination pool 10 java.util.concurrent.TimeUnit/SECONDS)
     ;; All 10 steps must complete without error

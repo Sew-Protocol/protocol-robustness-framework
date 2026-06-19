@@ -115,7 +115,7 @@
   [governance-response-days resolution-fee-per-dispute]
   (let [epochs-per-4-days (/ governance-response-days 4)
         response-epochs (long (Math/ceil epochs-per-4-days))
-        
+
         ;; During frozen window, resolver gets NO new assignments (workload-weight = 0)
         ;; Earnings during window = 0 (fully frozen)
         max-earnings 0]
@@ -143,23 +143,23 @@
   [slash-amount governance-response-days daily-profit-honest daily-profit-malicious]
   (let [epochs-per-4-days (/ governance-response-days 4)
         response-epochs (long (Math/ceil epochs-per-4-days))
-        
+
         ;; During window, resolver earns ZERO (fully frozen)
         earnings-during-window 0
-        
+
         ;; Cost of delay = opportunity cost of having capital locked
         ;; Assuming capital could earn daily-profit-honest if unfrozen
         opportunity-cost (* response-epochs 4 daily-profit-honest)
-        
+
         ;; Total cost to attacker
         total-cost (+ slash-amount opportunity-cost)
-        
+
         ;; Profit from fraudulent activity (already earned before detection)
         fraud-profit (* daily-profit-malicious 10) ;; Assume 10-day fraud window before detection
-        
+
         ;; Break-even: Is fraud-profit > total-cost?
         is-profitable (> fraud-profit total-cost)]
-    
+
     {:window-duration-epochs response-epochs
      :window-duration-days (* response-epochs 4)
      :governance-response-days governance-response-days
@@ -186,19 +186,19 @@
   
   This is called ONCE per epoch and modifies resolver state based on pending slashes"
   [epoch-state current-epoch governance-state]
-  
+
   ;; Step 1: Execute slashes whose governance window has closed
-  (let [{:keys [pending-state executable-slashes]} 
+  (let [{:keys [pending-state executable-slashes]}
         (process-governance-approvals governance-state current-epoch)
-        
+
         ;; Step 2: Mark frozen resolvers in dispute assignments
         ;; (Mid-epoch: resolvers with pending slashes don't get new assignments)
         frozen-resolver-ids (set (map :resolver-id (:pending-slashes pending-state)))
-        
+
         ;; Step 3: Apply executed slashes via waterfall
         ;; (This is done by returning executable-slashes to caller for waterfall processing)
         ]
-    
+
     {:updated-epoch-state (update epoch-state :frozen-resolvers frozen-resolver-ids)
      :updated-governance-state pending-state
      :slashes-to-execute executable-slashes}))
@@ -227,7 +227,7 @@
         max-delay (if (> total-slashes 0)
                     (apply max (map :delay-epochs resolved))
                     0)]
-    
+
     {:total-pending-slashes-resolved total-slashes
      :avg-governance-delay-epochs (double (/ (round (* avg-delay 100)) 100))
      :max-governance-delay-epochs max-delay
@@ -238,11 +238,11 @@
 (comment
   ;; Example: Calculate impact of 3-day governance delay
   (calculate-slash-timing-impact
-    10000      ;; slash amount ($10k junior bond)
-    3          ;; governance-response-days
-    100        ;; daily-profit-honest ($100/day)
-    500)       ;; daily-profit-malicious ($500/day from fraud)
-  
+   10000      ;; slash amount ($10k junior bond)
+   3          ;; governance-response-days
+   100        ;; daily-profit-honest ($100/day)
+   500)       ;; daily-profit-malicious ($500/day from fraud)
+
   ;; Expected: Not profitable (full freeze prevents earnings during window)
   ;; Result:
   ;; {:window-duration-epochs 1
@@ -253,7 +253,7 @@
   ;;  :fraud-profit 5000
   ;;  :is-profitable-after-governance-delay false  <- KEY FINDING
   ;;  :margin-of-safety -5400}
-  
+
   ;; With 7-day governance delay:
   (calculate-slash-timing-impact 10000 7 100 500)
   ;; Result:
@@ -265,4 +265,4 @@
   ;;  :fraud-profit 5000
   ;;  :is-profitable-after-governance-delay false  <- Still not profitable
   ;;  :margin-of-safety -5800}
-)
+  )

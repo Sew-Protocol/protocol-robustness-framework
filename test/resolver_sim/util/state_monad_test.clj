@@ -11,10 +11,10 @@
 (deftest test-bind
   (testing "bind threads state through chained computations"
     (let [comp (sm/bind (sm/return 1)
-                 (fn [a]
-                   (sm/bind (sm/return 2)
-                     (fn [b]
-                       (sm/return (+ a b))))))]
+                        (fn [a]
+                          (sm/bind (sm/return 2)
+                                   (fn [b]
+                                     (sm/return (+ a b))))))]
       (is (= [3 {}] (sm/run-state comp {}))))))
 
 (deftest test-get-state
@@ -26,17 +26,17 @@
 (deftest test-put-state
   (testing "put-state replaces the state entirely"
     (let [comp (sm/bind (sm/put-state {:replaced true})
-                 (fn [_] (sm/get-state)))]
+                        (fn [_] (sm/get-state)))]
       (is (= [{:replaced true} {:replaced true}]
              (sm/run-state comp {:original true}))))))
 
 (deftest test-update-state
   (testing "update-state applies f to the state"
     (let [comp (sm/bind (sm/update-state assoc :a 1)
-                 (fn [_]
-                   (sm/bind (sm/update-state assoc :b 2)
-                     (fn [_]
-                       (sm/get-state)))))]
+                        (fn [_]
+                          (sm/bind (sm/update-state assoc :b 2)
+                                   (fn [_]
+                                     (sm/get-state)))))]
       (is (= [{:a 1 :b 2} {:a 1 :b 2}]
              (sm/run-state comp {}))))))
 
@@ -51,13 +51,13 @@
 (deftest test-composed-validation-style
   (testing "validation-style accumulation"
     (let [m (sm/bind (sm/update-state update :status-keys conj :yield/shortfall-tested)
-             (fn [_]
-               (sm/bind (sm/update-state update :error-keys conj :yield/deferred-mismatch)
-                 (fn [_]
-                   (sm/bind
-                     (sm/update-state update :evidence conj
-                       {:check/id :yield/deferred-accounting :status :failed})
-                     (fn [_] (sm/get-state)))))))
+                     (fn [_]
+                       (sm/bind (sm/update-state update :error-keys conj :yield/deferred-mismatch)
+                                (fn [_]
+                                  (sm/bind
+                                   (sm/update-state update :evidence conj
+                                                    {:check/id :yield/deferred-accounting :status :failed})
+                                   (fn [_] (sm/get-state)))))))
           final (sm/exec-state m {:status-keys #{}
                                   :error-keys #{}
                                   :evidence []})]
@@ -75,19 +75,19 @@
   (testing "traverse-state maps over a collection with state threading"
     (let [f (fn [x]
               (sm/bind (sm/update-state update :seen conj x)
-                (fn [_] (sm/return (* 2 x)))))
+                       (fn [_] (sm/return (* 2 x)))))
           m (sm/traverse-state f [1 2 3])]
       (is (= [[2 4 6] {:seen [1 2 3]}] (sm/run-state m {:seen []}))))))
 
 (deftest test-run-state-example
   (testing "the documented example works"
     (let [result (sm/run-state
-                   (sm/bind (sm/get-state)
-                     (fn [s]
-                       (sm/bind (sm/update-state assoc :validated? true)
-                         (fn [_]
-                           (sm/return (:run-id s))))))
-                   {:run-id "abc"})]
+                  (sm/bind (sm/get-state)
+                           (fn [s]
+                             (sm/bind (sm/update-state assoc :validated? true)
+                                      (fn [_]
+                                        (sm/return (:run-id s))))))
+                  {:run-id "abc"})]
       (is (= ["abc" {:run-id "abc" :validated? true}] result)))))
 
 (deftest test-state-is-immutable

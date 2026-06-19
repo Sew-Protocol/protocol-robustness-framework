@@ -16,8 +16,8 @@
 
 (deftest gen-yield-scenario-replays-without-invalid
   (let [prop (prop/for-all [scenario ysc/gen-yield-scenario]
-              (not= :invalid
-                    (:outcome (replay/replay-yield-scenario scenario))))]
+                           (not= :invalid
+                                 (:outcome (replay/replay-yield-scenario scenario))))]
     (is (:pass? (tc/quick-check 25 prop)))))
 
 (deftest shortfall-affected-generated-scenario-passes

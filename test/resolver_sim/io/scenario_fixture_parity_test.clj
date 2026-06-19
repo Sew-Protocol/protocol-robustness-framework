@@ -72,8 +72,8 @@
   (testing "trace export from Clojure matches contract fields (strict scenarios)"
     (doseq [s (scenarios-with-strict-expected-errors)
             :let [exported (export/scenario->trace-document
-                             s
-                             (get export/default-export-metadata (:scenario-id s)))
+                            s
+                            (get export/default-export-metadata (:scenario-id s)))
                   drift  (sync/trace-contract-drift s exported)]]
       (is (nil? drift)
           (str "Export drift for " (:scenario-id s) ": " (pr-str drift))))))

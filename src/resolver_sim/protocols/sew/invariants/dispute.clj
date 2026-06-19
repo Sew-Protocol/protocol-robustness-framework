@@ -15,7 +15,7 @@
               :when (not (pos? ts))]
           {:workflow-id wf :timestamp ts})]
     {:holds?     (empty? violations)
-      :violations (vec violations)}))
+     :violations (vec violations)}))
 
 (defn dispute-level-bounded?
   "True when every :dispute-levels entry is in [0, max-dispute-level], refers to
@@ -245,7 +245,6 @@
            :appeal-window appeal-window})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
-
 
 (defn escrow-dispute-metadata-consistent?
   "True when dispute timestamps and levels align with escrow-state.

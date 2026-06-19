@@ -106,8 +106,8 @@
               step-fail? (and (contains? inv-map inv-kw)
                               (= :fail (get inv-map inv-kw)))
               world-ok?  (if (and last-world (yield-invariant-registered? inv-kw))
-                             (yield-inv/holds? inv-kw last-world)
-                             true)
+                           (yield-inv/holds? inv-kw last-world)
+                           true)
               fail?      (or step-fail?
                              (not world-ok?)
                              (and (pos? agg-violations)

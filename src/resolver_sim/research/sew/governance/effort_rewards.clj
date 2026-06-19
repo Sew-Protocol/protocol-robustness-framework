@@ -66,9 +66,9 @@
         (for [{:keys [tier complexity fraction]} effort-tiers
               :let [n          (int (* n-disputes-per-tier fraction))
                     defect-p   (defection-probability base-fee reward-multiplier
-                                                      base-effort-cost complexity)
+                                 base-effort-cost complexity)
                     n-defected (count (filter (fn [_] (< (rng/next-double d-rng) defect-p))
-                                             (range n)))
+                                              (range n)))
                     rate       (/ (double n-defected) (max 1 n))]]
           {:tier tier :n n :defect-prob defect-p :defection-rate rate
            :passes? (< rate 0.20)})

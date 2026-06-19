@@ -38,8 +38,8 @@
   (if-let [errs (:expected-errors scenario)]
     (assoc scenario :expected-errors
            (mapv #(-> %
-                     (update :error normalize-error-kw)
-                     (update :seq normalize-seq))
+                      (update :error normalize-error-kw)
+                      (update :seq normalize-seq))
                  errs))
     scenario))
 

@@ -100,7 +100,7 @@
           ;; Attach the initial resolver via Priority-3 (et.dispute-resolver)
           w1        (assoc-in (:world cr) [:escrow-transfers wf-id :dispute-resolver] resolver-addr)
           tk        (keyword token)
-      fee       (get-in w1 [:total-fees tk] 0)
+          fee       (get-in w1 [:total-fees tk] 0)
           afa       (get-in w1 [:escrow-transfers wf-id :amount-after-fee] 0)
           resolvers (resolver-chain resolver-addr)
 
@@ -273,53 +273,53 @@
         result
         (am/eval-attributed
          (sm/bind (lc/create-escrow-m from token to escrow-amount (t/make-escrow-settings {}) snap)
-           (fn [create-result]
-             (if-not (:ok create-result)
-               (throw (ex-info "create-escrow failed" create-result))
-               (sm/bind (am/update-attributed
-                         #(assoc-in % [:escrow-transfers wf-id :dispute-resolver] resolver-addr))
-                 (fn [_]
-                   (sm/bind (lc/raise-dispute-m wf-id from)
-                     (fn [raise-result]
-                       (if-not (:ok raise-result)
-                         (throw (ex-info "raise-dispute failed" raise-result))
-                          (sm/bind (sm/get-state)
-                            (fn [attributed]
-                              (let [w2 (attr/unwrap-state attributed)
-                                    attr-ctx (attr/get-attribution attributed)]
-                                (attr/with-attribution attr-ctx
-                                  (let [tk        (keyword token)
-                                        fee       (get-in w2 [:total-fees tk] 0)
-                                        afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
-                                        {:keys [world-after verdict-correct? escalated? escalation-level]}
-                                        (resolution-loop w2 wf-id from resolvers
-                                                         rng-fn strategy
-                                                         escalation-prob-correct escalation-prob-wrong)
-                                   detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
-                                   bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
-                                   profit-honest (long fee)
-                                   profit-malice (if detected? (long (- fee bond-amt)) (long fee))
-                                   final-state   (t/escrow-state world-after wf-id)
-                                   inv-result    (inv/check-all world-after)]
-                               (sm/return
-                                {:dispute-correct?      verdict-correct?
-                                 :appeal-triggered?     escalated?
-                                 :escalated?            escalated?
-                                 :escalation-level      escalation-level
-                                 :slashed?              detected?
-                                 :frozen?               detected?
-                                 :escaped?              false
-                                 :slashing-pending?     false
-                                 :slashing-delay-weeks  0
-                                 :slashing-reason       (when detected? :fraud)
-                                 :profit-honest         profit-honest
-                                 :profit-malice         profit-malice
-                                 :strategy              strategy
-                                 :cm/final-state        final-state
-                                 :cm/fee                fee
-                                 :cm/afa                afa
-                                 :cm/invariants-ok?     (:all-hold? inv-result)
-                                  :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))}))))))))))))))
+                  (fn [create-result]
+                    (if-not (:ok create-result)
+                      (throw (ex-info "create-escrow failed" create-result))
+                      (sm/bind (am/update-attributed
+                                #(assoc-in % [:escrow-transfers wf-id :dispute-resolver] resolver-addr))
+                               (fn [_]
+                                 (sm/bind (lc/raise-dispute-m wf-id from)
+                                          (fn [raise-result]
+                                            (if-not (:ok raise-result)
+                                              (throw (ex-info "raise-dispute failed" raise-result))
+                                              (sm/bind (sm/get-state)
+                                                       (fn [attributed]
+                                                         (let [w2 (attr/unwrap-state attributed)
+                                                               attr-ctx (attr/get-attribution attributed)]
+                                                           (attr/with-attribution attr-ctx
+                                                             (let [tk        (keyword token)
+                                                                   fee       (get-in w2 [:total-fees tk] 0)
+                                                                   afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)
+                                                                   {:keys [world-after verdict-correct? escalated? escalation-level]}
+                                                                   (resolution-loop w2 wf-id from resolvers
+                                                                                    rng-fn strategy
+                                                                                    escalation-prob-correct escalation-prob-wrong)
+                                                                   detected?     (and (not verdict-correct?) (< (rng-fn) detection-prob))
+                                                                   bond-amt      (long (/ (* afa appeal-bond-bps) 10000))
+                                                                   profit-honest (long fee)
+                                                                   profit-malice (if detected? (long (- fee bond-amt)) (long fee))
+                                                                   final-state   (t/escrow-state world-after wf-id)
+                                                                   inv-result    (inv/check-all world-after)]
+                                                               (sm/return
+                                                                {:dispute-correct?      verdict-correct?
+                                                                 :appeal-triggered?     escalated?
+                                                                 :escalated?            escalated?
+                                                                 :escalation-level      escalation-level
+                                                                 :slashed?              detected?
+                                                                 :frozen?               detected?
+                                                                 :escaped?              false
+                                                                 :slashing-pending?     false
+                                                                 :slashing-delay-weeks  0
+                                                                 :slashing-reason       (when detected? :fraud)
+                                                                 :profit-honest         profit-honest
+                                                                 :profit-malice         profit-malice
+                                                                 :strategy              strategy
+                                                                 :cm/final-state        final-state
+                                                                 :cm/fee                fee
+                                                                 :cm/afa                afa
+                                                                 :cm/invariants-ok?     (:all-hold? inv-result)
+                                                                 :cm/inv-violations     (when-not (:all-hold? inv-result) (:results inv-result))}))))))))))))))
          initial-world
          initial-attr)]
     result))

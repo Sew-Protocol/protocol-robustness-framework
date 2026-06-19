@@ -132,15 +132,15 @@
         appeal-bond-bps 700  ; 7% bond
         appeal-bond-wei (quot (* escrow appeal-bond-bps) 10000)
         penalty-wei (* appeal-bond-wei penalty-percent-bond)
-        
+
         ;; Frivolous appeal has 30% win probability
         frivolous-win-prob 0.30
-        
+
         ;; EV of frivolous appeal: win * escrow - (1-win) * penalty
         escrow-upside (* frivolous-win-prob escrow)
         penalty-downside (* (- 1.0 frivolous-win-prob) penalty-wei)
         net-ev (- escrow-upside penalty-downside)
-        
+
         ;; Appeal made if EV > 0
         appeal-made? (> net-ev 0)
         ;; Frivolous appeal is discouraged if appeal-made? is false
@@ -196,13 +196,13 @@
         low-quality (* total-resolvers 0.80)
         med-quality (- (* total-resolvers 0.95) low-quality)
         high-quality (- total-resolvers (* total-resolvers 0.95))
-        
+
         ;; Count resolvers meeting min-reputation
         available (cond
                     (<= min-reputation 0.5) total-resolvers
                     (<= min-reputation 0.8) (+ med-quality high-quality)
                     :else high-quality)
-        
+
         availability-pct (double (/ available total-resolvers))
         sufficient? (> availability-pct 0.10)]  ; At least 10% available
     {:min-reputation min-reputation
@@ -250,36 +250,36 @@
               "M2: Asymmetric Information Cost (evidence prep cost)"
               "M3: Frivolous Appeal Discouragement (penalty sweep)"
               "M4: Expert Availability & Cost (resolver reputation sweep)"]})
-  
+
   (let [m1 (run-m1-access-to-justice-validation)
         m2 (run-m2-asymmetric-information-cost)
         m3 (run-m3-frivolous-appeal-discouragement)
         m4 (run-m4-expert-availability-and-cost)
-        
+
         phases [m1 m2 m3 m4]
         passed-phases (count (filter :passed? phases))
         total-phases (count phases)
-        
+
         overall-passed? (>= passed-phases 3)  ; 3/4 must pass
-        
+
         result (engine/make-result
-         {:benchmark-id "Phase M"
-          :label "Fairness Analysis"
-          :hypothesis "Protocol is procedurally fair"
-          :passed? overall-passed?
-          :summary {:total-phases total-phases
-                    :passed-phases passed-phases
-                    :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
-    
+                {:benchmark-id "Phase M"
+                 :label "Fairness Analysis"
+                 :hypothesis "Protocol is procedurally fair"
+                 :passed? overall-passed?
+                 :summary {:total-phases total-phases
+                           :passed-phases passed-phases
+                           :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
+
     (println (format "M1 Access-to-Justice: %s" (:status m1)))
     (println (format "M2 Asymmetric Information: %s" (:status m2)))
     (println (format "M3 Frivolous Appeal Discouragement: %s" (:status m3)))
     (println (format "M4 Expert Availability: %s" (:status m4)))
     (println "")
-    
+
     (if overall-passed?
       (println "✓ PASS: Phase M — Protocol is procedurally fair")
       (println "✗ FAIL: Phase M — Fairness barriers detected"))
     (println "")
-    
+
     result))

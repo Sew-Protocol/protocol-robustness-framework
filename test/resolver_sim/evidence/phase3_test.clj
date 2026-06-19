@@ -216,7 +216,7 @@
   (chain/reset-chain-cursor!)
   (testing "capture-event-evidence! accepts pre-built evidence map"
     (let [evidence (-> (cap/evidence-base {:type :test-capture :importance :core
-                                            :ctx sample-attribution})
+                                           :ctx sample-attribution})
                        (cap/cap-fields {:scenario/id "test"
                                         :run/id "run-1"
                                         :event/seq 99
@@ -240,7 +240,7 @@
 (deftest test-fraud-slash-evidence-builder-flow
   (testing "Fraud-slash evidence is built correctly using the cap-field builder"
     (let [e (-> (cap/evidence-base {:type :fraud-slash :importance :core
-                                     :ctx sample-attribution})
+                                    :ctx sample-attribution})
                 (cap/cap-fields {:scenario/id        "scenario-1"
                                  :run/id             "run-42"
                                  :event/seq          7
@@ -258,7 +258,7 @@
                                  :world/before-hash  "sha256:abc123"
                                  :world/after-hash   "sha256:def456"})
                 (assoc :transition/inputs {:pre-stake 1000 :slash-obligation 500})
-                 cap/finalize-evidence)]
+                cap/finalize-evidence)]
       (is (= "fraud-slash" (:evidence/type e)))
       (is (= "core" (:evidence/importance e)))
       (is (= "scenario-1" (:scenario/id e)))
@@ -275,7 +275,7 @@
       (is (.startsWith (:evidence/hash e) "sha256:"))
       ;; Hash chain stability: same inputs => same hash
       (let [e2 (-> (cap/evidence-base {:type :fraud-slash :importance :core
-                                        :ctx sample-attribution})
+                                       :ctx sample-attribution})
                    (cap/cap-fields {:scenario/id       "scenario-1"
                                     :run/id            "run-42"
                                     :event/seq         7

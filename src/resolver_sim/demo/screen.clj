@@ -15,8 +15,7 @@
 (def term-font-size 13)
 (def term-line-height 20)
 (def term-pad-x 16)
-(def term-pad-y 12
-)
+(def term-pad-y 12)
 (def term-bg "#1e1e2e")
 (def term-fg "#cdd6f4")
 (def term-title-bg "#181825")
@@ -73,10 +72,10 @@
          n (count lines)
          h (or height (+ term-pad-y 28 term-pad-y (* n term-line-height) term-pad-y))
          body (str/join "\n" (map-indexed
-                               (fn [i line]
-                                 (line->svg line
-                                   (+ term-pad-y 28 term-pad-y (* i term-line-height))))
-                               lines))
+                              (fn [i line]
+                                (line->svg line
+                                           (+ term-pad-y 28 term-pad-y (* i term-line-height))))
+                              lines))
          title-svg (title-bar-svg width title)]
      (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
           "<svg xmlns=\"http://www.w3.org/2000/svg\" "
@@ -99,7 +98,7 @@
    Compatible with asciinema 2.x players."
   ([text] (text->asciicast-str text {:duration 5.0}))
   ([text {:keys [duration title command]
-           :or   {duration 5.0 title "demo" command ""}}]
+          :or   {duration 5.0 title "demo" command ""}}]
    (let [lines (str/split-lines text)
          n (count lines)
          delay-per-line (if (pos? n) (/ (float duration) n) 0.1)
@@ -109,11 +108,11 @@
                  "env" {"SHELL" "/bin/bash" "TERM" "xterm-256color"}}
          header-line (json/write-str header)
          event-lines (str/join "\n"
-                      (map (fn [i line]
-                            (json/write-str [(float (* i delay-per-line))
-                                             "o"
-                                             (str line "\n")]))
-                           (range) lines))]
+                               (map (fn [i line]
+                                      (json/write-str [(float (* i delay-per-line))
+                                                       "o"
+                                                       (str line "\n")]))
+                                    (range) lines))]
      (str header-line "\n" event-lines "\n"))))
 
 ;; ── File output ──────────────────────────────────────────────────────────────
@@ -131,8 +130,8 @@
          svg-path (str screen-dir "/" section-id "-" n ".svg")
          _ (spit svg-path svg)
          cast-str (text->asciicast-str text
-                    {:title (or (:title opts) section-id)
-                     :command (:command opts "")})
+                                       {:title (or (:title opts) section-id)
+                                        :command (:command opts "")})
          cast-path (str screen-dir "/" section-id "-" n ".cast")
          _ (spit cast-path cast-str)]
      {:svg-path svg-path

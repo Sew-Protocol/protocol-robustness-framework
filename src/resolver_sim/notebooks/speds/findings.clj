@@ -257,7 +257,7 @@
                     :next-step "Classify as research finding vs regression before publication."}
     :visual {:blocks (mapv (fn [b] {:block (keyword (str/replace (or (:block b) "") "_" "-"))
                                     :text (:text b)})
-                          (get story-spec :visual_blocks []))}}})
+                           (get story-spec :visual_blocks []))}}})
 
 (defn- severity [scenario]
   (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))
@@ -285,8 +285,8 @@
 
 (defn- status-kind [scenario]
   (if (ose/negative-test-purpose? (:purpose scenario))
-      "expected_negative"
-      "observed"))
+    "expected_negative"
+    "observed"))
 
 (defn- priority [severity]
   (case severity "high" 90 "medium" 60 "low" 30 10))
@@ -313,8 +313,8 @@
      :severity sev
      :status_kind st-kind
      :one_line_description (one-line-description scenario)
-      :confidence "medium"
-      :classification classif
+     :confidence "medium"
+     :classification classif
      :title (or (:title scenario) sid)
      :summary (one-line-description scenario)
      :metrics {:replay_success_pct (:replay-match-pct (data/narrative-metrics artifacts))}
@@ -325,8 +325,8 @@
      :story {:eligible true
              :priority (priority sev)
              :family (purpose->family (:purpose scenario))}
-      :story_artifact_spec story-spec
-      :outcome (canonical-outcome artifacts scenario sid sev st-kind classif story-spec)
+     :story_artifact_spec story-spec
+     :outcome (canonical-outcome artifacts scenario sid sev st-kind classif story-spec)
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
                   :trace_digest nil
@@ -349,40 +349,40 @@
   ([artifacts] (generate-findings-bundle artifacts {:comparator-config default-comparator-config}))
   ([artifacts {:keys [comparator-config] :or {comparator-config default-comparator-config}}]
    (let [scenarios (or (get-in artifacts [:coverage :scenarios]) [])
-        summary (:summary artifacts)
-        canon (data/canonical-summary summary)
-        findings (->> scenarios
-                      (map #(scenario->finding artifacts % comparator-config))
-                      (sort-by (juxt (comp - :priority :story) :scenario_id))
-                      vec)
-        cnt (counts findings)]
-    {:schema_version "speds.findings.v1"
-     :comparator_config comparator-config
-     :run {:run_id (:run-id canon)
-           :generated_at (str (java.time.Instant/now))
-           :git_sha (:git-sha canon)
-           :suite_id (:suite-id config/profile)
-           :artifact_root "results/test-artifacts"}
-     :overall_status {:status (if (= "pass" (:overall-status canon)) "passed" "warning")
-                      :status_kind (if (empty? findings) "no_findings_detected" "validated_with_gaps")
-                      :confidence "medium"
-                      :summary (if (empty? findings)
-                                 "No negative findings were detected in this run, but this does not prove protocol safety."
-                                 "Findings observed; review evidence and action queue for triage.")
-                      :counts cnt}
-     :findings findings
-     :story_candidates (if (empty? findings)
-                         [{:story_id "RUN-OVERVIEW-001"
-                           :kind "run_overview"
-                           :priority 50
-                           :headline "No negative findings detected in this validation run"
-                           :caveat "Absence of findings is not proof of absence."}]
-                         [])
-     :provenance {:source_artifacts [{:kind "summary" :path (:test-summary config/artifact-paths) :digest nil}
-                                     {:kind "coverage" :path (:coverage config/artifact-paths) :digest nil}]
-                  :definitions/hash (defs/definitions-hash)
-                  :definitions_hash (defs/definitions-hash)
-                  :claim_map_path "results/test-artifacts/claim-map.json"}})))
+         summary (:summary artifacts)
+         canon (data/canonical-summary summary)
+         findings (->> scenarios
+                       (map #(scenario->finding artifacts % comparator-config))
+                       (sort-by (juxt (comp - :priority :story) :scenario_id))
+                       vec)
+         cnt (counts findings)]
+     {:schema_version "speds.findings.v1"
+      :comparator_config comparator-config
+      :run {:run_id (:run-id canon)
+            :generated_at (str (java.time.Instant/now))
+            :git_sha (:git-sha canon)
+            :suite_id (:suite-id config/profile)
+            :artifact_root "results/test-artifacts"}
+      :overall_status {:status (if (= "pass" (:overall-status canon)) "passed" "warning")
+                       :status_kind (if (empty? findings) "no_findings_detected" "validated_with_gaps")
+                       :confidence "medium"
+                       :summary (if (empty? findings)
+                                  "No negative findings were detected in this run, but this does not prove protocol safety."
+                                  "Findings observed; review evidence and action queue for triage.")
+                       :counts cnt}
+      :findings findings
+      :story_candidates (if (empty? findings)
+                          [{:story_id "RUN-OVERVIEW-001"
+                            :kind "run_overview"
+                            :priority 50
+                            :headline "No negative findings detected in this validation run"
+                            :caveat "Absence of findings is not proof of absence."}]
+                          [])
+      :provenance {:source_artifacts [{:kind "summary" :path (:test-summary config/artifact-paths) :digest nil}
+                                      {:kind "coverage" :path (:coverage config/artifact-paths) :digest nil}]
+                   :definitions/hash (defs/definitions-hash)
+                   :definitions_hash (defs/definitions-hash)
+                   :claim_map_path "results/test-artifacts/claim-map.json"}})))
 
 (defn save-findings!
   ([] (save-findings! (data/load-run-artifacts)))

@@ -83,7 +83,7 @@
         (println (format "%-30s %-20s %s" "Benchmark ID" "Date" "Outcome"))
         (println (apply str (repeat 70 "-")))
         (doseq [h history]
-          (println (format "%-30s %-20s %s" 
+          (println (format "%-30s %-20s %s"
                            (get-in h [:benchmark :benchmark/id])
                            (java.util.Date. (:timestamp h))
                            (if (= (get-in h [:metrics :passed]) (get-in h [:metrics :total]))
@@ -130,9 +130,9 @@
         (println "Hash match:" (if hash-ok? "✓" "✗"))
         (when (:evidence/signature bundle)
           (if-let [pub-key-path (:evidence/public-key-path bundle)]
-             (let [sig-ok? (signing/verify-signature stored-hash (:evidence/signature bundle) pub-key-path)]
-               (println "Signature valid:" (if sig-ok? "✓" "✗")))
-             (println "Public key path missing in bundle, cannot verify signature.")))
+            (let [sig-ok? (signing/verify-signature stored-hash (:evidence/signature bundle) pub-key-path)]
+              (println "Signature valid:" (if sig-ok? "✓" "✗")))
+            (println "Public key path missing in bundle, cannot verify signature.")))
         (System/exit (if hash-ok? 0 1)))
 
       (:hash-only options)
@@ -158,7 +158,7 @@
                              (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
                                    pub-path (str key-path ".pub")
                                    pub-exists? (.exists (io/file pub-path))]
-                               (assoc evidence 
+                               (assoc evidence
                                       :evidence/signature sig
                                       :evidence/public-key-path (if pub-exists? pub-path key-path)))
                              evidence)

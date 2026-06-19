@@ -233,19 +233,19 @@
         bond-mult 2.0
         bond-wei (* escrow bond-mult)
         slash-mult 2.0
-        
+
         ;; Actual cost to the attacker
         attack-cost (* escrow cost-mult)
-        
+
         ;; Gross profit if undetected
         gross-profit (+ fee-wei (* escrow (- 1 (/ fee-bps 10000.0))))
-        
+
         ;; Expected loss from detection
         expected-loss (* detection-prob (* bond-wei slash-mult))
-        
+
         ;; Net profit after accounting for attack cost and detection risk
         net-profit (- (+ gross-profit (- expected-loss)) attack-cost)
-        
+
         safe? (< net-profit 0)]
     {:detection-prob detection-prob
      :cost-mult cost-mult
@@ -353,17 +353,17 @@
         detection-prob 0.6
         slash-mult 2.0
         appeal-rate 0.2
-        
+
         ;; Lazy EV: fee with some appeal loss, but no slashing
         lazy-ev (* fee-wei (- 1 appeal-rate))
-        
+
         ;; Malicious EV
         malicious-ev (- fee-wei (* bond-wei detection-prob slash-mult))
-        
+
         ;; Add timeout penalty to lazy EV
         timeout-penalty-wei (quot (* escrow timeout-penalty-bps) 10000)
         lazy-with-penalty (- lazy-ev timeout-penalty-wei)
-        
+
         ;; Malicious is better if it avoids penalty
         malicious-superior? (> malicious-ev lazy-with-penalty)]
     {:timeout-penalty-bps timeout-penalty-bps
@@ -415,29 +415,29 @@
               "C4: Detection Probability Trade-off (2D grid)"
               "C5: Profit-Maximizer Lifecycle (slash sweep)"
               "C6: Strategic Abstention (timeout penalty sweep)"]})
-  
+
   (let [c1 (run-c1-bribery-cost-model)
         c2 (run-c2-external-collusion)
         c3 (run-c3-layer-escalation-attack)
         c4 (run-c4-detection-trade-off)
         c5 (run-c5-profit-maximizer-lifecycle)
         c6 (run-c6-strategic-abstention)
-        
+
         phases [c1 c2 c3 c4 c5 c6]
         passed-phases (count (filter :passed? phases))
         total-phases (count phases)
-        
+
         overall-passed? (>= passed-phases 5)  ; 5/6 phases must pass
-        
+
         result (engine/make-result
-         {:benchmark-id "Phase C"
-          :label "Corruption Economics"
-          :hypothesis "Cost-of-corruption exceeds profit across all scenarios"
-          :passed? overall-passed?
-          :summary {:total-phases total-phases
-                    :passed-phases passed-phases
-                    :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
-    
+                {:benchmark-id "Phase C"
+                 :label "Corruption Economics"
+                 :hypothesis "Cost-of-corruption exceeds profit across all scenarios"
+                 :passed? overall-passed?
+                 :summary {:total-phases total-phases
+                           :passed-phases passed-phases
+                           :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
+
     (println (format "C1 Bribery Cost: %s" (:status c1)))
     (println (format "C2 Collusion: %s" (:status c2)))
     (println (format "C3 Escalation: %s" (:status c3)))
@@ -445,10 +445,10 @@
     (println (format "C5 Profit-Maximizer: %s" (:status c5)))
     (println (format "C6 Strategic Abstention: %s" (:status c6)))
     (println "")
-    
+
     (if overall-passed?
       (println "✓ PASS: Phase C — Corruption is uneconomical")
       (println "✗ FAIL: Phase C — Profitable corruption scenarios exist"))
     (println "")
-    
+
     result))

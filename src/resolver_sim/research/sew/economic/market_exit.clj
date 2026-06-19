@@ -40,7 +40,7 @@
         exited (- initial (count remaining))
         exit-rate (if (zero? initial) 0.0 (double (/ exited initial)))
         honest-remaining (count (filter #(= :honest (:strategy %)) remaining))]
-    
+
     {:remaining remaining
      :exited-count exited
      :exit-rate exit-rate
@@ -51,23 +51,23 @@
   
   Returns: {:epoch, :honest-remaining, :pool-size, :honest-ratio, :remaining}"
   [rng epoch resolvers params expected-profit]
-  
+
   (let [[rng-exit rng-batch] (rng/split-rng rng)
         ;; Run disputes
         batch-result (batch/run-batch rng-batch (:n-trials-per-epoch params 500) params)
         avg-profit (:avg-profit batch-result 150.0)
-        
+
         ;; Calculate exit probs
         exit-prob-fn (fn [r]
-                      (calculate-exit-probability expected-profit avg-profit))
-        
+                       (calculate-exit-probability expected-profit avg-profit))
+
         ;; Apply exits
         {:keys [remaining exited-count exit-rate honest-remaining]}
         (apply-resolver-exits rng-exit resolvers exit-prob-fn)
-        
+
         pool-size (count remaining)
         honest-ratio (if (zero? pool-size) 0.0 (double (/ honest-remaining pool-size)))]
-    
+
     {:epoch epoch
      :pool-size pool-size
      :honest-remaining honest-remaining
@@ -82,34 +82,34 @@
 (defn run-market-exit-cascade-scenario
   "Run one scenario over 10 epochs"
   [rng params scenario]
-  
+
   (let [scenario-name (:name scenario)
         gov-eff (:governance-effectiveness scenario)
         fraud-mult (:fraud-rate-multiplier scenario)
         baseline-profit 150.0
         expected-profit (* baseline-profit gov-eff)
-        
+
         ;; Initial pool: 50 resolvers, 90% honest
         initial-honest 45
         initial-fraud 5
         initial-resolvers (concat
-                          (mapv (fn [i] {:id (str "h" i) :strategy :honest}) (range initial-honest))
-                          (mapv (fn [i] {:id (str "f" i) :strategy :fraud}) (range initial-fraud)))
-        
+                           (mapv (fn [i] {:id (str "h" i) :strategy :honest}) (range initial-honest))
+                           (mapv (fn [i] {:id (str "f" i) :strategy :fraud}) (range initial-fraud)))
+
         ;; Adjust params
         adjusted-params (assoc params
-                         :fraud-rate (* (:fraud-rate params 0.1) fraud-mult))
-        
+                               :fraud-rate (* (:fraud-rate params 0.1) fraud-mult))
+
         ;; Run 10 epochs — split RNG for each epoch
         results (loop [epoch 1, rng rng, resolvers initial-resolvers, epochs []]
-                 (if (> epoch 10)
-                   epochs
-                   (let [[rng-epoch rng-rest] (rng/split-rng rng)
-                         result (run-one-epoch rng-epoch epoch resolvers adjusted-params expected-profit)]
-                     (recur (inc epoch) rng-rest
-                           (:remaining result)
-                           (conj epochs result)))))]
-    
+                  (if (> epoch 10)
+                    epochs
+                    (let [[rng-epoch rng-rest] (rng/split-rng rng)
+                          result (run-one-epoch rng-epoch epoch resolvers adjusted-params expected-profit)]
+                      (recur (inc epoch) rng-rest
+                             (:remaining result)
+                             (conj epochs result)))))]
+
     {:scenario-name scenario-name
      :gov-eff gov-eff
      :fraud-mult fraud-mult
@@ -130,58 +130,57 @@
   3. Fraud Spike: gov=0%, fraud=30%
   4. Recovery: gov=100%, fraud=30%"
   [params]
-  
-  (let [scenarios [
-         {:name "Baseline (Normal)" :governance-effectiveness 1.0 :fraud-rate-multiplier 1.0}
-         {:name "Governance Failure" :governance-effectiveness 0.0 :fraud-rate-multiplier 1.0}
-         {:name "Fraud Spike" :governance-effectiveness 0.0 :fraud-rate-multiplier 3.0}
-         {:name "Recovery" :governance-effectiveness 1.0 :fraud-rate-multiplier 3.0}]
-        
+
+  (let [scenarios [{:name "Baseline (Normal)" :governance-effectiveness 1.0 :fraud-rate-multiplier 1.0}
+                   {:name "Governance Failure" :governance-effectiveness 0.0 :fraud-rate-multiplier 1.0}
+                   {:name "Fraud Spike" :governance-effectiveness 0.0 :fraud-rate-multiplier 3.0}
+                   {:name "Recovery" :governance-effectiveness 1.0 :fraud-rate-multiplier 3.0}]
+
         _ (println "\n📊 Running Phase O: Market Exit Cascade Analysis")
         _ (println "   Testing 4 cascading failure modes over 10 epochs\n")
-        
+
         rng-seed  (or (:rng-seed params) 42)
         rng-scenarios (rng/make-rng rng-seed)
         results (mapv (fn [scenario]
-                       (let [[rng-scenario rng-scenarios] (rng/split-rng rng-scenarios)
-                             _ (println (format "   Testing: %s..." (:name scenario)))
-                             result (run-market-exit-cascade-scenario rng-scenario params scenario)
-                             _ (println (format "     → Final honest ratio: %.1f%%"
-                                              (* 100 (:final-honest-ratio result))))]
-                         result))
-                     scenarios)
-        
+                        (let [[rng-scenario rng-scenarios] (rng/split-rng rng-scenarios)
+                              _ (println (format "   Testing: %s..." (:name scenario)))
+                              result (run-market-exit-cascade-scenario rng-scenario params scenario)
+                              _ (println (format "     → Final honest ratio: %.1f%%"
+                                                 (* 100 (:final-honest-ratio result))))]
+                          result))
+                      scenarios)
+
         ;; Summary
         baseline-ratio (:final-honest-ratio (first results))
         spike-ratio (:final-honest-ratio (nth results 2))
-        
+
         status (if (< spike-ratio 0.5)
-               "🔴 CRITICAL (honest ratio < 50%)"
-               (if (< spike-ratio 0.7)
-                "🟠 DEGRADED (honest ratio < 70%)"
-                (if (< spike-ratio 0.85)
-                 "🟡 CAUTION (honest ratio < 85%)"
-                 "✅ STABLE (honest ratio maintained)")))
-        
+                 "🔴 CRITICAL (honest ratio < 50%)"
+                 (if (< spike-ratio 0.7)
+                   "🟠 DEGRADED (honest ratio < 70%)"
+                   (if (< spike-ratio 0.85)
+                     "🟡 CAUTION (honest ratio < 85%)"
+                     "✅ STABLE (honest ratio maintained)")))
+
         finding (format "Baseline: %.0f%% → Spike: %.0f%% → %s"
-                       (* 100 baseline-ratio)
-                       (* 100 spike-ratio)
-                       status)]
-    
+                        (* 100 baseline-ratio)
+                        (* 100 spike-ratio)
+                        status)]
+
     (println "\n📈 Exit Cascade Results:")
     (println "Scenario                 | Gov'nce | Fraud | Final Honest | Status")
     (println "-------------------------|--------|-------|--------------|--------")
     (doseq [result results]
       (println (format "%-25s | %6.0f%% | %5.0f%% | %11.1f%% | %s"
-                      (:scenario-name result)
-                      (* 100 (:gov-eff result))
-                      (* 100 (:fraud-mult result))
-                      (* 100 (:final-honest-ratio result))
-                      (cond (< (:final-honest-ratio result) 0.5) "🔴"
-                           (< (:final-honest-ratio result) 0.7) "🟠"
-                           (< (:final-honest-ratio result) 0.85) "🟡"
-                           :else "✅"))))
-    
+                       (:scenario-name result)
+                       (* 100 (:gov-eff result))
+                       (* 100 (:fraud-mult result))
+                       (* 100 (:final-honest-ratio result))
+                       (cond (< (:final-honest-ratio result) 0.5) "🔴"
+                             (< (:final-honest-ratio result) 0.7) "🟠"
+                             (< (:final-honest-ratio result) 0.85) "🟡"
+                             :else "✅"))))
+
     (println (format "\n   Key Finding: %s\n" finding))
 
     ;; MC-B: Print breakeven detection rate so the economic security gap is visible
@@ -211,4 +210,4 @@
         :class        :analytic
         :passed?      (>= spike-ratio spike-threshold)
         :results      results
-         :summary      {:finding finding :spike-ratio spike-ratio :threshold spike-threshold}}))))
+        :summary      {:finding finding :spike-ratio spike-ratio :threshold spike-threshold}}))))

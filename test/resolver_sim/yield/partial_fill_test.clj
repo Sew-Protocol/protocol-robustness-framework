@@ -5,7 +5,6 @@
             [resolver-sim.yield.partial-fill :as pf]
             [resolver-sim.yield.position :as pos]))
 
-
 (def base-position
   (pos/normalize-position
    {:owner/id "user1"
@@ -19,7 +18,6 @@
     :deferred-yield 200
     :haircut-yield 0
     :status :active}))
-
 
 (deftest test-full-fill-when-sufficient-liquidity
   (testing "Full fill when liquidity covers all claims"
@@ -174,7 +172,7 @@
                   :rounding-policy :largest-remainder
                   :unrealized-yield-treatment :not-claimable}
           decision (pf/calculate-fulfillment 100 [(assoc base-position
-                                                    :principal 33 :realized-yield 33 :deferred-yield 34)] policy)
+                                                         :principal 33 :realized-yield 33 :deferred-yield 34)] policy)
           total-filled (reduce + 0 (vals (:filled decision)))]
       (is (<= total-filled 100)
           "Never exceeds available liquidity"))))

@@ -39,7 +39,7 @@
           (cond
             (not ((set (preg/known-protocol-ids)) protocol-id))
             (do (println (str "Unknown protocol: " protocol-id
-                               ". Available: " (str/join ", " (preg/known-protocol-ids))))
+                              ". Available: " (str/join ", " (preg/known-protocol-ids))))
                 (log/error! "unknown protocol" {:protocol-id protocol-id})
                 (System/exit 1))
 

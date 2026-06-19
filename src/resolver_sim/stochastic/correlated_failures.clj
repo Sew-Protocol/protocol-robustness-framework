@@ -35,32 +35,32 @@
   ([bias-strength ground-truth num-resolvers correlation-coefficient]
    (shared-bias-effect bias-strength ground-truth num-resolvers correlation-coefficient nil))
   ([bias-strength ground-truth num-resolvers correlation-coefficient rng]
-  (let [roll #(rng/roll-double rng)
-        shared-error (if (< (roll) bias-strength)
-                      (not ground-truth)
-                      ground-truth)
-        individual-error (if (< (roll) 0.1)
-                          (not ground-truth)
-                          ground-truth)
-        make-decision (fn [rho]
-                        (if (< (roll) rho)
-                          shared-error
-                          individual-error))
-        decisions (map (fn [_] (make-decision correlation-coefficient))
-                      (range num-resolvers))
-        agreeing (count (filter #(= % shared-error) decisions))
-        agreement-fraction (/ agreeing num-resolvers)
-        correct-count (count (filter #(= % ground-truth) decisions))
-        accuracy (/ correct-count num-resolvers)]
-    {:shared-error shared-error
-     :ground-truth ground-truth
-     :decisions decisions
-     :agreement-fraction agreement-fraction
-     :accuracy accuracy
-     :correlation-coefficient correlation-coefficient
-     :biased? (not= shared-error ground-truth)
-     :systemic-risk? (and (not= shared-error ground-truth)
-                         (> agreement-fraction 0.7))})))
+   (let [roll #(rng/roll-double rng)
+         shared-error (if (< (roll) bias-strength)
+                        (not ground-truth)
+                        ground-truth)
+         individual-error (if (< (roll) 0.1)
+                            (not ground-truth)
+                            ground-truth)
+         make-decision (fn [rho]
+                         (if (< (roll) rho)
+                           shared-error
+                           individual-error))
+         decisions (map (fn [_] (make-decision correlation-coefficient))
+                        (range num-resolvers))
+         agreeing (count (filter #(= % shared-error) decisions))
+         agreement-fraction (/ agreeing num-resolvers)
+         correct-count (count (filter #(= % ground-truth) decisions))
+         accuracy (/ correct-count num-resolvers)]
+     {:shared-error shared-error
+      :ground-truth ground-truth
+      :decisions decisions
+      :agreement-fraction agreement-fraction
+      :accuracy accuracy
+      :correlation-coefficient correlation-coefficient
+      :biased? (not= shared-error ground-truth)
+      :systemic-risk? (and (not= shared-error ground-truth)
+                           (> agreement-fraction 0.7))})))
 
 (defn herding-dynamic
   "Model herding: Resolvers converge on same decision through:
@@ -80,23 +80,23 @@
   ([round prior-decision accuracy-if-independent reputation-pressure evidence-quality]
    (herding-dynamic round prior-decision accuracy-if-independent reputation-pressure evidence-quality nil))
   ([round prior-decision accuracy-if-independent reputation-pressure evidence-quality rng]
-  (let [round-factor (/ round 2.0)
-        clarity-factor (- 1.0 evidence-quality)
-        pressure-factor reputation-pressure
-        accuracy-factor (- 1.0 accuracy-if-independent)
-        base-herding (* round-factor clarity-factor pressure-factor accuracy-factor)
-        herding-prob (min 1.0 (max 0.0 base-herding))]
-    {:round round
-     :prior-decision prior-decision
-     :herding-probability herding-prob
-     :reputation-pressure reputation-pressure
-     :evidence-quality evidence-quality
-     :will-herd? (< (rng/roll-double rng) herding-prob)
-     :risk-level (cond
-                   (< herding-prob 0.2) "LOW"
-                   (< herding-prob 0.5) "MODERATE"
-                   (< herding-prob 0.8) "HIGH"
-                   :else "CRITICAL")})))
+   (let [round-factor (/ round 2.0)
+         clarity-factor (- 1.0 evidence-quality)
+         pressure-factor reputation-pressure
+         accuracy-factor (- 1.0 accuracy-if-independent)
+         base-herding (* round-factor clarity-factor pressure-factor accuracy-factor)
+         herding-prob (min 1.0 (max 0.0 base-herding))]
+     {:round round
+      :prior-decision prior-decision
+      :herding-probability herding-prob
+      :reputation-pressure reputation-pressure
+      :evidence-quality evidence-quality
+      :will-herd? (< (rng/roll-double rng) herding-prob)
+      :risk-level (cond
+                    (< herding-prob 0.2) "LOW"
+                    (< herding-prob 0.5) "MODERATE"
+                    (< herding-prob 0.8) "HIGH"
+                    :else "CRITICAL")})))
 
 (defn shared-information-source
   "Model resolvers using same external information.
@@ -119,30 +119,30 @@
   ([num-resolvers source-accuracy ground-truth]
    (shared-information-source num-resolvers source-accuracy ground-truth nil))
   ([num-resolvers source-accuracy ground-truth rng]
-  (let [roll #(rng/roll-double rng)
-        source-signal (if (< (roll) source-accuracy)
-                       ground-truth
-                       (not ground-truth))
-        follow-prob 0.8
-        decisions (map (fn [_]
-                        (if (< (roll) follow-prob)
-                          source-signal
-                          (if (< (roll) 0.5) ground-truth (not ground-truth))))
-                      (range num-resolvers))
-        agreeing-with-source (count (filter #(= % source-signal) decisions))
-        agreement-fraction (/ agreeing-with-source num-resolvers)
-        correct-count (count (filter #(= % ground-truth) decisions))
-        accuracy (/ correct-count num-resolvers)]
-    {:source-signal source-signal
-     :source-accuracy source-accuracy
-     :ground-truth ground-truth
-     :decisions decisions
-     :agreement-with-source agreement-fraction
-     :accuracy accuracy
-     :correlation-risk (cond
-                         (< source-accuracy 0.7) "HIGH: Unreliable source creates errors"
-                         (> agreement-fraction 0.9) "HIGH: Over-reliance on source"
-                         :else "LOW: Good source with healthy skepticism")})))
+   (let [roll #(rng/roll-double rng)
+         source-signal (if (< (roll) source-accuracy)
+                         ground-truth
+                         (not ground-truth))
+         follow-prob 0.8
+         decisions (map (fn [_]
+                          (if (< (roll) follow-prob)
+                            source-signal
+                            (if (< (roll) 0.5) ground-truth (not ground-truth))))
+                        (range num-resolvers))
+         agreeing-with-source (count (filter #(= % source-signal) decisions))
+         agreement-fraction (/ agreeing-with-source num-resolvers)
+         correct-count (count (filter #(= % ground-truth) decisions))
+         accuracy (/ correct-count num-resolvers)]
+     {:source-signal source-signal
+      :source-accuracy source-accuracy
+      :ground-truth ground-truth
+      :decisions decisions
+      :agreement-with-source agreement-fraction
+      :accuracy accuracy
+      :correlation-risk (cond
+                          (< source-accuracy 0.7) "HIGH: Unreliable source creates errors"
+                          (> agreement-fraction 0.9) "HIGH: Over-reliance on source"
+                          :else "LOW: Good source with healthy skepticism")})))
 
 (defn diversity-effect
   "Model how resolver diversity (geographic, institutional, training)
@@ -154,14 +154,14 @@
    
    Returns: Effective correlation after diversity adjustment"
   [diversity-level correlation-base]
-  
+
   (let [; Diversity reduces correlation
         ; At diversity=1.0, correlation approaches 0
         effective-correlation (* correlation-base (- 1.0 diversity-level))
-        
+
         ; System resilience depends on diversity
         resilience (+ 0.5 (* diversity-level 0.5))]
-    
+
     {:diversity-level diversity-level
      :correlation-base correlation-base
      :effective-correlation effective-correlation
@@ -188,44 +188,44 @@
    
    Returns: Phase transition analysis"
   [correlation-coefficient system-accuracy-base appeal-effectiveness]
-  
+
   (let [; Linear degradation at low correlation
         ; Nonlinear collapse at high correlation
         rho correlation-coefficient
-        
+
         ; System accuracy under different regimes
         ; Low correlation: Independent decisions, appeals work well
         ; Medium correlation: Some cascade, Kleros still effective
         ; High correlation: Information locked in, system fails
-        
+
         accuracy-at-rho (cond
-                         (< rho 0.3)
+                          (< rho 0.3)
                          ; Low regime: Independent decisions
-                         (- system-accuracy-base (* rho 0.1))
-                         
-                         (< rho 0.6)
+                          (- system-accuracy-base (* rho 0.1))
+
+                          (< rho 0.6)
                          ; Medium regime: Some herding, appeals help
-                         (- system-accuracy-base
-                          (+ (* rho 0.2) (* rho (- 1.0 appeal-effectiveness) 0.1)))
-                         
-                         :else
+                          (- system-accuracy-base
+                             (+ (* rho 0.2) (* rho (- 1.0 appeal-effectiveness) 0.1)))
+
+                          :else
                          ; High regime: Collapse, appeals ineffective
-                         (let [collapse-factor (- rho 0.6)
-                               collapse-loss (* collapse-factor 0.4)]
-                           (- system-accuracy-base collapse-loss)))
-        
+                          (let [collapse-factor (- rho 0.6)
+                                collapse-loss (* collapse-factor 0.4)]
+                            (- system-accuracy-base collapse-loss)))
+
         ; Kleros effectiveness at breaking cascades
         kleros-effectiveness (cond
-                              (< rho 0.3) appeal-effectiveness
-                              (< rho 0.6) (* appeal-effectiveness 0.7)
-                              :else (* appeal-effectiveness 0.3))
-        
+                               (< rho 0.3) appeal-effectiveness
+                               (< rho 0.6) (* appeal-effectiveness 0.7)
+                               :else (* appeal-effectiveness 0.3))
+
         ; Regime identification
         regime (cond
-                (< rho 0.3) "LOW_CORRELATION"
-                (< rho 0.6) "MEDIUM_CORRELATION"
-                :else "HIGH_CORRELATION")]
-    
+                 (< rho 0.3) "LOW_CORRELATION"
+                 (< rho 0.6) "MEDIUM_CORRELATION"
+                 :else "HIGH_CORRELATION")]
+
     {:correlation-coefficient correlation-coefficient
      :system-accuracy-base system-accuracy-base
      :appeal-effectiveness appeal-effectiveness
@@ -238,14 +238,14 @@
                         "MEDIUM_CORRELATION" "ACCEPTABLE: Appeals effective"
                         "HIGH_CORRELATION" "CRITICAL: Cascades may lock in")
      :recommendation (cond
-                      (< rho 0.3)
-                      "No action needed. Natural diversity sufficient."
-                      
-                      (< rho 0.6)
-                      "Monitor cascade rates. Ensure geographic + institutional diversity."
-                      
-                      :else
-                      "EMERGENCY: Resolvers too correlated. Add external oracles or expand panel.")}))
+                       (< rho 0.3)
+                       "No action needed. Natural diversity sufficient."
+
+                       (< rho 0.6)
+                       "Monitor cascade rates. Ensure geographic + institutional diversity."
+
+                       :else
+                       "EMERGENCY: Resolvers too correlated. Add external oracles or expand panel.")}))
 
 (defn resolver-pool-correlation
   "Estimate correlation given resolver pool composition.
@@ -258,22 +258,22 @@
    
    Returns: Estimated correlation and risk"
   [num-resolvers geographic-diversity institutional-diversity training-diversity]
-  
+
   (let [; Correlation decreases with diversity
         ; Assume independent effects
         base-correlation 0.8  ; Start high (humans naturally correlated)
         geo-reduction (* geographic-diversity 0.3)
         inst-reduction (* institutional-diversity 0.3)
         train-reduction (* training-diversity 0.2)
-        
+
         effective-correlation (max 0.0
-                               (- base-correlation
-                                  geo-reduction inst-reduction train-reduction))
-        
+                                   (- base-correlation
+                                      geo-reduction inst-reduction train-reduction))
+
         ; Larger pools reduce correlation per resolver
         pool-size-reduction (/ 1.0 (max 1.0 (Math/sqrt num-resolvers)))
         adjusted-correlation (* effective-correlation pool-size-reduction)]
-    
+
     {:num-resolvers num-resolvers
      :geographic-diversity geographic-diversity
      :institutional-diversity institutional-diversity

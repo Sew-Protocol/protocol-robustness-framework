@@ -20,8 +20,8 @@
 (deftest shortfall-without-financial-finality-pending
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0 :escrow-state] :refunded)
-                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
-                             (yield-pos 0 {:status :unwinding
+                  (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
+                            (yield-pos 0 {:status :unwinding
                                           :shortfall {:fulfilled-amount 800
                                                       :deferred-amount 200
                                                       :haircut-amount 0}})))
@@ -33,11 +33,11 @@
 (deftest shortfall-during-challengeable-phase-is-risk-not-pending
   (let [world (-> (t/empty-world 1000)
                   (assoc-in [:escrow-transfers 0 :escrow-state] :disputed)
-                   (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
-                             {:token :USDC :shortfall {:fulfilled-amount 800
-                                                       :deferred-amount 200
-                                                       :haircut-amount 0}}))
-         r     (loss/classify-loss world :USDC)]
+                  (assoc-in [:yield/positions (t/escrow-yield-owner-id 0)]
+                            {:token :USDC :shortfall {:fulfilled-amount 800
+                                                      :deferred-amount 200
+                                                      :haircut-amount 0}}))
+        r     (loss/classify-loss world :USDC)]
     (is (= :loss-risk (:loss/status r))
         "shortfall while disputed must be risk, not pending (challenge window still open)")
     (is (false? (:loss/user-realized? r)))))
@@ -51,8 +51,8 @@
                   (assoc-in [:escrow-transfers wf :escrow-state] :refunded)
                   (assoc-in [:yield/positions pos-key]
                             {:token :USDC :shortfall {:fulfilled-amount 800
-                                                       :deferred-amount 200
-                                                       :haircut-amount 0}}))
+                                                      :deferred-amount 200
+                                                      :haircut-amount 0}}))
         r     (loss/classify-loss world :USDC)]
     (is (= :loss-realized (:loss/status r))
         "deferred shortfall at finality must be realized")
@@ -108,7 +108,6 @@
     (is (false? (loss/user-loss-realized? r1)))
     (is (true? (loss/user-loss-realized? r2)))))
 
-
 (deftest reclaim-deferred-clears-shortfall-on-available
   (testing "claim-deferred clears shortfall and returns reclaimed amount"
     (let [pos {:token :USDC :status :unwinding :principal 10000
@@ -136,16 +135,16 @@
 (deftest shortfall-total-distinguishes-yield-vs-principal
   (testing "shortfall-total distinguishes yield-leg from principal shortfalls"
     (let [world {:yield/positions {"y1" {:token :USDC :principal 10000
-                                            :shortfall {:fulfilled-amount 8000 :deferred-amount 2000
-                                                        :haircut-amount 0 :reason :liquidity-shortfall
-                                                        :basis-amount 5000}}
+                                         :shortfall {:fulfilled-amount 8000 :deferred-amount 2000
+                                                     :haircut-amount 0 :reason :liquidity-shortfall
+                                                     :basis-amount 5000}}
                                    "y2" {:token :USDC :principal 10000
-                                            :shortfall {:fulfilled-amount 6000 :deferred-amount 0
-                                                        :haircut-amount 4000 :reason :permanent-loss
-                                                        :basis-amount 10000}}
+                                         :shortfall {:fulfilled-amount 6000 :deferred-amount 0
+                                                     :haircut-amount 4000 :reason :permanent-loss
+                                                     :basis-amount 10000}}
                                    "y3" {:token :USDC :principal 10000
-                                            :shortfall {:fulfilled-amount 10000 :deferred-amount 0
-                                                        :haircut-amount 0 :basis-amount 10000}}}}
+                                         :shortfall {:fulfilled-amount 10000 :deferred-amount 0
+                                                     :haircut-amount 0 :basis-amount 10000}}}}
           sf (loss/shortfall-total world :USDC)]
       (is (= 3 (:positions-with-shortfall sf)))
       (is (= 1 (:yield-leg-shortfall-count sf)) "y3 fulfilled=10000 >= principal=10000 → yield-leg")

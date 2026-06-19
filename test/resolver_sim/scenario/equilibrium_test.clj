@@ -353,7 +353,6 @@
                  :spe-regret-table)]
       (is (= r1 r2)))))
 
-
 (deftest test-bne-always-inconclusive
   (testing "bayesian-nash-equilibrium always returns :inconclusive"
     (let [proj (projection {:attack-successes 0 :invariant-violations 0})
@@ -588,7 +587,7 @@
 (deftest test-spe-observed-includes-phase-f-g-h-i-j-l-fields
   (testing "SPE observed payload includes all Phase F-J and L fields"
     (let [proj (sb/spe-projection {:chosen-wealth 200 :terminal-wealth 200
-                                :regret-threshold 1000})
+                                   :regret-threshold 1000})
           result (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
                      :subgame-perfect-equilibrium)
           obs (:observed result)]
@@ -622,33 +621,33 @@
         (is (= :profitable-deviation (:failure/type ce)))
         (is (string? (:node/id ce))))))
 
-(deftest test-spe-proof-sketch-emitted
-  (testing ":spe-proof-sketch is a non-empty string"
-    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          obs (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
-                  :subgame-perfect-equilibrium :observed)]
-      (is (string? (:spe-proof-sketch obs)))
-      (is (pos? (count (:spe-proof-sketch obs)))))))
+  (deftest test-spe-proof-sketch-emitted
+    (testing ":spe-proof-sketch is a non-empty string"
+      (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+            obs (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
+                    :subgame-perfect-equilibrium :observed)]
+        (is (string? (:spe-proof-sketch obs)))
+        (is (pos? (count (:spe-proof-sketch obs)))))))
 
-(deftest test-spe-proof-sketch-method-section-and-memoization-line
-  (testing ":spe-proof-sketch includes method metadata and memoization diagnostics"
-    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          sketch (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
-                     :subgame-perfect-equilibrium :observed :spe-proof-sketch)]
-      (is (re-find #"Method:" sketch))
-      (is (re-find #"continuation-policy:" sketch))
-      (is (re-find #"utility-spec:" sketch))
-      (is (re-find #"max deviation depth:" sketch))
-      (is (re-find #"epsilon: abs=" sketch))
-      (is (re-find #"memoization:" sketch)))))
+  (deftest test-spe-proof-sketch-method-section-and-memoization-line
+    (testing ":spe-proof-sketch includes method metadata and memoization diagnostics"
+      (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+            sketch (-> (eq/evaluate-equilibrium-concepts [:subgame-perfect-equilibrium] proj sew-eq/equilibrium-concept-validators)
+                       :subgame-perfect-equilibrium :observed :spe-proof-sketch)]
+        (is (re-find #"Method:" sketch))
+        (is (re-find #"continuation-policy:" sketch))
+        (is (re-find #"utility-spec:" sketch))
+        (is (re-find #"max deviation depth:" sketch))
+        (is (re-find #"epsilon: abs=" sketch))
+        (is (re-find #"memoization:" sketch)))))
 
-(deftest test-bounded-public-state-epsilon-spe-pass
-  (testing ":bounded-public-state-epsilon-spe passes with a proper-subgame resolver node"
-    (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
-          result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
-                     :bounded-public-state-epsilon-spe)]
-      (is (= :pass (:status result)))
-      (is (= :hard (:severity result)))))))
+  (deftest test-bounded-public-state-epsilon-spe-pass
+    (testing ":bounded-public-state-epsilon-spe passes with a proper-subgame resolver node"
+      (let [proj (sb/spe-projection {:chosen-wealth 200 :regret-threshold 1000})
+            result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
+                       :bounded-public-state-epsilon-spe)]
+        (is (= :pass (:status result)))
+        (is (= :hard (:severity result)))))))
 
 (deftest test-bounded-public-state-epsilon-spe-fail-deviation
   (testing ":bounded-public-state-epsilon-spe fails when regret exceeds threshold"
@@ -659,12 +658,11 @@
       (is (= :fail (:status result)))
       (is (seq (:offending result))))))
 
-
 (deftest test-bounded-public-state-epsilon-spe-inconclusive-no-proper-subgames
   (testing ":bounded-public-state-epsilon-spe is :inconclusive when only info-set nodes"
     ;; buyer raise_dispute is an info-set node → no proper subgames → inconclusive
     (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0 :regret-threshold 0
-                                :agent "buyer" :action "raise_dispute"})
+                                   :agent "buyer" :action "raise_dispute"})
           result (-> (eq/evaluate-equilibrium-concepts [:bounded-public-state-epsilon-spe] proj sew-eq/equilibrium-concept-validators)
                      :bounded-public-state-epsilon-spe)]
       (is (= :inconclusive (:status result))))))
@@ -687,12 +685,12 @@
                     :live-states {"e1" "disputed"}
                     :total-held {}
                     :total-fees {}}
-             :agent "resolver" :action "register_stake" :seq 0 :time 1000}
-            {:world {:claimable {"e1" {"0xresolver" 50}}
-                     :live-states {"e1" "released"}
-                     :total-held {}
-                     :total-fees {}}
-             :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+            :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+           {:world {:claimable {"e1" {"0xresolver" 50}}
+                    :live-states {"e1" "released"}
+                    :total-held {}
+                    :total-fees {}}
+            :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
    :metrics {}
    :protocol sew-protocol/protocol})
@@ -818,16 +816,16 @@
                      :live-states {"e1" "disputed"}
                      :total-held {}
                      :total-fees {}}
-              :agent "resolver" :action "register_stake" :seq 0 :time 1000}
-             {:world {:resolver-stakes {addr 0}
-                      :resolver-slash-total {addr 100}
-                      :claimable {"e1" {addr 50}}
-                      :bond-balances {}
-                      :live-states {"e1" "released"}
-                      :total-held {}
-                      :total-fees {}
-                      :terminal? true}
-              :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+             :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+            {:world {:resolver-stakes {addr 0}
+                     :resolver-slash-total {addr 100}
+                     :claimable {"e1" {addr 50}}
+                     :bond-balances {}
+                     :live-states {"e1" "released"}
+                     :total-held {}
+                     :total-fees {}
+                     :terminal? true}
+             :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
     :agents [{:id "resolver" :address addr :role "resolver" :strategy "malicious"}]
     :metrics {}
     :protocol sew-protocol/protocol}))
@@ -845,16 +843,16 @@
                     :live-states {"e1" "disputed"}
                     :total-held {}
                     :total-fees {}}
-             :agent "resolver" :action "register_stake" :seq 0 :time 1000}
-            {:world {:resolver-stakes {"0xresolver" 100}
-                     :resolver-slash-total {}
-                     :claimable {"e1" {"0xresolver" 50}}
-                     :bond-balances {}
-                     :live-states {"e1" "released"}
-                     :total-held {}
-                     :total-fees {}
-                     :terminal? true}
-             :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+            :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+           {:world {:resolver-stakes {"0xresolver" 100}
+                    :resolver-slash-total {}
+                    :claimable {"e1" {"0xresolver" 50}}
+                    :bond-balances {}
+                    :live-states {"e1" "released"}
+                    :total-held {}
+                    :total-fees {}
+                    :terminal? true}
+            :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
    :metrics {}
    :protocol sew-protocol/protocol})
@@ -870,16 +868,16 @@
                     :live-states {"e1" "disputed"}
                     :total-held {}
                     :total-fees {}}
-             :agent "resolver" :action "register_stake" :seq 0 :time 1000}
-            {:world {:resolver-stakes {"0xresolver" 50}
-                     :resolver-slash-total {}
-                     :claimable {"e1" {"0xresolver" 50}}
-                     :bond-balances {}
-                     :live-states {"e1" "released"}
-                     :total-held {}
-                     :total-fees {}
-                     :terminal? true}
-             :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+            :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+           {:world {:resolver-stakes {"0xresolver" 50}
+                    :resolver-slash-total {}
+                    :claimable {"e1" {"0xresolver" 50}}
+                    :bond-balances {}
+                    :live-states {"e1" "released"}
+                    :total-held {}
+                    :total-fees {}
+                    :terminal? true}
+            :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver" :address "0xresolver" :role "resolver" :strategy "honest"}]
    :metrics {}
    :protocol sew-protocol/protocol})
@@ -895,16 +893,16 @@
                     :live-states {}
                     :total-held {}
                     :total-fees {}}
-             :agent "resolver-a" :action "register_stake" :seq 0 :time 1000}
-            {:world {:resolver-stakes {"0xresolver-a" 100 "0xresolver-b" 0}
-                     :resolver-slash-total {"0xresolver-b" 100}
-                     :claimable {"e1" {"0xresolver-a" 50}}
-                     :bond-balances {}
-                     :live-states {"e1" "released"}
-                     :total-held {}
-                     :total-fees {}
-                     :terminal? true}
-             :agent "resolver-a" :action "execute_resolution" :seq 1 :time 1100}]
+            :agent "resolver-a" :action "register_stake" :seq 0 :time 1000}
+           {:world {:resolver-stakes {"0xresolver-a" 100 "0xresolver-b" 0}
+                    :resolver-slash-total {"0xresolver-b" 100}
+                    :claimable {"e1" {"0xresolver-a" 50}}
+                    :bond-balances {}
+                    :live-states {"e1" "released"}
+                    :total-held {}
+                    :total-fees {}
+                    :terminal? true}
+            :agent "resolver-a" :action "execute_resolution" :seq 1 :time 1100}]
    :agents [{:id "resolver-a" :address "0xresolver-a" :role "resolver" :strategy "honest"}
             {:id "resolver-b" :address "0xresolver-b" :role "resolver" :strategy "malicious"}]
    :metrics {}
@@ -1093,16 +1091,16 @@
                       :live-states {"e1" "disputed"}
                       :total-held {}
                       :total-fees {}}
-               :agent "resolver" :action "register_stake" :seq 0 :time 1000}
-              {:world {:resolver-stakes {addr 80}
-                       :resolver-slash-total {addr 20}
-                       :claimable {"e1" {addr 60}}
-                       :bond-balances {}
-                       :live-states {"e1" "released"}
-                       :total-held {}
-                       :total-fees {}
-                       :terminal? true}
-               :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
+              :agent "resolver" :action "register_stake" :seq 0 :time 1000}
+             {:world {:resolver-stakes {addr 80}
+                      :resolver-slash-total {addr 20}
+                      :claimable {"e1" {addr 60}}
+                      :bond-balances {}
+                      :live-states {"e1" "released"}
+                      :total-held {}
+                      :total-fees {}
+                      :terminal? true}
+              :agent "resolver" :action "execute_resolution" :seq 1 :time 1100}]
      :agents [{:id "resolver" :address addr :role "resolver" :strategy "malicious"}]
      :metrics {}
      :protocol sew-protocol/protocol}))

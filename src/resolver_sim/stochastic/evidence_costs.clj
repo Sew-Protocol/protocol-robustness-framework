@@ -65,13 +65,13 @@
   (case strategy
     :honest
     (min effort-available effort-required)  ; Do best effort within budget
-    
+
     :lazy
     (max 3 (/ effort-available 2.0))  ; Lazy spends ~half effort on anything
-    
+
     :malicious
     (max 1 (/ effort-available 4.0))  ; Malice barely tries; they know the answer
-    
+
     :collusive
     (min effort-available (double (/ effort-required 1.3)))))  ; Collusive tries harder
 
@@ -91,7 +91,7 @@
         effort-spent (effort-actually-spent rng strategy difficulty
                                             effort-available effort-required)
         adjusted-accuracy (diff/accuracy-with-effort base-accuracy effort-spent
-                                                    effort-required)]
+                                                     effort-required)]
     adjusted-accuracy))
 
 (defn should-shortcut?
@@ -163,7 +163,7 @@
   [base-detection-prob difficulty-distribution]
   (reduce (fn [acc [difficulty weight]]
             (+ acc (* weight (diff/detection-probability-by-difficulty
-                               base-detection-prob difficulty))))
+                              base-detection-prob difficulty))))
           0.0
           difficulty-distribution))
 

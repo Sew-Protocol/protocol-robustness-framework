@@ -76,12 +76,12 @@
                                 :action/type :fees/withdraw
                                 :evidence/reason :fees-withdrawn}
           (cap/capture-event-evidence!
-            :fees-withdrawn
-            {:fee/before {:total-fees amount}}
-            {:fee/after {:total-fees 0
-                         :total-withdrawn (get-in world' [:total-withdrawn token])}}
-            {:fee/token token
-             :fee/amount amount}))
+           :fees-withdrawn
+           {:fee/before {:total-fees amount}}
+           {:fee/after {:total-fees 0
+                        :total-withdrawn (get-in world' [:total-withdrawn token])}}
+           {:fee/token token
+            :fee/amount amount}))
         (assoc (t/ok world') :amount amount)))))
 
 ;; ---------------------------------------------------------------------------
@@ -148,10 +148,10 @@
   [world wf-id addr]
   (if-let [domains (get-in world [:claimable-v2 wf-id])]
     (update-in world [:claimable-v2 wf-id]
-                 (fn [domain-map]
-                   (into {}
-                         (for [[domain addr-map] domain-map]
-                           [domain (assoc addr-map addr 0)]))))
+               (fn [domain-map]
+                 (into {}
+                       (for [[domain addr-map] domain-map]
+                         [domain (assoc addr-map addr 0)]))))
     world))
 
 (defn withdraw-escrow
@@ -193,16 +193,16 @@
                                       :action/type :escrow/withdraw
                                       :evidence/reason :escrow-withdrawn}
                 (cap/capture-event-evidence!
-                  :escrow-withdrawn
-                  {:withdraw/before {:claimable amount
-                                     :workflow-id wf-id
-                                     :recipient addr}}
-                  {:withdraw/after {:claimable (get-in world' [:claimable wf-id addr])
-                                    :total-withdrawn (get-in world' [:total-withdrawn token])}}
-                  {:withdraw/workflow-id wf-id
-                   :withdraw/recipient addr
-                   :withdraw/token token
-                   :withdraw/amount amount}))
+                 :escrow-withdrawn
+                 {:withdraw/before {:claimable amount
+                                    :workflow-id wf-id
+                                    :recipient addr}}
+                 {:withdraw/after {:claimable (get-in world' [:claimable wf-id addr])
+                                   :total-withdrawn (get-in world' [:total-withdrawn token])}}
+                 {:withdraw/workflow-id wf-id
+                  :withdraw/recipient addr
+                  :withdraw/token token
+                  :withdraw/amount amount}))
               (assoc (t/ok world') :amount amount))))))))
 
 ;; ---------------------------------------------------------------------------
@@ -245,20 +245,20 @@
                             :action/type :bond/post
                             :evidence/reason :bond-posted}
       (cap/capture-event-evidence!
-        :bond-posted
-        {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
-                       :total-held (get-in world [:total-held token])}}
-        {:bond/after  {:bond-balance (get-in world' [:bond-balances workflow-id appellant] 0)
-                       :total-held (get-in world' [:total-held token])}}
-        {:bond/workflow-id workflow-id
-         :bond/appellant appellant
-         :bond/amount amount
-         :bond/fee fee
-         :bond/net net
-         :bond/token token}
-        nil
-        {:world-before world
-         :world-after world'}))
+       :bond-posted
+       {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                      :total-held (get-in world [:total-held token])}}
+       {:bond/after  {:bond-balance (get-in world' [:bond-balances workflow-id appellant] 0)
+                      :total-held (get-in world' [:total-held token])}}
+       {:bond/workflow-id workflow-id
+        :bond/appellant appellant
+        :bond/amount amount
+        :bond/fee fee
+        :bond/net net
+        :bond/token token}
+       nil
+       {:world-before world
+        :world-after world'}))
     world'))
 
 (defn distribute-slashed-funds
@@ -281,22 +281,22 @@
                     (update-in [:retained-slash-reserves]      (fnil + 0) (:retained dist))
                     (cond-> (and challenger (pos? bounty) (some? workflow-id))
                       (record-claimable-v2 workflow-id :liability/challenge-bounty challenger bounty)))]
-     
+
      (when (and challenger (pos? bounty))
        (attr/with-attribution
          {:subject/type :challenger
           :subject/id   challenger
           :action/type  :reward-bounty
           :evidence/reason :incentive-payout}
-          (cap/capture-event-evidence! :incentive-payout
-                                           {:bounty-claimable 0}
-                                           {:bounty-claimable bounty}
-                                           {:slash-amount amount :bounty-bps bounty-bps}
-                                           {:formula "payoffs/calculate-bounty"}
-                                           {:world-before world
-                                             :world-after world'})))
-      
-      world')))
+         (cap/capture-event-evidence! :incentive-payout
+                                      {:bounty-claimable 0}
+                                      {:bounty-claimable bounty}
+                                      {:slash-amount amount :bounty-bps bounty-bps}
+                                      {:formula "payoffs/calculate-bounty"}
+                                      {:world-before world
+                                       :world-after world'})))
+
+     world')))
 
 (defn- reject-bond-evidence!
   "Capture evidence for a rejected bond operation."
@@ -306,18 +306,18 @@
                           :action/type action-type
                           :evidence/reason error-kw}
     (cap/capture-event-evidence!
-      evidence-type
-      {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
-                     :bond-status :active}}
-      {:bond/after  {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
-                     :bond-status :unchanged}}
-      {:bond/workflow-id workflow-id
-       :bond/appellant appellant
-       :bond/amount amount
-       :bond/error error-kw}
-      nil
-      {:world-before world
-       :world-after world})))
+     evidence-type
+     {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                    :bond-status :active}}
+     {:bond/after  {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
+                    :bond-status :unchanged}}
+     {:bond/workflow-id workflow-id
+      :bond/appellant appellant
+      :bond/amount amount
+      :bond/error error-kw}
+     nil
+     {:world-before world
+      :world-after world})))
 
 (defn slash-bond
   "Slash the posted bond for a losing appellant.
@@ -342,18 +342,18 @@
                                 :action/type :bond/slash
                                 :evidence/reason :bond-slashed}
           (cap/capture-event-evidence!
-            :bond-slashed
-            {:bond/before {:bond-balance amount
-                           :bond-status :active}}
-            {:bond/after  {:bond-balance 0
-                           :bond-status :slashed}}
-            {:bond/workflow-id workflow-id
-             :bond/appellant appellant
-             :bond/amount amount
-             :bond/token token}
-            nil
-            {:world-before world
-             :world-after world'}))
+           :bond-slashed
+           {:bond/before {:bond-balance amount
+                          :bond-status :active}}
+           {:bond/after  {:bond-balance 0
+                          :bond-status :slashed}}
+           {:bond/workflow-id workflow-id
+            :bond/appellant appellant
+            :bond/amount amount
+            :bond/token token}
+           nil
+           {:world-before world
+            :world-after world'}))
         (assoc (t/ok world') :slashed amount)))))
 
 (defn return-bond
@@ -377,16 +377,16 @@
                                 :action/type :bond/return
                                 :evidence/reason :bond-returned}
           (cap/capture-event-evidence!
-            :bond-returned
-            {:bond/before {:bond-balance amount
-                           :bond-status :active}}
-            {:bond/after  {:bond-balance 0
-                           :bond-status :returned}}
-            {:bond/workflow-id workflow-id
-             :bond/appellant appellant
-             :bond/amount amount
-             :bond/token token}
-            nil
-            {:world-before world
-             :world-after world'}))
+           :bond-returned
+           {:bond/before {:bond-balance amount
+                          :bond-status :active}}
+           {:bond/after  {:bond-balance 0
+                          :bond-status :returned}}
+           {:bond/workflow-id workflow-id
+            :bond/appellant appellant
+            :bond/amount amount
+            :bond/token token}
+           nil
+           {:world-before world
+            :world-after world'}))
         (assoc (t/ok world') :returned amount)))))

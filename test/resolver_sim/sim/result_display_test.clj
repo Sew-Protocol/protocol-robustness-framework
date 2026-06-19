@@ -49,8 +49,8 @@
   {"S108-fake-yield" {:metrics [{:name :yield/escrow-principal :op := :value 9950}]}})
 
 (defn- lines-at [level & {:keys [elapsed-ms expectations-by-trace-id]
-                           :or {elapsed-ms 1200
-                                expectations-by-trace-id yield-expectations-decl}}]
+                          :or {elapsed-ms 1200
+                               expectations-by-trace-id yield-expectations-decl}}]
   (display/suite-report-lines suite-result
                               {:result-display-level level
                                :elapsed-ms elapsed-ms
@@ -117,7 +117,7 @@
   (is (= :failures (display/resolve-display-level {:show-failures? true})))
   (is (= :summary (display/resolve-display-level {:show-failures? false})))
   (is (= :verbose (display/resolve-display-level {:result-display-level :verbose
-                                                   :verbose? false}))))
+                                                  :verbose? false}))))
 
 (deftest unknown-display-level-throws-with-valid-levels
   (try
@@ -132,7 +132,7 @@
   (is (display/scenario-entry-ok? pass-entry))
   (is (not (display/scenario-entry-ok? yield-fail-entry)))
   (is (not (display/scenario-entry-ok? (dissoc pass-entry :pass?)))
-        "missing :pass? is treated as fail for display gating only"))
+      "missing :pass? is treated as fail for display gating only"))
 
 (deftest run-suite-return-map-excludes-display-only-keys
   (let [result (fixtures/run-suite :suites/equivalence-escalation-boundaries

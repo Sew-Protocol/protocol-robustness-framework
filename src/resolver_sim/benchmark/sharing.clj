@@ -38,7 +38,7 @@
         (println "Target commit: " target-commit)
         (println "Current commit: " current-commit))
       (println "Repository state matches."))
-    
+
     (println "Rerunning benchmark...")
     ;; We need to make sure we use the same manifest. 
     ;; Manifest might have changed, so ideally we'd use the one in evidence.
@@ -62,7 +62,7 @@
       (spit (io/file tmp-dir "repo.edn") (pr-str (:repo evidence)))
       (spit (io/file tmp-dir "results.edn") (pr-str (:results evidence)))
       (spit (io/file tmp-dir "metrics.edn") (pr-str (:metrics evidence)))
-      
+
       ;; Deterministic tar
       ;; We use --sort=name --mtime='2026-01-01' --owner=0 --group=0 --numeric-owner
       (let [{:keys [exit out err]} (sh "tar" "--sort=name" "--mtime=2026-01-01" "--owner=0" "--group=0" "--numeric-owner" "-czf" export-tar-path "-C" "tmp-export" ".")]

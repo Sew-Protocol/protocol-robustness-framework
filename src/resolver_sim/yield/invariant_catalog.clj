@@ -27,7 +27,6 @@
    {:description "Under :partial-liquidity stress, unwinding positions keep principal intact; shortfall applies to yield leg only."
     :prf-tags [:partial-liquidity :shortfall-affected]}
 
-
    :yield/value-conservation
    {:description "Total position value = claimable + deferred + loss within rounding tolerance (1 base unit)."
     :prf-tags [:yield-accounting :conservation :shortfall-affected]}
@@ -53,7 +52,7 @@
 (def default-expectation-invariant-ids
   "Merged into :expectations :invariants for :yield-provider-scenarios."
   (vec (distinct (concat default-runtime-invariant-ids
-                        default-transition-invariant-ids))))
+                         default-transition-invariant-ids))))
 
 (def scenario-extra-invariants
   "Per scenario-id additions (unioned with defaults at load time)."

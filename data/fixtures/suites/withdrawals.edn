@@ -9,4 +9,5 @@
  :thresholds :thresholds/strict-baseline
   :traces [:traces/s114-withdraw-fees-governance
            :traces/s115-claim-deferred-yield-recovery
-           :traces/s118-withdraw-while-paused]}
+           :traces/s118-withdraw-while-paused
+           :traces/s119-non-governance-rejected]}

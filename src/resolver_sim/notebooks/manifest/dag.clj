@@ -17,7 +17,7 @@
    :simulation-run     {:label "Simulation Run"    :tier 2 :color "#155e75"}
    :event-traces       {:label "Event Traces"      :tier 3 :color "#1a6b80"}
    :findings           {:label "Findings / Issues" :tier 4 :color "#0369a1"}
-   :evidence-artifacts {:label "Evidence Artifacts":tier 5 :color "#1d4ed8"}
+   :evidence-artifacts {:label "Evidence Artifacts" :tier 5 :color "#1d4ed8"}
    :published-bundle   {:label "Published Bundle"  :tier 6 :color "#4338ca"}})
 
 (def ^:private edge-pairs

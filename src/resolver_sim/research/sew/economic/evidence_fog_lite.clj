@@ -27,41 +27,41 @@
         fee-bps     (:resolver-fee-bps params 150)
         yield-bps   (:yield-annual-bps params 500) ; 5%
         duration    (:duration-days params 30)
-        
+
         ;; Setup
         w0    (t/empty-world 1000)
-        snap  (snapshot/make-escrow-snapshot 
-                {:escrow-fee-bps fee-bps
-                 :yield-protocol-fee-bps (:yield-protocol-fee-bps params 1000)}) ; 10% of yield
-        
+        snap  (snapshot/make-escrow-snapshot
+               {:escrow-fee-bps fee-bps
+                :yield-protocol-fee-bps (:yield-protocol-fee-bps params 1000)}) ; 10% of yield
+
         ;; 1. Create
         cr    (lc/create-escrow w0 "alice" "USDC" "bob" escrow-size {} snap)
         _     (when-not (:ok cr) (throw (ex-info "Create failed" cr)))
         w1    (assoc-in (:world cr) [:escrow-transfers 0 :dispute-resolver] "resolver0")
         wf-id 0
-        
+
         ;; 1.5 Raise Dispute (required for resolution)
         dr    (lc/raise-dispute w1 wf-id "alice")
         w1-d  (:world dr)
-        
+
         ;; 2. Set Rate
         w2    (assoc-in w1-d [:yield-rates "USDC"] yield-bps)
-        
+
         ;; 3. Advance Time
         w3    (assoc w2 :block-time (+ (:block-time w2) (* duration 86400)))
-        
+
         ;; 4. Accrue & Resolve
         r-res (res/execute-resolution w3 wf-id "resolver0" true "0xhash" nil)
         _     (when-not (:ok r-res) (throw (ex-info "Resolution failed" r-res)))
         w4    (:world r-res)
-        
+
         ;; Final State check
         et-final (t/get-transfer w4 wf-id)
         yield    (get-in w4 [:total-yield-generated "USDC"] 0)
         fees     (get-in w4 [:total-fees "USDC"] 0)
-        
+
         inv-res  (inv/check-all w4)]
-    
+
     {:yield-generated yield
      :protocol-fees   fees
      :final-state     (:escrow-state et-final)
@@ -70,11 +70,11 @@
 
 (defn run-phase-y [params]
   (println "\n=== Phase Y: Yield Efficiency Validation ===")
-  (println (format "Escrow: %d | APR: %.2f%% | Duration: %d days" 
+  (println (format "Escrow: %d | APR: %.2f%% | Duration: %d days"
                    (:escrow-size params 10000)
                    (/ (double (:yield-annual-bps params 500)) 100.0)
                    (:duration-days params 30)))
-  
+
   (let [result (run-yield-trial params)]
     (println "\n=== SUMMARY ===")
     (println (format "  Yield Accrued:   %d" (:yield-generated result)))

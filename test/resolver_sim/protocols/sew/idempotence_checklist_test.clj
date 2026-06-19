@@ -15,8 +15,8 @@
 (defn- base-world
   [appeal-window-duration]
   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50
-                                      :max-dispute-duration 3600
-                                      :appeal-window-duration appeal-window-duration})
+                                        :max-dispute-duration 3600
+                                        :appeal-window-duration appeal-window-duration})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
                                (t/make-escrow-settings {}) snap)
         w    (:world r)]

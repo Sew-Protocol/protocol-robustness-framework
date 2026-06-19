@@ -78,9 +78,9 @@
     (if-some [cur (get-in world path)]
       (apply update-in world path f args)
       (throw (ex-info "No escrow-transfer found; cannot apply transition"
-                       {:workflow-id workflow-id
-                        :f           (pr-str f)
-                        :args        args})))))
+                      {:workflow-id workflow-id
+                       :f           (pr-str f)
+                       :args        args})))))
 
 (defn- set-escrow-state
   "Set :escrow-state for workflow-id.  Asserts via the transition graph —
@@ -209,9 +209,9 @@
         token (:token et)
         held  (get-in world [:total-held token] 0)
         other-live  (reduce (fn [acc [wf e]]
-                               (if (and (not= wf workflow-id)
-                                        (= (:token e) token)
-                                        (contains? t/live-states (:escrow-state e)))
+                              (if (and (not= wf workflow-id)
+                                       (= (:token e) token)
+                                       (contains? t/live-states (:escrow-state e)))
                                 (+ acc (:amount-after-fee e))
                                 acc))
                             0
@@ -224,7 +224,7 @@
     (fn [world workflow-id caller]
       (let [et (t/get-transfer world workflow-id)]
         (or (= caller (:from et)) (= caller (:to et)))))
-    
+
     :terminal-transfer-done?
     (fn [world workflow-id _]
       (terminal-transfer-done? world workflow-id))}
@@ -235,12 +235,12 @@
       (let [et (t/get-transfer world workflow-id)
             is-sender? (= caller (:from et))]
         (update-transfer world workflow-id
-                        (if is-sender?
-                          #(assoc % :sender-status    :raise-dispute
-                                    :recipient-status  :none)
-                          #(assoc % :recipient-status :raise-dispute
-                                    :sender-status     :none)))))
-    
+                         (if is-sender?
+                           #(assoc % :sender-status    :raise-dispute
+                                   :recipient-status  :none)
+                           #(assoc % :recipient-status :raise-dispute
+                                   :sender-status     :none)))))
+
     :record-dispute-timestamp
     (fn [world workflow-id _]
       (assoc-in world [:dispute-timestamps workflow-id] (time-ctx/block-ts world)))}})

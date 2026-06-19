@@ -391,29 +391,29 @@
               "F4: Escrow Concentration (100–1M)"
               "F5: Multi-resolver Equilibrium (1–100 resolvers)"
               "F6: Appeal Window Adequacy (0–10k blocks)"]})
-  
+
   (let [f1 (run-f1-detection-probability-sweep)
         f2 (run-f2-bond-size-sweep)
         f3 (run-f3-fee-adequacy-sweep)
         f4 (run-f4-escrow-concentration-sweep)
         f5 (run-f5-multi-resolver-equilibrium)
         f6 (run-f6-appeal-window-adequacy)
-        
+
         phases [f1 f2 f3 f4 f5 f6]
         passed-phases (count (filter :passed? phases))
         total-phases (count phases)
-        
+
         overall-passed? (>= passed-phases 5)  ; 5/6 phases must pass
-        
+
         result (engine/make-result
-         {:benchmark-id "Phase F"
-          :label "Economic Parameter Validation"
-          :hypothesis "Safe parameter zones exist where malicious EV < 0"
-          :passed? overall-passed?
-          :summary {:total-phases total-phases
-                    :passed-phases passed-phases
-                    :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
-    
+                {:benchmark-id "Phase F"
+                 :label "Economic Parameter Validation"
+                 :hypothesis "Safe parameter zones exist where malicious EV < 0"
+                 :passed? overall-passed?
+                 :summary {:total-phases total-phases
+                           :passed-phases passed-phases
+                           :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
+
     (println (format "F1 Detection Prob: %s" (:status f1)))
     (println (format "F2 Bond Size: %s" (:status f2)))
     (println (format "F3 Fee Adequacy: %s" (:status f3)))
@@ -421,10 +421,10 @@
     (println (format "F5 Multi-resolver: %s" (:status f5)))
     (println (format "F6 Appeal Window: %s" (:status f6)))
     (println "")
-    
+
     (if overall-passed?
       (println "✓ PASS: Phase F — Economic parameters validated")
       (println "✗ FAIL: Phase F — Unsafe parameter zones detected"))
     (println "")
-    
+
     result))

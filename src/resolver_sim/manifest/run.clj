@@ -67,12 +67,12 @@
       (some (fn [d]
               (when (and (.isDirectory d)
                          (str/ends-with? (.getName d) run-id))
-                 (let [base (.getPath d)]
-                   {:manifest        (common/read-json (str base "/" (evcfg/artifact-file :test-run)))
-                    :summary         (common/read-json (str base "/" (evcfg/artifact-file :test-summary)))
-                    :registry        (common/read-json (str base "/test-artifacts.json"))
-                    :classification  (common/read-json (str base "/" (evcfg/artifact-file :claimable-classification)))
-                    :dir             base})))
+                (let [base (.getPath d)]
+                  {:manifest        (common/read-json (str base "/" (evcfg/artifact-file :test-run)))
+                   :summary         (common/read-json (str base "/" (evcfg/artifact-file :test-summary)))
+                   :registry        (common/read-json (str base "/test-artifacts.json"))
+                   :classification  (common/read-json (str base "/" (evcfg/artifact-file :claimable-classification)))
+                   :dir             base})))
             (.listFiles root)))))
 
 (defn artifact-by-id
@@ -107,7 +107,6 @@
         (or (load-run run-id)
             (load-latest)))
       (load-latest))))
-
 
 (defn run->status-indicator
   "Derive a status keyword for a loaded run map.

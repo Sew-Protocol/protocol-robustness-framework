@@ -15,4 +15,4 @@
           :traces/s31-forking-strategist-all-levels-confirm
           :traces/s32-forking-strategist-premature-settlement-rejected
           :traces/s33-forking-strategist-two-escrow-fork-isolation
-          :traces/s114-withdraw-fees-governance]}
+]}

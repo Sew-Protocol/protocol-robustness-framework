@@ -87,13 +87,13 @@ Every yield position now exposes structured shortfall annotations in traces.
         haircut (long (or (:haircut-amount sf) 0))]
     {:shortfall-affected? (some? sf)
      :shortfall-kind (if (= (:reason sf) :liquidity-shortfall)
-                      :temporary-liquidity
-                      :unknown)
+                       :temporary-liquidity
+                       :unknown)
      :shortfall-effect (cond
-                        (and (pos? deferred) (pos? haircut)) :partially-liquid
-                        (pos? deferred) :timing-delayed
-                        (pos? haircut) :loss-realized
-                        :else :claimability-constrained)
+                         (and (pos? deferred) (pos? haircut)) :partially-liquid
+                         (pos? deferred) :timing-delayed
+                         (pos? haircut) :loss-realized
+                         :else :claimability-constrained)
      :shortfall-affected-fields (cond-> []
                                   (pos? deferred) (conj :deferred-amount)
                                   (pos? haircut) (conj :haircut-amount))
@@ -151,11 +151,11 @@ Example: principal=100% available, yield=60% available, partial-liquidity active
 
 (comment
   (let [world {:yield/risk {:mod {:USDC {:liquidity-mode :shortfall
-                                          :failure-modes #{:partial-liquidity}
-                                          :shortfall {:available-ratio 0.8
-                                                       :yield-available-ratio 0.6
-                                                       :principal-available-ratio 1.0
-                                                       :reason :liquidity-shortfall}}}}}
+                                         :failure-modes #{:partial-liquidity}
+                                         :shortfall {:available-ratio 0.8
+                                                     :yield-available-ratio 0.6
+                                                     :principal-available-ratio 1.0
+                                                     :reason :liquidity-shortfall}}}}}
         ;; 5000 yield, 10000 principal = 15000 gross
         ;; yield=5000 * 0.6 = 3000, principal=10000 * 1.0 = 10000
         ;; total fulfilled = 13000
@@ -186,14 +186,14 @@ This runs on every replay step alongside the other 6 yield invariants.")
         valid {:yield/positions {"p1" {:token :USDC :principal 10000
                                        :realized-yield 300 :unrealized-yield 200
                                        :shortfall {:deferred-amount 1500
-                                                    :haircut-amount 0
-                                                    :fulfilled-amount 8500}}}}
+                                                   :haircut-amount 0
+                                                   :fulfilled-amount 8500}}}}
         ;; Invalid: deferred=20000 > principal=10000+500 (no yield covers it)
         invalid {:yield/positions {"p1" {:token :USDC :principal 10000
                                          :realized-yield 300 :unrealized-yield 200
                                          :shortfall {:deferred-amount 20000
-                                                      :haircut-amount 0
-                                                      :fulfilled-amount 0}}}}
+                                                     :haircut-amount 0
+                                                     :fulfilled-amount 0}}}}
         {:keys [holds?]} (yi/holds? :yield/value-conservation valid)
         {:keys [holds?]} (yi/holds? :yield/value-conservation invalid)]
     (clerk/table
@@ -214,16 +214,16 @@ relevant amounts.")
 (comment
   (let [events (atom [])
         world (-> {}
-                (ye/emit-shortfall-event :yield.shortfall/deferred-created "pos-1"
-                  {:deferred-amount 2000 :haircut-amount 0 :fulfilled-amount 8000
-                   :basis-amount 10000 :available-ratio 0.8
-                   :shortfall-kind "temporary-liquidity"})
-                (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed "pos-1"
-                  {:reclaimed-amount 2000 :deferred-before 2000})
-                (ye/emit-shortfall-event :yield.shortfall/deferred-created "pos-2"
-                  {:deferred-amount 5000 :haircut-amount 3000 :fulfilled-amount 4000
-                   :basis-amount 12000 :available-ratio 0.5
-                   :shortfall-kind "partial-liquidity"}))]
+                  (ye/emit-shortfall-event :yield.shortfall/deferred-created "pos-1"
+                                           {:deferred-amount 2000 :haircut-amount 0 :fulfilled-amount 8000
+                                            :basis-amount 10000 :available-ratio 0.8
+                                            :shortfall-kind "temporary-liquidity"})
+                  (ye/emit-shortfall-event :yield.shortfall/deferred-reclaimed "pos-1"
+                                           {:reclaimed-amount 2000 :deferred-before 2000})
+                  (ye/emit-shortfall-event :yield.shortfall/deferred-created "pos-2"
+                                           {:deferred-amount 5000 :haircut-amount 3000 :fulfilled-amount 4000
+                                            :basis-amount 12000 :available-ratio 0.5
+                                            :shortfall-kind "partial-liquidity"}))]
     (clerk/table
      (for [e (:yield/events world)]
        {:type (:event/type e) :position (:position/id e)

@@ -29,18 +29,18 @@
    
    Returns: Probability [0.0 - 1.0] of following prior"
   [prior-alignment reputation-weight confidence-in-prior]
-  
+
   (let [; Base following probability
         alignment-factor prior-alignment
-        
+
         ; Reputation pressure increases following probability
         reputation-factor (* reputation-weight 0.5)  ; scales [0 - 0.5]
-        
+
         ; Confidence in prior increases following
         confidence-factor (* confidence-in-prior 0.3)  ; scales [0 - 0.3]
-        
+
         ; Combined following probability
-        p-follow (min 1.0 
+        p-follow (min 1.0
                       (+ alignment-factor reputation-factor confidence-factor))]
     p-follow))
 
@@ -57,16 +57,16 @@
    
    Returns: Probability [0.0 - 1.0] of breaking cascade"
   [rounds-in-cascade evidence-strength time-available]
-  
+
   (let [; More rounds = stickier cascade
         cascade-stickiness (/ rounds-in-cascade 3.0)
-        
+
         ; Evidence can break cascade
         evidence-power (* evidence-strength (/ time-available 1.0))
-        
+
         ; Break probability = evidence / stickiness
         p-break (/ evidence-power (+ 1.0 cascade-stickiness))]
-    
+
     (min 1.0 p-break)))
 
 ;; ============ Sequential Decision Under Information Asymmetry ============
@@ -84,34 +84,34 @@
    - :follow-prior: agree with prior
    - :escalate: disagree and escalate
    - :agree-independently: agree for own reasons"
-  [rng ground-truth prior-decision prior-was-wrong? 
+  [rng ground-truth prior-decision prior-was-wrong?
    reputation-weight time-pressure-factor evidence-quality]
-  
+
   (let [; Personal signal (what does evidence suggest?)
         accuracy-of-personal-signal (case time-pressure-factor
                                       1.0 0.70  ; Normal time
                                       1.5 0.60  ; Rushed
                                       0.5 0.85) ; Abundant time
-        
+
         personal-believes-prior? (< (rng/next-double rng) accuracy-of-personal-signal)
-        
+
         ; Cascade following probability
         prior-confidence (if prior-was-wrong? 0.3 0.8)  ; How credible is prior?
         prior-alignment (if (= prior-decision ground-truth) 1.0 0.0)
-        
-        p-follow (cascade-following-probability 
-                   prior-alignment reputation-weight prior-confidence)
-        
+
+        p-follow (cascade-following-probability
+                  prior-alignment reputation-weight prior-confidence)
+
         ; Decision logic
         decision (if (< (rng/next-double rng) p-follow)
                    ; Follow cascade/prior
                    prior-decision
-                   
+
                    ; Trust personal signal
                    (if personal-believes-prior?
                      prior-decision
                      (not prior-decision)))]
-    
+
     {:decision decision
      :followed-prior? (= decision prior-decision)
      :personal-signal personal-believes-prior?
@@ -139,24 +139,24 @@
    
    Returns: Risk score [0.0 - 1.0]"
   [num-rounds reputation-weight evidence-quality]
-  
+
   (let [; Base cascade risk
         base-risk (case num-rounds
                     1 0.0    ; Can't cascade with one resolver
                     2 0.30   ; Two resolvers: can lock in
                     3 0.50)  ; Three resolvers: sticky
-        
+
         ; Reputation pressure increases risk
         reputation-risk (* reputation-weight 0.40)
-        
+
         ; Good evidence decreases risk
         evidence-protection (* evidence-quality 0.30)
-        
+
         ; Combined risk
         total-risk (min 1.0
-                       (- (+ base-risk reputation-risk)
-                          evidence-protection))]
-    
+                        (- (+ base-risk reputation-risk)
+                           evidence-protection))]
+
     (max 0.0 total-risk)))
 
 ;; ============ Multi-Round Cascade Analysis ============
@@ -166,35 +166,35 @@
    
    Returns: {:risk-score, :vulnerable-rounds, :break-point, :recommendation}"
   [ground-truth round-decisions reputation-weight evidence-quality]
-  
+
   (let [num-rounds (count round-decisions)
-        
+
         ; Is system locked in wrong outcome?
         all-same? (apply = round-decisions)
-        wrong-outcome (and all-same? 
+        wrong-outcome (and all-same?
                            (not= (first round-decisions) ground-truth))
-        
+
         ; Where could cascade break?
-        break-probability (detect-cascade-error 
+        break-probability (detect-cascade-error
                            (count round-decisions)
                            evidence-quality
                            1.0)  ; Standard time
-        
-        cascade-risk (information-cascade-risk 
+
+        cascade-risk (information-cascade-risk
                       num-rounds reputation-weight evidence-quality)
-        
+
         vulnerability (if wrong-outcome cascade-risk 0.0)]
-    
+
     {:cascade-locked? wrong-outcome
      :cascade-risk cascade-risk
      :break-probability break-probability
      :vulnerability vulnerability
      :rounds (count round-decisions)
      :recommendation (cond
-                      (> break-probability 0.8) "Cascade will likely break"
-                      (< cascade-risk 0.2) "Low cascade risk"
-                      (> cascade-risk 0.7) "HIGH CASCADE RISK - Consider external review"
-                      :else "Moderate cascade risk")}))
+                       (> break-probability 0.8) "Cascade will likely break"
+                       (< cascade-risk 0.2) "Low cascade risk"
+                       (> cascade-risk 0.7) "HIGH CASCADE RISK - Consider external review"
+                       :else "Moderate cascade risk")}))
 
 ;; ============ Cascade Prevention Strategies ============
 
@@ -208,24 +208,24 @@
    
    Returns: Modified reputation-weight for cascade analysis"
   [base-reputation-weight strategy]
-  
+
   (case strategy
     :no-strategy base-reputation-weight
-    
+
     :reputation-weighting
     (* base-reputation-weight 0.5)  ; Good actors have more influence
-    
+
     :evidence-oracles
     (* base-reputation-weight 0.3)  ; External truth breaks cascades
-    
+
     :juror-rotation
     (* base-reputation-weight 0.4)  ; Prevents same group from cascading
-    
+
     :challenge-period
     (* base-reputation-weight 0.6)  ; Early challenges reduce stickiness
-    
+
     :combined
     (* base-reputation-weight 0.2)  ; All strategies together
-    
+
     base-reputation-weight))
 

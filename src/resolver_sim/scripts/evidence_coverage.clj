@@ -30,20 +30,20 @@
   [source]
   (let [lines (str/split-lines source)]
     (keep-indexed
-      (fn [i line]
-        (when-let [m (re-find defn-pattern line)]
-          [(symbol (m 1)) (inc i)]))
-      lines)))
+     (fn [i line]
+       (when-let [m (re-find defn-pattern line)]
+         [(symbol (m 1)) (inc i)]))
+     lines)))
 
 (defn- find-evidence-call-lines
   "Find line numbers of capture-event-evidence! calls."
   [source]
   (let [lines (str/split-lines source)]
     (keep-indexed
-      (fn [i line]
-        (when (re-find capture-call-pattern line)
-          (inc i)))
-      lines)))
+     (fn [i line]
+       (when (re-find capture-call-pattern line)
+         (inc i)))
+     lines)))
 
 (defn- form-range
   "Heuristically determine the line range of a defn form starting at defn-line.

@@ -59,9 +59,9 @@
   [world resolver-addr]
   (let [wf-id   (count (:escrow-transfers world))
         r       (lc/create-escrow
-                  world alice usdc bob 1000
-                  (assoc base-settings :custom-resolver resolver-addr)
-                  base-snapshot)]
+                 world alice usdc bob 1000
+                 (assoc base-settings :custom-resolver resolver-addr)
+                 base-snapshot)]
     (when-not (:ok r)
       (throw (ex-info "create-escrow failed" {:error (:error r)})))
     [(:world r) wf-id]))

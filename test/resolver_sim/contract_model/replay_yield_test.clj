@@ -27,16 +27,16 @@
     (is (= :invalid (:outcome result)))
     (is (= :dt-time-mismatch (:halt-reason result))))
 
-(deftest simple-replay-delegates-to-thin-runner
-  (let [result (replay/simple-replay yp/protocol base-scenario)]
-    (is (= :pass (:outcome result)))
-    (is (= :yield-sequential (get-in result [:execution :mode])))))
+  (deftest simple-replay-delegates-to-thin-runner
+    (let [result (replay/simple-replay yp/protocol base-scenario)]
+      (is (= :pass (:outcome result)))
+      (is (= :yield-sequential (get-in result [:execution :mode])))))
 
-(deftest unknown-time-advance-actions-rejected
-  (doseq [action ["advance_time" "time_advance"]]
-    (let [scenario (update base-scenario :events conj
-                           {:seq 2 :time 3000 :agent "vault" :action action :params {}})
-          result   (yield-replay/replay-yield-scenario scenario)]
-      (is (= :pass (:outcome result)) (str action " should not break prior steps"))
-      (is (= :rejected (:result (last (:trace result)))))
-      (is (= :unknown-action (:error (last (:trace result)))))))))
+  (deftest unknown-time-advance-actions-rejected
+    (doseq [action ["advance_time" "time_advance"]]
+      (let [scenario (update base-scenario :events conj
+                             {:seq 2 :time 3000 :agent "vault" :action action :params {}})
+            result   (yield-replay/replay-yield-scenario scenario)]
+        (is (= :pass (:outcome result)) (str action " should not break prior steps"))
+        (is (= :rejected (:result (last (:trace result)))))
+        (is (= :unknown-action (:error (last (:trace result)))))))))

@@ -6,7 +6,7 @@
 (deftest structured-reason-fields
   (testing "untested incentive compatibility"
     (let [r (-> (eq/evaluate-mechanism-properties [:incentive-compatibility]
-                                                 {:metrics {:attack-attempts 0}})
+                                                  {:metrics {:attack-attempts 0}})
                 :incentive-compatibility)]
       (is (= :inconclusive (:status r)))
       (is (= :untested-no-adversary (:reason r)))

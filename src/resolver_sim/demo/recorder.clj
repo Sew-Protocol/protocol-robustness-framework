@@ -154,7 +154,6 @@
         {:path script-path :content content
          :sections @section-infos}))))
 
-
 ;; ── Artifact collection ─────────────────────────────────────────────────────
 
 (def canonical-artifacts
@@ -198,9 +197,9 @@
       (ensure-dir! (str out-dir "/recordings"))
       ;; Record entire demo as one asciicast
       (let [{:keys [exit]} (shell/sh "asciinema" "rec" cast-path
-                              "--command" script-path
-                              "--cols" (str cols) "--rows" (str rows)
-                              "--overwrite" :dir ".")]
+                                     "--command" script-path
+                                     "--cols" (str cols) "--rows" (str rows)
+                                     "--overwrite" :dir ".")]
         (println (str "  Recorded: " cast-path))
         ;; Load per-section output content
         (let [sections (mapv (fn [si]
@@ -209,10 +208,10 @@
                                      stderr-content (try (slurp (:stderr-path si))
                                                          (catch Exception _ ""))]
                                  (assoc si
-                                   :exit-code exit
-                                   :stdout stdout-content
-                                   :stderr stderr-content
-                                   :recording-path cast-path)))
+                                        :exit-code exit
+                                        :stdout stdout-content
+                                        :stderr stderr-content
+                                        :recording-path cast-path)))
                              section-infos)
               any-fail? (some #(not (zero? (:exit-code %))) sections)
               artifacts (collect-artifacts out-dir)
@@ -225,9 +224,9 @@
                         :terminal (str cols "x" rows)
                         :recording cast-path
                         :sections (mapv #(select-keys %
-                                          [:sid :title :command :exit-code
-                                           :stdout-path :stderr-path
-                                           :recording-path :expected-artifacts])
+                                                      [:sid :title :command :exit-code
+                                                       :stdout-path :stderr-path
+                                                       :recording-path :expected-artifacts])
                                         sections)
                         :artifacts artifacts}
               json-key (fn [k] (if (keyword? k)
@@ -246,7 +245,7 @@
         mode-val (if (>= mode-idx 0) (nth args (inc mode-idx) "auto") "auto")
         mode-kw (keyword mode-val)
         filtered (keep-indexed (fn [i x] (when-not (or (= x "--mode")
-                                                        (= x mode-val))
+                                                       (= x mode-val))
                                            x)) args)
         args' (vec filtered)
         validate-only? (= (first args') "--validate")

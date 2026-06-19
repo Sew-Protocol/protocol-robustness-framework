@@ -177,8 +177,8 @@
   [dispatch opts]
   (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)
         dispatch*   (if (and (:suite dispatch) (not (:protocol dispatch)))
-                    (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
-                    dispatch)]
+                      (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
+                      dispatch)]
     (cond
       (:fixture-suite dispatch*)
       (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)

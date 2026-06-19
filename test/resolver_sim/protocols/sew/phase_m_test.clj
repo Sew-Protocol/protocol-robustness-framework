@@ -13,11 +13,11 @@
         r0 "0xRes0"
         r1 "0xRes1"
         gov "0xGov"
-        snap (snap-fix/escrow-snapshot {:dispute-resolver r0 
-                                      :reversal-slash-bps 10000
-                                      :appeal-window-duration 86400
-                                      :resolver-bond-bps 10000
-                                      :escrow-fee-bps 50})
+        snap (snap-fix/escrow-snapshot {:dispute-resolver r0
+                                        :reversal-slash-bps 10000
+                                        :appeal-window-duration 86400
+                                        :resolver-bond-bps 10000
+                                        :escrow-fee-bps 50})
         world (-> world (reg/register-stake r0 2000) (reg/register-stake r1 2000))
         {:keys [world workflow-id]} (lc/create-escrow world buyer "0xT" seller 1000 {} snap)
         net-escrow (t/compute-amount-after-fee 1000 50) ; default 50 bps fee
@@ -64,10 +64,10 @@
           r0 "0xRes0"
           r1 "0xRes1"
           snap (snap-fix/escrow-snapshot {:dispute-resolver r0
-                                         :reversal-slash-bps 2500
-                                         :appeal-window-duration 86400
-                                         :resolver-bond-bps 10000
-                                         :escrow-fee-bps 50})
+                                          :reversal-slash-bps 2500
+                                          :appeal-window-duration 86400
+                                          :resolver-bond-bps 10000
+                                          :escrow-fee-bps 50})
           world (-> world (reg/register-stake r0 2000) (reg/register-stake r1 2000))
           {:keys [world workflow-id]}
           (lc/create-escrow world buyer "USDC" seller 1000 {} snap)
@@ -93,12 +93,12 @@
           r1 "0xRes1"
           r2 "0xRes2"
           snap (snap-fix/escrow-snapshot {:dispute-resolver r0
-                                         :reversal-slash-bps 2500
-                                         :appeal-window-duration 86400
-                                         :challenge-window-duration 86400
-                                         :max-dispute-level 3
-                                         :resolver-bond-bps 10000
-                                         :escrow-fee-bps 50})
+                                          :reversal-slash-bps 2500
+                                          :appeal-window-duration 86400
+                                          :challenge-window-duration 86400
+                                          :max-dispute-level 3
+                                          :resolver-bond-bps 10000
+                                          :escrow-fee-bps 50})
           world (-> world
                     (reg/register-stake r0 5000)
                     (reg/register-stake r1 5000)

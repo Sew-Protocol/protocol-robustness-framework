@@ -53,8 +53,6 @@
                    m))
                data data)))
 
-
-
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
 (defn evidence-filename
@@ -62,16 +60,16 @@
    Sanitize evidence-type to avoid directory traversal issues.
    Format: ev-<transition-index>-<type>-<short-hash>.json"
   [evidence]
-   (let [etype-str (fn [v] (if (keyword? v) (name v) (str v)))
-         etype (:evidence/type evidence)
-         reason (-> (etype-str etype)
-                    (clojure.string/replace #":|-|/" "-")
-                    (clojure.string/replace #"\\.\\." ""))
-         sid    (-> (etype-str (:scenario/id evidence))
-                    (clojure.string/replace #":|-|/" "-")
-                    (clojure.string/replace #"\\.\\." ""))
-         idx    (or (:event/seq evidence) "unknown")]
-     (str reason "-" sid "-" idx ".json")))
+  (let [etype-str (fn [v] (if (keyword? v) (name v) (str v)))
+        etype (:evidence/type evidence)
+        reason (-> (etype-str etype)
+                   (clojure.string/replace #":|-|/" "-")
+                   (clojure.string/replace #"\\.\\." ""))
+        sid    (-> (etype-str (:scenario/id evidence))
+                   (clojure.string/replace #":|-|/" "-")
+                   (clojure.string/replace #"\\.\\." ""))
+        idx    (or (:event/seq evidence) "unknown")]
+    (str reason "-" sid "-" idx ".json")))
 
 (defn- needs-internal-build?
   "Check if the call should use the legacy positional builder path.
@@ -207,83 +205,83 @@
    (let [capture-start (System/nanoTime)]
      (if (needs-internal-build? reason pre post inputs)
         ;; Legacy positional path: build evidence internally
-        (let [hash-opts? (and (map? ctx-or-opts)
-                              (or (:world-before ctx-or-opts)
-                                  (:world-after ctx-or-opts)))
-              resolved-attr (cond
-                              (and (map? ctx-or-opts) (:attribution-context ctx-or-opts))
-                              (attr/get-attribution (:attribution-context ctx-or-opts))
-                              (and (map? ctx-or-opts) (not hash-opts?))
-                              ctx-or-opts
-                              (map? reason)
-                              (attr/get-attribution reason)
-                              :else
-                              (attr/current-attribution))
-              _ (validate-attribution! resolved-attr)
-              importance (if (map? ctx-or-opts) (or (:importance ctx-or-opts) :core) :core)
-              hash-start (System/nanoTime)
-              before-hash (cap/stable-hash pre)
-              after-hash  (cap/stable-hash post)
-              _ (record-hash-latency! hash-start)
-              e (-> (cap/evidence-base {:type reason :importance importance
-                                     :ctx resolved-attr})
-                (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
-                                 :run/id          (:ctx/run-id resolved-attr)
-                                 :trial/id        (:ctx/trial-id resolved-attr)
-                                 :event/seq       (:ctx/event-index resolved-attr 0)
-                                 :replay/seed     (:ctx/replay-seed resolved-attr)
-                                 :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
-                                 :oracle/mode     (:ctx/oracle-mode resolved-attr)
-                                 :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)})
-                (assoc :inputs inputs :pre-state pre :post-state post :calculation calc)
-                (cap/cap-field :world/before-hash before-hash)
-                (cap/cap-field :world/after-hash after-hash)
-                (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
-                        (assoc :world/before-full-hash (cap/hash-world (:world-before ctx-or-opts)))
-                        (and (map? ctx-or-opts) (:world-after ctx-or-opts))
-                        (assoc :world/after-full-hash (cap/hash-world (:world-after ctx-or-opts)))
-                        (:ctx/evidence-group-id resolved-attr)
-                        (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
-                               :evidence/layer :targeted-protocol))
-                (cap/finalize-evidence)
-                (chain/inject-chain-fields))
-              serialize-start (System/nanoTime)
-              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
-              filename (evidence-filename e)
-              f        (io/file out-dir filename)]
-          (.mkdirs (io/file out-dir))
-          (spit f (json/write-str e {:key-fn qualified-key :indent true}))
-          (verify-write! e f)
-          (record-serialize-latency! serialize-start)
-          (record-capture-latency! capture-start)
-          (println "Captured event evidence:" (:evidence/type e) "hash:" (:evidence/hash e))
-          (chain/register-evidence! (normalize-for-chain e))
-          e)
+       (let [hash-opts? (and (map? ctx-or-opts)
+                             (or (:world-before ctx-or-opts)
+                                 (:world-after ctx-or-opts)))
+             resolved-attr (cond
+                             (and (map? ctx-or-opts) (:attribution-context ctx-or-opts))
+                             (attr/get-attribution (:attribution-context ctx-or-opts))
+                             (and (map? ctx-or-opts) (not hash-opts?))
+                             ctx-or-opts
+                             (map? reason)
+                             (attr/get-attribution reason)
+                             :else
+                             (attr/current-attribution))
+             _ (validate-attribution! resolved-attr)
+             importance (if (map? ctx-or-opts) (or (:importance ctx-or-opts) :core) :core)
+             hash-start (System/nanoTime)
+             before-hash (cap/stable-hash pre)
+             after-hash  (cap/stable-hash post)
+             _ (record-hash-latency! hash-start)
+             e (-> (cap/evidence-base {:type reason :importance importance
+                                       :ctx resolved-attr})
+                   (cap/cap-fields {:scenario/id     (:ctx/scenario-id resolved-attr)
+                                    :run/id          (:ctx/run-id resolved-attr)
+                                    :trial/id        (:ctx/trial-id resolved-attr)
+                                    :event/seq       (:ctx/event-index resolved-attr 0)
+                                    :replay/seed     (:ctx/replay-seed resolved-attr)
+                                    :oracle/cursor   (:ctx/oracle-cursor resolved-attr)
+                                    :oracle/mode     (:ctx/oracle-mode resolved-attr)
+                                    :oracle/fixture-id (:ctx/oracle-fixture-id resolved-attr)})
+                   (assoc :inputs inputs :pre-state pre :post-state post :calculation calc)
+                   (cap/cap-field :world/before-hash before-hash)
+                   (cap/cap-field :world/after-hash after-hash)
+                   (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
+                     (assoc :world/before-full-hash (cap/hash-world (:world-before ctx-or-opts)))
+                     (and (map? ctx-or-opts) (:world-after ctx-or-opts))
+                     (assoc :world/after-full-hash (cap/hash-world (:world-after ctx-or-opts)))
+                     (:ctx/evidence-group-id resolved-attr)
+                     (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
+                            :evidence/layer :targeted-protocol))
+                   (cap/finalize-evidence)
+                   (chain/inject-chain-fields))
+             serialize-start (System/nanoTime)
+             out-dir  (str (evcfg/artifact-dir) "/event-evidence")
+             filename (evidence-filename e)
+             f        (io/file out-dir filename)]
+         (.mkdirs (io/file out-dir))
+         (spit f (json/write-str e {:key-fn qualified-key :indent true}))
+         (verify-write! e f)
+         (record-serialize-latency! serialize-start)
+         (record-capture-latency! capture-start)
+         (println "Captured event evidence:" (:evidence/type e) "hash:" (:evidence/hash e))
+         (chain/register-evidence! (normalize-for-chain e))
+         e)
         ;; Single-arg convention: reason is actually a pre-built evidence map
        (do (record-capture-latency! capture-start)
            (capture-event-evidence! reason)))))
   ([evidence]
    (let [capture-start (System/nanoTime)]
      (when (map? evidence)
-         (let [evidence (cap/require-fields evidence)
-               resolved-attr (attr/current-attribution)
-               _ (validate-attribution! resolved-attr)
-               group-id (:ctx/evidence-group-id attr/*attribution*)
-               evidence (cond-> evidence
-                          group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
-                evidence (chain/inject-chain-fields evidence)
-               serialize-start (System/nanoTime)
-              out-dir  (str (evcfg/artifact-dir) "/event-evidence")
-              filename (evidence-filename evidence)
-              f        (io/file out-dir filename)]
-           (.mkdirs (io/file out-dir))
-           (spit f (json/write-str evidence {:key-fn qualified-key :indent true}))
-          (verify-write! evidence f)
-          (record-serialize-latency! serialize-start)
-          (record-capture-latency! capture-start)
-          (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
-          (chain/register-evidence! (normalize-for-chain evidence))
-          evidence)))))
+       (let [evidence (cap/require-fields evidence)
+             resolved-attr (attr/current-attribution)
+             _ (validate-attribution! resolved-attr)
+             group-id (:ctx/evidence-group-id attr/*attribution*)
+             evidence (cond-> evidence
+                        group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
+             evidence (chain/inject-chain-fields evidence)
+             serialize-start (System/nanoTime)
+             out-dir  (str (evcfg/artifact-dir) "/event-evidence")
+             filename (evidence-filename evidence)
+             f        (io/file out-dir filename)]
+         (.mkdirs (io/file out-dir))
+         (spit f (json/write-str evidence {:key-fn qualified-key :indent true}))
+         (verify-write! evidence f)
+         (record-serialize-latency! serialize-start)
+         (record-capture-latency! capture-start)
+         (println "Captured event evidence:" (:evidence/type evidence) "hash:" (:evidence/hash evidence))
+         (chain/register-evidence! (normalize-for-chain evidence))
+         evidence)))))
 
 ;; ── Evidence Links Index ──────────────────────────────────────────────────────
 ;;
@@ -319,7 +317,7 @@
                                     :ok true}))
                                (catch Exception e
                                  (log/warn! :evidence-read-failed
-                                   {:path (str f) :error (.getMessage e)})
+                                            {:path (str f) :error (.getMessage e)})
                                  nil)))
                            files)
              read-errors (count (remove :ok results))]
@@ -347,8 +345,8 @@
     (spit f (json/write-str idx {:key-fn qualified-key :indent true}))
     (println "Wrote evidence links index:" (.getPath f))
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :evidence-links "evidence-links.json"
-                                  "evidence-index.v1" "DIAGNOSTIC"))
+     (chain/index-artifact-entry :evidence-links "evidence-links.json"
+                                 "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
 
 ;; ── Content Hash Verification Helper ──────────────────────────────────────────
@@ -361,12 +359,12 @@
    by finalize-evidence before JSON serialization."
   [data]
   (walk/postwalk
-    (fn [v]
-      (cond
-        (instance? clojure.lang.Keyword v) (name v)
-        (map? v) (into (sorted-map) v)
-        :else v))
-    data))
+   (fn [v]
+     (cond
+       (instance? clojure.lang.Keyword v) (name v)
+       (map? v) (into (sorted-map) v)
+       :else v))
+   data))
 
 ;; ── Post-hoc Chain Integrity Verification ──────────────────────────────────────
 ;;
@@ -411,15 +409,15 @@
           ;; Check 1: content hash — re-compute hash from artifact content
           content-ok (filter (fn [a]
                                (let [content (dissoc a :evidence/hash
-                                                      :evidence/chain-self-hash
-                                                      :evidence/chain-prev-hash)
+                                                     :evidence/chain-self-hash
+                                                     :evidence/chain-prev-hash)
                                      expected (cap/stable-hash (canonicalize-for-verification content))]
                                  (= expected (:evidence/hash a))))
                              sorted)
           content-bad (remove (fn [a]
                                 (let [content (dissoc a :evidence/hash
-                                                       :evidence/chain-self-hash
-                                                       :evidence/chain-prev-hash)
+                                                      :evidence/chain-self-hash
+                                                      :evidence/chain-prev-hash)
                                       expected (cap/stable-hash (canonicalize-for-verification content))]
                                   (= expected (:evidence/hash a))))
                               sorted)
@@ -439,17 +437,17 @@
                    (remove (set seqs) expected))
                  [])
           violations (concat
-                       (map (fn [a] {:chain-seq (:evidence/chain-seq a)
-                                     :reason (str "Content hash mismatch — evidence content has been modified")})
-                            content-bad)
-                       (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
-                                     :reason (str "Prev-hash mismatch: "
-                                                  (:evidence/chain-prev-hash (:artifact r))
-                                                  " does not link to previous")})
-                            prev-bad)
-                       (map (fn [g] {:chain-seq g
-                                     :reason (str "Gap in chain: seq " g " missing")})
-                            gaps))]
+                      (map (fn [a] {:chain-seq (:evidence/chain-seq a)
+                                    :reason (str "Content hash mismatch — evidence content has been modified")})
+                           content-bad)
+                      (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
+                                    :reason (str "Prev-hash mismatch: "
+                                                 (:evidence/chain-prev-hash (:artifact r))
+                                                 " does not link to previous")})
+                           prev-bad)
+                      (map (fn [g] {:chain-seq g
+                                    :reason (str "Gap in chain: seq " g " missing")})
+                           gaps))]
       {:valid (and (empty? content-bad) (empty? prev-bad) (empty? gaps))
        :artifact-count (count sorted)
        :content-hash-valid (count content-ok)
@@ -497,15 +495,15 @@
                               (try (read-evidence-json f)
                                    (catch Exception e
                                      (log/warn! :evidence-read-failed
-                                       {:path (str f) :error (.getMessage e)})
+                                                {:path (str f) :error (.getMessage e)})
                                      nil)))
                             (filter #(.isFile %) (file-seq dir-file)))
               captured-types (into #{} (keep :evidence/type) results)
               expected-types (set (map :type expected))
               read-errors (count (filter (fn [f]
-                                          (try (read-evidence-json f) false
-                                               (catch Exception _ true)))
-                                        (filter #(.isFile %) (file-seq dir-file))))]
+                                           (try (read-evidence-json f) false
+                                                (catch Exception _ true)))
+                                         (filter #(.isFile %) (file-seq dir-file))))]
           (cond-> {:declared expected
                    :matched (filter #(contains? captured-types (:type %)) expected)
                    :missing (remove #(contains? captured-types (:type %)) expected)
@@ -522,7 +520,7 @@
                       (assoc d :path (.getPath f)))
                     (catch Exception e
                       (log/warn! :evidence-read-failed
-                        {:path (str f) :error (.getMessage e)})
+                                 {:path (str f) :error (.getMessage e)})
                       nil)))
              (filter #(.isFile %) (file-seq (io/file dir))))))
 
@@ -591,7 +589,7 @@
                                  {:data d :file f}))
                              (catch Exception e
                                (log/warn! :evidence-bundle-export-skipped
-                                 {:path (str f) :error (.getMessage e)})
+                                          {:path (str f) :error (.getMessage e)})
                                nil)))
                       files)]
     (.mkdirs (io/file output-dir))
@@ -606,15 +604,14 @@
                     :group-ids (vec gids)
                     :artifact-count (count matched)
                     :artifacts (vec (for [{:keys [data]} (sort-by (comp :evidence/chain-seq :data) matched)]
-                                     {:group-id (:evidence/group-id data)
-                                      :evidence-type (:evidence/type data)
-                                      :chain-seq (:evidence/chain-seq data)
-                                      :evidence-hash (:evidence/hash data)}))}]
+                                      {:group-id (:evidence/group-id data)
+                                       :evidence-type (:evidence/type data)
+                                       :chain-seq (:evidence/chain-seq data)
+                                       :evidence-hash (:evidence/hash data)}))}]
       (spit (io/file output-dir "manifest.json")
             (json/write-str manifest {:key-fn qualified-key :indent true})))
     (println "Exported" (count matched) "evidence artifacts to" output-dir)
     output-dir))
-
 
 (defn linked-evidence-group
   "Researcher-facing helper for inspecting one replay event.
@@ -652,14 +649,14 @@
                           (try (read-evidence-json f)
                                (catch Exception e
                                  (log/warn! :linked-evidence-read-failed
-                                   {:path (str f) :error (.getMessage e)})
+                                            {:path (str f) :error (.getMessage e)})
                                  nil)))
                         files)
         grouped (filter #(= (:evidence/group-id %) group-id) artifacts)]
     (when (seq grouped)
       (let [generic (some #(when (or (= "generic-trace" (:evidence/layer %))
                                      (= :generic-trace (:evidence/layer %)))
-                              %)
+                             %)
                           grouped)
             targeted (vec (sort-by :evidence/chain-seq
                                    (remove #(= % generic) grouped)))]
@@ -667,9 +664,8 @@
          :generic-trace generic
          :targeted targeted
          :diagnostics {:generic-trace-found? (some? generic)
-                        :targeted-count (count targeted)
-                        :artifact-count (count grouped)}}))))
-
+                       :targeted-count (count targeted)
+                       :artifact-count (count grouped)}}))))
 
 (def evidence-type->mechanism
   {:stake-registered :staking
@@ -717,25 +713,25 @@
   [data path]
   (let [etype (:evidence/type data)]
     (merge
-      {:id (some-> (:evidence/chain-self-hash data)
-                   (subs 0 16)
-                   (str "ev-"))
-       :evidence/type etype
-       :evidence/mechanism (mechanism-for-type etype)
-       :evidence/chain-seq (:evidence/chain-seq data)
-       :evidence/group-id (:evidence/group-id data)
-       :evidence/layer (:evidence/layer data)
-       :evidence/hash (or (:evidence-hash data) (:evidence/hash data))
-       :path path}
+     {:id (some-> (:evidence/chain-self-hash data)
+                  (subs 0 16)
+                  (str "ev-"))
+      :evidence/type etype
+      :evidence/mechanism (mechanism-for-type etype)
+      :evidence/chain-seq (:evidence/chain-seq data)
+      :evidence/group-id (:evidence/group-id data)
+      :evidence/layer (:evidence/layer data)
+      :evidence/hash (or (:evidence-hash data) (:evidence/hash data))
+      :path path}
       ;; Include subject keys when present
-      (when-let [sid (:subject/id data)] {:subject/id sid})
-      (when-let [stype (:subject/type data)] {:subject/type stype})
+     (when-let [sid (:subject/id data)] {:subject/id sid})
+     (when-let [stype (:subject/type data)] {:subject/type stype})
       ;; Include any workflow-id from domain payload
-      (some (fn [k] (when-let [v (get data k)] {k v}))
-            [:escrow/workflow-id :finalize/workflow-id :bond/workflow-id
-             :dispute/workflow-id :appeal/slash-id :appeal-resolution/slash-id
-             :proposal/workflow-id :unfreeze/resolver
-             :challenge/workflow-id :escalation/workflow-id]))))
+     (some (fn [k] (when-let [v (get data k)] {k v}))
+           [:escrow/workflow-id :finalize/workflow-id :bond/workflow-id
+            :dispute/workflow-id :appeal/slash-id :appeal-resolution/slash-id
+            :proposal/workflow-id :unfreeze/resolver
+            :challenge/workflow-id :escalation/workflow-id]))))
 
 (defn- matches-filter?
   "Check a single evidence artifact map against one filter."
@@ -795,30 +791,30 @@
       :or {artifact-dir (str (evcfg/artifact-dir) "/event-evidence")
            include-body? false}}]
   (let [filters (concat
-                  (when by-type [:by-type by-type])
-                  (when by-mechanism [:by-mechanism by-mechanism])
-                  (when by-workflow [:by-workflow by-workflow])
-                  (when by-group-id [:by-group-id by-group-id])
-                  (when by-chain-seq [:by-chain-seq by-chain-seq])
-                  (when by-run-id [:by-run-id by-run-id])
-                  (when by-scenario-id [:by-scenario-id by-scenario-id]))]
+                 (when by-type [:by-type by-type])
+                 (when by-mechanism [:by-mechanism by-mechanism])
+                 (when by-workflow [:by-workflow by-workflow])
+                 (when by-group-id [:by-group-id by-group-id])
+                 (when by-chain-seq [:by-chain-seq by-chain-seq])
+                 (when by-run-id [:by-run-id by-run-id])
+                 (when by-scenario-id [:by-scenario-id by-scenario-id]))]
     (if-let [dir (io/file artifact-dir)]
       (if (.isDirectory dir)
         (let [files (filter #(.isFile %) (file-seq dir))]
-      (keep (fn [f]
-               (try
-                 (let [data (read-evidence-json f)
-                       matches (every? (fn [[ft fv]] (matches-filter? data ft fv))
-                                       (partition 2 filters))]
-                   (when matches
-                     (if include-body?
-                       (assoc data :path (.getPath f))
-                       (artifact-summary data (.getPath f)))))
-                 (catch Exception e
-                   (log/warn! :find-evidence-read-failed
-                     {:path (str f) :error (.getMessage e)})
-                   nil)))
-             files))
+          (keep (fn [f]
+                  (try
+                    (let [data (read-evidence-json f)
+                          matches (every? (fn [[ft fv]] (matches-filter? data ft fv))
+                                          (partition 2 filters))]
+                      (when matches
+                        (if include-body?
+                          (assoc data :path (.getPath f))
+                          (artifact-summary data (.getPath f)))))
+                    (catch Exception e
+                      (log/warn! :find-evidence-read-failed
+                                 {:path (str f) :error (.getMessage e)})
+                      nil)))
+                files))
         [])
       [])))
 
@@ -845,7 +841,7 @@
                                :summary (artifact-summary data (.getPath f))}))
                           (catch Exception e
                             (log/warn! :mechanism-index-read-failed
-                              {:path (str f) :error (.getMessage e)})
+                                       {:path (str f) :error (.getMessage e)})
                             nil)))
                       files)]
     (reduce (fn [acc entry]
@@ -872,8 +868,8 @@
     (spit f (json/write-str (sort-by key idx) {:key-fn qualified-key :indent true}))
     (println "Wrote mechanism index:" (.getPath f))
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :evidence-mechanisms "evidence-mechanisms.json"
-                                  "evidence-index.v1" "DIAGNOSTIC"))
+     (chain/index-artifact-entry :evidence-mechanisms "evidence-mechanisms.json"
+                                 "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
 
 ;; ── Coverage Report ───────────────────────────────────────────────────────────
@@ -890,7 +886,7 @@
       (try (json/read-str (slurp f) :key-fn keyword)
            (catch Exception e
              (log/warn! :evidence-links-index-corrupt
-               {:path (str f) :error (.getMessage e)})
+                        {:path (str f) :error (.getMessage e)})
              nil)))))
 
 (defn- generic-trace-event-count
@@ -905,7 +901,7 @@
           {:count (count (:artifacts reg))})
         (catch Exception e
           (log/warn! :registry-corrupt
-            {:path (str f) :error (.getMessage e)})
+                     {:path (str f) :error (.getMessage e)})
           {:count 0 :degraded true}))
       {:count 0})))
 
@@ -944,7 +940,7 @@
                                   (catch Exception e
                                     (swap! read-errors inc)
                                     (log/warn! :coverage-report-read-failed
-                                      {:path (str f) :error (.getMessage e)})
+                                               {:path (str f) :error (.getMessage e)})
                                     acc)))
                               {} files))
         total-targeted (reduce + 0 (vals type-counts))
@@ -978,8 +974,8 @@
     (spit f (json/write-str report {:key-fn qualified-key :indent true}))
     (println "Wrote evidence coverage report:" (.getPath f))
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
-                                  "evidence-index.v1" "DIAGNOSTIC"))
+     (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
+                                 "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
 
 ;; ── Wire up capture implementation for protocol layers ──────────────────────

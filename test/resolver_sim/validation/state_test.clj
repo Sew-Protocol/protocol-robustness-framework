@@ -30,14 +30,14 @@
 (deftest test-semantic-operations
   (testing "semantic operations compose via bind"
     (let [m (vs/bind (vs/set-suite-id :yield)
-             (fn [_]
-               (vs/bind (vs/record-error {:key :yield/deferred-mismatch :message "fail"})
-                 (fn [_]
-                   (vs/bind (vs/record-warning {:key :yield/drift :message "drift"})
                      (fn [_]
-                       (vs/bind (vs/add-status-key :yield/checked)
-                         (fn [_]
-                           (vs/record-pass)))))))))
+                       (vs/bind (vs/record-error {:key :yield/deferred-mismatch :message "fail"})
+                                (fn [_]
+                                  (vs/bind (vs/record-warning {:key :yield/drift :message "drift"})
+                                           (fn [_]
+                                             (vs/bind (vs/add-status-key :yield/checked)
+                                                      (fn [_]
+                                                        (vs/record-pass)))))))))
           final (vs/exec-state m init)]
       (is (= :yield (:suite/id final)))
       (is (contains? (:error-keys final) :yield/deferred-mismatch))
@@ -184,25 +184,25 @@
 (deftest test-full-validation-flow
   (testing "validation accumulation flow using semantic operations"
     (let [m (vs/bind (vs/set-suite-id :yield)
-             (fn [_]
-               (vs/bind (vs/set-suite-type :protocol)
-                 (fn [_]
-                   (vs/bind (vs/record-error {:key :yield/deferred-mismatch
-                                              :severity :critical
-                                              :message "deferred mismatch"})
                      (fn [_]
-                       (vs/bind (vs/record-warning {:key :yield/drift
-                                                    :severity :warning
-                                                    :message "small drift"})
-                         (fn [_]
-                           (vs/bind (vs/record-evidence {:check/id :yield/solvency
-                                                         :status :passed})
-                             (fn [_]
-                               (vs/bind (vs/record-pass)
-                                 (fn [_]
-                                   (vs/bind (vs/merge-extra {:run-id "run-1"})
-                                     (fn [_]
-                                        (vs/snapshot)))))))))))))))
+                       (vs/bind (vs/set-suite-type :protocol)
+                                (fn [_]
+                                  (vs/bind (vs/record-error {:key :yield/deferred-mismatch
+                                                             :severity :critical
+                                                             :message "deferred mismatch"})
+                                           (fn [_]
+                                             (vs/bind (vs/record-warning {:key :yield/drift
+                                                                          :severity :warning
+                                                                          :message "small drift"})
+                                                      (fn [_]
+                                                        (vs/bind (vs/record-evidence {:check/id :yield/solvency
+                                                                                      :status :passed})
+                                                                 (fn [_]
+                                                                   (vs/bind (vs/record-pass)
+                                                                            (fn [_]
+                                                                              (vs/bind (vs/merge-extra {:run-id "run-1"})
+                                                                                       (fn [_]
+                                                                                         (vs/snapshot)))))))))))))))
           state (vs/exec-state m init)]
       (is (= :yield (:suite/id state)))
       (is (= :protocol (:suite/type state)))

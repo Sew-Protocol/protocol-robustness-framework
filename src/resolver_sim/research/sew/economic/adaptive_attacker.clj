@@ -30,26 +30,26 @@
   [strategy difficulty rng]
   (let [; Base detection rate by difficulty
         base-detection (case difficulty
-                       :easy 0.15
-                       :medium 0.30
-                       :hard 0.50)
-        
+                         :easy 0.15
+                         :medium 0.30
+                         :hard 0.50)
+
         ; Strategy effectiveness
         effectiveness (case strategy
-                      :bribery (- 1.0 (* base-detection 0.6))
-                      :evidence-spoof (- 1.0 (* base-detection 0.4))
-                      :resolver-targeting (- 1.0 (* base-detection 0.5))
-                      0.5)
-        
+                        :bribery (- 1.0 (* base-detection 0.6))
+                        :evidence-spoof (- 1.0 (* base-detection 0.4))
+                        :resolver-targeting (- 1.0 (* base-detection 0.5))
+                        0.5)
+
         success? (< (rng/next-double rng) effectiveness)
         cost (case strategy
-             :bribery (case difficulty :easy 2000 :medium 5000 :hard 10000)
-             :evidence-spoof (case difficulty :easy 1000 :medium 2000 :hard 5000)
-             :resolver-targeting (case difficulty :easy 1500 :medium 3000 :hard 6000)
-             2000)
-        
+               :bribery (case difficulty :easy 2000 :medium 5000 :hard 10000)
+               :evidence-spoof (case difficulty :easy 1000 :medium 2000 :hard 5000)
+               :resolver-targeting (case difficulty :easy 1500 :medium 3000 :hard 6000)
+               2000)
+
         detected? (and success? (< (rng/next-double rng) (* base-detection 0.3)))]
-    
+
     {:success? (and success? (not detected?))
      :cost cost
      :detected? detected?}))
@@ -69,78 +69,78 @@
   ([initial-budget num-attacks difficulty learning? strategy-history rng]
    (run-epoch initial-budget num-attacks difficulty learning? strategy-history rng nil))
   ([initial-budget num-attacks difficulty learning? strategy-history rng adversary]
-  (let [strategies [:bribery :evidence-spoof :resolver-targeting]
-        stats (zipmap strategies (repeat {:attempts 0 :successes 0 :cost 0}))]
+   (let [strategies [:bribery :evidence-spoof :resolver-targeting]
+         stats (zipmap strategies (repeat {:attempts 0 :successes 0 :cost 0}))]
 
-    (loop [epoch   0
-           budget  initial-budget
-           stats   stats
-           history []]
+     (loop [epoch   0
+            budget  initial-budget
+            stats   stats
+            history []]
 
-      (if (>= epoch num-attacks)
-        {:strategy-stats   stats
-         :budget-remaining budget
-         :total-attempts   (apply + (map :attempts (vals stats)))
-         :total-successes  (apply + (map :successes (vals stats)))
-         :history          history}
+       (if (>= epoch num-attacks)
+         {:strategy-stats   stats
+          :budget-remaining budget
+          :total-attempts   (apply + (map :attempts (vals stats)))
+          :total-successes  (apply + (map :successes (vals stats)))
+          :history          history}
 
-        (let [dispatch-params {:rng rng :difficulty difficulty :attacker-budget budget}
+         (let [dispatch-params {:rng rng :difficulty difficulty :attacker-budget budget}
 
               ;; Decide whether to attack this round
-              attack? (if adversary
-                        (strategy/should-attack? adversary dispatch-params)
-                        true)  ; legacy path: always attack
+               attack? (if adversary
+                         (strategy/should-attack? adversary dispatch-params)
+                         true)  ; legacy path: always attack
 
-              chosen-strategy
-              (cond
+               chosen-strategy
+               (cond
                 ;; Adversary protocol dispatch
-                adversary
-                (let [at (strategy/attack-type adversary dispatch-params)]
-                  (if (= at :none) :bribery at))
+                 adversary
+                 (let [at (strategy/attack-type adversary dispatch-params)]
+                   (if (= at :none) :bribery at))
                 ;; Inline learning mode
-                learning?
-                (let [win-rates (into {}
-                                      (for [s strategies]
-                                        (let [st (get stats s)]
-                                          [s (if (zero? (:attempts st))
-                                               0.0
-                                               (/ (double (:successes st))
-                                                  (double (:attempts st))))])))
-                      best (key (apply max-key val win-rates))]
-                  best)
+                 learning?
+                 (let [win-rates (into {}
+                                       (for [s strategies]
+                                         (let [st (get stats s)]
+                                           [s (if (zero? (:attempts st))
+                                                0.0
+                                                (/ (double (:successes st))
+                                                   (double (:attempts st))))])))
+                       best (key (apply max-key val win-rates))]
+                   best)
                 ;; Random strategy (seeded)
-                :else
-                (nth strategies (mod (long (* (rng/next-double rng) (count strategies)))
-                                     (count strategies))))
+                 :else
+                 (nth strategies (mod (long (* (rng/next-double rng) (count strategies)))
+                                      (count strategies))))
 
-              result     (if attack?
-                           (simulate-attack chosen-strategy difficulty rng)
-                           {:success? false :cost 0 :detected? false})
-              new-budget (- budget (:cost result))
-              old-stat   (get stats chosen-strategy)
-              new-stat   (assoc old-stat
-                                :attempts  (inc (:attempts old-stat))
-                                :successes (+ (:successes old-stat) (if (:success? result) 1 0))
-                                :cost      (+ (:cost old-stat) (:cost result)))]
+               result     (if attack?
+                            (simulate-attack chosen-strategy difficulty rng)
+                            {:success? false :cost 0 :detected? false})
+               new-budget (- budget (:cost result))
+               old-stat   (get stats chosen-strategy)
+               new-stat   (assoc old-stat
+                                 :attempts  (inc (:attempts old-stat))
+                                 :successes (+ (:successes old-stat) (if (:success? result) 1 0))
+                                 :cost      (+ (:cost old-stat) (:cost result)))]
 
           ;; Notify adversary of outcome (no-op for non-adaptive types)
-          (when adversary
-            (strategy/observe-outcome! adversary
-                                       {:attack-type chosen-strategy
-                                        :success?    (:success? result)
-                                        :profit      (if (:success? result) (:cost result) 0)
-                                        :detected?   (:detected? result)}))
+           (when adversary
+             (strategy/observe-outcome! adversary
+                                        {:attack-type chosen-strategy
+                                         :success?    (:success? result)
+                                         :profit      (if (:success? result) (:cost result) 0)
+                                         :detected?   (:detected? result)}))
 
-          (recur (inc epoch)
-                 (max 0 new-budget)
-                 (assoc stats chosen-strategy new-stat)
-                 (conj history
-                       {:epoch    epoch
-                        :strategy chosen-strategy
-                        :success? (:success? result)
-                        :cost     (:cost result)
-                        :budget   new-budget
-                        :attacked? attack?}))))))))
+           (recur (inc epoch)
+                  (max 0 new-budget)
+                  (assoc stats chosen-strategy new-stat)
+                  (conj history
+                        {:epoch    epoch
+                         :strategy chosen-strategy
+                         :success? (:success? result)
+                         :cost     (:cost result)
+                         :budget   new-budget
+                         :attacked? attack?}))))))))
 
 ;; ============ Phase U Scenarios ============
 
@@ -157,36 +157,36 @@
         budget 100000
         num-epochs 50
         difficulty :medium
-        
+
         ; Static baseline
         static (run-epoch budget num-epochs difficulty false [] rng)
         static-rate (if (zero? (:total-attempts static))
-                     0.0
-                     (/ (double (:total-successes static))
-                       (double (:total-attempts static))))
-        
+                      0.0
+                      (/ (double (:total-successes static))
+                         (double (:total-attempts static))))
+
         ; Learning attacker
         learning (run-epoch budget num-epochs difficulty true [] rng)
         learning-rate (if (zero? (:total-attempts learning))
-                       0.0
-                       (/ (double (:total-successes learning))
-                         (double (:total-attempts learning))))
-        
+                        0.0
+                        (/ (double (:total-successes learning))
+                           (double (:total-attempts learning))))
+
         improvement (- learning-rate static-rate)
         vulnerable? (> improvement 0.1)]
-    
+
     {:scenario "learning-advantage"
      :status (if vulnerable? :vulnerable :safe)
      :confidence improvement
      :metrics {:static-success-rate static-rate
-              :learning-success-rate learning-rate
-              :improvement improvement
-              :static-budget-left (:budget-remaining static)
-              :learning-budget-left (:budget-remaining learning)}
+               :learning-success-rate learning-rate
+               :improvement improvement
+               :static-budget-left (:budget-remaining static)
+               :learning-budget-left (:budget-remaining learning)}
      :reason (format "Static: %.1f%%, Learning: %.1f%%, Improvement: %.1f%%"
-                    (* 100.0 static-rate)
-                    (* 100.0 learning-rate)
-                    (* 100.0 improvement))}))
+                     (* 100.0 static-rate)
+                     (* 100.0 learning-rate)
+                     (* 100.0 improvement))}))
 
 (defn scenario-convergence-speed
   "Scenario 2: How quickly does attacker converge to winning strategy?
@@ -198,29 +198,29 @@
   (let [rng (rng/make-rng seed)
         result (run-epoch 100000 50 :medium true [] rng)
         history (:history result)
-        
+
         early (take 15 history)
         late (drop 35 history)
-        
+
         early-wins (count (filter :success? early))
         early-rate (if (empty? early) 0.0 (/ early-wins (double (count early))))
-        
+
         late-wins (count (filter :success? late))
         late-rate (if (empty? late) 0.0 (/ late-wins (double (count late))))
-        
+
         convergence-improvement (- late-rate early-rate)
         vulnerable? (> convergence-improvement 0.15)]
-    
+
     {:scenario "convergence-speed"
      :status (if vulnerable? :vulnerable :safe)
      :confidence convergence-improvement
      :metrics {:early-success-rate early-rate
-              :late-success-rate late-rate
-              :improvement convergence-improvement}
+               :late-success-rate late-rate
+               :improvement convergence-improvement}
      :reason (format "Early: %.1f%%, Late: %.1f%%, Improvement: %.1f%%"
-                    (* 100.0 early-rate)
-                    (* 100.0 late-rate)
-                    (* 100.0 convergence-improvement))}))
+                     (* 100.0 early-rate)
+                     (* 100.0 late-rate)
+                     (* 100.0 convergence-improvement))}))
 
 (defn scenario-defense-timing
   "Scenario 3: Can governance prevent attacker learning?
@@ -232,34 +232,34 @@
    Expected: Defense should reset attacker's learning and reduce final ROI"
   [{:keys [seed]}]
   (let [rng (rng/make-rng seed)
-        
+
         ; No defense
         baseline (run-epoch 100000 50 :medium true [] rng)
         baseline-rate (if (zero? (:total-attempts baseline))
-                      0.0
-                      (/ (double (:total-successes baseline))
-                        (double (:total-attempts baseline))))
-        
+                        0.0
+                        (/ (double (:total-successes baseline))
+                           (double (:total-attempts baseline))))
+
         ; With defense: increase difficulty mid-game (approximated by lower effectiveness)
         defended (run-epoch 100000 50 :hard true [] rng)
         defended-rate (if (zero? (:total-attempts defended))
-                       0.0
-                       (/ (double (:total-successes defended))
-                         (double (:total-attempts defended))))
-        
+                        0.0
+                        (/ (double (:total-successes defended))
+                           (double (:total-attempts defended))))
+
         protection (- baseline-rate defended-rate)
         status (if (< protection 0.05) :vulnerable :safe)]
-    
+
     {:scenario "defense-effectiveness"
      :status status
      :confidence protection
      :metrics {:baseline-rate baseline-rate
-              :defended-rate defended-rate
-              :protection protection}
+               :defended-rate defended-rate
+               :protection protection}
      :reason (format "Baseline ROI: %.1f%%, Defended: %.1f%%, Protection: %.1f%%"
-                    (* 100.0 baseline-rate)
-                    (* 100.0 defended-rate)
-                    (* 100.0 protection))}))
+                     (* 100.0 baseline-rate)
+                     (* 100.0 defended-rate)
+                     (* 100.0 protection))}))
 
 (defn scenario-budget-grinding
   "Scenario 4: Can persistent attacks with small budget succeed?
@@ -270,7 +270,7 @@
   [{:keys [seed]}]
   (let [rng (rng/make-rng seed)
         budgets [25000 50000 100000]
-        
+
         ; Test each budget on hard disputes
         results (for [budget budgets]
                   (let [sim (run-epoch budget 100 :hard true [] rng)
@@ -281,21 +281,21 @@
                      :profit profit
                      :roi (if (zero? budget) 0.0 (/ (double profit) (double budget)))
                      :success-rate (if (zero? (:total-attempts sim))
-                                  0.0
-                                  (/ (double (:total-successes sim))
-                                    (double (:total-attempts sim))))}))
-        
+                                     0.0
+                                     (/ (double (:total-successes sim))
+                                        (double (:total-attempts sim))))}))
+
         profitable (count (filter #(pos? (:profit %)) results))
         vulnerable? (> profitable 0)]
-    
+
     {:scenario "budget-grinding"
      :status (if vulnerable? :vulnerable :safe)
      :confidence (apply max (map :roi results))
      :metrics {:results results
-              :profitable-budgets profitable}
+               :profitable-budgets profitable}
      :reason (format "Profitable budgets: %d/3, Best ROI: %.1f%%"
-                    profitable
-                    (* 100.0 (apply max (map :roi results))))}))
+                     profitable
+                     (* 100.0 (apply max (map :roi results))))}))
 
 ;; ============ Adversary Protocol Scenario ============
 
@@ -320,16 +320,16 @@
         ;; Baseline: static (no adversary, no learning)
         static     (run-epoch budget num-attacks difficulty false [] rng nil)
         static-rate (if (zero? (:total-attempts static)) 0.0
-                      (/ (double (:total-successes static))
-                         (double (:total-attempts static))))
+                        (/ (double (:total-successes static))
+                           (double (:total-attempts static))))
 
         ;; Protocol-wired: AdaptiveAttacker via protocol dispatch
         [rng2 _]   (rng/split-rng rng)
         adversary  (strategy/make-adaptive-attacker 0.3 0.2)
         adaptive   (run-epoch budget num-attacks difficulty false [] rng2 adversary)
         adapt-rate (if (zero? (:total-attempts adaptive)) 0.0
-                     (/ (double (:total-successes adaptive))
-                        (double (:total-attempts adaptive))))
+                       (/ (double (:total-successes adaptive))
+                          (double (:total-attempts adaptive))))
 
         improvement (- adapt-rate static-rate)
         vulnerable? (> improvement 0.1)]
@@ -381,8 +381,8 @@
             (let [[sub _]  (rng/split-rng rng)
                   result   (run-epoch budget epoch-attacks difficulty false [] sub adversary)
                   rate     (if (zero? (:total-attempts result)) 0.0
-                             (/ (double (:total-successes result))
-                                (double (:total-attempts result))))
+                               (/ (double (:total-successes result))
+                                  (double (:total-attempts result))))
                   ;; Snapshot belief variance at this epoch
                   beliefs  @(.beliefs-atom adversary)
                   mean-b   (/ (apply + beliefs) (count beliefs))
@@ -426,7 +426,7 @@
   (println "\n" (apply str (repeat 70 "=")))
   (println "Phase U: Adaptive Attacker Learning")
   (println (apply str (repeat 70 "=")))
-  
+
   (let [seeds (range 42 52)  ; 10 trials
         scenario-fns [scenario-learning-vs-static
                       scenario-convergence-speed
@@ -434,44 +434,44 @@
                       scenario-budget-grinding
                       scenario-adversary-protocol
                       scenario-adversary-multi-epoch]
-        
+
         results (flatten
-                (for [scenario-fn scenario-fns
-                      seed seeds]
-                  (let [result (scenario-fn {:seed seed})]
-                    (println (format "%-30s seed=%2d [%s]"
-                                   (:scenario result)
-                                   seed
-                                   (name (:status result))))
-                    result)))]
-    
+                 (for [scenario-fn scenario-fns
+                       seed seeds]
+                   (let [result (scenario-fn {:seed seed})]
+                     (println (format "%-30s seed=%2d [%s]"
+                                      (:scenario result)
+                                      seed
+                                      (name (:status result))))
+                     result)))]
+
     (println "\n" (apply str (repeat 70 "=")))
-    
+
     ; Summary stats
     (let [by-scenario (group-by :scenario results)
           vulnerable-count (count (filter #(= :vulnerable (:status %)) results))
           safe-count (count (filter #(= :safe (:status %)) results))]
-      
+
       (println (format "\n📊 Summary"))
       (println (format "  Total scenarios: %d" (count results)))
       (println (format "  Vulnerable: %d" vulnerable-count))
       (println (format "  Safe: %d" safe-count))
-      
+
       (doseq [[scenario-name rs] by-scenario]
         (let [vulns (count (filter #(= :vulnerable (:status %)) rs))
               avg-conf (/ (apply + (map :confidence rs)) (count rs))]
           (println (format "  %-30s: %d vulnerable, avg confidence: %.1f%%"
-                         scenario-name vulns (* 100.0 avg-conf)))))
-      
+                           scenario-name vulns (* 100.0 avg-conf)))))
+
       (println "\n" (apply str (repeat 70 "=")))
       (println "Detailed Results")
       (println (apply str (repeat 70 "=")))
-      
+
       (doseq [result results]
         (println (format "\n%s (seed=%d)" (:scenario result) (:seed result)))
         (println (format "  Status: %s" (name (:status result))))
         (println (format "  Reason: %s" (:reason result))))
-      
+
       (println "\n\n" (apply str (repeat 70 "=")))
       (println "PHASE U ASSESSMENT")
       (println (apply str (repeat 70 "=")))

@@ -91,20 +91,20 @@
       (conj :escrow-state)
 
        ;; Gate: unresolved pending settlement
-       (and (= state :disputed) (:exists pending))
-       (conj :pending-settlement)
+      (and (= state :disputed) (:exists pending))
+      (conj :pending-settlement)
 
        ;; Gate: appeal/challenge window still open
-       (and (= state :disputed) (:exists pending)
-            (< (time-ctx/block-ts world) (:appeal-deadline pending)))
-       (conj :appeal-window)
+      (and (= state :disputed) (:exists pending)
+           (< (time-ctx/block-ts world) (:appeal-deadline pending)))
+      (conj :appeal-window)
 
        ;; Gate: yield position still unwinding (shortfall recovery)
-       has-unwinding?
-       (conj :yield-recovery)
+      has-unwinding?
+      (conj :yield-recovery)
 
        ;; Gate: slashing appeal still pending
-       (has-appeal-pending? indexed-slashes workflow-id)
+      (has-appeal-pending? indexed-slashes workflow-id)
       (conj :slash-appeal))))
 
 (defn classify-financial-finality
@@ -141,13 +141,13 @@
       (and (contains? t/terminal-states state)
            (seq gates))
       {:financial/phase       (if (some #{:yield-recovery :slash-appeal} gates)
-                               :recoverable
-                               :finalizing)
+                                :recoverable
+                                :finalizing)
        :financially-final?    false
        :can-change?           true
        :open-gates            gates
        :reason                (str "terminal escrow but gates still open: "
-                                  (str/join ", " (map name gates)))}
+                                   (str/join ", " (map name gates)))}
 
       ;; Disputed with challenge/appeal windows open
       (= state :disputed)
@@ -156,8 +156,8 @@
        :can-change?           true
        :open-gates            gates
        :reason                (if (seq gates)
-                               (str "gates open: " (str/join ", " (map name gates)))
-                               "disputed with no pending settlement")}
+                                (str "gates open: " (str/join ", " (map name gates)))
+                                "disputed with no pending settlement")}
 
       ;; No resolution yet (pending escrow, or not yet disputed)
       :else
