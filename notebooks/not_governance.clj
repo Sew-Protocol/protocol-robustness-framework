@@ -68,9 +68,8 @@
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defn- delta-str [a b fmt-str]
-  (let [diff (- (or a 0) (or b 0))
-        abs-diff (double diff)]
-    (format (str "%+.0f") abs-diff)))
+  (let [diff (- (or a 0) (or b 0))]
+    (format fmt-str (double diff))))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defn- sweep-at-bond
@@ -186,7 +185,7 @@
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce malice-batch
   (delay (-> (deref (run-batch 200 {:malicious 1.0}))
-             (views/assert-batch-shape!))))
+             (checks/assert-batch-shape!))))
 
 ^{::clerk/visibility {:code :fold :result :show}
   ::clerk/auto-expand-results? true
@@ -316,12 +315,12 @@
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce honest-batch
   (delay (-> (deref (run-batch 300 {:honest 1.0}))
-             (views/assert-batch-shape!))))
+             (checks/assert-batch-shape!))))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce malice-compare
   (delay (-> (deref (run-batch 300 {:malicious 1.0}))
-             (views/assert-batch-shape!))))
+             (checks/assert-batch-shape!))))
 
 ^{::clerk/visibility {:code :fold :result :show}
   ::clerk/auto-expand-results? true

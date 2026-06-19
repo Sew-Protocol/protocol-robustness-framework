@@ -32,28 +32,23 @@
 
 (defn- find-scenario-file
   [trace-id]
-  (let [;; Try standard naming: s88-yield-accrual-efficiency → S88_yield-accrual-efficiency.json
-        public-name (export/scenario-id->public-json-filename trace-id)
+  (let [public-name (export/scenario-id->public-json-filename trace-id)
         std-path (when public-name (str "scenarios/" public-name))]
-    (cond
-      (and std-path (.exists (io/file std-path))) std-path
-      ;; Try uppercase underscore variant: some files use scenario-id as filename
-      (let [up (str "scenarios/" (str/upper-case (first (str trace-id)))
-                    (subs trace-id 1) ".json")]
-        (when (.exists (io/file up)) up))
-      ;; Search all scenario files for matching scenario-id
-      :else
-      (let [dir (io/file "scenarios")]
-        (when (.isDirectory dir)
-          (some (fn [f]
-                  (when (.endsWith (.getName f) ".json")
-                    (try
-                      (let [data (json/read-str (slurp f) :key-fn keyword)]
-                        (when (and (map? data)
-                                   (= (:scenario-id data) trace-id))
-                          (.getPath f)))
-                      (catch Exception _ nil))))
-                (.listFiles dir)))))))
+    (or (and std-path (.exists (io/file std-path)) std-path)
+        (let [up (str "scenarios/" (str/upper-case (first (str trace-id)))
+                      (subs trace-id 1) ".json")]
+          (when (.exists (io/file up)) up))
+        (let [dir (io/file "scenarios")]
+          (when (.isDirectory dir)
+            (some (fn [f]
+                    (when (.endsWith (.getName f) ".json")
+                      (try
+                        (let [data (json/read-str (slurp f) :key-fn keyword)]
+                          (when (and (map? data)
+                                     (= (:scenario-id data) trace-id))
+                            (.getPath f)))
+                        (catch Exception _ nil))))
+                  (.listFiles dir)))))))
 
 (defn- normalize-trace-file!
   "Rewrite the trace file so its scenario-id matches the golden trace-id convention."
