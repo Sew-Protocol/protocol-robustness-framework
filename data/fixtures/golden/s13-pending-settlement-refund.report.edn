@@ -1,5 +1,5 @@
 {:golden-schema-version "2.0",
- :suite-id :suites/withdrawal-adversarial,
+ :suite-id :suites/all-invariants,
  :trace-id "s13-pending-settlement-refund",
  :final-state-hash "5t80tv0pYY5nuT3uvJuAD9iEjtrPvWxYSp2fxQeskE0=",
  :metrics

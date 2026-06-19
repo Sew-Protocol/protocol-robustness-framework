@@ -25,7 +25,7 @@
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
             [resolver-sim.util.attribution             :as attr]
             [resolver-sim.time.context                 :as time-ctx]
-            [resolver-sim.io.event-evidence            :as evidence]))
+            [resolver-sim.evidence.capture            :as cap]))
 
 ;; ---------------------------------------------------------------------------
 ;; Guard logging helper — returns (t/fail kw) with :guard-context attached
@@ -198,7 +198,7 @@
                               :subject/id workflow-id
                               :action/type (keyword "escrow" (name direction))
                               :evidence/reason evidence-reason}
-         (evidence/capture-event-evidence!
+         (cap/capture-event-evidence!
            evidence-reason
            {:finalize/before
             {:workflow-state (t/escrow-state world workflow-id)
@@ -368,7 +368,7 @@
                                        :subject/id workflow-id
                                        :action/type :escrow/create
                                        :evidence/reason :escrow-created}
-                  (evidence/capture-event-evidence!
+                  (cap/capture-event-evidence!
                     :escrow-created
                     {:escrow/before
                      {:next-workflow-id (:next-workflow-id world)
@@ -425,7 +425,7 @@
                                     :subject/id workflow-id
                                     :action/type :dispute/raise
                                     :evidence/reason :dispute-raised}
-              (evidence/capture-event-evidence!
+              (cap/capture-event-evidence!
                 :dispute-raised
                 {:dispute/before {:escrow-state (t/escrow-state world workflow-id)
                                   :resolver resolver}}

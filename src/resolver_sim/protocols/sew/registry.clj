@@ -15,8 +15,7 @@
             [resolver-sim.economics.payoffs            :as payoffs]
             [resolver-sim.util.attribution         :as attr]
             [resolver-sim.util.math                 :as math]
-            [resolver-sim.evidence.capture         :as cap]
-            [resolver-sim.io.event-evidence         :as evidence]))
+            [resolver-sim.evidence.capture         :as cap]))
 
 (declare get-stake)
 
@@ -39,7 +38,7 @@
                              :subject/id resolver-addr
                              :action/type :stake/register
                              :evidence/reason :stake-registered}
-        (evidence/capture-event-evidence!
+        (cap/capture-event-evidence!
           :stake-registered
           {:stake/before (get-stake world resolver-addr)}
           {:stake/after  (get-stake world' resolver-addr)}
@@ -84,7 +83,7 @@
                                 :subject/id resolver-addr
                                 :action/type :stake/withdraw
                                 :evidence/reason :stake-withdrawn}
-          (evidence/capture-event-evidence!
+          (cap/capture-event-evidence!
             :stake-withdrawn
             {:stake/before current}
             {:stake/after  (get-stake world' resolver-addr)}
@@ -145,7 +144,7 @@
          :subject/id   resolver-addr
          :action/type  :slash
          :evidence/reason :slashing}
-        (evidence/capture-event-evidence! :slashing
+        (cap/capture-event-evidence! :slashing
                                          {:resolver-stake current}
                                          {:resolver-stake (get-stake world' resolver-addr)}
                                          {:requested-amount amount :actual-amount actual}

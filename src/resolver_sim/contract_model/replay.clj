@@ -25,7 +25,6 @@
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.yield.risk-monitor :as risk]
             [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.io.event-evidence :as event-evidence]
             [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -141,7 +140,7 @@
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
    ([protocol scenario replay-opts]
     (chain/with-fresh-registry
-      (event-evidence/with-fresh-chain-cursor
+      (chain/with-fresh-chain-cursor
         (risk/with-fresh-risk-context
           (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
          vocab              (if (satisfies? proto/EconomicModel protocol)

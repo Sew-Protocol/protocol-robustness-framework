@@ -106,6 +106,7 @@ run_unit() {
 (require '[resolver-sim.contract-model.replay-batch-sew-test])
 (require '[resolver-sim.contract-model.replay-batch-appeal-test])
 (require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
+(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
@@ -123,7 +124,8 @@ run_unit() {
                 'resolver-sim.contract-model.replay-batch-test
                 'resolver-sim.contract-model.replay-batch-sew-test
                 'resolver-sim.contract-model.replay-batch-appeal-test
-                'resolver-sim.contract-model.replay-batch-slash-domain-test)]
+                'resolver-sim.contract-model.replay-batch-slash-domain-test
+                'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -310,6 +312,18 @@ run_invariants() {
   require_clojure || return $?
   echo "Running deterministic invariant scenarios (S01–S100)..."
   clojure -M:run -- --invariants
+  return $?
+}
+
+run_dispute_resolution() {
+  require_clojure || return $?
+  echo "Running dispute resolution coverage scenarios (S-DR-* via test namespace)..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
+(let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
   return $?
 }
 
@@ -1004,6 +1018,9 @@ case "$MODE" in
   invariants)
     run_invariants || FAILURES=$((FAILURES + 1))
     ;;
+  dispute-resolution)
+    run_dispute_resolution || FAILURES=$((FAILURES + 1))
+    ;;
   yield-scenarios)
     run_yield_scenarios || FAILURES=$((FAILURES + 1))
     ;;
@@ -1080,7 +1097,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac
@@ -1547,6 +1564,13 @@ print(f"Wrote machine-readable summary: $ARTIFACT_FILE")
 print(f"Wrote run manifest: $RUN_MANIFEST_FILE")
 print(f"Wrote artifact registry: $ARTIFACT_REGISTRY_FILE")
 print(f"Wrote claimable classification: $CLAIMABLE_CLASSIFICATION_FILE")
+
+status_word = "PASS" if overall == "pass" else "FAIL"
+fail_detail = ""
+if target_fail > 0:
+    fail_detail = f" ({target_fail}/{target_total} failed)"
+print(f"")
+print(f"Overall: {status_word}{fail_detail}  |  Acceptance: {decision}")
 PY
 fi
 

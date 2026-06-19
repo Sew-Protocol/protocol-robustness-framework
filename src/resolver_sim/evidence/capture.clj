@@ -160,3 +160,48 @@
   (let [hash-input (dissoc evidence :evidence/hash :evidence/timestamp)
         evidence-hash (stable-hash hash-input)]
     (assoc evidence :evidence/hash evidence-hash)))
+
+;; ── World Hashing ──────────────────────────────────────────────────────────
+
+(defn hash-world
+  "Content hash of a world state for deterministic forensic anchoring.
+   Canonicalizes map keys so the same logical world always produces the
+   same hash across JVM invocations. Falls back to stable sort for maps
+   with mixed key types that sorted-map cannot compare."
+  [world]
+  (let [canon (walk/postwalk
+               (fn [x]
+                 (if (map? x)
+                   (try (into (sorted-map) x)
+                        (catch ClassCastException _
+                          (into (array-map) (sort-by (fn [[k _]] (str k)) x))))
+                   x))
+               world)
+        digest (java.security.MessageDigest/getInstance "SHA-256")]
+    (.update digest (.getBytes (pr-str canon) "UTF-8"))
+    (apply str (map (partial format "%02x") (.digest digest)))))
+
+;; ── Dynamic dispatch for I/O capture ──────────────────────────────────────
+
+(def ^:dynamic *capture-event-evidence!*
+  "Dynamic var for I/O-backed evidence capture.
+   Bound by resolver-sim.io.event-evidence at load time to the actual
+   persistence implementation. Protocol-layer code should call
+   capture-event-evidence! which delegates through this var.
+   
+   Default implementation returns nil (no-op) until bound."
+  (fn
+    ([reason pre post inputs] nil)
+    ([reason pre post inputs calc] nil)
+    ([reason pre post inputs calc ctx-or-opts] nil)
+    ([evidence] nil)))
+
+(defn capture-event-evidence!
+  "Delegate to the bound I/O implementation of event evidence capture.
+   See resolver-sim.io.event-evidence/capture-event-evidence! for the
+   actual implementation that persists evidence artifacts to disk.
+   
+   Supports the same calling conventions as the I/O implementation:
+   positional (legacy) or pre-built evidence map."
+  [& args]
+  (apply *capture-event-evidence!* args))

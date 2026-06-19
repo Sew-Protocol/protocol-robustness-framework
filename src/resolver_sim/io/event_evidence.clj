@@ -53,23 +53,7 @@
                    m))
                data data)))
 
-(defn hash-world
-  "Content hash of a world state for deterministic forensic anchoring.
-   Canonicalizes map keys so the same logical world always produces the
-   same hash across JVM invocations. Falls back to stable sort for maps
-   with mixed key types that sorted-map cannot compare."
-  [world]
-  (let [canon (walk/postwalk
-               (fn [x]
-                 (if (map? x)
-                   (try (into (sorted-map) x)
-                        (catch ClassCastException _
-                          (into (array-map) (sort-by (fn [[k _]] (str k)) x))))
-                   x))
-               world)
-        digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (pr-str canon) "UTF-8"))
-    (apply str (map (partial format "%02x") (.digest digest)))))
+
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,16 +62,16 @@
    Sanitize evidence-type to avoid directory traversal issues.
    Format: ev-<transition-index>-<type>-<short-hash>.json"
   [evidence]
-   (let [etype (:evidence/type evidence)
-          reason (clojure.string/replace (name (if (keyword? etype) etype "unknown")) #":" "-")
-          reason (-> reason
-                     (clojure.string/replace #"/" "-")
-                     (clojure.string/replace #"\\.\\." ""))
-          sid    (-> (name (if (keyword? (:scenario/id evidence)) (:scenario/id evidence) "unknown"))
-                     (clojure.string/replace #"/" "-")
-                     (clojure.string/replace #"\\.\\." ""))
-          idx    (:event/seq evidence "unknown")]
-      (str reason "-" sid "-" idx ".json")))
+   (let [etype-str (fn [v] (if (keyword? v) (name v) (str v)))
+         etype (:evidence/type evidence)
+         reason (-> (etype-str etype)
+                    (clojure.string/replace #":|-|/" "-")
+                    (clojure.string/replace #"\\.\\." ""))
+         sid    (-> (etype-str (:scenario/id evidence))
+                    (clojure.string/replace #":|-|/" "-")
+                    (clojure.string/replace #"\\.\\." ""))
+         idx    (or (:event/seq evidence) "unknown")]
+     (str reason "-" sid "-" idx ".json")))
 
 (defn- needs-internal-build?
   "Check if the call should use the legacy positional builder path.
@@ -179,53 +163,6 @@
   (swap! metrics update :serialize-count inc)
   (swap! metrics update :serialize-total-ns + (- (System/nanoTime) start-ns)))
 
-;; ── Evidence Chain Cursor ─────────────────────────────────────────────────────
-;;
-;; Run-scoped evidence chain: every targeted artifact gets a sequence number,
-;; the previous artifact's hash, and its own hash.  This enables a researcher
-;; to detect missing or inserted artifacts using only the artifact directory.
-;;
-;; The cursor is an atom; call reset-chain-cursor! at the start of each run.
-;; Example from dispatcher entry point:
-;;   (event-evidence/reset-chain-cursor!)
-
-(def ^:dynamic ^:private chain-cursor
-  (atom {:seq 0 :last-hash nil}))
-
-(defn reset-chain-cursor!
-  "Reset the evidence chain cursor for a new run.
-   Idempotent — safe to call multiple times."
-  []
-  (reset! chain-cursor {:seq 0 :last-hash nil}))
-
-(defmacro with-fresh-chain-cursor
-  "Execute body with a fresh evidence chain cursor.
-   The outer cursor is restored when body exits.
-   Use at the start of a replay run alongside chain/with-fresh-registry."
-  [& body]
-  `(let [fresh# (atom {:seq 0 :last-hash nil})]
-     (binding [chain-cursor fresh#]
-       ~@body)))
-
-(defn- inject-chain-fields
-  "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
-   :evidence/chain-self-hash to the evidence map using the cursor.
-   Uses a single atomic swap! to prevent race conditions on the
-   sequence counter and prev-hash chain linking."
-  [evidence]
-  (let [self-hash (:evidence/hash evidence)
-        {:keys [seq last-hash]}
-        (swap! chain-cursor
-               (fn [cursor]
-                 (let [new-seq (inc (:seq cursor))]
-                   {:seq new-seq
-                    :last-hash self-hash
-                    :prev-hash (:last-hash cursor)})))]
-    (assoc evidence
-      :evidence/chain-seq seq
-      :evidence/chain-prev-hash last-hash
-      :evidence/chain-self-hash self-hash)))
-
 ;; ── Chain Registry Integration ────────────────────────────────────────────────
 
 (defn- normalize-for-chain
@@ -302,14 +239,14 @@
                 (cap/cap-field :world/before-hash before-hash)
                 (cap/cap-field :world/after-hash after-hash)
                 (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
-                        (assoc :world/before-full-hash (hash-world (:world-before ctx-or-opts)))
+                        (assoc :world/before-full-hash (cap/hash-world (:world-before ctx-or-opts)))
                         (and (map? ctx-or-opts) (:world-after ctx-or-opts))
-                        (assoc :world/after-full-hash (hash-world (:world-after ctx-or-opts)))
+                        (assoc :world/after-full-hash (cap/hash-world (:world-after ctx-or-opts)))
                         (:ctx/evidence-group-id resolved-attr)
                         (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
                                :evidence/layer :targeted-protocol))
                 (cap/finalize-evidence)
-                (inject-chain-fields))
+                (chain/inject-chain-fields))
               serialize-start (System/nanoTime)
               out-dir  (str (evcfg/artifact-dir) "/event-evidence")
               filename (evidence-filename e)
@@ -334,7 +271,7 @@
                group-id (:ctx/evidence-group-id attr/*attribution*)
                evidence (cond-> evidence
                           group-id (assoc :evidence/group-id group-id :evidence/layer :targeted-protocol))
-               evidence (inject-chain-fields evidence)
+                evidence (chain/inject-chain-fields evidence)
                serialize-start (System/nanoTime)
               out-dir  (str (evcfg/artifact-dir) "/event-evidence")
               filename (evidence-filename evidence)
@@ -1042,4 +979,10 @@
       (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
                                   "evidence-index.v1" "DIAGNOSTIC"))
     (.getPath f)))
+
+;; ── Wire up capture implementation for protocol layers ──────────────────────
+
+(let [v (find-var 'resolver-sim.evidence.capture/*capture-event-evidence!*)]
+  (when v
+    (alter-var-root v (constantly (var-get #'capture-event-evidence!)))))
 
