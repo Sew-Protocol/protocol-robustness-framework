@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Added (2026-06-19)
+- **Notebook support layer:** `src/resolver_sim/notebook/` with `views.clj` (RAG helpers, card rendering, status functions, triage logic, evidence-hash-viewer, invariant-status-badge, trace-table, notice-box, trace-transition-card, badge) and `checks.clj` (Malli schemas for GoldenReport, TraceMetadata, TestSummary; assert-shape! and specific validators).
+- **`bb notebook:check` and `bb notebook:lint` tasks:** `notebook:check` loads notebook namespaces and validates data shapes; `notebook:lint` runs clj-kondo on `src/resolver_sim/notebook/`. `notebook:ci` combines both.
+- **`notebooks/docs/evidence_attribution.clj`:** Researcher-facing demonstration of the `with-attribution` → `capture-event-evidence!` → JSON artifact pipeline. 12 sections covering attribution context, evidence payloads, replay example, artifact registry, evidence chain validation.
+- **`notebooks/docs/NOTEBOOK_STYLE.md`:** Visibility standards, 4-layer notebook structure, shape check requirements, evidence table conventions, agent checklist.
+- **`notebooks/_template.clj`:** 4-layer research notebook template (claim, context, evidence, reproduction).
+- **`bb fixtures:generate-traces`:** Generates `.trace.json` files for golden reports that lack matching trace metadata. Created `scripts/generate_missing_traces.clj`.
+- **`bb regenerate-goldens` task:** Wraps `clojure -M:regenerate-goldens` for regenerating golden report `.report.edn` files.
+- **AGENTS.md Clerk notebook rules:** Agent prompt, visibility standards table, before-commit checklist.
+- **`scripts/vcs_info.py`:** Python VCS helper with `jj`-first, `git`-fallback for commit_sha, short_sha, branch, commit_message, root.
+- **`src/resolver_sim/vcs.clj`:** Clojure VCS abstraction supporting `jj` and Git.
 - **Scenario Evidence Verification:** `verify-scenario-evidence` compares `:expected-evidence` declared on scenario metadata against captured artifacts. Reports `:matched`, `:missing`, `:unexpected` entries.
 - **Cross-Run Evidence Diff:** `diff-evidence-directories` compares two artifact directories by evidence-hash. Reports `:added`, `:missing`, `:changed`, `:unchanged` with summary counts.
 - **Evidence Bundle Export:** `export-evidence-bundle` copies artifacts matching one or more group-ids into a portable directory with `manifest.json` for sharing with collaborators.
@@ -68,6 +78,10 @@
 
 ### Changed (2026-06-19)
 - **`bb test` now prints overall status:** After all targets complete, the terminal output includes a summary line (`Overall: PASS | Acceptance: PASS_CLEAN` or `Overall: FAIL (1/10 failed) | Acceptance: REJECTED`) so users see the result without opening files.
+- **`export-scenario-files!` metadata now extracted programmatically from scenario maps:** `scenario-inline-metadata` extracts `:title`, `:purpose`, `:threat-tags` directly from the scenario map, covering all 138 scenarios instead of only the 17 hardcoded entries in `default-export-metadata`. Resolution order: hardcoded defaults → inline scenario keys → caller-supplied metadata.
+- **VCS abstraction for git references:** `src/resolver_sim/vcs.clj` — all git SHA/branch extraction centralized with `jj`-first, `git`-fallback. `commit-sha`, `short-sha`, `branch`, `commit-message`, `root`, `dirty?`, `remotes`. Updated `claimable_classification_emitter.clj`, `sim/audit.clj`, `benchmark/repo.clj`, `python/invariant_suite.py`, `scripts/write_scenario_run_manifest.py` to use VCS helper.
+- **`notebooks/report.clj` visibility and color contrast:** Changed default from `:code :hide` to `:code :fold` with `:toc true`. Added dark-theme CSS override (`color-scheme: dark`). Replaced `#555`/`#444`/`#666` text colors with `#f1f5f9`/`#cbd5e1` for readability on dark background. Extracted RAG helpers, card rendering, status functions, and triage logic to `src/resolver_sim/notebook/views.clj`. Added Malli shape checks for golden reports, trace metadata, and test-summary artifacts.
+- **`notebooks/not-governance.clj` demo rewrite:** Consolidated 4 duplicate batch configs into single `const` map with `run-batch` helper. All display sections wrapped in `clerk/html`. Added transition-diff cards, delta column to strategy comparison, conservation equation to pro-rata allocation, and dual sweep (default bond + breakeven bond) for detection probability. Added demo warning boxes for stochastic zero-detection cases. Dark-theme CSS fix. Extracted `badge`, `notice-box`, `trace-table` to `views.clj`. Added shape checks on batch results.
 
 ### Fixed (2026-06-18)
 - **`cleanup-orphaned-slashes` ClassCastException:** `(name slash-id)` on integer keys (fraud slashes stored under workflow-id) threw `Long cannot be cast to Named`. Fixed to `(str slash-id)`.

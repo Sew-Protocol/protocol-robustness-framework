@@ -199,11 +199,30 @@
   (io/make-parents path)
   (spit path (json/write-str doc {:indent true :key-fn name :value-fn json-value})))
 
+(defn- scenario-inline-metadata
+  "Extract metadata directly from the scenario map if available.
+   Returns nil when the scenario has no inline metadata keys."
+  [scenario]
+  (let [title (:title scenario)
+        purpose (:purpose scenario)
+        tags (:threat-tags scenario)]
+    (when (or title purpose tags)
+      (cond-> {}
+        title   (assoc :title title)
+        purpose (assoc :purpose purpose)
+        tags    (assoc :threat-tags tags)))))
+
 (defn export-scenario-files!
-  "Write trace fixture and optional public scenarios/*.json for one scenario map."
+  "Write trace fixture and optional public scenarios/*.json for one scenario map.
+   Metadata is resolved in this order (last wins):
+     1. hardcoded default-export-metadata map (by scenario-id)
+     2. inline keys from the scenario map itself (:title, :purpose, :threat-tags)
+     3. caller-supplied :metadata argument"
   [scenario & {:keys [metadata write-public-json?]}]
   (let [sid         (:scenario-id scenario)
-        meta        (merge (get default-export-metadata sid {}) metadata)
+        meta        (merge (get default-export-metadata sid {})
+                           (scenario-inline-metadata scenario)
+                           metadata)
         trace-doc   (scenario->trace-document scenario meta)
         trace-p     (str "data/fixtures/traces/" sid ".trace.json")
         public-name (scenario-id->public-json-filename sid)
