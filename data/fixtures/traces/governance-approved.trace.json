@@ -2,6 +2,9 @@
   "schema-version" : "1.1",
   "threat-tags" : [ "governance-enforcement", "approval-gated-slashing" ],
   "initial-block-time" : 1000,
+  "protocol-params" : {
+    "appeal-window-duration" : 0
+  },
   "scenario-author" : "@codex",
   "expectations" : {
     "terminal" : [ {
