@@ -481,6 +481,16 @@
   benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
                   :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
 
+  evidence:registry
+  {:doc "Build the evidence registry for a run directory.
+         Usage: bb evidence:registry [--dir <run-dir>]
+         Defaults to the focused run or latest results/test-artifacts."
+   :task (let [args (vec *command-line-args*)
+               dir-idx (.indexOf args "--dir")
+               dir (when (<= 0 dir-idx) (nth args (inc dir-idx) nil))]
+           (clojure {:dir "." :extra-deps {}}
+                    "-M" "-m" "resolver-sim.scripts.evidence" "registry" (or dir "")))}
+
   evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
                      :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}
 

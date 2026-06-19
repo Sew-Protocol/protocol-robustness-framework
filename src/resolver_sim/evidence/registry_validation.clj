@@ -1,0 +1,216 @@
+(ns resolver-sim.evidence.registry-validation
+  "Validation checks for evidence-registry.json.
+   
+   Runs post-build and produces evidence-registry-validation.json.
+   
+   Checks are classified:
+     :required    — must pass or validation fails
+     :recommended — warning emitted, validation still passes
+     :diagnostic  — logged only, no validation impact
+   
+   Usage:
+     (validate-evidence-registry! registry dir)"
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.evidence.registry :as reg]
+            [resolver-sim.io.event-evidence :as io-evidence]
+            [resolver-sim.logging :as log]))
+
+;; ── Check Runner ─────────────────────────────────────────────────────────────
+
+(defn- check-required
+  "Run all required checks. Returns a vector of check result maps."
+  [registry artifact-dir]
+  (let [entries (:entries registry)
+        ;; Every entry has :evidence/id
+        c1 (every? :evidence/id entries)
+        ;; Every entry has :evidence/type
+        c2 (every? :evidence/type entries)
+        ;; Every entry has :hash/content
+        c3 (every? :hash/content entries)
+        ;; Every entry has :file/path
+        c4 (every? :file/path entries)
+        ;; Every file path exists
+        c5 (every? (fn [e] (.exists (io/file artifact-dir (:file/path e)))) entries)
+        ;; No duplicate IDs
+        c6 (let [ids (map :evidence/id entries)]
+             (= (count ids) (count (set ids))))]
+    [{:id "every-entry-has-id" :status (if c1 :passed :failed) :detail {:count (count entries) :missing (count (remove :evidence/id entries))}}
+     {:id "every-entry-has-type" :status (if c2 :passed :failed) :detail {:count (count entries) :missing (count (remove :evidence/type entries))}}
+     {:id "every-entry-has-content-hash" :status (if c3 :passed :failed) :detail {:count (count entries) :missing (count (remove :hash/content entries))}}
+     {:id "every-entry-has-path" :status (if c4 :passed :failed) :detail {:count (count entries) :missing (count (remove :file/path entries))}}
+     {:id "every-path-exists" :status (if c5 :passed :failed) :detail {:entries (count entries) :missing (count (remove (fn [e] (.exists (io/file artifact-dir ".." (:file/path e)))) entries))}}
+     {:id "no-duplicate-evidence-ids" :status (if c6 :passed :failed) :detail {:total (count entries) :unique (count (set (map :evidence/id entries)))}}]))
+
+(defn- check-recommended
+  "Run all recommended checks. Returns a vector of check result maps with :warning status."
+  [registry]
+  (let [entries (:entries registry)
+        targeted (filter #(= :targeted-protocol (:evidence/layer %)) entries)
+        ;; Every entry has :scenario/id
+        w1 (remove :scenario/id entries)
+        ;; Every entry has :run/id
+        w2 (remove :run/id entries)
+        ;; Every entry has :event/index
+        w3 (remove :event/index entries)
+        ;; Every targeted entry has :subject/type
+        w4 (remove :subject/type targeted)
+        ;; Every targeted entry has :subject/id
+        w5 (remove :subject/id targeted)
+        ;; Every targeted entry has :action/type
+        w6 (remove :action/type targeted)
+        ;; Every group-id resolves to at least one entry
+        gids (set (keep :evidence/group-id entries))
+        group-idx (:by-group-id (:indexes registry))
+        gid-ok (every? (fn [gid] (seq (get group-idx gid))) gids)]
+    [{:id "entries-have-scenario-id" :status (if (empty? w1) :passed :warning) :detail {:missing (count w1)}}
+     {:id "entries-have-run-id" :status (if (empty? w2) :passed :warning) :detail {:missing (count w2)}}
+     {:id "entries-have-event-index" :status (if (empty? w3) :passed :warning) :detail {:missing (count w3)}}
+     {:id "targeted-entries-have-subject-type" :status (if (empty? w4) :passed :warning) :detail {:targeted (count targeted) :missing (count w4)}}
+     {:id "targeted-entries-have-subject-id" :status (if (empty? w5) :passed :warning) :detail {:targeted (count targeted) :missing (count w5)}}
+     {:id "targeted-entries-have-action-type" :status (if (empty? w6) :passed :warning) :detail {:targeted (count targeted) :missing (count w6)}}
+     {:id "group-ids-resolve" :status (if gid-ok :passed :warning) :detail {:group-ids (count gids) :unresolved (count (remove (fn [gid] (seq (get group-idx gid))) gids))}}]))
+
+(defn- check-diagnostic
+  "Run diagnostic checks. Returns a vector of informative entries."
+  [registry]
+  (let [entries (:entries registry)
+        ;; World hashes present
+        wh-before (count (remove :hash/world-before entries))
+        wh-after (count (remove :hash/world-after entries))
+        ;; Chain-seq monotonic
+        with-chain (sort-by :evidence/chain-seq (filter :evidence/chain-seq entries))
+        chain-mono (or (nil? (seq (keep :evidence/chain-seq with-chain))) (apply < (keep :evidence/chain-seq with-chain)))
+        ;; Chain-seq gaps
+        chain-seqs (sort (keep :evidence/chain-seq entries))
+        gaps (if (seq chain-seqs)
+               (let [expected (range (first chain-seqs) (inc (last chain-seqs)))]
+                 (remove (set chain-seqs) expected))
+               [])
+        ;; Metadata completeness — targeted entries with full attribution
+        targeted (filter #(= :targeted-protocol (:evidence/layer %)) entries)
+        has-subject-type (count (remove :subject/type targeted))
+        has-subject-id (count (remove :subject/id targeted))
+        has-action-type (count (remove :action/type targeted))
+        has-reason (count (remove :evidence/reason targeted))
+        has-world-before (count (remove :hash/world-before entries))
+        has-world-after (count (remove :hash/world-after entries))
+        incomplete (set (keep (fn [e]
+                                (let [missing (filter (fn [k] (nil? (get e k)))
+                                                      [:subject/type :subject/id :action/type :evidence/reason])]
+                                  (when (seq missing) (:evidence/id e))))
+                              targeted))]
+    [{:id "world-before-hashes-present" :status :diagnostic :detail {:total (count entries) :missing wh-before}}
+     {:id "world-after-hashes-present" :status :diagnostic :detail {:total (count entries) :missing wh-after}}
+     {:id "chain-seq-monotonic" :status (if chain-mono :diagnostic :warning) :detail {:chained (count with-chain)}}
+     {:id "metadata-subject-type" :status (if (zero? has-subject-type) :diagnostic :warning) :detail {:total (count targeted) :missing has-subject-type}}
+     {:id "metadata-subject-id" :status (if (zero? has-subject-id) :diagnostic :warning) :detail {:total (count targeted) :missing has-subject-id}}
+     {:id "metadata-action-type" :status (if (zero? has-action-type) :diagnostic :warning) :detail {:total (count targeted) :missing has-action-type}}
+     {:id "metadata-reason" :status (if (zero? has-reason) :diagnostic :warning) :detail {:total (count targeted) :missing has-reason}}
+     {:id "metadata-world-hashes-complete" :status (if (and (zero? has-world-before) (zero? has-world-after)) :diagnostic :warning) :detail {:total (count entries) :missing-before has-world-before :missing-after has-world-after}}
+     {:id "metadata-incomplete-entries" :status (if (empty? incomplete) :diagnostic :warning) :detail {:incomplete (vec (take 5 incomplete))}}
+     {:id "chain-seq-no-gaps" :status (if (empty? gaps) :diagnostic :warning) :detail {:gaps (vec gaps)}}]))
+
+;; ── Public API ───────────────────────────────────────────────────────────────
+
+(defn validate-evidence-registry
+  "Run all validation checks against an evidence registry map.
+   Returns a validation result map suitable for JSON serialization.
+   
+   Checks are grouped by category:
+   - required:   must pass or status = :failed
+   - recommended: warnings, status = :warning (unless :strict)
+   - diagnostic:  informational, no status impact
+   
+   When :strict is true, recommended checks are promoted to required —
+   warnings become failures.  Use for CI or research-release gates.
+   Diff-evidence artifacts (:diff layer) are excluded from strict checks
+   since they are always diagnostic."
+  [registry & {:keys [strict artifact-dir]
+               :or {strict false
+                    artifact-dir (str (evcfg/artifact-dir))}}]
+  (let [dir artifact-dir
+        entries (:entries registry)
+        ;; Filter out diagnostic diff artifacts from strict checks
+        strict-entries (if strict
+                         (remove #(= :diff (:evidence/layer %)) entries)
+                         entries)
+        strict-registry (assoc registry :entries strict-entries)
+        required-ch (check-required strict-registry dir)
+        recommended-ch (check-recommended strict-registry)
+        diagnostic-ch (check-diagnostic strict-registry)
+        all-ch (concat required-ch recommended-ch diagnostic-ch)
+        ;; In strict mode, :warning status from recommended checks is promoted to :failed
+        promoted (if strict
+                   (map (fn [c]
+                          (if (= :warning (:status c))
+                            (assoc c :status :failed :message "Promoted to required by strict mode")
+                            c))
+                        all-ch)
+                   all-ch)
+        has-failed (some #(= :failed (:status %)) promoted)
+        passed (count (filter #(= :passed (:status %)) promoted))
+        warnings (count (filter #(= :warning (:status %)) promoted))
+        failed (count (filter #(= :failed (:status %)) promoted))
+        diagnostics (count (filter #(= :diagnostic (:status %)) promoted))]
+    {:schema/version "evidence-registry-validation.v1"
+     :mode (if strict :strict :normal)
+     :registry-path "evidence-registry.json"
+     :status (if has-failed :failed :passed)
+     :checks (vec promoted)
+     :warnings (mapv (fn [c] {:check (:id c) :detail (:detail c)})
+                     (filter #(= :warning (:status %)) promoted))
+     :metrics {:total (count promoted)
+               :passed passed
+               :warnings warnings
+               :failed failed
+               :diagnostics diagnostics}}))
+
+(defn write-evidence-registry-validation!
+  "Run validation and persist to evidence-registry-validation.json.
+   Also registers the artifact in the chain registry.
+   Returns {:validation-path \"...\" :validation <map>}"
+  [registry & [dir]]
+  (let [out-dir (or dir (str (evcfg/artifact-dir)))
+        validation (validate-evidence-registry registry :artifact-dir out-dir)
+        f (io/file out-dir "evidence-registry-validation.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str validation {:indent true}))
+    (println "Wrote evidence registry validation:" (.getPath f) "- status:" (:status validation))
+    (chain/register-additional-artifact!
+      (chain/index-artifact-entry :evidence-registry-validation
+                                  "evidence-registry-validation.json"
+                                  "evidence-registry-validation.v1" "DIAGNOSTIC"))
+    {:validation-path (.getPath f)
+     :validation validation}))
+
+(defn build-evidence-registry!
+  "Full pipeline: build evidence registry, write to disk, run validation, write validation.
+   
+   When :strict is true, recommended checks are promoted to failures.
+   Use :strict for CI or research-release gates.
+   
+   Returns a map with:
+   :registry-path      — path to evidence-registry.json
+   :validation-path    — path to evidence-registry-validation.json
+   :entry-count        — number of evidence entries
+   :validation-status  — :passed or :failed"
+  [& {:keys [strict dir]
+      :or {strict false}}]
+  (let [out-dir (or dir (str (evcfg/artifact-dir)))
+        {:keys [registry-path entry-count registry]} (reg/write-evidence-registry! out-dir)
+        {:keys [validation-path validation]} (write-evidence-registry-validation! registry out-dir)]
+    (when strict
+      (let [strict-result (validate-evidence-registry registry
+                            :strict true :artifact-dir out-dir)]
+        (println "Strict validation:" (:status strict-result)
+                 "—" (:failed (:metrics strict-result)) "failures")
+        (when (= :failed (:status strict-result))
+          (throw (ex-info "Evidence registry strict validation failed"
+                   {:validation strict-result})))))
+    {:registry-path registry-path
+     :validation-path validation-path
+     :entry-count entry-count
+     :validation-status (:status validation)}))

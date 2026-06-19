@@ -33,7 +33,7 @@
     (string? k) k
     :else (str k)))
 
-(defn- read-evidence-json
+(defn read-evidence-json
   "Read an evidence artifact JSON file and return the map with keyword keys.
    Handles both qualified JSON keys (evidence/type) and legacy unqualified keys
    (type) by normalizing unqualified keys to their namespaced equivalents
@@ -57,7 +57,7 @@
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
-(defn- evidence-filename
+(defn evidence-filename
   "Derive a collision-resistant filename from evidence record metadata.
    Sanitize evidence-type to avoid directory traversal issues.
    Format: ev-<transition-index>-<type>-<short-hash>.json"

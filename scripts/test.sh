@@ -219,6 +219,7 @@ run_sew() {
 (require '[resolver-sim.scenario.spe-fork-event-id-test])
 (require '[resolver-sim.properties.invariants-test])
 (require '[resolver-sim.definitions.registry-test])
+(require '[resolver-sim.evidence.registry-test])
 (require '[resolver-sim.evidence.qol-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
@@ -275,7 +276,8 @@ run_sew() {
                 'resolver-sim.scenario.spe-fork-event-id-test
                 'resolver-sim.properties.invariants-test
                 'resolver-sim.definitions.registry-test
-                'resolver-sim.evidence.qol-test)]
+                'resolver-sim.evidence.qol-test
+                'resolver-sim.evidence.registry-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?

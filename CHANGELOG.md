@@ -9,6 +9,31 @@
 - **Post-hoc Chain Verification:** `verify-chain-integrity` reads all artifacts, validates `:evidence/chain-self-hash` matches `:evidence/hash`, and verifies `:evidence/chain-prev-hash` links against the previous artifact in sequence order.
 - **`with-fresh-chain-cursor` macro:** Dynamic chain cursor isolation per run, matching `chain/with-fresh-registry` pattern.
 
+### Added (2026-06-19, cont.)
+- **Evidence Registry (Phases 1-8):** Full 8-phase evidence registry implementation:
+  - Phase 1: Read-only registry builder (`build-evidence-registry`) with entries, indexes, query helpers
+  - Phase 2: Integration into scenario runner + `bb evidence:registry` task + CLI entry point
+  - Phase 3: Structural diff-evidence generation (`build-diff-evidence!`) comparing before/after world states
+  - Phase 4: Path classification (35 known paths across 10 domains) with domain summaries and suppression
+  - Phase 5: Invariant result linking (`build-invariant-links`, `merge-invariant-links`) from replay traces
+  - Phase 6: Semantic classification (`:expected`, `:unexpected`, `:financial-boundary`, `:diagnostic-only`)
+  - Phase 7: Strict-mode CI gates (`:strict true` promotes warnings to failures, excludes diff layer)
+  - Phase 8: Metadata hardening (6 completeness checks: subject/type, subject/id, action/type, reason, world hashes)
+- **Strict Mode Validation:** `validate-evidence-registry` accepts `:strict true` — recommended checks become failures.
+  `build-evidence-registry!` with `:strict true` throws on strict failure. Diff artifacts excluded from strict checks.
+- **Metadata Completeness Checks:** 6 diagnostic checks for attribution fields (`metadata-subject-type`, `metadata-subject-id`,
+  `metadata-action-type`, `metadata-reason`, `metadata-world-hashes-complete`, `metadata-incomplete-entries`).
+- **Semantic Diff Classification:** `classify-change` classifies each diff change by path prefix + event action.
+  `classify-diff-changes-semantic` adds `:classification` (`:expected`, `:unexpected`, `:financial-boundary`,
+  `:diagnostic-only`). `build-enhanced-domain-summary` adds `:by-classification` breakdown.
+- **Domain Summaries:** 35 known world-state path prefixes classified into 10 domains (financial, resolver, slashing,
+  bonding, escrow, dispute, yield, claimable, risk, internal). Internal paths are `:suppress-from-summary? true`.
+- **Diff Artifact Index:** `build-diff-index` with `:by-event-index` linking diffs to event indices.
+- **Invariant Linking:** `build-invariant-links` extracts invariant results from trace entries and produces
+  `:by-event-index` and `:by-invariant-id` indexes. `merge-invariant-links` adds them to the registry.
+- **11 new tests:** semantic classification (classify-change, classify-diff-changes-semantic), domain summary enhancement,
+  diff index, strict mode validation (2 tests), merge invariant links (2 tests). Total: 598 tests, 1956 assertions.
+
 ### Added (2026-06-18)
 - **Evidence Query API:** `find-evidence` with 9 AND-combined filters (`:by-type`, `:by-mechanism`, `:by-workflow`, `:by-group-id`, `:by-chain-seq`, `:by-run-id`, `:by-scenario-id`, `:include-body?`, `:artifact-dir`). Returns lightweight artifact summaries by default; full body opt-in.
 - **Mechanism Index:** `build-mechanism-index` / `write-mechanism-index!` grouping artifacts by `:evidence/mechanism`, falling back to type→mechanism mapping. Persisted as `evidence-mechanisms.json`.

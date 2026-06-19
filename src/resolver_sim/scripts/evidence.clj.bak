@@ -35,20 +35,20 @@
       "registry"
       (let [dir (or param (str (evcfg/artifact-dir)))]
         (println "Building evidence registry for:" dir)
-        (let [res (rv/build-evidence-registry! :dir dir)]
+        (let [res (rv/build-evidence-registry! dir)]
           (println "  Registry:" (:registry-path res))
           (println "  Validation:" (:validation-path res))
           (println "  Entries:" (:entry-count res))
           (println "  Status:" (:validation-status res))))
 
       "bundle"
-      (do (when-not manifest
-            (println "ERROR: no manifest found. Run bb scenario:run first.")
-            (System/exit 1))
-          (let [res (bundle/export-bundle! manifest registry out-dir)]
-            (if (:error res)
-              (do (println "ERROR:" (:error res)) (System/exit 1))
-              (do (println "Wrote bundle to:" (:out-dir res)) (println "Bundle hash:" (:bundle-hash res))))))
+      (when-not manifest
+        (println "ERROR: no manifest found. Run bb scenario:run first.")
+        (System/exit 1))
+      (let [res (bundle/export-bundle! manifest registry out-dir)]
+        (if (:error res)
+          (do (println "ERROR:" (:error res)) (System/exit 1))
+          (do (println "Wrote bundle to:" (:out-dir res)) (println "Bundle hash:" (:bundle-hash res)))))
 
       "sign"
       (let [key-path param]

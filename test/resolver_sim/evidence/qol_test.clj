@@ -14,7 +14,12 @@
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.evidence.diff :as diff]
+            [resolver-sim.evidence.registry-validation :as reg-val]
             [resolver-sim.io.event-evidence :as evidence]
+            [resolver-sim.io.scenarios :as io-sc]
+            [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.sim.fixtures :as fix]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.scripts.evidence-coverage :as coverage]))
@@ -607,3 +612,193 @@
     (let [files (.listFiles (java.io.File. out))]
       (is (= 1 (count files)) "Only manifest.json written")
       (is (= "manifest.json" (.getName (first files)))))))
+
+;; ── Diff Evidence: "What changed because of this event?" ────────────────
+
+(deftest diff-evidence-builds-from-trace
+  (let [s (io-sc/load-scenario-file "scenarios/S01_baseline-happy-path.json")
+        r (sew/replay-with-sew-protocol (fix/normalize-scenario s))
+        diffs (diff/build-diff-evidence (:trace r) :scenario-id "S01" :run-id "test")]
+    (is (seq diffs) "At least one diff artifact produced")
+    (is (every? :evidence/id diffs) "Every diff has an id")
+    (is (every? :diff/summary diffs) "Every diff has a summary")
+    (is (every? #(= :state-diff (:evidence/type %)) diffs) "All are state-diff type")
+    (is (every? #(= :diff (:evidence/layer %)) diffs) "All have :diff layer")
+    (is (every? #(= :diagnostic (:evidence/role %)) diffs) "All are diagnostic")))
+
+(deftest diff-evidence-events-linked
+  (let [s (io-sc/load-scenario-file "data/fixtures/traces/governance-approved.trace.json")
+        r (sew/replay-with-sew-protocol (fix/normalize-scenario s))
+        diffs (diff/build-diff-evidence (:trace r) :scenario-id "g" :run-id "t")]
+    (doseq [d diffs]
+      (is (contains? d :event/index) (str "Event index present for " (:evidence/id d)))
+      (is (contains? d :event/type) (str "Event type present for " (:evidence/id d))))
+    ;; Verify events match scenario actions
+    (is (= "raise_dispute" (:event/type (second diffs))))))
+
+(deftest diff-evidence-structural-integrity
+  (let [a {:a 1 :b 2 :c 3}
+        b {:a 1 :b 99 :d 4}
+        changes (diff/structural-diff a b)
+        ;; :c removed, :d added, :b changed, :a unchanged
+        changed (:op (first (filter #(= :b (first (:path %))) changes)))
+        added (:op (first (filter #(= :d (first (:path %))) changes)))
+        removed (:op (first (filter #(= :c (first (:path %))) changes)))]
+    (is (= :changed changed) ":b changed")
+    (is (= :added added) ":d added")
+    (is (= :removed removed) ":c removed")
+    (is (= 3 (count changes)) "3 changes total")))
+
+(deftest diff-evidence-empty-diff
+  (let [changes (diff/structural-diff {:a 1} {:a 1})]
+    (is (empty? changes) "Identical maps produce no changes")))
+
+(deftest diff-evidence-write-and-index
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-diff-" (java.util.UUID/randomUUID))
+        s (io-sc/load-scenario-file "scenarios/S01_baseline-happy-path.json")
+        r (sew/replay-with-sew-protocol (fix/normalize-scenario s))
+        result (diff/write-diff-evidence! (:trace r) dir :scenario-id "S01" :run-id "test")]
+    (is (pos? (:diff-count result)) "Diffs were written")
+    (is (seq (:paths result)) "Paths are returned")
+    (is (.exists (io/file dir "diff-evidence")) "Diff-evidence directory created")))
+
+(deftest diff-evidence-role-diagnostic-not-core
+  (let [a {:x 10} b {:x 20}
+        changes (diff/structural-diff a b)
+        artifact (diff/build-diff-artifact {:action :test :time 100} nil nil 0 "g" changes)]
+    (is (= :diagnostic (:evidence/role artifact)) "Diff evidence is always diagnostic")
+    (is (= :diff (:evidence/layer artifact)) "Diff evidence layer is :diff")))
+
+;; ── Invariant Linking: "Which invariants were checked for this event?" ──
+
+(deftest invariant-linking-empty-trace
+  (let [links (diff/build-invariant-links [])]
+    (is (zero? (count (:by-event-index links))) "Empty trace produces no links")
+    (is (zero? (count (:by-invariant-id links))) "Empty trace produces no invariant IDs")))
+
+(deftest invariant-linking-no-violations
+  (let [links (diff/build-invariant-links [{:violations nil :invariants-ok? true}])]
+    (is (zero? (count (:by-event-index links))) "No violations → no event links")
+    (is (zero? (count (:by-invariant-id links))) "No violations → no invariant links")))
+
+(deftest invariant-linking-with-violations
+  (let [trace [{:action :create_escrow :seq 0
+                :violations {:solvency {:holds? false :violations [{:type :underflow}]}
+                             :fee-cap {:holds? true :violations []}}
+                :invariants-ok? false}]
+        links (diff/build-invariant-links trace)]
+    (is (= 1 (count (:by-event-index links))) "One event with violations")
+    (is (= 2 (count (:by-invariant-id links))) "Two invariants referenced")
+    (let [ev (get (:by-event-index links) 0)]
+      (is (false? (:invariants-ok? ev)) "invariants-ok? reflects failure")
+      (is (= 2 (count (:invariant-ids ev))) "Two IDs listed"))
+    (let [sol (get (:by-invariant-id links) :solvency)]
+      (is (false? (:invariant/holds? (first sol))) "solvency holds? is false"))))
+
+(deftest invariant-linking-merges-into-registry
+  (let [registry {:entries [] :indexes {:by-event-index {}}}
+        trace [{:action :test :seq 0
+                :violations {:solvency {:holds? false :violations []}}
+                :invariants-ok? false}]
+        merged (diff/merge-invariant-links registry trace)]
+    (is (get-in merged [:indexes :by-invariant]) "Invariant links added to registry")))
+
+(deftest invariant-linking-unchanged-registry
+  (let [registry {:entries [] :indexes {:by-event-index {}}}
+        trace [{:violations nil :invariants-ok? true}]
+        merged (diff/merge-invariant-links registry trace)]
+    (is (= registry merged) "No-violation trace leaves registry unchanged")))
+
+
+
+;; ── Semantic Classification: classify-change and classify-diff-changes-semantic ─
+
+(deftest classify-change-expected-for-known-path-and-event
+  (let [c {:path [:total-held :USDC] :op :changed}
+        result (diff/classify-change c :create_escrow)]
+    (is (= :expected result) ":total-held changed during create_escrow is expected")))
+
+(deftest classify-change-unexpected-for-unknown-combo
+  (let [c {:path [:escrow-transfers 0] :op :changed}
+        result (diff/classify-change c :register_stake)]
+    (is (= :unexpected result) ":escrow-transfers changed during register_stake is unexpected")))
+
+(deftest classify-change-diagnostic-for-internal
+  (let [c {:path [:block-time nil] :op :changed}
+        result (diff/classify-change c :any_event)]
+    (is (= :diagnostic-only result) "Internal paths are diagnostic-only")))
+
+(deftest classify-change-financial-boundary
+  (let [c {:path [:total-held :USDC] :op :changed}
+        result (diff/classify-change c :unknown_event)]
+    (is (= :financial-boundary result) "Financial path + unknown event = financial-boundary")))
+
+(deftest classify-diff-changes-semantic-maps-all
+  (let [changes [{:path [:total-held :USDC] :op :changed}
+                 {:path [:block-time nil] :op :changed}
+                 {:path [:escrow-transfers 0] :op :changed}]
+        classified (diff/classify-diff-changes-semantic changes :create_escrow)]
+    (is (= 3 (count classified)) "All changes classified")
+    (is (every? :classification classified) "Every change has classification")
+    (is (= :expected (:classification (first classified))) ":total-held → expected")
+    (is (= :diagnostic-only (:classification (second classified))) ":block-time → diagnostic")))
+
+;; ── Domain Summary Enhancement ─────────────────────────────────────────────
+
+(deftest build-enhanced-domain-summary-adds-classification
+  (let [changes [{:path [:total-held :USDC] :domain :financial :label "Held" :op :changed :classification :expected}
+                 {:path [:block-time nil] :domain :internal :label "Clock" :op :changed :classification :diagnostic-only}]
+        summary (diff/build-enhanced-domain-summary changes)
+        bcs (:by-classification summary)]
+    (is (contains? summary :by-classification) "Has :by-classification")
+    (is (= 1 (get bcs :expected 0)) "1 :expected change")
+    (is (= 1 (get bcs :diagnostic-only 0)) "1 :diagnostic change")))
+
+;; ── Diff Index ──────────────────────────────────────────────────────────────
+
+(deftest build-diff-index-creates-by-event-index
+  (let [diffs [{:event/index 0 :evidence/id "diff-a" :event/type "test"
+                :diff/summary {:changed-paths 1 :added-paths 0 :removed-paths 0}}
+               {:event/index 1 :evidence/id "diff-b" :event/type "test2"
+                :diff/summary {:changed-paths 2 :added-paths 1 :removed-paths 0}}]
+        idx (diff/build-diff-index diffs)]
+    (is (contains? (:by-event-index idx) 0) "Event 0 in index")
+    (is (contains? (:by-event-index idx) 1) "Event 1 in index")
+    (is (= "diff-a" (:diff-id (get (:by-event-index idx) 0))) "Correct diff ID")))
+
+;; ── Strict Mode Validation ─────────────────────────────────────────────────
+
+(deftest strict-mode-promotes-warnings
+  (let [reg {:entries [{:evidence/id "e1" :evidence/type :test :hash/content "a"
+                        :file/path "test.json" :evidence/layer :generic-trace}
+                       {:evidence/id "e2" :evidence/type :test :hash/content "b"
+                        :file/path "test2.json" :evidence/layer :targeted-protocol}]
+             :indexes {:by-group-id {"g1" ["e1"]}}}
+        strict (reg-val/validate-evidence-registry reg :strict true :artifact-dir "/tmp")]
+    (is (= :failed (:status strict)) "Strict mode fails on missing metadata")
+    (let [failed-checks (filter #(= :failed (:status %)) (:checks strict))]
+      (is (some #(= "targeted-entries-have-subject-type" (:id %)) failed-checks)
+          "Missing subject/type promoted to failure"))))
+
+(deftest strict-mode-excludes-diff-layer
+  (let [reg {:entries [{:evidence/id "d1" :evidence/type :state-diff
+                        :hash/content "a" :file/path "d.json"
+                        :evidence/layer :diff}]
+             :indexes {}}
+        strict (reg-val/validate-evidence-registry reg :strict true :artifact-dir "/tmp")]
+    (is (= :passed (:status strict)) "Diff-only registry passes strict mode")))
+
+;; ── Merge Invariant Links ──────────────────────────────────────────────────
+
+(deftest merge-invariant-links-adds-section
+  (let [registry {:entries [] :indexes {:by-event-index {}}}
+        trace [{:action :test :violations {:solvency {:holds? true :violations []}}
+                :invariants-ok? true}]
+        merged (diff/merge-invariant-links registry trace)]
+    (is (get-in merged [:indexes :by-invariant :links]) "Links section added to registry")))
+
+(deftest merge-invariant-links-no-registry-mutation
+  (let [registry {:entries [] :indexes {:by-event-index {}}}
+        trace [{:action :ok :violations nil :invariants-ok? true}]
+        merged (diff/merge-invariant-links registry trace)]
+    (is (= registry merged) "No-violation trace leaves registry unchanged")))
