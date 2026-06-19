@@ -13,8 +13,7 @@
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.evidence.capture :as cap]
-            [resolver-sim.io.event-evidence :as evidence]))
+            [resolver-sim.evidence.capture :as cap]))
 
 (declare sub-held record-fee record-claimable)
 
@@ -212,7 +211,7 @@
                             :subject/id (str workflow-id "-" appellant)
                             :action/type :bond/post
                             :evidence/reason :bond-posted}
-      (evidence/capture-event-evidence!
+      (cap/capture-event-evidence!
         :bond-posted
         {:bond/before {:bond-balance (get-in world [:bond-balances workflow-id appellant] 0)
                        :total-held (get-in world [:total-held token])}}
@@ -256,7 +255,7 @@
           :subject/id   challenger
           :action/type  :reward-bounty
           :evidence/reason :incentive-payout}
-          (evidence/capture-event-evidence! :incentive-payout
+          (cap/capture-event-evidence! :incentive-payout
                                            {:bounty-claimable 0}
                                            {:bounty-claimable bounty}
                                            {:slash-amount amount :bounty-bps bounty-bps}
@@ -287,7 +286,7 @@
                                 :subject/id (str workflow-id "-" appellant)
                                 :action/type :bond/slash
                                 :evidence/reason :bond-slashed}
-          (evidence/capture-event-evidence!
+          (cap/capture-event-evidence!
             :bond-slashed
             {:bond/before {:bond-balance amount
                            :bond-status :active}}
@@ -321,7 +320,7 @@
                                 :subject/id (str workflow-id "-" appellant)
                                 :action/type :bond/return
                                 :evidence/reason :bond-returned}
-          (evidence/capture-event-evidence!
+          (cap/capture-event-evidence!
             :bond-returned
             {:bond/before {:bond-balance amount
                            :bond-status :active}}

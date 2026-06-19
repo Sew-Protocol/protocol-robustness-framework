@@ -1547,6 +1547,13 @@ print(f"Wrote machine-readable summary: $ARTIFACT_FILE")
 print(f"Wrote run manifest: $RUN_MANIFEST_FILE")
 print(f"Wrote artifact registry: $ARTIFACT_REGISTRY_FILE")
 print(f"Wrote claimable classification: $CLAIMABLE_CLASSIFICATION_FILE")
+
+status_word = "PASS" if overall == "pass" else "FAIL"
+fail_detail = ""
+if target_fail > 0:
+    fail_detail = f" ({target_fail}/{target_total} failed)"
+print(f"")
+print(f"Overall: {status_word}{fail_detail}  |  Acceptance: {decision}")
 PY
 fi
 

@@ -47,6 +47,47 @@
      (binding [evidence-registry-atom fresh#]
        ~@body)))
 
+;; ── Chain Cursor ──────────────────────────────────────────────────────────
+
+(def ^:dynamic ^:private chain-cursor
+  "Run-scoped evidence chain cursor for targeted event evidence.
+   Tracks sequence number and previous hash for chain linking."
+  (atom {:seq 0 :last-hash nil}))
+
+(defn reset-chain-cursor!
+  "Reset the evidence chain cursor for a new run.
+   Idempotent — safe to call multiple times."
+  []
+  (reset! chain-cursor {:seq 0 :last-hash nil}))
+
+(defmacro with-fresh-chain-cursor
+  "Execute body with a fresh evidence chain cursor.
+   The outer cursor is restored when body exits.
+   Use at the start of a replay run alongside with-fresh-registry."
+  [& body]
+  `(let [fresh# (atom {:seq 0 :last-hash nil})]
+     (binding [chain-cursor fresh#]
+       ~@body)))
+
+(defn inject-chain-fields
+  "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
+   :evidence/chain-self-hash to the evidence map using the cursor.
+   Uses a single atomic swap! to prevent race conditions on the
+   sequence counter and prev-hash chain linking."
+  [evidence]
+  (let [self-hash (:evidence/hash evidence)
+        {:keys [seq last-hash]}
+        (swap! chain-cursor
+               (fn [cursor]
+                 (let [new-seq (inc (:seq cursor))]
+                   {:seq new-seq
+                    :last-hash self-hash
+                    :prev-hash (:last-hash cursor)})))]
+    (assoc evidence
+      :evidence/chain-seq seq
+      :evidence/chain-prev-hash last-hash
+      :evidence/chain-self-hash self-hash)))
+
 (defn registry-status
   "Return summary info from the current registry state: count, run-id."
   []

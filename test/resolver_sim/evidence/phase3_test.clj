@@ -213,7 +213,7 @@
 
 (deftest test-capture-with-prebuilt-evidence
   (chain/reset-registry!)
-  (evidence/reset-chain-cursor!)
+  (chain/reset-chain-cursor!)
   (testing "capture-event-evidence! accepts pre-built evidence map"
     (let [evidence (-> (cap/evidence-base {:type :test-capture :importance :core
                                             :ctx sample-attribution})

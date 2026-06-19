@@ -6,9 +6,51 @@
             [resolver-sim.contract-model.replay.flags :as replay-flags]
             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
             [resolver-sim.protocols.protocol :as proto]
-            [resolver-sim.sim.dispatcher :as sim-dispatcher]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.util.evidence :as ev]
+            [resolver-sim.util.attribution :as attr]
             [resolver-sim.time.context :as time-ctx]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.logging :as log]))
+
+;; ---------------------------------------------------------------------------
+;; Action Dispatch with Evidence
+;; ---------------------------------------------------------------------------
+
+(defn apply-action-with-evidence
+  "Dispatch an action through the protocol layer and emit a content-hashed
+   evidence record for the transition.
+
+   Call shape mirrors proto/dispatch-action:
+     (apply-action-with-evidence protocol context world event)
+     => {:ok bool? :world world' :error kw? :extra map? :evidence map?}
+
+   The :evidence key in the result contains the evidence record (or nil if
+   attribution context was insufficient for evidence emission). The dispatch
+   itself always proceeds — evidence is best-effort at this layer."
+  [protocol context world event]
+  (let [action (:action event)
+        pre-world world
+        result (proto/dispatch-action protocol context world event)
+        post-world (:world result)
+        evidence (when (map? post-world)
+                   (try
+                     (attr/with-attribution
+                       {:ctx/step (:seq event)
+                        :ctx/event-id (str (:seq event))}
+                       (ev/emit-evidence!
+                         {:artifact-kind (if (:error result) :transition-error :transition)
+                          :block-time (:block-time pre-world)
+                          :step (:seq event)
+                          :before pre-world
+                          :after post-world
+                          :action action
+                          :result (dissoc result :world)}))
+                     (catch Exception e
+                       (log/error! :evidence-emission-failed
+                         {:action action :step (:seq event) :error (.getMessage e)})
+                       nil)))
+        _ (when evidence (chain/register-evidence! evidence))]
+    (assoc result :evidence evidence)))
 
 ;; ---------------------------------------------------------------------------
 ;; Execution Mode & Batch Helpers
@@ -131,7 +173,7 @@
                          :ctx/event-index (:seq event)
                          :ctx/event-type  (:action event)}
                         (try
-                         (sim-dispatcher/apply-action-with-evidence protocol context world-t event)
+                          (apply-action-with-evidence protocol context world-t event)
                          (catch Exception e
                              (attr/log-with-attr :error "dispatch exception"
                                         {:error (.getMessage e)

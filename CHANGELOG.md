@@ -38,6 +38,11 @@
 - **Yield deposit `:total-held` double-counting:** Liquid-lending module's `deposit` updated `:total-held`, but `create-escrow` already called `add-held` for the same amount. Removed the redundant update from `liquid_lending.clj:62`. Fixed `s115-claim-deferred-yield-recovery` invariant violations.
 - **`slash-status-consistent?` invariant fix:** `(> appeal-dl proposed-at)` → `(>= appeal-dl proposed-at)`. Zero-length appeal windows (`appeal-window-duration: 0`, the default) produced `deadline = proposed-at`, violating the strict inequality. Fixed `governance-approved` scenario halt.
 - **`cleanup-orphaned-slashes` removed from `finalize`:** The call was removing pending Track 2 reversal slashes created by `handle-reversal-slashing` in the same `execute-resolution` call (final-round path). The cleanup already runs in `execute-pending-settlement` where it belongs.
+- **Namespace layering violations in resolver-sim:** 6 dependency direction violations fixed. `contract-model.replay.execution` no longer depends on `sim.dispatcher` — implementation moved to correct layer with sim layer delegating to it. Chain cursor (`chain-cursor`, `with-fresh-chain-cursor`, `inject-chain-fields`) moved from `io.event-evidence` to `evidence.chain`. Protocol-layer evidence capture (`capture-event-evidence!`) now routes through a dynamic var in `evidence.capture` bound by `io.event-evidence` at load time, fixing `protocols.sew.*` → `io.*` and `contract-model.replay` → `io.*` imports.
+- **`evidence-filename` string type handling:** `evidence-filename` now handles string-typed `:evidence/type` values (produced by `evidence-base`) correctly instead of falling through to `"unknown"`.
+
+### Changed (2026-06-19)
+- **`bb test` now prints overall status:** After all targets complete, the terminal output includes a summary line (`Overall: PASS | Acceptance: PASS_CLEAN` or `Overall: FAIL (1/10 failed) | Acceptance: REJECTED`) so users see the result without opening files.
 
 ### Fixed (2026-06-18)
 - **`cleanup-orphaned-slashes` ClassCastException:** `(name slash-id)` on integer keys (fraud slashes stored under workflow-id) threw `Long cannot be cast to Named`. Fixed to `(str slash-id)`.
