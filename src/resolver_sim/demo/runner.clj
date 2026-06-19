@@ -12,6 +12,7 @@
             [clojure.data.json :as json]
             [clojure.java.shell :as shell]
             [resolver-sim.demo.spec :as demo-spec]
+            [resolver-sim.demo.screen :as screen]
             [resolver-sim.evidence.config :as evcfg]))
 
 ;; ── Helpers ─────────────────────────────────────────────────────────────────
@@ -109,14 +110,26 @@
           scenario-halt (get replay-data :halt-reason nil)]
       (println (str "  Scenario outcome: " scenario-outcome
                     (when scenario-halt (str " (" scenario-halt ")"))))
+      ;; Generate scenario screenshot
+      (let [sc-text (or (:stdout scenario-result) "")
+            sc-shot (screen/render-screenshot!
+                      out-dir "scenario" 0 sc-text
+                      {:title (str "Scenario: " (demo-spec/demo-id spec))
+                       :command scenario-cmd})]
+        (println (str "  Wrote screenshot: " (:svg-path sc-shot))))
 
       ;; 2. Run section commands (exploratory commands over results)
       (doseq [section (demo-spec/sections spec)]
-        (doseq [cmd (:commands section)]
+        (doseq [[cmd-idx cmd] (map-indexed vector (:commands section))]
           (println (str "  Running [" (:id section) "] " cmd))
           (let [result (run-command cmd)
                 stdout-file (str out-dir "/outputs/" (:id section) "-stdout.txt")
-                stderr-file (str out-dir "/outputs/" (:id section) "-stderr.txt")]
+                stderr-file (str out-dir "/outputs/" (:id section) "-stderr.txt")
+                ;; Render terminal screenshot
+                screenshot (screen/render-screenshot!
+                             out-dir (name (:id section)) cmd-idx (:stdout result)
+                             {:title (str (name (:id section)) " — " cmd)
+                              :command cmd})]
             (ensure-dir! (str out-dir "/outputs"))
             (write-string! stdout-file (:stdout result))
             (write-string! stderr-file (:stderr result))
@@ -125,7 +138,9 @@
                     :command cmd
                     :exit-code (:exit result)
                     :stdout-path stdout-file
-                    :stderr-path stderr-file}))))
+                    :stderr-path stderr-file
+                    :screenshot (:svg-path screenshot)
+                    :asciicast (:asciicast-path screenshot)}))))
       ;; 3. Collect artifacts
       (let [artifacts (collect-artifacts out-dir)
             run-data {:demo/id id-str

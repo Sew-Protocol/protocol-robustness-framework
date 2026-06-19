@@ -1,30 +1,110 @@
 {
-  "demo\/id": "yield-shortfall-partial-fill",
-  "run-id": "2026-06-19T12:48:55.103057869Z",
-  "git-commit": null,
-  "scenario": {
-    "exit-code": 0,
-    "outcome": "pass",
-    "halt-reason": null,
-    "stdout": "{:ts \"2026-06-19T12:49:05.602899254Z\", :level :info, :message \"yield-replay\/start\", :context {:id \"Y02_vault-shortfall-partial-withdraw\"}}\n{:ts \"2026-06-19T12:49:05.707574426Z\", :level :info, :message \"yield-replay\/end\", :context {:id \"Y02_vault-shortfall-partial-withdraw\", :outcome :pass}}\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  Deterministic scenario collection\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n  Scenario                                        steps  reverts  status\n  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  \u2713 PASS purpose=:functional-test  Y02_vault-shortfall-partial-withdraw  [scenarios\/Y02_vault-shortfall-partial-withdraw.json]     4        0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  1\/1 passed  (0.1 s)\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n",
-    "stderr": ""
-  },
-  "commands": [
+  "terminal": "120x36",
+  "recording": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+  "sections": [
     {
-      "section": "setup",
-      "command": "cat scenarios\/Y02_vault-shortfall-partial-withdraw.json",
+      "sid": "intro",
+      "title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
+      "command": null,
       "exit-code": 0,
-      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/:setup-stdout.txt",
-      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/:setup-stderr.txt"
+      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/intro.stdout.txt",
+      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/intro.stderr.txt",
+      "recording-path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+      "expected-artifacts": []
     },
     {
-      "section": "inspect",
-      "command": "cat results\/test-artifacts\/claimable-classification.json",
+      "sid": "setup",
+      "title": "Scenario fixture",
+      "command": "bb demo:scenario-summary scenarios\/Y02_vault-shortfall-partial-withdraw.json",
       "exit-code": 0,
-      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/:inspect-stdout.txt",
-      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/:inspect-stderr.txt"
+      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/setup.stdout.txt",
+      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/setup.stderr.txt",
+      "recording-path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+      "expected-artifacts": []
+    },
+    {
+      "sid": "run",
+      "title": "Run the simulation",
+      "command": "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios\/Y02_vault-shortfall-partial-withdraw.json --output-file demos\/yield-shortfall-partial-fill\/generated\/replay-output.json",
+      "exit-code": 0,
+      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/run.stdout.txt",
+      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/run.stderr.txt",
+      "recording-path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+      "expected-artifacts": [
+        "results\/test-artifacts\/test-summary.json",
+        "results\/test-artifacts\/test-artifacts.json"
+      ]
+    },
+    {
+      "sid": "inspect",
+      "title": "Inspect outcomes",
+      "command": "bb demo:scenario-summary scenarios\/Y02_vault-shortfall-partial-withdraw.json",
+      "exit-code": 0,
+      "stdout-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/inspect.stdout.txt",
+      "stderr-path": "demos\/yield-shortfall-partial-fill\/generated\/outputs\/inspect.stderr.txt",
+      "recording-path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+      "expected-artifacts": []
     }
   ],
+  "demo\/title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
+  "git-commit": null,
+  "playback-mode": "auto",
+  "demo\/id": "yield-shortfall-partial-fill",
+  "demo\/spec": {
+    "demo\/id": "yield-shortfall-partial-fill",
+    "demo\/title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
+    "playback": {
+      "mode": "auto",
+      "terminal": {
+        "cols": 120,
+        "rows": 36
+      },
+      "default-pause-ms": 3000,
+      "title-pause-ms": 4000,
+      "result-pause-ms": 8000,
+      "header-pause-ms": 2000,
+      "command-pause-ms": 2000,
+      "final-pause-ms": 6000
+    },
+    "sections": [
+      {
+        "id": "intro",
+        "title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
+        "display": "title-card",
+        "explain": "A reproducible protocol simulation demonstrating shortfall behavior.",
+        "pause-ms": 4000
+      },
+      {
+        "id": "setup",
+        "title": "Scenario fixture",
+        "display": "section-header",
+        "explain": "Two depositors (OwnerA, OwnerB) deposit into a shared yield module.\nGovernance sets a 50% liquidity shortfall. OwnerA withdraws during shortfall.",
+        "command": "bb demo:scenario-summary scenarios\/Y02_vault-shortfall-partial-withdraw.json",
+        "pause-ms": 7000
+      },
+      {
+        "id": "run",
+        "title": "Run the simulation",
+        "display": "section-header",
+        "explain": "The simulator executes the deterministic scenario and emits evidence artifacts.",
+        "command": "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios\/Y02_vault-shortfall-partial-withdraw.json --output-file demos\/yield-shortfall-partial-fill\/generated\/replay-output.json",
+        "expected-artifacts": [
+          "results\/test-artifacts\/test-summary.json",
+          "results\/test-artifacts\/test-artifacts.json"
+        ],
+        "pause-ms": 5000
+      },
+      {
+        "id": "inspect",
+        "title": "Inspect outcomes",
+        "display": "section-header",
+        "explain": "Check the summary and claimable classification for invariant results and evidence.",
+        "command": "bb demo:scenario-summary scenarios\/Y02_vault-shortfall-partial-withdraw.json",
+        "pause-ms": 8000
+      }
+    ]
+  },
+  "run-id": "2026-06-19T14:22:58.125489700Z",
   "artifacts": [
     "coverage.json",
     "validation-root.json",
@@ -32,70 +112,5 @@
     "test-run.json",
     "test-summary.json",
     "test-artifacts.json"
-  ],
-  "demo-spec": {
-    "sections": [
-      {
-        "id": "setup",
-        "title": "Scenario Setup",
-        "explain": "Two depositors (OwnerA, OwnerB) deposit into a shared Aave v3 yield module.  OwnerA deposits 1000 USDC, OwnerB deposits 2000 USDC.",
-        "commands": [
-          "cat scenarios\/Y02_vault-shortfall-partial-withdraw.json"
-        ]
-      },
-      {
-        "id": "inject-shortfall",
-        "title": "Inject Liquidity Shortfall",
-        "explain": "Governance sets the yield module to shortfall mode with 50% available liquidity.  This simulates a DeFi liquidity crisis where only half the deposited funds are immediately redeemable.",
-        "commands": []
-      },
-      {
-        "id": "withdraw",
-        "title": "Withdraw During Shortfall",
-        "explain": "OwnerA requests a full withdrawal while the module is in shortfall.  The protocol fulfills 50% (500 USDC) immediately and defers the remaining 500 USDC as a claimable deferred amount.",
-        "commands": []
-      },
-      {
-        "id": "inspect",
-        "title": "Inspect Outcomes",
-        "explain": "Check the claimable classification to verify that deferred amounts are tracked correctly and that no funds were silently lost.",
-        "commands": [
-          "cat results\/test-artifacts\/claimable-classification.json"
-        ]
-      }
-    ],
-    "demo\/title": "Vault Shortfall and Partial Withdrawal",
-    "demo\/id": "yield-shortfall-partial-fill",
-    "outputs": {
-      "format": [
-        "markdown"
-      ],
-      "include-terminal-output": true,
-      "include-evidence-links": true
-    },
-    "research\/claims": [
-      {
-        "claim\/id": "partial-fill-preserves-funds",
-        "text": "Available liquidity is allocated pro-rata; unfilled amounts become deferred claims.",
-        "evidence": [
-          "summary",
-          "claimable-classification"
-        ]
-      },
-      {
-        "claim\/id": "deferred-claims-trackable",
-        "text": "Deferred withdrawal amounts remain explicit in the claimable classification.",
-        "evidence": [
-          "claimable-classification"
-        ]
-      }
-    ],
-    "research\/question": "When a yield module enters shortfall, how does the protocol handle withdrawal requests?",
-    "demo\/audience": "researchers",
-    "scenario": {
-      "id": "Y02_vault-shortfall-partial-withdraw",
-      "command": "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios\/Y02_vault-shortfall-partial-withdraw.json --output-file demos\/yield-shortfall-partial-fill\/generated\/replay-output.json"
-    },
-    "demo\/version": "demo.v1"
-  }
+  ]
 }

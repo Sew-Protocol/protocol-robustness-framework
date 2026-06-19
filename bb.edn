@@ -623,17 +623,21 @@
   {:doc "Full notebook validation: lint + load/check"
    :depends [notebook:lint notebook:check]}
 
-  demo:run
-  {:doc "Run or validate a demo by ID.
-         Usage:
-           bb demo:run <id>       — run demo (execute, capture output)
-           bb demo:validate <id>  — validate spec only (no execution)
-         Loads demos/<id>/demo.edn. Output: demos/<id>/generated/demo-run.json"
+  demo:record
+  {:doc "Record a demo via asciinema. Usage: bb demo:record <id>
+         Loads demos/<id>/demo.edn, records each section via asciinema rec.
+         The command is visibly printed in the recording before execution.
+         Output: demos/<id>/generated/demo-run.json + recordings/*.cast"
    :task (apply clojure {:dir "." :extra-deps {}}
-                "-M" "-m" "resolver-sim.demo.runner" *command-line-args*)}
+                "-M" "-m" "resolver-sim.demo.recorder" *command-line-args*)}
 
   demo:validate
-  {:doc "Validate a demo spec without running it. Usage: bb demo:validate <id>
-         Delegates to resolver-sim.demo.runner --validate."
+  {:doc "Validate a demo spec. Usage: bb demo:validate <id>"
    :task (apply clojure {:dir "." :extra-deps {}}
-                "-M" "-m" "resolver-sim.demo.runner" "--validate" *command-line-args*)}}}
+                "-M" "-m" "resolver-sim.demo.recorder" "--validate" *command-line-args*)}
+
+  demo:scenario-summary
+  {:doc "Print a compact researcher-facing summary of a scenario JSON file.
+         Usage: bb demo:scenario-summary <path-to-scenario.json>"
+   :task (apply clojure {:dir "." :extra-deps {}}
+                "-M" "-m" "resolver-sim.demo.summary" *command-line-args*)}}}

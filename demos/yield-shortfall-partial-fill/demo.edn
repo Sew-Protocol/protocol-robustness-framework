@@ -1,46 +1,44 @@
 {:demo/id :yield-shortfall-partial-fill
- :demo/title "Vault Shortfall and Partial Withdrawal"
- :demo/audience :researchers
- :demo/version "demo.v1"
+ :demo/title "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall"
 
- :research/question
- "When a yield module enters shortfall, how does the protocol handle withdrawal requests?"
-
- :research/claims
- [{:claim/id :partial-fill-preserves-funds
-   :text "Available liquidity is allocated pro-rata; unfilled amounts become deferred claims."
-   :evidence [:summary :claimable-classification]}
-
-  {:claim/id :deferred-claims-trackable
-   :text "Deferred withdrawal amounts remain explicit in the claimable classification."
-   :evidence [:claimable-classification]}]
-
- :scenario
- {:id "Y02_vault-shortfall-partial-withdraw"
-  :command "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios/Y02_vault-shortfall-partial-withdraw.json --output-file demos/yield-shortfall-partial-fill/generated/replay-output.json"}
+ :playback
+ {:mode :auto
+  :terminal {:cols 120 :rows 36}
+  :default-pause-ms 3000
+  :title-pause-ms 4000
+  :result-pause-ms 8000
+  :header-pause-ms 2000
+  :command-pause-ms 2000
+  :final-pause-ms 6000}
 
  :sections
- [{:id :setup
-   :title "Scenario Setup"
-   :explain "Two depositors (OwnerA, OwnerB) deposit into a shared Aave v3 yield module.  OwnerA deposits 1000 USDC, OwnerB deposits 2000 USDC."
-   :commands ["cat scenarios/Y02_vault-shortfall-partial-withdraw.json"]}
+ [{:id :intro
+   :title "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall"
+   :display :title-card
+   :explain "A reproducible protocol simulation demonstrating shortfall behavior."
+   :pause-ms 4000}
 
-  {:id :inject-shortfall
-   :title "Inject Liquidity Shortfall"
-   :explain "Governance sets the yield module to shortfall mode with 50% available liquidity.  This simulates a DeFi liquidity crisis where only half the deposited funds are immediately redeemable."
-   :commands []}
+  {:id :setup
+   :title "Scenario fixture"
+   :display :section-header
+   :explain "Two depositors (OwnerA, OwnerB) deposit into a shared yield module.
+Governance sets a 50% liquidity shortfall. OwnerA withdraws during shortfall."
+   :command "bb demo:scenario-summary scenarios/Y02_vault-shortfall-partial-withdraw.json"
+   :pause-ms 7000}
 
-  {:id :withdraw
-   :title "Withdraw During Shortfall"
-   :explain "OwnerA requests a full withdrawal while the module is in shortfall.  The protocol fulfills 50% (500 USDC) immediately and defers the remaining 500 USDC as a claimable deferred amount."
-   :commands []}
+  {:id :run
+   :title "Run the simulation"
+   :display :section-header
+   :explain "The simulator executes the deterministic scenario and emits evidence artifacts."
+   :command "clojure -M:run -- --invariants --protocol yield-v1 --scenario scenarios/Y02_vault-shortfall-partial-withdraw.json --output-file demos/yield-shortfall-partial-fill/generated/replay-output.json"
+   :expected-artifacts ["results/test-artifacts/test-summary.json"
+                        "results/test-artifacts/test-artifacts.json"]
+   :pause-ms 5000}
 
   {:id :inspect
-   :title "Inspect Outcomes"
-   :explain "Check the claimable classification to verify that deferred amounts are tracked correctly and that no funds were silently lost."
-   :commands ["cat results/test-artifacts/claimable-classification.json"]}]
-
- :outputs
- {:format [:markdown]
-  :include-terminal-output true
-  :include-evidence-links true}}
+   :title "Inspect outcomes"
+   :display :section-header
+   :explain "Check the summary and claimable classification for invariant results and evidence."
+   :command "bb demo:scenario-summary scenarios/Y02_vault-shortfall-partial-withdraw.json"
+   :pause-ms 8000}
+]}

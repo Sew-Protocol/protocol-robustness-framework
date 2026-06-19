@@ -2,23 +2,29 @@
   "Demo spec schema and validation.
 
    A Demo Spec is an EDN file under demos/<id>/demo.edn that defines
-   what the demo does, what commands to run, and how to interpret results.
-   This namespace provides validation and accessor helpers."
+   what the demo does, what commands to run, and how to interpret results."
   (:require [clojure.java.io :as io]
-            [clojure.edn :as edn]
-            [clojure.string :as str]))
-
-;; ── Required keys ───────────────────────────────────────────────────────────
+            [clojure.edn :as edn]))
 
 (def required-top-level
-  #{:demo/id :demo/title :demo/audience :demo/version
-    :scenario :sections})
+  #{:demo/id :demo/title :sections})
 
-(def valid-audiences
-  #{:researchers :executive :protocol-engineer :audit})
+(def section-keys
+  #{:id :title :command :text :display :cwd :explain :expected-artifacts :pause-ms})
 
-(def valid-output-formats
-  #{:markdown :html :pdf})
+(def display-types
+  #{:title-card :section-header :command-output :summary})
+
+;; ── Defaults ─────────────────────────────────────────────────────────────────
+
+(def default-playback
+  {:mode :auto
+   :terminal {:cols 120 :rows 36}
+   :default-pause-ms 3000
+   :title-pause-ms 4000
+   :result-pause-ms 8000
+   :header-pause-ms 2000
+   :final-pause-ms 6000})
 
 ;; ── Validation ──────────────────────────────────────────────────────────────
 
@@ -26,25 +32,11 @@
   "Validate a demo spec map. Returns {:valid true} or {:valid false :errors [...]}."
   [spec]
   (let [errors (atom [])]
-    ;; Check required top-level keys
     (doseq [k required-top-level]
       (when (nil? (get spec k))
         (swap! errors conj (str "Missing required key: " k))))
-    ;; :demo/id must be a keyword
     (when (and (:demo/id spec) (not (keyword? (:demo/id spec))))
       (swap! errors conj ":demo/id must be a keyword"))
-    ;; :demo/audience must be valid
-    (when-let [aud (:demo/audience spec)]
-      (when-not (valid-audiences aud)
-        (swap! errors conj (str "Invalid :demo/audience: " aud
-                                " — must be one of " valid-audiences))))
-    ;; :scenario must have :id
-    (when-let [sc (:scenario spec)]
-      (when-not (:id sc)
-        (swap! errors conj ":scenario must have an :id"))
-      (when-not (:command sc)
-        (swap! errors conj ":scenario must have a :command")))
-    ;; :sections must be a vector
     (when-let [sections (:sections spec)]
       (when-not (vector? sections)
         (swap! errors conj ":sections must be a vector"))
@@ -52,44 +44,43 @@
         (when-not (:id s)
           (swap! errors conj "Each section must have an :id"))
         (when-not (:title s)
-          (swap! errors conj "Each section must have a :title"))))
-    ;; :outputs format validation
-    (when-let [outputs (:outputs spec)]
-      (when-let [fmt (:format outputs)]
-        (when-not (every? valid-output-formats fmt)
-          (swap! errors conj (str "Invalid :outputs/:format — must be subset of "
-                                  valid-output-formats)))))
+          (swap! errors conj "Each section must have a :title"))
+        (when (and (:command s) (:text s))
+          (swap! errors conj (str "Section " (:id s) " cannot have both :command and :text")))))
     (if (empty? @errors)
       {:valid true}
       {:valid false :errors @errors})))
 
 ;; ── Loading ─────────────────────────────────────────────────────────────────
 
-(defn load-spec
-  "Load a demo spec from a directory path.
-   Expects <dir>/demo.edn. Returns parsed map or nil."
-  [dir]
+(defn load-spec [dir]
   (let [f (io/file dir "demo.edn")]
-    (when (.exists f)
-      (edn/read-string (slurp f)))))
+    (when (.exists f) (edn/read-string (slurp f)))))
 
-(defn find-spec
-  "Find and load a demo spec by ID or path.
-   - Keyword: looks in demos/<name>/demo.edn
-   - String without path separators: looks in demos/<name>/demo.edn
-   - String with / or .: treated as a literal path to a demo.edn or directory"
-  [id]
+(defn find-spec [id]
   (let [id-str (if (keyword? id) (name id) id)
         demo-dir (if (or (keyword? id)
                          (not (or (.contains id-str "/")
                                   (.contains id-str "."))))
-                   (str "demos/" id-str)
-                   id-str)]
+                   (str "demos/" id-str) id-str)]
     (load-spec demo-dir)))
 
 ;; ── Accessors ───────────────────────────────────────────────────────────────
 
 (defn demo-id [spec] (:demo/id spec))
 (defn demo-title [spec] (:demo/title spec))
-(defn scenario-command [spec] (get-in spec [:scenario :command]))
 (defn sections [spec] (:sections spec))
+
+(defn playback-config
+  "Get playback config merged with defaults."
+  [spec]
+  (merge default-playback (:playback spec)))
+
+(defn pause-ms
+  "Get pause for a section, falling back to type-specific default."
+  [section pb-config]
+  (or (:pause-ms section)
+      (case (:display section)
+        :title-card (:title-pause-ms pb-config)
+        :summary (:result-pause-ms pb-config)
+        (:default-pause-ms pb-config))))
