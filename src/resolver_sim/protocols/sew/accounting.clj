@@ -204,7 +204,7 @@
    appellant must have sufficient external balance to post the bond.
    The simulation does not model external wallets, so this enforcement
    is absent.  The invariant :challenge-bond-proportional flags cases
-   where the default bond exceeds the escrow value, which would make
+   where the configured bond exceeds the escrow value, which would make
    challenge uneconomic even if the caller had the funds."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)

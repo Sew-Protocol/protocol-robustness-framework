@@ -41,10 +41,15 @@
 (defn calculate-challenge-bond-amount
   "Calculate the required challenge bond amount (Phase L).
 
+   Returns 0 (no bond required) when neither challenge-bond-bps nor
+   appeal-bond-amount is configured, matching the Solidity contract
+   behavior where escalation cost is governance-configurable and
+   starts at 0 by default.
+
    Priority:
      1. challenge-bond-bps > 0  → bps of AFA
      2. appeal-bond-amount > 0  → absolute value
-     3. fallback                → 100 (minimum viable bond)
+     3. fallback                → 0 (no bond required)
 
    NOTE: ModuleSnapshot (make-escrow-snapshot) defaults appeal-bond-amount to 0 (an integer).
    In Clojure (or 0 100) = 0, so the fallback must use pos? not or."
@@ -52,7 +57,7 @@
   (cond
     (pos? (:challenge-bond-bps snap 0))  (compute-fee afa (:challenge-bond-bps snap))
     (pos? (:appeal-bond-amount snap 0))  (:appeal-bond-amount snap)
-    :else                                100))
+    :else                                0))
 
 (defn calculate-appeal-bond-amount
   "Calculate the required appeal bond amount for escalation.

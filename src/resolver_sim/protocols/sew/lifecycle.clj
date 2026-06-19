@@ -423,7 +423,12 @@
       (let [resolver (get-in (:world result) [:escrow-transfers workflow-id :dispute-resolver])]
         (if (and resolver (t/resolver-at-capacity? world resolver))
           (t/fail :resolver-capacity-exceeded)
-          (let [world' (t/increment-resolver-capacity (:world result) resolver)]
+          (let [et (t/get-transfer world workflow-id)
+                afa (:amount-after-fee et)
+                max-escrow (reg/get-max-escrow-per-case world resolver)]
+            (if (> afa max-escrow)
+              (t/fail :insufficient-resolver-stake)
+              (let [world' (t/increment-resolver-capacity (:world result) resolver)]
             (attr/with-attribution {:subject/type :dispute
                                     :subject/id workflow-id
                                     :action/type :dispute/raise
@@ -441,7 +446,7 @@
                 nil
                 {:world-before world
                  :world-after world'}))
-            (t/ok world')))))))
+             (t/ok world')))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; release

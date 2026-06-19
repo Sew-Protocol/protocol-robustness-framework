@@ -1340,8 +1340,6 @@
     :schema-version  "1.0"
    :scenario-author "@grifma"
     :initial-block-time 1000
-    :expected-failures {"s92-settlement-zero-amount-edge"
-                        #{:challenge-bond-proportional}}
     :agents          [{:id "buyer"    :address "0xbuyer"   :strategy "honest"}
                      {:id "seller"   :address "0xseller"  :strategy "honest"}
                      {:id "resolver" :address "0xresolver" :role "resolver"}
