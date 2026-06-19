@@ -46,10 +46,21 @@
       "expected-artifacts": []
     }
   ],
+  "readme\/embed": "![yield-shortfall-partial-fill](demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.svg)",
   "demo\/title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
   "git-commit": null,
   "playback-mode": "auto",
   "demo\/id": "yield-shortfall-partial-fill",
+  "svg": {
+    "format": "animated-svg",
+    "path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.svg",
+    "size": 55016,
+    "generated-at": "2026-06-19T18:14:38.464248980Z",
+    "source-cast": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
+    "terminal": "120x36",
+    "command": "svg-term-cli --window",
+    "tool-version": "2.1.1"
+  },
   "demo\/spec": {
     "demo\/id": "yield-shortfall-partial-fill",
     "demo\/title": "Yield Shortfall: Partial Withdrawal during Liquidity Shortfall",
@@ -104,7 +115,7 @@
       }
     ]
   },
-  "run-id": "2026-06-19T14:22:58.125489700Z",
+  "run-id": "2026-06-19T18:12:56.215661946Z",
   "artifacts": [
     "coverage.json",
     "validation-root.json",

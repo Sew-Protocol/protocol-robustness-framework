@@ -1,5 +1,5 @@
-{:ts "2026-06-19T14:22:31.876844139Z", :level :info, :message "yield-replay/start", :context {:id "Y02_vault-shortfall-partial-withdraw"}}
-{:ts "2026-06-19T14:22:32.071966257Z", :level :info, :message "yield-replay/end", :context {:id "Y02_vault-shortfall-partial-withdraw", :outcome :pass}}
+{:ts "2026-06-19T18:12:29.961894112Z", :level :info, :message "yield-replay/start", :context {:id "Y02_vault-shortfall-partial-withdraw"}}
+{:ts "2026-06-19T18:12:30.062223011Z", :level :info, :message "yield-replay/end", :context {:id "Y02_vault-shortfall-partial-withdraw", :outcome :pass}}
 ════════════════════════════════════════════════════════════════════════
   Deterministic scenario collection
 ════════════════════════════════════════════════════════════════════════
@@ -7,5 +7,5 @@
   ──────────────────────────────────────────────────────────────────────
   ✓ PASS purpose=:functional-test  Y02_vault-shortfall-partial-withdraw  [scenarios/Y02_vault-shortfall-partial-withdraw.json]     4        0
 ────────────────────────────────────────────────────────────────────────
-  1/1 passed  (0.2 s)
+  1/1 passed  (0.1 s)
 ════════════════════════════════════════════════════════════════════════
