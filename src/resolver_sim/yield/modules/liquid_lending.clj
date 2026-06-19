@@ -65,31 +65,58 @@
 ;; ---------------------------------------------------------------------------
 ;; accrue
 ;; ---------------------------------------------------------------------------
-(defn accrue
-  "Accrue yield for all positions in this module using the decision-based
-   accrual engine. Each position gets a separate accrual-decision that
-   handles short circuits, dust accumulation, and exact ratio arithmetic."
-  [world module op]
-  (let [token (normalize-token (:token op))
-        dt    (:dt op)
-        mid   (:module/id module)
-        now   (resolve-now world)]
+(defn- accrue-from-index-schedule
+  "Accrue all positions for this module+token using an index-schedule value.
+   Bypasses the APY-based decision engine — index comes directly from the
+   schedule at `now`. Updates per-position unrealized-yield and world-level
+   total-yield-generated / total-held."
+  [world module token mid now sched-index]
+  (let [world' (assoc-in world [:yield/indices mid token] sched-index)]
     (reduce (fn [w [oid pos]]
               (if (and (= (:module/id pos) mid)
                        (token= (:token pos) token)
                        (= (:status pos) :active))
-                (let [decision (accrual/accrual-decision
-                                w {:module-id mid
-                                   :token token
-                                   :position-id oid
-                                   :now now
-                                   :dt dt})]
-                  ;; apply-accrual-decision-with-attribution sets *attribution*
-                  ;; with accrual evidence and calls risk/capture-if-risk-event
-                  (accrual/apply-accrual-decision-with-attribution w decision))
+                (let [updated   (acct/update-position-yield w pos sched-index)
+                      old-yield (:unrealized-yield pos 0)
+                      yield-delta (- (:unrealized-yield updated 0) old-yield)]
+                  (-> w
+                      (assoc-in [:yield/positions oid] updated)
+                      (update-in [:total-yield-generated token] (fnil + 0) (max 0 yield-delta))
+                      (update-in [:total-held token] (fnil + 0) yield-delta)))
                 w))
-            world
+            world'
             (:yield/positions world {}))))
+
+(defn accrue
+  "Accrue yield for all positions in this module using the decision-based
+   accrual engine. Each position gets a separate accrual-decision that
+   handles short circuits, dust accumulation, and exact ratio arithmetic.
+
+   When the index-schedule provides a value at the current time, it is used
+   directly instead of computing the index from APY + dt."
+  [world module op]
+  (let [token (normalize-token (:token op))
+        dt    (:dt op)
+        mid   (:module/id module)
+        now   (resolve-now world)
+        ms    (market-state/get-market-state world mid token now)
+        sched-index (:index ms)]
+    (if (and sched-index (not (zero? sched-index)))
+      (accrue-from-index-schedule world module token mid now sched-index)
+      (reduce (fn [w [oid pos]]
+                (if (and (= (:module/id pos) mid)
+                         (token= (:token pos) token)
+                         (= (:status pos) :active))
+                  (let [decision (accrual/accrual-decision
+                                  w {:module-id mid
+                                     :token token
+                                     :position-id oid
+                                     :now now
+                                     :dt dt})]
+                    (accrual/apply-accrual-decision-with-attribution w decision))
+                  w))
+              world
+              (:yield/positions world {})))))
 
 
 ;; ---------------------------------------------------------------------------
@@ -129,7 +156,6 @@
             market-state (market-state/get-market-state world-after-accrue mid token now)
             available-ratio (:available-ratio market-state 1.0)
             shortfall-model (:shortfall-model market-state)
-            withdrawal-policy (:withdrawal-policy market-state)
             recoverable (long (* base-recoverable available-ratio))
             gross-amount (+ (:principal pos-after-accrue 0)
                             (:unrealized-yield pos-after-accrue 0))
@@ -165,10 +191,16 @@
                                                (+ deferred-total haircut-total))
                            :as-of-index (:current-index pos-after-accrue)}))
 
-            ;; Step 5: Update position status
-            realized-yield (max 0
-                                (min (:unrealized-yield pos-after-accrue 0)
-                                     (- fulfilled-total (:principal pos-after-accrue 0))))
+            ;; Step 5: Update position status.
+            ;; When the withdrawal fully covers the obligation (no shortfall), realize
+            ;; the full unrealized yield.  When there is a shortfall, cap realized yield
+            ;; to the fulfilled amount above principal (the waterfall may not fill
+            ;; unrealized-yield under :not-claimable treatment).
+            realized-yield (if shortfall
+                             (max 0
+                               (min (:unrealized-yield pos-after-accrue 0)
+                                    (- fulfilled-total (:principal pos-after-accrue 0))))
+                             (:unrealized-yield pos-after-accrue 0))
             updated-pos (-> pos-after-accrue
                             (assoc :partial-fill-affected? (boolean shortfall))
                             (assoc :status (if shortfall :unwinding :withdrawn))

@@ -975,10 +975,11 @@
 
 (defn held-delta-accounted?
   "True when the change in physically held funds is fully explained by
-   principal deposits, bond movements, and actual withdrawals."
+   principal deposits, bond movements, yield-generation, recognized losses,
+   and actual withdrawals."
   [world-before world-after]
   (let [all-tokens (into #{} (concat (keys (:total-held world-before))
-                                     (keys (:total-held world-after))))
+                                      (keys (:total-held world-after))))
         violations
         (for [token all-tokens
               :let [held-before      (get (:total-held world-before) token 0)
@@ -991,7 +992,10 @@
                     inflow-after     (+ (get (:total-principal-deposited world-after) token 0)
                                         (get (:total-bonds-posted world-after) token 0)
                                         (get (:total-yield-generated world-after) token 0))
-                    delta-inflow     (- inflow-after inflow-before)
+                    losses-before    (yield-evi/sum-recognized-losses world-before token)
+                    losses-after     (yield-evi/sum-recognized-losses world-after token)
+                    delta-losses     (- losses-after losses-before)
+                    delta-inflow     (- (- inflow-after inflow-before) delta-losses)
                     
                     withdrawn-before (get (:total-withdrawn world-before) token 0)
                     withdrawn-after  (get (:total-withdrawn world-after) token 0)
@@ -1323,39 +1327,49 @@
 ;; ---------------------------------------------------------------------------
 
 (defn single-resolution-payout-consistent?
-  "True when terminal workflows have exactly one payout direction.
+  "True when terminal workflows have exactly one payout direction
+   per domain.  Yield distributions via :settlement/yield create a
+   separate claimable domain and do not count as a second payout
+   direction for the principal settlement.
 
-   Detects double-resolution style corruption where both buyer and seller end up
-   with positive claimable balances for the same workflow."
+   Detects double-resolution style corruption where both buyer and seller
+   end up with positive claimable principal balances for the same workflow."
   [world]
   (let [violations
         (for [[wf et] (:escrow-transfers world {})
               :when (contains? t/terminal-states (:escrow-state et))
               :let [state         (:escrow-state et)
                     pending?      (:exists (t/get-pending world wf))
-                    claimable-map (get-in world [:claimable wf] {})
-                    positives     (->> claimable-map
-                                       (filter (fn [[_ amt]] (pos? (or amt 0))))
-                                       (map first)
-                                       vec)
-                    valid-direction?
-                    (case state
-                      :released (or (= positives [(:to et)])
-                                    (empty? positives))
-                      :refunded (or (= positives [(:from et)])
-                                    (empty? positives))
-                      ;; :resolved is legacy/terminal umbrella: allow either single side,
-                      ;; but never dual-positive payouts.
-                      :resolved (<= (count positives) 1)
-                      true)
-                    valid? (and (not pending?) valid-direction?)]
-              :when (not valid?)]
-          {:workflow-id wf
+                    ;; Check v2 domain-level claimables: a workflow is valid when
+                    ;; each domain has at most one positive claimant.
+                    domains       (get-in world [:claimable-v2 wf] {})
+                    domain-violations
+                    (for [[domain addr-map] domains
+                          :let [positives (->> addr-map
+                                               (filter (fn [[_ amt]] (pos? (or amt 0))))
+                                               (map first)
+                                               vec)
+                                 valid-direction?
+                                 (case state
+                                   :released (or (= positives [(:to et)])
+                                                 (= positives [(:from et)])
+                                                 (empty? positives))
+                                   :refunded (or (= positives [(:from et)])
+                                                 (= positives [(:to et)])
+                                                 (empty? positives))
+                                   :resolved (<= (count positives) 1)
+                                   true)]
+                          :when (and (seq positives) (not valid-direction?))]
+                      {:domain domain
+                       :positives positives
+                       :to (:to et)
+                       :from (:from et)})
+                     has-domain-violation? (seq domain-violations)]
+               :when (and (not pending?) has-domain-violation?)]
+           {:workflow-id wf
            :state state
            :pending? pending?
-           :positive-claimable-addrs positives
-           :to (:to et)
-           :from (:from et)})]
+           :domain-violations domain-violations})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 

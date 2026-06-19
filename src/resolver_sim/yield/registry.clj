@@ -85,7 +85,8 @@
   (cond
     (nil? sch) nil
     (and (map? sch) (= (:type sch) "external"))
-    (schedule/load-external-json (:path sch))
+    (some-> (schedule/load-external-json (:path sch))
+            (update :type #(if (string? %) (keyword %) %)))
     (map? sch) (update sch :type #(if (string? %) (keyword %) %))
     :else sch))
 
