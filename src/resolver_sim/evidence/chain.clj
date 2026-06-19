@@ -250,6 +250,45 @@
     (swap! evidence-registry-atom update :artifacts conj entry))
   nil)
 
+;; ── Chain Cursor Finalization ───────────────────────────────────────────────
+
+(defn cursor-snapshot
+  "Read-only snapshot of the chain cursor's final state.
+   Returns {:cursor/seq N :cursor/last-hash ...} or nil if never used."
+  []
+  (let [c @chain-cursor]
+    (when (pos? (:seq c))
+      {:cursor/scope :targeted-evidence
+       :cursor/final-seq (:seq c)
+       :cursor/final-self-hash (:last-hash c)
+       :cursor/total-captured (:seq c)})))
+
+(defn write-chain-cursor-final!
+  "Snapshot the chain cursor at run finalization and persist as
+   chain-cursor-final.json.  Registers the artifact for test-artifacts.json.
+   Returns the path written, or nil if the cursor was never used.
+   
+   One-shot: call once when the run completes (no new captures after)."
+  [& [dir]]
+  (when-let [snapshot (cursor-snapshot)]
+    (let [out-dir (or dir (str (evcfg/artifact-dir)))
+          f (io/file out-dir "chain-cursor-final.json")
+          artifact {:schema/version "chain-cursor-final.v1"
+                    :run/id (get-in @evidence-registry-atom [:run-id] "unknown")
+                    :cursor/scope :targeted-evidence
+                    :cursor/final-seq (:cursor/final-seq snapshot)
+                    :cursor/final-self-hash (:cursor/final-self-hash snapshot)
+                    :cursor/total-captured (:cursor/total-captured snapshot)}]
+      (.mkdirs (io/file out-dir))
+      (spit f (json/write-str artifact {:indent true}))
+      (println "Wrote chain-cursor-final.json: seq" (:cursor/final-seq snapshot))
+      (register-additional-artifact!
+        (index-artifact-entry :chain-cursor-final "chain-cursor-final.json"
+                              "chain-cursor-final.v1" "DIAGNOSTIC"))
+      (.getPath f))))
+
+;; ── Evidence Registration ─────────────────────────────────────────────────
+
 (defn finalize-and-write!
   "Build the evidence registry from accumulated records, write it to disk,
    and return {:registry ... :artifact-entry ... :path ...}.

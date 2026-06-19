@@ -10,6 +10,7 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
+            [clojure.walk :as walk]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
@@ -394,6 +395,19 @@
 
 ;; ── Chain Integrity: \"Can I verify the evidence chain from artifacts alone?\" ─
 
+(defn- compute-content-hash
+  "Compute the content hash the way finalize-evidence does:
+   dissoc chain fields, canonicalize, stable-hash."
+  [m]
+  (let [content (dissoc m :evidence/hash :evidence/chain-self-hash :evidence/chain-prev-hash)
+        canon (walk/postwalk
+                (fn [v]
+                  (cond (instance? clojure.lang.Keyword v) (name v)
+                        (map? v) (into (sorted-map) v)
+                        :else v))
+                content)]
+    (cap/stable-hash canon)))
+
 (defn- setup-chain-artifacts
   "Write a valid 3-artifact chain into dir."
   [dir]
@@ -402,24 +416,28 @@
         a1 (assoc base :evidence/type "escrow-created"
                   :evidence/chain-seq 1
                   :evidence/chain-prev-hash nil
-                  :evidence/chain-self-hash "h1"
-                  :evidence/hash "h1"
                   :evidence/group-id "g1")
         a2 (assoc base :evidence/type "escrow-released"
                   :evidence/chain-seq 2
                   :evidence/chain-prev-hash "h1"
-                  :evidence/chain-self-hash "h2"
-                  :evidence/hash "h2"
                   :evidence/group-id "g1")
         a3 (assoc base :evidence/type "dispute-raised"
                   :evidence/chain-seq 3
                   :evidence/chain-prev-hash "h2"
-                  :evidence/chain-self-hash "h3"
-                  :evidence/hash "h3"
-                  :evidence/group-id "g1")]
+                  :evidence/group-id "g1")
+        a1 (assoc a1 :evidence/hash (compute-content-hash a1)
+                      :evidence/chain-self-hash (compute-content-hash a1))
+        a2 (assoc a2 :evidence/hash (compute-content-hash a2)
+                      :evidence/chain-self-hash (compute-content-hash a2))
+        a3 (assoc a3 :evidence/hash (compute-content-hash a3)
+                      :evidence/chain-self-hash (compute-content-hash a3))
+        ;; Update prev-hashes to use actual computed hashes
+        a2 (assoc a2 :evidence/chain-prev-hash (:evidence/hash a1))
+        a3 (assoc a3 :evidence/chain-prev-hash (:evidence/hash a2))]
     (doseq [m [a1 a2 a3]]
       (spit (io/file dir (str "ev-" (:evidence/hash m) ".json"))
-            (json/write-str m {:key-fn evidence/qualified-key :indent true})))))
+            (json/write-str m {:key-fn evidence/qualified-key :indent true})))
+    dir))
 
 (deftest chain-integrity-valid-chain
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
@@ -431,27 +449,35 @@
 
 (deftest chain-integrity-gap
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
-        _ (setup-chain-artifacts dir)]
-    ;; Delete artifact with chain-seq 2
-    (doseq [f (.listFiles (java.io.File. dir))]
-      (when (.contains (.getName f) "h2")
-        (.delete f)))
+        written (setup-chain-artifacts dir)
+        ;; Find the file with chain-seq 2 to delete
+        files (.listFiles (java.io.File. dir))]
+    (doseq [f files]
+      (try
+        (let [data (json/read-str (slurp f) :key-fn keyword)]
+          (when (= 2 (:evidence/chain-seq data))
+            (.delete f)))
+        (catch Exception _ nil)))
     (let [result (evidence/verify-chain-integrity dir)]
       (is (not (:valid result)) "Chain with gap is invalid")
       (is (some #(= 2 %) (:gaps result)) "Seq 2 reported as gap"))))
 
 (deftest chain-integrity-self-hash-mismatch
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
-        _ (setup-chain-artifacts dir)]
-    ;; Tamper with the first artifact: re-write with wrong self-hash
-    (let [path (str dir "/ev-h1.json")
-          data (json/read-str (slurp path) :key-fn keyword)
-          tampered (assoc data :evidence/chain-self-hash "tampered")]
-      (spit (java.io.File. path)
-            (json/write-str tampered {:key-fn evidence/qualified-key :indent true}))
-      (let [result (evidence/verify-chain-integrity dir)]
-        (is (not (:valid result)) "Tampered chain is invalid")
-        (is (= 1 (:self-hash-failed result)) "Self-hash mismatch detected")))))
+        written (setup-chain-artifacts dir)
+        ;; Find the file with chain-seq 1 and change its evidence/type
+        files (.listFiles (java.io.File. dir))
+        f (some (fn [f]
+                  (try (let [d (json/read-str (slurp f) :key-fn keyword)]
+                         (when (= 1 (:evidence/chain-seq d)) f))
+                       (catch Exception _ nil)))
+                files)
+        data (json/read-str (slurp f) :key-fn keyword)
+        tampered (assoc data :evidence/type "tampered-type")]
+    (spit f (json/write-str tampered {:key-fn evidence/qualified-key :indent true}))
+    (let [result (evidence/verify-chain-integrity dir)]
+      (is (not (:valid result)) "Tampered chain is invalid")
+      (is (= 1 (:content-hash-failed result)) "Content hash mismatch detected"))))
 
 ;; ── Scenario Evidence Verification: \"Did this scenario produce expected evidence?\" ─
 
