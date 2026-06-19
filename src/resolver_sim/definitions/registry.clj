@@ -197,7 +197,17 @@
    {:invariant/id :invariant/finality-blocked-during-appeal
     :label "Finality blocked during appeal"
     :default-severity :high
-    :class :safety}})
+    :class :safety}
+   :invariant/challenge-bond-proportional
+   {:invariant/id :invariant/challenge-bond-proportional
+    :label "Challenge bond proportional to escrow value"
+    :default-severity :medium
+    :class :economic-safety}
+   :invariant/resolver-stake-proportional
+   {:invariant/id :invariant/resolver-stake-proportional
+    :label "Resolver stake proportional to escrow value"
+    :default-severity :medium
+    :class :economic-safety}})
 
 (def invariant-metadata
   {:invariant/conservation
@@ -226,7 +236,13 @@
     :related-scenario-families [:scenario-deep-dive :theory-falsification]}
    :invariant/finality-blocked-during-appeal
    {:related-transitions [:execute_pending_settlement]
-    :related-scenario-families [:scenario-deep-dive :deadline-boundary]}})
+    :related-scenario-families [:scenario-deep-dive :deadline-boundary]}
+   :invariant/challenge-bond-proportional
+   {:related-transitions [:challenge-resolution :raise-dispute]
+    :related-scenario-families [:economic-liveness :theory-falsification]}
+   :invariant/resolver-stake-proportional
+   {:related-transitions [:create_escrow :register_stake]
+    :related-scenario-families [:economic-security :theory-falsification]}})
 
 (def claims
   {:claims/forking-l1-reversal

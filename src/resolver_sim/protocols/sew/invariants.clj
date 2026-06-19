@@ -33,7 +33,9 @@
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
             [resolver-sim.yield.evidence :as yield-evi]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.time.context :as time-ctx]))
+            [resolver-sim.time.context :as time-ctx]
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.protocols.sew.registry :as reg]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -91,7 +93,9 @@
     :resolver-decision-attributable
     :appeal-reversal-detectable
     :evidence-deadline-enforced
-    :finality-blocked-during-appeal})
+                   :finality-blocked-during-appeal
+                   :challenge-bond-proportional
+                   :resolver-stake-proportional})
 
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
@@ -1393,6 +1397,77 @@
 
 
 ;; ---------------------------------------------------------------------------
+;; Invariant: Challenge bond proportional to escrow value
+;;
+;; For every escrow with a pending settlement (challengeable), the default
+;; challenge bond must not exceed the escrow value.  If it does, no rational
+;; challenger will post the bond, making fraudulent outcomes final.
+;; The bond is calculated using payoffs/calculate-challenge-bond-amount.
+;; ---------------------------------------------------------------------------
+
+(defn challenge-bond-proportional?
+  "True when every disputed escrow with an active challenge window has a
+   default challenge bond <= amount-after-fee.  Detects the uneconomic-
+   challenge scenario where no rational actor would post the bond.
+
+   Only applies when appeal-window-duration > 0 — zero-window escrows have
+   no challenge path, so the bond amount is irrelevant."
+  [world]
+  (let [violations
+        (for [[wf et] (:escrow-transfers world)
+              :when (= :disputed (:escrow-state et))
+              :let [snap (t/get-snapshot world wf)
+                    window (:appeal-window-duration snap 0)]
+              :when (pos? window)
+              :let [afa (:amount-after-fee et)
+                    bond (payoffs/calculate-challenge-bond-amount afa snap)]
+              :when (> bond afa)]
+          {:workflow-id wf
+           :amount-after-fee afa
+           :challenge-bond bond
+           :appeal-window-duration window
+           :bond-exceeds? (> bond afa)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant: Resolver stake proportional to escrow value
+;;
+;; When resolver-bond-bps is configured, the resolver's stake must be
+;; sufficient to cover at least the default max-slash-per-offense on the
+;; escrow value.  When bond-bps is 0, this invariant is informational
+;; (the protocol does not enforce proportionality).
+;; ---------------------------------------------------------------------------
+
+(defn resolver-stake-proportional-to-escrow?
+  "True when every escrow's resolver has stake >= max-slash-per-offense
+   as a fraction of amount-after-fee.  When resolver-bond-bps is 0,
+   returns true with a note — the protocol does not enforce this."
+  [world]
+  (let [max-slash-bps (get-in world [:params :max-slash-per-offense-bps] 5000)
+        violations
+        (for [[wf et] (:escrow-transfers world)
+              :let [resolver (:dispute-resolver et)
+                    stake (if resolver (reg/get-stake world resolver) 0)
+                    afa (:amount-after-fee et)
+                    min-stake (quot (* afa max-slash-bps) 10000)]
+              :when (and resolver (pos? stake) (pos? afa) (< stake min-stake))]
+          {:workflow-id wf
+           :resolver resolver
+           :resolver-stake stake
+           :amount-after-fee afa
+           :min-stake-for-max-slash min-stake
+           :max-slash-per-offense-bps max-slash-bps
+           :gap (- min-stake stake)})]
+    (cond
+      (zero? (get-in world [:params :resolver-bond-bps] 0))
+      {:holds? true :violations [] :note "resolver-bond-bps=0, no proportionality enforced"}
+      (empty? violations)
+      {:holds? true :violations []}
+      :else
+      {:holds? false :violations (vec violations)})))
+
+;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
 ;; ---------------------------------------------------------------------------
 
@@ -1453,8 +1528,10 @@
                   :resolver-decision-attributable      (dispute/resolver-decision-attributable? world)
                   :appeal-reversal-detectable          (dispute/appeal-reversal-detectable? world)
                   :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
-                  :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
-                   :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
+                   :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
+                   :challenge-bond-proportional         (challenge-bond-proportional? world)
+                   :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
+                    :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
                   :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
                                                     (if (map? r) r {:holds? r :violations nil}))}
          
