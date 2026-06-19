@@ -9,24 +9,24 @@
    Replay invariants (after every successful transition):
      1. protocol/check-invariants-single
      2. protocol/check-invariants-transition"
-    (:require [clojure.data.json                 :as json]
-               [clojure.java.io                   :as io]
-               [resolver-sim.evidence.config      :as evcfg]
-                [resolver-sim.contract-model.replay.metrics :as metrics]
-                [resolver-sim.contract-model.replay.validation :as validation]
-                [resolver-sim.contract-model.replay.analysis :as analysis]
-                [resolver-sim.contract-model.replay.temporal :as temporal]
-                [resolver-sim.contract-model.replay.execution :as execution]
-                [resolver-sim.contract-model.replay.yield :as yield-replay]
-                [resolver-sim.contract-model.replay.flags :as replay-flags]
-                [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
-                [resolver-sim.protocols.protocol :as proto]
-                [resolver-sim.protocols.registry :as preg]
-                [resolver-sim.util.attribution :as attr]
-               [resolver-sim.yield.risk-monitor :as risk]
-               [resolver-sim.evidence.chain :as chain]
-               [resolver-sim.io.event-evidence :as event-evidence]
-               [resolver-sim.logging :as log]))
+  (:require [clojure.data.json                 :as json]
+            [clojure.java.io                   :as io]
+            [resolver-sim.evidence.config      :as evcfg]
+            [resolver-sim.contract-model.replay.metrics :as metrics]
+            [resolver-sim.contract-model.replay.validation :as validation]
+            [resolver-sim.contract-model.replay.analysis :as analysis]
+            [resolver-sim.contract-model.replay.temporal :as temporal]
+            [resolver-sim.contract-model.replay.yield :as yield-replay]
+            [resolver-sim.contract-model.replay.flags :as replay-flags]
+            [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
+            [resolver-sim.contract-model.replay.execution :as execution]
+            [resolver-sim.protocols.protocol :as proto]
+            [resolver-sim.protocols.registry :as preg]
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.yield.risk-monitor :as risk]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.io.event-evidence :as event-evidence]
+            [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; JSON serialisation helpers (Generic)
@@ -117,14 +117,9 @@
 (defn- accum-metrics [protocol metrics event trace-entry agent-index world-before]
   (metrics/accum-metrics protocol metrics event trace-entry agent-index world-before))
 
-;; ---------------------------------------------------------------------------
-;; Re-exports from sub-modules
-;; ---------------------------------------------------------------------------
-
-(defn process-step
-  "Apply one scenario event. Delegates to execution/process-step."
-  [protocol context world event]
-  (execution/process-step protocol context world event))
+(def process-step
+  "Forwarding reference — moved to replay.execution."
+  execution/process-step)
 
 ;; ---------------------------------------------------------------------------
 ;; Public API (Generic)
@@ -171,7 +166,7 @@
              expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
              strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
              run-id  (or (:run-id replay-opts) (:run-id scenario) (str scenario-id "-run"))
-              raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
+             raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
                                              {:expected-errors-set expected-errors-set
                                               :strict-expected-errors? strict-expected-errors?
                                               :allow-open-entities? (:allow-open-entities? scenario)

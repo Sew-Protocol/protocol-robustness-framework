@@ -23,9 +23,9 @@
 (defn callout [rag body]
   (let [[bg border fg]
         (case rag
-          :green ["#f0fdf4" "#16a34a" "#166534"]
-          :red   ["#fef2f2" "#dc2626" "#7f1d1d"]
-          ["#fffbeb" "#f59e0b" "#92400e"])]
+          :green ["#14532d" "#22c55e" "#f0fdf4"]
+          :red   ["#7f1d1d" "#ef4444" "#fef2f2"]
+          ["#78350f" "#f59e0b" "#fef3c7"])]
     [:div {:style {:padding "12px 16px" :backgroundColor bg
                    :border (str "1px solid " border) :borderRadius "4px"
                    :marginBottom "12px" :color fg}}
@@ -56,18 +56,21 @@
 
 (defn filter-controls [!ui-state]
   (let [{:keys [filters pagination]} @!ui-state]
-    [:div {:style {:backgroundColor "#eff6ff" :padding "12px" :borderRadius "4px"
-                   :border "1px solid #93c5fd" :marginBottom "12px"}}
-     [:h3 {:style {:margin "0 0 8px 0"}} "Filters"]
+    [:div {:style {:backgroundColor "#172554" :padding "12px" :borderRadius "4px"
+                   :border "1px solid #1e40af" :marginBottom "12px" :color "#eff6ff"}}
+     [:h3 {:style {:margin "0 0 8px 0" :color "#ffffff"}} "Filters"]
      [:div {:style {:display "grid" :gridTemplateColumns "1fr 1fr 140px" :gap "8px"}}
       [:input {:type "text" :placeholder "Outcome (released/slashed/disputed)"
                :value (or (:outcome filters) "")
+               :style {:backgroundColor "#1e293b" :color "#ffffff" :border "1px solid #475569" :padding "6px 10px" :borderRadius "4px"}
                :on-change #(swap! !ui-state assoc-in [:filters :outcome] (.. % -target -value))}]
       [:input {:type "text" :placeholder "Invariants: pass/fail"
                :value (or (:invariants filters) "")
+               :style {:backgroundColor "#1e293b" :color "#ffffff" :border "1px solid #475569" :padding "6px 10px" :borderRadius "4px"}
                :on-change #(swap! !ui-state assoc-in [:filters :invariants] (.. % -target -value))}]
       [:input {:type "number" :min "1" :max "1000"
                :value (or (get pagination :limit) 100)
+               :style {:backgroundColor "#1e293b" :color "#ffffff" :border "1px solid #475569" :padding "6px 10px" :borderRadius "4px"}
                :on-change #(let [raw (.. % -target -value)
                                  v   (try (Long/parseLong (str raw)) (catch Exception _ 100))
                                  v*  (-> v (max 1) (min 1000))]
@@ -75,72 +78,72 @@
 
 (defn trial-selection-controls [!ui-state]
   (let [selected (:selected-trial-id @!ui-state)]
-    [:div {:style {:backgroundColor "#fff7ed" :padding "12px" :borderRadius "4px"
-                   :border "1px solid #fdba74" :marginBottom "12px"}}
-     [:h3 {:style {:margin "0 0 8px 0"}} "Selected Trial"]
-     [:p {:style {:fontSize "0.82em" :margin "0 0 8px 0" :color "#7c2d12"}}
+    [:div {:style {:backgroundColor "#431407" :padding "12px" :borderRadius "4px"
+                   :border "1px solid #9a3412" :marginBottom "12px" :color "#ffedd5"}}
+     [:h3 {:style {:margin "0 0 8px 0" :color "#ffffff"}} "Selected Trial"]
+     [:p {:style {:fontSize "0.82em" :margin "0 0 8px 0" :color "#fdba74"}}
       "Paste a trial UUID directly (works even if row-click interaction is unavailable)."]
      [:div {:style {:display "flex" :gap "8px"}}
       [:input {:type "text"
                :placeholder "Paste full trial UUID"
                :value (or selected "")
-               :style {:width "100%" :padding "6px 8px" :fontFamily "monospace"}
+               :style {:width "100%" :padding "6px 8px" :fontFamily "monospace" :backgroundColor "#1e293b" :color "#ffffff" :border "1px solid #475569" :borderRadius "4px"}
                :on-change #(let [v (.. % -target -value)
                                  v* (when-not (str/blank? v) v)]
                              (swap! !ui-state assoc :selected-trial-id v*))}]
       [:button {:on-click #(swap! !ui-state assoc :selected-trial-id nil)
-                :style {:padding "6px 10px" :cursor "pointer"}}
+                :style {:padding "6px 10px" :cursor "pointer" :backgroundColor "#2e1007" :color "#ffffff" :border "1px solid #ea580c" :borderRadius "4px"}}
        "Clear"]]
-     [:div {:style {:fontSize "0.78em" :marginTop "6px" :color "#9a3412"}}
+     [:div {:style {:fontSize "0.78em" :marginTop "6px" :color "#fdba74"}}
       (str "Current selected-trial-id=" (pr-str selected))]]))
 
 (defn select-trial-view [!ui-state rows]
   [:div {:style {:overflowX "auto"}}
-   [:table {:style {:borderCollapse "collapse" :fontSize "0.83em" :width "100%"}}
-   [:thead
-    [:tr {:style {:backgroundColor "#f1f5f9"}}
-     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Trial ID"]
-     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Batch"]
-     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Protocol"]
-     [:th {:style {:padding "6px 10px" :textAlign "left"}} "Outcome"]
-     [:th {:style {:padding "6px 10px" :textAlign "center"}} "invariants_ok"]
-     [:th {:style {:padding "6px 10px" :textAlign "center"}} "divergence"]]]
-   (into [:tbody]
-         (for [{:keys [trial-id batch-id protocol-id outcome invariants-ok divergence]} rows]
-           [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
-            [:td {:style {:padding "5px 10px" :fontFamily "monospace" :fontSize "0.8em"
-                          :cursor "pointer" :color "#1d4ed8" :fontWeight "600"
-                          :whiteSpace "nowrap" :minWidth "320px" :userSelect "text"}
-                  :title (str trial-id)
-                  :on-click #(swap! !ui-state assoc :selected-trial-id trial-id)}
-             (str trial-id)]
-            [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str batch-id)]
-            [:td {:style {:padding "5px 10px" :fontFamily "monospace"}} (str protocol-id)]
-            [:td {:style {:padding "5px 10px"}} (str outcome)]
-            [:td {:style {:padding "5px 10px" :textAlign "center"}}
-             (if invariants-ok (rag-badge :green "pass") (rag-badge :red "fail"))]
-            [:td {:style {:padding "5px 10px" :textAlign "center"}}
-             (if divergence (rag-badge :amber "yes") (rag-badge :green "no"))]]))]])
+   [:table {:style {:borderCollapse "collapse" :fontSize "0.83em" :width "100%" :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
+    [:thead
+     [:tr {:style {:backgroundColor "#0f172a"}}
+      [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Trial ID"]
+      [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Batch"]
+      [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Protocol"]
+      [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "Outcome"]
+      [:th {:style {:padding "8px 12px" :textAlign "center" :color "#ffffff"}} "invariants_ok"]
+      [:th {:style {:padding "8px 12px" :textAlign "center" :color "#ffffff"}} "divergence"]]]
+    (into [:tbody]
+          (for [{:keys [trial-id batch-id protocol-id outcome invariants-ok divergence]} rows]
+            [:tr {:style {:borderBottom "1px solid #334155"}}
+             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :fontSize "0.82em"
+                           :cursor "pointer" :color "#38bdf8" :fontWeight "600"
+                           :whiteSpace "nowrap" :minWidth "320px" :userSelect "text"}
+                   :title (str trial-id)
+                   :on-click #(swap! !ui-state assoc :selected-trial-id trial-id)}
+              (str trial-id)]
+             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"} } (str batch-id)]
+             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str protocol-id)]
+             [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str outcome)]
+             [:td {:style {:padding "6px 12px" :textAlign "center"}}
+              (if invariants-ok (rag-badge :green "pass") (rag-badge :red "fail"))]
+             [:td {:style {:padding "6px 12px" :textAlign "center"}}
+              (if divergence (rag-badge :amber "yes") (rag-badge :green "no"))]]))]])
 
 (defn event-timeline-view [events]
   (if (seq events)
-    [:table {:style {:borderCollapse "collapse" :fontSize "0.8em" :width "100%"}}
+    [:table {:style {:borderCollapse "collapse" :fontSize "0.8em" :width "100%" :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
      [:thead
-      [:tr {:style {:backgroundColor "#f1f5f9"}}
-       [:th {:style {:padding "6px 10px" :textAlign "left"}} "#"]
-       [:th {:style {:padding "6px 10px" :textAlign "left"}} "time"]
-       [:th {:style {:padding "6px 10px" :textAlign "left"}} "entity_id"]
-       [:th {:style {:padding "6px 10px" :textAlign "left"}} "event_type"]
-       [:th {:style {:padding "6px 10px" :textAlign "left"}} "entity_state"]]]
+      [:tr {:style {:backgroundColor "#0f172a"}}
+       [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "#"]
+       [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "time"]
+       [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "entity_id"]
+       [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "event_type"]
+       [:th {:style {:padding "8px 12px" :textAlign "left" :color "#ffffff"}} "entity_state"]]]
      (into [:tbody]
            (map-indexed
             (fn [i {:keys [block-time entity-id event-type entity-state]}]
-              [:tr {:style {:borderBottom "1px solid #e2e8f0"}}
-               [:td {:style {:padding "4px 10px"}} (inc i)]
-               [:td {:style {:padding "4px 10px" :fontFamily "monospace"}} (str block-time)]
-               [:td {:style {:padding "4px 10px" :fontFamily "monospace"}} (str entity-id)]
-               [:td {:style {:padding "4px 10px"}} (str event-type)]
-               [:td {:style {:padding "4px 10px" :fontFamily "monospace"}} (str entity-state)]])
+              [:tr {:style {:borderBottom "1px solid #334155"}}
+               [:td {:style {:padding "5px 12px" :color "#e2e8f0"}} (inc i)]
+               [:td {:style {:padding "5px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str block-time)]
+               [:td {:style {:padding "5px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str entity-id)]
+               [:td {:style {:padding "5px 12px" :color "#e2e8f0"}} (str event-type)]
+               [:td {:style {:padding "5px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str entity-state)]])
             events))]
     (callout :amber [:div "No events recorded for this trial."])))
 
@@ -158,14 +161,14 @@
                         {:label "Telemetry Trial Timeline" :href "/notebooks/telemetry"}
                         {:label "XTDB Overview" :href "/notebooks/xtdb_overview"}]
          links (or custom-links default-links)]
-     [:div {:style {:backgroundColor "#eef2ff" :border "1px solid #a5b4fc" :borderRadius "6px"
-                    :padding "10px 12px" :marginBottom "12px"}}
-      [:div {:style {:fontWeight "600" :marginBottom "6px"}} "Notebook navigation"]
+     [:div {:style {:backgroundColor "#1e1b4b" :border "1px solid #4338ca" :borderRadius "6px"
+                    :padding "10px 12px" :marginBottom "12px" :color "#e0e7ff"}}
+      [:div {:style {:fontWeight "600" :marginBottom "6px" :color "#ffffff"}} "Notebook navigation"]
       [:div {:style {:display "flex" :gap "10px" :flexWrap "wrap" :fontSize "0.9em"}}
        (for [{:keys [label href]} links]
-         [:a {:href href :style {:color "#1d4ed8"}} label])
+         [:a {:href href :style {:color "#818cf8" :fontWeight "600"}} label])
        (when current-label
-         [:span {:style {:color "#334155"}} (str "• current: " current-label)])]])))
+         [:span {:style {:color "#94a3b8"}} (str "• current: " current-label)])]])))
 
 (defn reference-validation-status []
   (let [required ["suites/reference-validation-v1/expected/summary.json"
@@ -182,18 +185,18 @@
               :else :green)]
     (callout rag
              [:div
-              [:strong "Reference validation status"]
+              [:strong {:style {:color "#ffffff"}} "Reference validation status"]
               [:div {:style {:marginTop "6px" :fontSize "0.86em"}}
                (str (count present) "/" (count required) " core artifacts present")]
               (when (seq missing)
                 [:details {:style {:marginTop "6px"}}
-                 [:summary "Missing artifacts"]
+                 [:summary {:style {:cursor "pointer"}} "Missing artifacts"]
                  [:ul {:style {:margin "6px 0 0 18px"}}
                   (for [m missing] [:li m])]])
               [:div {:style {:marginTop "8px" :fontSize "0.86em"}}
-               [:a {:href "/notebooks/report" :style {:color "#1d4ed8"}} "Open Report notebook"]
+               [:a {:href "/notebooks/report" :style {:color "#60a5fa" :fontWeight "600"}} "Open Report notebook"]
                " · "
-               [:a {:href "suites/reference-validation-v1/reports/reference-validation-v1.md" :style {:color "#1d4ed8"}}
+               [:a {:href "suites/reference-validation-v1/reports/reference-validation-v1.md" :style {:color "#60a5fa" :fontWeight "600"}}
                 "Open reference validation report"]]])))
 
 (defn provenance-footer [run]

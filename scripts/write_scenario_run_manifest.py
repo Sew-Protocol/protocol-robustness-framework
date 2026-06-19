@@ -94,15 +94,10 @@ def mk_artifact_entry(
 
 # ── environment probes ────────────────────────────────────────────────────────
 
-def get_git_info() -> dict:
+def get_vcs_info() -> dict:
     try:
-        sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        msg = subprocess.check_output(
-            ["git", "log", "-1", "--format=%s"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-        return {"git_commit": sha, "git_message": msg}
+        from scripts.vcs_info import commit_sha, commit_message
+        return {"git_commit": commit_sha(), "git_message": commit_message()}
     except Exception:
         return {"git_commit": None, "git_message": None}
 
@@ -262,7 +257,7 @@ def main() -> int:
     now        = datetime.datetime.now(datetime.timezone.utc)
     run_id     = now.strftime("%Y%m%d-%H%M%S")
     created_at = now.isoformat()
-    git_info   = get_git_info()
+    git_info   = get_vcs_info()
 
     summary = {
         "schema_version": cfg.schema("test-summary"),

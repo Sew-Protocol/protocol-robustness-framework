@@ -153,3 +153,27 @@ yield-reference-v1-check:
 .PHONY: refresh-yield-reference-v1
 refresh-yield-reference-v1:
 	clojure -M:reference-validation --suite-root suites/yield-reference-v1 --protocol yield --refresh-expected
+
+# ---------------------------------------------------------------------------
+# XTDB
+# ---------------------------------------------------------------------------
+
+.PHONY: xtdb
+xtdb:
+	docker compose up -d xtdb
+
+.PHONY: xtdb-stop
+xtdb-stop:
+	docker compose stop xtdb
+
+.PHONY: xtdb-down
+xtdb-down:
+	docker compose down xtdb
+
+.PHONY: xtdb-logs
+xtdb-logs:
+	docker compose logs xtdb
+
+.PHONY: db-setup
+db-setup: xtdb
+	bb db:setup

@@ -2,11 +2,11 @@
   "Write claimable-classification.v2 evidence artifact (I/O shell)."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.java.shell :as sh]
             [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.scenario-runner :as scenario-runner]
-            [resolver-sim.protocols.sew.claimable-classification :as cc]))
+            [resolver-sim.protocols.sew.claimable-classification :as cc]
+            [resolver-sim.vcs :as vcs]))
 
 (def producer-id (evcfg/producer :claimable-classification))
 
@@ -16,13 +16,8 @@
     (when parent (.mkdirs parent))
     (spit f (json/write-str doc {:indent true}))))
 
-(defn- current-git-sha []
-  (try
-    (-> (sh/sh "git" "rev-parse" "HEAD")
-        :out
-        str/trim
-        not-empty)
-    (catch Exception _ nil)))
+(defn- current-vcs-sha []
+  (vcs/commit-sha))
 
 (defn- sha256-hex
   [path]
@@ -34,7 +29,7 @@
 
 (defn- provenance-block
   [& {:keys [run-id git-sha override-sha input-result-path]}]
-  (let [sha (or override-sha git-sha (current-git-sha))]
+  (let [sha (or override-sha git-sha (current-vcs-sha))]
     (cond-> {:producer producer-id
              :classifier_version cc/classifier-version
              :produced_at (str (java.time.Instant/now))}

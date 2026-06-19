@@ -17,6 +17,7 @@
 
    Layering: sim/* only. File I/O via resolver-sim.io.audit-outputs."
   (:require [resolver-sim.sim.trajectory :as trajectory]
+            [resolver-sim.vcs            :as vcs]
             [clojure.string               :as str]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.logging :as log])
@@ -231,17 +232,15 @@
 ;; Reproducibility manifest
 ;; ---------------------------------------------------------------------------
 
-(defn- git-head-sha
-  "Return current git HEAD SHA, or \"unknown\" if git is unavailable."
+(defn- vcs-head-sha
+  "Return current VCS HEAD SHA, or \"unknown\" if jj/git is unavailable."
   []
   (try
-    (let [pb  (ProcessBuilder. ["git" "rev-parse" "HEAD"])
-          p   (.start pb)
-          out (slurp (.getInputStream p))]
-      (str/trim out))
+    (or (vcs/commit-sha) "unknown")
     (catch Exception e
       (log/warn! :git-sha-resolution-failed {:error (.getMessage e)})
       "unknown")))
+
 
 (defn- sha256-hex
   "Return SHA-256 hex digest of string s."
@@ -280,7 +279,7 @@
      :trials-per-epoch  (:n-trials-per-epoch result)
      :initial-resolvers (:initial-resolver-count result)
      :routing-mode      (-> result :epoch-results first :routing-mode)
-     :git-commit        (or git-commit (git-head-sha))
+      :git-commit        (or git-commit (vcs-head-sha))
      :sim-version       (or sim-version default-version)
      :completed-at      (str (java.time.Instant/now))}))
 

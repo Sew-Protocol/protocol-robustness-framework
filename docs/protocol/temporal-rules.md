@@ -7,6 +7,28 @@ This document describes how temporal validation works in replay.
 Temporal rules are evaluated in `resolver-sim.contract-model.replay/process-step`
 before protocol `dispatch-action`.
 
+## Temporal Context Schema (v2)
+
+To ensure high-precision and deterministic temporal semantics, the simulation uses a canonical `temporal-context.v2` schema, defined in `resolver-sim.time.context`.
+
+A world state holds this context under the `:context/time` key:
+
+```clojure
+{:schema-version "temporal-context.v2"
+ :step 0
+ :event-seq 0
+ :block-ts 1718534400    ;; Unix seconds
+ :instant #inst "..."    ;; java.time.Instant
+ :clock/source :legacy   ;; or :scenario
+ :clock/mode :discrete-step
+ :tick-seconds 86400}
+```
+
+Utilities:
+- `ensure-temporal-context`: Normalizes legacy worlds to v2.
+- `with-temporal-context`: Safely updates temporal state.
+- `temporal-context`: Canonical accessor.
+
 ## Rule sources
 
 Effective rules are:

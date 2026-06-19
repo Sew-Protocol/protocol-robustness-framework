@@ -82,13 +82,11 @@ SCENARIOS = [
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _git_info() -> tuple[str, str]:
+def _vcs_info() -> tuple[str, str]:
     try:
-        sha    = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                         text=True, stderr=subprocess.DEVNULL).strip()
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                                         text=True, stderr=subprocess.DEVNULL).strip()
-        return sha, branch
+        from scripts.vcs_info import short_sha, branch
+        return (short_sha() or "unknown",
+                branch() or "unknown")
     except Exception:
         return "unknown", "unknown"
 
@@ -131,7 +129,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    git_sha, git_branch = _git_info()
+    git_sha, git_branch = _vcs_info()
     run_at    = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     python_ver = platform.python_version()
 
