@@ -1,6 +1,6 @@
 (ns resolver-sim.yield.exact-math
   "Exact integer and ratio arithmetic for yield accrual, partial-fill ratios,
-   shortfall ratios, and rounding-drift analysis.
+   shortfall ratios, rounding-drift analysis, and pro-rata allocation.
 
    Principles:
    - Economic amounts, APYs, indices, available ratios, and fill ratios are
@@ -8,7 +8,17 @@
    - Externally settled token amounts are integer base units.
    - Quantization rounds down (floor) and preserves exact fractional remainders
      for carry-forward across accrual intervals.
-   - All arithmetic is deterministic and reproducible.")
+   - All arithmetic is deterministic and reproducible.
+
+   ## Framework pro-rata primitive
+
+   largest-remainder-alloc is the canonical Hare-quota allocation function.
+   Used by:
+   - resolver-sim.yield.partial-fill      (pro-rata fill mode)
+   - resolver-sim.economics.payoffs       (prorata slash allocation)
+   - resolver-sim.sim.trial-router        (weighted trial distribution)
+
+   Any new pro-rata calculation should call this function.")
 
 (def seconds-per-year 31536000)
 
@@ -186,13 +196,49 @@
          :carry (ratio carry)}))))
 
 (defn largest-remainder-alloc
-  "Allocate `total-available` across `claims` using largest-remainder method.
+  "Allocate `total-available` base units across `claims` using the
+   largest-remainder method (Hare quota).
 
-   Each claim gets its floor allocation, then remaining units are distributed
-   one at a time to claims with the largest fractional remainders.
+   This is the framework's canonical pro-rata allocation primitive. It is used
+   by the yield settlement engine (partial-fill pro-rata mode), the economics
+   module (prorata slash allocation), and the simulation engine (weighted trial
+   distribution). Any new pro-rata need should call this function.
 
-   Guarantees: sum(filled) = floor(total-available) in base units.
-   Never allocates more than total-available."
+   ## Contract
+
+   Each claim is a map with at least `:amount` (the weight — any numeric type;
+   doubles are exact-rationalized internally). The function computes each
+   claim's ideal fractional share of total-available, assigns the floor
+   allocation, then distributes the remaining units one at a time to claims
+   with the largest fractional remainders. Ties are broken by input order
+   (deterministic for reproducible sequences).
+
+   The function guarantees:
+   - sum(:filled across all claims) == total-available (conservation)
+   - No claim receives more than its ideal share times total-available
+   - All amounts are integer base units (no fractional claims)
+
+   ## Returns
+
+   {:allocations [{:amount       ,  ;; original weight
+                   :filled       ,  ;; allocated base units (long)
+                   :remainder-exact ;; exact fractional remainder
+                   :ideal-exact  }  ;; exact ideal share
+                  ...]
+    :total-available-units     ,  ;; total-available as base units
+    :total-allocated-units     ,  ;; sum of :filled (== total-available)
+    :shortage-units            ,  ;; always 0 for this method
+    :carry                     }  ;; always 0 for this method
+
+   When total claim amount is zero, all claims receive 0 filled units.
+
+   ## Example
+
+   (largest-remainder-alloc 10 [{:key :a :amount 3}
+                                {:key :b :amount 3}
+                                {:key :c :amount 3}])
+   ;; => first two claims get 4, 3, 3 (remainder goes to earliest indices)
+   "
   [total-available claims]
   (let [total (ratio total-available)
         total-units (first (quantize-base-units total))

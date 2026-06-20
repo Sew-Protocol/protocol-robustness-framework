@@ -26,7 +26,8 @@
    so the others can be added without changing multi_epoch.clj.
 
    Layering: sim/* only. No db/*, io/* imports."
-  (:require [resolver-sim.stochastic.rng :as rng]))
+  (:require [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.yield.exact-math :as m]))
 
 ;; ---------------------------------------------------------------------------
 ;; Protocol
@@ -188,6 +189,9 @@
 
 (defn- distribute-weighted
   "Assign n-trials to ids according to weights using largest-remainder method.
+   Delegates rounding to resolver-sim.yield.exact-math/largest-remainder-alloc
+   for exact-ratio Hare-quota allocation with deterministic tie-breaking.
+
    Returns {id → trial-count} where every id has a non-negative count and
    sum of counts == n-trials.
 
@@ -199,29 +203,15 @@
         n       (count ids-vec)]
     (if (zero? n)
       {}
-      (let [raw-weights  (mapv #(max 0.0 (double (get weights % 0.0))) ids-vec)
+      (let [raw-weights (mapv #(max 0.0 (double (get weights % 0.0))) ids-vec)
             total-weight (reduce + 0.0 raw-weights)
             ;; Fall back to uniform if all weights zero (e.g. first epoch)
-            eff-weights  (if (pos? total-weight)
-                           raw-weights
-                           (vec (repeat n 1.0)))
-            eff-total    (if (pos? total-weight) total-weight (double n))
-            ;; Each id's exact fractional share
-            exact        (mapv #(* n-trials (/ % eff-total)) eff-weights)
-            ;; Floor allocation
-            floors       (mapv #(long (Math/floor %)) exact)
-            allocated    (reduce + floors)
-            remainder    (- n-trials allocated)
-            ;; Distribute remainder by largest fractional part (largest-remainder)
-            residuals    (mapv - exact floors)
-            sorted-idxs  (sort-by #(- (nth residuals %)) (range n))
-            final-counts (reduce (fn [acc [rank idx]]
-                                   (if (< rank remainder)
-                                     (update acc idx inc)
-                                     acc))
-                                 floors
-                                 (map-indexed vector sorted-idxs))]
-        (zipmap ids-vec final-counts)))))
+            eff-weights (if (pos? total-weight)
+                          raw-weights
+                          (vec (repeat n 1.0)))
+            claims (mapv (fn [id w] {:id id :amount w}) ids-vec eff-weights)
+            alloc-result (m/largest-remainder-alloc n-trials claims)]
+        (zipmap ids-vec (mapv :filled (:allocations alloc-result)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; ReputationWeightedRouter
