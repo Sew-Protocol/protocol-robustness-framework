@@ -4,6 +4,8 @@
             [resolver-sim.benchmark.registry :as registry]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.benchmark.hashing :as hashing]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.timestamping :as ts]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.tools.cli :refer [parse-opts]]))
@@ -25,6 +27,7 @@
    [nil "--publish-ipfs PATH" "Publish exported bundle to IPFS"]
    [nil "--attest PATH" "Generate an independent attestation for an evidence bundle"]
    [nil "--verify-attestation PATH" "Verify an independent attestation"]
+   [nil "--tsa-url URL" "RFC 3161 Time-Stamp Authority URL for timestamping evidence artifacts"]
    [nil "--history" "Display local evidence run history"]
    ["-h" "--help" "Show help"]])
 
@@ -144,27 +147,30 @@
         (System/exit 0))
 
       :else
-      (let [arg (first arguments)
-            index (load-index)
-            benchmark-from-index (first (filter #(= (:id %) arg) (:benchmarks index)))
-            manifest-path (cond
-                            benchmark-from-index (:manifest benchmark-from-index)
-                            (and arg (.endsWith arg ".edn")) arg
-                            :else "benchmarks/dispute-liveness.edn")
-            _ (println "Running benchmark:" manifest-path)
-            evidence (runner/run-benchmark manifest-path)
-            output-path (:output options)
-            final-evidence (if-let [key-path (:key options)]
-                             (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
-                                   pub-path (str key-path ".pub")
-                                   pub-exists? (.exists (io/file pub-path))]
-                               (assoc evidence
-                                      :evidence/signature sig
-                                      :evidence/public-key-path (if pub-exists? pub-path key-path)))
-                             evidence)
-            passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
-        (runner/write-evidence final-evidence output-path)
-        (registry/record-entry final-evidence)
-        (when passed?
-          (interactive-ux final-evidence output-path options))
-        (System/exit (if passed? 0 1))))))
+      (binding [chain/*signing-key* (:key options)
+                chain/*signing-password* (:password options)
+                ts/*tsa-url* (:tsa-url options)]
+        (let [arg (first arguments)
+              index (load-index)
+              benchmark-from-index (first (filter #(= (:id %) arg) (:benchmarks index)))
+              manifest-path (cond
+                              benchmark-from-index (:manifest benchmark-from-index)
+                              (and arg (.endsWith arg ".edn")) arg
+                              :else "benchmarks/dispute-liveness.edn")
+              _ (println "Running benchmark:" manifest-path)
+              evidence (runner/run-benchmark manifest-path)
+              output-path (:output options)
+              final-evidence (if-let [key-path (:key options)]
+                               (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
+                                     pub-path (str key-path ".pub")
+                                     pub-exists? (.exists (io/file pub-path))]
+                                 (assoc evidence
+                                        :evidence/signature sig
+                                        :evidence/public-key-path (if pub-exists? pub-path key-path)))
+                               evidence)
+               passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
+          (runner/write-evidence final-evidence output-path)
+          (registry/record-entry final-evidence)
+          (when passed?
+            (interactive-ux final-evidence output-path options))
+          (System/exit (if passed? 0 1)))))))

@@ -169,7 +169,7 @@
 (deftest full-pipeline-creates-files
   (let [dir (str (System/getProperty "java.io.tmpdir") "/reg-test-" (java.util.UUID/randomUUID))
         _ (setup-events dir)
-        result (reg-val/build-evidence-registry! :dir dir)]
+        result (reg-val/build-evidence-registry! :dir dir :strict false)]
     (is (.exists (io/file (:registry-path result))) "Registry file exists")
     (is (.exists (io/file (:validation-path result))) "Validation file exists")
     (is (= 3 (:entry-count result)) "3 entries")

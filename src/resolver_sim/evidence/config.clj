@@ -62,3 +62,9 @@
 
 (defn evidence-bundle-dir []
   (get (get-config) "evidence_bundle_dir"))
+
+(defn strict-mode?
+  "Return true when strict validation mode is enabled in config.
+   In strict mode, recommended checks are promoted to required (warnings → failures)."
+  []
+  (boolean (get (get-config) "strict_mode" false)))

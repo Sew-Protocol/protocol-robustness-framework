@@ -4,6 +4,7 @@
   "runs_root": "results/runs",
   "evidence_bundle_dir": "results/evidence-bundle",
   "contract_version": "evidence-contract.v1",
+  "strict_mode": true,
   "rounding_policy": "floor-to-asset-decimals.v1",
   "framework": {
     "name": "sew-simulation-test-runner",

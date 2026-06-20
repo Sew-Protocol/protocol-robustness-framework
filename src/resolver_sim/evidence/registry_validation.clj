@@ -268,17 +268,18 @@
 
 (defn build-evidence-registry!
   "Full pipeline: build evidence registry, write to disk, run validation, write validation.
-   
+    
    When :strict is true, recommended checks are promoted to failures.
+   Defaults to the value of strict_mode in evidence config when not explicitly passed.
    Use :strict for CI or research-release gates.
-   
+    
    Returns a map with:
    :registry-path      — path to evidence-registry.json
    :validation-path    — path to evidence-registry-validation.json
    :entry-count        — number of evidence entries
    :validation-status  — :passed or :failed"
   [& {:keys [strict dir]
-      :or {strict false}}]
+      :or {strict (evcfg/strict-mode?)}}]
   (let [out-dir (or dir (str (evcfg/artifact-dir)))
         {:keys [registry-path entry-count registry]} (reg/write-evidence-registry! out-dir)
         {:keys [validation-path validation]} (write-evidence-registry-validation! registry out-dir)]

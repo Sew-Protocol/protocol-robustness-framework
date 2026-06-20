@@ -4,12 +4,15 @@
   Usage:
     clojure -M -m resolver-sim.scripts.evidence bundle <out-dir>
     clojure -M -m resolver-sim.scripts.evidence sign <private-key-path>
-    clojure -M -m resolver-sim.scripts.evidence registry [run-dir]
+    clojure -M -m resolver-sim.scripts.evidence registry [--strict] [run-dir]
 
   The commands operate on the focused run (results/.notebook-focus) or the
   latest results/test-artifacts directory.
 
-  The registry command does NOT require the focused manifest."
+  The registry command does NOT require the focused manifest.
+
+  Options:
+    --strict    Enable strict validation mode (promotes warnings to failures)"
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
@@ -25,8 +28,10 @@
     (.getPath f)))
 
 (defn -main [& args]
-  (let [cmd (first args)
-        param (second args)
+  (let [args-vec (vec args)
+        strict? (some #{"--strict"} args-vec)
+        cmd (first (remove #{"--strict"} args))
+        param (second (remove #{"--strict"} args))
         run  (loader/load-focused)
         manifest (:manifest run)
         registry (:registry run)
@@ -35,7 +40,7 @@
       "registry"
       (let [dir (or param (str (evcfg/artifact-dir)))]
         (println "Building evidence registry for:" dir)
-        (let [res (rv/build-evidence-registry! :dir dir)]
+        (let [res (rv/build-evidence-registry! :dir dir :strict strict?)]
           (println "  Registry:" (:registry-path res))
           (println "  Validation:" (:validation-path res))
           (println "  Entries:" (:entry-count res))
