@@ -36,32 +36,32 @@
         {:keys [pending-state executable-slashes slashes-still-pending]}
         (gov-delay/process-governance-approvals governance-state epoch)
         [rng-batch rng-events rng-decay] (rng/split-rng rng)
-        
+
         ;; Get set of frozen resolvers (those with pending slashes)
         frozen-resolver-ids (set (map :resolver-id slashes-still-pending))
-        
+
         ;; Step 2: Run batch simulation for this epoch (frozen resolvers don't get assignments)
         decayed-params (rep/apply-detection-decay params epoch)
         batch-result (batch/run-batch rng-batch n-trials decayed-params)
-        
+
         ;; Step 3: Mark newly detected slashes as pending governance approval
         detection-rate (double (get-in batch-result [:aggregate :detection-rate] 0.0))
         detected-slashes-count (long (* n-trials detection-rate))
-        
+
         ;; Create pending slash entries for detected slashes
         new-pending (reduce (fn [acc _]
-                             (let [resolver-id (next-int rng-events (max 1 (count resolver-histories)))
-                                   slash-amount (+ 5000 (next-int rng-events 5000))] ; $5-10k
-                               (gov-delay/mark-slash-detected
+                              (let [resolver-id (next-int rng-events (max 1 (count resolver-histories)))
+                                    slash-amount (+ 5000 (next-int rng-events 5000))] ; $5-10k
+                                (gov-delay/mark-slash-detected
                                  acc
                                  slash-amount
                                  resolver-id
                                  epoch
                                  (:governance-response-days params 3)
                                  :timeout)))
-                           pending-state
-                           (range detected-slashes-count))
-        
+                            pending-state
+                            (range detected-slashes-count))
+
         ;; Summary for this epoch
         epoch-summary
         {:epoch epoch
@@ -76,43 +76,43 @@
          :slashes-executed (count executable-slashes)
          :slashes-pending (count (:pending-slashes new-pending))
          :frozen-resolvers (count frozen-resolver-ids)}
-        
+
         ;; Update resolver histories
         updated-histories
         (let [honest-mean (:honest-mean batch-result)
               malice-mean (:malice-mean batch-result)
               honest-count (count (filter #(= :honest (:strategy (val %))) resolver-histories))
               malice-count (count (filter #(#{:malicious :lazy :collusive} (:strategy (val %))) resolver-histories))]
-          
+
           (reduce-kv (fn [acc id resolver]
                        (let [strategy (:strategy resolver)
                              is-honest? (= strategy :honest)
                              is-frozen? (contains? frozen-resolver-ids id)
-                             
+
                              resolver-profit (if is-frozen?
-                                             0.0  ; Frozen = zero profit this epoch
-                                             (if is-honest?
-                                               (if (> honest-count 0) (/ honest-mean honest-count) 0)
-                                               (if (> malice-count 0) (/ malice-mean malice-count) 0)))
-                             
+                                               0.0  ; Frozen = zero profit this epoch
+                                               (if is-honest?
+                                                 (if (> honest-count 0) (/ honest-mean honest-count) 0)
+                                                 (if (> malice-count 0) (/ malice-mean malice-count) 0)))
+
                              was-slashed? (and (not is-honest?)
-                                              (> (:slash-rate batch-result 0) 0)
-                                              (< (rng/next-double rng-events) (:slash-rate batch-result 0.1)))
-                             
+                                               (> (:slash-rate batch-result 0) 0)
+                                               (< (rng/next-double rng-events) (:slash-rate batch-result 0.1)))
+
                              updated (rep/update-resolver-history
-                                     resolver
-                                     resolver-profit
-                                     (if is-frozen? 0 1)  ; 0 verdicts if frozen
-                                     (if is-honest? (if is-frozen? 0 1) 0)
-                                     was-slashed?
-                                     epoch)]
-                         
+                                      resolver
+                                      resolver-profit
+                                      (if is-frozen? 0 1)  ; 0 verdicts if frozen
+                                      (if is-honest? (if is-frozen? 0 1) 0)
+                                      was-slashed?
+                                      epoch)]
+
                          (assoc acc id updated)))
                      {} resolver-histories))
-        
+
         ;; Apply population decay
         decay-result (rep/apply-epoch-decay updated-histories epoch params rng-decay next-id)]
-    
+
     {:epoch-summary epoch-summary
      :histories (:histories decay-result)
      :next-id (:next-id decay-result)
@@ -132,20 +132,20 @@
   [rng n-epochs n-trials-per-epoch params]
   (let [n-resolvers (get params :n-resolvers 100)
         strategy-mix (or (:strategy-mix params)
-                        {:honest 0.50 :lazy 0.15 :malicious 0.25 :collusive 0.10})
+                         {:honest 0.50 :lazy 0.15 :malicious 0.25 :collusive 0.10})
         gov-response-days (get params :governance-response-days 3)
-        
+
         _ (println (format "\n🏛️  Running Phase M: Governance Response Time Impact"))
         _ (println (format "   Epochs: %d" n-epochs))
         _ (println (format "   Trials per epoch: %d" n-trials-per-epoch))
         _ (println (format "   Governance response window: %d days" gov-response-days))
         _ (println (format "   Initial resolvers: %d" n-resolvers))
         _ (println "")
-        
+
         ;; Initialize
         initial-histories (rep/initialize-resolvers n-resolvers strategy-mix)
         initial-gov-state (gov-delay/initialize-pending-slashes)
-        
+
         ;; Run epoch loop
         result-accumulator
         (reduce (fn [acc epoch-num]
@@ -153,34 +153,34 @@
                         prev-histories (:histories acc initial-histories)
                         prev-gov-state (:gov-state acc initial-gov-state)
                         prev-next-id   (:next-id acc n-resolvers)
-                        
+
                         {:keys [epoch-summary histories next-id governance-state executed-slashes]}
                         (run-single-epoch-with-governance rng-1 epoch-num prev-histories n-trials-per-epoch params prev-gov-state prev-next-id)
-                        
+
                         _ (println (format "   Epoch %d: honest=%.0f, frozen=%d, pending=%d, executed=%d"
-                                         epoch-num
-                                         (:honest-mean-profit epoch-summary)
-                                         (:frozen-resolvers epoch-summary)
-                                         (:slashes-pending epoch-summary)
-                                         (:slashes-executed epoch-summary)))]
-                    
+                                           epoch-num
+                                           (:honest-mean-profit epoch-summary)
+                                           (:frozen-resolvers epoch-summary)
+                                           (:slashes-pending epoch-summary)
+                                           (:slashes-executed epoch-summary)))]
+
                     (assoc acc
-                      :rng rng-2
-                      :epochs (cons epoch-summary (:epochs acc []))
-                      :histories histories
-                      :next-id next-id
-                      :gov-state governance-state
-                      :all-executed-slashes (concat executed-slashes (:all-executed-slashes acc [])))))
+                           :rng rng-2
+                           :epochs (cons epoch-summary (:epochs acc []))
+                           :histories histories
+                           :next-id next-id
+                           :gov-state governance-state
+                           :all-executed-slashes (concat executed-slashes (:all-executed-slashes acc [])))))
                 {:rng rng :epochs [] :histories initial-histories :next-id n-resolvers :gov-state initial-gov-state :all-executed-slashes []}
                 (range 1 (inc n-epochs)))
-        
+
         epoch-results (reverse (:epochs result-accumulator []))
         final-histories (:histories result-accumulator initial-histories)
         final-gov-state (:gov-state result-accumulator initial-gov-state)
-        
+
         ;; Calculate governance metrics
         gov-metrics (gov-delay/summarize-governance-delay-metrics final-gov-state)
-        
+
         ;; Calculate final statistics
         final-stats
         (let [honest-resolvers (filter #(= :honest (:strategy (val %))) final-histories)
@@ -190,7 +190,7 @@
               initial-ids (set (keys initial-histories))
               final-ids (set (keys final-histories))
               total-exits (count (clojure.set/difference initial-ids final-ids))]
-          
+
           {:final-resolver-count (count final-histories)
            :total-resolver-exits total-exits
            :honest-final-count (count honest-resolvers)
@@ -199,7 +199,7 @@
            :malice-cumulative-profit (if (empty? malice-profits) 0 (apply + malice-profits))
            :honest-avg-profit (if (empty? honest-profits) 0 (/ (apply + honest-profits) (count honest-resolvers)))
            :malice-avg-profit (if (empty? malice-profits) 0 (/ (apply + malice-profits) (count malice-resolvers)))})]
-    
+
     ;; Return complete results
     {:scenario-id (:scenario-id params "phase-m-unnamed")
      :governance-response-days gov-response-days
@@ -231,13 +231,13 @@
   - System stability"
   [rng n-epochs n-trials-per-epoch base-params governance-day-options]
   (let [results (map (fn [gov-days]
-                      (let [scenario-params (assoc base-params
-                                                   :governance-response-days gov-days
-                                                   :scenario-id (str "phase-m-" gov-days "days"))]
-                        {:governance-days gov-days
-                         :result (run-multi-epoch-governance-impact rng n-epochs n-trials-per-epoch scenario-params)}))
-                    governance-day-options)]
-    
+                       (let [scenario-params (assoc base-params
+                                                    :governance-response-days gov-days
+                                                    :scenario-id (str "phase-m-" gov-days "days"))]
+                         {:governance-days gov-days
+                          :result (run-multi-epoch-governance-impact rng n-epochs n-trials-per-epoch scenario-params)}))
+                     governance-day-options)]
+
     {:comparison-id "governance-delay-sensitivity"
      :test-configurations results
      :summary-table (map (fn [{:keys [governance-days result]}]
@@ -247,4 +247,4 @@
                             :slashes-executed (apply + (map :slashes-executed (:epoch-results result)))
                             :slashes-pending (get-in result [:governance-metrics :pending-slashes-still-waiting])
                             :total-exits (get-in result [:aggregated-stats :total-resolver-exits])})
-                        results)}))
+                         results)}))

@@ -163,13 +163,13 @@
    (let [prob (:reversal-detection-probability snapshot 0.0)]
       ;; reversal-detection-probability is the only float-valued snapshot field;
       ;; all other numeric fields use integer (uint256) semantics.
-      (when (or (< prob 0.0) (> prob 1.0))
-        (throw (snapshot-validation-error
-                "reversal-detection-probability must be in [0, 1]"
-                {:error-type :snapshot/probability-out-of-range
-                 :snapshot/field :reversal-detection-probability
-                 :expected "[0.0, 1.0]"
-                 :actual prob}))))
+     (when (or (< prob 0.0) (> prob 1.0))
+       (throw (snapshot-validation-error
+               "reversal-detection-probability must be in [0, 1]"
+               {:error-type :snapshot/probability-out-of-range
+                :snapshot/field :reversal-detection-probability
+                :expected "[0.0, 1.0]"
+                :actual prob}))))
    (doseq [k [:yield-generation-module :yield-profile :yield-archetype :yield-module-id]]
      (when-let [v (get snapshot k)]
        (when-not (keyword-id? v)
@@ -228,7 +228,7 @@
         {:keys [profile-id archetype module-id]}
         (yield-proto/resolve-yield-profile yield-id)
         snap (make-escrow-snapshot
-              {                 :escrow-fee-bps         (get pp :resolver-fee-bps 100)
+              {:escrow-fee-bps         (get pp :resolver-fee-bps 100)
                :resolution-module            (get pp :resolution-module nil)
                :appeal-window-duration       (get pp :appeal-window-duration 0)
                :max-dispute-duration         (get pp :max-dispute-duration types/default-max-dispute-duration)
@@ -245,10 +245,10 @@
                :default-auto-release-delay   (get pp :default-auto-release-delay 0)
                :default-auto-cancel-delay    (get pp :default-auto-cancel-delay 0)
                :escrow-modules               {:resolution (get pp :resolution-module nil)
-                                            :yield      profile-id
-                                            :release    (get pp :release-strategy nil)
-                                            :cancel     (get pp :cancellation-strategy nil)}
-                :yield-module-id              (or (get pp :yield-module-id) profile-id)
+                                              :yield      profile-id
+                                              :release    (get pp :release-strategy nil)
+                                              :cancel     (get pp :cancellation-strategy nil)}
+               :yield-module-id              (or (get pp :yield-module-id) profile-id)
                :yield-profile                profile-id
                :yield-archetype              archetype
                :yield-generation-module      module-id

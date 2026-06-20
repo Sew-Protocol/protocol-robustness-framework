@@ -7,130 +7,130 @@
   [& _]
   (run-tests 'resolver-sim.scenario.projection-test))
 
- (defn- replay-result
-   [{:keys [world metrics trace halt-reason agents]
-     :or   {metrics {}
-            trace   []
-            agents  []}}]
-   {:trace       (if (seq trace) trace [{:world world}])
-    :metrics     metrics
-    :halt-reason halt-reason
-    :agents      agents})
+(defn- replay-result
+  [{:keys [world metrics trace halt-reason agents]
+    :or   {metrics {}
+           trace   []
+           agents  []}}]
+  {:trace       (if (seq trace) trace [{:world world}])
+   :metrics     metrics
+   :halt-reason halt-reason
+   :agents      agents})
 
- (deftest test-trace-end-projection-terminal-world
-   (testing "terminal world produces terminal=true and stable terminal-state set"
-     (let [result (replay-result
-                   {:world {:live-states {0 :released 1 :refunded}
-                            :total-held {"USDC" 0}
-                            :total-fees {"USDC" 50}
-                            :escrow-amounts {0 1000 1 2000}
-                            :dispute-resolvers {0 "0xR" 1 "0xR"}
-                            :dispute-levels {0 0 1 1}
-                            :pending-count 0
-                            :resolver-stakes {"0xR" 1000}
-                            :block-time 1300}
-                    :metrics {:disputes-triggered 1
-                              :resolutions-executed 2}})
-           p      (proj/trace-end-projection result)]
-       (is (= true (get-in p [:terminal-world :terminal?])))
-       (is (= #{:released :refunded}
-              (get-in p [:terminal-world :all-terminal-states])))
-       (is (= {"USDC" 0} (get-in p [:terminal-world :total-held-by-token])))
-       (is (= 1300 (get-in p [:trace-summary :terminal-time]))))))
-
- (deftest test-trace-end-projection-open-dispute
-   (testing "open entity keeps terminal=false and preserves halt reason"
-     (let [result (replay-result
-                   {:world {:live-states {0 :disputed}
-                            :total-held {"USDC" 9950}
-                            :total-fees {"USDC" 50}
-                            :pending-count 0
-                            :block-time 1060}
-                    :halt-reason :open-entities-at-end
-                    :metrics {:disputes-triggered 1}})
-           p      (proj/trace-end-projection result)]
-       (is (= false (get-in p [:terminal-world :terminal?])))
-       (is (= :open-entities-at-end (get-in p [:trace-summary :halt-reason])))
-       (is (= 1 (get-in p [:trace-summary :dispute-count]))))))
-
- (deftest test-trace-end-projection-multi-token
-   (testing "multi-token accounting maps are preserved with defaults"
-     (let [result (replay-result
-                   {:world {:live-states {0 :released 1 :refunded}
-                            :total-held {"USDC" 0 "DAI" 0}
-                            :total-fees {"USDC" 25 "DAI" 40}
-                            :block-time 1400}
-                    :metrics {}})
-           p      (proj/trace-end-projection result)]
-       (is (= {"USDC" 0 "DAI" 0} (get-in p [:terminal-world :total-held-by-token])))
-       (is (= {"USDC" 25 "DAI" 40} (get-in p [:terminal-world :total-fees-by-token])))
-       (is (= 0 (get-in p [:metrics :attack-successes])))
-       (is (nil? (get-in p [:metrics :coalition-net-profit]))))))
-
- (deftest test-trace-end-projection-includes-yield-routing-topology
-   (testing "terminal-world includes snapshot module topology and yield profile->archetype routing"
-     (let [result (replay-result
-                    {:world {:live-states {0 :released}
-                             :total-held {"USDC" 0}
-                             :total-fees {"USDC" 10}
-                             :module-snapshots
-                             {0 {:resolution-module :module/decentralized-dispute-resolution
-                                 :release-strategy :module/release-default
-                                 :cancellation-strategy :module/cancellation-default
-                                 :yield-generation-module :yield.provider/liquid-lending
-                                 :yield-distribution-module :module/yield-distribution-default
-                                 :incentive-module :module/incentive-default
-                                 :escrow/modules {:resolution :module/decentralized-dispute-resolution
-                                                  :yield :aave-v3
-                                                  :release :module/release-default
-                                                  :cancel :module/cancellation-default}
-                                 :yield-module-id :module/aave-yield
-                                 :yield-profile :aave-v3
-                                 :yield-archetype :yield.provider/liquid-lending}}
-                             :yield/risk {:aave-v3 {:USDC {:failure-modes #{:partial-liquidity}}}}
-                             :block-time 1400}
-                    :metrics {}})
-           p      (proj/trace-end-projection result)]
-       (is (= :module/aave-yield
-              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-module-id])))
-       (is (= :aave-v3
-              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-profile])))
-       (is (= :yield.provider/liquid-lending
-              (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-archetype])))
-       (is (= :aave-v3
-              (get-in p [:yield-evidence :routing-by-workflow 0 :yield-profile])))
-       (is (contains? (get-in p [:yield-evidence :supported-failure-modes]) :partial-liquidity))
-       (is (= :module/decentralized-dispute-resolution
-              (get-in p [:terminal-world :module-topology-by-workflow 0 :resolution-module]))))))
-
- (deftest test-trace-end-projection-escalation-summary
-   (testing "escalation levels are derived from escalation actions and actors are distinct"
-     (let [trace [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-                   :world {:live-states {0 :pending}
-                           :total-held {"USDC" 5000}
-                           :total-fees {"USDC" 0}
-                           :block-time 1000}}
-                  {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-                   :world {:live-states {0 :disputed}
-                           :total-held {"USDC" 5000}
-                           :total-fees {"USDC" 0}
-                           :block-time 1060}}
-                  {:seq 2 :time 1120 :agent "buyer" :action "escalate_dispute"
-                   :extra {:level 1}
-                   :world {:live-states {0 :disputed}
-                           :total-held {"USDC" 5000}
-                           :total-fees {"USDC" 0}
-                           :block-time 1120}}
-                  {:seq 3 :time 1180 :agent "buyer" :action "escalate_dispute"
-                   :extra {:level 2}
-                   :world {:live-states {0 :released}
+(deftest test-trace-end-projection-terminal-world
+  (testing "terminal world produces terminal=true and stable terminal-state set"
+    (let [result (replay-result
+                  {:world {:live-states {0 :released 1 :refunded}
                            :total-held {"USDC" 0}
-                           :total-fees {"USDC" 0}
-                           :block-time 1180}}]
-           p (proj/trace-end-projection (replay-result {:trace trace :metrics {:disputes-triggered 1}}))]
-       (is (= #{1 2} (get-in p [:trace-summary :escalation-levels])))
-       (is (= #{"buyer"} (get-in p [:trace-summary :actors])))
-       (is (= 4 (get-in p [:trace-summary :events-count]))))))
+                           :total-fees {"USDC" 50}
+                           :escrow-amounts {0 1000 1 2000}
+                           :dispute-resolvers {0 "0xR" 1 "0xR"}
+                           :dispute-levels {0 0 1 1}
+                           :pending-count 0
+                           :resolver-stakes {"0xR" 1000}
+                           :block-time 1300}
+                   :metrics {:disputes-triggered 1
+                             :resolutions-executed 2}})
+          p      (proj/trace-end-projection result)]
+      (is (= true (get-in p [:terminal-world :terminal?])))
+      (is (= #{:released :refunded}
+             (get-in p [:terminal-world :all-terminal-states])))
+      (is (= {"USDC" 0} (get-in p [:terminal-world :total-held-by-token])))
+      (is (= 1300 (get-in p [:trace-summary :terminal-time]))))))
+
+(deftest test-trace-end-projection-open-dispute
+  (testing "open entity keeps terminal=false and preserves halt reason"
+    (let [result (replay-result
+                  {:world {:live-states {0 :disputed}
+                           :total-held {"USDC" 9950}
+                           :total-fees {"USDC" 50}
+                           :pending-count 0
+                           :block-time 1060}
+                   :halt-reason :open-entities-at-end
+                   :metrics {:disputes-triggered 1}})
+          p      (proj/trace-end-projection result)]
+      (is (= false (get-in p [:terminal-world :terminal?])))
+      (is (= :open-entities-at-end (get-in p [:trace-summary :halt-reason])))
+      (is (= 1 (get-in p [:trace-summary :dispute-count]))))))
+
+(deftest test-trace-end-projection-multi-token
+  (testing "multi-token accounting maps are preserved with defaults"
+    (let [result (replay-result
+                  {:world {:live-states {0 :released 1 :refunded}
+                           :total-held {"USDC" 0 "DAI" 0}
+                           :total-fees {"USDC" 25 "DAI" 40}
+                           :block-time 1400}
+                   :metrics {}})
+          p      (proj/trace-end-projection result)]
+      (is (= {"USDC" 0 "DAI" 0} (get-in p [:terminal-world :total-held-by-token])))
+      (is (= {"USDC" 25 "DAI" 40} (get-in p [:terminal-world :total-fees-by-token])))
+      (is (= 0 (get-in p [:metrics :attack-successes])))
+      (is (nil? (get-in p [:metrics :coalition-net-profit]))))))
+
+(deftest test-trace-end-projection-includes-yield-routing-topology
+  (testing "terminal-world includes snapshot module topology and yield profile->archetype routing"
+    (let [result (replay-result
+                  {:world {:live-states {0 :released}
+                           :total-held {"USDC" 0}
+                           :total-fees {"USDC" 10}
+                           :module-snapshots
+                           {0 {:resolution-module :module/decentralized-dispute-resolution
+                               :release-strategy :module/release-default
+                               :cancellation-strategy :module/cancellation-default
+                               :yield-generation-module :yield.provider/liquid-lending
+                               :yield-distribution-module :module/yield-distribution-default
+                               :incentive-module :module/incentive-default
+                               :escrow/modules {:resolution :module/decentralized-dispute-resolution
+                                                :yield :aave-v3
+                                                :release :module/release-default
+                                                :cancel :module/cancellation-default}
+                               :yield-module-id :module/aave-yield
+                               :yield-profile :aave-v3
+                               :yield-archetype :yield.provider/liquid-lending}}
+                           :yield/risk {:aave-v3 {:USDC {:failure-modes #{:partial-liquidity}}}}
+                           :block-time 1400}
+                   :metrics {}})
+          p      (proj/trace-end-projection result)]
+      (is (= :module/aave-yield
+             (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-module-id])))
+      (is (= :aave-v3
+             (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-profile])))
+      (is (= :yield.provider/liquid-lending
+             (get-in p [:terminal-world :yield-routing-by-workflow 0 :yield-archetype])))
+      (is (= :aave-v3
+             (get-in p [:yield-evidence :routing-by-workflow 0 :yield-profile])))
+      (is (contains? (get-in p [:yield-evidence :supported-failure-modes]) :partial-liquidity))
+      (is (= :module/decentralized-dispute-resolution
+             (get-in p [:terminal-world :module-topology-by-workflow 0 :resolution-module]))))))
+
+(deftest test-trace-end-projection-escalation-summary
+  (testing "escalation levels are derived from escalation actions and actors are distinct"
+    (let [trace [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+                  :world {:live-states {0 :pending}
+                          :total-held {"USDC" 5000}
+                          :total-fees {"USDC" 0}
+                          :block-time 1000}}
+                 {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+                  :world {:live-states {0 :disputed}
+                          :total-held {"USDC" 5000}
+                          :total-fees {"USDC" 0}
+                          :block-time 1060}}
+                 {:seq 2 :time 1120 :agent "buyer" :action "escalate_dispute"
+                  :extra {:level 1}
+                  :world {:live-states {0 :disputed}
+                          :total-held {"USDC" 5000}
+                          :total-fees {"USDC" 0}
+                          :block-time 1120}}
+                 {:seq 3 :time 1180 :agent "buyer" :action "escalate_dispute"
+                  :extra {:level 2}
+                  :world {:live-states {0 :released}
+                          :total-held {"USDC" 0}
+                          :total-fees {"USDC" 0}
+                          :block-time 1180}}]
+          p (proj/trace-end-projection (replay-result {:trace trace :metrics {:disputes-triggered 1}}))]
+      (is (= #{1 2} (get-in p [:trace-summary :escalation-levels])))
+      (is (= #{"buyer"} (get-in p [:trace-summary :actors])))
+      (is (= 4 (get-in p [:trace-summary :events-count]))))))
 
 (deftest test-trace-end-projection-money-movement-summary
   (testing "money movement summary captures token deltas and pending lifecycle"
@@ -288,7 +288,7 @@
                              :metrics {}}))]
       (is (number? (get-in p [:metrics :coalition-net-profit])))
       (is (= (get-in p [:metrics :coalition-net-profit])
-              (get-in p [:payoff-ledger-summary :coalition-net-profit]))))))
+             (get-in p [:payoff-ledger-summary :coalition-net-profit]))))))
 
 (deftest test-trace-end-projection-includes-financial-loss
   (testing "projection includes :financial-loss with loss status keys and prorata user-loss-realised"

@@ -6,7 +6,7 @@
    Boundary note:
    - This namespace is currently aligned with the active Sew accounting path.
    - Treat constants and payout formulas here as reference defaults, not
-     universal cross-protocol economics." )
+     universal cross-protocol economics.")
 
 ;; Fee denominator constant
 (def ^:private fee-denominator 10000)

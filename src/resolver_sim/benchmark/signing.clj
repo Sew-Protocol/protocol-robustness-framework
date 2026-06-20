@@ -65,10 +65,10 @@
     (cond
       (str/starts-with? content "ssh-ed25519")
       (load-ssh-public-key path)
-      
+
       (str/includes? content "BEGIN PUBLIC KEY")
       (keys/public-key path)
-      
+
       :else
       (keys/public-key path))))
 

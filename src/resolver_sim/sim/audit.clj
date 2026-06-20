@@ -143,8 +143,8 @@
          n-epochs          (count epoch-results)
          dom-threshold     (get opts :dominance-threshold 1.2)
          max-equity-share  (get opts :max-malice-equity-share 0.3)
-          tail-fraction     (get opts :tail-fraction 0.2)
-          min-detection     (get opts :min-detection-rate 0.0)
+         tail-fraction     (get opts :tail-fraction 0.2)
+         min-detection     (get opts :min-detection-rate 0.0)
 
          strata          (stratify resolver-histories)
          honest-ids      (get strata :honest [])
@@ -169,49 +169,49 @@
          survival-rate   (:malice-survival-rate aggregated-stats 0.0)
 
           ;; Epoch-level check: any epoch where dominance fell below threshold
-          dominance-violations
-          (for [[e r] (map-indexed vector epoch-results)
-                :when (< (:dominance-ratio r 0.0) dom-threshold)]
-            {:check :dominance-above-threshold?
-             :epoch (inc e)
-             :value (:dominance-ratio r)})
+         dominance-violations
+         (for [[e r] (map-indexed vector epoch-results)
+               :when (< (:dominance-ratio r 0.0) dom-threshold)]
+           {:check :dominance-above-threshold?
+            :epoch (inc e)
+            :value (:dominance-ratio r)})
 
-          detection-violations
-          (when (pos? min-detection)
-            (let [missing (filter (fn [[_ r]] (nil? (:detection-rate r))) epoch-results)]
-              (concat
-               (for [[e _] missing]
-                 {:check :detection-rate-no-data
-                  :epoch (inc e)
-                  :detail "detection-rate not present in epoch result (may be stochastic-only metric)"
-                  :threshold min-detection})
-               (for [[e r] (map-indexed vector epoch-results)
-                     :let [dr (:detection-rate r)]
-                     :when (and dr (< dr min-detection))]
-                 {:check :detection-rate-above-minimum
-                  :epoch (inc e)
-                  :value dr :threshold min-detection}))))
+         detection-violations
+         (when (pos? min-detection)
+           (let [missing (filter (fn [[_ r]] (nil? (:detection-rate r))) epoch-results)]
+             (concat
+              (for [[e _] missing]
+                {:check :detection-rate-no-data
+                 :epoch (inc e)
+                 :detail "detection-rate not present in epoch result (may be stochastic-only metric)"
+                 :threshold min-detection})
+              (for [[e r] (map-indexed vector epoch-results)
+                    :let [dr (:detection-rate r)]
+                    :when (and dr (< dr min-detection))]
+                {:check :detection-rate-above-minimum
+                 :epoch (inc e)
+                 :value dr :threshold min-detection}))))
 
          survival-threshold (get opts :malice-survival-threshold 0.5)
 
-          checks
-          {:honest-mean-positive?           (pos? (:honest-cumulative-profit aggregated-stats 0.0))
-           :malice-mean-nonpositive?         (<= (:malice-cumulative-profit aggregated-stats 0.0) 0.0)
-           :dominance-above-threshold?       (>= min-dominance dom-threshold)
-           :honest-p10-above-malice-p90?     (> honest-p10 malice-p90)
-           :malice-equity-share-below-limit? (< equity-share max-equity-share)
-           :malice-slope-not-improving?      (not (malice-slope-improving? epoch-results tail-fraction))
-           :malice-survival-rate-low?        (< survival-rate survival-threshold)
-           :detection-rate-above-minimum?    (if (pos? min-detection)
+         checks
+         {:honest-mean-positive?           (pos? (:honest-cumulative-profit aggregated-stats 0.0))
+          :malice-mean-nonpositive?         (<= (:malice-cumulative-profit aggregated-stats 0.0) 0.0)
+          :dominance-above-threshold?       (>= min-dominance dom-threshold)
+          :honest-p10-above-malice-p90?     (> honest-p10 malice-p90)
+          :malice-equity-share-below-limit? (< equity-share max-equity-share)
+          :malice-slope-not-improving?      (not (malice-slope-improving? epoch-results tail-fraction))
+          :malice-survival-rate-low?        (< survival-rate survival-threshold)
+          :detection-rate-above-minimum?    (if (pos? min-detection)
                                               (empty? detection-violations)
                                               true)}
 
-          all-violations
-          (concat dominance-violations
-                  detection-violations
-                  (for [[check passed?] checks
-                        :when (not passed?)]
-                    {:check check :value (get checks check)}))
+         all-violations
+         (concat dominance-violations
+                 detection-violations
+                 (for [[check passed?] checks
+                       :when (not passed?)]
+                   {:check check :value (get checks check)}))
 
          passed? (empty? all-violations)]
 
@@ -240,7 +240,6 @@
     (catch Exception e
       (log/warn! :git-sha-resolution-failed {:error (.getMessage e)})
       "unknown")))
-
 
 (defn- sha256-hex
   "Return SHA-256 hex digest of string s."
@@ -279,7 +278,7 @@
      :trials-per-epoch  (:n-trials-per-epoch result)
      :initial-resolvers (:initial-resolver-count result)
      :routing-mode      (-> result :epoch-results first :routing-mode)
-      :git-commit        (or git-commit (vcs-head-sha))
+     :git-commit        (or git-commit (vcs-head-sha))
      :sim-version       (or sim-version default-version)
      :completed-at      (str (java.time.Instant/now))}))
 
@@ -391,16 +390,16 @@
      :epoch-callback   — (fn [epoch-n summary]) invoked after each epoch
 
    Returns {:result run-result :audit audit-result :manifest manifest}."
-   [params params-file & {:keys [seed n-epochs n-trials audit-opts epoch-callback]}]
-   (let [seed'         (or seed (:rng-seed params 42))
-         n-epochs'     (or n-epochs (:n-epochs params 10))
-         n-trials'     (or n-trials (:n-trials-per-epoch params 500))
-         rng-inst      (@(requiring-resolve 'resolver-sim.stochastic.rng/make-rng) seed')
-         run-fn        @(requiring-resolve 'resolver-sim.sim.multi-epoch/run-multi-epoch)
-         result        (run-fn rng-inst n-epochs' n-trials' params (or epoch-callback (constantly nil)))
-         params-audit  (:audit-thresholds params {})
-         merged-opts   (merge params-audit (or audit-opts {}))
-         audit-res     (analyze-multi-epoch result merged-opts)
+  [params params-file & {:keys [seed n-epochs n-trials audit-opts epoch-callback]}]
+  (let [seed'         (or seed (:rng-seed params 42))
+        n-epochs'     (or n-epochs (:n-epochs params 10))
+        n-trials'     (or n-trials (:n-trials-per-epoch params 500))
+        rng-inst      (@(requiring-resolve 'resolver-sim.stochastic.rng/make-rng) seed')
+        run-fn        @(requiring-resolve 'resolver-sim.sim.multi-epoch/run-multi-epoch)
+        result        (run-fn rng-inst n-epochs' n-trials' params (or epoch-callback (constantly nil)))
+        params-audit  (:audit-thresholds params {})
+        merged-opts   (merge params-audit (or audit-opts {}))
+        audit-res     (analyze-multi-epoch result merged-opts)
         mfst      (make-manifest result params params-file seed')]
     {:result  result
      :audit   audit-res

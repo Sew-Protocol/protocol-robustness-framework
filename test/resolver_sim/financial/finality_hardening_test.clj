@@ -21,11 +21,10 @@
       (let [c (lc/create-escrow w "0xAlice" "0xUSDC" "0xBob" 1000 {} snap)
             w-final (-> c :world (lc/release 0 "0xAlice" (fn [_ _ _] {:allowed? true :reason-code 0})) :world)
             ff (fin/classify-financial-finality w-final wf-id)]
-        
+
         ;; Ensure terminal state
         (is (true? (:financially-final? ff)))
         (is (false? (:can-change? ff)))
 
         ;; Assert that all state-mutating actions are blocked (or simply not covered by open-gates)
-        (is (empty? (:open-gates ff)) "No open gates allowed in terminal state")
-        ))))
+        (is (empty? (:open-gates ff)) "No open gates allowed in terminal state")))))

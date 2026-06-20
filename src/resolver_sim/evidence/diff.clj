@@ -38,16 +38,16 @@
         removed (clojure.set/difference keys-before keys-after)
         common (clojure.set/intersection keys-before keys-after)]
     (concat
-      (for [k (sort added)]
-        {:path [k] :op :added :after (get after k)})
-      (for [k (sort removed)]
-        {:path [k] :op :removed :before (get before k)})
-      (for [k (sort common)
-            :let [bv (get before k) av (get after k)]
-            :when (not= bv av)]
-        {:path [k] :op :changed
-         :before bv :after av
-         :delta (- (safe-bytes av) (safe-bytes bv))}))))
+     (for [k (sort added)]
+       {:path [k] :op :added :after (get after k)})
+     (for [k (sort removed)]
+       {:path [k] :op :removed :before (get before k)})
+     (for [k (sort common)
+           :let [bv (get before k) av (get after k)]
+           :when (not= bv av)]
+       {:path [k] :op :changed
+        :before bv :after av
+        :delta (- (safe-bytes av) (safe-bytes bv))}))))
 
 (defn stable-diff-hash
   "Compute a stable hash of a diff's changes vector."
@@ -79,8 +79,8 @@
       :removed-paths (count (filter #(= :removed (:op %)) changes))
       :financial-changes (count (filter (fn [c]
                                           (#{:total-held :total-principal-deposited
-                                            :total-bonds-posted :resolver-stakes
-                                            :claimable :total-yield-generated}
+                                             :total-bonds-posted :resolver-stakes
+                                             :claimable :total-yield-generated}
                                            (first (:path c))))
                                         changes))}
      :diff/changes (vec changes)
@@ -102,18 +102,18 @@
   (let [worlds (keep :world trace)
         pairs (map vector (cons nil worlds) worlds)]
     (keep-indexed
-      (fn [idx [before after]]
-        (let [action (get-in (nth trace idx {:event {:action "init"}}) [:event :action])
-              event-action (if (keyword? action) (name action) (str action))
-              changes (if (and before after (not= before after))
-                        (structural-diff before after)
-                        [])
-              group-id (group-id-fn idx event-action)]
-          (when (seq changes)
-            (build-fully-classified-diff-artifact (nth trace idx {:event {:action action}})
-                                          before after
-                                          idx group-id changes))))
-      pairs)))
+     (fn [idx [before after]]
+       (let [action (get-in (nth trace idx {:event {:action "init"}}) [:event :action])
+             event-action (if (keyword? action) (name action) (str action))
+             changes (if (and before after (not= before after))
+                       (structural-diff before after)
+                       [])
+             group-id (group-id-fn idx event-action)]
+         (when (seq changes)
+           (build-fully-classified-diff-artifact (nth trace idx {:event {:action action}})
+                                                 before after
+                                                 idx group-id changes))))
+     pairs)))
 
 ;; ?? Diff Index ????????????????????????????????????????????????????????????????
 
@@ -155,8 +155,8 @@
       (spit idx-f (json/write-str index {:indent true})))
     ;; Register in chain
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :diff-evidence "diff-evidence"
-                                  "diff-evidence.v1" "DIAGNOSTIC"))
+     (chain/index-artifact-entry :diff-evidence "diff-evidence"
+                                 "diff-evidence.v1" "DIAGNOSTIC"))
     (println "Wrote" (count diffs) "diff-evidence artifacts to" diff-dir)
     {:diff-count (count diffs)
      :paths (mapv (fn [d] (str "diff-evidence/" (:evidence/id d) ".json")) diffs)}))
@@ -217,7 +217,6 @@
    {:path-prefix :temporal :domain :internal :label "Temporal context" :suppress-from-summary? true}])
 
 (declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
-
 
 (defn- classify-path
   "Classify a path vector (e.g. [:total-held :USDC]) into a domain, label, and
@@ -283,13 +282,13 @@
         suppressed-added (reduce + 0 (map :added (filter :suppressed? (vals domains))))
         suppressed-removed (reduce + 0 (map :removed (filter :suppressed? (vals domains))))]
     (assoc base
-      :diff/changes classified
-      :diff/domains domains
-      :diff/summary (assoc (:diff/summary base)
-                           :suppressed-paths suppressed-total
-                           :suppressed-changed suppressed-changed
-                           :suppressed-added suppressed-added
-                           :suppressed-removed suppressed-removed))))
+           :diff/changes classified
+           :diff/domains domains
+           :diff/summary (assoc (:diff/summary base)
+                                :suppressed-paths suppressed-total
+                                :suppressed-changed suppressed-changed
+                                :suppressed-added suppressed-added
+                                :suppressed-removed suppressed-removed))))
 
 ;; ?? Invariant Result Linking ?????????????????????????????????????????????????
 ;;
@@ -381,8 +380,6 @@
 ;;   :diagnostic-only     ? Internal/administrative, not analysis-relevant
 ;;   :unknown             ? Cannot classify, researcher should inspect
 
-
-
 (declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
 
 ;; ?? Structural Diff Algorithm ????????????????????????????????????????????????
@@ -391,7 +388,6 @@
   "Total bytes of a top-level value for size comparison."
   [v]
   (try (count (pr-str v)) (catch Exception _ 0)))
-
 
 ;; ── Path Classification ───────────────────────────────────────────────────────
 
@@ -481,13 +477,13 @@
         suppressed-added (reduce + 0 (map :added (filter :suppressed? (vals domains))))
         suppressed-removed (reduce + 0 (map :removed (filter :suppressed? (vals domains))))]
     (assoc base
-      :diff/changes classified
-      :diff/domains domains
-      :diff/summary (assoc (:diff/summary base)
-                           :suppressed-paths suppressed-total
-                           :suppressed-changed suppressed-changed
-                           :suppressed-added suppressed-added
-                           :suppressed-removed suppressed-removed))))
+           :diff/changes classified
+           :diff/domains domains
+           :diff/summary (assoc (:diff/summary base)
+                                :suppressed-paths suppressed-total
+                                :suppressed-changed suppressed-changed
+                                :suppressed-added suppressed-added
+                                :suppressed-removed suppressed-removed))))
 
 ;; ── Semantic Classification ──────────────────────────────────────────────────
 
@@ -566,10 +562,10 @@
                                            event-index group-id semantic-changes)
         domain-summary-with-class (build-enhanced-domain-summary (:diff/changes base))]
     (assoc base
-      :diff/changes semantic-changes
-      :diff/domains domain-summary-with-class
-      :diff/summary (assoc (:diff/summary base)
-                           :by-classification (:by-classification domain-summary-with-class)))))
+           :diff/changes semantic-changes
+           :diff/domains domain-summary-with-class
+           :diff/summary (assoc (:diff/summary base)
+                                :by-classification (:by-classification domain-summary-with-class)))))
 
 ;; ── Invariant Result Linking ─────────────────────────────────────────────────
 

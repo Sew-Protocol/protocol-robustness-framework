@@ -100,34 +100,34 @@
   (case (:status check)
     :failed
     (vs/bind (vs/record-check check)
-      (fn [_]
-        (vs/record-error
-         {:key         (or (:error-key check) (:check/id check) :unclassified-error)
-          :severity    (:severity check :warning)
-          :message     (:message check "")
-          :evidence-ref (:evidence-ref check)})))
+             (fn [_]
+               (vs/record-error
+                {:key         (or (:error-key check) (:check/id check) :unclassified-error)
+                 :severity    (:severity check :warning)
+                 :message     (:message check "")
+                 :evidence-ref (:evidence-ref check)})))
     :warning
     (vs/bind (vs/record-check check)
-      (fn [_]
-        (vs/record-warning
-         {:key         (or (:warning-key check) (:check/id check) :unclassified-warning)
-          :severity    (:severity check :warning)
-          :message     (:message check "")
-          :evidence-ref (:evidence-ref check)})))
+             (fn [_]
+               (vs/record-warning
+                {:key         (or (:warning-key check) (:check/id check) :unclassified-warning)
+                 :severity    (:severity check :warning)
+                 :message     (:message check "")
+                 :evidence-ref (:evidence-ref check)})))
     :passed
     (vs/bind (vs/record-check check)
-      (fn [_]
-        (vs/record-pass)))
+             (fn [_]
+               (vs/record-pass)))
     ;; unknown status — record the check with a structured warning
     (vs/bind (vs/record-check check)
-      (fn [_]
-        (vs/record-warning
-         {:key         unknown-status-warning-key
-          :severity    :warning
-          :message     (str "Unknown check status "
-                            (pr-str (:status check))
-                            " for check.id "
-                            (pr-str (:check/id check)))})))))
+             (fn [_]
+               (vs/record-warning
+                {:key         unknown-status-warning-key
+                 :severity    :warning
+                 :message     (str "Unknown check status "
+                                   (pr-str (:status check))
+                                   " for check.id "
+                                   (pr-str (:check/id check)))})))))
 
 (defn- checks->computation
   "Convert a vector of check maps into a single state computation."
@@ -163,10 +163,10 @@
   [metadata]
   (let [m (or metadata {})]
     (vs/bind (vs/set-suite-id :artifact-registry)
-      (fn [_]
-        (vs/bind (vs/set-suite-type :evidence)
-          (fn [_]
-            (vs/merge-extra m)))))))
+             (fn [_]
+               (vs/bind (vs/set-suite-type :evidence)
+                        (fn [_]
+                          (vs/merge-extra m)))))))
 
 ;; ── public API ───────────────────────────────────────────────────────────────
 
@@ -181,12 +181,12 @@
         warnings (:warnings registry-result [])
         metadata (:metadata registry-result {})]
     (vs/bind (checks->computation checks)
-      (fn [_]
-        (vs/bind (errors->computation errors)
-          (fn [_]
-            (vs/bind (warnings->computation warnings)
-              (fn [_]
-                (metadata->computation metadata)))))))))
+             (fn [_]
+               (vs/bind (errors->computation errors)
+                        (fn [_]
+                          (vs/bind (warnings->computation warnings)
+                                   (fn [_]
+                                     (metadata->computation metadata)))))))))
 
 (defn registry-result->validation-root
   "Translate a registry-result map into a finalized validation-root.v1 map.

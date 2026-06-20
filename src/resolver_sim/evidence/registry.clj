@@ -87,15 +87,15 @@
     (if-not (.isDirectory dir-file)
       {:entries [] :indexes {} :run/id nil :scenario/id nil :error (str "Not a directory: " ev-dir)}
       (let [ev-dir-file (if (.isDirectory (io/file base-dir "event-evidence"))
-                             (io/file base-dir "event-evidence")
-                             dir-file)
+                          (io/file base-dir "event-evidence")
+                          dir-file)
             diff-dir-file (when (.isDirectory (io/file base-dir "diff-evidence"))
                             (io/file base-dir "diff-evidence"))
             ev-files (filter #(.isFile %) (file-seq ev-dir-file))
             diff-files (when diff-dir-file
                          (filter #(.isFile %) (file-seq diff-dir-file)))
             all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
-                            (concat ev-files diff-files))
+                              (concat ev-files diff-files))
             artifacts (vec (sort-by :evidence/chain-seq
                                     (keep (fn [f]
                                             (try (io-evidence/read-evidence-json f)
@@ -114,31 +114,31 @@
                                   gid (:evidence/group-id a)
                                   aid (derive-evidence-id a)]
                               (merge
-                                {:evidence/id aid
-                                 :evidence/type (keyword (safe-str etype))
-                                 :evidence/layer (if-let [l (:evidence/layer a)] (if (keyword? l) l (keyword (name l))) :targeted-protocol)
-                                 :evidence/role (derive-evidence-role a)
-                                 :hash/content (or (:evidence/hash a) (:evidence-hash a))
-                                 :file/path (str "event-evidence/"
-                                                  (io-evidence/evidence-filename a))}
-                                (when (:evidence/chain-seq a)
-                                  {:evidence/chain-seq (:evidence/chain-seq a)})
-                                (when gid {:evidence/group-id gid})
-                                (when scenario-id {:scenario/id scenario-id})
-                                (when run-id {:run/id run-id})
-                                (when-let [eid (:event/seq a)] {:event/index eid})
-                                (when-let [ei (:event/index a)] {:event/index ei})
-                                (when-let [ei (:ctx/event-index ctx)] {:event/index ei})
-                                (when-let [et (:event/type a)] {:event/type (keyword (safe-str et))})
-                                (when-let [et (:ctx/event-type ctx)] {:event/type (keyword (safe-str et))})
-                                (when-let [st (:subject/type ctx)] {:subject/type (if (keyword? st) st (keyword (name st)))})
-                                (when-let [si (:subject/id ctx)] {:subject/id si})
-                                (when-let [at (:action/type ctx)] {:action/type at})
-                                (when-let [er (:evidence/reason ctx)] {:evidence/reason er})
-                                (when-let [wb (:world/before-full-hash a)]
-                                  {:hash/world-before wb})
-                                (when-let [wa (:world/after-full-hash a)]
-                                  {:hash/world-after wa}))))
+                               {:evidence/id aid
+                                :evidence/type (keyword (safe-str etype))
+                                :evidence/layer (if-let [l (:evidence/layer a)] (if (keyword? l) l (keyword (name l))) :targeted-protocol)
+                                :evidence/role (derive-evidence-role a)
+                                :hash/content (or (:evidence/hash a) (:evidence-hash a))
+                                :file/path (str "event-evidence/"
+                                                (io-evidence/evidence-filename a))}
+                               (when (:evidence/chain-seq a)
+                                 {:evidence/chain-seq (:evidence/chain-seq a)})
+                               (when gid {:evidence/group-id gid})
+                               (when scenario-id {:scenario/id scenario-id})
+                               (when run-id {:run/id run-id})
+                               (when-let [eid (:event/seq a)] {:event/index eid})
+                               (when-let [ei (:event/index a)] {:event/index ei})
+                               (when-let [ei (:ctx/event-index ctx)] {:event/index ei})
+                               (when-let [et (:event/type a)] {:event/type (keyword (safe-str et))})
+                               (when-let [et (:ctx/event-type ctx)] {:event/type (keyword (safe-str et))})
+                               (when-let [st (:subject/type ctx)] {:subject/type (if (keyword? st) st (keyword (name st)))})
+                               (when-let [si (:subject/id ctx)] {:subject/id si})
+                               (when-let [at (:action/type ctx)] {:action/type at})
+                               (when-let [er (:evidence/reason ctx)] {:evidence/reason er})
+                               (when-let [wb (:world/before-full-hash a)]
+                                 {:hash/world-before wb})
+                               (when-let [wa (:world/after-full-hash a)]
+                                 {:hash/world-after wa}))))
                           artifacts)
             ;; Build indexes
             indexed-entries (reduce (fn [m e] (assoc m (:evidence/id e) e)) {} entries)
@@ -192,8 +192,8 @@
     (spit f (json/write-str registry {:key-fn io-evidence/qualified-key :indent true}))
     (println "Wrote evidence registry:" (.getPath f) "-" (count (:entries registry)) "entries")
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :evidence-registry "evidence-registry.json"
-                                  "evidence-registry.v1" "CORE"))
+     (chain/index-artifact-entry :evidence-registry "evidence-registry.json"
+                                 "evidence-registry.v1" "CORE"))
     {:registry-path (.getPath f)
      :entry-count (count (:entries registry))
      :registry registry}))

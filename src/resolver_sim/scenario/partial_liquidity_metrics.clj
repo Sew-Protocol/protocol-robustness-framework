@@ -9,7 +9,7 @@
                  (ypm/compute-provider-metrics replay-result scenario))
         outcome (:outcome replay-result)]
     {:yield/shortfall-outcome (if (and (= :pass outcome)
-                                        (pos? (:yield/position-deferred m 0)))
+                                       (pos? (:yield/position-deferred m 0)))
                                 :may-be-partially-deferred
                                 (if (= :pass outcome) :fully-immediate :none))
      :yield/position-principal (:yield/position-principal m)

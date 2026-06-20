@@ -16,13 +16,12 @@
   {:yield/indices {:test-mod {"USDC" 1.0}}
    :yield/rates   {:test-mod {"USDC" 0.05}}
    :yield/risk    {:test-mod {"USDC" {:liquidity-mode :available
-                                     :loss-mode :none}}}
+                                      :loss-mode :none}}}
    :yield/held-balances {"USDC" 1000000}
    :yield/module-status {:test-mod :active}
    :block-time 1000})
 
 (def test-mod (ll/make-liquid-lending-module :test-mod))
-
 
 (deftest deposit-creates-ratio-position
   (testing "Deposit creates position with ratio-based entry-index"
@@ -35,7 +34,6 @@
       (is (nil? (:current-index pos)))
       (is (= :active (:status pos))))))
 
-
 (deftest accrue-positive
   (testing "Accrue produces positive unrealized yield"
     (let [world-a (ll/deposit test-world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
@@ -45,7 +43,6 @@
           "Should have positive unrealized yield")
       (is (number? (:current-index pos))
           "Index should be set"))))
-
 
 (deftest two-positions-accrue-separately
   (testing "Two positions in same module accrue independently"
@@ -59,7 +56,6 @@
       (is (> (:unrealized-yield p1 0) (:unrealized-yield p2 0))
           "Bigger deposit should earn more yield"))))
 
-
 (deftest withdraw-full-liquidity
   (testing "Full withdrawal with adequate liquidity"
     (let [w (ll/deposit test-world test-mod {:owner/id "user1" :amount 10000 :token "USDC"})
@@ -68,7 +64,6 @@
           pos (get-in w [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
       (is (zero? (:unrealized-yield pos 0)) "unrealized yield zeroed on withdraw"))))
-
 
 (deftest shortfall-calls-partial-fill
   (testing "Withdrawal with shortfall calls partial-fill"
@@ -80,7 +75,6 @@
           pos (get-in w [:yield/positions "user1"])]
       (is (:partial-fill-affected? pos)))))
 
-
 (deftest apply-partial-fill-with-attribution-sets-ctx
   (testing "apply-partial-fill-with-attribution sets settlement context"
     (let [pos (pos/normalize-position
@@ -90,7 +84,6 @@
           decision (partial-fill/calculate-fulfillment 8000 pos)
           _ (partial-fill/apply-partial-fill-with-attribution {} pos decision)]
       (is (nil? (:settlement/mode attr/*attribution*))))))
-
 
 (deftest lifecycle-integration
   (testing "End-to-end: register module -> deposit -> accrue -> withdraw via lifecycle-compatible path"

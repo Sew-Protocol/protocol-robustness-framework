@@ -40,7 +40,7 @@
                     :fontWeight "800"
                     :color color
                     :boxShadow (str "0 0 15px " color "44")}}
-      (str/upper-case (name id)) ])))
+      (str/upper-case (name id))])))
 
 ;; ---
 ;; P2: Escrow Flow Line (V-FLO)
@@ -90,9 +90,9 @@
   "Renders the 'Intercept Shield' wall."
   [label]
   [:div {:style {:display "flex" :alignItems "center" :gap "15px"}}
-   [:div {:style {:width "12px" :height "120px" 
+   [:div {:style {:width "12px" :height "120px"
                   :background (get-color :sys/primary)
-                  :boxShadow (str "0 0 30px " (get-color :sys/primary) "99")}} ]
+                  :boxShadow (str "0 0 30px " (get-color :sys/primary) "99")}}]
    [:div {:style {:fontFamily (get-typo :font/mono) :fontSize "10px" :color (get-color :sys/primary)}}
     (str "× " (str/upper-case label)) [:br] "× SHATTERED"]])
 
@@ -129,13 +129,13 @@
                   :fontFamily (get-typo :font/mono) :fontSize "10px" :fontWeight "800"
                   :color (get-color :sys/primary) :letterSpacing "0.1em"}}
     header]
-   
+
    ;; Content
    [:div {:style {:flex 1 :padding "32px" :display "flex" :flexDirection "column" :justifyContent "center"
                   :backgroundImage (str "radial-gradient(" (get-color :sys/structural) " 1px, transparent 1px)")
                   :backgroundSize "20px 20px"}}
     content]
-   
+
    ;; Footer Strip
    [:div {:style {:height "40px" :borderTop (get tokens/grid :border)
                   :display "flex" :alignItems "center" :justifyContent "space-between"

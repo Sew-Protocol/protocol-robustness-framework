@@ -11,11 +11,11 @@
       ;; Max yield is an 'always' check
       (> total-yield max-y)
       {:holds? false :error :yield-outside-tolerance :actual total-yield :expected max-y :direction :above}
-      
+
       ;; Min yield is a 'finally' check
       (and terminal? (< total-yield min-y))
       {:holds? false :error :yield-outside-tolerance :actual total-yield :expected min-y :direction :below}
-      
+
       :else {:holds? true})))
 
 (defn- check-partial-liquidity-expectation [world exp terminal?]
@@ -31,11 +31,11 @@
       ;; Max shortfall is an 'always' check
       (> actual-shortfall max-sf)
       {:holds? false :error :shortfall-outside-tolerance :actual actual-shortfall :expected max-sf :direction :above}
-      
+
       ;; Min shortfall is a 'finally' check
       (and terminal? (< actual-shortfall min-sf))
       {:holds? false :error :shortfall-outside-tolerance :actual actual-shortfall :expected min-sf :direction :below}
-      
+
       :else {:holds? true})))
 
 (defn- all-terminal?
@@ -63,10 +63,10 @@
     (cond
       (> actual-loss max-loss)
       {:holds? false :error :loss-outside-tolerance :actual actual-loss :expected max-loss :direction :above}
-      
+
       (and terminal? (< actual-loss min-loss))
       {:holds? false :error :loss-outside-tolerance :actual actual-loss :expected min-loss :direction :below}
-      
+
       :else {:holds? true})))
 
 (defn check-expectations

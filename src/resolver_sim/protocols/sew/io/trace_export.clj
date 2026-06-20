@@ -10,7 +10,7 @@
   (:require [clojure.data.json                 :as json]
             [clojure.java.io                   :as io]
             [clojure.string                    :as str]
-             [resolver-sim.logging              :as log]
+            [resolver-sim.logging              :as log]
             [resolver-sim.protocols.sew          :as sew]
             [resolver-sim.protocols.sew.compat :as compat]
             [resolver-sim.protocols.sew.projection :as sew-proj]
@@ -289,7 +289,7 @@
                        (when wf-id (str "wf" wf-id)))
 
         expected-raw (projection->expected proj (or wf-id 0) token-sym)
-        
+
         ;; Patch for resolution window logic
         expected-state
         (if (and expected-raw (= action "execute_resolution"))
@@ -313,29 +313,29 @@
         replay-event  (or raw-evt {:params {}})
         idem-kw       (get-in entry [:extra :idempotency])
         attributes    (cond-> {:action action :seq seq-n}
-                      wf-alias (assoc :wf_alias wf-alias)
-                      params   (merge params)
-                      (:temporal-rule-id entry)
-                      (assoc :temporal_rule_id
-                             (kw-val->str-flat (:temporal-rule-id entry)))
-                      idem-kw (assoc :idempotency (name idem-kw))
-                      (compat/event-id replay-event)
-                      (assoc :event_id (compat/event-id replay-event))
-                      (compat/hop-id replay-event)
-                      (assoc :hop_id (compat/hop-id replay-event))
-                      metadata (merge (into {} (map (fn [[k v]] [(kw-val->str-flat k) (kw-val->str-flat v)]) metadata))))]
+                        wf-alias (assoc :wf_alias wf-alias)
+                        params   (merge params)
+                        (:temporal-rule-id entry)
+                        (assoc :temporal_rule_id
+                               (kw-val->str-flat (:temporal-rule-id entry)))
+                        idem-kw (assoc :idempotency (name idem-kw))
+                        (compat/event-id replay-event)
+                        (assoc :event_id (compat/event-id replay-event))
+                        (compat/hop-id replay-event)
+                        (assoc :hop_id (compat/hop-id replay-event))
+                        metadata (merge (into {} (map (fn [[k v]] [(kw-val->str-flat k) (kw-val->str-flat v)]) metadata))))]
     (cond-> {:seq           seq-n
              :cdrs_version  "0.2"
              :event_type    (str/upper-case (str/replace forge-action #"_" " "))
              :step_type     (cond
-                         (not= result :ok)
-                         "protocol-transition"
-                         (= :transition/economic (:transition/type metadata))
-                         "economic-effect"
-                         (#{:transition/timeout :transition/maintenance} (:transition/type metadata))
-                         "environmental-change"
-                         :else
-                         "protocol-transition")
+                              (not= result :ok)
+                              "protocol-transition"
+                              (= :transition/economic (:transition/type metadata))
+                              "economic-effect"
+                              (#{:transition/timeout :transition/maintenance} (:transition/type metadata))
+                              "environmental-change"
+                              :else
+                              "protocol-transition")
              :context_id    (or wf-alias "global")
              :actor         caller-role
              :timestamp     (:time entry 0)
@@ -365,8 +365,8 @@
                                 created-entries)))
 
         steps (loop [entries   trace
-                      prev-proj nil
-                      acc       []]
+                     prev-proj nil
+                     acc       []]
                 (if (empty? entries)
                   acc
                   (let [entry (first entries)

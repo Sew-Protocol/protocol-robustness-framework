@@ -81,7 +81,7 @@
                         (expectations/evaluate-expectations result' (:expectations scenario)))
 
          ;; BRIDGE: Apply theory evaluation
-         result''     (theory-result/attach-three-way-model result' 
+         result''     (theory-result/attach-three-way-model result'
                                                             (:theory-eval-opts scenario {})
                                                             :theory (:theory scenario))
 
@@ -97,8 +97,8 @@
          theory-ok?   (or (nil? (:falsified? result-ev)) (not (:falsified? result-ev)))
          checks-ok?   (and outcomes-ok? expect-ok? theory-ok?)]
      (cond-> (assoc result-ev
-               :expected-outcomes outcomes
-               :expectations expect)
+                    :expected-outcomes outcomes
+                    :expectations expect)
        (and (= (:outcome result-ev) :pass) (not checks-ok?))
        (assoc :outcome :fail
               :halt-reason (cond (not outcomes-ok?) :expected-outcome-mismatch

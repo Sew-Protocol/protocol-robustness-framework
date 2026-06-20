@@ -10,7 +10,7 @@
 
 (def coverage-categories
   "Coverage category definitions with full scenario file paths."
-  {   :basic-lifecycle    {:label "Basic lifecycle"
+  {:basic-lifecycle    {:label "Basic lifecycle"
                         :scenarios ["S-DR-001-basic-release-ruling"
                                     "S-DR-002-basic-refund-ruling"
                                     "S-DR-003-duplicate-dispute-rejected"
@@ -123,20 +123,20 @@
      :defined-scenarios (count all-defined)
      :todo-stubs (count todo-stubs)
      :by-coverage by-coverage
-      :missing (vec (for [m missing]
+     :missing (vec (for [m missing]
                      (let [cat (first (filter (fn [[_ v]] ((set (:scenarios v)) m)) coverage-categories))]
                        {:scenario-id m
                         :coverage (first cat)
                         :reason "scenario file not found on disk"})))
-      :gaps coverage-gaps
-      :researcher-readiness
-      {:trace-summary? (artifact-ready? "trace-summary.json")
-       :evidence-summary? (artifact-ready? "evidence-summary.json")
-       :evidence-world-hashes? (artifact-ready? "evidence-summary.json")
-       :financial-outcome? (artifact-ready? "financial-outcome.json")
-       :linked-evidence-group? (artifact-ready? "evidence-summary.json")
-       :invariant-results? (artifact-ready? "invariant-results.json")
-       :dispute-summary? (artifact-ready? "dispute-summary.json")}}))
+     :gaps coverage-gaps
+     :researcher-readiness
+     {:trace-summary? (artifact-ready? "trace-summary.json")
+      :evidence-summary? (artifact-ready? "evidence-summary.json")
+      :evidence-world-hashes? (artifact-ready? "evidence-summary.json")
+      :financial-outcome? (artifact-ready? "financial-outcome.json")
+      :linked-evidence-group? (artifact-ready? "evidence-summary.json")
+      :invariant-results? (artifact-ready? "invariant-results.json")
+      :dispute-summary? (artifact-ready? "dispute-summary.json")}}))
 
 (defn -main
   "CLI entrypoint: print dispute resolution coverage report as JSON.

@@ -35,12 +35,12 @@
     (show-notebook! "notebooks/challenge_drilldown.clj")
     (show-notebook! "notebooks/protocol_provenance.clj")
     ;; Index is shown last — it becomes the default landing page.
-     (show-notebook! "notebooks/security_validation.clj")
+    (show-notebook! "notebooks/security_validation.clj")
 
-     (show-notebook! "notebooks/yield_shortfall_analysis.clj")
-     (show-notebook! "src/resolver_sim/notebooks/yield_provider_demo.clj")
-     (show-notebook! "src/resolver_sim/notebooks/subgame_counterfactual_workbench.clj")
+    (show-notebook! "notebooks/yield_shortfall_analysis.clj")
+    (show-notebook! "src/resolver_sim/notebooks/yield_provider_demo.clj")
+    (show-notebook! "src/resolver_sim/notebooks/subgame_counterfactual_workbench.clj")
 
      ;; Index is shown last — it becomes the default landing page.
-     (show-notebook! "notebooks/index.clj")))
+    (show-notebook! "notebooks/index.clj")))
 

@@ -27,15 +27,15 @@
                           :action/type :stake/withdraw-rejected
                           :evidence/reason error-kw}
     (cap/capture-event-evidence!
-      :stake-withdraw-rejected
-      {:stake/before (get-stake world resolver-addr)}
-      {:stake/after (get-stake world resolver-addr)}
-      {:stake/resolver resolver-addr
-       :stake/amount amount
-       :stake/error error-kw}
-      nil
-      {:world-before world
-       :world-after world})))
+     :stake-withdraw-rejected
+     {:stake/before (get-stake world resolver-addr)}
+     {:stake/after (get-stake world resolver-addr)}
+     {:stake/resolver resolver-addr
+      :stake/amount amount
+      :stake/error error-kw}
+     nil
+     {:world-before world
+      :world-after world})))
 
 ;; ---------------------------------------------------------------------------
 ;; Stake management
@@ -56,16 +56,16 @@
                              :subject/id resolver-addr
                              :action/type :stake/register
                              :evidence/reason :stake-registered}
-        (cap/capture-event-evidence!
-          :stake-registered
-          {:stake/before (get-stake world resolver-addr)}
-          {:stake/after  (get-stake world' resolver-addr)}
-          {:stake/resolver resolver-addr
-           :stake/amount amount
-           :stake/yield-profile-id yield-profile-id}
-          nil
-          {:world-before world
-           :world-after world'}))
+       (cap/capture-event-evidence!
+        :stake-registered
+        {:stake/before (get-stake world resolver-addr)}
+        {:stake/after  (get-stake world' resolver-addr)}
+        {:stake/resolver resolver-addr
+         :stake/amount amount
+         :stake/yield-profile-id yield-profile-id}
+        nil
+        {:world-before world
+         :world-after world'}))
      world')))
 
 (defn get-resolver-yield-profile
@@ -104,14 +104,14 @@
                                 :action/type :stake/withdraw
                                 :evidence/reason :stake-withdrawn}
           (cap/capture-event-evidence!
-            :stake-withdrawn
-            {:stake/before current}
-            {:stake/after  (get-stake world' resolver-addr)}
-            {:stake/resolver resolver-addr
-             :stake/amount amount}
-            nil
-            {:world-before world
-             :world-after world'}))
+           :stake-withdrawn
+           {:stake/before current}
+           {:stake/after  (get-stake world' resolver-addr)}
+           {:stake/resolver resolver-addr
+            :stake/amount amount}
+           nil
+           {:world-before world
+            :world-after world'}))
         (t/ok world')))))
 
 (defn can-handle-escrow?
@@ -159,32 +159,32 @@
   ([world resolver-addr amount challenger bounty-bps]
    (slash-resolver-stake world resolver-addr amount challenger bounty-bps nil))
   ([world resolver-addr amount challenger bounty-bps workflow-id]
-    (let [current (get-stake world resolver-addr)
-          actual  (math/to-canonical (min (double current) (double amount)))
-          token   (if workflow-id
-                    (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
-                    :USDC)
-          held-available (get-in world [:total-held token] 0)
+   (let [current (get-stake world resolver-addr)
+         actual  (math/to-canonical (min (double current) (double amount)))
+         token   (if workflow-id
+                   (keyword (or (:token (t/get-transfer world workflow-id)) "USDC"))
+                   :USDC)
+         held-available (get-in world [:total-held token] 0)
           ;; Reduce held only when slash amount is backed by on-hand custody (avoids underflow
           ;; after settlement has already drained :total-held for this token).
-          sub-held?      (and (pos? actual)
-                              (>= held-available actual))
-          world'  (-> world
-                      (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
-                      (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
-                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
-                      (cond-> sub-held? (acct/sub-held token actual)))]
+         sub-held?      (and (pos? actual)
+                             (>= held-available actual))
+         world'  (-> world
+                     (update-in [:resolver-stakes resolver-addr] (fnil - 0) actual)
+                     (acct/distribute-slashed-funds actual challenger bounty-bps workflow-id)
+                     (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
+                     (cond-> sub-held? (acct/sub-held token actual)))]
       ;; Phase 6: Capture Slashing Evidence
-      (attr/with-attribution
-        {:subject/type :resolver
-         :subject/id   resolver-addr
-         :action/type  :slash
-         :evidence/reason :slashing}
-        (cap/capture-event-evidence! :slashing
-                                         {:resolver-stake current}
-                                         {:resolver-stake (get-stake world' resolver-addr)}
-                                         {:requested-amount amount :actual-amount actual}
-                                         nil
-                                         {:world-before world
-                                          :world-after world'}))
-      (assoc (t/ok world') :slashed-from-stake actual))))
+     (attr/with-attribution
+       {:subject/type :resolver
+        :subject/id   resolver-addr
+        :action/type  :slash
+        :evidence/reason :slashing}
+       (cap/capture-event-evidence! :slashing
+                                    {:resolver-stake current}
+                                    {:resolver-stake (get-stake world' resolver-addr)}
+                                    {:requested-amount amount :actual-amount actual}
+                                    nil
+                                    {:world-before world
+                                     :world-after world'}))
+     (assoc (t/ok world') :slashed-from-stake actual))))

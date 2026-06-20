@@ -80,11 +80,11 @@
     []
     (mapv row->sew-trial-outcome
           (jdbc/execute! ds
-            [(str "SELECT * FROM sim_trial_results "
-                  "FOR VALID_TIME AS OF TIMESTAMP '"
-                  (inst->iso valid-at)
-                  "' WHERE protocol_id = 'sew-v1'")]
-            xtdb/opts))))
+                         [(str "SELECT * FROM sim_trial_results "
+                               "FOR VALID_TIME AS OF TIMESTAMP '"
+                               (inst->iso valid-at)
+                               "' WHERE protocol_id = 'sew-v1'")]
+                         xtdb/opts))))
 
 (defn sew-escrow-events-for-trial
   "Return entity events for a trial in Sew-shaped maps (remaps generic

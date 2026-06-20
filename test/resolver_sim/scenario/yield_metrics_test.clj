@@ -4,12 +4,12 @@
 
 (deftest compute-yield-metrics-reads-yield-positions
   (let [world {:yield/positions {[:sew/escrow 0] {:token :USDC
-                                                   :principal 1000
-                                                   :unrealized-yield 50
-                                                   :realized-yield 10
-                                                   :status :active}}
+                                                  :principal 1000
+                                                  :unrealized-yield 50
+                                                  :realized-yield 10
+                                                  :status :active}}
                :escrow-transfers {0 {:amount-after-fee 1000
-                                    :escrow-state :pending}}}
+                                     :escrow-state :pending}}}
         m (ym/compute-yield-metrics {:trace [{:world world}]} :workflow-id 0)]
     (is (= 1000 (:yield/escrow-principal m)))
     (is (= 50 (:yield/escrow-unrealized m)))

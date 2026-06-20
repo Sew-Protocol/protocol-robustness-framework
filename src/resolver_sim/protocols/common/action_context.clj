@@ -10,8 +10,7 @@
    - Success path delegates to caller callback; callback return is propagated as-is.
 
    In practice, protocol modules own domain error semantics while these helpers
-   only orchestrate control-flow ordering."
-  )
+   only orchestrate control-flow ordering.")
 
 (defn with-resolved-actor
   "Resolve actor via (resolve-fn agent-index agent-id) and call (f actor-address).

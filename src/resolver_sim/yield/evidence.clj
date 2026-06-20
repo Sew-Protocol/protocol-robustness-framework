@@ -31,7 +31,6 @@
                       [oid (extract-position-evidence oid pos ms)]))
                   positions))))
 
-
 (defn emit-shortfall-event
   "Record a shortfall lifecycle event in world state.
    Returns updated world with event appended to :yield/events."

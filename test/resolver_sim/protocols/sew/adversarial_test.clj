@@ -43,9 +43,9 @@
   ([] (base-snap {}))
   ([overrides]
    (snap-fix/escrow-snapshot (merge {:max-dispute-duration   2592000
-                                   :appeal-window-duration 0
-                                   :escrow-fee-bps         50}
-                                  overrides))))
+                                     :appeal-window-duration 0
+                                     :escrow-fee-bps         50}
+                                    overrides))))
 
 (defn- windowed-snap
   "Snapshot with a non-zero appeal window."

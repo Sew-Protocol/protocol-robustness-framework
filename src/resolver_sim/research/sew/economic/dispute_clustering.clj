@@ -59,17 +59,17 @@
   (let [[cat success-rate difficulty] weakest-category
         ; In hard category, even honest accuracy drops
         honest-accuracy (- 1.0 (* 0.1 difficulty))
-        
+
         ; Attack succeeds if:
         ; 1. Corrupt resolver votes wrong (bribed)
         ; 2. Senior reviewer doesn't catch it (depends on evidence)
         ; Weak categories have poor evidence, so harder to catch
         catch-probability (+ 0.4 (* 0.3 (- 1.0 difficulty))) ; 0.4-0.7 catch rate
-        
+
         attack-success-per-dispute (- 1.0 catch-probability) ; 0.3-0.6 success
         bond-cost 1.0
         reward 0.8 ; Profit if gets past both rounds
-        ev (- (* attack-success-per-dispute reward) 
+        ev (- (* attack-success-per-dispute reward)
               (* (- 1.0 attack-success-per-dispute) bond-cost))]
     {:category cat
      :honest-accuracy (format "%.1f%%" (* 100.0 honest-accuracy))
@@ -99,15 +99,15 @@
                         7 0.70
                         8 0.75
                         9 0.80)]))
-        
+
         ; Probe phase: attacker tries each category
         probes (detect-weak-categories 30 15 difficulty-distribution rng)
         weakest (first probes)
-        
+
         ; Attack phase: concentrate on weakest
-        attack-result (run-focused-attacks weakest 15 difficulty-distribution 
-                                          50 rng)]
-    
+        attack-result (run-focused-attacks weakest 15 difficulty-distribution
+                                           50 rng)]
+
     {:scenario scenario-name
      :weakest-category (:category attack-result)
      :honest-acc (:honest-accuracy attack-result)
@@ -124,21 +124,21 @@
   (println "Phase W: Dispute Type Clustering (Adversarial Category Targeting)")
   (println "======================================================================")
   (println)
-  
+
   (let [tests [[0.2 0.1 "baseline-low-spread"]
                [0.5 0.2 "spread-medium"]
                [0.8 0.3 "spread-high"]
                [1.0 0.4 "spread-extreme"]]
-        
+
         results (for [seed (range 42 47)
-                     [spread learning name-str] tests]
+                      [spread learning name-str] tests]
                   (let [r (test-clustering (str name-str "-s" seed) seed spread learning)]
-                    (println (format "%-35s [%s] EV=%s" 
-                                   (:scenario r) 
-                                   (if (:profitable? r) "VULN" "safe")
-                                   (:expected-value r)))
+                    (println (format "%-35s [%s] EV=%s"
+                                     (:scenario r)
+                                     (if (:profitable? r) "VULN" "safe")
+                                     (:expected-value r)))
                     r))]
-    
+
     (let [vuln    (count (filter #(:profitable? %) results))
           passed? (<= vuln 5)]
       (println "\n" (apply str (repeat 70 "=")))

@@ -127,10 +127,10 @@
     (is (not (str/includes? out "✓ PASS")))))
 
 (deftest golden-match-omitted-in-compact-failure-formatter
-  (is (not (some #(str/includes? % "golden:") 
-                  (report/format-check-failures
-                   {:pass? true
-                    :checks {:golden {:ok? true :summary "match" :mismatches []}}})))))
+  (is (not (some #(str/includes? % "golden:")
+                 (report/format-check-failures
+                  {:pass? true
+                   :checks {:golden {:ok? true :summary "match" :mismatches []}}})))))
 
 (deftest golden-match-shown-in-verbose-on-passing-row
   (let [out (with-out-str

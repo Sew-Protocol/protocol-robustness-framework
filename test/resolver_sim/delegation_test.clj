@@ -26,7 +26,7 @@
 (deftest test-waterfall-slashing-solo
   (testing "Slash solo resolver"
     (let [registry (delegation/create-resolver-registry
-                     {"solo-1" {:bond 5000 :tier :solo}})
+                    {"solo-1" {:bond 5000 :tier :solo}})
           registry-after (delegation/waterfall-slash registry "solo-1" 1000)]
       (is (= 4000 (get-in registry-after ["solo-1" :bond])))
       (is (= 1000 (get-in registry-after ["solo-1" :slashed-amount]))))))
@@ -34,8 +34,8 @@
 (deftest test-waterfall-slashing-junior
   (testing "Slash junior (depletes own bond first)"
     (let [registry (delegation/create-resolver-registry
-                     {"senior-1" {:bond 10000 :tier :senior}
-                      "junior-1" {:bond 1000 :delegated-to "senior-1" :tier :junior}})
+                    {"senior-1" {:bond 10000 :tier :senior}
+                     "junior-1" {:bond 1000 :delegated-to "senior-1" :tier :junior}})
           registry-after (delegation/waterfall-slash registry "junior-1" 500)]
       (is (= 500 (get-in registry-after ["junior-1" :bond])))
       (is (= 500 (get-in registry-after ["junior-1" :slashed-amount]))))))
@@ -43,8 +43,8 @@
 (deftest test-waterfall-slashing-junior-exceeds-bond
   (testing "Slash junior beyond bond (reduces senior's reserved coverage)"
     (let [registry (delegation/create-resolver-registry
-                     {"senior-1" {:bond 10000 :tier :senior}
-                      "junior-1" {:bond 1000 :delegated-to "senior-1" :tier :junior}})
+                    {"senior-1" {:bond 10000 :tier :senior}
+                     "junior-1" {:bond 1000 :delegated-to "senior-1" :tier :junior}})
           ;; Pre-reserve coverage on the senior (not junior)
           registry-with-coverage (assoc-in registry ["senior-1" :reserved-coverage] 2000)
           ;; Slash 2000: 1000 from junior bond, 1000 from senior's reserved coverage

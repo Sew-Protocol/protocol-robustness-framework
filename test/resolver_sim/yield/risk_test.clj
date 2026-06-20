@@ -59,7 +59,7 @@
 (deftest apply-liquidity-stress-basis-amount
   (let [{:keys [shortfall]} (acct/apply-liquidity-stress
                              {:yield/risk {:mod {:USDC {:liquidity-mode :shortfall
-                                                         :shortfall {:available-ratio 0.8}}}}}
+                                                        :shortfall {:available-ratio 0.8}}}}}
                              :mod :USDC 10000)]
     (is (= 10000 (:basis-amount shortfall)))
     (is (= 8000 (:fulfilled-amount shortfall)))

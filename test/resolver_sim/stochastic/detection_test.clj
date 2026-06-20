@@ -9,16 +9,16 @@
 
 (deftest reversal-pending-live?-zero-threshold-disabled
   (is (false? (detection/reversal-pending-live?
-                {:rng (rng/make-rng 42)
-                 :new-evidence-probability 0.0}
-                {:reversal-slashed? true}))
+               {:rng (rng/make-rng 42)
+                :new-evidence-probability 0.0}
+               {:reversal-slashed? true}))
       "reversal-pending-live? should return false when threshold is 0.0"))
 
 (deftest reversal-pending-live?-not-slashed-disabled
   (is (false? (detection/reversal-pending-live?
-                {:rng (rng/make-rng 42)
-                 :new-evidence-probability 0.05}
-                {:reversal-slashed? false}))
+               {:rng (rng/make-rng 42)
+                :new-evidence-probability 0.05}
+               {:reversal-slashed? false}))
       "reversal-pending-live? should return false when not reversal-slashed"))
 
 (deftest reversal-pending-live?-positive-threshold-active
@@ -68,7 +68,7 @@
 (deftest fixed-or-per-kind-map-pipeline
   (testing ":fixed-or with per-kind map propagates through to reversal-pending-live?"
     (let [params  {:fixed-or {:rolls {:pending-evidence [0.9 0.9 0.9 0.9 0.9 0.1]}
-                               :scope #{:detection}}
+                              :scope #{:detection}}
                    :new-evidence-probability 0.5}
           ;; The first 5 rolls (0.9) are NOT < 0.5 → no detect.
           ;; The 6th roll (0.1) IS < 0.5 → detect.
@@ -81,11 +81,10 @@
       ;; The fixture has 5 zeros then a 1.0 — with threshold 1.0 and
       ;; reversal-slashed? true, the 6th roll (1.0) should detect.
       (let [_ (dotimes [_ 5]
-                 (detection/oracle-roll-event prepared :pending-evidence))
+                (detection/oracle-roll-event prepared :pending-evidence))
             result (detection/reversal-pending-live?
                     prepared {:reversal-slashed? true})]
         (is result "reversal-pending-live? should detect on 6th roll (0.1 < 0.5 threshold)")))))
-
 
 (deftest fixed-or-simple-vector-fallback
   (testing ":fixed-or simple vector feeds shared roll sequence across kinds"

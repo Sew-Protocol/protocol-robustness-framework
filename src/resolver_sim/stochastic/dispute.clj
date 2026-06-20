@@ -53,17 +53,17 @@
   [rng escrow-wei fee-bps bond-bps slash-mult strategy
    appeal-prob-correct appeal-prob-wrong detection-prob
    & {:keys [senior-resolver-skill resolver-bond-bps resolver-stake-wei l2-detection-prob
-              slashing-detection-delay-weeks allow-slashing?
-              unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
-              detection-type timeout-detection-probability reversal-detection-probability
-               fraud-detection-probability fraud-slash-bps l2-slash-bps reversal-slash-bps timeout-slash-bps
-               _new-evidence-probability  ; forwarded to prepare-oracle-params via all-kw-args below
-               fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
-               p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
-               lazy-correct-prob malicious-correct-prob collusive-correct-prob
-              model-appeal-costs? appeal-bond-recovery-rate
-              oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
-               fixed-or oracle-roll-trace-enabled? evidence-quality?]
+             slashing-detection-delay-weeks allow-slashing?
+             unstaking-delay-days freeze-on-detection? freeze-duration-days appeal-window-days
+             detection-type timeout-detection-probability reversal-detection-probability
+             fraud-detection-probability fraud-slash-bps l2-slash-bps reversal-slash-bps timeout-slash-bps
+             _new-evidence-probability  ; forwarded to prepare-oracle-params via all-kw-args below
+             fraud-success-rate fraud-model escalation-assumptions escalation-assumption-band
+             p-appeal-wrong p-l1-reversal has-kleros? p-l2-escalation p-l2-reversal
+             lazy-correct-prob malicious-correct-prob collusive-correct-prob
+             model-appeal-costs? appeal-bond-recovery-rate
+             oracle-fixture oracle-mode oracle-roll-sequence oracle-roll-on-exhaustion
+             fixed-or oracle-roll-trace-enabled? evidence-quality?]
       :or {senior-resolver-skill 0.95
            resolver-bond-bps 1000
            l2-detection-prob 0
@@ -75,13 +75,13 @@
            appeal-window-days 7
            detection-type :fraud
            timeout-detection-probability 0.0
-            reversal-detection-probability 1.0
+           reversal-detection-probability 1.0
             ; fraud-detection-probability intentionally absent (nil) — normalize-detection-probabilities falls back to l1-malicious
-             fraud-slash-bps 0
-            l2-slash-bps 200
-            reversal-slash-bps 0
-            timeout-slash-bps 200
-             _new-evidence-probability 0.0
+           fraud-slash-bps 0
+           l2-slash-bps 200
+           reversal-slash-bps 0
+           timeout-slash-bps 200
+           _new-evidence-probability 0.0
            resolver-stake-wei nil
            fraud-success-rate 0.0
            fraud-model :single-stage-ev
@@ -89,11 +89,11 @@
            escalation-assumption-band :base
            model-appeal-costs? false
            appeal-bond-recovery-rate 0.5
-            oracle-roll-trace-enabled? false
-            evidence-quality? false
-            lazy-correct-prob 0.5
-            malicious-correct-prob 0.3
-            collusive-correct-prob 0.8}
+           oracle-roll-trace-enabled? false
+           evidence-quality? false
+           lazy-correct-prob 0.5
+           malicious-correct-prob 0.3
+           collusive-correct-prob 0.8}
       :as all-kw-args}]
 
   (let [fee           (econ/calculate-fee escrow-wei fee-bps)
@@ -104,12 +104,12 @@
 
         oracle-params   (detection/prepare-oracle-params
                          (merge {:rng rng}
-                         (dissoc all-kw-args
-                                         :senior-resolver-skill
-                                         :fraud-success-rate
-                                         :fraud-model
-                                         :model-appeal-costs?
-                                         :appeal-bond-recovery-rate)))
+                                (dissoc all-kw-args
+                                        :senior-resolver-skill
+                                        :fraud-success-rate
+                                        :fraud-model
+                                        :model-appeal-costs?
+                                        :appeal-bond-recovery-rate)))
 
         ;; Determine if resolver judges correctly (depends on strategy)
         verdict-correct?
@@ -126,14 +126,14 @@
         ;; ── Live-aligned appeal reversal (deterministic slash, stake basis) ──
         {:keys [l1-reversed? l2-escalated? l2-reversed? decision-reversed?]}
         (detection/appeal-reversal-outcome rng oracle-params
-                                        {:verdict-correct? verdict-correct?
-                                         :appealed? appealed?})
+                                           {:verdict-correct? verdict-correct?
+                                            :appealed? appealed?})
 
         reversal-slashed?
         (detection/reversal-slashed-live? oracle-params
-                                       {:verdict-correct? verdict-correct?
-                                        :appealed? appealed?
-                                        :decision-reversed? decision-reversed?})
+                                          {:verdict-correct? verdict-correct?
+                                           :appealed? appealed?
+                                           :decision-reversed? decision-reversed?})
 
         reversal-pending?
         (detection/reversal-pending-live? oracle-params {:reversal-slashed? reversal-slashed?})
@@ -170,24 +170,24 @@
         slash-reason
         (when slashed-detected?
           (detection/select-slash-reason {:fraud-detected? fraud-detected?
-                                       :reversal-slashed? reversal-slashed?
-                                       :l2-slashed? l2-slashed?
-                                       :timeout-detected? timeout-detected?
-                                       :l1-slashed? l1-slashed?}))
+                                          :reversal-slashed? reversal-slashed?
+                                          :l2-slashed? l2-slashed?
+                                          :timeout-detected? timeout-detected?
+                                          :l1-slashed? l1-slashed?}))
 
         bond-loss
         (if slashed-detected?
           (detection/slash-amount-for-reason slash-reason oracle-params
-                                          {:bond-total bond-total
-                                           :resolver-stake resolver-stake
-                                           :slash-mult slash-mult
-                                           :timeout-detected? timeout-detected?})
+                                             {:bond-total bond-total
+                                              :resolver-stake resolver-stake
+                                              :slash-mult slash-mult
+                                              :timeout-detected? timeout-detected?})
           0)
 
         ;; Phase G / Track 2: delayed slashing (detection delay or new-evidence pending)
         slashing-pending? (and slashed-detected?
-                             (or reversal-pending?
-                                 (> slashing-detection-delay-weeks 0)))
+                               (or reversal-pending?
+                                   (> slashing-detection-delay-weeks 0)))
         delay-weeks       (if slashing-pending? slashing-detection-delay-weeks 0)
 
         ;; Phase H: Realistic bond mechanics
@@ -254,24 +254,24 @@
         (when slashed-detected?
           (payoffs/calculate-slashing-distribution bond-loss 0))]
 
-     {:dispute-correct?      verdict-correct?
-      :appeal-triggered?     appealed?
-       :detected?             detected?
-       :l2-detected?          l2-slashed?
-       :escalated?            escalated?
-       :escalation-level      escalation-level
-       :slashed?              slashed-detected?
-      :frozen?               frozen?
-      :escaped?              escaped?
-      :slashing-pending?     slashing-pending?
-      :slashing-delay-weeks  delay-weeks
-      :slashing-reason       slash-reason
-      :bond-loss             (long (max 0 bond-loss))
-      :profit-honest         profit-honest
-      :profit-malice         profit-malice
-      :fraud-upside          fraud-upside
-      :fraud-survival-prob   fraud-success-prob
-      :slash-distributed     slash-distributed
+    {:dispute-correct?      verdict-correct?
+     :appeal-triggered?     appealed?
+     :detected?             detected?
+     :l2-detected?          l2-slashed?
+     :escalated?            escalated?
+     :escalation-level      escalation-level
+     :slashed?              slashed-detected?
+     :frozen?               frozen?
+     :escaped?              escaped?
+     :slashing-pending?     slashing-pending?
+     :slashing-delay-weeks  delay-weeks
+     :slashing-reason       slash-reason
+     :bond-loss             (long (max 0 bond-loss))
+     :profit-honest         profit-honest
+     :profit-malice         profit-malice
+     :fraud-upside          fraud-upside
+     :fraud-survival-prob   fraud-success-prob
+     :slash-distributed     slash-distributed
      :oracle-roll-trace     (when oracle-roll-trace-enabled?
                               @(:oracle-roll-trace oracle-params))
      :oracle-fixture/exhausted?
@@ -291,7 +291,7 @@
    & args]
 
   (let [results (repeatedly n-trials
-                  #(apply resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
+                            #(apply resolve-dispute rng escrow-wei fee-bps bond-bps slash-mult
                                     strategy appeal-prob-correct appeal-prob-wrong
                                     detection-prob args))
         profits-honest    (map :profit-honest results)

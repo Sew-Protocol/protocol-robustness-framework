@@ -82,8 +82,8 @@
   (let [d-rng        (rng/make-rng seed)
         steady       (ema-steady-state p-correct)
         trajectories (doall (repeatedly n-sims
-                              #(simulate-resolver p-correct alpha-bps
-                                                  initial-score n-disputes d-rng)))
+                                        #(simulate-resolver p-correct alpha-bps
+                                                            initial-score n-disputes d-rng)))
         mae-at-step  (mapv (fn [step]
                              (let [errs (map #(Math/abs (- (nth % step) steady)) trajectories)]
                                (/ (reduce + errs) n-sims)))

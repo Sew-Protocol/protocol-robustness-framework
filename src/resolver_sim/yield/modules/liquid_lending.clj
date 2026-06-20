@@ -38,7 +38,6 @@
       (get-in v keys)
       v)))
 
-
 ;; ---------------------------------------------------------------------------
 ;; deposit
 ;; ---------------------------------------------------------------------------
@@ -55,12 +54,11 @@
         shares (m/shares-from-principal-and-index (long amount) index)]
     (assoc-in world [:yield/positions oid]
               (pos/make-position {:owner/id oid
-                                 :module/id mid
-                                 :token token
-                                 :principal (long amount)
-                                 :shares shares
-                                 :entry-index index}))))
-
+                                  :module/id mid
+                                  :token token
+                                  :principal (long amount)
+                                  :shares shares
+                                  :entry-index index}))))
 
 ;; ---------------------------------------------------------------------------
 ;; accrue
@@ -118,7 +116,6 @@
               world
               (:yield/positions world {})))))
 
-
 ;; ---------------------------------------------------------------------------
 ;; withdraw
 ;; ---------------------------------------------------------------------------
@@ -138,90 +135,87 @@
       (let [token   (normalize-token (:token pos))
             now     (resolve-now world)]
       ;; Step 1: Accrue to crystallize final yield
-      (let [accrual-decision (accrual/accrual-decision
-                              world {:module-id mid
-                                     :token token
-                                     :position-id oid
-                                     :now now
-                                     :dt 0})
-            world-after-accrue (accrual/apply-accrual-decision world accrual-decision)
-            pos-after-accrue (get-in world-after-accrue pos-key)
+        (let [accrual-decision (accrual/accrual-decision
+                                world {:module-id mid
+                                       :token token
+                                       :position-id oid
+                                       :now now
+                                       :dt 0})
+              world-after-accrue (accrual/apply-accrual-decision world accrual-decision)
+              pos-after-accrue (get-in world-after-accrue pos-key)
 
             ;; Step 2: Determine available liquidity from market state,
             ;; which resolves the liquidity-schedule, shortfall-model,
             ;; and risk config into a composite available-ratio.
-            base-recoverable (or (get-in world-after-accrue [:total-held token])
-                                 (get-in world-after-accrue [:yield/held-balances (name token)])
-                                 0)
-            market-state (market-state/get-market-state world-after-accrue mid token now)
-            available-ratio (:available-ratio market-state 1.0)
-            shortfall-model (:shortfall-model market-state)
-            recoverable (long (* base-recoverable available-ratio))
-            gross-amount (+ (:principal pos-after-accrue 0)
-                            (:unrealized-yield pos-after-accrue 0))
+              base-recoverable (or (get-in world-after-accrue [:total-held token])
+                                   (get-in world-after-accrue [:yield/held-balances (name token)])
+                                   0)
+              market-state (market-state/get-market-state world-after-accrue mid token now)
+              available-ratio (:available-ratio market-state 1.0)
+              shortfall-model (:shortfall-model market-state)
+              recoverable (long (* base-recoverable available-ratio))
+              gross-amount (+ (:principal pos-after-accrue 0)
+                              (:unrealized-yield pos-after-accrue 0))
 
             ;; Step 3: Calculate fulfillment via the partial-fill engine
-            settlement (partial-fill/calculate-fulfillment
-                        (max 0 (long recoverable)) pos-after-accrue)
-            filled (get settlement :filled {})
-            deferred-map (get settlement :deferred {})
-            haircut-map (get settlement :haircut {})
+              settlement (partial-fill/calculate-fulfillment
+                          (max 0 (long recoverable)) pos-after-accrue)
+              filled (get settlement :filled {})
+              deferred-map (get settlement :deferred {})
+              haircut-map (get settlement :haircut {})
 
-            fulfilled-total (reduce + 0 (vals filled))
-            deferred-total (reduce + 0 (vals deferred-map))
-            haircut-total (reduce + 0 (vals haircut-map))
-            basis-total (reduce + 0 (vals (:requested settlement {})))
+              fulfilled-total (reduce + 0 (vals filled))
+              deferred-total (reduce + 0 (vals deferred-map))
+              haircut-total (reduce + 0 (vals haircut-map))
+              basis-total (reduce + 0 (vals (:requested settlement {})))
 
             ;; Step 4: Build :shortfall (based on requested vs filled, not gross value).
             ;; When shortfall-model specifies recoverable=false, all unfilled
             ;; amounts become permanent haircuts (recognized losses) rather
             ;; than deferred (future recoverable).
-            shortfall (when (pos? (- basis-total fulfilled-total))
-                        (let [sf-reason (or (:type shortfall-model) :liquidity-shortfall)
-                              recoverable? (:recoverable shortfall-model true)]
-                          {:reason sf-reason
-                           :basis-amount basis-total
-                           :available-ratio (if (pos? gross-amount)
-                                              (/ (rationalize fulfilled-total)
-                                                 (rationalize gross-amount))
-                                              1)
-                           :fulfilled-amount fulfilled-total
-                           :deferred-amount (if recoverable? deferred-total 0)
-                           :haircut-amount (if recoverable? haircut-total
-                                               (+ deferred-total haircut-total))
-                           :as-of-index (:current-index pos-after-accrue)}))
+              shortfall (when (pos? (- basis-total fulfilled-total))
+                          (let [sf-reason (or (:type shortfall-model) :liquidity-shortfall)
+                                recoverable? (:recoverable shortfall-model true)]
+                            {:reason sf-reason
+                             :basis-amount basis-total
+                             :available-ratio (if (pos? gross-amount)
+                                                (/ (rationalize fulfilled-total)
+                                                   (rationalize gross-amount))
+                                                1)
+                             :fulfilled-amount fulfilled-total
+                             :deferred-amount (if recoverable? deferred-total 0)
+                             :haircut-amount (if recoverable? haircut-total
+                                                 (+ deferred-total haircut-total))
+                             :as-of-index (:current-index pos-after-accrue)}))
 
             ;; Step 5: Update position status.
             ;; When the withdrawal fully covers the obligation (no shortfall), realize
             ;; the full unrealized yield.  When there is a shortfall, cap realized yield
             ;; to the fulfilled amount above principal (the waterfall may not fill
             ;; unrealized-yield under :not-claimable treatment).
-            realized-yield (if shortfall
-                             (max 0
-                               (min (:unrealized-yield pos-after-accrue 0)
-                                    (- fulfilled-total (:principal pos-after-accrue 0))))
-                             (:unrealized-yield pos-after-accrue 0))
-            updated-pos (-> pos-after-accrue
-                            (assoc :partial-fill-affected? (boolean shortfall))
-                            (assoc :status (if shortfall :unwinding :withdrawn))
-                            (assoc :realized-yield realized-yield)
-                            (assoc :unrealized-yield 0)
-                            (assoc :shortfall shortfall))
-            
-            world-final (assoc-in world-after-accrue pos-key updated-pos)]
-            
-        (cond-> world-final
+              realized-yield (if shortfall
+                               (max 0
+                                    (min (:unrealized-yield pos-after-accrue 0)
+                                         (- fulfilled-total (:principal pos-after-accrue 0))))
+                               (:unrealized-yield pos-after-accrue 0))
+              updated-pos (-> pos-after-accrue
+                              (assoc :partial-fill-affected? (boolean shortfall))
+                              (assoc :status (if shortfall :unwinding :withdrawn))
+                              (assoc :realized-yield realized-yield)
+                              (assoc :unrealized-yield 0)
+                              (assoc :shortfall shortfall))
+
+              world-final (assoc-in world-after-accrue pos-key updated-pos)]
+
+          (cond-> world-final
             shortfall
-              (ye/emit-shortfall-event :yield.shortfall/deferred-created oid
-                {:deferred-amount deferred-total
-                  :haircut-amount haircut-total
-                  :fulfilled-amount fulfilled-total
-                  :basis-amount basis-total
-                  :available-ratio (:available-ratio shortfall 1.0)
-                  :shortfall-kind (name (or (:reason shortfall) :unknown))}))
-        )))))
-
-
+            (ye/emit-shortfall-event :yield.shortfall/deferred-created oid
+                                     {:deferred-amount deferred-total
+                                      :haircut-amount haircut-total
+                                      :fulfilled-amount fulfilled-total
+                                      :basis-amount basis-total
+                                      :available-ratio (:available-ratio shortfall 1.0)
+                                      :shortfall-kind (name (or (:reason shortfall) :unknown))})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; emergency-unwind
@@ -239,7 +233,6 @@
                 w))
             world
             (:yield/positions world {}))))
-
 
 ;; ---------------------------------------------------------------------------
 ;; claim-deferred
@@ -261,8 +254,8 @@
         (if (pos? reclaimed)
           (let [world-final (assoc-in world pos-key new-pos)]
             (ye/emit-shortfall-event world-final :yield.shortfall/deferred-reclaimed oid
-              { :reclaimed-amount reclaimed
-                :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})
+                                     {:reclaimed-amount reclaimed
+                                      :deferred-before (get-in old-pos [:shortfall :deferred-amount] 0)})
             world-final)
           world))
 
@@ -275,7 +268,6 @@
         (assoc-in world pos-key claimed-pos))
 
       :else world)))
-
 
 ;; ---------------------------------------------------------------------------
 ;; Module constructor
@@ -297,7 +289,6 @@
           :yield/accrue accrue
           :yield/emergency-unwind emergency-unwind
           :yield/claim-deferred claim-deferred}}))
-
 
 (def liquid-lending-module
   (make-liquid-lending-module :yield.provider/liquid-lending))

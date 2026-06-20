@@ -33,7 +33,7 @@
                                :or   {entities-before-fn (fn [w] (:escrow-transfers w {}))
                                       state-after-fn     (fn [w entity-id]
                                                            (get-in w [:escrow-transfers entity-id :escrow-state]))
-                                       terminal-states    t/terminal-states}}]
+                                      terminal-states    t/terminal-states}}]
   (let [terminals terminal-states
         violations
         (for [[entity-id entity-before] (entities-before-fn world-before)

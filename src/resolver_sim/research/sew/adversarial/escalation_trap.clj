@@ -75,10 +75,10 @@
         ring-fraction   (if (pos? total-resolvers)
                           (double (/ ring-active total-resolvers))
                           0.0)
-        
+
         ;; Total escalations forced by the ring
         total-escalations-forced (* ring-fraction n-trials effective-rate)
-        
+
         ;; Drain per honest resolver: total cost / number of honest resolvers
         capital-drain       (if (pos? (count honest-capitals))
                               (/ (* total-escalations-forced bond-cost) (count honest-capitals))
@@ -100,8 +100,7 @@
                    (-> ring
                        (assoc :last-esc-epoch epoch)
                        (assoc :total-escalations (inc total-escalations)))
-                   ring)
-]
+                   ring)]
 
     {:honest-capitals updated-caps
      :honest-active   (count updated-caps)
@@ -220,7 +219,7 @@
                 {:epoch-counts (vec counts) :final-capitals capitals}
                 (let [[rng-e _] (rng/split-rng rng)
                       ;; Apply ring detection modifier
-                      params-e (assoc params :fraud-detection-probability 
+                      params-e (assoc params :fraud-detection-probability
                                       (+ (:fraud-detection-probability params 0.05) ring-detection-prob))
                       {:keys [honest-capitals honest-active ring-active ring ring-events]}
                       (run-escalation-epoch-ring-model rng-e epoch capitals ring params-e)
@@ -268,24 +267,24 @@
                      (if pass? "✓ PASS" "✗ FAIL")
                      (* 100 disp-rate)
                      (name pattern)))
-    
+
     ; Add interpretation and recommendations
     (if pass?
       (do (println "")
-          (println (format "   Status: ✅ PASS (%.0f%% displacement < %.0f%% threshold)" 
-                          (* 100 disp-rate) 
-                          (* 100 displacement-threshold)))
+          (println (format "   Status: ✅ PASS (%.0f%% displacement < %.0f%% threshold)"
+                           (* 100 disp-rate)
+                           (* 100 displacement-threshold)))
           (println "   Interpretation: Sybil ring attack is contained. Honest resolvers maintain market share.")
           (println "   Confidence delta: +5% (escalation trap well-defended)"))
       (do (println "")
-          (println (format "   Status: ❌ FAIL (%.0f%% displacement ≥ %.0f%% threshold — pattern: %s)" 
-                          (* 100 disp-rate) 
-                          (* 100 displacement-threshold)
-                          (name pattern)))
+          (println (format "   Status: ❌ FAIL (%.0f%% displacement ≥ %.0f%% threshold — pattern: %s)"
+                           (* 100 disp-rate)
+                           (* 100 displacement-threshold)
+                           (name pattern)))
           (println "   Interpretation: ❌ CRITICAL — Sybil ring attack is EFFECTIVE")
-          (println (format "   Impact: %s displacement pattern (reached %.0f%% honest exit)" 
-                          (name pattern)
-                          (* 100.0 (- 1.0 (/ final-honest n-resolvers)))))
+          (println (format "   Impact: %s displacement pattern (reached %.0f%% honest exit)"
+                           (name pattern)
+                           (* 100.0 (- 1.0 (/ final-honest n-resolvers)))))
           (println "")
           (println "   Recommendations (Priority Order):")
           (println "   1. [CRITICAL] Implement ring detection via correlation analysis")

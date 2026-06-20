@@ -29,26 +29,26 @@
    
    Returns: Cost in time/effort units"
   [evidence-type dispute-difficulty quality-level]
-  
+
   (let [; Base cost depends on difficulty
         base-cost (case dispute-difficulty
                     :easy 1.0
                     :medium 5.0
                     :hard 15.0
                     5.0)
-        
+
         ; Honest evidence requires more work (must be thorough)
         ; Fake evidence is cheaper (can be selective)
         type-multiplier (case evidence-type
                           :honest 1.5
                           :fake 0.6
                           1.0)
-        
+
         ; Higher quality costs more
         quality-cost (* quality-level 2.0)
-        
+
         total-cost (* base-cost type-multiplier (+ 1.0 quality-cost))]
-    
+
     {:type evidence-type
      :difficulty dispute-difficulty
      :quality quality-level
@@ -77,27 +77,27 @@
    
    Returns: Verification confidence and cost"
   [evidence-volume verification-time resolver-attention]
-  
+
   (let [; Maximum evidence a resolver can fully verify per hour
         verification-rate 10.0  ; 10 units of evidence per hour
-        
+
         ; Actual verification possible given time
         verifiable (min evidence-volume (* verification-rate verification-time))
-        
+
         ; Fraction verified
         verification-fraction (if (> evidence-volume 0)
-                               (/ verifiable evidence-volume)
-                               1.0)
-        
+                                (/ verifiable evidence-volume)
+                                1.0)
+
         ; Resolver attention reduces verification depth
         adjusted-verification (* verification-fraction resolver-attention)
-        
+
         ; Time cost
         time-cost (* (/ verifiable verification-rate) 1.0)
-        
+
         ; Resource cost (hiring experts, etc.)
         resource-cost (* evidence-volume 0.2)]
-    
+
     {:evidence-volume evidence-volume
      :time-available verification-time
      :resolver-attention resolver-attention
@@ -110,10 +110,10 @@
      :verdict (cond
                 (< adjusted-verification 0.3)
                 "UNVERIFIED: High risk of manipulation"
-                
+
                 (< adjusted-verification 0.6)
                 "PARTIALLY: Some evidence unverified"
-                
+
                 :else
                 "VERIFIED: Evidence adequately reviewed")}))
 
@@ -136,59 +136,59 @@
    
    Returns: Optimal strategy and expected effectiveness"
   [attacker-budget resolver-time-budget evidence-difficulty]
-  
+
   (let [; Volume attack: Many low-quality fakes
         fake-cost-per-unit (case evidence-difficulty
                              :easy 0.3
                              :medium 1.0
                              :hard 3.0)
         volume-attack-quantity (/ attacker-budget fake-cost-per-unit)
-        
+
         ; Fake evidence generation
         {:keys [total-cost]} (evidence-generation-cost :fake evidence-difficulty 0.5)
-        
+
         ; Volume attack effectiveness: Harder to verify everything
         verification-rate 10.0
         verifiable-units (* verification-rate resolver-time-budget)
         unverified-units (max 0 (- volume-attack-quantity verifiable-units))
         volume-effectiveness (/ unverified-units volume-attack-quantity)
-        
+
         ; Quality attack: Few very good fakes
         quality-fake-cost (case evidence-difficulty
                             :easy 1.0
                             :medium 3.0
                             :hard 8.0)
         quality-attack-quantity (/ attacker-budget quality-fake-cost)
-        
+
         ; High-quality fakes are harder to detect
         quality-detection-difficulty 0.8  ; 20% detection rate on good fakes
         quality-effectiveness (- 1.0 quality-detection-difficulty)
-        
+
         ; Compare strategies
         volume-roi (/ volume-effectiveness (max 0.1 (/ attacker-budget volume-attack-quantity)))
         quality-roi (/ quality-effectiveness (max 0.1 (/ attacker-budget quality-attack-quantity)))]
-    
+
     {:budget attacker-budget
      :time-budget resolver-time-budget
-     
+
      :volume-strategy
      {:quantity volume-attack-quantity
       :quality-per-unit 0.5
       :effectiveness volume-effectiveness
       :roi volume-roi
       :description "Flood with quantity, exploit verification limits"}
-     
+
      :quality-strategy
      {:quantity quality-attack-quantity
       :quality-per-unit 0.8
       :effectiveness quality-effectiveness
       :roi quality-roi
       :description "High-quality fakes, harder to detect"}
-     
+
      :optimal-strategy (if (> volume-roi quality-roi) :volume :quality)
      :recommendation (if (> volume-roi quality-roi)
-                      (str "Use volume attack: " (int volume-attack-quantity) " evidence units")
-                      (str "Use quality attack: " (int quality-attack-quantity) " evidence units"))}))
+                       (str "Use volume attack: " (int volume-attack-quantity) " evidence units")
+                       (str "Use quality attack: " (int quality-attack-quantity) " evidence units"))}))
 
 (defn resolver-verification-tradeoff
   "Model resolver's tradeoff: Spend time on verification vs. other decisions.
@@ -203,24 +203,24 @@
    
    Returns: Quality degradation under load"
   [attention-budget num-disputes evidence-complexity verification-time-per-case]
-  
+
   (let [; Time available per dispute
         time-per-dispute (/ attention-budget num-disputes)
-        
+
         ; Time needed for thorough verification
         needed-time verification-time-per-case
-        
+
         ; Actual verification fraction
         verification-fraction (min 1.0 (/ time-per-dispute needed-time))
-        
+
         ; Accuracy degradation: Less time = lower quality decisions
         ; Assume linear degradation: Full time = 85% accuracy, no time = 50%
         base-accuracy 0.85
         degraded-accuracy (+ 0.50 (* (- base-accuracy 0.50) verification-fraction))
-        
+
         ; Effect on detection probability
         detection-ability verification-fraction]
-    
+
     {:attention-budget attention-budget
      :num-disputes num-disputes
      :time-per-dispute time-per-dispute
@@ -254,7 +254,7 @@
    
    Returns: Collapse risk and effect on outcomes"
   [evidence-clarity verification-cost time-pressure resolver-baseline-accuracy]
-  
+
   (let [; Collapse risk increases with:
         ; - Low clarity (evidence is ambiguous)
         ; - High verification cost (easier to be lazy)
@@ -262,23 +262,23 @@
         clarity-factor evidence-clarity
         cost-factor (/ 1.0 (max 0.1 verification-cost))
         time-factor time-pressure
-        
+
         collapse-risk (* (- 1.0 clarity-factor) cost-factor time-factor)
         clamped-risk (min 1.0 collapse-risk)
-        
+
         ; Under collapse, resolvers use heuristics
         ; Heuristic accuracy is baseline (no evidence processing)
         heuristic-accuracy resolver-baseline-accuracy
-        
+
         ; Evidence-based accuracy improves with clarity
         evidence-accuracy (+ 0.5 (* clarity-factor 0.4))
-        
+
         ; Final accuracy: Mix of heuristic and evidence-based
         final-accuracy (+ (* (- 1.0 clamped-risk) evidence-accuracy)
-                         (* clamped-risk heuristic-accuracy))
-        
+                          (* clamped-risk heuristic-accuracy))
+
         accuracy-loss (- evidence-accuracy final-accuracy)]
-    
+
     {:evidence-clarity evidence-clarity
      :verification-cost verification-cost
      :time-pressure time-pressure

@@ -133,7 +133,7 @@
 
         ;; Detect-and-revert: if drift window > 0.10 accumulated, undo one step
         reverted?     (and detect-and-revert?
-                          (should-revert? (conj rule-history rules-after-q) 10))
+                           (should-revert? (conj rule-history rules-after-q) 10))
         rules-final   (if reverted?
                         (update rules-after-q :slash-multiplier + 0.05)
                         rules-after-q)]
@@ -255,7 +255,7 @@
                                (if (:passed? r) "✅" "❌"))))
 
           safe-low-stake (filter #(and (<= (:attacker-stake %) 0.35)
-                                        (>= (:survival-rate %) surv-threshold))
+                                       (>= (:survival-rate %) surv-threshold))
 
                                  h1-results)
           total-low      (count (filter #(<= (:attacker-stake %) 0.35) h1-results))
@@ -330,7 +330,7 @@
                                    (* 100.0 (:improvement r)))))
 
               safe-40  (filter #(and (= (:stake %) 0.40)
-                                      (>= (:surv-with %) surv-threshold))
+                                     (>= (:surv-with %) surv-threshold))
 
                                h3-results)
               total-40 (count (filter #(= (:stake %) 0.40) h3-results))

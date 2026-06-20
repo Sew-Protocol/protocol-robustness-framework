@@ -93,8 +93,8 @@
      (if (contains? seen x)
        (throw (ex-info "Circular fixture reference" {:key x :seen seen}))
        ;; Normalize JSON-loaded fixtures to fix type mismatches
-        (let [loaded (load-fixture x)
-              normalized (normalize-scenario loaded)]
+       (let [loaded (load-fixture x)
+             normalized (normalize-scenario loaded)]
          (compose-suite normalized (conj seen x))))
 
      (map? x)
@@ -285,7 +285,7 @@
                                trace-id (:scenario-id trace)
                                runner-opts (scenario-runner/runner-opts-for-scenario effective-trace opts)
                                threshold-validation (validate-thresholds res thresholds
-                                                                           {:expected-outcome expected-outcome})
+                                                                         {:expected-outcome expected-outcome})
                                base-entry (scenario-runner/build-entry-result
                                            {:name          (str trace-id)
                                             :replay-result res
@@ -294,8 +294,8 @@
                                            runner-opts)
                                theory-res-for-golden (get-in base-entry [:checks :theory :result])
                                report (generate-golden-report suite-key trace-id res
-                                                                {:theory-res theory-res-for-golden
-                                                                 :theory-decl (:theory trace)})
+                                                              {:theory-res theory-res-for-golden
+                                                               :theory-decl (:theory trace)})
                                comparison (when (= mode :verify)
                                             (compare-golden-report suite-key
                                                                    {:trace-id trace-id :golden-report report}
@@ -325,7 +325,7 @@
                                                 (when-let [id (:scenario-id trace)]
                                                   (when (:expectations trace)
                                                     [id (:expectations trace)]))))
-                                      traces)
+                                        traces)
          display-opts (merge opts
                              {:elapsed-ms elapsed-ms
                               :expectations-by-trace-id expectations-by-trace-id
@@ -362,8 +362,8 @@
              effective-trace (cond-> trace
                                merged-proto (assoc :protocol-params merged-proto)
                                state (assoc :initial-block-time (:block-time state 1000))
-                              authority (assoc :authority-params authority)
-                              actors (assoc :agents (vec (concat (:agents trace []) actors))))
+                               authority (assoc :authority-params authority)
+                               actors (assoc :agents (vec (concat (:agents trace []) actors))))
              replay-result (replay/replay-with-protocol effective-protocol effective-trace)]
          (when (and (= :fail (:outcome replay-result))
                     (= :invariant-violation (:halt-reason replay-result)))
@@ -394,8 +394,8 @@
                  (let [suite-path (str "data/fixtures/suites/" (:file v))
                        suite (edn/read-string (slurp suite-path))]
                    (assoc m k (select-keys suite [:suite/id :suite/title :suite/purpose
-                                                 :suite/class :suite/criticality
-                                                 :suite/prevents]))))
+                                                  :suite/class :suite/criticality
+                                                  :suite/prevents]))))
                {}
                manifest)))
 

@@ -41,20 +41,20 @@
 
 (defprotocol Adversary
   "Attack strategy that decides whether and how to attack."
-  
-  (should-attack? 
+
+  (should-attack?
     [this dispute-params]
     "Decide whether to attack this dispute.
      dispute-params may include :rng (a SplittableRandom) for reproducible decisions.")
-  
+
   (attack-type
     [this dispute-params]
     "Choose attack type given constraints.")
-  
+
   (budget-allocation
     [this dispute-params]
     "Allocate available budget across attack types.")
-  
+
   (expected-profit
     [this attack-type dispute-params]
     "Estimate profit from chosen attack.")
@@ -69,19 +69,19 @@
 
 (deftype StaticAttacker []
   Adversary
-  
+
   (should-attack? [_ params]
     (< (next-double params) 0.5))
-  
+
   (attack-type [_ params]
     :none)
-  
+
   (budget-allocation [_ params]
     {:bribery 0.0 :evidence 0.0 :collusion 0.0})
-  
+
   (expected-profit [_ attack-type params]
     0)
-  
+
   (observe-outcome! [_ _outcome]
     nil))
 
@@ -89,10 +89,10 @@
 
 (deftype BriberyAttacker [bribe-cost-ratio]
   Adversary
-  
+
   (should-attack? [_ params]
     (< (next-double params) 0.5))
-  
+
   (attack-type [_ params]
     (let [available-budget (:attacker-budget params 0)
           bribery-cost (estimate-bribery-cost params bribe-cost-ratio)]
@@ -100,15 +100,15 @@
                (< bribery-cost available-budget))
         :bribery
         :none)))
-  
+
   (budget-allocation [_ params]
     {:bribery 1.0 :evidence 0.0 :collusion 0.0})
-  
+
   (expected-profit [_ attack-type params]
     (case attack-type
       :bribery (estimate-bribery-profit params)
       0))
-  
+
   (observe-outcome! [_ _outcome]
     nil))
 
@@ -116,10 +116,10 @@
 
 (deftype EvidenceAttacker [bribe-cost-ratio evidence-difficulty]
   Adversary
-  
+
   (should-attack? [_ params]
     (< (next-double params) 0.5))
-  
+
   (attack-type [_ params]
     (let [bribery-cost (estimate-bribery-cost params bribe-cost-ratio)
           evidence-cost (estimate-evidence-cost params evidence-difficulty)
@@ -129,16 +129,16 @@
              (< evidence-cost available-budget)) :evidence
         (< bribery-cost available-budget) :bribery
         :else :none)))
-  
+
   (budget-allocation [_ params]
     {:bribery 0.4 :evidence 0.6 :collusion 0.0})
-  
+
   (expected-profit [_ attack-type params]
     (case attack-type
       :evidence (estimate-evidence-profit params)
       :bribery (estimate-bribery-profit params)
       0))
-  
+
   (observe-outcome! [_ _outcome]
     nil))
 
@@ -149,10 +149,10 @@
 
 (deftype AdaptiveAttacker [beliefs-atom learning-rate]
   Adversary
-  
+
   (should-attack? [_ params]
     (some #(> % 0) @beliefs-atom))
-  
+
   (attack-type [_ params]
     (let [beliefs @beliefs-atom]
       (if (< (next-double params) 0.1)
@@ -162,7 +162,7 @@
         ; Exploitation: pick the highest-belief type.
         (let [best-idx (.indexOf ^java.util.List beliefs (apply max beliefs))]
           (nth [:bribery :evidence :collusion] best-idx)))))
-  
+
   (budget-allocation [_ params]
     (let [beliefs @beliefs-atom
           total   (apply + beliefs)
@@ -170,7 +170,7 @@
       {:bribery   (norm (nth beliefs 0))
        :evidence  (norm (nth beliefs 1))
        :collusion (norm (nth beliefs 2))}))
-  
+
   (expected-profit [_ attack-type params]
     (let [beliefs @beliefs-atom]
       (case attack-type
@@ -178,7 +178,7 @@
         :evidence  (nth beliefs 1)
         :collusion (nth beliefs 2)
         0)))
-  
+
   (observe-outcome! [_ outcome]
     ; Update the belief for the observed attack type using a simple gradient step:
     ;   belief' = belief + learning-rate × (observed-profit - belief)

@@ -61,10 +61,10 @@
             (let [signed-manifest (:manifest result)
                   latest-dir (evcfg/artifact-dir)
                   run-dir (:dir run)
-                   envelope {:registry_sha256 (:artifact-registry-sha signed-manifest)
-                             :run_id (:run_id signed-manifest)
-                             :timestamp (str (java.time.Instant/now))
-                             :chain-final (boolean (:artifact-registry-sha signed-manifest))}
+                  envelope {:registry_sha256 (:artifact-registry-sha signed-manifest)
+                            :run_id (:run_id signed-manifest)
+                            :timestamp (str (java.time.Instant/now))
+                            :chain-final (boolean (:artifact-registry-sha signed-manifest))}
                   envelope-json (json/write-str envelope {:indent true})
                   signature-json (json/write-str {:signature (:signature result)
                                                   :hash (:hash result)

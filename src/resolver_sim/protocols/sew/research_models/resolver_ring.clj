@@ -28,17 +28,17 @@
         junior-specs (:juniors ring-spec)
         senior-name (:name senior-spec)
         junior-names (mapv :name junior-specs)
-        
+
         resolver-specs
         (reduce
-          (fn [specs junior-spec]
-            (assoc specs (:name junior-spec)
-              {:bond (:bond junior-spec)
-               :delegated-to senior-name
-               :tier :junior}))
-          {senior-name {:bond (:bond senior-spec) :tier :senior}}
-          junior-specs)]
-    
+         (fn [specs junior-spec]
+           (assoc specs (:name junior-spec)
+                  {:bond (:bond junior-spec)
+                   :delegated-to senior-name
+                   :tier :junior}))
+         {senior-name {:bond (:bond senior-spec) :tier :senior}}
+         junior-specs)]
+
     {:senior-id senior-name
      :junior-ids junior-names
      :registry (delegation/create-resolver-registry resolver-specs)
@@ -60,20 +60,20 @@
   [rng ring escrow-wei fee-bps bond-bps slash-mult
    appeal-prob-correct appeal-prob-wrong detection-prob
    & rest-kwargs]
-  
+
   (let [;; Simulate one resolver (arbitrarily pick senior for now)
         resolver-id (:senior-id ring)
-        
+
         ;; All collude: use malicious strategy
         result (apply dispute/resolve-dispute
-                 rng escrow-wei fee-bps bond-bps slash-mult
-                 :malicious
-                 appeal-prob-correct appeal-prob-wrong detection-prob
-                 rest-kwargs)
-        
+                      rng escrow-wei fee-bps bond-bps slash-mult
+                      :malicious
+                      appeal-prob-correct appeal-prob-wrong detection-prob
+                      rest-kwargs)
+
         caught? (:slashed? result)
         profit (:profit-malice result)
-        
+
         ;; If caught, apply waterfall slashing
         updated-registry
         (if caught?
@@ -84,17 +84,17 @@
             ;; In reality, junior would be slashed first, then senior coverage
             (delegation/waterfall-slash (:registry ring) resolver-id slash-amount))
           (:registry ring))]
-    
+
     {:ring
      (assoc ring
-       :registry updated-registry
-       :total-profit (+ (:total-profit ring) profit)
-       :disputes-total (inc (:disputes-total ring))
-       :disputes-caught (if caught? (inc (:disputes-caught ring)) (:disputes-caught ring))
-       :individual-profits
-       (update (:individual-profits ring) resolver-id
-         (fnil + 0) profit))
-     
+            :registry updated-registry
+            :total-profit (+ (:total-profit ring) profit)
+            :disputes-total (inc (:disputes-total ring))
+            :disputes-caught (if caught? (inc (:disputes-caught ring)) (:disputes-caught ring))
+            :individual-profits
+            (update (:individual-profits ring) resolver-id
+                    (fnil + 0) profit))
+
      :caught? caught?
      :profit profit}))
 
@@ -112,21 +112,21 @@
         num-disputes (:disputes-total ring)
         avg-profit (if (zero? num-disputes) 0 (/ total-profit num-disputes))
         catch-rate (if (zero? num-disputes) 0 (/ (:disputes-caught ring) num-disputes))
-        
+
         member-states
         (mapv
-          (fn [[resolver-id resolver]]
-            {:resolver-id resolver-id
-             :original-bond (:original-bond resolver)
-             :bond-remaining (:bond resolver)
-             :slashed-amount (:slashed-amount resolver)
-             :tier (:tier resolver)
-             :status (:status resolver)})
-          (:registry ring))
-        
+         (fn [[resolver-id resolver]]
+           {:resolver-id resolver-id
+            :original-bond (:original-bond resolver)
+            :bond-remaining (:bond resolver)
+            :slashed-amount (:slashed-amount resolver)
+            :tier (:tier resolver)
+            :status (:status resolver)})
+         (:registry ring))
+
         ;; Ring is viable if at least one member still has positive bond
         viable? (some #(> (:bond-remaining %) 0) member-states)]
-    
+
     {:total-profit total-profit
      :average-profit-per-dispute avg-profit
      :catch-rate catch-rate

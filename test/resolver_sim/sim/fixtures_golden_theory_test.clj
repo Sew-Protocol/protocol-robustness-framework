@@ -51,9 +51,9 @@
         (is (= :theory (first (:path (first (:mismatches cmp))))))))
     (testing "replay-only ignores theory drift"
       (is (:ok? (fixtures/compare-golden-reports golden actual-theory-drift
-                                                {:golden-verify-mode :replay-only}))))
+                                                 {:golden-verify-mode :replay-only}))))
     (testing "legacy golden without :theory compares replay only"
       (let [legacy (dissoc golden :theory :golden-schema-version)
             actual (assoc actual-theory-drift :theory {:status :falsified})]
         (is (:ok? (fixtures/compare-golden-reports legacy actual
-                                                  {:golden-verify-mode :replay-and-theory})))))))
+                                                   {:golden-verify-mode :replay-and-theory})))))))

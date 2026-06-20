@@ -4,14 +4,12 @@
   (:require [clojure.test :refer :all]
             [resolver-sim.yield.exact-math :as m]))
 
-
 (deftest test-bps-ratio-roundtrip
   (testing "bps->ratio and ratio->bps roundtrip for common values"
     (is (= 0 (m/ratio->bps (m/bps->ratio 0))))
     (is (= 500 (m/ratio->bps (m/bps->ratio 500))))
     (is (= 10000 (m/ratio->bps (m/bps->ratio 10000))))
     (is (= 1 (m/ratio->bps (m/bps->ratio 1))))))
-
 
 (deftest test-index-growth-factor-ratio
   (testing "index-growth-factor returns exact number, not a float"
@@ -29,13 +27,11 @@
       (is (number? factor))
       (is (< (double factor) 1.0)))))
 
-
 (deftest test-next-index-exact
   (testing "next-index uses exact arithmetic"
     (let [idx (m/next-index 1 500 31536000)]
       (is (number? idx))
       (is (> (double idx) 1.0)))))
-
 
 (deftest test-quantize-base-units
   (testing "quantize-base-units splits ratio into integer and remainder"
@@ -48,7 +44,6 @@
     (let [[units rem] (m/quantize-base-units 1/3)]
       (is (= 0 units))
       (is (= 1/3 rem)))))
-
 
 (deftest test-quantize-with-carry-subunit-accumulation
   (testing "Sub-unit amounts accumulate across intervals"
@@ -82,7 +77,6 @@
       (is (< drift 0.002)
           (str "Compounding drift " drift " within 0.2% for 5% APY over one year")))))
 
-
 (deftest test-floor-and-carry-alloc
   (testing "floor-and-carry alloc sum never exceeds available"
     (let [claims [{:key :a :amount 100} {:key :b :amount 100} {:key :c :amount 100}]
@@ -91,8 +85,8 @@
               (first (m/quantize-base-units 250))))))
 
   (testing "floor-and-carry preserves exact carry"
-     (let [result (m/floor-and-carry-alloc 100 [{:key :a :amount 3} {:key :b :amount 3}])]
-       (is (number? (:carry result)))))
+    (let [result (m/floor-and-carry-alloc 100 [{:key :a :amount 3} {:key :b :amount 3}])]
+      (is (number? (:carry result)))))
 
   (testing "equal claims get equal floor allocations"
     (let [claims [{:key :a :amount 100} {:key :b :amount 100}]
@@ -128,7 +122,6 @@
           (str "Expected " available " units, got " total-filled
                " — lost " (- available total-filled) " units across " (count claims) " claims")))))
 
-
 (deftest test-largest-remainder-alloc
   (testing "largest-remainder alloc sum equals available units"
     (let [claims [{:key :a :amount 100} {:key :b :amount 60} {:key :c :amount 40}]
@@ -142,13 +135,12 @@
       (is (<= (reduce + 0 (map :filled (:allocations result)))
               500)))))
 
-
 (deftest test-principal-protective-floor-alloc
   (testing "principal-protective-floor protects principal claims"
     (let [claims [{:key :principal :amount 1000}
                   {:key :yield :amount 500}]
           result (m/principal-protective-floor-alloc 1200 claims
-                   (fn [c] (= :principal (:key c))))
+                                                     (fn [c] (= :principal (:key c))))
           allocs (:allocations result)
           principal-filled (:filled (first allocs))
           yield-filled (:filled (second allocs))]
@@ -159,12 +151,11 @@
     (let [claims [{:key :principal :amount 1000}
                   {:key :yield :amount 500}]
           result (m/principal-protective-floor-alloc 500 claims
-                   (fn [c] (= :principal (:key c))))
+                                                     (fn [c] (= :principal (:key c))))
           allocs (:allocations result)
           principal-filled (:filled (first allocs))]
       (is (= 0 (:filled (second allocs))) "Yield should get nothing")
       (is (<= principal-filled 500) "Principal capped at available"))))
-
 
 (deftest test-adversarial-rounding
   (testing "adversarial rounding creates positive rounding debt"
@@ -180,7 +171,6 @@
           sum-remainders (reduce + 0 (map :remainder-exact (:allocations result)))]
       (is (>= (:rounding-debt result) 0)))))
 
-
 (deftest test-apy-degradation
   (testing "APY degrades toward floor with staleness"
     (is (= 500 (m/apy-degradation 500 0 86400 0))
@@ -193,14 +183,12 @@
   (testing "Negative APY remains unchanged"
     (is (= -500 (m/apy-degradation -500 43200 86400 0)))))
 
-
 (deftest test-shortfall-ratio-exact
   (testing "shortfall-ratio-exact computes exact ratio"
     (is (= 1/2 (m/shortfall-ratio-exact 50 100)))
     (is (= 1 (m/shortfall-ratio-exact 100 100)))
     (is (= 1 (m/shortfall-ratio-exact 200 100)) "Cap at 1.0")
     (is (= 1 (m/shortfall-ratio-exact 100 0)) "Zero denominator gives 1")))
-
 
 (deftest test-ratio-json-serialization
   (testing "ratio->json produces EDN-safe representation"
@@ -211,7 +199,6 @@
       (is (= "22" (:num json)))
       (is (= "7" (:den json))))))
 
-
 (deftest test-dust-imbalance-vs-economic-insolvency
   (testing "Dust imbalance is distinguishable from economic insolvency"
     (let [dust (m/quantize-with-carry 1/7 0)
@@ -219,7 +206,6 @@
       (is (>= (double (:carry dust)) 0) "Dust carry is non-negative")
       (is (< (double (:carry dust)) 1) "Dust is < 1 base unit")
       (is (neg? insolvent-value) "Insolvency is clearly negative"))))
-
 
 (deftest test-shares-from-principal-and-index
   (testing "shares computation is exact"
@@ -234,7 +220,6 @@
           recovered (m/principal-from-shares-and-index shares entry-index)]
       (is (= principal (long (double recovered)))))))
 
-
 (deftest test-current-value-exact
   (testing "current-value-exact is ratio-accurate"
     (let [shares (m/ratio 8000)
@@ -242,7 +227,6 @@
           value (m/current-value-exact shares index)]
       (is (number? value))
       (is (== 10000 (double value)) "8000 shares × 1.25 index = 10000"))))
-
 
 (deftest test-position-current-value-exact-conservation
   (testing "Position value conservation with exact ratios"

@@ -48,10 +48,10 @@
     (post url body)))
 
 (def state (atom {:total-simulations 0
-                 :passes 0
-                 :fails 0
-                 :invalids 0
-                 :history []}))
+                  :passes 0
+                  :fails 0
+                  :invalids 0
+                  :history []}))
 
 (def max-history 10)
 
@@ -63,12 +63,12 @@
                  (let [outcome (:outcome result)
                        s' (-> s
                               (update :total-simulations inc)
-                        (update (case outcome
-                                  :pass :passes
-                                  :fail :fails
-                                  :invalid :invalids
-                                  (do (log/warn! :unknown-outcome {:outcome outcome})
-                                      :invalids)) inc))
+                              (update (case outcome
+                                        :pass :passes
+                                        :fail :fails
+                                        :invalid :invalids
+                                        (do (log/warn! :unknown-outcome {:outcome outcome})
+                                            :invalids)) inc))
                        history (:history s')
                        entry {:id (:scenario-id result)
                               :outcome (if (keyword? outcome) (name outcome) outcome)

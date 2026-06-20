@@ -12,17 +12,17 @@
 
 (defprotocol GovernanceRules
   "Dispute resolution rules and governance mechanics."
-  
+
   (can-rule-change?
     [this epoch current-rules params]
     "Determine if rules can be changed at this epoch.
      Returns: true | false")
-  
+
   (apply-rule-change
     [this old-rules new-rules params]
     "Apply governance rule change with appropriate delay.
      Returns: {:rules new-rules :delay-epochs int}")
-  
+
   (governance-delay
     [this params]
     "Get governance response delay in epochs.
@@ -84,7 +84,7 @@
     :appeal-probability-if-correct float
     :appeal-probability-if-wrong float}"
   [escrow-size]
-  
+
   {:escrow-size escrow-size
    :appeal-bond-bps 500       ;; 5% of escrow
    :slash-multiplier 2.5      ;; 2.5× slash for detected fraud
@@ -111,7 +111,7 @@
    
    Returns: true if change is active, false if still pending"
   [epoch-proposed delay-epochs current-epoch]
-  
+
   (>= current-epoch (+ epoch-proposed delay-epochs)))
 
 (defn validate-rule-change
@@ -125,39 +125,39 @@
    Returns: {:valid? bool :errors [str]}
    "
   [old-rules new-rules]
-  
+
   (let [errors (atom [])]
-    
+
     ;; Check slash multiplier bounds
     (let [slash-mult (:slash-multiplier new-rules)]
       (when (or (< slash-mult 1.0) (> slash-mult 5.0))
         (swap! errors conj "Slash multiplier must be in [1.0, 5.0]")))
-    
+
     ;; Check appeal bond bounds
     (let [bond-bps (:appeal-bond-bps new-rules)]
       (when (or (< bond-bps 100) (> bond-bps 2000))
         (swap! errors conj "Appeal bond must be in [100, 2000] bps")))
-    
+
     ;; Check fee bounds
     (let [fee-bps (:resolver-fee-bps new-rules)]
       (when (or (< fee-bps 50) (> fee-bps 500))
         (swap! errors conj "Resolver fee must be in [50, 500] bps")))
-    
+
     ;; Check panel size bounds
     (let [panel-size (:panel-size new-rules)]
       (when (or (< panel-size 1) (> panel-size 21))
         (swap! errors conj "Panel size must be in [1, 21]")))
-    
+
     ;; Check majority ratio bounds
     (let [maj-ratio (:majority-ratio new-rules)]
       (when (or (< maj-ratio 0.5) (> maj-ratio 1.0))
         (swap! errors conj "Majority ratio must be in [0.5, 1.0]")))
-    
+
     ;; Check appeal threshold bounds
     (let [appeal-thresh (:appeal-threshold new-rules)]
       (when (or (< appeal-thresh 0.0) (> appeal-thresh 1.0))
         (swap! errors conj "Appeal threshold must be in [0.0, 1.0]")))
-    
+
     {:valid? (empty? @errors)
      :errors @errors}))
 
@@ -173,16 +173,16 @@
    Returns: {:drifting? bool :drift-vector map}
    "
   [rule-history]
-  
+
   (if (< (count rule-history) 10)
     {:drifting? false :drift-vector {}}
-    
+
     ;; Look at last 10 rule changes
     (let [recent (take-last 10 rule-history)
           slash-changes (mapv #(/ (:slash-multiplier (:rules %)) 2.5)
                               recent)
           mean-change (/ (reduce + slash-changes) (count slash-changes))]
-      
+
       {:drifting? (> (Math/abs (- 1.0 mean-change)) 0.01)
        :drift-vector {:average-multiplier-change mean-change}})))
 
@@ -201,11 +201,11 @@
    {:attack-now? bool
     :reason str}"
   [governance-delay-epochs current-epoch last-slashing-epoch]
-  
+
   (let [epochs-since-slash (- current-epoch last-slashing-epoch)
         governance-is-slow? (> governance-delay-epochs 30)
         attacker-safe? (> epochs-since-slash governance-delay-epochs)]
-    
+
     {:attack-now? (and governance-is-slow? attacker-safe?)
      :reason (if governance-is-slow?
                "Governance is slow, attack response will be delayed"

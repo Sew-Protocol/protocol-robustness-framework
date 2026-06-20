@@ -12,10 +12,10 @@
    :resolver-bond-bps 0})
 
 (defn sc [& {:keys [agents params init-time events schema-version]
-              :or   {agents       [alice bob resolver]
-                     params       default-params
-                     init-time    1000
-                     schema-version "1.0"}}]
+             :or   {agents       [alice bob resolver]
+                    params       default-params
+                    init-time    1000
+                    schema-version "1.0"}}]
   {:scenario-id        "test"
    :schema-version     schema-version
    :seed               42

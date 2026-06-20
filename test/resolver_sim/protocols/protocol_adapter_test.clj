@@ -43,7 +43,7 @@
     (is (satisfies? proto/SimulationAdapter sew/protocol))
     (is (satisfies? proto/EconomicModel sew/protocol))
     (is (satisfies? proto/AnalysisModule sew/protocol)))
-  
+
   (testing "DummyProtocol"
     (is (satisfies? proto/SimulationAdapter dummy/protocol))
     (is (satisfies? proto/EconomicModel dummy/protocol))

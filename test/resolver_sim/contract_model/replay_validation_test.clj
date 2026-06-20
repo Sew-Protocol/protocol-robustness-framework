@@ -11,7 +11,7 @@
    :id "metric-validation-test"
    :title "Metric validation"
    :purpose :regression
-  :scenario-author "@test-author"
+   :scenario-author "@test-author"
    :agents [{:id "buyer" :address "0xB" :role "buyer"}
             {:id "seller" :address "0xS" :role "seller"}]
    :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"

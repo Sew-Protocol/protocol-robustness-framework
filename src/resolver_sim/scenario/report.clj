@@ -93,35 +93,35 @@
      :verbose?      — alias for :report-detail :verbose"
   ([entry] (format-check-failures entry {}))
   ([entry opts]
-  (let [checks (:checks entry)]
-    (vec
-     (concat
-      (when-let [fo (:fixture-outcome checks)]
-        (when-not (:ok? fo true)
-          [(format "  outcome: expected %s (got %s)" (:expected fo) (:actual fo))]))
-      (when-let [h (:halt checks)]
-        (when-not (:ok? h true)
-          [(format "  halt: expected %s (got %s)" (:expected h) (:actual h))]))
-      (when (and (nil? (:halt checks)) (:halt-reason entry))
-        [(str "  halt: " (:halt-reason entry))])
-      (when-let [eo (:expected-outcomes checks)]
-        (when-not (:ok? eo true)
-          (map #(str "  expected-outcome: " (format-violation %)) (:violations eo))))
-      (when-let [exp (:expectations checks)]
-        (when-not (:ok? exp true)
-          (map #(str "  expectation: " (format-violation %)) (:violations exp))))
-      (when-let [th (:theory checks)]
-        (when-not (:ok? th true)
-          (if-let [res (:result th)]
-            [(str "  theory: " (theory-result/result-display-label res))]
-            ["  theory: check failed"])))
-      (when-let [th (:thresholds checks)]
-        (when-not (:ok? th true)
-          (map #(str "  threshold: " (or (:detail %) (str (:type %) " " (:violations th)))) (:violations th))))
-      (when-let [g (:golden checks)]
-        (when-not (:ok? g true)
-          (format-golden-check-lines g opts)))
-      (format-golden-pass-note checks opts))))))
+   (let [checks (:checks entry)]
+     (vec
+      (concat
+       (when-let [fo (:fixture-outcome checks)]
+         (when-not (:ok? fo true)
+           [(format "  outcome: expected %s (got %s)" (:expected fo) (:actual fo))]))
+       (when-let [h (:halt checks)]
+         (when-not (:ok? h true)
+           [(format "  halt: expected %s (got %s)" (:expected h) (:actual h))]))
+       (when (and (nil? (:halt checks)) (:halt-reason entry))
+         [(str "  halt: " (:halt-reason entry))])
+       (when-let [eo (:expected-outcomes checks)]
+         (when-not (:ok? eo true)
+           (map #(str "  expected-outcome: " (format-violation %)) (:violations eo))))
+       (when-let [exp (:expectations checks)]
+         (when-not (:ok? exp true)
+           (map #(str "  expectation: " (format-violation %)) (:violations exp))))
+       (when-let [th (:theory checks)]
+         (when-not (:ok? th true)
+           (if-let [res (:result th)]
+             [(str "  theory: " (theory-result/result-display-label res))]
+             ["  theory: check failed"])))
+       (when-let [th (:thresholds checks)]
+         (when-not (:ok? th true)
+           (map #(str "  threshold: " (or (:detail %) (str (:type %) " " (:violations th)))) (:violations th))))
+       (when-let [g (:golden checks)]
+         (when-not (:ok? g true)
+           (format-golden-check-lines g opts)))
+       (format-golden-pass-note checks opts))))))
 
 (defn print-report
   "Print the canonical deterministic scenario table from a collection summary.

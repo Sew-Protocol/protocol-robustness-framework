@@ -86,7 +86,6 @@
 (defn- evaluate-temporal-rules [rules ctx] (temporal/evaluate-temporal-rules rules ctx))
 (defn- maybe-record-temporal! [cfg enabled? id outcome world metrics trace] (temporal/maybe-record-temporal! cfg enabled? id outcome world metrics trace))
 
-
 ;; ---------------------------------------------------------------------------
 ;; Metrics — registry (must precede validate-scenario which references it)
 ;; ---------------------------------------------------------------------------
@@ -138,69 +137,69 @@
    Optional third argument `replay-opts` may include `:flags` (see `replay.flags`).
    Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
-   ([protocol scenario replay-opts]
-    (chain/with-fresh-registry
-      (chain/with-fresh-chain-cursor
-        (risk/with-fresh-risk-context
-          (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
-         vocab              (if (satisfies? proto/EconomicModel protocol)
-                              (proto/metric-vocabulary protocol)
-                              #{})
-         effective-metrics  (into (into metrics/base-metrics vocab)
-                                  (or (metrics/expectation-metric-keys scenario) #{}))
-         validation         (validate-scenario scenario effective-metrics
-                                               {:strict-validation? (:strict-validation? flags)})
-         temporal-cfg       (:temporal-evidence scenario)
-         temporal-enabled?    (:temporal-enabled? flags)]
-     (if-not (:ok validation)
-       {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
-       (let [agents   (:agents scenario)
-             p-params (get scenario :protocol-params {})
-             context  (-> (proto/build-execution-context protocol agents p-params)
-                          (assoc :replay-flags flags))
-             agent-index (:agent-index context)
-             world0  (proto/init-world protocol scenario)
-             events  (sort-by :seq (:events scenario))
-             scenario-id (:scenario-id scenario)
-             expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
-             strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
-             run-id  (or (:run-id replay-opts) (:run-id scenario) (str scenario-id "-run"))
-             raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
-                                             {:expected-errors-set expected-errors-set
-                                              :strict-expected-errors? strict-expected-errors?
-                                              :allow-open-entities? (:allow-open-entities? scenario)
-                                              :allow-open-disputes? (:allow-open-disputes? scenario)
-                                              :agents agents
-                                              :temporal-cfg temporal-cfg
-                                              :temporal-enabled? temporal-enabled?
-                                              :agent-index agent-index
-                                              :scenario scenario
-                                              :run-id run-id
-                                              :replay-flags flags})
-             trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
-                             (:world-checkpoint-policy flags)
-                             raw-result)]
-         (attr/with-attribution
-           {:ctx/scenario-id scenario-id
-            :ctx/run-id run-id}
-           (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
-          (let [result (if (:evaluate-expectations? flags true)
-                         (finalize-scenario-result scenario trimmed-result flags)
-                         trimmed-result)]
+  ([protocol scenario replay-opts]
+   (chain/with-fresh-registry
+     (chain/with-fresh-chain-cursor
+       (risk/with-fresh-risk-context
+         (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
+               vocab              (if (satisfies? proto/EconomicModel protocol)
+                                    (proto/metric-vocabulary protocol)
+                                    #{})
+               effective-metrics  (into (into metrics/base-metrics vocab)
+                                        (or (metrics/expectation-metric-keys scenario) #{}))
+               validation         (validate-scenario scenario effective-metrics
+                                                     {:strict-validation? (:strict-validation? flags)})
+               temporal-cfg       (:temporal-evidence scenario)
+               temporal-enabled?    (:temporal-enabled? flags)]
+           (if-not (:ok validation)
+             {:outcome :invalid :scenario-id (:scenario-id scenario) :events-processed 0 :trace [] :metrics (metrics/zero-metrics protocol) :halt-reason (:error validation) :protocol protocol}
+             (let [agents   (:agents scenario)
+                   p-params (get scenario :protocol-params {})
+                   context  (-> (proto/build-execution-context protocol agents p-params)
+                                (assoc :replay-flags flags))
+                   agent-index (:agent-index context)
+                   world0  (proto/init-world protocol scenario)
+                   events  (sort-by :seq (:events scenario))
+                   scenario-id (:scenario-id scenario)
+                   expected-errors-set (set (map expected-error-key (:expected-errors scenario [])))
+                   strict-expected-errors? (boolean (:strict-expected-errors? scenario false))
+                   run-id  (or (:run-id replay-opts) (:run-id scenario) (str scenario-id "-run"))
+                   raw-result (execution/run-simulation-loop protocol context scenario-id events world0 [] (metrics/zero-metrics protocol)
+                                                             {:expected-errors-set expected-errors-set
+                                                              :strict-expected-errors? strict-expected-errors?
+                                                              :allow-open-entities? (:allow-open-entities? scenario)
+                                                              :allow-open-disputes? (:allow-open-disputes? scenario)
+                                                              :agents agents
+                                                              :temporal-cfg temporal-cfg
+                                                              :temporal-enabled? temporal-enabled?
+                                                              :agent-index agent-index
+                                                              :scenario scenario
+                                                              :run-id run-id
+                                                              :replay-flags flags})
+                   trimmed-result (replay-checkpoints/apply-checkpoint-policy-to-result
+                                   (:world-checkpoint-policy flags)
+                                   raw-result)]
+               (attr/with-attribution
+                 {:ctx/scenario-id scenario-id
+                  :ctx/run-id run-id}
+                 (attr/log-with-attr :info "scenario/start" {:id scenario-id}))
+               (let [result (if (:evaluate-expectations? flags true)
+                              (finalize-scenario-result scenario trimmed-result flags)
+                              trimmed-result)]
              ;; Phase 2: Register Theory Evaluation and Results
              ;; TODO: Move this I/O to the caller level — replay-with-protocol
              ;; should be a pure computation.
-             (when-let [theory (:diagnostics result)]
-               (try
-                 (let [f (io/file (evcfg/artifact-path :theory-eval))]
-                   (.mkdirs (.getParentFile f))
-                   (spit f (json/write-str theory {:indent true})))
-                 (catch Exception e
-                   (log/warn! :theory-diagnostics-write-failed
-                     {:path (evcfg/artifact-path :theory-eval)
-                      :error (.getMessage e)}))))
-           
-             (assoc result :risk-events (risk/events)))))))))))
+                 (when-let [theory (:diagnostics result)]
+                   (try
+                     (let [f (io/file (evcfg/artifact-path :theory-eval))]
+                       (.mkdirs (.getParentFile f))
+                       (spit f (json/write-str theory {:indent true})))
+                     (catch Exception e
+                       (log/warn! :theory-diagnostics-write-failed
+                                  {:path (evcfg/artifact-path :theory-eval)
+                                   :error (.getMessage e)}))))
+
+                 (assoc result :risk-events (risk/events)))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."
@@ -239,16 +238,16 @@
         temporal-enabled? (boolean (:enabled? temporal-cfg))
         run-id (or (:run-id options) (str scenario-id "-resume"))]
     (execution/run-simulation-loop protocol context scenario-id events world trace metrics'
-                         (merge {:expected-errors-set expected-errors-set
-                                 :strict-expected-errors? strict-expected-errors?
-                                 :allow-open-entities? true
-                                 :allow-open-disputes? true
-                                 :agents agents
-                                 :temporal-cfg temporal-cfg
-                                 :temporal-enabled? temporal-enabled?
-                                 :agent-index agent-index
-                                 :run-id run-id}
-                                options))))
+                                   (merge {:expected-errors-set expected-errors-set
+                                           :strict-expected-errors? strict-expected-errors?
+                                           :allow-open-entities? true
+                                           :allow-open-disputes? true
+                                           :agents agents
+                                           :temporal-cfg temporal-cfg
+                                           :temporal-enabled? temporal-enabled?
+                                           :agent-index agent-index
+                                           :run-id run-id}
+                                          options))))
 
 (defn result->json-str
   "Serialize a replay result to a JSON string."

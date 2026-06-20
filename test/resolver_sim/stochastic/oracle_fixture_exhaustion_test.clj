@@ -70,9 +70,9 @@
           result (dispute/resolve-dispute
                   rng 10000 150 700 2.5 :malicious 0.05 0.99 0.1
                   :oracle-fixture {:mode :fixed-roll-sequence
-                                    :rolls [0.0 0.0]
-                                    :scope #{:detection}
-                                    :on-exhaustion :repeat-last}
+                                   :rolls [0.0 0.0]
+                                   :scope #{:detection}
+                                   :on-exhaustion :repeat-last}
                   :reversal-detection-probability 0.5
                   :reversal-slash-bps 2500
                   :evidence-quality? true)]

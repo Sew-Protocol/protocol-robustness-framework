@@ -16,19 +16,19 @@
                                (range resolver-count)))
           {:keys [updated-histories defection-events diagnostics]}
           (d/apply-strategy-defection
-            (rng/make-rng 7)
-            histories
-            1
-            {:n-trials-per-epoch 2000
-             :escrow-size 10000
-             :resolver-fee-bps 150
-             :slashing-detection-probability 0.1
-             :slash-multiplier 2.0
-             :strategy-adaptation {:enabled true
-                                   :rate 1.0
-                                   :selector :load-optimal
-                                   :allowed-targets #{:honest :lazy :malicious}}
-             :strategy-space #{:honest :lazy :malicious}})
+           (rng/make-rng 7)
+           histories
+           1
+           {:n-trials-per-epoch 2000
+            :escrow-size 10000
+            :resolver-fee-bps 150
+            :slashing-detection-probability 0.1
+            :slash-multiplier 2.0
+            :strategy-adaptation {:enabled true
+                                  :rate 1.0
+                                  :selector :load-optimal
+                                  :allowed-targets #{:honest :lazy :malicious}}
+            :strategy-space #{:honest :lazy :malicious}})
           final-strategies (set (map :strategy (vals updated-histories)))]
       (is (empty? diagnostics))
       (is (contains? final-strategies :lazy))
@@ -41,15 +41,15 @@
                      "resolver-2" {:strategy :malicious :epoch-history {:epoch-1 {:trials 5 :profit 5.0}}}}
           {:keys [updated-histories]}
           (d/apply-strategy-defection
-            (rng/make-rng 13)
-            histories
-            1
-            {:n-trials-per-epoch 2000
-             :strategy-adaptation {:enabled true
-                                   :rate 1.0
-                                   :selector :load-optimal
-                                   :allowed-targets #{:honest :lazy :malicious}}
-             :strategy-space #{:honest :lazy :malicious}})
+           (rng/make-rng 13)
+           histories
+           1
+           {:n-trials-per-epoch 2000
+            :strategy-adaptation {:enabled true
+                                  :rate 1.0
+                                  :selector :load-optimal
+                                  :allowed-targets #{:honest :lazy :malicious}}
+            :strategy-space #{:honest :lazy :malicious}})
           final-mix (frequencies (map :strategy (vals updated-histories)))]
       (is (pos? (get final-mix :lazy 0))))))
 
@@ -80,15 +80,15 @@
                                     :epoch-history {:epoch-3 {:trials 12 :profit 9.0}}}}
           {:keys [updated-histories defection-events diagnostics]}
           (d/apply-strategy-defection
-            (rng/make-rng 11)
-            histories
-            3
-            {:n-trials-per-epoch 2000
-             :strategy-adaptation {:enabled true
-                                   :rate 1.0
-                                   :selector :load-optimal
-                                   :allowed-targets #{:honest :malicious}}
-             :strategy-space #{:honest :malicious}})]
+           (rng/make-rng 11)
+           histories
+           3
+           {:n-trials-per-epoch 2000
+            :strategy-adaptation {:enabled true
+                                  :rate 1.0
+                                  :selector :load-optimal
+                                  :allowed-targets #{:honest :malicious}}
+            :strategy-space #{:honest :malicious}})]
       (is (empty? defection-events))
       (is (= :honest (get-in updated-histories ["resolver-07" :strategy])))
       (is (= :target-outside-strategy-space (-> diagnostics first :reason))))))
@@ -165,15 +165,15 @@
 (deftest validation-rejects-invalid-params
   (testing "parameter validation throws ex-info for out-of-range inputs"
     (is (thrown? clojure.lang.ExceptionInfo
-          (ec/optimal-strategy-under-load (rng/make-rng 1) 0 100 0.1 2.0 150.0)))
+                 (ec/optimal-strategy-under-load (rng/make-rng 1) 0 100 0.1 2.0 150.0)))
     (is (thrown? clojure.lang.ExceptionInfo
-          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 0 0.1 2.0 150.0)))
+                 (ec/optimal-strategy-under-load (rng/make-rng 1) 10 0 0.1 2.0 150.0)))
     (is (thrown? clojure.lang.ExceptionInfo
-          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 -0.1 2.0 150.0)))
+                 (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 -0.1 2.0 150.0)))
     (is (thrown? clojure.lang.ExceptionInfo
-          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 0.0 150.0)))
+                 (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 0.0 150.0)))
     (is (thrown? clojure.lang.ExceptionInfo
-          (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 2.0 0.0)))))
+                 (ec/optimal-strategy-under-load (rng/make-rng 1) 10 100 0.1 2.0 0.0)))))
 
 (deftest load-reduces-honest-accuracy-monotonically
   (testing "as dispute count increases, honest expected accuracy does not increase"
@@ -229,7 +229,7 @@
 (deftest blocked-target-policy-modes
   (testing "blocked-target-policy controls compatibility classification"
     (let [base-result {:epoch-results [{:defection {:diagnostics [{:reason :target-outside-strategy-space}]
-                                                  :adaptation/resolved-config {:blocked-target-policy :inconclusive}}}]}
+                                                    :adaptation/resolved-config {:blocked-target-policy :inconclusive}}}]}
           warn-result (assoc-in base-result [:epoch-results 0 :defection :adaptation/resolved-config :blocked-target-policy] :warn)
           fail-result (assoc-in base-result [:epoch-results 0 :defection :adaptation/resolved-config :blocked-target-policy] :fail)
           inc-claim (se/evaluate-strategy-adaptation-compatibility base-result)

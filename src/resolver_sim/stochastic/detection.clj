@@ -52,7 +52,7 @@
 
       (map? fixed-or)
       (let [m (if (:mode fixed-or) fixed-or
-                (assoc fixed-or :mode :fixed-roll-sequence))]
+                  (assoc fixed-or :mode :fixed-roll-sequence))]
         (update m :mode normalize-oracle-mode))
 
       :else
@@ -80,8 +80,8 @@
         legacy-rolls (:oracle-roll-sequence params)
         legacy-on-exhaustion (:oracle-roll-on-exhaustion params)
         fixture (merge (:oracle-fixture params {})
-                     (fixture-from-fixed-or (:fixed-or params)))
-         mode (normalize-oracle-mode (or (:mode fixture) legacy-mode :stochastic))
+                       (fixture-from-fixed-or (:fixed-or params)))
+        mode (normalize-oracle-mode (or (:mode fixture) legacy-mode :stochastic))
         scope (or (:scope fixture) #{:detection})
         on-exhaustion (or (:on-exhaustion fixture) legacy-on-exhaustion :throw)
         on-unknown-roll-kind (or (:on-unknown-roll-kind fixture) :throw)
@@ -303,9 +303,9 @@
   (let [l1-malicious (double (or slashing-detection-prob
                                  (:slashing-detection-probability params)
                                  0.1))]
-    {     :fraud (double (or (:fraud-detection-probability params)
-                         l1-malicious
-                         0.0))
+    {:fraud (double (or (:fraud-detection-probability params)
+                        l1-malicious
+                        0.0))
      :timeout (double (:timeout-detection-probability params 0.0))
      :l1-honest (double (:l1-honest-detection-probability params 0.01))
      :l1-lazy (double (:l1-lazy-detection-probability params 0.02))
@@ -363,9 +363,9 @@
     (append-roll-trace!
      params
      (merge (select-keys roll-event #{:roll/kind :roll/source :roll/value
-                                       :roll/index :roll/count :roll/exhausted?
-                                       :roll/on-exhaustion :roll/repeated-index
-                                       :roll/cycled-index})
+                                      :roll/index :roll/count :roll/exhausted?
+                                      :roll/on-exhaustion :roll/repeated-index
+                                      :roll/cycled-index})
             {:threshold (double threshold)
              :detected? (boolean detected?)}))))
 
@@ -506,7 +506,7 @@
         p-l2-esc (double (or (:p-l2-escalation params) (:p-l2-escalation band-assumptions 0.55)))
         p-l2-rev (double (or (:p-l2-reversal params) (:p-l2-reversal band-assumptions 0.88)))
         scope (:scope (:oracle-effective params)
-                       (:scope (normalize-oracle-fixture params) #{:detection}))
+                      (:scope (normalize-oracle-fixture params) #{:detection}))
         has-kleros? (if (some? (:has-kleros? params))
                       (:has-kleros? params)
                       (:has-kleros? band-assumptions true))

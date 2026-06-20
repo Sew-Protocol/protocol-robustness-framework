@@ -50,6 +50,6 @@
       (spit (nth files 4)  (str bundle-h "\n"))
       {:out-dir out-dir
        :bundle-hash bundle-h
-       :files   (->> files (map #(.getPath %)) (remove nil?) )})
+       :files   (->> files (map #(.getPath %)) (remove nil?))})
     (catch Exception e
       {:error (.getMessage e)})))

@@ -76,10 +76,10 @@
      :ctx        — attribution context map (merged into :attribution)"
   [{:keys [type importance ctx]
     :or   {importance :core}}]
-   {:evidence/schema-version (evcfg/schema :event-evidence)
-    :evidence/type           (when type (name type))
-    :evidence/importance     (name (or importance :diagnostic))
-    :evidence/context        (when ctx (attr/sanitize-attribution ctx))})
+  {:evidence/schema-version (evcfg/schema :event-evidence)
+   :evidence/type           (when type (name type))
+   :evidence/importance     (name (or importance :diagnostic))
+   :evidence/context        (when ctx (attr/sanitize-attribution ctx))})
 
 ;; ── Field Capture ────────────────────────────────────────────────────────────
 

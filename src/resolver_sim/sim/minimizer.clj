@@ -28,26 +28,26 @@
 (defn- normalize-map-keys [m]
   (if (map? m)
     (reduce-kv (fn [acc k v]
-                  (let [normalized-k (if (string? k)
-                                       (try (Integer/parseInt k)
-                                            (catch Exception _ k))
-                                       k)]
-                    (assoc acc normalized-k v)))
+                 (let [normalized-k (if (string? k)
+                                      (try (Integer/parseInt k)
+                                           (catch Exception _ k))
+                                      k)]
+                   (assoc acc normalized-k v)))
                {} m)
     m))
 
 (defn- normalize-json-scenario [x]
   (walk/postwalk
-    (fn [v]
-      (cond
-        (map? v)
-        (let [key-normalized (normalize-map-keys v)]
-          (reduce-kv (fn [m k kv]
-                       (assoc m k (normalize-keyword-strings kv)))
-                     key-normalized key-normalized))
-        (string? v) (normalize-keyword-strings v)
-        :else v))
-    x))
+   (fn [v]
+     (cond
+       (map? v)
+       (let [key-normalized (normalize-map-keys v)]
+         (reduce-kv (fn [m k kv]
+                      (assoc m k (normalize-keyword-strings kv)))
+                    key-normalized key-normalized))
+       (string? v) (normalize-keyword-strings v)
+       :else v))
+   x))
 
 (defn- re-index-events
   "Ensure event sequence numbers are contiguous from 0."
@@ -93,7 +93,7 @@
   [scenario]
   (let [referenced (into #{} (keep :agent (:events scenario)))]
     (update scenario :agents (fn [agents]
-                                (filterv #(contains? referenced (:id %)) agents)))))
+                               (filterv #(contains? referenced (:id %)) agents)))))
 
 (defn minimize
   "Greedily minimize the scenario trace, then prune unreferenced agents.

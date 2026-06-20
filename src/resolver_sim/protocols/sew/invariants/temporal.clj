@@ -10,6 +10,6 @@
         canon (:block-ts ctx)]
     (if (or (nil? legacy) (= legacy canon))
       {:holds? true}
-      {:holds? false :violations [{:error :temporal-drift 
-                                  :legacy legacy 
-                                  :canonical canon}]})))
+      {:holds? false :violations [{:error :temporal-drift
+                                   :legacy legacy
+                                   :canonical canon}]})))

@@ -81,7 +81,7 @@
 
   :fmt
   {:mvn/repos {"clojars" {:url "https://repo.clojars.org/"}}
-   :extra-deps {cljfmt/cljfmt {:mvn/version "0.13.0"}}
+   :extra-deps {dev.weavejester/cljfmt {:mvn/version "0.16.4"}}
    :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
 
   :run

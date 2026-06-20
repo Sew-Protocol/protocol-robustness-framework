@@ -69,23 +69,23 @@
         ; Find worst-case epoch: highest strategic-mean / honest-mean ratio.
         violations
         (keep-indexed
-          (fn [epoch-idx _]
-            (let [h-profits (honest-profits-at-epoch   equity-traj histories epoch-idx)
-                  s-profits (strategic-profits-at-epoch equity-traj histories epoch-idx)
-                  h-mean    (if (seq h-profits) (double (/ (reduce + h-profits) (count h-profits))) 0.0)
-                  s-mean    (if (seq s-profits) (double (/ (reduce + s-profits) (count s-profits))) 0.0)
-                  s-p95     (trajectory/p95 (vec s-profits))
-                  ratio-mean (trajectory/divergence-ratio h-mean s-mean)
-                  ratio-p95  (trajectory/divergence-ratio h-mean s-p95)]
-              (when (or (and ratio-mean (> ratio-mean drift-mean))
-                        (and ratio-p95  (> ratio-p95  drift-p95)))
-                {:epoch           (inc epoch-idx)
-                 :ratio-mean      ratio-mean
-                 :ratio-p95       ratio-p95
-                 :honest-mean     h-mean
-                 :strategic-mean  s-mean
-                 :strategic-p95   s-p95})))
-          spread-traj)
+         (fn [epoch-idx _]
+           (let [h-profits (honest-profits-at-epoch   equity-traj histories epoch-idx)
+                 s-profits (strategic-profits-at-epoch equity-traj histories epoch-idx)
+                 h-mean    (if (seq h-profits) (double (/ (reduce + h-profits) (count h-profits))) 0.0)
+                 s-mean    (if (seq s-profits) (double (/ (reduce + s-profits) (count s-profits))) 0.0)
+                 s-p95     (trajectory/p95 (vec s-profits))
+                 ratio-mean (trajectory/divergence-ratio h-mean s-mean)
+                 ratio-p95  (trajectory/divergence-ratio h-mean s-p95)]
+             (when (or (and ratio-mean (> ratio-mean drift-mean))
+                       (and ratio-p95  (> ratio-p95  drift-p95)))
+               {:epoch           (inc epoch-idx)
+                :ratio-mean      ratio-mean
+                :ratio-p95       ratio-p95
+                :honest-mean     h-mean
+                :strategic-mean  s-mean
+                :strategic-p95   s-p95})))
+         spread-traj)
 
         first-violation (first violations)
         max-spread-mean (apply max 0.0 (keep :ratio-mean violations))

@@ -157,12 +157,12 @@
                  (let [[_ r] (first resolutions)]
                    {:resolution/type (if (:is-release r) :release :refund)
                     :resolved-by (:resolved-by r)})
-                  (apply merge (map (fn [[wf-id r]]
-                                      {(keyword (str "wf-" wf-id "-resolution"))
-                                       (if (:is-release r) :release :refund)
-                                       (keyword (str "wf-" wf-id "-resolved-by"))
-                                       (:resolved-by r)})
-                                     (filter (fn [[_ r]] (map? r)) resolutions)))))))))
+                 (apply merge (map (fn [[wf-id r]]
+                                     {(keyword (str "wf-" wf-id "-resolution"))
+                                      (if (:is-release r) :release :refund)
+                                      (keyword (str "wf-" wf-id "-resolved-by"))
+                                      (:resolved-by r)})
+                                   (filter (fn [[_ r]] (map? r)) resolutions)))))))))
 
 (defn build-entry-result
   "Build one collection entry from a replay result.
@@ -190,34 +190,34 @@
          violations    (if expected-fail?
                          0
                          (get-in replay-result [:metrics :invariant-violations] 0))
-          entry         (cond-> {:name           name
-                                 :scenario-id    (:scenario-id replay-result)
-                                 :source         (or source :replay)
-                                 :outcome        (:outcome replay-result)
-                                 :halt-reason    (:halt-reason replay-result)
-                                 :expected-fail? expected-fail?
-                                 :steps          (:events-processed replay-result 0)
-                                 :reverts        (get-in replay-result [:metrics :reverts] 0)
-                                 :violations     violations
-                                 :checks         checks
-                                 :replay-result  replay-result
-                                 :details        [replay-result]}
-                          scenario (assoc :scenario scenario))
-          pass-entry    (assoc entry :pass? (scenario-pass? entry opts))
-          attr          (derive-resolution-attributes replay-result scenario)
-          capsule       (when-not (:pass? pass-entry)
-                          (let [world (:world replay-result)]
-                            (capsule/generate-capsule
-                             :scenario-id (:scenario-id replay-result)
-                             :protocol (:protocol scenario)
-                             :metrics-digest (:metrics replay-result)
-                             :diagnosis (str "Scenario failed: " name)
-                             :recommended-next-test "Review trace for invariant violations"
-                             :semantic-analysis (registry/classify-semantic-impact (:protocol scenario) world pass-entry))))
-          pass-entry*   (if capsule (assoc pass-entry :reasoning-capsule capsule) pass-entry)]
-      (if attr
-        (apply with-attribute pass-entry* (mapcat identity (seq attr)))
-        pass-entry*))))
+         entry         (cond-> {:name           name
+                                :scenario-id    (:scenario-id replay-result)
+                                :source         (or source :replay)
+                                :outcome        (:outcome replay-result)
+                                :halt-reason    (:halt-reason replay-result)
+                                :expected-fail? expected-fail?
+                                :steps          (:events-processed replay-result 0)
+                                :reverts        (get-in replay-result [:metrics :reverts] 0)
+                                :violations     violations
+                                :checks         checks
+                                :replay-result  replay-result
+                                :details        [replay-result]}
+                         scenario (assoc :scenario scenario))
+         pass-entry    (assoc entry :pass? (scenario-pass? entry opts))
+         attr          (derive-resolution-attributes replay-result scenario)
+         capsule       (when-not (:pass? pass-entry)
+                         (let [world (:world replay-result)]
+                           (capsule/generate-capsule
+                            :scenario-id (:scenario-id replay-result)
+                            :protocol (:protocol scenario)
+                            :metrics-digest (:metrics replay-result)
+                            :diagnosis (str "Scenario failed: " name)
+                            :recommended-next-test "Review trace for invariant violations"
+                            :semantic-analysis (registry/classify-semantic-impact (:protocol scenario) world pass-entry))))
+         pass-entry*   (if capsule (assoc pass-entry :reasoning-capsule capsule) pass-entry)]
+     (if attr
+       (apply with-attribute pass-entry* (mapcat identity (seq attr)))
+       pass-entry*))))
 
 (defn runner-opts-for-scenario
   "Default theory evaluation opts for a scenario map (fixture or JSON).
@@ -257,9 +257,9 @@
                            :expected expected-outcome
                            :actual (:outcome base-entry)})
         halt-check     (when expected-halt-reason
-                          {:ok? (= expected-halt-reason (:halt-reason base-entry))
-                           :expected expected-halt-reason
-                           :actual (:halt-reason base-entry)})
+                         {:ok? (= expected-halt-reason (:halt-reason base-entry))
+                          :expected expected-halt-reason
+                          :actual (:halt-reason base-entry)})
         entry          (-> base-entry
                            (assoc :expected-outcome expected-outcome
                                   :expected-halt-reason expected-halt-reason

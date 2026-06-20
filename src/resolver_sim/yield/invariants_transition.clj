@@ -54,7 +54,7 @@
   "Returns {inv-kw {:holds? bool}} for transition checks."
   [world-before world-after]
   {:yield/index-monotone {:holds? (check-index-monotone-transition
-                                  world-before world-after)}})
+                                   world-before world-after)}})
 
 (defn transition-violations
   "Map of failed invariants for replay (same shape as single-world checks)."
