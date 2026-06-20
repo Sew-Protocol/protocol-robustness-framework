@@ -736,6 +736,7 @@
     :escalation-not-configured
     :resolution-already-pending
     :resolver-capacity-exceeded
+    :insufficient-resolver-stake
     :not-participant
     :not-authorized-resolver
     :not-governance

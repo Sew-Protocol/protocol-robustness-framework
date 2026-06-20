@@ -330,7 +330,13 @@ run_dispute_resolution() {
 (let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
-  return $?
+  local dr_exit=$?
+  # CI Gate: validate artifact registry
+  if [[ -f "scripts/ci_gate_validation.py" ]]; then
+    echo "Running CI gate validation..."
+    python3 scripts/ci_gate_validation.py || return $?
+  fi
+  return $dr_exit
 }
 
 run_yield_scenarios() {

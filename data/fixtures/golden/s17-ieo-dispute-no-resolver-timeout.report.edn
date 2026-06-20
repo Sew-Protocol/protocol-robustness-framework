@@ -34,7 +34,7 @@
   :attack-successes 0,
   :funds-lost 0,
   :total-escrows 1,
-  :invalid-guard-conditions 0,
+  :invalid-guard-conditions 1,
   :disputes-triggered 0,
   :protocol/fees-usdc 0,
   :escrow/state "pending",

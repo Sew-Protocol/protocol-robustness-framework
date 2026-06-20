@@ -19,12 +19,15 @@
    :evidence           {:label "Evidence robustness"
                         :scenarios ["S-DR-010-missing-evidence"
                                     "S-DR-011-contradictory-evidence"
-                                    "S-DR-056-evidence-non-disputed-rejected"]}
+                                    "S-DR-056-evidence-non-disputed-rejected"
+                                    "S-DR-083-evidence-after-resolution"
+                                    "S-DR-084-evidence-after-settlement-rejected"]}
    :strategic          {:label "Strategic disputants"
                         :scenarios ["S-DR-020-false-claimant-slashed"
                                     "S-DR-021-griefing-claim-cost"
                                     "S-DR-022-lazy-counterparty-timeout"
-                                    "S-DR-072-resolver-unavailable-timeout"]}
+                                    "S-DR-072-resolver-unavailable-timeout"
+                                    "S-DR-085-repeated-frivolous-disputes"]}
    :resolver-integrity {:label "Resolver integrity"
                         :scenarios ["S-DR-030-biased-resolver-appealed"
                                     "S-DR-031-colluding-resolver-detected"
@@ -39,7 +42,10 @@
                                     "S-DR-070-empty-string-resolver-rejected"
                                     "S-DR-071-governance-rotate-biased-ruling"
                                     "S-DR-074-governance-capacity-bypass"
-                                    "S-DR-076-non-governance-rotate-rejected"]}
+                                    "S-DR-076-non-governance-rotate-rejected"
+                                    "S-DR-080-stake-capacity-enforced"
+                                    "S-DR-081-stake-capacity-bypass"
+                                    "S-DR-082-stake-capacity-sufficient"]}
    :finality           {:label "Finality and payout correctness"
                         :scenarios ["S-DR-040-finality-blocked-during-appeal"
                                     "S-DR-041-finality-after-appeal-window"

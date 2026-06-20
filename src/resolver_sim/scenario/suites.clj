@@ -53,7 +53,13 @@
    "scenarios/S-DR-073-capacity-exhaustion-permanent-lock.json"
    "scenarios/S-DR-074-governance-capacity-bypass.json"
    "scenarios/S-DR-075-insufficient-bond-deterrence.json"
-   "scenarios/S-DR-076-non-governance-rotate-rejected.json"])
+   "scenarios/S-DR-076-non-governance-rotate-rejected.json"
+   "scenarios/S-DR-080-stake-capacity-enforced.json"
+   "scenarios/S-DR-081-stake-capacity-bypass.json"
+   "scenarios/S-DR-082-stake-capacity-sufficient.json"
+   "scenarios/S-DR-083-evidence-after-resolution.json"
+   "scenarios/S-DR-084-evidence-after-settlement-rejected.json"
+   "scenarios/S-DR-085-repeated-frivolous-disputes.json"])
 
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"
