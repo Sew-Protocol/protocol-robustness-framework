@@ -1,6 +1,7 @@
 (ns resolver-sim.notebooks.common
   "Backward-compatibility wrapper. New code should use resolver-sim.manifest.common."
-  (:require [resolver-sim.manifest.common :as mc]))
+  (:require [resolver-sim.manifest.common :as mc]
+            [resolver-sim.notebooks.theme :refer [notebook-theme]]))
 
 (defn safe-slurp [& args] (apply mc/safe-slurp args))
 (defn read-json [& args] (apply mc/read-json args))
@@ -13,7 +14,7 @@
   (try
     (f)
     (catch Exception e
-      [:div {:style {:background "#fef2f2" :border "1px solid #dc2626"
+      [:div {:style {:background (:tone/red-row-bg notebook-theme) :border (str "1px solid " (:alert/red-border notebook-theme))
                      :borderRadius "4px" :padding "12px" :margin "8px 0"}}
        [:strong (str "⚠ " label " render error: ")]
        [:code (.getMessage e)]])))

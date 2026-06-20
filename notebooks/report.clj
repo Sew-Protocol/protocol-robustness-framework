@@ -74,6 +74,28 @@
 ;; - `:research-finding` — model/theory finding
 ;; - `:expected-negative` — scenario designed to demonstrate a known limitation
 ;; - `:missing-data` — artifact absent; evidence incomplete
+
+^{:nextjournal.clerk/visibility {:code :hide :result :show}}
+(clerk/html
+ [:div {:style {:display "flex" :gap "12px" :flexWrap "wrap" :alignItems "center" :marginBottom "6px"}}
+  [:span {:style {:fontSize "0.82em" :fontWeight "600" :color (:text/body notebook-theme)}} "status semantics"]
+  [:span {:style (merge status-badge-base-style (tone-style :green))} "🟢 Validation holds"]
+  [:span {:style (merge status-badge-base-style (tone-style :amber))} "🟠 Inconclusive / warning"]
+  [:span {:style (merge status-badge-base-style (tone-style :red))} "🔴 Hard failure"]
+  [:span {:style (merge status-badge-base-style
+                        {:backgroundColor (:status/neutral-bg notebook-theme)
+                         :color (:status/neutral-text notebook-theme)})} "⚪ Neutral"]]
+ [:div {:style {:marginTop "6px" :fontSize "0.78em" :color (:text/muted notebook-theme) :lineHeight "1.5"}}
+  "Red can mean a validation failure OR a successful falsification (expected-negative). "
+  "Always inspect the status-kind badge: "
+  [:span {:style (merge status-badge-base-style (kind-badge-style "Validation"))} "Validation"]
+  " "
+  [:span {:style (merge status-badge-base-style (kind-badge-style "Research finding"))} "Research finding"]
+  " "
+  [:span {:style (merge status-badge-base-style (kind-badge-style "Expected negative"))} "Expected negative"]
+  " "
+  [:span {:style (merge status-badge-base-style (kind-badge-style "Missing data"))} "Missing data"]
+  "."]
 ;; ---
 
 ;; ## Style Layer
@@ -659,61 +681,7 @@
          (ui/callout :green [:div "No validation-failure rows detected in current corpus."]))]))))
 
 ;; ---
-;; ## 6. Substatus Detail
-;;
-;; Expanded columns for scenarios with a golden report.
-;; Helps distinguish: protocol invariant pass, research claim status,
-;; adversarial success, and accounting metrics.
-
-^{:nextjournal.clerk/visibility {:code :fold}}
-(clerk/html
- (common/safe-render
-  "Substatus Detail"
-  (fn []
-    (let [golds (or golden-reports {})
-          rows
-          (for [t (or all-traces [])
-                :let [golden (get golds (:id t))]
-                :when golden
-                :let [m          (:metrics golden)
-                      inv-pass?  (zero? (get m :invariant-violations 0))
-                      atk-succ   (get m :attack-successes 0)
-                      bg         (cond (not inv-pass?) (:tone/red-row-bg notebook-theme)
-                                       (pos? atk-succ)  (:tone/amber-bg notebook-theme)
-                                       :else            "white")]]
-            [:tr {:style {:borderBottom (str "1px solid " (:table/border notebook-theme)) :background bg}}
-              [:td {:style {:fontFamily "monospace" :fontSize "0.78em" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (:id t)]
-              [:td {:style {:fontSize "0.78em" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (:purpose t)]
-              [:td {:style {:textAlign "center" :padding "4px 8px"
-                            :color (if (not= :fail (:outcome golden)) (:status/pass-color notebook-theme) (:status/fail-color notebook-theme))}}
-               (if (not= :fail (:outcome golden)) "✓" "✗")]
-              [:td {:style {:textAlign "center" :padding "4px 8px"
-                            :color (if inv-pass? (:status/pass-color notebook-theme) (:status/fail-color notebook-theme))}}
-               (if inv-pass? "✓" "✗")]
-              [:td {:style (merge {:textAlign "center" :padding "4px 8px"}
-                                  (when (pos? atk-succ) {:color (:status/atk-color notebook-theme) :fontWeight "bold"}))}
-               atk-succ]
-              [:td {:style {:textAlign "right" :padding "4px 8px" :fontFamily "monospace" :color (:table/cell-text notebook-theme)}}
-               (str (get m :total-volume "—"))]
-              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :disputes-triggered 0)]
-              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :reverts 0)]
-              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :resolutions-executed 0)]])]
-      [:div
-        [:h2 "Substatus Detail"]
-        [:p {:style {:fontSize "0.85em" :color (:text/muted notebook-theme)}}
-         "Per-scenario substatus for all scenarios with golden reports. "
-         "Columns: replay-ok, invariants-pass, attack-successes, volume, disputes, reverts, resolutions."]
-        [:div {:style {:overflowX "auto"}}
-         [:table {:style table-tight-style}
-          [:thead
-            (into [:tr {:style table-header-row-style}]
-                  (map #(vector :th {:style (merge table-header-cell-style {:padding "5px 8px" :textAlign (if (= % "ID") "left" "center")})} %)
-                       ["ID" "Purpose" "replay-ok?" "inv-pass?" "atk-succ"
-                        "volume" "disputes" "reverts" "resolutions"]))]
-          (into [:tbody] rows)]]]))))
-
-;; ---
-;; ## 7. Funds / Accounting Panel
+;; ## 6. Funds / Accounting Panel
 ;;
 ;; Framework-level reconciliation view. Conservation is modeled — it tracks
 ;; invariant-violation counts, not live ledger entries.
@@ -786,7 +754,7 @@
         "See docs/overview/USE_OF_FUNDS.md for accounting semantics."]]))))
 
 ;; ---
-;; ## 8. Coverage Summary
+;; ## 7. Coverage Summary
 
 ^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
@@ -841,7 +809,7 @@
                     [:td {:style {:padding "3px 10px" :textAlign "right"}} (str n)]]))]]])))))
 
 ;; ---
-;; ## 9. Reproducibility / Provenance Panel
+;; ## 8. Reproducibility / Provenance Panel
 
 ^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html
@@ -889,10 +857,60 @@
          [:code "scripts/monte-carlo/test-all.sh"] " (stochastic phases)."]]))))
 
 ;; ---
-;; ## 10. Appendix — Data Source Debug
+;; ## 9. Appendix — Substatus Detail & Data Source Debug
 ;;
-;; Developer debug panel for notebook sync/path drift issues.
-;; Makes the data source explicit so stale sessions / wrong working dir are obvious.
+;; Folded diagnostic sections. These re-table data already visible in
+;; the Scenario Matrix, providing per-scenario metrics and artifact
+;; path debugging for researcher deep-dives.
+
+^{:nextjournal.clerk/visibility {:code :fold}}
+(clerk/html
+ (common/safe-render
+  "Appendix — Substatus Detail"
+  (fn []
+    (let [golds (or golden-reports {})
+          rows
+          (for [t (or all-traces [])
+                :let [golden (get golds (:id t))]
+                :when golden
+                :let [m          (:metrics golden)
+                      inv-pass?  (zero? (get m :invariant-violations 0))
+                      atk-succ   (get m :attack-successes 0)
+                      bg         (cond (not inv-pass?) (:tone/red-row-bg notebook-theme)
+                                       (pos? atk-succ)  (:tone/amber-bg notebook-theme)
+                                       :else            "white")]]
+            [:tr {:style {:borderBottom (str "1px solid " (:table/border notebook-theme)) :background bg}}
+              [:td {:style {:fontFamily "monospace" :fontSize "0.78em" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (:id t)]
+              [:td {:style {:fontSize "0.78em" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (:purpose t)]
+              [:td {:style {:textAlign "center" :padding "4px 8px"
+                            :color (if (not= :fail (:outcome golden)) (:status/pass-color notebook-theme) (:status/fail-color notebook-theme))}}
+               (if (not= :fail (:outcome golden)) "✓" "✗")]
+              [:td {:style {:textAlign "center" :padding "4px 8px"
+                            :color (if inv-pass? (:status/pass-color notebook-theme) (:status/fail-color notebook-theme))}}
+               (if inv-pass? "✓" "✗")]
+              [:td {:style (merge {:textAlign "center" :padding "4px 8px"}
+                                  (when (pos? atk-succ) {:color (:status/atk-color notebook-theme) :fontWeight "bold"}))}
+               atk-succ]
+              [:td {:style {:textAlign "right" :padding "4px 8px" :fontFamily "monospace" :color (:table/cell-text notebook-theme)}}
+               (str (get m :total-volume "—"))]
+              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :disputes-triggered 0)]
+              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :reverts 0)]
+              [:td {:style {:textAlign "center" :padding "4px 8px" :color (:table/cell-text notebook-theme)}} (get m :resolutions-executed 0)]])]
+      [:div
+        [:h3 "Substatus Detail"]
+        [:p {:style {:fontSize "0.85em" :color (:text/muted notebook-theme)}}
+         "Per-scenario substatus for all scenarios with golden reports. "
+         "Columns: replay-ok, invariants-pass, attack-successes, volume, disputes, reverts, resolutions."]
+        [:div {:style {:overflowX "auto"}}
+         [:table {:style table-tight-style}
+          [:thead
+            (into [:tr {:style table-header-row-style}]
+                  (map #(vector :th {:style (merge table-header-cell-style {:padding "5px 8px" :textAlign (if (= % "ID") "left" "center")})} %)
+                       ["ID" "Purpose" "replay-ok?" "inv-pass?" "atk-succ"
+                        "volume" "disputes" "reverts" "resolutions"]))]
+          (into [:tbody] rows)]]]))))
+
+;; ---
 
 ^{:nextjournal.clerk/visibility {:code :fold}}
 (clerk/html

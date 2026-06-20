@@ -1,6 +1,7 @@
 (ns resolver-sim.notebooks.ui
   (:require [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [resolver-sim.notebooks.theme :refer [notebook-theme]]))
 
 (def default-ui-state
   {:selected-trial-id nil
@@ -12,20 +13,22 @@
 (defn rag-badge [rag text]
   (let [[bg border fg emoji]
         (case rag
-          :green ["#dcfce7" "#16a34a" "#166534" "🟢"]
-          :red   ["#fee2e2" "#dc2626" "#7f1d1d" "🔴"]
-          ["#fef3c7" "#f59e0b" "#92400e" "🟠"])]
+          :green [(:status/passed-bg notebook-theme) (:status/pass-color notebook-theme) (:status/passed-text notebook-theme) "🟢"]
+          :red   [(:status/failed-bg notebook-theme) (:status/fail-color notebook-theme) (:status/failed-text notebook-theme) "🔴"]
+          [(:status/warning-bg notebook-theme) (:status/atk-color notebook-theme) (:status/warning-text notebook-theme) "🟠"])]
     [:span {:style {:display "inline-block" :padding "2px 8px"
                     :borderRadius "999px" :border (str "1px solid " border)
                     :backgroundColor bg :color fg :fontSize "0.75em" :fontWeight "600"}}
      (str emoji " " text)]))
 
 (defn callout [rag body]
+  ;; Inverted callout: dark background with light text for visual emphasis.
+  ;; Theme tokens are light-bg/dark-text; we swap bg/fg for the inverted style.
   (let [[bg border fg]
         (case rag
-          :green ["#14532d" "#22c55e" "#f0fdf4"]
-          :red   ["#7f1d1d" "#ef4444" "#fef2f2"]
-          ["#78350f" "#f59e0b" "#fef3c7"])]
+          :green [(:alert/green-text notebook-theme) (:alert/green-border notebook-theme) (:alert/green-bg notebook-theme)]
+          :red   [(:tone/red-text notebook-theme) (:alert/red-border notebook-theme) (:alert/red-bg notebook-theme)]
+          [(:alert/amber-text notebook-theme) (:alert/amber-border notebook-theme) (:alert/amber-bg notebook-theme)])]
     [:div {:style {:padding "12px 16px" :backgroundColor bg
                    :border (str "1px solid " border) :borderRadius "4px"
                    :marginBottom "12px" :color fg}}
@@ -48,11 +51,11 @@
    (query-error-callout "Query error" m)))
 
 (defn metric-card [{:keys [label value rag note]}]
-  [:div {:style {:border "1px solid #e2e8f0" :borderRadius "6px" :padding "10px" :minWidth "140px"}}
+  [:div {:style {:border (str "1px solid " (:tone/neutral-border notebook-theme)) :borderRadius "6px" :padding "10px" :minWidth "140px"}}
    [:div {:style {:display "flex" :gap "6px" :alignItems "center"}}
-    (rag-badge rag label)]
+     (rag-badge rag label)]
    [:div {:style {:fontFamily "monospace" :fontSize "1.1em" :marginTop "4px"}} (str value)]
-   (when note [:div {:style {:fontSize "0.75em" :color "#475569" :marginTop "4px"}} note])])
+   (when note [:div {:style {:fontSize "0.75em" :color (:text/muted notebook-theme) :marginTop "4px"}} note])])
 
 (defn filter-controls [!ui-state]
   (let [{:keys [filters pagination]} @!ui-state]
@@ -206,7 +209,7 @@
         registry-sha (or (get-in manifest [:framework :registry_sha256]) "—")
         git-commit   (get-in manifest [:framework :git_commit] "—")
         git-message  (get-in manifest [:framework :git_message] "—")]
-    [:div {:style {:marginTop "40px" :padding "20px" :borderTop "1px solid #e2e8f0" :fontSize "0.75em" :color "#64748b"}}
+    [:div {:style {:marginTop "40px" :padding "20px" :borderTop (str "1px solid " (:tone/neutral-border notebook-theme)) :fontSize "0.75em" :color (:text/muted notebook-theme)}}
      [:div "Artifact provenance:"]
      [:div {:style {:fontFamily "monospace"}}
       "Run ID: " run-id [:br]
