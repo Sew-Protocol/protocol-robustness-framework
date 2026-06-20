@@ -2,7 +2,23 @@
 
 ## [Unreleased]
 
-### Added (2026-06-19)
+### Added (2026-06-20)
+- **Yield-bearing scenario classification system:** `src/resolver_sim/scenario/yield_classification.clj` — `classify-yield-scenario` returns `{:yield/enabled? :yield/risk-class :scenario/categories :invariant/profile}`. Used to select invariant profiles and interpret expected failures. `yield-risk-class` inspects yield-config to determine `:principal-preserving`, `:principal-loss`, `:liquidity-shortfall`, or `:historical-index-replay`. `expected-invariant-results` returns per-invariant `{:status :expected? :reason}` metadata.
+- **Yield-bearing invariant documentation:** `docs/yield/YIELD_BEARING_INVARIANTS.md` — classification axes table, risk-class semantics, scenario map with expected invariant results, and per-scenario accounting traces.
+
+### Fixed (2026-06-20)
+- **`liquid_lending/withdraw` nil-position crash:** `token` normalization moved after the nil guard; module-id mismatch guard added. `claim-deferred` given explicit nil/module guards.
+- **`liquid_lending/withdraw` available-ratio dead path:** Withdraw now calls `market-state/get-market-state` instead of reading from `[:yield/risk :shortfall :available-ratio]` (never populated by `apply-yield-config`). Liquidity-schedule and shortfall-model configs now drive withdrawal shortfall calculations.
+- **`liquid_lending/withdraw` shortfall reason mismatch:** Hardcoded `:reason :liquidity-shortfall` replaced with `(or (:type shortfall-model) :liquidity-shortfall)`. Deferred-amount is moved to haircut-amount when `:recoverable false`, so `sum-recognized-losses` in `evidence.clj` correctly captures principal losses.
+- **`liquid_lending/withdraw` realized-yield zeroed on full fill:** Under waterfall `:not-claimable` policy, `realized-yield` was capped at `(- fulfilled-total principal)` = 0. When no shortfall, now uses full `unrealized-yield` so yield is distributed to claimable.
+- **`liquid_lending/accrue` index-schedule never consumed:** With APY=0, the index stayed at 1.0. Now calls `market-state/get-market-state` and uses schedule index directly via `update-position-yield`, matching the `fixed-accrue` pattern.
+- **`registry/normalize-schedule` external JSON type normalization:** `load-external-json` returned `:type "steps"` (string) but `get-value-at-time` pattern-matched on keyword `:steps`. Added `(update :type keyword)` after load.
+- **`held-delta-accounted?` missing losses term:** Added `losses` (via `yield-evi/sum-recognized-losses`) to `delta-inflow`, matching `conservation-of-funds?`. Principal-loss haircuts no longer cause spurious failures.
+- **`single-resolution-payout-consistent?` false positive on yield distributions:** Switched from flat legacy `:claimable` map to v2 domain-level check (`:claimable-v2`). Each domain (`:settlement/principal`, `:settlement/yield`) is checked independently, so yield distributions to a second party no longer trigger violations.
+
+### Changed (2026-06-20)
+- **S113/S115 scenarios:** Added `"yield-preset": "to-sender"` to `create_escrow` params. Yield was silently disabled because `normalize-yield-preset(nil) = :off`.
+- **S113/S115 golden reports regenerated:** S113 passes `conservation-of-funds`, `token-tax-reconciliation`, `held-delta-accounted`; solo expected-fail is `:solvency` (principal-loss by-design). S115 passes all invariants (index replay yield now correctly accrued).
 - **Notebook support layer:** `src/resolver_sim/notebook/` with `views.clj` (RAG helpers, card rendering, status functions, triage logic, evidence-hash-viewer, invariant-status-badge, trace-table, notice-box, trace-transition-card, badge) and `checks.clj` (Malli schemas for GoldenReport, TraceMetadata, TestSummary; assert-shape! and specific validators).
 - **`bb notebook:check` and `bb notebook:lint` tasks:** `notebook:check` loads notebook namespaces and validates data shapes; `notebook:lint` runs clj-kondo on `src/resolver_sim/notebook/`. `notebook:ci` combines both.
 - **`notebooks/docs/evidence_attribution.clj`:** Researcher-facing demonstration of the `with-attribution` → `capture-event-evidence!` → JSON artifact pipeline. 12 sections covering attribution context, evidence payloads, replay example, artifact registry, evidence chain validation.

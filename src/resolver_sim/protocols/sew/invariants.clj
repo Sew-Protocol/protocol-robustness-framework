@@ -1328,50 +1328,52 @@
 
 (defn single-resolution-payout-consistent?
   "True when terminal workflows have exactly one payout direction
-   per domain.  Yield distributions via :settlement/yield create a
-   separate claimable domain and do not count as a second payout
-   direction for the principal settlement.
+   per settlement domain.  Settlement domains are :settlement/principal
+   and :settlement/yield — these must go to the expected party
+   (:to for release, :from for refund).  Non-settlement domains
+   (:liability/challenge-bounty, :liability/slash-bounty, etc.)
+   may pay third parties and are not restricted.
 
    Detects double-resolution style corruption where both buyer and seller
-   end up with positive claimable principal balances for the same workflow."
+   end up with positive claimable settlement balances for the same workflow."
   [world]
-  (let [violations
-        (for [[wf et] (:escrow-transfers world {})
+  (let [settlement-domains #{:settlement/principal :settlement/yield}
+        violations
+        (for [[wf et] (vec (:escrow-transfers world))
               :when (contains? t/terminal-states (:escrow-state et))
-              :let [state         (:escrow-state et)
-                    pending?      (:exists (t/get-pending world wf))
-                    ;; Check v2 domain-level claimables: a workflow is valid when
-                    ;; each domain has at most one positive claimant.
-                    domains       (get-in world [:claimable-v2 wf] {})
+              :let [state (:escrow-state et)
+                    pending? (:exists (t/get-pending world wf))
+                    claimable-v2 (get (:claimable-v2 world) wf {})
                     domain-violations
-                    (for [[domain addr-map] domains
-                          :let [positives (->> addr-map
-                                               (filter (fn [[_ amt]] (pos? (or amt 0))))
-                                               (map first)
-                                               vec)
-                                 valid-direction?
-                                 (case state
-                                   :released (or (= positives [(:to et)])
-                                                 (= positives [(:from et)])
-                                                 (empty? positives))
-                                   :refunded (or (= positives [(:from et)])
-                                                 (= positives [(:to et)])
-                                                 (empty? positives))
-                                   :resolved (<= (count positives) 1)
+                    (for [[domain addr-map] claimable-v2
+                          :when (contains? settlement-domains domain)
+                          :let [positives (vec (keep (fn [[addr amt]]
+                                                       (when (and amt (pos? amt)) addr))
+                                                     addr-map))
+                                valid-direction?
+                                (case state
+                                  :released (or (= positives [(:to et)])
+                                                (= positives [(:from et)])
+                                                (empty? positives))
+                                  :refunded (or (= positives [(:from et)])
+                                                (= positives [(:to et)])
+                                                (empty? positives))
+                                  :resolved (<= (count positives) 1)
                                    true)]
-                          :when (and (seq positives) (not valid-direction?))]
-                      {:domain domain
-                       :positives positives
-                       :to (:to et)
-                       :from (:from et)})
-                     has-domain-violation? (seq domain-violations)]
+                           :when (and (seq positives) (not valid-direction?))]
+                           {:domain domain
+                           :positives positives
+                           :to (:to et)
+                           :from (:from et)})
+                    has-domain-violation? (boolean (seq domain-violations))]
                :when (and (not pending?) has-domain-violation?)]
            {:workflow-id wf
-           :state state
-           :pending? pending?
-           :domain-violations domain-violations})]
+            :state state
+            :pending? pending?
+            :domain-violations domain-violations})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 32: Executed fraud slashes are accounted in resolver slash totals
