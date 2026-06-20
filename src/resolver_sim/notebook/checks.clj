@@ -40,11 +40,6 @@
    [:malice-mean double?]
    [:strategy keyword?]])
 
-(defn assert-batch-shape!
-  "Validate a batch result map against the expected shape."
-  [result]
-  (assert-shape! "Batch result" BatchResult result))
-
 (defn assert-shape!
   "Validate data against a Malli schema. Throws with a descriptive message on failure."
   ([schema value]
@@ -57,6 +52,11 @@
                 :value  value
                 :errors (m/explain schema value)})))
    value))
+
+(defn assert-batch-shape!
+  "Validate a batch result map against the expected shape."
+  [result]
+  (assert-shape! "Batch result" BatchResult result))
 
 (defn assert-golden-report!
   "Validate a single golden report map."
