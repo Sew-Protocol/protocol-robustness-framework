@@ -54,8 +54,8 @@
   "svg": {
     "format": "animated-svg",
     "path": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.svg",
-    "size": 55016,
-    "generated-at": "2026-06-19T18:14:38.464248980Z",
+    "size": 56551,
+    "generated-at": "2026-06-19T19:16:13.342136396Z",
     "source-cast": "demos\/yield-shortfall-partial-fill\/generated\/recordings\/yield-shortfall-partial-fill.cast",
     "terminal": "120x36",
     "command": "svg-term-cli --window",
@@ -115,7 +115,7 @@
       }
     ]
   },
-  "run-id": "2026-06-19T18:12:56.215661946Z",
+  "run-id": "2026-06-19T19:05:34.986738192Z",
   "artifacts": [
     "coverage.json",
     "validation-root.json",

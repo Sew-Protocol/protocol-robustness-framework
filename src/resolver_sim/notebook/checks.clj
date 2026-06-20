@@ -31,6 +31,20 @@
    [:status_counts {:optional true} map?]
    [:risk_digest {:optional true} [:maybe map?]]])
 
+(def BatchResult
+  [:map
+   [:n-trials int?]
+   [:slash-rate double?]
+   [:fraud-slashed-count int?]
+   [:honest-mean double?]
+   [:malice-mean double?]
+   [:strategy keyword?]])
+
+(defn assert-batch-shape!
+  "Validate a batch result map against the expected shape."
+  [result]
+  (assert-shape! "Batch result" BatchResult result))
+
 (defn assert-shape!
   "Validate data against a Malli schema. Throws with a descriptive message on failure."
   ([schema value]

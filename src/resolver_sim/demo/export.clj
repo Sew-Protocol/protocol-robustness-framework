@@ -46,10 +46,9 @@
 
 (defn fix-svg!
   "Post-process SVG for sharp rendering:
-   - Fix SVG element width/height to match viewBox aspect ratio exactly
+   - Fix SVG element height to match viewBox aspect ratio exactly
    - Add crispEdges / geometricPrecision rendering hints
-   Does NOT change text coordinates or viewBox — those are kept as-is
-   from svg-term-cli so font rendering stays correct."
+   Does NOT change text coordinates or viewBox."
   [svg-path]
   (try
     (let [content (slurp svg-path)
@@ -61,7 +60,6 @@
           vb-h (when (>= (count vb-parts) 4) (nth vb-parts 3))]
       (if (and w-str vb-w vb-h (pos? vb-w))
         (let [w (Float/parseFloat w-str)
-              ;; Adjust height so SVG element aspect = viewBox aspect
               corrected-h (long (Math/round (/ (* w (float vb-h)) (float vb-w))))
               fixed (-> content
                         (str/replace (re-pattern (str "height=\"" h-str "\""))
@@ -71,7 +69,7 @@
                          (str "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
                               " style=\"shape-rendering:crispEdges;text-rendering:geometricPrecision\"")))]
           (spit svg-path fixed)
-          (println (str "    Fixed SVG aspect ratio (" (int w) "x" corrected-h ")")))
+          (println (str "    Fixed SVG for sharp rendering (" (int w) "x" corrected-h ")")))
         (println (str "    Warning: could not fix SVG dimensions"))))
     (catch Exception e
       (println (str "    Warning: SVG post-processing skipped: " (.getMessage e))))))
@@ -122,8 +120,13 @@
       (do (println (str "No recording found for: " id-str
                         ". Run bb demo:record " id-str " first."))
           false)
-      (let [svg-path (str (.getParentFile (io/file cast-path)) "/" id-str ".svg")
-            cols 120 rows 36
+      (let [;; Read cols/rows from demo spec playback config, default 96x36
+            spec-path (str "demos/" id-str "/demo.edn")
+            spec (try (demo-spec/find-spec id-str) (catch Exception _ nil))
+            pb (when spec (demo-spec/playback-config spec))
+            cols (get-in pb [:terminal :cols] 120)
+            rows (get-in pb [:terminal :rows] 36)
+            svg-path (str (.getParentFile (io/file cast-path)) "/" id-str ".svg")
             result (cast->svg cast-path svg-path cols rows)
             ok? (:ok? result)]
         ;; Update demo-run.json with SVG metadata

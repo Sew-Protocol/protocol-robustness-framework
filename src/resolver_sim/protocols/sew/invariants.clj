@@ -1531,21 +1531,22 @@
                  :slash-epoch-cap-respected      (slash-epoch-cap-respected? world)
                  :reversal-slash-disabled        (reversal-slash-disabled? world)
                  :resolver-capacity              (resolver-capacity-invariant? world)
-                 :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
-                 :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
-                 :evidence-on-state-change            (dispute/evidence-on-state-change? world)
-                 :no-duplicate-dispute                (dispute/no-duplicate-dispute? world)
-                 :appeal-requires-prior-resolution    (dispute/appeal-requires-prior-resolution? world)
-                 :resolver-decision-attributable      (dispute/resolver-decision-attributable? world)
-                 :appeal-reversal-detectable          (dispute/appeal-reversal-detectable? world)
-                 :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
-                 :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
-                 :challenge-bond-proportional         (challenge-bond-proportional? world)
-                 :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
-                 :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
-                 :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
-                                                   (if (map? r) r {:holds? r :violations nil}))}
-
+                 -
+                 +                 :single-resolution-payout-consistent (single-resolution-payout-consistent? world)
+                 +                 :fraud-slash-executions-accounted    (fraud-slash-executions-accounted? world)
+                 +                 :evidence-on-state-change            (dispute/evidence-on-state-change? world)
+                 +                 :no-duplicate-dispute                (dispute/no-duplicate-dispute? world)
+                 +                 :appeal-requires-prior-resolution    (dispute/appeal-requires-prior-resolution? world)
+                 +                 :resolver-decision-attributable      (dispute/resolver-decision-attributable? world)
+                 +                 :appeal-reversal-detectable          (dispute/appeal-reversal-detectable? world)
+                 +                 :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
+                 +                 :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
+                 +                 :challenge-bond-proportional         (challenge-bond-proportional? world)
+                 +                 :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
+                 +                 :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
+                 +                 :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
+                                                                     +                                                   (if (map? r) r {:holds? r :violations nil}))}
+         +
           ;; Process results
          results (into {}
                        (for [[id result-map] checks]
