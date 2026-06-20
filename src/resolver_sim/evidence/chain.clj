@@ -375,7 +375,7 @@
      :all-hashes-well-formed all-well-formed
      :all-hashes-registered (and all-non-nil all-well-formed)
      :all-with-component-hashes all-with-component-hashes
-      :chain-intact (and reg-valid all-non-nil all-well-formed)}))
+     :chain-intact (and reg-valid all-non-nil all-well-formed)}))
 
 ;; ── Forensic-Grade Acceptance Criteria ───────────────────────────────────────
 ;;
@@ -612,18 +612,18 @@
         reg-hash (:registry-hash registry)
         reg-path (write-registry! registry dir)
         sig-result (write-registry-signature! registry
-                     :private-key-path private-key-path
-                     :password password
-                     :dir dir)
+                                              :private-key-path private-key-path
+                                              :password password
+                                              :dir dir)
         cursor-path (write-chain-cursor-final!
-                      :dir dir
-                      :private-key-path private-key-path
-                      :password password)
+                     :dir dir
+                     :private-key-path private-key-path
+                     :password password)
         tsa-url (or tsa-url ts/*tsa-url*)
         tsa-result (when (and tsa-url reg-hash)
                      (ts/write-tsa-timestamp! reg-hash
-                       :tsa-url tsa-url
-                       :dir dir))]
+                                              :tsa-url tsa-url
+                                              :dir dir))]
     {:registry registry
      :registry-path reg-path
      :signature sig-result

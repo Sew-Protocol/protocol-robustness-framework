@@ -168,7 +168,7 @@
                                         :evidence/signature sig
                                         :evidence/public-key-path (if pub-exists? pub-path key-path)))
                                evidence)
-               passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
+              passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
           (runner/write-evidence final-evidence output-path)
           (registry/record-entry final-evidence)
           (when passed?

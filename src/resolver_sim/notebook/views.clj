@@ -2,7 +2,8 @@
   "Clerk display helpers for research notebooks."
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebook.checks :as checks]))
+            [resolver-sim.notebook.checks :as checks]
+            [resolver-sim.notebooks.theme :refer [notebook-theme]]))
 
 (defn rag-status
   "Returns :green, :amber, or :red from a keyword, map {:rag/status kw}, or default amber."
@@ -49,9 +50,9 @@
     :else                              :green))
 
 (defn- card-style [rag]
-  (let [border (case rag :green "#16a34a" :red "#dc2626" "#d97706")
-        bg     (case rag :green "#f0fdf4" :red "#fef2f2" "#fffbeb")
-        color  (case rag :green "#14532d" :red "#7f1d1d" "#78350f")]
+  (let [border (case rag :green (:alert/green-border notebook-theme) :red (:alert/red-border notebook-theme) (:status/atk-color notebook-theme))
+        bg     (case rag :green (:tone/green-bg notebook-theme) :red (:tone/red-row-bg notebook-theme) (:tone/amber-bg notebook-theme))
+        color  (case rag :green (:tone/green-text notebook-theme) :red (:tone/red-text notebook-theme) (:tone/amber-text notebook-theme))]
     {:borderLeft   (str "4px solid " border)
      :background   bg
      :color        color

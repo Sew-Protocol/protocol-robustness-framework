@@ -189,26 +189,26 @@
              ;; Phase 2: Register Theory Evaluation and Results
              ;; TODO: Move this I/O to the caller level — replay-with-protocol
              ;; should be a pure computation.
-                  (when-let [theory (:diagnostics result)]
-                    (try
-                      (let [f (io/file (evcfg/artifact-path :theory-eval))]
-                        (.mkdirs (.getParentFile f))
-                        (spit f (json/write-str theory {:indent true})))
-                      (catch Exception e
-                        (log/warn! :theory-diagnostics-write-failed
-                                   {:path (evcfg/artifact-path :theory-eval)
-                                    :error (.getMessage e)}))))
+                 (when-let [theory (:diagnostics result)]
+                   (try
+                     (let [f (io/file (evcfg/artifact-path :theory-eval))]
+                       (.mkdirs (.getParentFile f))
+                       (spit f (json/write-str theory {:indent true})))
+                     (catch Exception e
+                       (log/warn! :theory-diagnostics-write-failed
+                                  {:path (evcfg/artifact-path :theory-eval)
+                                   :error (.getMessage e)}))))
 
-                  (let [signing-key (or (:signing-key replay-opts)
+                 (let [signing-key (or (:signing-key replay-opts)
                                        chain/*signing-key*)
-                        signing-pw (or (:signing-password replay-opts)
-                                       chain/*signing-password*)]
-                    (chain/finalize-and-attest!
-                      :run-id run-id
-                      :private-key-path signing-key
-                      :password signing-pw))
+                       signing-pw (or (:signing-password replay-opts)
+                                      chain/*signing-password*)]
+                   (chain/finalize-and-attest!
+                    :run-id run-id
+                    :private-key-path signing-key
+                    :password signing-pw))
 
-                  (assoc result :risk-events (risk/events)))))))))))
+                 (assoc result :risk-events (risk/events)))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."

@@ -1,6 +1,7 @@
 (ns resolver-sim.yield.evidence
   "Extract explainable yield evidence for trace annotations."
-  (:require [resolver-sim.yield.market-state :as market-state]))
+  (:require [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.benchmark.hashing :as hashing]))
 
 (defn- extract-position-evidence [oid pos ms]
   {:owner-id (:owner/id pos)
@@ -32,14 +33,17 @@
                   positions))))
 
 (defn emit-shortfall-event
-  "Record a shortfall lifecycle event in world state.
+  "Record a shortfall lifecycle event in world state with a content-addressed hash.
+   The hash covers event-type, position-id, event-time, and event-data.
    Returns updated world with event appended to :yield/events."
   [world event-type position-id event-data]
-  (update world :yield/events (fnil conj [])
-          (merge {:event/type event-type
-                  :event/time (:block-time world 0)
-                  :position/id position-id}
-                 event-data)))
+  (let [event (merge {:event/type event-type
+                      :event/time (:block-time world 0)
+                      :position/id position-id}
+                     event-data)
+        hash-payload (dissoc event :event/hash)]
+    (update world :yield/events (fnil conj [])
+            (assoc event :event/hash (hashing/stable-hash-prefixed hash-payload)))))
 
 (defn sum-recognized-losses
   "Sum all recognized principal losses for a token across all positions."

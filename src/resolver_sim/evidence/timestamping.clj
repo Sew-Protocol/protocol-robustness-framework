@@ -21,7 +21,7 @@
             [resolver-sim.logging :as log])
   (:import (java.net URI)
            (java.net.http HttpClient HttpRequest HttpResponse
-                         HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
+                          HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
            (java.time Instant)
            (java.util Base64)
            (org.bouncycastle.tsp TimeStampRequestGenerator TimeStampResponse)
@@ -67,8 +67,8 @@
            :or {password nil}}]
   (when (and hash private-key-path)
     (let [proof (local-timestamp-proof hash
-                  :private-key-path private-key-path
-                  :password password)
+                                       :private-key-path private-key-path
+                                       :password password)
           out-dir (or dir (str (evcfg/artifact-dir)))
           f (io/file out-dir "timestamp.json")]
       (.mkdirs (io/file out-dir))
@@ -345,7 +345,7 @@
          :time (str (.getGenTime ts-info))
          :serial (str (.getSerialNumber ts-info))
          :hash hash
-          :algorithm (str (.getAlgorithm (.getHashAlgorithm ts-info)))}
+         :algorithm (str (.getAlgorithm (.getHashAlgorithm ts-info)))}
         {:valid false
          :error "Message imprint digest does not match the original hash"
          :hash hash}))
