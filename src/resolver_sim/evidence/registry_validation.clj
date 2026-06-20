@@ -12,6 +12,7 @@
      (validate-evidence-registry! registry dir)"
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.set :as set]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.registry :as reg]
@@ -117,6 +118,75 @@
      {:id "metadata-incomplete-entries" :status (if (empty? incomplete) :diagnostic :warning) :detail {:incomplete (vec (take 5 incomplete))}}
      {:id "chain-seq-no-gaps" :status (if (empty? gaps) :diagnostic :warning) :detail {:gaps (vec gaps)}}]))
 
+;; ── Cross-Registry Consistency ─────────────────────────────────────────────────
+
+(defn check-registry-consistency
+  "Cross-validate the chain registry (from evidence-registry.json, produced by
+   chain.clj finalize-and-write!) against the directory-scan registry (from
+   event-evidence/, produced by registry.clj build-evidence-registry).
+   
+   Returns a check result map:
+   :id          \"chain-vs-dir-registry-consistency\"
+   :status      :passed | :failed | :skipped
+   :detail      map with comparison metrics
+   
+   The chain registry stores artifact entries with :evidence-hash (component
+   hashes).  The directory-scan registry stores entries with :hash/content
+   and :file/path.  This check verifies:
+   - Entry count parity
+   - Every chain evidence hash has a file on disk
+   - Every directory entry has a matching hash in the chain registry"
+  [registry artifact-dir]
+  (let [;; Build the directory-scan registry from event-evidence/
+        ev-dir (str artifact-dir "/event-evidence")
+        ev-dir-file (io/file ev-dir)
+        _ registry] ;; registry param retained for API consistency
+    (if-not (.isDirectory ev-dir-file)
+      {:id "chain-vs-dir-registry-consistency"
+       :status :skipped
+       :detail {:reason "event-evidence directory not found" :path ev-dir}}
+      (let [dir-registry (reg/build-evidence-registry ev-dir)
+            dir-entries (:entries dir-registry [])
+            dir-hashes (set (keep :hash/content dir-entries))
+            dir-count (count dir-entries)
+            ;; Chain registry has :entries from the directory scan — but this
+            ;; function is called from validate-evidence-registry which receives
+            ;; the directory-scan registry as `registry`. The chain registry
+            ;; is on disk at evidence-registry.json. We need to read it.
+            chain-reg-path (str artifact-dir "/evidence-registry.json")
+            chain-file (io/file chain-reg-path)]
+        (if-not (.exists chain-file)
+          {:id "chain-vs-dir-registry-consistency"
+           :status :skipped
+           :detail {:reason "chain registry (evidence-registry.json) not found"
+                    :path chain-reg-path}}
+          (try
+            (let [chain-reg (json/read-str (slurp chain-file) :key-fn keyword)
+                  chain-artifacts (:artifacts chain-reg [])
+                  chain-hashes (set (keep :evidence-hash chain-artifacts))
+                  chain-count (count chain-artifacts)
+                  ;; Cross-reference
+                  chain-only (set/difference chain-hashes dir-hashes)
+                  dir-only (set/difference dir-hashes chain-hashes)
+                  count-match? (= chain-count dir-count)
+                  all-chain-on-disk? (empty? chain-only)
+                  all-dir-in-chain? (empty? dir-only)
+                  consistent? (and count-match? all-chain-on-disk? all-dir-in-chain?)]
+              {:id "chain-vs-dir-registry-consistency"
+               :status (if consistent? :passed :failed)
+               :detail {:chain-artifact-count chain-count
+                        :dir-entry-count dir-count
+                        :counts-match? count-match?
+                        :chain-hashes-without-file (vec (take 10 chain-only))
+                        :dir-hashes-without-chain-entry (vec (take 10 dir-only))
+                        :all-chain-hashes-on-disk? all-chain-on-disk?
+                        :all-dir-hashes-in-chain? all-dir-in-chain?}})
+            (catch Exception e
+              {:id "chain-vs-dir-registry-consistency"
+               :status :skipped
+               :detail {:reason "failed to read chain registry"
+                        :error (.getMessage e)}})))))))
+
 ;; ── Public API ───────────────────────────────────────────────────────────────
 
 (defn validate-evidence-registry
@@ -145,6 +215,12 @@
         required-ch (concat (check-required strict-registry dir) (check-attribution strict-registry))
         recommended-ch (check-recommended strict-registry)
         diagnostic-ch (check-diagnostic strict-registry)
+        ;; Cross-registry consistency check (recommended level)
+        consistency (check-registry-consistency registry dir)
+        ;; Include consistency in recommended checks when it ran
+        recommended-ch (cond-> recommended-ch
+                         (= :passed (:status consistency)) (conj (assoc consistency :status :passed))
+                         (= :failed (:status consistency)) (conj (assoc consistency :status :warning)))
         all-ch (concat required-ch recommended-ch diagnostic-ch)
         ;; In strict mode, :warning status from recommended checks is promoted to :failed
         promoted (if strict

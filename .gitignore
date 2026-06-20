@@ -70,6 +70,9 @@ all_violations.log
 invariants_only.log
 invariant_test.log
 test-debug.log
+full_test_output.log
+test_output.txt
+test_output.log
 
 # jar
 sew-simulation.jar
@@ -85,3 +88,11 @@ scripts/experimental
 local
 
 AGENTS.md
+
+.calva
+.claude
+.clojure-mcp
+.gemini
+.kilo
+archived
+

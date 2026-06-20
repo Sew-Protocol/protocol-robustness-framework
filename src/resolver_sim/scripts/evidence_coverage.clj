@@ -21,6 +21,10 @@
   "Regex to find capture-event-evidence! calls in source code."
   #"capture-event-evidence!")
 
+(def ^:private attribution-call-pattern
+  "Regex to find attr/with-attribution calls in source code."
+  #"attr/with-attribution|with-attribution")
+
 (def ^:private defn-pattern
   "Regex to match defn and defn- forms with name capture."
   #"\(defn-?\s+(\S+)")
@@ -73,6 +77,35 @@
   (let [[_ end] (form-range lines defn-line)]
     (some (fn [cl] (and (>= cl defn-line) (< cl end))) call-lines)))
 
+(defn- function-lines-range
+  "Return [start end] line range (1-indexed) for the function starting at defn-line."
+  [lines defn-line]
+  (form-range lines defn-line))
+
+(defn- find-lines-in-range
+  "Find all line numbers (1-indexed) within [start end) matching pattern."
+  [lines start end pattern]
+  (set (keep-indexed (fn [i line]
+                       (let [ln (inc i)]
+                         (when (and (>= ln start) (< ln end) (re-find pattern line))
+                           ln)))
+                     lines)))
+
+(defn- function-has-unattributed-evidence?
+  "Check whether a function body contains capture-event-evidence! calls that
+   are NOT accompanied by an attr/with-attribution block in the same function.
+   Evidence-helpers are known to capture evidence on behalf of callers who
+   supply the attribution context, so they are excluded from this check."
+  [lines defn-line capture-lines attribution-lines evidence-helpers fn-name]
+  (let [[s e] (function-lines-range lines defn-line)
+        f-captures (find-lines-in-range lines s e capture-call-pattern)
+        f-attribs (find-lines-in-range lines s e attribution-call-pattern)]
+    ;; Only flag when evidence is captured but with-attribution is absent
+    ;; AND the function is not a known evidence-helper (which relies on caller attribution)
+    (and (seq f-captures)
+         (not (seq f-attribs))
+         (not (contains? evidence-helpers fn-name)))))
+
 ;; ── Public API ────────────────────────────────────────────────────────────────
 
 (defn check-evidence-coverage
@@ -98,6 +131,11 @@
         lines (str/split-lines source)
         defns (find-defn-names source)
         call-lines (set (find-evidence-call-lines source))
+        attribution-call-lines (set (keep-indexed
+                                     (fn [i line]
+                                       (when (re-find attribution-call-pattern line)
+                                         (inc i)))
+                                     lines))
         total (count defns)
         covered (filter (fn [[fn-name defn-line]]
                           (function-calls-evidence? lines defn-line call-lines evidence-helpers))
@@ -116,19 +154,26 @@
                                   (str/starts-with? (name fn-name) "has-")
                                   (str/starts-with? (name fn-name) "compute-")
                                   (str/starts-with? (name fn-name) "normalize-")
-                                  (str/starts-with? (name fn-name) "valid-")
                                   (str/ends-with? (name fn-name) "?")))
                             uncovered)
         warnings (remove (fn [[fn-name _]]
                            (some (fn [[f2 _]] (= fn-name f2)) ci-failures))
-                         uncovered)]
+                         uncovered)
+        ;; Attribution gap check: functions that call capture-event-evidence!
+        ;; without a with-attribution block in the same function body.
+        unattributed (filter (fn [[fn-name defn-line]]
+                               (function-has-unattributed-evidence?
+                                lines defn-line call-lines attribution-call-lines
+                                evidence-helpers fn-name))
+                             defns)]
     {:file filepath
      :total-fns total
      :functions-with-evidence (count covered)
      :functions-without-evidence (count uncovered)
      :function-list (mapv (fn [[n l]] {:name (str n) :line l}) (sort-by second defns))
      :ci-failures (mapv (fn [[n l]] {:name (str n) :line l}) (sort-by second ci-failures))
-     :warnings (mapv (fn [[n l]] {:name (str n) :line l}) (sort-by second warnings))}))
+     :warnings (mapv (fn [[n l]] {:name (str n) :line l}) (sort-by second warnings))
+     :unattributed-evidence (mapv (fn [[n l]] {:name (str n) :line l}) (sort-by second unattributed))}))
 
 (defn check-directory-coverage
   "Run check-evidence-coverage on all .clj files in a directory (recursive).

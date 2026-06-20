@@ -905,19 +905,67 @@
           {:count 0 :degraded true}))
       {:count 0})))
 
+(defn- check-expected-evidence
+  "Scan scenario files for :expected-evidence declarations and verify them
+   against captured evidence artifacts.
+   
+   scenarios-dir — directory containing scenario JSON files
+   artifact-dir  — directory containing event-evidence/ subdirectory
+   
+   Returns a map:
+   :scenarios-checked — count of scenarios that declare :expected-evidence
+   :all-matched?      — true if every declared type was captured
+   :checked          — per-scenario results [{:scenario file :matched [...] :missing [...]}]
+   or nil when scenarios-dir is not a directory."
+  [scenarios-dir artifact-dir]
+  (let [sd (io/file scenarios-dir)]
+    (when (.isDirectory sd)
+      (let [scenario-files (filter #(.endsWith (.getName %) ".json") (.listFiles sd))
+            ev-dir (str artifact-dir "/event-evidence")
+            results (keep (fn [f]
+                            (try (let [scenario (json/read-str (slurp f) :key-fn keyword)
+                                       expected (:expected-evidence scenario)]
+                                   (when (seq expected)
+                                     (let [v (verify-scenario-evidence scenario ev-dir)]
+                                       {:scenario (.getName f)
+                                        :declared (map :type expected)
+                                        :matched (mapv :type (:matched v))
+                                        :missing (mapv :type (:missing v))
+                                        :all-ok? (empty? (:missing v))})))
+                                 (catch Exception e
+                                   (log/warn! :coverage-expected-evidence-read-failed
+                                              {:path (.getName f) :error (.getMessage e)})
+                                   nil)))
+                          scenario-files)
+            checked (vec results)]
+        (when (seq checked)
+          (let [missing-counts (map (fn [c] (count (:missing c))) checked)]
+            {:scenarios-checked (count checked)
+             :all-matched? (every? :all-ok? checked)
+             :checked checked
+             :total-missing-count (reduce + 0 missing-counts)}))))))
+
 (defn build-evidence-coverage-report
   "Analyze evidence artifacts in a run directory and produce a coverage report.
-   
+
    The report includes:
    - Total events with generic trace evidence
    - Events with targeted protocol evidence
    - Mechanism counts (number of artifacts per mechanism)
    - Missing group-ids (events with generic trace but no targeted evidence)
+   - Expected-evidence verification against scenario declarations
    - Warnings about potential gaps
+
+   Accepts an optional map with:
+   - :dir          — run artifact directory (default: evcfg/artifact-dir)
+   - :scenarios-dir — path to scenario JSON files (default: \"scenarios\" in project root)
    
    Returns a structured map suitable for JSON serialization."
-  [& [dir]]
-  (let [artifact-dir (or dir (str (evcfg/artifact-dir)))
+  [& [opts]]
+  (let [{:keys [dir scenarios-dir]
+         :or {dir (str (evcfg/artifact-dir))
+              scenarios-dir "scenarios"}} (if (map? opts) opts {:dir opts})
+        artifact-dir dir
         ev-dir (str artifact-dir "/event-evidence")
         generic-result (generic-trace-event-count artifact-dir)
         generic-count (:count generic-result)
@@ -944,6 +992,8 @@
                                     acc)))
                               {} files))
         total-targeted (reduce + 0 (vals type-counts))
+        ;; Check expected-evidence against scenario declarations
+        expected-evidence-check (check-expected-evidence scenarios-dir artifact-dir)
         degraded (or (:degraded generic-result) (pos? @read-errors))]
     (cond-> {:run-directory artifact-dir
              :generic-trace-event-count generic-count
@@ -952,6 +1002,7 @@
              :mechanism-counts mechanism-counts
              :type-counts type-counts
              :links-index-present? (some? links)
+             :expected-evidence-check expected-evidence-check
              :warnings
              (cond-> []
                (zero? generic-count)
@@ -959,8 +1010,37 @@
                (zero? total-targeted)
                (conj "No targeted evidence artifacts found — event-evidence directory may be empty")
                (and links (zero? targeted-events))
-               (conj "Evidence links index exists but contains no group-ids"))}
+               (conj "Evidence links index exists but contains no group-ids")
+               (and expected-evidence-check (not (:all-matched? expected-evidence-check)))
+               (conj (str "Expected-evidence check failed: "
+                          (:total-missing-count expected-evidence-check)
+                          " declared evidence type(s) missing across "
+                          (:scenarios-checked expected-evidence-check)
+                          " scenario(s)")))}
       degraded (assoc :degraded true :read-errors @read-errors))))
+
+(defn write-evidence-coverage-report!
+  "Build and persist the evidence coverage report to evidence-coverage-report.json.
+   Also registers the report in the chain registry for test-artifacts.json.
+   
+   Optional args (varargs or single map):
+   - :dir           — run artifact directory
+   - :scenarios-dir — path to scenario JSON files
+   
+   Returns the path to the written file."
+  [& args]
+  (let [opts (if (map? (first args)) (first args) (apply hash-map args))
+        dir (:dir opts)
+        report (build-evidence-coverage-report opts)
+        out-dir (or dir (str (evcfg/artifact-dir)))
+        f (io/file out-dir "evidence-coverage-report.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str report {:key-fn qualified-key :indent true}))
+    (println "Wrote evidence coverage report:" (.getPath f))
+    (chain/register-additional-artifact!
+     (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
+                                 "evidence-index.v1" "DIAGNOSTIC"))
+    (.getPath f)))
 
 (defn write-evidence-coverage-report!
   "Build and persist the evidence coverage report to evidence-coverage-report.json.

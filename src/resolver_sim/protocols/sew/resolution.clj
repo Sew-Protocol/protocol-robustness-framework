@@ -283,18 +283,23 @@
    pending entry for causal linking by execute-fraud-slash."
   [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
   (let [now (time-ctx/block-ts world)
-        evidence-map (cap/capture-event-evidence!
-                      :fraud-slash-proposed
-                      {:proposal/world-before (select-keys world [:resolver-stakes :total-held])}
-                      {:proposal/world-after  (select-keys world [:resolver-stakes :total-held])}
-                      {:proposal/resolver resolver
-                       :proposal/amount slash-amt
-                       :proposal/status :pending
-                       :proposal/deadline (+ now appeal-window)
-                       :proposal/workflow-id workflow-id}
-                      nil
-                      {:world-before world
-                       :world-after world})
+        evidence-map (attr/with-attribution
+                      {:subject/type :slash
+                       :subject/id slash-id
+                       :action/type :slash/propose
+                       :evidence/reason :fraud-slash-proposed}
+                      (cap/capture-event-evidence!
+                       :fraud-slash-proposed
+                       {:proposal/world-before (select-keys world [:resolver-stakes :total-held])}
+                       {:proposal/world-after  (select-keys world [:resolver-stakes :total-held])}
+                       {:proposal/resolver resolver
+                        :proposal/amount slash-amt
+                        :proposal/status :pending
+                        :proposal/deadline (+ now appeal-window)
+                        :proposal/workflow-id workflow-id}
+                       nil
+                       {:world-before world
+                        :world-after world}))
         evidence-hash (:evidence/hash evidence-map)]
     (attr/log-with-attr :debug "handle-fraud-slashing" {:now now :appeal-window appeal-window})
     (assoc-in world [:pending-fraud-slashes slash-id]
@@ -1124,21 +1129,26 @@
                                    [{:id resolver
                                      :slashable-stake current-stake
                                      :available-slashable current-stake}]})]
-             (let [evidence (slashing-ev/build-prorata-slash-evidence
-                             {:world world-slashed
-                              :slash-id slash-id
-                              :workflow-id workflow-id
-                              :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                              :trigger :fraud-slash
-                              :allocation-input {:slash-obligation amount :resolver resolver}
-                              :allocation-result allocation
-                              :transition-dependencies (filterv some?
-                                                                [(:proposal-evidence-hash pending)])
-                              :attribution (attr/current-attribution)})
-                   evidence (assoc evidence
-                                   :world/before-full-hash (cap/hash-world world)
-                                   :world/after-full-hash (cap/hash-world world-slashed))]
-               (cap/capture-event-evidence! evidence))
+            (let [evidence (slashing-ev/build-prorata-slash-evidence
+                              {:world world-slashed
+                               :slash-id slash-id
+                               :workflow-id workflow-id
+                               :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
+                               :trigger :fraud-slash
+                               :allocation-input {:slash-obligation amount :resolver resolver}
+                               :allocation-result allocation
+                               :transition-dependencies (filterv some?
+                                                                 [(:proposal-evidence-hash pending)])
+                               :attribution (attr/current-attribution)})
+                    evidence (assoc evidence
+                                    :world/before-full-hash (cap/hash-world world)
+                                    :world/after-full-hash (cap/hash-world world-slashed))]
+                (attr/with-attribution
+                  {:subject/type :slash
+                   :subject/id slash-id
+                   :action/type :slash/execute
+                   :evidence/reason :fraud-slash-executed}
+                  (cap/capture-event-evidence! evidence)))
              (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation
