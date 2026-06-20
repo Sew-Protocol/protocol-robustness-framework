@@ -26,21 +26,21 @@
         res "0xRes"
         gov "0xGov"
         snap (snap-fix/escrow-snapshot {:appeal-window-duration 86400})]
-    
+
     (testing "Manual slash proposal is appealable"
       (let [world (reg/register-stake world res 1000)
             {:keys [world workflow-id]}
             (world-ready-for-fraud-slash-propose world buyer "0xT" seller res 1000 snap)
             r-prop (res/propose-fraud-slash world workflow-id gov res 500)
             world-prop (:world r-prop)]
-        
+
         (is (= :pending (get-in world-prop [:pending-fraud-slashes workflow-id :status])))
-        
+
         (testing "Resolver appeals"
           (let [r-app (res/appeal-slash world-prop workflow-id res)
                 world-app (:world r-app)]
             (is (= :appealed (get-in world-app [:pending-fraud-slashes workflow-id :status])))))
-            
+
         (testing "Governance upholds appeal"
           (let [world-app (-> (res/appeal-slash world-prop workflow-id res) :world)
                 r-res (res/resolve-appeal world-app workflow-id gov true)
@@ -95,26 +95,26 @@
       (let [{:keys [world workflow-id]}
             (-> (reg/register-stake world res stake-amount)
                 (world-ready-for-fraud-slash-propose buyer "0xT" seller res 1000 snap))
-            
+
             ;; Propose slash
             world-prop (-> (res/propose-fraud-slash world workflow-id gov res slash-amount) :world)
-            
+
             ;; Set epoch cap to match per-offense cap (50%) so 40% slash passes
             world-params (assoc-in world-prop [:params :slash-epoch-cap-bps] 5000)
-            
+
             ;; Advance time to expire appeal window
             world-late (time-ctx/advance-time world-params {:to 1200})
-            
+
             ;; Execute slash
             world-slashed (:world (res/execute-fraud-slash world-late workflow-id))
-            
+
             post-stake (reg/get-stake world-slashed res)
             slash-total (get-in world-slashed [:resolver-slash-total res] 0)
-            
+
             ;; Calculate expected distribution based on default 50/30/20 split
             expected-dist (payoffs/calculate-slashing-distribution slash-amount 0)
             expected-total (+ (:insurance expected-dist) (:protocol expected-dist) (:retained expected-dist))]
-        
+
         (is (= (- stake-amount slash-amount) post-stake) "Post-slash stake should match")
         (is (= expected-total slash-total) "Slash total should match distributed sum")))))
 
@@ -197,7 +197,7 @@
         buyer "0xBuyer"
         seller "0xSeller"
         snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
-                                      :appeal-bond-amount 75})
+                                        :appeal-bond-amount 75})
         world0 (-> (t/empty-world 1000)
                    (reg/register-stake resolver-addr 1000))
         {:keys [world workflow-id]}
@@ -218,7 +218,7 @@
         buyer "0xBuyer"
         seller "0xSeller"
         snap (snap-fix/escrow-snapshot {:appeal-window-duration 100
-                                      :appeal-bond-amount 60})
+                                        :appeal-bond-amount 60})
         world0 (-> (t/empty-world 1000)
                    (reg/register-stake resolver-addr 1000))
         {:keys [world workflow-id]}
@@ -262,7 +262,7 @@
     (let [l0-res  "0xL0Res"
           gov     "0xGov"
           snap    (snap-fix/escrow-snapshot {:appeal-window-duration 200
-                                           :appeal-bond-amount 0})
+                                             :appeal-bond-amount 0})
           buyer   "0xBuyer"
           seller  "0xSeller"
           world0  (-> (t/empty-world 1000)
@@ -372,12 +372,12 @@
           buyer "0xBuyer"
           seller "0xSeller"
           snap (snap-fix/escrow-snapshot {:dispute-resolver r0
-                                         :reversal-slash-bps 2500
-                                         :appeal-window-duration 2000000
-                                         :challenge-window-duration 2000000
-                                         :max-dispute-level 2
-                                         :escrow-fee-bps 0
-                                         :resolver-bond-bps 10000})
+                                          :reversal-slash-bps 2500
+                                          :appeal-window-duration 2000000
+                                          :challenge-window-duration 2000000
+                                          :max-dispute-level 2
+                                          :escrow-fee-bps 0
+                                          :resolver-bond-bps 10000})
           world0 (-> (t/empty-world 1000)
                      (reg/register-stake r0 10000)
                      (reg/register-stake r1 5000))
@@ -497,7 +497,6 @@
       (is (= :executed (:status slash-entry)) "immediate track should be executed")
       (is (pos? (:amount slash-entry)) "slash amount should be positive"))))
 
-
 (deftest execute-fraud-slash-emits-allocation-evidence
   (testing "execute-fraud-slash computes and emits pro-rata allocation evidence"
     (let [resolver-addr "0xRes"
@@ -524,23 +523,23 @@
                             (reg/register-stake r1 1000)
                             (reg/register-stake r2 1000))
           slash-obligation 100
-          
+
           ;; Snapshot the basis BEFORE any mutations
           basis-r1 (reg/get-stake initial-world r1)
           basis-r2 (reg/get-stake initial-world r2)
           total-basis (+ basis-r1 basis-r2)
-          
+
           ;; Calculate allocation using fixed basis
           liable-parties [{:id r1 :slashable-stake basis-r1 :available-slashable 1000}
                           {:id r2 :slashable-stake basis-r2 :available-slashable 1000}]
           allocation (payoffs/calculate-prorata-slash-allocation
                       {:slash-obligation slash-obligation
                        :liable-parties liable-parties})
-          
+
           ;; Apply slash sequentially
           w1 (:world (reg/slash-resolver-stake initial-world r1 (get-in allocation [:allocations 0 :paid])))
           w2 (:world (reg/slash-resolver-stake w1 r2 (get-in allocation [:allocations 1 :paid])))
-          
+
           ;; The invariant: The total basis used MUST remain 2000, 
           ;; even though the world state mutated to 1900.
           ]

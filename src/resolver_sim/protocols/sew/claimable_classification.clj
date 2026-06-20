@@ -188,8 +188,8 @@
 (defn class-ids-by-category
   [category]
   (vec (sort (for [[class-id spec] v2-classes
-                    :when (= category (:category spec))]
-                (name class-id)))))
+                   :when (= category (:category spec))]
+               (name class-id)))))
 
 (defn- domains-present-in-worlds
   [worlds]
@@ -361,9 +361,9 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-          :let [claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
-                et     (get-in world [:escrow-transfers wf])
-                max    (t/safe-parse-long (:amount-after-fee et))]
+         :let [claims (reduce + 0 (vals (get domain-map :settlement/principal {})))
+               et     (get-in world [:escrow-transfers wf])
+               max    (t/safe-parse-long (:amount-after-fee et))]
          :when (or (pos? claims) et)]
      {:workflow_id wf :claims claims :max max :headroom (- max claims)})))
 
@@ -380,9 +380,9 @@
   [world]
   (vec
    (for [[wf domain-map] (get-in world [:claimable-v2] {})
-          :let [claims (reduce + 0 (vals (get domain-map :bond/refund {})))
-                posted (+ (reduce + 0 (map t/safe-parse-long (vals (get-in world [:bond-balances wf] {}))))
-                        (t/safe-parse-long (get-in world [:bond-posted-by-workflow wf] 0)))]
+         :let [claims (reduce + 0 (vals (get domain-map :bond/refund {})))
+               posted (+ (reduce + 0 (map t/safe-parse-long (vals (get-in world [:bond-balances wf] {}))))
+                         (t/safe-parse-long (get-in world [:bond-posted-by-workflow wf] 0)))]
          :when (or (pos? claims) (pos? posted))]
      {:workflow_id wf :claims claims :max posted :headroom (- posted claims)})))
 
@@ -619,9 +619,9 @@
                       from-path
                       "unknown")
      :scenario-id-status (cond
-                            from-result "from-result"
-                            from-path "derived-from-result-path"
-                            :else "missing-from-result")
+                           from-result "from-result"
+                           from-path "derived-from-result-path"
+                           :else "missing-from-result")
      :scenario-result-path (some-> result-path str)}))
 
 (defn- compact-by-class
@@ -678,7 +678,7 @@
      :scenario_count (if contexts (count contexts) (count worlds))
      :terminal_world_count (count worlds)
      :workflow_count (workflow-count-for-worlds worlds)
-      :scenarios_passed scenarios-passed
+     :scenarios_passed scenarios-passed
      :coverage_status (coverage-status-for-worlds worlds)
      :coverage_matrix (coverage-matrix worlds)
      :classified_claimable_total classified-total
@@ -689,7 +689,7 @@
                                        :classified-total classified-total})
      :aggregation (or aggregation "sum-across-terminal-worlds")
      :aggregation_note
-      (or aggregation-note
+     (or aggregation-note
          (str "classified_* sums :claimable-v2 only; terminal_value_total sums legacy :claimable."))
      ;; For single-scenario output, only emit classes with nonzero claimable
      :by_class (if single-scenario? (compact-by-class all-classes) all-classes)
@@ -723,11 +723,11 @@
 (defn terminal-observations
   "Aggregate claimable balances and boundary status from terminal replay worlds."
   [worlds & {:keys [scope scenarios_passed contexts highlight-limit workflow-limit
-                   aggregation aggregation_note]}]
+                    aggregation aggregation_note]}]
   (when (seq worlds)
     (let [first-ctx (first contexts)
           base      (base-observations worlds contexts scenarios_passed
-                                        aggregation aggregation_note)]
+                                       aggregation aggregation_note)]
       (cond-> base
         first-ctx (merge (single-scenario-section first-ctx))
         (seq contexts) (merge (scenario-highlights-section contexts
@@ -749,8 +749,8 @@
                                 (filter #(= "incentive" (:category %))
                                         (vals v2-classes)))))}
    :classes (update-vals v2-classes
-                          (fn [m]
-                            (update m :claimable_v2_domains vec)))})
+                         (fn [m]
+                           (update m :claimable_v2_domains vec)))})
 
 (defn build-document
   "Full v2 artifact: taxonomy plus optional terminal observations."

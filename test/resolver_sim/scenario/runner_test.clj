@@ -59,11 +59,11 @@
 (deftest report-surfaces-expectation-violations
   (let [lines (report/format-check-failures
                {:checks {:expectations {:ok? false
-                                       :violations [{:type :metric-violation
-                                                     :name :yield/escrow-principal
-                                                     :op :>
-                                                     :expected 100
-                                                     :actual 99}]}}})]
+                                        :violations [{:type :metric-violation
+                                                      :name :yield/escrow-principal
+                                                      :op :>
+                                                      :expected 100
+                                                      :actual 99}]}}})]
     (is (pos? (count lines)))
     (is (str/includes? (first lines) "expectation:"))
     (is (str/includes? (first lines) "yield/escrow-principal"))))

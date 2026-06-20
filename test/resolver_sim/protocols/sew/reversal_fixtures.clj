@@ -104,8 +104,8 @@
                           :escalate seller
                           :challenge challenger))
          world0 (-> (t/empty-world initial-block-time)
-                     (reg/register-stake l0-resolver l0-stake)
-                     (reg/register-stake l1-resolver l1-stake))
+                    (reg/register-stake l0-resolver l0-stake)
+                    (reg/register-stake l1-resolver l1-stake))
          create-r (require-ok! (lc/create-escrow world0 buyer token seller escrow-amount {} snap)
                                "create-escrow"
                                context)

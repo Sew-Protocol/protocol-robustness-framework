@@ -37,8 +37,8 @@
   (testing "Liquid-lending index-based accrual (:aave-v3 module id)"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.0}}
                  :yield/rates   {:aave-v3 {"USDC" 0.10}}
-                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC" 
-                                           :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
+                 :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
+                                            :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (liquid/accrue world {:module/id :aave-v3} {:token "USDC" :dt 31536000})]
       (is (== 21/20 (get-in world' [:yield/indices :aave-v3 "USDC"]))
           "index capped at 5% max-delta (1/20) even with 10% APY")
@@ -49,11 +49,11 @@
   (testing "Liquid-lending withdraw realizes current unrealized yield before marking withdrawn"
     (let [world {:yield/indices {:aave-v3 {"USDC" 1.1}}
                  :yield/risk {:aave-v3 {"USDC" {:liquidity-mode :available
-                                                 :shortfall {:available-ratio 1.0}}}}
+                                                :shortfall {:available-ratio 1.0}}}}
                  :total-held {:USDC 1100}
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token "USDC"
-                                             :principal 1000 :shares 1000 :entry-index 1.0
-                                             :status :active :unrealized-yield 100 :realized-yield 0}}}
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :active :unrealized-yield 100 :realized-yield 0}}}
           world' (liquid/withdraw world {:module/id :aave-v3} {:owner/id "user1"})
           pos    (get-in world' [:yield/positions "user1"])]
       (is (= :withdrawn (:status pos)))
@@ -65,7 +65,7 @@
   (testing "Fixed rate principal-based accrual"
     (let [world {:yield/rates {:fixed-rate {"USDC" 0.05}}
                  :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"] :module/id :fixed-rate :token "USDC"
-                                           :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                                          :principal 1000 :shares 1000 :entry-index 1.0 :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})]
       (is (== 50 (get-in world' [:yield/positions [:sew/escrow "user1"] :unrealized-yield]))))))
 
@@ -79,8 +79,8 @@
           world {:yield/indices {:aave-v3 {token 1.0}}
                  :yield/rates   {:aave-v3 {token 0.10}}
                  :yield/positions {"user1" {:owner/id "user1" :module/id :aave-v3 :token token
-                                             :principal 1000 :shares 1000 :entry-index 1.0
-                                             :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                            :principal 1000 :shares 1000 :entry-index 1.0
+                                            :status :active :unrealized-yield 0 :realized-yield 0}}}
           one-shot    (liquid/accrue world module {:token token :dt dt})
           fragmented  (run-liquid-lending-fragmented world module token dt n)
           y1          (get-in one-shot [:yield/positions "user1" :unrealized-yield])
@@ -99,9 +99,9 @@
           max-rounding-drift n
           world {:yield/rates {:fixed-rate {token 0.05}}
                  :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
-                                                           :module/id :fixed-rate :token token
-                                                           :principal 1000 :shares 1000 :entry-index 1.0
-                                                           :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                                          :module/id :fixed-rate :token token
+                                                          :principal 1000 :shares 1000 :entry-index 1.0
+                                                          :status :active :unrealized-yield 0 :realized-yield 0}}}
           one-shot   (fixed/fixed-accrue world module {:token token :dt dt})
           fragmented (run-fixed-fragmented world module token dt n)
           y1         (get-in one-shot [:yield/positions [:sew/escrow "user1"] :unrealized-yield])
@@ -234,9 +234,9 @@
     (let [world {:yield/rates {:fixed-rate {"USDC" -0.05}}
                  :yield/risk  {:fixed-rate {"USDC" {:loss-mode :mark-to-market}}}
                  :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
-                                                           :module/id :fixed-rate :token "USDC"
-                                                           :principal 1000 :shares 1000 :entry-index 1.0
-                                                           :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                                          :module/id :fixed-rate :token "USDC"
+                                                          :principal 1000 :shares 1000 :entry-index 1.0
+                                                          :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})
           pos     (get-in world' [:yield/positions [:sew/escrow "user1"]])]
       (is (< (:current-index pos) 1.0))
@@ -250,9 +250,9 @@
     (let [world {:yield/rates {:fixed-rate {"USDC" -0.05}}
                  :yield/risk  {:fixed-rate {"USDC" {:loss-mode :none}}}
                  :yield/positions {[:sew/escrow "user1"] {:owner/id [:sew/escrow "user1"]
-                                                           :module/id :fixed-rate :token "USDC"
-                                                           :principal 1000 :shares 1000 :entry-index 1.0
-                                                           :status :active :unrealized-yield 0 :realized-yield 0}}}
+                                                          :module/id :fixed-rate :token "USDC"
+                                                          :principal 1000 :shares 1000 :entry-index 1.0
+                                                          :status :active :unrealized-yield 0 :realized-yield 0}}}
           world' (fixed/fixed-accrue world {:module/id :fixed-rate} {:token "USDC" :dt 31536000})
           pos     (get-in world' [:yield/positions [:sew/escrow "user1"]])]
       (is (< (:current-index pos) 1.0))

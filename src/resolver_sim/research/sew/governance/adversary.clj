@@ -30,9 +30,9 @@
 (defn select-reviewed-disputes
   "Governance reviews up to capacity, prioritizing by value and probability."
   [disputes capacity d-rng]
-  (let [candidates (filter (fn [d] (> (rng/next-double d-rng) 
-                                     (- 1.0 (governance-review-probability (:value d))))) 
-                          disputes)
+  (let [candidates (filter (fn [d] (> (rng/next-double d-rng)
+                                      (- 1.0 (governance-review-probability (:value d)))))
+                           disputes)
         sorted (sort-by :value > candidates)]
     (take capacity sorted)))
 
@@ -57,8 +57,8 @@
   "Attacker analyzes history to find the highest value with <20% review rate."
   [history]
   (let [by-value (group-by (fn [d] (cond (< (:value d) 10000) :low
-                                       (< (:value d) 100000) :med
-                                       :else :high)) history)
+                                         (< (:value d) 100000) :med
+                                         :else :high)) history)
         stats (for [[k v] by-value]
                 [k (/ (double (count (filter :reviewed v))) (count v))])]
     (if-let [best (first (sort-by second < (filter (fn [[_ prob]] (< prob 0.3)) stats)))]
@@ -95,8 +95,8 @@
         rwp      (or reviewed-win-prob 0.03)
         history  (:history state [])
         attacker-strategy (if (and learning? (> epoch 20))
-                                  (infer-grey-zone history)
-                                  :random)
+                            (infer-grey-zone history)
+                            :random)
 
         ;; Generate disputes for this epoch
         epoch-disputes (for [i (range 5)]
@@ -117,12 +117,11 @@
                      (assoc d :won won? :reviewed (contains? reviewed-ids (:id d)))))
 
         new-wins (count (filter :won outcomes))]
-    
+
     {:epoch epoch
      :history (concat history outcomes)
      :total-wins (+ (:total-wins state 0) new-wins)
      :total-attempts (+ (:total-attempts state 0) (count epoch-disputes))}))
-
 
 (defn summarize-aa-history
   [history params]
@@ -162,12 +161,12 @@
            (< worst-win-rate 0.20) :green
            (< worst-win-rate 0.25) :yellow
            :else :red)]
-    {:target-win-rate target-win-rate
-     :required-review-rate required-review-rate
-     :required-capacity-floor (long required-capacity-floor)
-     :worst-win-rate worst-win-rate
-     :implied-review-rate-worst-case (- 1.0 observed-review-gain)
-     :envelope envelope})))
+     {:target-win-rate target-win-rate
+      :required-review-rate required-review-rate
+      :required-capacity-floor (long required-capacity-floor)
+      :worst-win-rate worst-win-rate
+      :implied-review-rate-worst-case (- 1.0 observed-review-gain)
+      :envelope envelope})))
 
 ;; ============ Scenario Definitions ============
 
@@ -229,10 +228,10 @@
         rev-win-prob  (get params :reviewed-win-prob 0.03)
         max-win-rate-threshold (double (get params :max-op-win-rate-threshold 0.20))
         _  (proto/print-phase-header
-              {:benchmark-id "AA"
-               :label        "Governance as Adversary"
-               :hypothesis   (format "Attackers cannot exceed %.0f%% win rate via governance gaming"
-                                     (* 100 max-win-rate-threshold))})
+            {:benchmark-id "AA"
+             :label        "Governance as Adversary"
+             :hypothesis   (format "Attackers cannot exceed %.0f%% win rate via governance gaming"
+                                   (* 100 max-win-rate-threshold))})
 
         scenarios (map (fn [s]
                          (update s :params merge {:base-win-prob    base-win-prob

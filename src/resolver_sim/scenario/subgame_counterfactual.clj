@@ -506,7 +506,7 @@
         ;; Phase F: subgame boundary classification
         subgame-class  (classify-subgame-node node pre-world)
         info-set       (build-information-set pre-world node)
-        
+
         ;; Phase 2: Dynamic Tree Expansion
         tree-expansion? (boolean (get spe-config :enable-tree-expansion? false))
         dynamic-branches (when (and tree-expansion? fork-world protocol)
@@ -518,7 +518,7 @@
         alternatives   (if (seq dynamic-branches)
                          (mapv #(get-in % [:action :action]) dynamic-branches)
                          (bounded-alternatives node-type action info-set spe-config))
-        
+
         pre-utility-r  (when pre-world (compute-utility pre-world actor utility-spec))
         chosen-utility-r (when terminal-state (compute-utility terminal-state actor utility-spec pre-world))
         pre-utility    (:value pre-utility-r)
@@ -531,13 +531,13 @@
           (let [{:keys [wealth-table downstream-seqs]} backward-induction-ctx
                 per-alt-vals (mapv (fn [alt]
                                      (compute-backward-alt-utility
-                                       actor alt pre-utility (or chosen-utility 0)
-                                       wealth-table downstream-seqs))
+                                      actor alt pre-utility (or chosen-utility 0)
+                                      wealth-table downstream-seqs))
                                    alternatives)]
             {:best-alt-utility  (apply max per-alt-vals)
              :deviation-classes (zipmap alternatives
                                         (map classify-deviation-action alternatives))}))
-        
+
         ;; Phase 2: Best alt from dynamic expansion (forward mode)
         best-alt-from-tree (when (seq dynamic-branches)
                              (apply max (keep (fn [b] (get-in b [:terminal-utility :value])) dynamic-branches)))
@@ -704,7 +704,7 @@
     :counterexamples [...]                           (Phase I)
     :requires [...]}"
   [{:keys [raw-trace decisions terminal-world spe-config world-checkpoints
-            protocol agents protocol-params scenario-id]}]
+           protocol agents protocol-params scenario-id]}]
   (let [decision-nodes (->> decisions
                             (sort-by (juxt :seq :agent :action))
                             vec)
@@ -817,11 +817,11 @@
                          (let [bi-rows (:rows
                                         (reduce (fn [{:keys [rows processed-seqs]} node]
                                                   (let [bi-ctx {:wealth-table    wealth-table
-                                                                 :downstream-seqs processed-seqs}
+                                                                :downstream-seqs processed-seqs}
                                                         row    (node->table-row
-                                                                 (assoc row-ctx :backward-induction-ctx bi-ctx)
-                                                                 node spe-config)]
-                                                     (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
+                                                                (assoc row-ctx :backward-induction-ctx bi-ctx)
+                                                                node spe-config)]
+                                                    (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
                                                       (reduced {:rows (conj rows (assoc row :memoization-hit? false :short-circuited? true))})
                                                       {:rows         (conj rows (assoc row :memoization-hit? false))
                                                        :processed-seqs (conj processed-seqs (long (:seq node)))})))
@@ -831,7 +831,7 @@
                          (:rows
                           (reduce (fn [{:keys [rows]} node]
                                     (let [row (cached-row node)]
-                                       (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
+                                      (if (and (some? (:local-regret row)) (> (:local-regret row) threshold))
                                         (reduced {:rows (conj rows (assoc row :short-circuited? true))})
                                         {:rows (conj rows row)})))
                                   {:rows []}

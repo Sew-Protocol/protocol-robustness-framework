@@ -20,11 +20,11 @@
    
    Returns a list of batch results for each combination."
   [params base-rng-seed sweep-params]
-  
+
   (let [; Get all sweep dimensions
         sweep-keys (keys sweep-params)
         sweep-values (vals sweep-params)
-        
+
         ; Generate all combinations (1D, 2D, or higher)
         combos
         (if (= 1 (count sweep-keys))
@@ -39,7 +39,7 @@
                 all-combos (apply cartesian-product values-list)]
             (for [combo all-combos]
               (map vector keys-vec combo))))]
-    
+
     (for [combo-pair combos]
       (let [; Handle both 1D (single pair) and multi-D (list of pairs)
             ; 1D: combo-pair = [:strategy :honest]
@@ -55,9 +55,9 @@
             result (batch/run-batch rng (:n-trials params) trial-params)
             ; Add all swept parameters to result for CSV output
             result-with-params (reduce
-                               (fn [r [k v]] (assoc r k v))
-                               result
-                               combo)]
+                                (fn [r [k v]] (assoc r k v))
+                                result
+                                combo)]
         result-with-params))))
 
 (defn run-strategy-sweep

@@ -143,44 +143,44 @@
 
 (def s26
   (fork/enrich-scenario
-    {:scenario-id        "s26-forking-strategist-l1-reversal"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s26-forking-strategist-l1-reversal"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title   "L1 reversal after L0 release"
-     :scenario-purpose "Verify escalation opens a new branch and L1 can fork the L0 outcome to refund."
-     :description      "Buyer escalates after L0 release; L1 rules refund; pending settlement finalizes without corrupting prior hashes."
-     :threat-model     {:actor "buyer" :strategy "forking-strategist"
-                        :goal  "Reverse an unfavourable L0 release via L1 escalation."}
-     :expected-outcome {:workflow-0 "refund-after-l1-reversal"}
-     :notes            "Falsifies if L1 refund mutates L0 audit trail incorrectly, appeal window is bypassed, or funds leak on reversal."
-     :theory           (fork/theory-block
-                        {:claim-id :claims/forking-strategist-l1-reversal
-                         :claim    "L1 escalation may reverse L0 without breaking accounting or monotonic dispute level."})
-     :expectations     (fork/single-wf-expectations
-                        {:final-state    :refunded
-                         :claim-address  "0xbuyer"
-                         :claim-amount   fork/escrow-afa-6000
-                         :dispute-level  1
-                         :step-terminal  [{:seq 3 :path ["dispute-levels" 0] :equals 1}]})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title   "L1 reversal after L0 release"
+    :scenario-purpose "Verify escalation opens a new branch and L1 can fork the L0 outcome to refund."
+    :description      "Buyer escalates after L0 release; L1 rules refund; pending settlement finalizes without corrupting prior hashes."
+    :threat-model     {:actor "buyer" :strategy "forking-strategist"
+                       :goal  "Reverse an unfavourable L0 release via L1 escalation."}
+    :expected-outcome {:workflow-0 "refund-after-l1-reversal"}
+    :notes            "Falsifies if L1 refund mutates L0 audit trail incorrectly, appeal window is bypassed, or funds leak on reversal."
+    :theory           (fork/theory-block
+                       {:claim-id :claims/forking-strategist-l1-reversal
+                        :claim    "L1 escalation may reverse L0 without breaking accounting or monotonic dispute level."})
+    :expectations     (fork/single-wf-expectations
+                       {:final-state    :refunded
+                        :claim-address  "0xbuyer"
+                        :claim-amount   fork/escrow-afa-6000
+                        :dispute-level  1
+                        :step-terminal  [{:seq 3 :path ["dispute-levels" 0] :equals 1}]})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S27 — Forking-Strategist: full 3-level ladder, fork at L2
@@ -211,48 +211,48 @@
 
 (def s27
   (fork/enrich-scenario
-    {:scenario-id        "s27-forking-strategist-l2-fork"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s27-forking-strategist-l2-fork"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "l2resolver" :address "0xl2"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release false :resolution-hash "0xl2hash"}}
-      {:seq 7 :time 1325 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title   "L2 fork after confirming L0 and L1"
-     :scenario-purpose "Verify full three-level ladder: fork materializes only at L2."
-     :description      "Buyer escalates through L0 and L1 (both release); L2 refunds — distinct resolution hashes per level."
-     :threat-model     {:actor "buyer" :strategy "forking-strategist"
-                        :goal  "Keep escalating until a higher tier reverses the outcome."}
-     :expected-outcome {:workflow-0 "refund-after-l2-reversal"}
-     :theory           (fork/theory-block
-                        {:claim-id :claims/forking-strategist-l2-fork
-                         :claim    "Dispute level advances monotonically 0→1→2; L2 may fork without rewriting L0/L1 hashes."})
-     :expectations     (fork/single-wf-expectations
-                        {:final-state    :refunded
-                         :claim-address  "0xbuyer"
-                         :claim-amount   fork/escrow-afa-6000
-                         :dispute-level  2
-                         :step-terminal  [{:seq 5 :path ["dispute-levels" 0] :equals 2}]})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release false :resolution-hash "0xl2hash"}}
+     {:seq 7 :time 1325 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title   "L2 fork after confirming L0 and L1"
+    :scenario-purpose "Verify full three-level ladder: fork materializes only at L2."
+    :description      "Buyer escalates through L0 and L1 (both release); L2 refunds — distinct resolution hashes per level."
+    :threat-model     {:actor "buyer" :strategy "forking-strategist"
+                       :goal  "Keep escalating until a higher tier reverses the outcome."}
+    :expected-outcome {:workflow-0 "refund-after-l2-reversal"}
+    :theory           (fork/theory-block
+                       {:claim-id :claims/forking-strategist-l2-fork
+                        :claim    "Dispute level advances monotonically 0→1→2; L2 may fork without rewriting L0/L1 hashes."})
+    :expectations     (fork/single-wf-expectations
+                       {:final-state    :refunded
+                        :claim-address  "0xbuyer"
+                        :claim-amount   fork/escrow-afa-6000
+                        :dispute-level  2
+                        :step-terminal  [{:seq 5 :path ["dispute-levels" 0] :equals 2}]})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S28 — Forking-Strategist: late escalation rejected, L0 decision stands
@@ -281,41 +281,41 @@
 
 (def s28
   (fork/enrich-scenario
-    {:scenario-id        "s28-forking-strategist-late-escalation-rejected"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s28-forking-strategist-late-escalation-rejected"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1185 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title            "Late escalation rejected; L0 release stands"
-     :scenario-purpose          "Verify appeal-window guard rejects post-deadline escalation."
-     :description               "Escalation after L0 appeal window expires is rejected; L0 pending settlement still executes."
-     :threat-model              {:actor "buyer" :strategy "forking-strategist"
-                                 :goal  "Escalate after the appeal window to overturn L0."}
-     :expected-outcome          {:workflow-0 "release-after-l0-finalization"}
-     :strict-expected-errors?   true
-     :expected-errors           [{:seq 3 :action "escalate_dispute" :error :appeal-window-expired}]
-     :theory                    (fork/theory-block
-                                 {:claim-id :claims/forking-strategist-late-escalation-rejected
-                                  :claim    "Post-deadline escalation must not advance dispute level or block L0 settlement."})
-     :expectations              (fork/single-wf-expectations
-                                 {:final-state   :released
-                                  :claim-address "0xseller"
-                                  :claim-amount  fork/escrow-afa-6000
-                                  :step-terminal [{:seq 4 :path ["live-states" 0] :equals :released}]})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1185 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title            "Late escalation rejected; L0 release stands"
+    :scenario-purpose          "Verify appeal-window guard rejects post-deadline escalation."
+    :description               "Escalation after L0 appeal window expires is rejected; L0 pending settlement still executes."
+    :threat-model              {:actor "buyer" :strategy "forking-strategist"
+                                :goal  "Escalate after the appeal window to overturn L0."}
+    :expected-outcome          {:workflow-0 "release-after-l0-finalization"}
+    :strict-expected-errors?   true
+    :expected-errors           [{:seq 3 :action "escalate_dispute" :error :appeal-window-expired}]
+    :theory                    (fork/theory-block
+                                {:claim-id :claims/forking-strategist-late-escalation-rejected
+                                 :claim    "Post-deadline escalation must not advance dispute level or block L0 settlement."})
+    :expectations              (fork/single-wf-expectations
+                                {:final-state   :released
+                                 :claim-address "0xseller"
+                                 :claim-amount  fork/escrow-afa-6000
+                                 :step-terminal [{:seq 4 :path ["live-states" 0] :equals :released}]})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S29 — Forking-Strategist: seller escalates after losing L0 refund
@@ -346,42 +346,42 @@
 
 (def s29
   (fork/enrich-scenario
-    {:scenario-id        "s29-forking-strategist-seller-escalates"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
+   {:scenario-id        "s29-forking-strategist-seller-escalates"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "honest"}
                          {:id "seller"     :address "0xseller" :strategy "forking-strategist"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release false :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "seller" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title   "Seller-initiated L1 fork to release"
-     :scenario-purpose "Verify non-buyer participant may escalate and fork an L0 refund to release."
-     :description      "L0 refunds buyer; seller escalates; L1 releases to seller — participant role does not break escalation rules."
-     :threat-model     {:actor "seller" :strategy "forking-strategist"
-                        :goal  "Reverse L0 refund via L1 release."}
-     :expected-outcome {:workflow-0 "release-after-l1-reversal"}
-     :theory           (fork/theory-block
-                        {:claim-id :claims/forking-strategist-seller-escalates
-                         :claim    "Seller escalation may fork L0 refund to L1 release with correct bonds and hashes."})
-     :expectations     (fork/single-wf-expectations
-                        {:final-state    :released
-                         :claim-address  "0xseller"
-                         :claim-amount   fork/escrow-afa-6000
-                         :dispute-level  1})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release false :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "seller" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title   "Seller-initiated L1 fork to release"
+    :scenario-purpose "Verify non-buyer participant may escalate and fork an L0 refund to release."
+    :description      "L0 refunds buyer; seller escalates; L1 releases to seller — participant role does not break escalation rules."
+    :threat-model     {:actor "seller" :strategy "forking-strategist"
+                       :goal  "Reverse L0 refund via L1 release."}
+    :expected-outcome {:workflow-0 "release-after-l1-reversal"}
+    :theory           (fork/theory-block
+                       {:claim-id :claims/forking-strategist-seller-escalates
+                        :claim    "Seller escalation may fork L0 refund to L1 release with correct bonds and hashes."})
+    :expectations     (fork/single-wf-expectations
+                       {:final-state    :released
+                        :claim-address  "0xseller"
+                        :claim-amount   fork/escrow-afa-6000
+                        :dispute-level  1})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S30 — Forking-Strategist: double-loss, fork never materialises
@@ -415,43 +415,42 @@
 
 (def s30
   (fork/enrich-scenario
-    {:scenario-id        "s30-forking-strategist-double-loss"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s30-forking-strategist-double-loss"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title   "Double loss: L1 confirms L0 release"
-     :scenario-purpose "Verify failed fork gamble: L1 agrees with L0; buyer loses bond; outcome stays release."
-     :description      "Buyer escalates but L1 also releases — no reversal; challenge bond forfeited without invariant break."
-     :threat-model     {:actor "buyer" :strategy "forking-strategist"
-                        :goal  "Force L1 reversal; instead L1 confirms L0."}
-     :expected-outcome {:workflow-0 "release-after-l1-confirmation"}
-     :theory           (fork/theory-block
-                        {:claim-id :claims/forking-strategist-double-loss
-                         :claim    "When L1 confirms L0, final settlement remains release and accounting stays conserved."})
-     :expectations     (fork/single-wf-expectations
-                        {:final-state    :released
-                         :claim-address  "0xseller"
-                         :claim-amount   fork/escrow-afa-6000
-                         :dispute-level  1})}))
-
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1255 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title   "Double loss: L1 confirms L0 release"
+    :scenario-purpose "Verify failed fork gamble: L1 agrees with L0; buyer loses bond; outcome stays release."
+    :description      "Buyer escalates but L1 also releases — no reversal; challenge bond forfeited without invariant break."
+    :threat-model     {:actor "buyer" :strategy "forking-strategist"
+                       :goal  "Force L1 reversal; instead L1 confirms L0."}
+    :expected-outcome {:workflow-0 "release-after-l1-confirmation"}
+    :theory           (fork/theory-block
+                       {:claim-id :claims/forking-strategist-double-loss
+                        :claim    "When L1 confirms L0, final settlement remains release and accounting stays conserved."})
+    :expectations     (fork/single-wf-expectations
+                       {:final-state    :released
+                        :claim-address  "0xseller"
+                        :claim-amount   fork/escrow-afa-6000
+                        :dispute-level  1})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S31 — Forking-Strategist: all three levels confirm — no fork ever materialises
@@ -487,52 +486,52 @@
 
 (def s31
   (fork/enrich-scenario
-    {:scenario-id        "s31-forking-strategist-all-levels-confirm"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s31-forking-strategist-all-levels-confirm"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "l2resolver" :address "0xl2"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl2hash"}}
-      {:seq 7 :time 1270 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 8 :time 1325 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title            "Max-level guard rejects third escalation"
-     :scenario-purpose          "Verify escalation cap at level 2; all levels may confirm release without fork."
-     :description               "L0/L1/L2 all release; third escalation rejected; two bonds lost; final release at L2."
-     :threat-model              {:actor "buyer" :strategy "forking-strategist"
-                                 :goal  "Escalate past max level after unanimous release votes."}
-     :expected-outcome          {:workflow-0 "release-after-l2-confirmation"}
-     :strict-expected-errors?   true
-     :expected-errors           [{:seq 7 :action "escalate_dispute" :error :transfer-not-in-dispute}
-                                  {:seq 8 :action "execute_pending_settlement" :error :transfer-not-in-dispute}]
-     :theory                    (fork/theory-block
-                                 {:claim-id :claims/forking-strategist-all-levels-confirm
-                                  :claim    "Third escalation after max level must reject without corrupting L2 pending settlement."})
-     :expectations              (fork/single-wf-expectations
-                                 {:final-state    :released
-                                  :claim-address  "0xseller"
-                                  :claim-amount   fork/escrow-afa-6000
-                                  :dispute-level  2})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1200 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 6 :time 1260 :agent "l2resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl2hash"}}
+     {:seq 7 :time 1270 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 8 :time 1325 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title            "Max-level guard rejects third escalation"
+    :scenario-purpose          "Verify escalation cap at level 2; all levels may confirm release without fork."
+    :description               "L0/L1/L2 all release; third escalation rejected; two bonds lost; final release at L2."
+    :threat-model              {:actor "buyer" :strategy "forking-strategist"
+                                :goal  "Escalate past max level after unanimous release votes."}
+    :expected-outcome          {:workflow-0 "release-after-l2-confirmation"}
+    :strict-expected-errors?   true
+    :expected-errors           [{:seq 7 :action "escalate_dispute" :error :transfer-not-in-dispute}
+                                {:seq 8 :action "execute_pending_settlement" :error :transfer-not-in-dispute}]
+    :theory                    (fork/theory-block
+                                {:claim-id :claims/forking-strategist-all-levels-confirm
+                                 :claim    "Third escalation after max level must reject without corrupting L2 pending settlement."})
+    :expectations              (fork/single-wf-expectations
+                                {:final-state    :released
+                                 :claim-address  "0xseller"
+                                 :claim-amount   fork/escrow-afa-6000
+                                 :dispute-level  2})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S32 — Forking-Strategist: fork lands at L1; keeper attempts settlement too
@@ -568,47 +567,47 @@
 
 (def s32
   (fork/enrich-scenario
-    {:scenario-id        "s32-forking-strategist-premature-settlement-rejected"
-     :schema-version     "1.0"
-     :scenario-author    "@grifma"
-     :initial-block-time 1000
-     :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
+   {:scenario-id        "s32-forking-strategist-premature-settlement-rejected"
+    :schema-version     "1.0"
+    :scenario-author    "@grifma"
+    :initial-block-time 1000
+    :agents             [{:id "buyer"      :address "0xbuyer"  :strategy "forking-strategist"}
                          {:id "seller"     :address "0xseller" :strategy "honest"}
                          {:id "l0resolver" :address "0xl0"     :role "resolver"}
                          {:id "l1resolver" :address "0xl1"     :role "resolver"}
                          {:id "keeper"     :address "0xkeeper"  :role "keeper"}]
-     :events
-     [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-       :params {:token "USDC" :to "0xseller" :amount 6000}}
-      {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-       :params {:workflow-id 0}}
-      {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
-      {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-       :params {:workflow-id 0}}
-      {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
-       :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
-      {:seq 5 :time 1200 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}
-      {:seq 6 :time 1255 :agent "keeper" :action "execute_pending_settlement"
-       :params {:workflow-id 0}}]}
-    {:scenario-title            "Premature settlement rejected; L1 fork finalizes"
-     :scenario-purpose          "Verify keeper cannot execute before L1 appeal window expires."
-     :description               "Early execute_pending_settlement rejected; retry after window closes refunds buyer."
-     :threat-model              {:actor "buyer" :strategy "forking-strategist"
-                                 :goal  "Finalize L1 refund before appeal window allows."}
-     :expected-outcome          {:workflow-0 "refund-after-l1-reversal"}
-     :strict-expected-errors?   true
-     :expected-errors           [{:seq 5 :action "execute_pending_settlement" :error :appeal-window-not-expired}]
-     :theory                    (fork/theory-block
-                                 {:claim-id :claims/forking-strategist-premature-settlement-rejected
-                                  :claim    "Premature settlement must reject without corrupting pending state; post-window refund succeeds."})
-     :expectations              (fork/single-wf-expectations
-                                 {:final-state    :refunded
-                                  :claim-address  "0xbuyer"
-                                  :claim-amount   fork/escrow-afa-6000
-                                  :dispute-level  1
-                                  :step-terminal  [{:seq 5 :path ["live-states" 0] :equals :disputed}]})}))
+    :events
+    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+      :params {:token "USDC" :to "0xseller" :amount 6000}}
+     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+      :params {:workflow-id 0}}
+     {:seq 2 :time 1120 :agent "l0resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release true :resolution-hash "0xl0hash"}}
+     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
+      :params {:workflow-id 0}}
+     {:seq 4 :time 1190 :agent "l1resolver" :action "execute_resolution"
+      :params {:workflow-id 0 :is-release false :resolution-hash "0xl1hash"}}
+     {:seq 5 :time 1200 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}
+     {:seq 6 :time 1255 :agent "keeper" :action "execute_pending_settlement"
+      :params {:workflow-id 0}}]}
+   {:scenario-title            "Premature settlement rejected; L1 fork finalizes"
+    :scenario-purpose          "Verify keeper cannot execute before L1 appeal window expires."
+    :description               "Early execute_pending_settlement rejected; retry after window closes refunds buyer."
+    :threat-model              {:actor "buyer" :strategy "forking-strategist"
+                                :goal  "Finalize L1 refund before appeal window allows."}
+    :expected-outcome          {:workflow-0 "refund-after-l1-reversal"}
+    :strict-expected-errors?   true
+    :expected-errors           [{:seq 5 :action "execute_pending_settlement" :error :appeal-window-not-expired}]
+    :theory                    (fork/theory-block
+                                {:claim-id :claims/forking-strategist-premature-settlement-rejected
+                                 :claim    "Premature settlement must reject without corrupting pending state; post-window refund succeeds."})
+    :expectations              (fork/single-wf-expectations
+                                {:final-state    :refunded
+                                 :claim-address  "0xbuyer"
+                                 :claim-amount   fork/escrow-afa-6000
+                                 :dispute-level  1
+                                 :step-terminal  [{:seq 5 :path ["live-states" 0] :equals :disputed}]})}))
 
 ;; ---------------------------------------------------------------------------
 ;; S33 — Forking-Strategist: two concurrent disputes — fork on wf0, no
@@ -671,10 +670,10 @@
                         :falsifies-if [{:metric :funds-lost :op :> :value 0}
                                        {:metric :double-settlements :op :> :value 0}]}
    :expectations       {:terminal [{:path ["live-states" 0] :equals :refunded}
-                                    {:path ["live-states" 1] :equals :released}
-                                    {:path ["claimable" 0 "0xbuyer0"] :equals 5910}
-                                    {:path ["claimable" 1 "0xseller"] :equals 3940}
-                                    {:path ["dispute-levels" 0] :equals 1}]
+                                   {:path ["live-states" 1] :equals :released}
+                                   {:path ["claimable" 0 "0xbuyer0"] :equals 5910}
+                                   {:path ["claimable" 1 "0xseller"] :equals 3940}
+                                   {:path ["dispute-levels" 0] :equals 1}]
                         :step-terminal [{:seq 7 :path ["live-states" 1] :equals :released}
                                         {:seq 6 :path ["live-states" 1] :equals :disputed}
                                         {:seq 6 :path ["dispute-levels" 0] :equals 1}]}
@@ -1271,28 +1270,28 @@
     ;; are handled gracefully (idempotence).
     ;; ---------------------------------------------------------------------------
 
-    (def s46
-    {:scenario-id     "s46-reorg-idempotence"
-    :schema-version  "1.0"
+(def s46
+  {:scenario-id     "s46-reorg-idempotence"
+   :schema-version  "1.0"
    :scenario-author "@grifma"
-    :initial-block-time 1000
-    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
-                    {:id "seller"   :address "0xseller"   :strategy "honest"}
-                    {:id "resolver" :address "0xresolver" :role "resolver"}]
-    :protocol-params dr3
-    :events
-    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                     {:id "seller"   :address "0xseller"   :strategy "honest"}
+                     {:id "resolver" :address "0xresolver" :role "resolver"}]
+   :protocol-params dr3
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id 0}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
     {:seq 3 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xbranchA"}}
     {:seq 4 :time 1180 :agent "buyer" :action "challenge_resolution"
-    :params {:workflow-id 0}}
+     :params {:workflow-id 0}}
     {:seq 5 :time 1181 :agent "buyer" :action "challenge_resolution"
-    :params {:workflow-id 0}}]})
+     :params {:workflow-id 0}}]})
 
     ;; ---------------------------------------------------------------------------
     ;; S66 — Cooldown Boundary Reorg
@@ -1301,28 +1300,28 @@
     ;; enforced across reorgs where timestamps might shift across the boundary.
     ;; ---------------------------------------------------------------------------
 
-    (def s66
-    {:scenario-id     "s66-cooldown-boundary-reorg"
-    :schema-version  "1.0"
+(def s66
+  {:scenario-id     "s66-cooldown-boundary-reorg"
+   :schema-version  "1.0"
    :scenario-author "@grifma"
-    :initial-block-time 1000
-    :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
-                    {:id "seller"   :address "0xseller"   :strategy "honest"}
-                    {:id "resolver" :address "0xresolver" :role "resolver"}]
-    :protocol-params dr3
-    :events
-    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-    :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
+   :initial-block-time 1000
+   :agents          [{:id "buyer"    :address "0xbuyer"    :strategy "honest"}
+                     {:id "seller"   :address "0xseller"   :strategy "honest"}
+                     {:id "resolver" :address "0xresolver" :role "resolver"}]
+   :protocol-params dr3
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller" :amount 5000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-    :params {:workflow-id 0}}
+     :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-    :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
+     :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}
     ;; First escalation (0→1) at T=1130
     {:seq 3 :time 1130 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id 0}}
+     :params {:workflow-id 0}}
     ;; Second escalation attempt at T=80000 (rejected: < 86400 cooldown)
     {:seq 4 :time 80000 :agent "buyer" :action "escalate_dispute"
-    :params {:workflow-id 0}}
+     :params {:workflow-id 0}}
     ;; Third escalation attempt at T=90000 (succeeds: > 86400 cooldown since T=1130)
     {:seq 5 :time 90000 :agent "buyer" :action "escalate_dispute"
      :params {:workflow-id 0}}]})
@@ -1339,23 +1338,23 @@
     ;; drains the balance first in the chained state.
     ;; ---------------------------------------------------------------------------
 
-    (def s67
-    {:scenario-id     "s67-reentrancy-callback"
-    :schema-version  "1.0"
+(def s67
+  {:scenario-id     "s67-reentrancy-callback"
+   :schema-version  "1.0"
    :scenario-author "@grifma"
-    :initial-block-time 1000
-    :agents          [{:id "attacker" :address "0xattacker" :strategy "malicious"}
+   :initial-block-time 1000
+   :agents          [{:id "attacker" :address "0xattacker" :strategy "malicious"}
                      {:id "buyer"    :address "0xbuyer"    :strategy "honest"}
                      {:id "seller"   :address "0xseller"   :strategy "honest"}
                      {:id "resolver" :address "0xresolver" :role "resolver"}]
-    :protocol-params dr3
+   :protocol-params dr3
     ;; The main action is expected to fail because the callback succeeds first.
-    :expected-revert? true
-    :events
-    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+   :expected-revert? true
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xattacker" :amount 10000 :custom-resolver "0xresolver"}}
     {:seq 1 :time 1060 :agent "buyer" :action "release"
      :params {:workflow-id 0}}
     {:seq 2 :time 1120 :agent "attacker" :action "execute_reentrant_withdraw"
-      :params {:workflow-id 0
-               :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id 0}}}}]})
+     :params {:workflow-id 0
+              :callback {:agent "attacker" :action "withdraw_escrow" :params {:workflow-id 0}}}}]})

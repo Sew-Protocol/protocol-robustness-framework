@@ -96,7 +96,7 @@
         out-dir (str demo-dir "/generated")
         _ (ensure-dir! out-dir)
         run-id (timestamp)
-         cmd-results (atom [])]
+        cmd-results (atom [])]
     ;; 1. Run scenario command first (produces artifacts)
     (let [scenario-cmd (demo-spec/scenario-command spec)
           scenario-result (when scenario-cmd
@@ -113,9 +113,9 @@
       ;; Generate scenario screenshot
       (let [sc-text (or (:stdout scenario-result) "")
             sc-shot (screen/render-screenshot!
-                      out-dir "scenario" 0 sc-text
-                      {:title (str "Scenario: " (demo-spec/demo-id spec))
-                       :command scenario-cmd})]
+                     out-dir "scenario" 0 sc-text
+                     {:title (str "Scenario: " (demo-spec/demo-id spec))
+                      :command scenario-cmd})]
         (println (str "  Wrote screenshot: " (:svg-path sc-shot))))
 
       ;; 2. Run section commands (exploratory commands over results)
@@ -127,9 +127,9 @@
                 stderr-file (str out-dir "/outputs/" (:id section) "-stderr.txt")
                 ;; Render terminal screenshot
                 screenshot (screen/render-screenshot!
-                             out-dir (name (:id section)) cmd-idx (:stdout result)
-                             {:title (str (name (:id section)) " — " cmd)
-                              :command cmd})]
+                            out-dir (name (:id section)) cmd-idx (:stdout result)
+                            {:title (str (name (:id section)) " — " cmd)
+                             :command cmd})]
             (ensure-dir! (str out-dir "/outputs"))
             (write-string! stdout-file (:stdout result))
             (write-string! stderr-file (:stderr result))

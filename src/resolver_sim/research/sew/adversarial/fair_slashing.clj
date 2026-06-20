@@ -83,9 +83,9 @@
   [params n-trials seed preservation-floor]
   (let [d-rng          (rng/make-rng seed)
         fraud-outcomes (for [_ (range n-trials)]
-                          (simulate-false-positive-slash params d-rng))
+                         (simulate-false-positive-slash params d-rng))
         timeout-outcomes (for [_ (range n-trials)]
-                            (simulate-timeout-contest params d-rng))
+                           (simulate-timeout-contest params d-rng))
         all-outcomes   (concat fraud-outcomes timeout-outcomes)
         preserved      (count (filter #{:capital-preserved} all-outcomes))
         total          (count all-outcomes)

@@ -10,8 +10,8 @@
   (mapv (fn [e]
           (let [e (if (and (= "create_escrow" (:action e))
                            (not (:save-id-as e)))
-                   (assoc e :save-id-as "wf0")
-                   e)]
+                    (assoc e :save-id-as "wf0")
+                    e)]
             (if-let [wf (:workflow-id (:params e))]
               (update-in e [:params :workflow-id]
                          #(if (number? %) "wf0" %))
@@ -24,15 +24,15 @@
    :claim        claim
    :assumptions  (or assumptions [:appeal-window-60s :kleros-escalation-ladder])
    :falsifies-if (into [{:metric :funds-lost :op :> :value 0}
-                         {:metric :double-settlements :op :> :value 0}]
-                        (or falsifies-if-extra []))})
+                        {:metric :double-settlements :op :> :value 0}]
+                       (or falsifies-if-extra []))})
 
 (defn single-wf-expectations
   [{:keys [final-state claim-address claim-amount dispute-level step-terminal]}]
   (cond-> {:terminal (into [{:path ["live-states" 0] :equals final-state}
                             {:path ["claimable" 0 claim-address] :equals claim-amount}]
-                          (when dispute-level
-                            [{:path ["dispute-levels" 0] :equals dispute-level}]))}
+                           (when dispute-level
+                             [{:path ["dispute-levels" 0] :equals dispute-level}]))}
     (seq step-terminal) (assoc :step-terminal step-terminal)))
 
 (defn enrich-scenario

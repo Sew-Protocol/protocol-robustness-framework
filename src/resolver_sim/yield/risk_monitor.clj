@@ -22,12 +22,10 @@
      (binding [*risk-events* fresh#]
        ~@body)))
 
-
 (defn events
   "Return accumulated risk events as a vector of maps."
   []
   @*risk-events*)
-
 
 (defn summary
   "Aggregate risk events by short-circuit type.
@@ -47,7 +45,6 @@
                            (update :samples (fnil conj []) (select-keys e [:ts :module-id :yield-delta :deferred-delta]))))))
             {}
             events)))
-
 
 (defn capture-if-risk-event
   "Check the current attribution context for yield short circuits. If a

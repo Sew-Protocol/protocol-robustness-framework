@@ -368,8 +368,8 @@
                  :scenario-name scenario-name
                  :type :waterfall
                  :params (select-keys params [:fraud-rate :coverage-multiplier :utilization-factor
-                                             :n-seniors :n-juniors-per-senior
-                                             :senior-bond-amount :junior-bond-amount])
+                                              :n-seniors :n-juniors-per-senior
+                                              :senior-bond-amount :junior-bond-amount])
                  :results metrics}]
 
     (let [adequacy (:coverage-adequacy-score metrics)
@@ -421,7 +421,7 @@
                  :type :governance-impact
                  :governance-response-days (:governance-response-days params 3)
                  :params (select-keys params [:governance-response-days :n-epochs :n-trials-per-epoch
-                                             :slashing-detection-probability :strategy-mix])
+                                              :slashing-detection-probability :strategy-mix])
                  :results (select-keys result [:epoch-results :governance-metrics :aggregated-stats])}]
 
     (println (format "   Final honest resolvers: %d" (get-in result [:aggregated-stats :honest-final-count])))
@@ -495,8 +495,8 @@
    :phase-x         ["\n💥 Running Phase X: Burst Concurrency Exploit"
                      (fn [_ _] (burst-concurrency/run-phase-x-sweep))]
    :governance-impact [nil run-governance-impact-simulation]
-    :waterfall              [nil run-waterfall-simulation]
-    :probabilistic-waterfall [nil run-probabilistic-waterfall-simulation]
+   :waterfall              [nil run-waterfall-simulation]
+   :probabilistic-waterfall [nil run-probabilistic-waterfall-simulation]
    :multi-epoch       [nil run-multi-epoch-simulation]
    :sweep             [nil run-sweep]
    :adversarial       [nil (fn [p _] (adversarial/run-adversarial-search p))]

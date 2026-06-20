@@ -184,9 +184,9 @@
     (spit f (json/write-str validation {:indent true}))
     (println "Wrote evidence registry validation:" (.getPath f) "- status:" (:status validation))
     (chain/register-additional-artifact!
-      (chain/index-artifact-entry :evidence-registry-validation
-                                  "evidence-registry-validation.json"
-                                  "evidence-registry-validation.v1" "DIAGNOSTIC"))
+     (chain/index-artifact-entry :evidence-registry-validation
+                                 "evidence-registry-validation.json"
+                                 "evidence-registry-validation.v1" "DIAGNOSTIC"))
     {:validation-path (.getPath f)
      :validation validation}))
 
@@ -208,12 +208,12 @@
         {:keys [validation-path validation]} (write-evidence-registry-validation! registry out-dir)]
     (when strict
       (let [strict-result (validate-evidence-registry registry
-                            :strict true :artifact-dir out-dir)]
+                                                      :strict true :artifact-dir out-dir)]
         (println "Strict validation:" (:status strict-result)
                  "—" (:failed (:metrics strict-result)) "failures")
         (when (= :failed (:status strict-result))
           (throw (ex-info "Evidence registry strict validation failed"
-                   {:validation strict-result})))))
+                          {:validation strict-result})))))
     {:registry-path registry-path
      :validation-path validation-path
      :entry-count entry-count

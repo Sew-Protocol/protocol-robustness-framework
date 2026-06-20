@@ -165,9 +165,9 @@
                         :default-severity :high
                         :class :safety}
    :invariant/finality {:invariant/id :invariant/finality
-                         :label "Finality"
-                         :default-severity :medium
-                         :class :liveness}
+                        :label "Finality"
+                        :default-severity :medium
+                        :class :liveness}
    :invariant/evidence-on-state-change
    {:invariant/id :invariant/evidence-on-state-change
     :label "Evidence on state change"

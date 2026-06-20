@@ -481,7 +481,7 @@
       (and (= :pass outcome) (zero? violations)) :normal-completion
       (= halt :invariant-violation)      :invariant-failure
       (#{:open-entities-at-end :open-disputes-at-end} halt) :liveness-failure
-       (= outcome :fail)                  :cascade-failure
+      (= outcome :fail)                  :cascade-failure
       :else                              :normal-completion)))
 
 ;; ===========================================================================

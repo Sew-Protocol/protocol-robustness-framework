@@ -40,7 +40,7 @@
                           :slash-risk-inhibition 0.7
                           :max-switch-probability 0.8
                           :detection-probability 0.1
-                           :slash-multiplier 2.5
+                          :slash-multiplier 2.5
                           :blocked-target-policy :inconclusive}
         legacy-rate      (double (get params :defection-rate 0.0))
         legacy-model     (get params :defection-model :binary-payoff)
@@ -228,8 +228,8 @@
                     :optimal-strategy-under-load optimal
                     :strategy-payoffs (:strategy-payoffs load-snap)
                     :allowed-targets (:allowed-targets cfg)
-                     :observed-strategies observed-strategies
-                     :strategy-space (:strategy-space cfg)}}
+                    :observed-strategies observed-strategies
+                    :strategy-space (:strategy-space cfg)}}
 
       (switch-with-rate? rng (min rate (:max-switch-probability cfg)))
       {:to optimal
@@ -254,8 +254,8 @@
         malice-mean (group-mean-profit resolver-histories epoch :malicious)]
     (reduce-kv
      (fn [acc id resolver]
-      (let [strategy   (:strategy resolver)
-            decision   (select-next-strategy
+       (let [strategy   (:strategy resolver)
+             decision   (select-next-strategy
                          :binary-payoff
                          {:honest-mean honest-mean
                           :malice-mean malice-mean
@@ -265,12 +265,12 @@
                           :cfg cfg
                           :epoch epoch}
                          resolver)
-            target (:to decision)]
-        (if (and target (not= strategy target))
+             target (:to decision)]
+         (if (and target (not= strategy target))
            (-> acc
                (assoc-in [:updated-histories id] (assoc resolver :strategy target))
                (update :defection-events conj
-                      (merge
+                       (merge
                         {:id id}
                         (event-base epoch id strategy target :binary-payoff
                                     (:reason decision) nil rate))))
@@ -286,14 +286,14 @@
      (fn [acc id resolver]
        (let [from     (:strategy resolver)
              decision (select-next-strategy
-                        :load-optimal
-                        {:rate rate
-                         :rng rng
-                         :cfg cfg
-                         :load-snap load-snap
-                         :observed-strategies observed-strategies
-                         :epoch epoch}
-                        (assoc resolver :resolver-id id))
+                       :load-optimal
+                       {:rate rate
+                        :rng rng
+                        :cfg cfg
+                        :load-snap load-snap
+                        :observed-strategies observed-strategies
+                        :epoch epoch}
+                       (assoc resolver :resolver-id id))
              target   (:to decision)]
          (cond
            (:blocked? decision)

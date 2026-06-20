@@ -609,8 +609,6 @@
      (map? attributed-state-or-map) attributed-state-or-map
      :else *attribution*)))
 
-
-
 (defn artifact-safe-value?
   "Predicate for values safe to include in persisted JSON/EDN artifacts."
   [v]
@@ -700,21 +698,21 @@
    at serialize time, not just when inspecting artifacts."
   [attr]
   (let [safe (into {}
-                (filter (fn [[k v]]
-                          (let [valid? (and (keyword? k)
-                                            (namespace k)
-                                            (artifact-safe-value? v))]
-                            (when-not valid?
-                              (log/log! :warn "sanitize-attribution dropping invalid entry"
-                                        {:key k
-                                         :value-type (some-> v type str)
-                                         :reason (cond
-                                                   (not (keyword? k)) :key-not-keyword
-                                                   (not (namespace k)) :key-not-namespaced
-                                                   (not (artifact-safe-value? v)) :value-not-artifact-safe
-                                                   :else :unknown)}))
-                            valid?)))
-                        attr)]
+                   (filter (fn [[k v]]
+                             (let [valid? (and (keyword? k)
+                                               (namespace k)
+                                               (artifact-safe-value? v))]
+                               (when-not valid?
+                                 (log/log! :warn "sanitize-attribution dropping invalid entry"
+                                           {:key k
+                                            :value-type (some-> v type str)
+                                            :reason (cond
+                                                      (not (keyword? k)) :key-not-keyword
+                                                      (not (namespace k)) :key-not-namespaced
+                                                      (not (artifact-safe-value? v)) :value-not-artifact-safe
+                                                      :else :unknown)}))
+                               valid?)))
+                   attr)]
     safe))
 
 (defn attribution-quality

@@ -278,7 +278,7 @@
          :status   :inconclusive
          :basis    :single-simulation-evidence
          :reason   (format "load-optimal target outside strategy space in %d event(s); policy=%s"
-                          (count blocked) (name policy))
+                           (count blocked) (name policy))
          :evidence {:blocked-events (count blocked)
                     :blocked-target-policy policy}})
       (pass :strategy-adaptation-compatibility

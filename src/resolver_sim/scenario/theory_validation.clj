@@ -70,14 +70,12 @@
 
       :else "unrecognized predicate shape: expected :metric, :state, :and, :or, :not, :implies, :always, :eventually, :after, or :before")))
 
-
 (defn- validate-falsifies-if
   "Validate a :falsifies-if value (vector of predicates or a single predicate)."
   [conds]
   (if (vector? conds)
     (first (keep #(validate-predicate % 10) conds))
     (validate-predicate conds 10)))
-
 
 (defn validate-theory
   "Validate a theory block.

@@ -34,7 +34,7 @@
   (testing "malformed-core-evidence-rejected-test"
     ;; Verifies our builder logic (Phase 3 requirements)
     (is (thrown? Exception (cap/require-fields {:some-field "val"
-                                                  :evidence/importance "core"})))
+                                                :evidence/importance "core"})))
     (is (= {} (cap/require-fields {}))))
 
   (testing "deterministic-evidence-chain-test"
@@ -52,7 +52,7 @@
     (let [registry {:artifacts [{:evidence-hash "e1"}] :evidence-hashes ["e1"]}]
       ;; Mock evidence pointing to non-existent e2
       (is (= false (:present (chain/verify-evidence-in-registry registry "e2"))))))
-      
+
   (testing "causality-cycle-test"
     (let [registry {:artifacts [{:evidence-hash "e1" :caused-by "e2"}
                                 {:evidence-hash "e2" :caused-by "e1"}]}]
@@ -86,5 +86,4 @@
                               e1 (first (filter #(= "e1" (:evidence-hash %)) arts))
                               e2 (first (filter #(= (:caused-by %) "e1") arts))]
                           (if (and e1 e2 (= (:workflow-id e1) (:workflow-id e2))) true false)))]
-        (is (false? (is-valid? registry))))))
-)
+        (is (false? (is-valid? registry)))))))

@@ -5,9 +5,9 @@
    `resolver-sim.io.scenario-runner`; this namespace keeps stable requires
    for notebooks and legacy call sites."
   (:require
-            [resolver-sim.protocols.sew.invariant-scenarios :as sc]
-            [resolver-sim.protocols.sew.narrative :as narrative]
-            [resolver-sim.scenario.report :as report]))
+   [resolver-sim.protocols.sew.invariant-scenarios :as sc]
+   [resolver-sim.protocols.sew.narrative :as narrative]
+   [resolver-sim.scenario.report :as report]))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API (delegates to pure scenario.* + io.*)

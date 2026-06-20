@@ -39,16 +39,16 @@
         best (eval-params start 500)]
     (loop [cur best i 0]
       (if (>= i n-iter) cur
-        (let [keys-vec [:resolver-fee-bps :resolver-bond-bps :slash-multiplier :slashing-detection-probability]
-              k (nth keys-vec (rng/sample-index rng (count keys-vec)))
-              v (get pte k [0 1])
-              delta (* (- (second v) (first v)) 0.1 (- (rng/next-double rng) 0.5))
-              curr-v (get (:params cur) k 0)
-              new-v (max (first v) (min (second v) (+ curr-v delta)))
-              cand-params (assoc (:params cur) k new-v)
-              cand (eval-params cand-params 500)]
-          (if (> (:malicious-ev cand) (:malicious-ev cur))
-            (recur cand (inc i)) (recur cur (inc i))))))))
+          (let [keys-vec [:resolver-fee-bps :resolver-bond-bps :slash-multiplier :slashing-detection-probability]
+                k (nth keys-vec (rng/sample-index rng (count keys-vec)))
+                v (get pte k [0 1])
+                delta (* (- (second v) (first v)) 0.1 (- (rng/next-double rng) 0.5))
+                curr-v (get (:params cur) k 0)
+                new-v (max (first v) (min (second v) (+ curr-v delta)))
+                cand-params (assoc (:params cur) k new-v)
+                cand (eval-params cand-params 500)]
+            (if (> (:malicious-ev cand) (:malicious-ev cur))
+              (recur cand (inc i)) (recur cur (inc i))))))))
 
 (defn grid-search [pte]
   (let [fees [100 150 200 250 300] bonds [500 800 1000 1500]
@@ -62,16 +62,16 @@
   (let [det (get worst :slashing-detection-probability 0.03)
         bond (get worst :resolver-bond-bps 500)]
     (map #(eval-params % n-trials)
-      [(assoc worst :slashing-detection-probability (max 0.01 (- det 0.01)))
-       (assoc worst :resolver-bond-bps (max 100 (- bond 100)))
-       (merge worst {:slashing-detection-probability (max 0.01 (- det 0.01))
-                   :resolver-bond-bps (max 100 (- bond 100))})])))
+         [(assoc worst :slashing-detection-probability (max 0.01 (- det 0.01)))
+          (assoc worst :resolver-bond-bps (max 100 (- bond 100)))
+          (merge worst {:slashing-detection-probability (max 0.01 (- det 0.01))
+                        :resolver-bond-bps (max 100 (- bond 100))})])))
 
 (defn run-pte-analysis [& {:keys [n-trials n-restarts] :or {n-trials 1000 n-restarts 50}}]
   (println "\n=== PTE v1.0 Analysis ===")
   (println "Constraints: Bond 5-15%, Fee 1-3%, Detection 3-30%, Slash 1-3x")
   (println "")
-  
+
   (let [grid-results (doall (map #(eval-params % n-trials) (grid-search pte-v1)))
         hill-results (doall (for [i (range n-restarts)] (hill-climb (rng/make-rng i) pte-v1 100)))
         all-results (concat grid-results hill-results)
@@ -79,24 +79,24 @@
         worst (first sorted) best (last sorted)
         flip-tests (find-flip (:params worst) n-trials)
         wins (filter #(>= (:malicious-ev %) (:honest-ev %)) all-results)]
-    
+
     (println "Worst cases:")
     (doseq [r (take 5 sorted)]
       (let [p (:params r)]
         (println (format "  A:%+.0f H:%+.0f R:%.2f | F:%d B:%d S:%.1f D:%.0f"
-                       (double (:malicious-ev r)) (double (:honest-ev r)) (double (:dominance-ratio r))
-                       (int (:resolver-fee-bps p)) (int (:resolver-bond-bps p))
-                       (double (:slash-multiplier p)) (* 100 (double (:slashing-detection-probability p)))))))
-    
+                         (double (:malicious-ev r)) (double (:honest-ev r)) (double (:dominance-ratio r))
+                         (int (:resolver-fee-bps p)) (int (:resolver-bond-bps p))
+                         (double (:slash-multiplier p)) (* 100 (double (:slashing-detection-probability p)))))))
+
     (println "")
     (println "Flip tests:")
     (doseq [r flip-tests]
       (let [p (:params r)
             status (if (>= (:malicious-ev r) (:honest-ev r)) "ATTACKER WINS" "still < honest")]
         (println (format "  Det:%.0f%% Bond:%d -> A:%+.0f H:%+.0f [%s]"
-                       (* 100 (double (:slashing-detection-probability p))) (int (:resolver-bond-bps p))
-                       (double (:malicious-ev r)) (double (:honest-ev r)) status))))
-    
+                         (* 100 (double (:slashing-detection-probability p))) (int (:resolver-bond-bps p))
+                         (double (:malicious-ev r)) (double (:honest-ev r)) status))))
+
     (println "")
     (println "=== SUMMARY ===")
     (let [we (double (:malicious-ev worst)) be (double (:malicious-ev best))

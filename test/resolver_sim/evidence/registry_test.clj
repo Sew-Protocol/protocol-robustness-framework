@@ -37,13 +37,13 @@
               :run/id "test-run"
               :scenario/id "test-scenario"
               :attribution/context {:ctx/run-id "test-run"
-                                   :ctx/scenario-id "test-scenario"
-                                   :ctx/event-index 0
-                                   :ctx/event-type :create_escrow
-                                   :subject/type :escrow
-                                   :subject/id 0
-                                   :action/type :escrow/create
-                                   :evidence/reason :escrow-created}}
+                                    :ctx/scenario-id "test-scenario"
+                                    :ctx/event-index 0
+                                    :ctx/event-type :create_escrow
+                                    :subject/type :escrow
+                                    :subject/id 0
+                                    :action/type :escrow/create
+                                    :evidence/reason :escrow-created}}
         ;; Event 0: create escrow — generic trace
         e0-generic (assoc base :evidence/type "transition"
                           :evidence/hash "gen-0000"
@@ -66,8 +66,8 @@
                          :world/after-full-hash "sha256-after-0"
                          :event/seq 0
                          :attribution/context (assoc (:attribution/context base)
-                                                      :ctx/event-index 0
-                                                      :ctx/event-type :create_escrow))
+                                                     :ctx/event-index 0
+                                                     :ctx/event-type :create_escrow))
         ;; Event 1: raise dispute
         e1-dispute (assoc base :evidence/type "dispute-raised"
                           :evidence/hash "tgt-0001"
@@ -77,10 +77,10 @@
                           :dispute/workflow-id 0
                           :event/seq 1
                           :attribution/context (assoc (:attribution/context base)
-                                                       :ctx/event-index 1
-                                                       :ctx/event-type :raise_dispute
-                                                       :subject/type :dispute
-                                                       :action/type :dispute/raise))]
+                                                      :ctx/event-index 1
+                                                      :ctx/event-type :raise_dispute
+                                                      :subject/type :dispute
+                                                      :action/type :dispute/raise))]
     (doseq [m [e0-generic e0-target e1-dispute]]
       (write-sample-artifact dir m))
     {:dir dir :event-count 3}))
@@ -149,7 +149,7 @@
         {:keys [registry]} (reg/write-evidence-registry! dir)
         ;; Remove an ID from one entry
         tampered (update registry :entries (fn [entries]
-                                              (update-in entries [0] dissoc :evidence/id)))
+                                             (update-in entries [0] dissoc :evidence/id)))
         result (reg-val/validate-evidence-registry tampered :artifact-dir dir)]
     (is (= :failed (:status result)) "Validation fails when entries lack IDs")
     (is (some #(and (= "every-entry-has-id" (:id %)) (= :failed (:status %))) (:checks result)))))

@@ -23,7 +23,7 @@
     (when owner
       (let [pos-key (first owner)]
         (Math/abs (long (- (get-in one-shot [:yield/positions pos-key :unrealized-yield] 0)
-                            (get-in fragmented [:yield/positions pos-key :unrealized-yield] 0))))))))
+                           (get-in fragmented [:yield/positions pos-key :unrealized-yield] 0))))))))
 
 (defn partition-drift-within-budget?
   [world module-id token total-dt steps max-drift]

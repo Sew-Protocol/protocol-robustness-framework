@@ -25,7 +25,7 @@
      (escrow-snapshot preset-id params nil)))
   ([preset-id params opts]
    (let [base (when (and preset-id (not (map? preset-id)))
-               (presets/preset->snapshot preset-id (assoc opts :validate? false)))
+                (presets/preset->snapshot preset-id (assoc opts :validate? false)))
          merged (if base (merge base params) params)
          snap (snap/make-escrow-snapshot merged)]
      (if (false? (:validate? opts))

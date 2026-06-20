@@ -20,9 +20,7 @@
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.io.event-evidence :as evidence]))
 
-
 (def ^:private schema-version (evcfg/schema :partial-fill-decision))
-
 
 (def default-partial-fill-policy
   {:mode :waterfall
@@ -31,7 +29,6 @@
    :residual-treatment :defer
    :post-partial-fill-accrual :accrue-residual-as-unrealized
    :rounding-policy :floor-and-carry})
-
 
 (def default-settlement-decision
   {:settlement-mode :full-fill
@@ -43,12 +40,10 @@
    :policy default-partial-fill-policy
    :evidence {:schema-version schema-version}})
 
-
 (defn- fill-order-set
   "Convert fill-order vector to a set for membership checks."
   [fill-order]
   (set fill-order))
-
 
 (defn- position-bucket
   "Get a position's value for a given bucket key."
@@ -60,7 +55,6 @@
     :deferred-yield   (long (:deferred-yield pos 0))
     0))
 
-
 (defn- position-bucket-name
   [bucket]
   (case bucket
@@ -70,14 +64,12 @@
     :deferred-yield "deferred_yield"
     "unknown"))
 
-
 (defn- normalize-token [token]
   (tok/normalize token))
 
 (defn- sum-requested
   [requested]
   (reduce + 0 (map long (vals requested))))
-
 
 (defn- make-evidence
   [policy available-liquidity total-requested shortage fill-mode]
@@ -88,7 +80,6 @@
    :fill-mode fill-mode
    :rounding-policy (:rounding-policy policy)
    :fill-order (:fill-order policy)})
-
 
 (defn calculate-fulfillment-pro-rata
   "Pro-rata fill: each claim bucket receives a proportional share of the available
@@ -127,10 +118,9 @@
          :policy policy
          :evidence (assoc (make-evidence policy available-liquidity total shortage :pro-rata)
                           :allocation-detail (select-keys alloc [:total-available-units
-                                                                  :total-allocated-units
-                                                                  :shortage-units
-                                                                  :carry]))}))))
-
+                                                                 :total-allocated-units
+                                                                 :shortage-units
+                                                                 :carry]))}))))
 
 (defn calculate-fulfillment-principal-first
   "Principal-first fill: principal claims are satisfied in full before any
@@ -177,7 +167,6 @@
          :policy policy
          :evidence (make-evidence policy available-liquidity (+ principal-requested yield-total) shortage :principal-first)}))))
 
-
 (defn calculate-fulfillment-waterfall
   "Waterfall fill: claims are satisfied in strict fill-order priority.
    Each bucket in :fill-order is filled to exhaustion before moving to the next.
@@ -222,7 +211,6 @@
                    (if (pos? filled-amount) (assoc filled bucket filled-amount) filled)
                    (if (pos? deferred-amount) (assoc deferred bucket deferred-amount) deferred)
                    (rest buckets))))))))
-
 
 (defn calculate-fulfillment
   "Calculate the structured settlement decision for a withdrawal against
@@ -284,12 +272,10 @@
          :principal-first (calculate-fulfillment-principal-first available requested policy)
          :waterfall       (calculate-fulfillment-waterfall available requested policy))))))
 
-
 (defn partial-fill?
   "True if the settlement decision represents a partial fill."
   [decision]
   (= :partial-fill (:settlement-mode decision)))
-
 
 (defn post-partial-fill-position
   "Update a position after a partial-fill settlement decision has been applied.
@@ -327,19 +313,18 @@
         (assoc :partial-fill-affected? true)
         (assoc :status :unwinding)
         (cond->
-          (= post-accrual :accrue-residual-as-unrealized)
+         (= post-accrual :accrue-residual-as-unrealized)
           (update :unrealized-yield + (long (get deferred :principal 0))
-                                       (long (get deferred :realized-yield 0))
-                                       (long (get deferred :deferred-yield 0)))
+                  (long (get deferred :realized-yield 0))
+                  (long (get deferred :deferred-yield 0)))
 
           (not= post-accrual :accrue-residual-as-unrealized)
           (-> (update :principal-impairment + (long (get deferred :principal 0)))
               (update :deferred-yield + (long (get deferred :realized-yield 0))
-                                         (long (get deferred :deferred-yield 0))))
+                      (long (get deferred :deferred-yield 0))))
 
           (some pos? (vals haircut))
           (update :haircut-yield + (reduce + 0 (vals haircut)))))))
-
 
 (defn apply-partial-fill
   "Apply a partial-fill settlement to the world state, updating both the
@@ -347,7 +332,7 @@
 
    Returns updated world."
   [world position decision]
-    (let [owner-id (or (:owner/id position) (-> (pos/position-identity position) second))
+  (let [owner-id (or (:owner/id position) (-> (pos/position-identity position) second))
         updated-pos (post-partial-fill-position position decision)
         filled-total (reduce + 0 (vals (:filled decision)))
         raw-token (or (:token position) (get-in position [:position/id 3]))
@@ -355,7 +340,6 @@
     (-> world
         (assoc-in [:yield/positions owner-id] updated-pos)
         (update-in [:total-held tok] #(- (or % 0) filled-total)))))
-
 
 (defn apply-partial-fill-with-attribution
   "Apply a partial-fill settlement to world state, wrapping the mutation in
@@ -383,11 +367,11 @@
     (attr/with-attribution ctx
       (let [world' (apply-partial-fill world position decision)]
         (evidence/capture-event-evidence!
-          :settlement-fill
-          {:settlement/before (select-keys world [:total-held :yield/positions])}
-          {:settlement/after (select-keys world' [:total-held :yield/positions])}
-          {:settlement/decision decision}
-          nil
-          {:world-before world
-           :world-after world'})
+         :settlement-fill
+         {:settlement/before (select-keys world [:total-held :yield/positions])}
+         {:settlement/after (select-keys world' [:total-held :yield/positions])}
+         {:settlement/decision decision}
+         nil
+         {:world-before world
+          :world-after world'})
         world'))))

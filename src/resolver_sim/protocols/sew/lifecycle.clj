@@ -148,8 +148,8 @@
             (accrue-yield workflow-id)
             (cond-> (and mid (contains? (:yield/modules world) mid))
               (yield-ops/apply-yield-op {:op/type :yield/withdraw
-                                        :module/id mid
-                                        :owner/id owner-id})))
+                                         :module/id mid
+                                         :owner/id owner-id})))
         ;; Under a liquidity shortfall, only fulfilled-amount is immediately settleable.
         ;; Use net-amt when no yield module is involved or no shortfall occurred.
         pos           (when mid (get-in world-after-yield [:yield/positions owner-id]))
@@ -198,26 +198,26 @@
                               :subject/id workflow-id
                               :action/type (keyword "escrow" (name direction))
                               :evidence/reason evidence-reason}
-         (cap/capture-event-evidence!
-           evidence-reason
-           {:finalize/before
-            {:workflow-state (t/escrow-state world workflow-id)
-             :total-held (get-in world [:total-held token])
-             :resolver (:dispute-resolver et)}}
-           {:finalize/after
-            {:workflow-state (t/escrow-state result workflow-id)
-             :total-held (get-in result [:total-held token])}}
-           {:finalize/workflow-id workflow-id
-            :finalize/direction direction
-            :finalize/recipient recipient
-            :finalize/settled-amount settled-amt
-            :finalize/sub-held-amount sub-held-amt
-            :finalize/partial-yield? (boolean partial-yield?)
-            :finalize/shortfall? (boolean pos-shortfall)
-            :finalize/resolver (:dispute-resolver et)}
-           nil
-           {:world-before world
-            :world-after result}))
+        (cap/capture-event-evidence!
+         evidence-reason
+         {:finalize/before
+          {:workflow-state (t/escrow-state world workflow-id)
+           :total-held (get-in world [:total-held token])
+           :resolver (:dispute-resolver et)}}
+         {:finalize/after
+          {:workflow-state (t/escrow-state result workflow-id)
+           :total-held (get-in result [:total-held token])}}
+         {:finalize/workflow-id workflow-id
+          :finalize/direction direction
+          :finalize/recipient recipient
+          :finalize/settled-amount settled-amt
+          :finalize/sub-held-amount sub-held-amt
+          :finalize/partial-yield? (boolean partial-yield?)
+          :finalize/shortfall? (boolean pos-shortfall)
+          :finalize/resolver (:dispute-resolver et)}
+         nil
+         {:world-before world
+          :world-after result}))
       result)))
 
 (defn finalize-escrow-accounting
@@ -263,52 +263,52 @@
   [world caller token to amount settings snapshot]
   (let [token (keyword token)]
     (cond
-    (nil? token)
-    (t/fail :invalid-token)
+      (nil? token)
+      (t/fail :invalid-token)
 
-    (not (token-available? world token))
-    (t/fail :token-liquidity-crunch)
+      (not (token-available? world token))
+      (t/fail :token-liquidity-crunch)
 
-    (nil? to)
-    (t/fail :invalid-recipient)
+      (nil? to)
+      (t/fail :invalid-recipient)
 
-    (<= amount 0)
-    (t/fail :amount-zero)
+      (<= amount 0)
+      (t/fail :amount-zero)
 
-    (let [ymid (:yield-generation-module snapshot)
-          yield-enabled? (and ymid (t/yield-preset-yield-enabled? (:yield-preset settings)))]
-      (and yield-enabled? (not (yield-module-available? world ymid token))))
-    (t/fail :insufficient-module-liquidity)
+      (let [ymid (:yield-generation-module snapshot)
+            yield-enabled? (and ymid (t/yield-preset-yield-enabled? (:yield-preset settings)))]
+        (and yield-enabled? (not (yield-module-available? world ymid token))))
+      (t/fail :insufficient-module-liquidity)
 
-    (and (pos? (:auto-release-time settings 0))
-         (pos? (:auto-cancel-time settings 0)))
-    (t/fail :cannot-set-both-auto-times)
+      (and (pos? (:auto-release-time settings 0))
+           (pos? (:auto-cancel-time settings 0)))
+      (t/fail :cannot-set-both-auto-times)
 
-    :else
-    (let [workflow-id   (get world :next-workflow-id 0)]
-      (let [fee-bps       (:escrow-fee-bps snapshot 0)
-            fee           (payoffs/calculate-escrow-fee amount fee-bps)
-            afa           (- amount fee)
+      :else
+      (let [workflow-id   (get world :next-workflow-id 0)]
+        (let [fee-bps       (:escrow-fee-bps snapshot 0)
+              fee           (payoffs/calculate-escrow-fee amount fee-bps)
+              afa           (- amount fee)
             ;; _applyEscrowSettings: compute effective auto times
-            snap-rel      (:default-auto-release-delay snapshot 0)
-            snap-can      (:default-auto-cancel-delay snapshot 0)
-            use-defaults? (and (zero? (:auto-release-time settings 0))
-                               (zero? (:auto-cancel-time settings 0)))
-            auto-rel      (cond
-                            (pos? (:auto-release-time settings 0)) (:auto-release-time settings)
-                            (and use-defaults? (pos? snap-rel))    (+ (time-ctx/block-ts world) snap-rel)
-                            :else                                   0)
-            auto-can      (cond
-                            (pos? (:auto-cancel-time settings 0)) (:auto-cancel-time settings)
-                            (and use-defaults? (pos? snap-can))   (+ (time-ctx/block-ts world) snap-can)
-                            :else                                  0)
+              snap-rel      (:default-auto-release-delay snapshot 0)
+              snap-can      (:default-auto-cancel-delay snapshot 0)
+              use-defaults? (and (zero? (:auto-release-time settings 0))
+                                 (zero? (:auto-cancel-time settings 0)))
+              auto-rel      (cond
+                              (pos? (:auto-release-time settings 0)) (:auto-release-time settings)
+                              (and use-defaults? (pos? snap-rel))    (+ (time-ctx/block-ts world) snap-rel)
+                              :else                                   0)
+              auto-can      (cond
+                              (pos? (:auto-cancel-time settings 0)) (:auto-cancel-time settings)
+                              (and use-defaults? (pos? snap-can))   (+ (time-ctx/block-ts world) snap-can)
+                              :else                                  0)
             ;; Resolver: custom-resolver takes precedence over snapshot
-            resolver      (or (:custom-resolver settings)
-                              (:dispute-resolver snapshot))
+              resolver      (or (:custom-resolver settings)
+                                (:dispute-resolver snapshot))
             ;; Bonding guard: only enforce when resolver-bond-bps is configured
-            bond-bps      (:resolver-bond-bps snapshot 0)
-            stake         (if resolver (reg/get-stake world resolver) 0)]
-            (cond
+              bond-bps      (:resolver-bond-bps snapshot 0)
+              stake         (if resolver (reg/get-stake world resolver) 0)]
+          (cond
             (= "" resolver)
             (t/fail :invalid-resolver)
 
@@ -324,83 +324,83 @@
 
             :else
             (let [et            (t/make-escrow-transfer
-                               {:token             token
-                                :to                to
-                                :from              caller
-                                :amount-after-fee  afa
-                                :initial-fee       fee
-                                :dispute-resolver  resolver
-                                :auto-release-time auto-rel
-                                :auto-cancel-time  auto-can
-                                :last-accrual-time (time-ctx/block-ts world)
-                                :escrow-state      :pending})
-                ymid          (:yield-generation-module snapshot)
-                world'        (-> world
-                                  (assoc :next-workflow-id (inc workflow-id))
-                                  (assoc-in [:escrow-transfers workflow-id] et)
-                                  (assoc-in [:escrow-settings workflow-id]
-                                            (t/make-escrow-settings settings))
-                                  (assoc-in [:module-snapshots workflow-id] snapshot)
-                                  (update-in [:total-principal-deposited token] (fnil + 0) amount)
-                                  (add-held token afa)
-                                  (add-fee token fee)
-                                  (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
+                                 {:token             token
+                                  :to                to
+                                  :from              caller
+                                  :amount-after-fee  afa
+                                  :initial-fee       fee
+                                  :dispute-resolver  resolver
+                                  :auto-release-time auto-rel
+                                  :auto-cancel-time  auto-can
+                                  :last-accrual-time (time-ctx/block-ts world)
+                                  :escrow-state      :pending})
+                  ymid          (:yield-generation-module snapshot)
+                  world'        (-> world
+                                    (assoc :next-workflow-id (inc workflow-id))
+                                    (assoc-in [:escrow-transfers workflow-id] et)
+                                    (assoc-in [:escrow-settings workflow-id]
+                                              (t/make-escrow-settings settings))
+                                    (assoc-in [:module-snapshots workflow-id] snapshot)
+                                    (update-in [:total-principal-deposited token] (fnil + 0) amount)
+                                    (add-held token afa)
+                                    (add-fee token fee)
+                                    (update-in [:total-fot-fees token] (fnil + 0) (- amount afa fee)))
                 ;; Trigger yield deposit if module is configured
-                world''       (if (and ymid
-                                       (t/yield-preset-yield-enabled? (:yield-preset settings))
-                                       (contains? (:yield/modules world') ymid))
-                                   (yield-ops/apply-yield-op world' {:op/type :yield/deposit
-                                                                     :module/id ymid
-                                                                     :owner/id (t/escrow-yield-owner-id workflow-id)
-                                                                     :amount afa
-                                                                     :token token})
-                                   world')]
+                  world''       (if (and ymid
+                                         (t/yield-preset-yield-enabled? (:yield-preset settings))
+                                         (contains? (:yield/modules world') ymid))
+                                  (yield-ops/apply-yield-op world' {:op/type :yield/deposit
+                                                                    :module/id ymid
+                                                                    :owner/id (t/escrow-yield-owner-id workflow-id)
+                                                                    :amount afa
+                                                                    :token token})
+                                  world')]
              ;; Evidence capture with canonical attribution + rich domain payload
-             (let [yield-deposit-applied? (and ymid
-                                               (t/yield-preset-yield-enabled? (:yield-preset settings))
-                                               (contains? (:yield/modules world') ymid))
+              (let [yield-deposit-applied? (and ymid
+                                                (t/yield-preset-yield-enabled? (:yield-preset settings))
+                                                (contains? (:yield/modules world') ymid))
                    ;; Normalize settings to artifact-safe fields only
-                   settings-ev {:yield-preset (:yield-preset settings)
-                                :profile-id (:profile-id settings)
-                                :protection-profile-id (:protection-profile-id settings)
-                                :auto-release (:auto-release settings)
-                                :auto-cancel (:auto-cancel settings)
-                                :custom-resolver (:custom-resolver settings)}
-                   created-wf (get-in world'' [:escrow-transfers workflow-id])]
-               (attr/with-attribution {:subject/type :escrow
-                                       :subject/id workflow-id
-                                       :action/type :escrow/create
-                                       :evidence/reason :escrow-created}
+                    settings-ev {:yield-preset (:yield-preset settings)
+                                 :profile-id (:profile-id settings)
+                                 :protection-profile-id (:protection-profile-id settings)
+                                 :auto-release (:auto-release settings)
+                                 :auto-cancel (:auto-cancel settings)
+                                 :custom-resolver (:custom-resolver settings)}
+                    created-wf (get-in world'' [:escrow-transfers workflow-id])]
+                (attr/with-attribution {:subject/type :escrow
+                                        :subject/id workflow-id
+                                        :action/type :escrow/create
+                                        :evidence/reason :escrow-created}
                   (cap/capture-event-evidence!
-                    :escrow-created
-                    {:escrow/before
-                     {:next-workflow-id (:next-workflow-id world)
-                      :total-held (get-in world [:total-held token])
-                      :resolver-stake (when resolver (reg/get-stake world resolver))}}
-                    {:escrow/after
-                     {:next-workflow-id (:next-workflow-id world'')
-                      :total-held (get-in world'' [:total-held token])
-                      :resolver-stake (when resolver (reg/get-stake world'' resolver))
-                      :created-workflow (select-keys created-wf
-                                                      [:token :to :from :amount-after-fee
-                                                       :initial-fee :dispute-resolver
-                                                       :auto-release-time :auto-cancel-time
-                                                       :escrow-state :last-accrual-time])}}
-                    {:escrow/workflow-id workflow-id
-                     :escrow/token token
-                     :escrow/amount amount
-                     :escrow/fee fee
-                     :escrow/amount-after-fee afa
-                     :escrow/resolver resolver
-                     :escrow/auto-release auto-rel
-                     :escrow/auto-cancel auto-can
-                     :escrow/yield-module ymid
-                     :escrow/yield-deposit-applied? yield-deposit-applied?
-                     :escrow/settings settings-ev}
-                    nil
-                    {:world-before world
-                     :world-after world''})))
-             (assoc (t/ok world'') :workflow-id workflow-id))))))))
+                   :escrow-created
+                   {:escrow/before
+                    {:next-workflow-id (:next-workflow-id world)
+                     :total-held (get-in world [:total-held token])
+                     :resolver-stake (when resolver (reg/get-stake world resolver))}}
+                   {:escrow/after
+                    {:next-workflow-id (:next-workflow-id world'')
+                     :total-held (get-in world'' [:total-held token])
+                     :resolver-stake (when resolver (reg/get-stake world'' resolver))
+                     :created-workflow (select-keys created-wf
+                                                    [:token :to :from :amount-after-fee
+                                                     :initial-fee :dispute-resolver
+                                                     :auto-release-time :auto-cancel-time
+                                                     :escrow-state :last-accrual-time])}}
+                   {:escrow/workflow-id workflow-id
+                    :escrow/token token
+                    :escrow/amount amount
+                    :escrow/fee fee
+                    :escrow/amount-after-fee afa
+                    :escrow/resolver resolver
+                    :escrow/auto-release auto-rel
+                    :escrow/auto-cancel auto-can
+                    :escrow/yield-module ymid
+                    :escrow/yield-deposit-applied? yield-deposit-applied?
+                    :escrow/settings settings-ev}
+                   nil
+                   {:world-before world
+                    :world-after world''})))
+              (assoc (t/ok world'') :workflow-id workflow-id))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; raise-dispute
@@ -429,24 +429,24 @@
             (if (> afa max-escrow)
               (t/fail :insufficient-resolver-stake)
               (let [world' (t/increment-resolver-capacity (:world result) resolver)]
-            (attr/with-attribution {:subject/type :dispute
-                                    :subject/id workflow-id
-                                    :action/type :dispute/raise
-                                    :evidence/reason :dispute-raised}
-              (cap/capture-event-evidence!
-                :dispute-raised
-                {:dispute/before {:escrow-state (t/escrow-state world workflow-id)
-                                  :resolver resolver}}
-                {:dispute/after  {:escrow-state (t/escrow-state world' workflow-id)
-                                  :resolver-capacity (get-in world' [:resolver-capacities resolver :current-active])}}
-                {:dispute/workflow-id workflow-id
-                 :dispute/caller caller
-                 :dispute/resolver resolver
-                 :dispute/level (t/dispute-level world' workflow-id)}
-                nil
-                {:world-before world
-                 :world-after world'}))
-             (t/ok world')))))))))
+                (attr/with-attribution {:subject/type :dispute
+                                        :subject/id workflow-id
+                                        :action/type :dispute/raise
+                                        :evidence/reason :dispute-raised}
+                  (cap/capture-event-evidence!
+                   :dispute-raised
+                   {:dispute/before {:escrow-state (t/escrow-state world workflow-id)
+                                     :resolver resolver}}
+                   {:dispute/after  {:escrow-state (t/escrow-state world' workflow-id)
+                                     :resolver-capacity (get-in world' [:resolver-capacities resolver :current-active])}}
+                   {:dispute/workflow-id workflow-id
+                    :dispute/caller caller
+                    :dispute/resolver resolver
+                    :dispute/level (t/dispute-level world' workflow-id)}
+                   nil
+                   {:world-before world
+                    :world-after world'}))
+                (t/ok world')))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; release
@@ -555,7 +555,7 @@
   "Attempt to cancel escrow as recipient.
 
    cancel-strategy — {:can-cancel? bool :unilateral-cancel? bool} or nil."
-   [world workflow-id caller cancel-strategy]
+  [world workflow-id caller cancel-strategy]
   (cond
     (not (t/valid-workflow-id? world workflow-id))
     (guard-fail :invalid-workflow-id :workflow-id workflow-id)
@@ -617,9 +617,9 @@
           resolver        (:dispute-resolver et)
           slash-amt       (:amount-after-fee et)
           token           (:token et)
-           has-resolver?   (and resolver
-                                (not= resolver t/zero-address))
-          
+          has-resolver?   (and resolver
+                               (not= resolver t/zero-address))
+
           ;; Ensure finalize, slash, and distribution are handled 
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)

@@ -7,7 +7,7 @@
             [resolver-sim.yield.ops :as ops]
             [resolver-sim.time.context :as time-ctx]))
 
-  (defn init-world
+(defn init-world
   "Initializes the world state with yield modules and configuration.
 
     protocol-params — map containing :yield-generation-module or :yield-profile

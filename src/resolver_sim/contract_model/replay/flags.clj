@@ -106,15 +106,15 @@
                                    (not (or (:minimal replay-opts) (= profile :minimal)))))
              :metrics-profile
              (keyword (name (or (flag-lookup scenario replay-opts :metrics-profile
-                                              (if (or (:minimal replay-opts) (= profile :minimal)) :yield-provider :sew-integrated))
+                                             (if (or (:minimal replay-opts) (= profile :minimal)) :yield-provider :sew-integrated))
                                 :sew-integrated)))
              :world-checkpoint-policy
              (keyword (name (or (flag-lookup scenario replay-opts :world-checkpoint-policy
-                                              (if (or (:minimal replay-opts) (= profile :minimal)) :omit :decision-nodes-only))
+                                             (if (or (:minimal replay-opts) (= profile :minimal)) :omit :decision-nodes-only))
                                 :decision-nodes-only)))
              :projection-mode
              (keyword (name (or (flag-lookup scenario replay-opts :projection-mode
-                                              (if (or (:minimal replay-opts) (= profile :minimal)) :finalize-only :full))
+                                             (if (or (:minimal replay-opts) (= profile :minimal)) :finalize-only :full))
                                 :full)))
              :require-event-id?
              (boolean (flag-lookup scenario replay-opts :require-event-id? false))}))))

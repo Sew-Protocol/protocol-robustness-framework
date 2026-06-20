@@ -23,7 +23,7 @@
                         (if (schema/valid-claim? c)
                           true
                           (do (println (str "WARN: invalid claim " (:claim/id c)
-                                           " — " (schema/explain-manifest c)))
+                                            " — " (schema/explain-manifest c)))
                               false)))))
          (do (println (str "WARN: claims file not found: " path)) [])))
      (catch Exception e

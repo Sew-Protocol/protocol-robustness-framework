@@ -46,20 +46,20 @@
     {:id "seller"   :address "0xseller"   :strategy "honest"}
     {:id "resolver" :address "0xresolver" :role "resolver"}]
    :protocol-params
-{:resolver-fee-bps      (:resolver-fee-bps params 100)
-     :appeal-window-duration 0
-     :max-dispute-duration  (:max-dispute-duration params 2592000)}
-    :events
-    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-      :params {:token "USDC" :to "0xseller"
-               :amount          (:escrow-size params 10000)
-               :custom-resolver "0xresolver"}}
-     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-      :params {:workflow-id 0}}
-     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-      :params {:workflow-id 0
-               :is-release     true
-               :resolution-hash "0xhash"}}]})
+   {:resolver-fee-bps      (:resolver-fee-bps params 100)
+    :appeal-window-duration 0
+    :max-dispute-duration  (:max-dispute-duration params 2592000)}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller"
+              :amount          (:escrow-size params 10000)
+              :custom-resolver "0xresolver"}}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 0
+              :is-release     true
+              :resolution-hash "0xhash"}}]})
 
 (defn generate-fraud-slash-scenario
   "Generate a dispute scenario that includes a fraud slash lifecycle.
@@ -143,7 +143,7 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng) ; consume rng for determinism
                       sc (generate-honest-scenario params (str "h" i))
-                       r  (replay/replay-with-protocol (default-protocol) sc)]
+                      r  (replay/replay-with-protocol (default-protocol) sc)]
                   {:scenario-id (:scenario-id sc)
                    :type        :honest
                    :outcome     (:outcome r)
@@ -208,21 +208,21 @@
     {:id "keeper"   :address "0xkeeper"   :role "keeper"}]
    :protocol-params
    {:resolver-fee-bps       (:resolver-fee-bps params 100)
-     :appeal-window-duration 120
-     :max-dispute-duration   (:max-dispute-duration params 2592000)}
-    :events
-    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
-      :params {:token "USDC" :to "0xseller"
-               :amount          (:escrow-size params 10000)
-               :custom-resolver "0xresolver"}}
-     {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
-      :params {:workflow-id 0}}
-     {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-      :params {:workflow-id 0
-               :is-release      false
-               :resolution-hash "0xhash-refund"}}
-     {:seq 3 :time 2000 :agent "keeper" :action "execute_pending_settlement"
-      :params {:workflow-id 0}}]})
+    :appeal-window-duration 120
+    :max-dispute-duration   (:max-dispute-duration params 2592000)}
+   :events
+   [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+     :params {:token "USDC" :to "0xseller"
+              :amount          (:escrow-size params 10000)
+              :custom-resolver "0xresolver"}}
+    {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute"
+     :params {:workflow-id 0}}
+    {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+     :params {:workflow-id 0
+              :is-release      false
+              :resolution-hash "0xhash-refund"}}
+    {:seq 3 :time 2000 :agent "keeper" :action "execute_pending_settlement"
+     :params {:workflow-id 0}}]})
 
 (defn generate-appeal-slash-scenario
   "Generate a dispute scenario covering the appeal-slash path.
@@ -310,10 +310,10 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-pending-settlement-scenario params (str "p" i))
-                       r  (replay/replay-with-protocol (default-protocol) sc)
+                      r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
-                                                         :resolutions-executed
-                                                         :pending-settlements-executed])]
+                                                        :resolutions-executed
+                                                        :pending-settlements-executed])]
                   {:scenario-id (:scenario-id sc)
                    :type        :pending-settlement
                    :outcome     (:outcome r)
@@ -325,9 +325,9 @@
          (vec (for [i (range n-samples)]
                 (let [_ (rng/next-long rng)
                       sc (generate-appeal-slash-scenario params (str "a" i))
-                       r  (replay/replay-with-protocol (default-protocol) sc)
+                      r  (replay/replay-with-protocol (default-protocol) sc)
                       coverage (check-domain-metrics r [:disputes-triggered
-                                                         :resolutions-executed])]
+                                                        :resolutions-executed])]
                   {:scenario-id (:scenario-id sc)
                    :type        :appeal-slash
                    :outcome     (:outcome r)

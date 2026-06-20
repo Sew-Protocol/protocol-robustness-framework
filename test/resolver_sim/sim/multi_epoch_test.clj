@@ -91,7 +91,7 @@
                                      :correct (if (:dispute-correct? t false) 1 0)
                                      :appeal-triggered? (:appeal-triggered? t false)
                                      :escalated? (:escalated? t false)})
-                             trials)
+                            trials)
           honest-attr (router/route router/uniform-random honest-ids honest-pool rng-h)
 
           ;; Route strategic pool
@@ -104,7 +104,7 @@
                                         :correct 0
                                         :appeal-triggered? (:appeal-triggered? t false)
                                         :escalated? (:escalated? t false)})
-                                trials)
+                               trials)
           strategic-attr (router/route router/uniform-random strategic-ids strategic-pool rng-s)
 
           eps 1e-5]
@@ -162,9 +162,9 @@
           small-n-trials        5
           resolver-ids          (mapv #(str "r" %) (range 100))
           trial-pool            (vec (repeat small-n-trials
-                                            {:profit 100.0 :slashed? false
-                                             :verdicts 1 :correct 1
-                                             :appeal-triggered? false :escalated? false}))
+                                             {:profit 100.0 :slashed? false
+                                              :verdicts 1 :correct 1
+                                              :appeal-triggered? false :escalated? false}))
           attr (router/route router/uniform-random resolver-ids trial-pool
                              (rng/make-rng 42))
           zero-resolvers (filter #(= 0 (:trials %)) (vals attr))]
@@ -206,10 +206,10 @@
     ;; This test verifies that the param is accepted and used, rather than
     ;; testing full exit/replacement logic (which depends on RNG and exit probs).
     (let [test-params-with-custom-mix (assoc test-params
-                                              :replacement-strategy-mix {:honest 1.0})]
+                                             :replacement-strategy-mix {:honest 1.0})]
       ;; Verify the key exists in the params
       (is (= {:honest 1.0}
-              (:replacement-strategy-mix test-params-with-custom-mix))
+             (:replacement-strategy-mix test-params-with-custom-mix))
           "custom replacement strategy mix should be in params"))))
 
 ;; ---------------------------------------------------------------------------

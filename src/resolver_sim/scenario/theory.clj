@@ -71,7 +71,6 @@
     (when-not (:valid? result)
       (:errors result))))
 
-
 (defn try-number
   "Coerce value to a number (via edn parsing). Returns nil if not possible."
   [v]
@@ -253,17 +252,17 @@
   [eval-tree]
   (mapv
    (fn [leaf]
-      (if (= :state (:kind leaf))
-        {:kind  :state
-         :state (:state leaf)
-         :actual (:actual leaf)
-         :op    (:op leaf)
-         :value (:value leaf)
-         :threshold (:value leaf)
-         :holds? (:holds? leaf)
-         :missing? (boolean (:missing-query-result? leaf))
-         :truth-status (get leaf :truth-status (if (:holds? leaf) :true :false))
-         :source [:terminal-world :projection (:state leaf)]}
+     (if (= :state (:kind leaf))
+       {:kind  :state
+        :state (:state leaf)
+        :actual (:actual leaf)
+        :op    (:op leaf)
+        :value (:value leaf)
+        :threshold (:value leaf)
+        :holds? (:holds? leaf)
+        :missing? (boolean (:missing-query-result? leaf))
+        :truth-status (get leaf :truth-status (if (:holds? leaf) :true :false))
+        :source [:terminal-world :projection (:state leaf)]}
        (let [missing? (boolean (:missing-metric? leaf))]
          {:kind  :metric
           :metric (:metric leaf)
@@ -367,103 +366,103 @@
        :mechanism-status    :not-checked
        :equilibrium-results {}
        :equilibrium-status  :not-checked}
-       opts theory)
-      (let [opts'     (theory-eval/resolve-theory-eval-opts opts)
-            v-errors  (validate-theory-block theory)
-            _ (when (and (:debug-theory? opts') (seq v-errors))
-                (debug-log! opts' "theory-validation-failed" {:errors v-errors}))]
-        (if (seq v-errors)
-          (case (:validator-error-policy opts' :inconclusive)
-            :throw (throw (ex-info "Theory validation failed" {:errors v-errors}))
-            :fail (finalize-metric-result
-                   {:status :inconclusive :reason :invalid-theory-block
-                    :falsified? false :evidence []
-                    :diagnostics {:validation-errors v-errors}
-                    :mechanism-results {} :mechanism-status :not-checked
-                    :equilibrium-results {} :equilibrium-status :not-checked}
-                   opts' theory)
-            (finalize-metric-result
-             {:status :inconclusive :reason :invalid-theory-block
-              :falsified? false :evidence []
-              :diagnostics {:validation-errors v-errors}
-              :mechanism-results {} :mechanism-status :not-checked
-              :equilibrium-results {} :equilibrium-status :not-checked}
-             opts' theory))
-          (let [protocol  (:protocol result)
-                world     (:terminal-world result)
-           trace     (:trace result [])
-           metrics   (:metrics result)
-           conds     (:falsifies-if theory [])
-           
-           ;; Cheap predicate check
-           predicate (when (seq conds)
-                       (if (and (vector? conds) (map? (first conds)))
-                         {:or conds}
-                         conds))
-           eval-res  (when predicate
-                       (eval-predicate protocol world trace metrics predicate opts'))
-           falsified? (boolean (:holds? eval-res))
-           
-           ;; Short-circuit SPE evaluation
-           skip-spe? (or falsified? (= :fail (:outcome result)))
-           eq-result (when (and (not skip-spe?)
-                                (or (seq (:mechanism-properties theory))
-                                    (seq (:equilibrium-concept theory))))
-                       (try
-                         (equilibrium/evaluate-equilibrium theory result)
-                         (catch Exception e
-                           (case (:validator-error-policy opts' :inconclusive)
-                             :throw (throw e)
-                             :fail {:mechanism-results {}
-                                    :mechanism-status :fail
-                                    :equilibrium-results {}
-                                    :equilibrium-status :fail
-                                    :validator-error {:class (str (type e))
-                                                      :message (.getMessage e)}}
-                             {:mechanism-results {}
-                              :mechanism-status :inconclusive
-                              :equilibrium-results {}
-                              :equilibrium-status :inconclusive
-                              :validator-error {:class (str (type e))
-                                                :message (.getMessage e)}}))))
-           merge-eq  (fn [base]
-                       (merge base
-                              (if eq-result
-                                (select-keys eq-result [:mechanism-results :mechanism-status
-                                                        :equilibrium-results :equilibrium-status
-                                                        :evidence-schema-version :equilibrium-claim-tier
-                                                        :equilibrium-trust-mode :provenance
-                                                        :validator-error])
-                                {:mechanism-results   {}
-                                 :mechanism-status    (if skip-spe? :skipped :not-checked)
-                                 :equilibrium-results {}
-                                 :equilibrium-status  (if skip-spe? :skipped :not-checked)})))]
-       (cond
-         (empty? conds)
-         (finalize-metric-result
-          (merge-eq {:status     :not-falsified
-                     :reason     :no-metric-falsification-claim
-                     :falsified? false
-                     :evidence   []
-                     :diagnostics {}})
-          opts' theory)
+      opts theory)
+     (let [opts'     (theory-eval/resolve-theory-eval-opts opts)
+           v-errors  (validate-theory-block theory)
+           _ (when (and (:debug-theory? opts') (seq v-errors))
+               (debug-log! opts' "theory-validation-failed" {:errors v-errors}))]
+       (if (seq v-errors)
+         (case (:validator-error-policy opts' :inconclusive)
+           :throw (throw (ex-info "Theory validation failed" {:errors v-errors}))
+           :fail (finalize-metric-result
+                  {:status :inconclusive :reason :invalid-theory-block
+                   :falsified? false :evidence []
+                   :diagnostics {:validation-errors v-errors}
+                   :mechanism-results {} :mechanism-status :not-checked
+                   :equilibrium-results {} :equilibrium-status :not-checked}
+                  opts' theory)
+           (finalize-metric-result
+            {:status :inconclusive :reason :invalid-theory-block
+             :falsified? false :evidence []
+             :diagnostics {:validation-errors v-errors}
+             :mechanism-results {} :mechanism-status :not-checked
+             :equilibrium-results {} :equilibrium-status :not-checked}
+            opts' theory))
+         (let [protocol  (:protocol result)
+               world     (:terminal-world result)
+               trace     (:trace result [])
+               metrics   (:metrics result)
+               conds     (:falsifies-if theory [])
 
-         :else
-         (let [missing   (collect-missing-metrics eval-res)
-               diagnostics (build-diagnostics eval-res missing)
-               empty-logical (apply-empty-logical-policy (:empty-logical-policy opts') eval-res)
-               missing-policy (or empty-logical
-                                  (apply-missing-metric-policy opts' metrics conds missing falsified?))
-               base (if missing-policy
-                      (merge missing-policy
-                             {:falsified? (= :falsified (:status missing-policy))
-                              :evidence [eval-res]
-                              :diagnostics diagnostics})
-                      (if falsified?
-                        {:status :falsified :reason :falsification-triggered
-                         :falsified? true :evidence [eval-res]
-                         :diagnostics diagnostics}
-                        {:status :not-falsified :reason :predicate-not-satisfied
-                         :falsified? false :evidence [eval-res]
-                         :diagnostics diagnostics}))]
-            (finalize-metric-result (merge-eq base) opts' theory)))))))))
+           ;; Cheap predicate check
+               predicate (when (seq conds)
+                           (if (and (vector? conds) (map? (first conds)))
+                             {:or conds}
+                             conds))
+               eval-res  (when predicate
+                           (eval-predicate protocol world trace metrics predicate opts'))
+               falsified? (boolean (:holds? eval-res))
+
+           ;; Short-circuit SPE evaluation
+               skip-spe? (or falsified? (= :fail (:outcome result)))
+               eq-result (when (and (not skip-spe?)
+                                    (or (seq (:mechanism-properties theory))
+                                        (seq (:equilibrium-concept theory))))
+                           (try
+                             (equilibrium/evaluate-equilibrium theory result)
+                             (catch Exception e
+                               (case (:validator-error-policy opts' :inconclusive)
+                                 :throw (throw e)
+                                 :fail {:mechanism-results {}
+                                        :mechanism-status :fail
+                                        :equilibrium-results {}
+                                        :equilibrium-status :fail
+                                        :validator-error {:class (str (type e))
+                                                          :message (.getMessage e)}}
+                                 {:mechanism-results {}
+                                  :mechanism-status :inconclusive
+                                  :equilibrium-results {}
+                                  :equilibrium-status :inconclusive
+                                  :validator-error {:class (str (type e))
+                                                    :message (.getMessage e)}}))))
+               merge-eq  (fn [base]
+                           (merge base
+                                  (if eq-result
+                                    (select-keys eq-result [:mechanism-results :mechanism-status
+                                                            :equilibrium-results :equilibrium-status
+                                                            :evidence-schema-version :equilibrium-claim-tier
+                                                            :equilibrium-trust-mode :provenance
+                                                            :validator-error])
+                                    {:mechanism-results   {}
+                                     :mechanism-status    (if skip-spe? :skipped :not-checked)
+                                     :equilibrium-results {}
+                                     :equilibrium-status  (if skip-spe? :skipped :not-checked)})))]
+           (cond
+             (empty? conds)
+             (finalize-metric-result
+              (merge-eq {:status     :not-falsified
+                         :reason     :no-metric-falsification-claim
+                         :falsified? false
+                         :evidence   []
+                         :diagnostics {}})
+              opts' theory)
+
+             :else
+             (let [missing   (collect-missing-metrics eval-res)
+                   diagnostics (build-diagnostics eval-res missing)
+                   empty-logical (apply-empty-logical-policy (:empty-logical-policy opts') eval-res)
+                   missing-policy (or empty-logical
+                                      (apply-missing-metric-policy opts' metrics conds missing falsified?))
+                   base (if missing-policy
+                          (merge missing-policy
+                                 {:falsified? (= :falsified (:status missing-policy))
+                                  :evidence [eval-res]
+                                  :diagnostics diagnostics})
+                          (if falsified?
+                            {:status :falsified :reason :falsification-triggered
+                             :falsified? true :evidence [eval-res]
+                             :diagnostics diagnostics}
+                            {:status :not-falsified :reason :predicate-not-satisfied
+                             :falsified? false :evidence [eval-res]
+                             :diagnostics diagnostics}))]
+               (finalize-metric-result (merge-eq base) opts' theory)))))))))

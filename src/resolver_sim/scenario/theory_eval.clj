@@ -43,5 +43,5 @@
                        default-theory-eval-profile)
         profile-kw (get profile-aliases raw-kw raw-kw)
         profile    (get theory-eval-profiles profile-kw
-                      (get theory-eval-profiles default-theory-eval-profile))]
+                        (get theory-eval-profiles default-theory-eval-profile))]
     (merge profile opts {:theory-eval-profile profile-kw})))

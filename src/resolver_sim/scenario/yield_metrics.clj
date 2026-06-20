@@ -35,15 +35,15 @@
     (cond-> {:yield/principal     (long (or (:principal pos) 0))
              :yield/unrealized    (long (or (:unrealized-yield pos) 0))
              :yield/current-value (long (or (:current-value pos)
-                                                   (+ (or (:principal pos) 0)
-                                                      (or (:unrealized-yield pos) 0))))
+                                            (+ (or (:principal pos) 0)
+                                               (or (:unrealized-yield pos) 0))))
              :yield/realized      (long (or (:realized-yield pos) 0))
              :yield/accrual-loss         (long (or (:amount (:yield-loss pos)) 0))
              :yield/deferred      (long (or (:deferred-amount shortfall) 0))
              :yield/haircut       (long (or (:haircut-amount shortfall) 0))
              :yield/reclaimed     (long (or (:reclaimed-amount pos) 0))
              :yield/gross         (long (+ (or (:principal pos) 0)
-                                                   (or (:unrealized-yield pos) 0)))
+                                           (or (:unrealized-yield pos) 0)))
              :yield/available-ratio (or (:available-ratio ms) 1.0)}
       ;; Backwards compatibility aliases for :yield/escrow-*
       true (assoc :yield/escrow-principal (long (or (:principal pos) 0))
@@ -53,10 +53,10 @@
                   :yield/escrow-haircut (long (or (:haircut-amount shortfall) 0))
                   :yield/escrow-reclaimed (long (or (:reclaimed-amount pos) 0))
                   :yield/escrow-current-value (long (or (:current-value pos)
-                                                       (+ (or (:principal pos) 0)
-                                                          (or (:unrealized-yield pos) 0))))
+                                                        (+ (or (:principal pos) 0)
+                                                           (or (:unrealized-yield pos) 0))))
                   :yield/escrow-gross (long (+ (or (:principal pos) 0)
-                                                (or (:unrealized-yield pos) 0))))
+                                               (or (:unrealized-yield pos) 0))))
 
       (:current-index pos) (assoc :yield/current-index (:current-index pos)
                                   :yield/escrow-current-index (:current-index pos))
@@ -66,21 +66,21 @@
                            :yield/escrow-status (name (:status pos)))
       (or (:reason shortfall) (:reason (:yield-loss pos)))
       (assoc :yield/loss-reason (name (or (:reason shortfall) (:reason (:yield-loss pos)))))
-      
+
       ;; SEW specific metrics
       wf-id
       (assoc :escrow/amount-after-fee    (long (or (get-in last-world [:escrow-amounts wf-id])
-                                                  (get-in last-world [:escrow-transfers wf-id :amount-after-fee])
-                                                  0))
+                                                   (get-in last-world [:escrow-transfers wf-id :amount-after-fee])
+                                                   0))
              :protocol/fees-usdc         (long (or (get-in last-world [:total-fees token]
-                                                            (get-in last-world [:total-fees (name token)]))
-                                                  0))
+                                                           (get-in last-world [:total-fees (name token)]))
+                                                   0))
              :buyer/claimable            (long (or (when claimable (get claimable buyer))
-                                                  (get claimable (keyword buyer))
-                                                  0))
+                                                   (get claimable (keyword buyer))
+                                                   0))
              :recipient/claimable        (long (or (when claimable (get claimable recipient))
-                                                  (get claimable (keyword recipient))
-                                                  0)))
+                                                   (get claimable (keyword recipient))
+                                                   0)))
 
       (and wf-id (:escrow-state (get-in last-world [:escrow-transfers wf-id])))
       (assoc :escrow/state (name (:escrow-state (get-in last-world [:escrow-transfers wf-id]))))

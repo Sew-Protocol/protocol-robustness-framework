@@ -50,7 +50,7 @@
 
         pending-slashed (count (filter :slashing-pending? results))
         pending-delay-weeks (if (empty? results) 0
-                             (double (mean (map :slashing-delay-weeks (filter :slashing-pending? results)))))
+                                (double (mean (map :slashing-delay-weeks (filter :slashing-pending? results)))))
 
         frozen-count (count (filter :frozen? results))
         escaped-count (count (filter :escaped? results))
@@ -222,16 +222,16 @@
         params        (assoc params :adjusted-strategy strategy)
         trials
         (vec (repeatedly n-trials
-               #(apply dispute/resolve-dispute
-                  rng (:escrow-size params 10000)
-                  (:resolver-fee-bps params)
-                  (:appeal-bond-bps params)
-                  (:slash-multiplier params)
-                  strategy
-                  (:appeal-probability-if-correct params)
-                  (:appeal-probability-if-wrong params)
-                  (:slashing-detection-probability params)
-                  (common-kwargs params))))]
+                         #(apply dispute/resolve-dispute
+                                 rng (:escrow-size params 10000)
+                                 (:resolver-fee-bps params)
+                                 (:appeal-bond-bps params)
+                                 (:slash-multiplier params)
+                                 strategy
+                                 (:appeal-probability-if-correct params)
+                                 (:appeal-probability-if-wrong params)
+                                 (:slashing-detection-probability params)
+                                 (common-kwargs params))))]
     {:aggregate (build-aggregate-with-interceptors trials n-trials params)
      :trials trials}))
 
@@ -245,57 +245,57 @@
    to ring/simulate-ring-dispute."
   [rng n-trials params ring-spec]
   (let [kw-args       (common-kwargs params)
-        
+
         ;; Initialize the ring
         initial-ring (ring/create-ring ring-spec)
-        
+
         ;; Run repeated disputes for the ring
         ring-results
         (reduce
-          (fn [ring-state _trial]
-            (let [dispute-result
-                  (apply ring/simulate-ring-dispute
-                   rng ring-state
-                   (:escrow-size params 10000)
-                   (:resolver-fee-bps params)
-                   (:appeal-bond-bps params)
-                   (:slash-multiplier params)
-                   (:appeal-probability-if-correct params)
-                   (:appeal-probability-if-wrong params)
-                   (:slashing-detection-probability params)
-                   kw-args)]
-              (:ring dispute-result)))
-          initial-ring
-          (range n-trials))
-        
+         (fn [ring-state _trial]
+           (let [dispute-result
+                 (apply ring/simulate-ring-dispute
+                        rng ring-state
+                        (:escrow-size params 10000)
+                        (:resolver-fee-bps params)
+                        (:appeal-bond-bps params)
+                        (:slash-multiplier params)
+                        (:appeal-probability-if-correct params)
+                        (:appeal-probability-if-wrong params)
+                        (:slashing-detection-probability params)
+                        kw-args)]
+             (:ring dispute-result)))
+         initial-ring
+         (range n-trials))
+
         ;; Extract profitability analysis
         profitability (ring/ring-profitability ring-results)
-        
+
         ;; Individual resolver states
         member-states (:member-states profitability)
         senior-state (first (filter #(= (:tier %) :senior) member-states))
         junior-states (filter #(= (:tier %) :junior) member-states)]
-    
+
     {:n-trials n-trials
      :ring-type (str (count junior-states) "-junior-ring")
-     
+
      ;; Aggregate ring profitability
      :ring-total-profit (double (:total-profit profitability))
      :ring-avg-profit-per-dispute (double (:average-profit-per-dispute profitability))
      :ring-catch-rate (double (:catch-rate profitability))
      :ring-viable? (:viable? profitability)
      :ring-senior-exhausted? (:senior-exhausted? profitability)
-     
+
      ;; Individual member status (scalars only for CSV compatibility)
      :senior-bond-remaining (double (:bond-remaining senior-state))
      :senior-slashed-amount (double (:slashed-amount senior-state))
      :juniors-count (count junior-states)
-     :juniors-avg-bond-remaining (double 
-       (if (empty? junior-states) 0 
-         (/ (reduce + (map :bond-remaining junior-states)) (count junior-states))))
+     :juniors-avg-bond-remaining (double
+                                  (if (empty? junior-states) 0
+                                      (/ (reduce + (map :bond-remaining junior-states)) (count junior-states))))
      :juniors-total-slashed (double
-       (reduce + (map :slashed-amount junior-states)))
-     
+                             (reduce + (map :slashed-amount junior-states)))
+
      ;; Comparative threshold
      :ring-profitable? (:ring-profitable? profitability)
      :ring-solvent? (:ring-solvent? profitability)}))

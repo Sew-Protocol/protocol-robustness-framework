@@ -64,8 +64,8 @@
         world {:yield/indices {module-id {token 1.0}}
                :yield/rates   {module-id {token 0.10}}
                :yield/positions {"user1" {:owner/id "user1" :module/id module-id :token token
-                                           :principal 1000 :shares 1000 :entry-index 1.0
-                                           :status :active :unrealized-yield 0 :realized-yield 0}}}]
+                                          :principal 1000 :shares 1000 :entry-index 1.0
+                                          :status :active :unrealized-yield 0 :realized-yield 0}}}]
     (is (accrual-props/partition-drift-within-budget?
          world module-id token dt steps accrual-props/default-liquid-lending-partition-budget))))
 

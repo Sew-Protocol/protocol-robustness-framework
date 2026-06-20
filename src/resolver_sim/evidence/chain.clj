@@ -84,9 +84,9 @@
                     :last-hash self-hash
                     :prev-hash (:last-hash cursor)})))]
     (assoc evidence
-      :evidence/chain-seq seq
-      :evidence/chain-prev-hash last-hash
-      :evidence/chain-self-hash self-hash)))
+           :evidence/chain-seq seq
+           :evidence/chain-prev-hash last-hash
+           :evidence/chain-self-hash self-hash)))
 
 (defn registry-status
   "Return summary info from the current registry state: count, run-id."
@@ -107,7 +107,7 @@
   (let [eh (:evidence-hash evidence)]
     {:id (str "evidence-" (subs eh 0 12))
      :kind :transition-evidence
-      :schema-version (evcfg/schema :evidence-record)
+     :schema-version (evcfg/schema :evidence-record)
      :evidence-hash eh
      :context-hash (:context-hash evidence)
      :before-hash (:before-hash evidence)
@@ -134,8 +134,8 @@
                          (update :evidence-hashes conj eh)))))
           eh)
       (do (log/warn! :evidence-register-missing-hash
-            {:evidence-type (:evidence/type evidence)
-             :artifact-kind (:artifact-kind evidence)})
+                     {:evidence-type (:evidence/type evidence)
+                      :artifact-kind (:artifact-kind evidence)})
           eh))
     eh))
 
@@ -210,17 +210,17 @@
         f (io/file path)]
     (when (.exists f)
       {:id (get (evcfg/artifact :evidence-registry) "id" "evidence-registry")
-        :kind (get (evcfg/artifact :evidence-registry) "kind" "evidence-registry")
-        :path path
-        :schema-version (evcfg/schema :evidence-registry)
-        :contract-version (evcfg/contract-version)
-        :producer (evcfg/producer :simulation-engine)
+       :kind (get (evcfg/artifact :evidence-registry) "kind" "evidence-registry")
+       :path path
+       :schema-version (evcfg/schema :evidence-registry)
+       :contract-version (evcfg/contract-version)
+       :producer (evcfg/producer :simulation-engine)
        :importance "CORE"
        :registry-hash (:registry-hash registry)
        :evidence-count (:evidence-count registry)
        :sha256 (compute-file-sha256 path)
        :bytes (.length f)
-        :mtime-utc (str (java.time.Instant/ofEpochMilli (.lastModified f)))})))
+       :mtime-utc (str (java.time.Instant/ofEpochMilli (.lastModified f)))})))
 
 (defn index-artifact-entry
   "Produce a test-artifacts.json compatible artifact entry for an index file.
@@ -283,8 +283,8 @@
       (spit f (json/write-str artifact {:indent true}))
       (println "Wrote chain-cursor-final.json: seq" (:cursor/final-seq snapshot))
       (register-additional-artifact!
-        (index-artifact-entry :chain-cursor-final "chain-cursor-final.json"
-                              "chain-cursor-final.v1" "DIAGNOSTIC"))
+       (index-artifact-entry :chain-cursor-final "chain-cursor-final.json"
+                             "chain-cursor-final.v1" "DIAGNOSTIC"))
       (.getPath f))))
 
 ;; ── Evidence Registration ─────────────────────────────────────────────────

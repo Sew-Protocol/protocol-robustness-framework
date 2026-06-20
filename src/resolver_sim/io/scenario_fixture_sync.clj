@@ -66,8 +66,8 @@
 (defn sync-all-with-traces!
   [& {:keys [write-public-json? only-scenario-ids]}]
   (let [scenarios (cond->> (all-invariant-scenario-maps)
-                     (seq only-scenario-ids)
-                     (filter #(contains? (set only-scenario-ids) (:scenario-id %))))
+                    (seq only-scenario-ids)
+                    (filter #(contains? (set only-scenario-ids) (:scenario-id %))))
         results   (mapv (fn [s]
                           (let [sid (:scenario-id s)
                                 tp  (trace-path sid)]

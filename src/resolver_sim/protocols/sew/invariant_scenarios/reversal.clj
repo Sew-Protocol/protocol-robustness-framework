@@ -4,8 +4,8 @@
 
 (def ^:private reversal-slash-enabled
   (assoc kleros-appeal
-    :reversal-slash-bps 2500
-    :challenge-bounty-bps 1000))
+         :reversal-slash-bps 2500
+         :challenge-bounty-bps 1000))
 
 ;; S101 — Track 1 reversal slash executes when bps > 0 (pre-v3 / enabled config)
 (def s101

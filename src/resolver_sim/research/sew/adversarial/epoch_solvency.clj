@@ -119,11 +119,11 @@
   (let [d-rng      (rng/make-rng seed)
         analytical (max-epoch-drawdown n-resolvers avg-bond-usd)
         mc-results (doall (repeatedly n-trials
-                            #(simulate-epoch-solvency
-                              {:n-resolvers   n-resolvers
-                               :avg-bond-usd  avg-bond-usd
-                               :pool-seed-usd pool-seed-usd}
-                              d-rng)))
+                                      #(simulate-epoch-solvency
+                                        {:n-resolvers   n-resolvers
+                                         :avg-bond-usd  avg-bond-usd
+                                         :pool-seed-usd pool-seed-usd}
+                                        d-rng)))
         pass-rate  (double (/ (count (filter :pass? mc-results)) n-trials))
         worst-pool (apply min (map :pool-after mc-results))
         analytic-sr (solvency-ratio pool-seed-usd (:net-obligation analytical))]
@@ -164,7 +164,7 @@
         min-bond    (double (or (:envelope-min-bond params) 500))
         envelope     (filter #(and (<= (get-in % [:params :n-resolvers]) max-n)
                                    (>= (get-in % [:params :avg-bond-usd]) min-bond))
-                              results)
+                             results)
         env-pass     (count (filter :pass? envelope))
         finite       (remove #(= ##Inf (:analytical-solvency %)) results)
         worst        (when (seq finite) (apply min-key :analytical-solvency finite))

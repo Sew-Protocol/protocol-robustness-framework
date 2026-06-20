@@ -22,6 +22,6 @@
 (defn accrue-module
   "Advance yield for a module. Usually triggered by time advance."
   [world module-id accrual-event]
-  (apply-yield-op world (assoc accrual-event 
-                               :op/type :yield/accrue 
+  (apply-yield-op world (assoc accrual-event
+                               :op/type :yield/accrue
                                :module/id module-id)))

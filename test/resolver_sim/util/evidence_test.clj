@@ -99,12 +99,12 @@
 
 (deftest make-evidence-record-includes-attribution
   (let [record (ev/make-evidence-record
-                 {:artifact-kind :transition
-                  :before sample-world
-                  :after sample-world
-                  :action sample-action
-                  :result sample-result
-                  :attribution sample-attribution})]
+                {:artifact-kind :transition
+                 :before sample-world
+                 :after sample-world
+                 :action sample-action
+                 :result sample-result
+                 :attribution sample-attribution})]
     (is (= "evidence-record.v1" (:schema-version record)))
     (is (= :transition (:artifact-kind record)))
     (is (= sample-attribution (:attribution record)))
@@ -112,12 +112,12 @@
 
 (deftest make-evidence-record-includes-hashes
   (let [record (ev/make-evidence-record
-                 {:artifact-kind :transition
-                  :before sample-world
-                  :after sample-world
-                  :action sample-action
-                  :result sample-result
-                  :attribution sample-attribution})]
+                {:artifact-kind :transition
+                 :before sample-world
+                 :after sample-world
+                 :action sample-action
+                 :result sample-result
+                 :attribution sample-attribution})]
     (is (string? (:context-hash record)))
     (is (string? (:before-hash record)))
     (is (string? (:after-hash record)))
@@ -127,53 +127,53 @@
 
 (deftest make-evidence-record-hash-changes-when-attribution-changes
   (let [record1 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before sample-world
-                   :after sample-world
-                   :action sample-action
-                   :result sample-result
-                   :attribution sample-attribution})
+                 {:artifact-kind :transition
+                  :before sample-world
+                  :after sample-world
+                  :action sample-action
+                  :result sample-result
+                  :attribution sample-attribution})
         record2 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before sample-world
-                   :after sample-world
-                   :action sample-action
-                   :result sample-result
-                   :attribution (assoc sample-attribution :ctx/step 99)})]
+                 {:artifact-kind :transition
+                  :before sample-world
+                  :after sample-world
+                  :action sample-action
+                  :result sample-result
+                  :attribution (assoc sample-attribution :ctx/step 99)})]
     (is (not= (:evidence-hash record1) (:evidence-hash record2)))))
 
 (deftest make-evidence-record-hash-changes-when-result-changes
   (let [record1 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before sample-world
-                   :after sample-world
-                   :action sample-action
-                   :result sample-result
-                   :attribution sample-attribution})
+                 {:artifact-kind :transition
+                  :before sample-world
+                  :after sample-world
+                  :action sample-action
+                  :result sample-result
+                  :attribution sample-attribution})
         record2 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before sample-world
-                   :after sample-world
-                   :action sample-action
-                   :result (assoc sample-result :success? false)
-                   :attribution sample-attribution})]
+                 {:artifact-kind :transition
+                  :before sample-world
+                  :after sample-world
+                  :action sample-action
+                  :result (assoc sample-result :success? false)
+                  :attribution sample-attribution})]
     (is (not= (:evidence-hash record1) (:evidence-hash record2)))))
 
 (deftest make-evidence-record-hash-changes-when-before-changes
   (let [record1 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before sample-world
-                   :after sample-world
-                   :action sample-action
-                   :result sample-result
-                   :attribution sample-attribution})
+                 {:artifact-kind :transition
+                  :before sample-world
+                  :after sample-world
+                  :action sample-action
+                  :result sample-result
+                  :attribution sample-attribution})
         record2 (ev/make-evidence-record
-                  {:artifact-kind :transition
-                   :before (assoc-in sample-world [:escrows "0xabc" :balance] 2000)
-                   :after sample-world
-                   :action sample-action
-                   :result sample-result
-                   :attribution sample-attribution})]
+                 {:artifact-kind :transition
+                  :before (assoc-in sample-world [:escrows "0xabc" :balance] 2000)
+                  :after sample-world
+                  :action sample-action
+                  :result sample-result
+                  :attribution sample-attribution})]
     (is (not= (:evidence-hash record1) (:evidence-hash record2)))))
 
 (deftest make-evidence-record-consistent-for-same-inputs
@@ -190,12 +190,12 @@
 
 (deftest make-evidence-record-with-different-kinds
   (let [invariant-record (ev/make-evidence-record
-                           {:artifact-kind :invariant
-                            :before sample-world
-                            :after sample-world
-                            :action sample-action
-                            :result {:invariant :solvency :passed? true}
-                            :attribution sample-attribution})]
+                          {:artifact-kind :invariant
+                           :before sample-world
+                           :after sample-world
+                           :action sample-action
+                           :result {:invariant :solvency :passed? true}
+                           :attribution sample-attribution})]
     (is (= :invariant (:artifact-kind invariant-record)))
     (is (string? (:evidence-hash invariant-record)))))
 
@@ -204,13 +204,13 @@
 (deftest emit-evidence-produces-valid-record
   (binding [attr/*attribution* sample-attribution]
     (let [record (ev/emit-evidence!
-                   {:artifact-kind :transition
-                    :block-time 1000
-                    :step 1
-                    :before sample-world
-                    :after sample-world
-                    :action sample-action
-                    :result sample-result})]
+                  {:artifact-kind :transition
+                   :block-time 1000
+                   :step 1
+                   :before sample-world
+                   :after sample-world
+                   :action sample-action
+                   :result sample-result})]
       (is (= "evidence-record.v1" (:schema-version record)))
       (is (= :transition (:artifact-kind record)))
       (is (contains? record :attribution))
@@ -220,13 +220,13 @@
   (binding [attr/*attribution* {}]
     (try
       (ev/emit-evidence!
-        {:artifact-kind :transition
-         :block-time 1000
-         :step 1
-         :before {}
-         :after {}
-         :action {}
-         :result {}})
+       {:artifact-kind :transition
+        :block-time 1000
+        :step 1
+        :before {}
+        :after {}
+        :action {}
+        :result {}})
       (is false "Expected exception was not thrown")
       (catch clojure.lang.ExceptionInfo e
         (let [data (ex-data e)]
@@ -237,11 +237,11 @@
   (binding [attr/*attribution* sample-attribution]
     (try
       (ev/emit-evidence!
-        {:artifact-kind :transition
-         :before {}
-         :after {}
-         :action {}
-         :result {}})
+       {:artifact-kind :transition
+        :before {}
+        :after {}
+        :action {}
+        :result {}})
       (is false "Expected exception was not thrown")
       (catch clojure.lang.ExceptionInfo e
         (let [data (ex-data e)]
@@ -252,13 +252,13 @@
   (binding [attr/*attribution* {:ctx/run-id "run-1"
                                 :ctx/scenario-id "scenario-1"}]
     (let [record (ev/emit-evidence!
-                   {:artifact-kind :scenario
-                    :block-time 1000
-                    :step 1
-                    :before {}
-                    :after {}
-                    :action {:type :start}
-                    :result {:status :ok}})]
+                  {:artifact-kind :scenario
+                   :block-time 1000
+                   :step 1
+                   :before {}
+                   :after {}
+                   :action {:type :start}
+                   :result {:status :ok}})]
       (is (= "evidence-record.v1" (:schema-version record)))
       (is (string? (:evidence-hash record))))))
 
@@ -269,14 +269,14 @@
                        :ctx/event-id "evt-1"}]
     (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
       (let [record (ev/emit-evidence!
-                     {:artifact-kind :transition
-                      :block-time 1000
-                      :step 1
-                      :before {}
-                      :after {}
-                      :action {}
-                      :result {}
-                      :attribution-context explicit-attr})]
+                    {:artifact-kind :transition
+                     :block-time 1000
+                     :step 1
+                     :before {}
+                     :after {}
+                     :action {}
+                     :result {}
+                     :attribution-context explicit-attr})]
         (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
 
 (deftest emit-evidence-works-with-attributed-state
@@ -287,14 +287,14 @@
         attributed (attr/wrap-state {} explicit-attr)]
     (binding [attr/*attribution* {}] ;; Ensure dynamic is empty
       (let [record (ev/emit-evidence!
-                     {:artifact-kind :transition
-                      :block-time 1000
-                      :step 1
-                      :before {}
-                      :after {}
-                      :action {}
-                      :result {}
-                      :attribution-context attributed})]
+                    {:artifact-kind :transition
+                     :block-time 1000
+                     :step 1
+                     :before {}
+                     :after {}
+                     :action {}
+                     :result {}
+                     :attribution-context attributed})]
         (is (= "run-1" (get-in record [:attribution :ctx/run-id])))))))
 
 ;; ── wrap-attribution ─────────────────────────────────────────────────────────
@@ -351,12 +351,12 @@
 
 (deftest make-evidence-record-with-nil-values
   (let [record (ev/make-evidence-record
-                 {:artifact-kind :transition
-                  :before nil
-                  :after nil
-                  :action nil
-                  :result nil
-                  :attribution {:ctx/run-id "run-1"}})]
+                {:artifact-kind :transition
+                 :before nil
+                 :after nil
+                 :action nil
+                 :result nil
+                 :attribution {:ctx/run-id "run-1"}})]
     (is (string? (:evidence-hash record)))
     (is (string? (:before-hash record)))
     (is (string? (:after-hash record)))
@@ -368,37 +368,37 @@
       (let [world-0 (assoc sample-world :step 0)
             ;; Step 1: Capture evidence
             record-1 (ev/emit-evidence!
-                       {:artifact-kind :transition
-                        :block-time 1000
-                        :step 1
-                        :before world-0
-                        :after (assoc world-0 :step 1)
-                        :action {:type :step-1}
-                        :result {:status :ok}})
+                      {:artifact-kind :transition
+                       :block-time 1000
+                       :step 1
+                       :before world-0
+                       :after (assoc world-0 :step 1)
+                       :action {:type :step-1}
+                       :result {:status :ok}})
             hash-1 (:evidence-hash record-1)
 
             ;; Step 2: Create "next" world state without mutating world-0
             world-1 (assoc world-0 :step 1)
             record-2 (ev/emit-evidence!
-                       {:artifact-kind :transition
-                        :block-time 1001
-                        :step 2
-                        :before world-1
-                        :after (assoc world-1 :step 2)
-                        :action {:type :step-2}
-                        :result {:status :ok}})
+                      {:artifact-kind :transition
+                       :block-time 1001
+                       :step 2
+                       :before world-1
+                       :after (assoc world-1 :step 2)
+                       :action {:type :step-2}
+                       :result {:status :ok}})
 
             ;; Assertions
             ;; 1. The original world state reference is unchanged (Clojure property)
             ;; 2. Record 1 remains exactly as it was
             record-1-recheck (ev/emit-evidence!
-                               {:artifact-kind :transition
-                                :block-time 1000
-                                :step 1
-                                :before world-0
-                                :after (assoc world-0 :step 1)
-                                :action {:type :step-1}
-                                :result {:status :ok}})]
+                              {:artifact-kind :transition
+                               :block-time 1000
+                               :step 1
+                               :before world-0
+                               :after (assoc world-0 :step 1)
+                               :action {:type :step-1}
+                               :result {:status :ok}})]
         (is (= hash-1 (:evidence-hash record-1-recheck))
             "Evidence hash for step 1 remains stable across later steps")
         (is (= record-1 record-1-recheck)

@@ -17,7 +17,7 @@
           h1 (hashing/hash-evidence data)
           h2 (hashing/hash-evidence data)]
       (is (= h1 h2))))
-  
+
   (testing "Map key order does not affect hash"
     (let [data1 {:a 1 :b 2}
           data2 {:b 2 :a 1}

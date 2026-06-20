@@ -57,7 +57,7 @@
 (deftest test-and-invalid-child-fails
   (testing ":and with an invalid child propagates the error"
     (let [result (tv/validate-theory {:falsifies-if [{:and [{:metric :a :op :> :value 0}
-                                                             {:metric nil :op := :value 1}]}]})]
+                                                            {:metric nil :op := :value 1}]}]})]
       (is (false? (:valid? result)))
       (is (some #(re-find #"unrecognized predicate" %) (:errors result))))))
 
@@ -83,7 +83,7 @@
   (testing ":after predicate passes"
     (is (= {:valid? true}
            (tv/validate-theory {:falsifies-if [{:after {:event "create_escrow"
-                                                       :predicate {:metric :a :op :> :value 0}}}]})))))
+                                                        :predicate {:metric :a :op :> :value 0}}}]})))))
 
 (deftest test-after-missing-event-fails
   (testing ":after without :event fails"
@@ -188,6 +188,6 @@
     (let [theory {:falsifies-if
                   [{:and [{:or [{:not {:metric :a :op :> :value 0}}
                                 {:implies {:if {:metric :b :op := :value 1}
-                                            :then {:always {:eventually {:metric :c :op :< :value 5}}}}}]}
-                            {:metric :d :op :>= :value 10}]}]}]
+                                           :then {:always {:eventually {:metric :c :op :< :value 5}}}}}]}
+                          {:metric :d :op :>= :value 10}]}]}]
       (is (= {:valid? true} (tv/validate-theory theory))))))

@@ -179,7 +179,6 @@
                                 :deferred-amount amount
                                 :haircut-amount 0}})))
 
-
 (defn partial-yield-shortfall?
   "True when shortfall stress applied only to the yield leg (partial-liquidity).
 
@@ -214,7 +213,7 @@
   (let [token (:token position)
         risk  (risk-map world module-id token)
         available-ratio (double (get-in risk [:shortfall :available-ratio]
-                                  (if (:shortfall risk) 0.0 1.0)))
+                                        (if (:shortfall risk) 0.0 1.0)))
         min-ratio (double (get-in risk [:min-available-ratio-for-claim] 1.0))
         shortfall (:shortfall position)]
     (if (and shortfall (>= available-ratio min-ratio))

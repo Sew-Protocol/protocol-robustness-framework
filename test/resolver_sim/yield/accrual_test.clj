@@ -7,7 +7,6 @@
             [resolver-sim.yield.risk-monitor :as risk]
             [resolver-sim.util.attribution :as attr]))
 
-
 (def base-world
   {:yield/indices {:test-mod {"USDC" 1}}
    :yield/rates {:test-mod {"USDC" 0.05}}
@@ -16,7 +15,6 @@
                                    :loss-mode :none}}}
    :yield/module-status {:test-mod :active}
    :block-time 1000})
-
 
 (def base-position
   {:owner/id "user1"
@@ -39,27 +37,24 @@
    :last-accrual-time nil
    :last-accrual-index nil})
 
-
 (defn- world-with-position
   ([] (world-with-position base-world base-position))
   ([world pos]
    (assoc-in world [:yield/positions "user1"] pos)))
 
-
 (defn- decision-for
   ([world pos dt]
    (accrual/accrual-decision world {:module-id :test-mod
-                                     :token "USDC"
-                                     :position-id "user1"
-                                     :now 1000
-                                     :dt dt}))
+                                    :token "USDC"
+                                    :position-id "user1"
+                                    :now 1000
+                                    :dt dt}))
   ([dt]
    (accrual/accrual-decision (world-with-position) {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt dt})))
-
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt dt})))
 
 (deftest test-normal-positive-accrual
   (testing "Normal positive accrual with 5% APY over one year"
@@ -79,16 +74,15 @@
     (let [dt 31536000
           world (world-with-position)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt dt})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt dt})
           world' (accrual/apply-accrual-decision world decision)
           pos' (get-in world' [:yield/positions "user1"])]
       (is (> (:unrealized-yield pos' 0) 0))
       (is (> (:current-index pos' 0) 1))
       (is (= 1000 (:last-accrual-time pos'))))))
-
 
 (deftest test-dust-threshold-accrual
   (testing "Dust-threshold: very small dt produces zero final delta"
@@ -98,48 +92,44 @@
       (is (contains? (set (:short-circuits decision)) :dust-threshold))
       (is (zero? (:final-accrual-delta decision))))))
 
-
 (deftest test-dust-threshold-preserves-exact-remainder
   (testing "Dust accumulator carries sub-unit accrual forward"
     (let [world (world-with-position)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 1})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 1})
           world' (accrual/apply-accrual-decision world decision)
           dust-after (get-in world' [:yield/positions "user1" :accrual-dust-remainder])]
       (is (ratio? dust-after))
       (is (> (double dust-after) 0) "Dust should be carried forward"))))
-
 
 (deftest test-frozen-module-zero-accrual
   (testing "Frozen module produces zero accrual"
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/module-status :test-mod] :frozen))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :module-frozen-zero-accrual))
       (is (= 0 (:effective-apy-bps decision)))
       (is (= (:previous-index decision) (:final-index decision)))
       (is (zero? (:final-accrual-delta decision))))))
-
 
 (deftest test-unwinding-position-no-accrual
   (testing "Unwinding position suspends accrual"
     (let [pos (assoc base-position :status :unwinding)
           world (world-with-position base-world pos)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :position-unwinding-accrual-suspended))
       (is (zero? (:final-accrual-delta decision))))))
-
 
 (deftest test-stale-oracle-degradation
   (testing "Stale oracle degrades APY"
@@ -147,15 +137,14 @@
                     (assoc-in [:yield/risk :test-mod "USDC" :failure-modes] #{:oracle-stale})
                     (assoc-in [:yield/risk :test-mod "USDC" :oracle-stale-seconds] 43200))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :stale-oracle-degraded-apy))
       (is (< (:effective-apy-bps decision) (:base-apy-bps decision))
           (str "Effective APY " (:effective-apy-bps decision)
                " should be less than base APY " (:base-apy-bps decision))))))
-
 
 (deftest test-stale-oracle-negative-apy-unchanged
   (testing "Stale oracle does not make negative APY less conservative"
@@ -164,41 +153,38 @@
                     (assoc-in [:yield/risk :test-mod "USDC" :failure-modes] #{:oracle-stale})
                     (assoc-in [:yield/risk :test-mod "USDC" :oracle-stale-seconds] 43200))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :stale-oracle-degraded-apy))
       (is (= (:effective-apy-bps decision) (:base-apy-bps decision))
           "Negative APY should remain unchanged under stale oracle"))))
-
 
 (deftest test-max-index-delta-cap
   (testing "Max index delta caps large APY changes"
     (let [world (world-with-position)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt (* 10 31536000)})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt (* 10 31536000)})]
       (is (contains? (set (:short-circuits decision)) :max-index-delta-capped)
           (str "Short circuits: " (:short-circuits decision)))
       (is (not= (:attempted-index decision) (:final-index decision))
           "Final index should differ from attempted index"))))
-
 
 (deftest test-max-index-delta-zero-policy
   (testing "Max index delta zero policy zeros accrual"
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/accrual-config :test-mod :max-index-delta-policy] :zero))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt (* 10 31536000)})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt (* 10 31536000)})]
       (is (contains? (set (:short-circuits decision)) :max-index-delta-zeroed))
       (is (= (:previous-index decision) (:final-index decision))))))
-
 
 (deftest test-negative-yield-floor-capital-event
   (testing "Negative yield floor breach classifies as capital event"
@@ -207,14 +193,13 @@
                     (assoc-in [:yield/risk :test-mod "USDC" :negative-yield-floor] 0)
                     (assoc-in [:yield/accrual-config :test-mod :max-index-delta-ratio] 2))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (= :capital-event (:accrual-mode decision))
           (str "Accrual mode: " (:accrual-mode decision)
                " short-circuits: " (:short-circuits decision))))))
-
 
 (deftest test-recoverable-liquidity-cap
   (testing "Recoverable liquidity cap creates unrealized excess"
@@ -227,28 +212,26 @@
                     (assoc-in [:yield/accrual-config :test-mod :max-index-delta-ratio] 2)
                     (assoc :yield/rates {:test-mod {"USDC" 1.0}}))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :recoverable-liquidity-cap)
           (str "Short circuits: " (:short-circuits decision)))
       (is (> (:deferred-yield-delta decision) 0)
           "Excess yield should be classified as deferred"))))
-
 
 (deftest test-no-recoverable-cap-when-adequate-liquidity
   (testing "No recoverable cap applied when liquidity is adequate"
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/held-balances "USDC"] 1000000))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (= :normal (:accrual-mode decision))
           (str "Short circuits: " (:short-circuits decision))))))
-
 
 (deftest test-multi-short-circuit-interaction
   (testing "Multiple short circuits can trigger together"
@@ -261,15 +244,14 @@
                     (assoc-in [:yield/held-balances "USDC"] 11000)
                     (assoc :yield/rates {:test-mod {"USDC" 1.0}}))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (is (contains? (set (:short-circuits decision)) :stale-oracle-degraded-apy))
       (is (contains? (set (:short-circuits decision)) :recoverable-liquidity-cap))
       (is (< (:effective-apy-bps decision) 10000)
           "Effective APY should be degraded by stale oracle"))))
-
 
 (deftest test-evidence-map-present
   (testing "Every decision includes a complete evidence map"
@@ -283,15 +265,14 @@
       (is (contains? (:evidence decision) :short-circuits))
       (is (contains? (:evidence decision) :accrual-mode)))))
 
-
 (deftest test-apply-accrual-decision-position-fields
   (testing "apply-accrual-decision correctly updates all position fields"
     (let [world (world-with-position)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})
           world' (accrual/apply-accrual-decision world decision)
           pos' (get-in world' [:yield/positions "user1"])]
       (is (contains? pos' :current-index))
@@ -308,34 +289,32 @@
       (is (contains? pos' :last-accrual-time))
       (is (contains? pos' :last-accrual-index)))))
 
-
 (deftest test-no-position-accrual-still-updates-index
   (testing "Module-level index update happens even without position"
     (let [world base-world
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :now 1000
-                                                      :dt 31536000})
+                                                    :token "USDC"
+                                                    :now 1000
+                                                    :dt 31536000})
           world' (accrual/apply-accrual-decision world decision)
           new-index (get-in world' [:yield/indices :test-mod "USDC"])]
       (is (> (double new-index) 1.0)
           "Index should advance even without a position to accrue against"))))
 
-
 (deftest test-projection-fields
   (testing "Projection fields are computable from a position"
     (let [world (world-with-position)
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})
           world' (accrual/apply-accrual-decision world decision)
           pos' (get-in world' [:yield/positions "user1"])
           proj (pos/projection-fields pos' :workflow-id "wf-1"
-                                          :settlement-mode :none
-                                          :accrual-mode (:accrual-mode decision)
-                                          :short-circuits (:short-circuits decision))]
+                                      :settlement-mode :none
+                                      :accrual-mode (:accrual-mode decision)
+                                      :short-circuits (:short-circuits decision))]
       (is (= "wf-1" (:workflow_id proj)))
       (is (= :test-mod (:module_id proj)))
       (is (= "USDC" (:token proj)))
@@ -352,10 +331,10 @@
                     (assoc-in [:yield/risk :test-mod "USDC" :failure-modes] #{:oracle-stale})
                     (assoc-in [:yield/risk :test-mod "USDC" :oracle-stale-seconds] 7200))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                       :token "USDC"
-                                                       :position-id "user1"
-                                                       :now 1000
-                                                       :dt 31536000})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})
           evidence (:evidence decision)]
       (is (some #(= :stale-oracle-degraded-apy %) (:short-circuits evidence))
           "Oracle staleness beyond custom max-seconds should trigger degradation")
@@ -381,18 +360,18 @@
           unfrozen (-> world
                        (assoc-in [:yield/module-status :test-mod] :frozen))
           unfrozen-decision (accrual/accrual-decision unfrozen {:module-id :test-mod
-                                                                   :token "USDC"
-                                                                   :position-id "user1"
-                                                                   :now 1000
-                                                                   :dt 31536000})
+                                                                :token "USDC"
+                                                                :position-id "user1"
+                                                                :now 1000
+                                                                :dt 31536000})
           ;; :paused IS in the custom set, so accrual should be blocked
           frozen (-> world
                      (assoc-in [:yield/module-status :test-mod] :paused))
           frozen-decision (accrual/accrual-decision frozen {:module-id :test-mod
-                                                              :token "USDC"
-                                                              :position-id "user1"
-                                                              :now 1000
-                                                              :dt 31536000})]
+                                                            :token "USDC"
+                                                            :position-id "user1"
+                                                            :now 1000
+                                                            :dt 31536000})]
       (is (not= :module-frozen (:accrual-mode unfrozen-decision))
           ":frozen module should NOT freeze accrual when custom freeze-on excludes it")
       (is (= :module-frozen (:accrual-mode frozen-decision))
@@ -404,10 +383,10 @@
                     (assoc-in [:yield/rates :test-mod "USDC"] 0.001)  ;; very low APY
                     (assoc-in [:yield/accrual-config :test-mod :min-accrual-delta] 100))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                       :token "USDC"
-                                                       :position-id "user1"
-                                                       :now 1000
-                                                       :dt 31536000})
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})
           world' (accrual/apply-accrual-decision world decision)
           pos' (get-in world' [:yield/positions "user1"])]
       (is (zero? (:unrealized-yield pos' 0))
@@ -421,10 +400,10 @@
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/module-status :test-mod] :frozen))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                       :token "USDC"
-                                                       :position-id "user1"
-                                                       :now 1000
-                                                       :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (accrual/apply-accrual-decision-with-attribution world decision)
       (let [events (risk/events)]
         (is (pos? (count events)) "Risk events should be captured")
@@ -437,10 +416,10 @@
     (let [world (-> (world-with-position)
                     (assoc-in [:yield/module-status :test-mod] :frozen))
           decision (accrual/accrual-decision world {:module-id :test-mod
-                                                      :token "USDC"
-                                                      :position-id "user1"
-                                                      :now 1000
-                                                      :dt 31536000})]
+                                                    :token "USDC"
+                                                    :position-id "user1"
+                                                    :now 1000
+                                                    :dt 31536000})]
       (accrual/apply-accrual-decision-with-attribution world decision)
       (let [s (risk/summary)]
         (is (contains? s :module-frozen-zero-accrual))

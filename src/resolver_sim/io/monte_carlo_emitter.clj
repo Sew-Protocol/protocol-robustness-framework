@@ -9,7 +9,7 @@
   [summary failures derivation-chain params-sha256 out-dir]
   (let [summary-file (io/file out-dir (evcfg/artifact-file :mc-summary))
         failures-file (io/file out-dir (evcfg/artifact-file :mc-failures))
-        enriched-summary (assoc summary 
+        enriched-summary (assoc summary
                                 :derivation-chain derivation-chain
                                 :params-sha256 params-sha256)]
     (.mkdirs (.getParentFile summary-file))

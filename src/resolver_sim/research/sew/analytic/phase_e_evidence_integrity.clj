@@ -23,7 +23,7 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.protocols.sew.snapshot :as snap]
-             [resolver-sim.protocols.sew.snapshot-presets :as presets]))
+            [resolver-sim.protocols.sew.snapshot-presets :as presets]))
 
 ;; ---------------------------------------------------------------------------
 ;; E1: Evidence Deadline Enforcement
@@ -140,19 +140,19 @@
         evidence [{:timestamp 100 :credibility 0.8 :claim :buyer-paid}
                   {:timestamp 110 :credibility 0.6 :claim :seller-not-paid}
                   {:timestamp 105 :credibility 0.9 :claim :buyer-paid}]
-        
+
         ;; Apply weighting based on function
         weights (case weight-function
                   :equal (mapv (fn [_] 1.0) evidence)
                   :recency (mapv (fn [e] (/ (:timestamp e) 110.0)) evidence)
                   :reputation (mapv :credibility evidence))
-        
+
         ;; Compute weighted verdict
         buyer-paid-weight (reduce + (mapv (fn [e w] (if (= (:claim e) :buyer-paid) w 0)) evidence weights))
         seller-not-paid-weight (reduce + (mapv (fn [e w] (if (= (:claim e) :seller-not-paid) w 0)) evidence weights))
-        
+
         final-verdict (if (> buyer-paid-weight seller-not-paid-weight) :buyer-paid :seller-not-paid)
-        
+
         ;; Consistency check: verdict should be buyer-paid (since most credible evidence says so)
         consistent? (= final-verdict :buyer-paid)]
     {:weight-function weight-function
@@ -245,9 +245,9 @@
   (let [t0           1000
         dt           (* 30 86400)
         snap         (snap/make-escrow-snapshot (merge (presets/preset->protocol-params :sew.preset/baseline)
-                                                        {:yield-generation-module :fixed-rate
-                                                         :yield-protocol-fee-bps 0
-                                                         :appeal-window-duration 0}))
+                                                       {:yield-generation-module :fixed-rate
+                                                        :yield-protocol-fee-bps 0
+                                                        :appeal-window-duration 0}))
         world0       (-> (proto/init-world sew/protocol {:initial-block-time t0})
                          (assoc-in [:yield/rates :fixed-rate "USDC"] yield-rate-apy)
                          (assoc-in [:yield/rates :fixed-rate :USDC] yield-rate-apy))
@@ -360,29 +360,29 @@
               "E4: Evidence Bloat Griefing Bounds (1KB–1GB)"
               "E5: Yield Accrual During Dispute (0%–10% APY)"
               "E6: Evidence Availability Guarantee (redundancy sweep)"]})
-  
+
   (let [e1 (run-e1-evidence-deadline-enforcement)
         e2 (run-e2-hash-mismatch-detection)
         e3 (run-e3-conflicting-evidence-resolution)
         e4 (run-e4-evidence-bloat-griefing-bounds)
         e5 (run-e5-yield-accrual-during-dispute)
         e6 (run-e6-evidence-availability-guarantee)
-        
+
         phases [e1 e2 e3 e4 e5 e6]
         passed-phases (count (filter :passed? phases))
         total-phases (count phases)
-        
+
         overall-passed? (>= passed-phases 5)  ; 5/6 must pass
-        
+
         result (engine/make-result
-         {:benchmark-id "Phase E"
-          :label "Evidence Integrity"
-          :hypothesis "Evidence layer is robust and non-corruptible"
-          :passed? overall-passed?
-          :summary {:total-phases total-phases
-                    :passed-phases passed-phases
-                    :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
-    
+                {:benchmark-id "Phase E"
+                 :label "Evidence Integrity"
+                 :hypothesis "Evidence layer is robust and non-corruptible"
+                 :passed? overall-passed?
+                 :summary {:total-phases total-phases
+                           :passed-phases passed-phases
+                           :phases (mapv #(select-keys % [:benchmark-id :passed?]) phases)}})]
+
     (println (format "E1 Deadline Enforcement: %s" (:status e1)))
     (println (format "E2 Hash Mismatch Detection: %s" (:status e2)))
     (println (format "E3 Conflicting Evidence: %s" (:status e3)))
@@ -390,10 +390,10 @@
     (println (format "E5 Yield Accrual: %s" (:status e5)))
     (println (format "E6 Availability Guarantee: %s" (:status e6)))
     (println "")
-    
+
     (if overall-passed?
       (println "✓ PASS: Phase E — Evidence integrity maintained")
       (println "✗ FAIL: Phase E — Evidence layer vulnerabilities detected"))
     (println "")
-    
+
     result))

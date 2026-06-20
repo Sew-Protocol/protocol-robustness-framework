@@ -100,7 +100,7 @@
                                        rate-schedule index-schedule liquidity-schedule module-state-schedule
                                        shortfall-model withdrawal-policy]
                                 :as cfg}]
-   {:initial-index     (or initial-index
+  {:initial-index     (or initial-index
                           (when initial-index-ray
                             (/ (bigdec initial-index-ray)
                                1000000000000000000000000000M))
@@ -111,12 +111,12 @@
    :liquidity-mode    (let [m (or liquidity-mode :available)]
                         (if (string? m) (keyword m) m))
    :loss-mode         (let [m (let [raw (or loss-mode :none)]
-                               (if (string? raw) (keyword raw) raw))
-                               failure-modes* (risk/normalize-failure-modes failure-modes)]
-                           (if (and (= m :none)
-                                    (contains? failure-modes* :negative-yield))
-                             :mark-to-market
-                             m))
+                                (if (string? raw) (keyword raw) raw))
+                            failure-modes* (risk/normalize-failure-modes failure-modes)]
+                        (if (and (= m :none)
+                                 (contains? failure-modes* :negative-yield))
+                          :mark-to-market
+                          m))
    :rate-mode         (let [m (or rate-mode :deterministic)]
                         (if (string? m) (keyword m) m))
    :failure-modes     (risk/normalize-failure-modes failure-modes)
@@ -161,44 +161,44 @@
    world paths rather than introducing a second test-only API."
   [world yield-config]
   (reduce-kv
-    (fn [w raw-module-id module-config]
-      (let [{normalized-module-id :module-id
-             resolved-module-id   :resolved-module-id
-             behavior             :behavior
-             module-status        :module-status
-             tokens               :tokens}
-            (normalize-module-entry raw-module-id module-config)
-            w* (-> w
-                   (assoc-in [:yield/behavior normalized-module-id] behavior)
-                   (assoc-in [:yield/module-aliases normalized-module-id] resolved-module-id)
-                   (assoc-in [:yield/module-aliases resolved-module-id] resolved-module-id))
-            w* (if-let [status module-status]
-                 (assoc-in w* [:yield/module-status resolved-module-id]
-                           (if (string? status) (keyword status) status))
-                 w*)]
-        (reduce-kv
-          (fn [w' token token-config]
-            (let [kw-token (keyword token)
-                  {:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall
-                          schedules shortfall-model withdrawal-policy]}
-                  (normalize-token-config token-config)]
-              (let [w' (-> w'
-                           (assoc-in [:yield/indices resolved-module-id kw-token] initial-index)
-                           (assoc-in [:yield/rates resolved-module-id kw-token] apy)
-                           (assoc-in [:yield/schedules resolved-module-id kw-token] schedules)
-                           (assoc-in [:yield/shortfall-models resolved-module-id kw-token] shortfall-model)
-                           (assoc-in [:yield/withdrawal-policies resolved-module-id kw-token] withdrawal-policy)
-                           (assoc-in [:yield/risk resolved-module-id kw-token]
-                                     {:liquidity-mode liquidity-mode
-                                      :loss-mode      loss-mode
-                                      :rate-mode      rate-mode
-                                      :failure-modes  failure-modes
-                                      :shortfall      shortfall}))]
-                  (log/debug! "stored-schedule" {:module resolved-module-id
-                                                              :token kw-token
-                                                              :schedules schedules})
-                  w')))
-          w*
-          tokens)))
-    world
-    (:modules yield-config {})))
+   (fn [w raw-module-id module-config]
+     (let [{normalized-module-id :module-id
+            resolved-module-id   :resolved-module-id
+            behavior             :behavior
+            module-status        :module-status
+            tokens               :tokens}
+           (normalize-module-entry raw-module-id module-config)
+           w* (-> w
+                  (assoc-in [:yield/behavior normalized-module-id] behavior)
+                  (assoc-in [:yield/module-aliases normalized-module-id] resolved-module-id)
+                  (assoc-in [:yield/module-aliases resolved-module-id] resolved-module-id))
+           w* (if-let [status module-status]
+                (assoc-in w* [:yield/module-status resolved-module-id]
+                          (if (string? status) (keyword status) status))
+                w*)]
+       (reduce-kv
+        (fn [w' token token-config]
+          (let [kw-token (keyword token)
+                {:keys [initial-index apy liquidity-mode loss-mode rate-mode failure-modes shortfall
+                        schedules shortfall-model withdrawal-policy]}
+                (normalize-token-config token-config)]
+            (let [w' (-> w'
+                         (assoc-in [:yield/indices resolved-module-id kw-token] initial-index)
+                         (assoc-in [:yield/rates resolved-module-id kw-token] apy)
+                         (assoc-in [:yield/schedules resolved-module-id kw-token] schedules)
+                         (assoc-in [:yield/shortfall-models resolved-module-id kw-token] shortfall-model)
+                         (assoc-in [:yield/withdrawal-policies resolved-module-id kw-token] withdrawal-policy)
+                         (assoc-in [:yield/risk resolved-module-id kw-token]
+                                   {:liquidity-mode liquidity-mode
+                                    :loss-mode      loss-mode
+                                    :rate-mode      rate-mode
+                                    :failure-modes  failure-modes
+                                    :shortfall      shortfall}))]
+              (log/debug! "stored-schedule" {:module resolved-module-id
+                                             :token kw-token
+                                             :schedules schedules})
+              w')))
+        w*
+        tokens)))
+   world
+   (:modules yield-config {})))

@@ -126,9 +126,9 @@
 (defn store-trace!
   "Persist a notable trace to disk."
   [scored-result scenario & [{:keys [store-dir corpus-max force?]
-                               :or   {store-dir   default-store-dir
-                                      corpus-max  default-corpus-max
-                                      force?      false}}]]
+                              :or   {store-dir   default-store-dir
+                                     corpus-max  default-corpus-max
+                                     force?      false}}]]
   (let [score      (:trace-score scored-result 0)
         categories (ts/score-category scored-result)
         notable?   (or force?
@@ -138,17 +138,17 @@
       (let [id       (trace-id scenario scored-result)
             fixture  (try (let [f (te/export-trace-fixture scored-result scenario)]
                             (update f :metadata merge
-                                   {"trace_kind"   (if (pos? (:invariant-violations (:metrics scored-result) 0))
-                                                     "known_failure"
-                                                     "fixed_regression")
-                                    "scenario_type" (:scenario-id scenario)
-                                    "issue_type"    (kw-val->str (:issue/type scored-result))
-                                    "adversary_type" "adversarial-agent"
-                                    "reconciliation_status" (if (pos? (:invariant-violations (:metrics scored-result) 0))
-                                                              "partial-failure"
-                                                              "fully-reconciled")
-                                    "cdrs_note" (format "Scored %d with categories %s" 
-                                                       score (map name categories))}))
+                                    {"trace_kind"   (if (pos? (:invariant-violations (:metrics scored-result) 0))
+                                                      "known_failure"
+                                                      "fixed_regression")
+                                     "scenario_type" (:scenario-id scenario)
+                                     "issue_type"    (kw-val->str (:issue/type scored-result))
+                                     "adversary_type" "adversarial-agent"
+                                     "reconciliation_status" (if (pos? (:invariant-violations (:metrics scored-result) 0))
+                                                               "partial-failure"
+                                                               "fully-reconciled")
+                                     "cdrs_note" (format "Scored %d with categories %s"
+                                                         score (map name categories))}))
                           (catch Exception _ nil))
             meta-map {"cdrs_version" "0.1"
                       "trace-id"   id
@@ -199,7 +199,7 @@
      store-dir      (default \"results/traces\")
      regression-dir (default \"test/foundry/traces/regression\")"
   ([] (promote-to-regression! default-store-dir
-                               "test/foundry/traces/regression"))
+                              "test/foundry/traces/regression"))
   ([store-dir regression-dir]
    (ensure-dir! regression-dir)
    (let [traces  (filter :has-fixture (load-store store-dir))]

@@ -107,8 +107,8 @@
     (when (seq subset)
       (str "yield: "
            (str/join ", "
-                    (for [[k v] (sort-by (comp str key) subset)]
-                      (str (yield-metrics/yield-metric-label k) "=" v)))))))
+                     (for [[k v] (sort-by (comp str key) subset)]
+                       (str (yield-metrics/yield-metric-label k) "=" v)))))))
 
 (defn- scenario-standard-row [r opts]
   (let [status (if (scenario-entry-ok? r) "pass" "FAIL")

@@ -74,22 +74,22 @@
               valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_trial_results"
-            " (_id, batch_id, protocol_id, outcome,"
-            "  invariants_ok, divergence,"
-            "  params_edn, metrics_edn, violations_edn, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id)                              ", "
-            (xtdb/sql-str (xtdb/kw->str batch-id))        ", "
-            (xtdb/sql-str protocol-id)                    ", "
-            (xtdb/sql-str (xtdb/kw->str outcome))         ", "
-            (xtdb/sql-bool invariants-ok?)                 ", "
-            (xtdb/sql-bool divergence?)                    ", "
-            (xtdb/sql-str (xtdb/->edn params))            ", "
-            (xtdb/sql-str (xtdb/->edn metrics))           ", "
-            (xtdb/sql-str (xtdb/->edn violations))        ", "
-            (xtdb/sql-ts valid-from)
-            ")")])))
+                   [(str "INSERT INTO sim_trial_results"
+                         " (_id, batch_id, protocol_id, outcome,"
+                         "  invariants_ok, divergence,"
+                         "  params_edn, metrics_edn, violations_edn, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id)                              ", "
+                         (xtdb/sql-str (xtdb/kw->str batch-id))        ", "
+                         (xtdb/sql-str protocol-id)                    ", "
+                         (xtdb/sql-str (xtdb/kw->str outcome))         ", "
+                         (xtdb/sql-bool invariants-ok?)                 ", "
+                         (xtdb/sql-bool divergence?)                    ", "
+                         (xtdb/sql-str (xtdb/->edn params))            ", "
+                         (xtdb/sql-str (xtdb/->edn metrics))           ", "
+                         (xtdb/sql-str (xtdb/->edn violations))        ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")])))
 
 ;; ---------------------------------------------------------------------------
 ;; sim_entity_events — writes
@@ -111,18 +111,18 @@
   [ds {:keys [id trial-id entity-id event-type entity-state block-time valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_entity_events"
-            " (_id, trial_id, entity_id, event_type, entity_state,"
-            "  block_time, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id)                              ", "
-            (xtdb/sql-str trial-id)                        ", "
-            (xtdb/sql-str (str entity-id))                 ", "
-            (xtdb/sql-str (xtdb/kw->str event-type))      ", "
-            (xtdb/sql-str (xtdb/kw->str entity-state))    ", "
-            (xtdb/sql-long block-time)                     ", "
-            (xtdb/sql-ts valid-from)
-            ")")])))
+                   [(str "INSERT INTO sim_entity_events"
+                         " (_id, trial_id, entity_id, event_type, entity_state,"
+                         "  block_time, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id)                              ", "
+                         (xtdb/sql-str trial-id)                        ", "
+                         (xtdb/sql-str (str entity-id))                 ", "
+                         (xtdb/sql-str (xtdb/kw->str event-type))      ", "
+                         (xtdb/sql-str (xtdb/kw->str entity-state))    ", "
+                         (xtdb/sql-long block-time)                     ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")])))
 
 ;; ---------------------------------------------------------------------------
 ;; sim_trial_results — reads (generic)
@@ -158,11 +158,11 @@
                      protocol-id (conj (str "protocol_id = '" protocol-id "'")))]
        (mapv row->trial-result
              (jdbc/execute!
-               ds
-               [(cond-> (str "SELECT * FROM sim_trial_results WHERE "
-                             (clojure.string/join " AND " clauses))
-                  limit (str " LIMIT " limit))]
-               xtdb/opts))))))
+              ds
+              [(cond-> (str "SELECT * FROM sim_trial_results WHERE "
+                            (clojure.string/join " AND " clauses))
+                 limit (str " LIMIT " limit))]
+              xtdb/opts))))))
 
 (defn- inst->iso ^String [^java.util.Date d]
   (.format java.time.format.DateTimeFormatter/ISO_INSTANT
@@ -201,9 +201,9 @@
              :event/entity-state (some-> (:entity_state row) keyword)
              :event/block-time   (:block_time row)})
           (jdbc/execute! ds
-            ["SELECT * FROM sim_entity_events WHERE trial_id = ? ORDER BY block_time ASC"
-             trial-id]
-            xtdb/opts))))
+                         ["SELECT * FROM sim_entity_events WHERE trial_id = ? ORDER BY block_time ASC"
+                          trial-id]
+                         xtdb/opts))))
 
 (defn entity-events-for-trial-at
   "Return entity state-transition events for a trial AS OF a specific valid time
@@ -236,22 +236,22 @@
               outcome metrics valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_temporal_runs"
-            " (_id, batch_id, protocol_id, suite_id, scenario_id, seed, git_sha,"
-            "  outcome, metrics_edn, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id) ", "
-            (xtdb/sql-str (xtdb/kw->str batch-id)) ", "
-            (xtdb/sql-str protocol-id) ", "
-            (xtdb/sql-str (xtdb/kw->str suite-id)) ", "
-            (xtdb/sql-str (xtdb/kw->str scenario-id)) ", "
-            (xtdb/sql-long seed) ", "
-            (xtdb/sql-str git-sha) ", "
-            (xtdb/sql-str (xtdb/kw->str outcome)) ", "
-            (xtdb/sql-str (xtdb/->edn metrics)) ", "
-            (xtdb/sql-ts valid-from)
-            ")")]
-      xtdb/opts)))
+                   [(str "INSERT INTO sim_temporal_runs"
+                         " (_id, batch_id, protocol_id, suite_id, scenario_id, seed, git_sha,"
+                         "  outcome, metrics_edn, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id) ", "
+                         (xtdb/sql-str (xtdb/kw->str batch-id)) ", "
+                         (xtdb/sql-str protocol-id) ", "
+                         (xtdb/sql-str (xtdb/kw->str suite-id)) ", "
+                         (xtdb/sql-str (xtdb/kw->str scenario-id)) ", "
+                         (xtdb/sql-long seed) ", "
+                         (xtdb/sql-str git-sha) ", "
+                         (xtdb/sql-str (xtdb/kw->str outcome)) ", "
+                         (xtdb/sql-str (xtdb/->edn metrics)) ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")]
+                   xtdb/opts)))
 
 (defn insert-temporal-step!
   "Insert one temporal step record.
@@ -261,22 +261,22 @@
               projection-hash valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_temporal_steps"
-            " (_id, run_id, step_index, action, result,"
-            "  time_before_edn, time_advance_edn, time_after_edn, projection_hash, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id) ", "
-            (xtdb/sql-str run-id) ", "
-            (xtdb/sql-long step-index) ", "
-            (xtdb/sql-str (xtdb/kw->str action)) ", "
-            (xtdb/sql-str (xtdb/kw->str result)) ", "
-            (xtdb/sql-str (xtdb/->edn time-before)) ", "
-            (xtdb/sql-str (xtdb/->edn time-advance)) ", "
-            (xtdb/sql-str (xtdb/->edn time-after)) ", "
-            (xtdb/sql-str projection-hash) ", "
-            (xtdb/sql-ts valid-from)
-            ")")]
-      xtdb/opts)))
+                   [(str "INSERT INTO sim_temporal_steps"
+                         " (_id, run_id, step_index, action, result,"
+                         "  time_before_edn, time_advance_edn, time_after_edn, projection_hash, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id) ", "
+                         (xtdb/sql-str run-id) ", "
+                         (xtdb/sql-long step-index) ", "
+                         (xtdb/sql-str (xtdb/kw->str action)) ", "
+                         (xtdb/sql-str (xtdb/kw->str result)) ", "
+                         (xtdb/sql-str (xtdb/->edn time-before)) ", "
+                         (xtdb/sql-str (xtdb/->edn time-advance)) ", "
+                         (xtdb/sql-str (xtdb/->edn time-after)) ", "
+                         (xtdb/sql-str projection-hash) ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")]
+                   xtdb/opts)))
 
 (defn insert-temporal-invariant!
   "Insert one temporal invariant evaluation record.
@@ -284,19 +284,19 @@
   [ds {:keys [id run-id step-index invariant holds? severity violations valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_temporal_invariants"
-            " (_id, run_id, step_index, invariant, holds, severity, violations_edn, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id) ", "
-            (xtdb/sql-str run-id) ", "
-            (xtdb/sql-long step-index) ", "
-            (xtdb/sql-str (xtdb/kw->str invariant)) ", "
-            (xtdb/sql-bool holds?) ", "
-            (xtdb/sql-str (xtdb/kw->str severity)) ", "
-            (xtdb/sql-str (xtdb/->edn violations)) ", "
-            (xtdb/sql-ts valid-from)
-            ")")]
-      xtdb/opts)))
+                   [(str "INSERT INTO sim_temporal_invariants"
+                         " (_id, run_id, step_index, invariant, holds, severity, violations_edn, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id) ", "
+                         (xtdb/sql-str run-id) ", "
+                         (xtdb/sql-long step-index) ", "
+                         (xtdb/sql-str (xtdb/kw->str invariant)) ", "
+                         (xtdb/sql-bool holds?) ", "
+                         (xtdb/sql-str (xtdb/kw->str severity)) ", "
+                         (xtdb/sql-str (xtdb/->edn violations)) ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")]
+                   xtdb/opts)))
 
 (defn insert-temporal-coverage!
   "Insert one temporal coverage summary record.
@@ -304,15 +304,15 @@
   [ds {:keys [id run-id coverage valid-from]}]
   (when ds
     (jdbc/execute! ds
-      [(str "INSERT INTO sim_temporal_coverage"
-            " (_id, run_id, coverage_edn, _valid_from)"
-            " VALUES ("
-            (xtdb/sql-str id) ", "
-            (xtdb/sql-str run-id) ", "
-            (xtdb/sql-str (xtdb/->edn coverage)) ", "
-            (xtdb/sql-ts valid-from)
-            ")")]
-      xtdb/opts)))
+                   [(str "INSERT INTO sim_temporal_coverage"
+                         " (_id, run_id, coverage_edn, _valid_from)"
+                         " VALUES ("
+                         (xtdb/sql-str id) ", "
+                         (xtdb/sql-str run-id) ", "
+                         (xtdb/sql-str (xtdb/->edn coverage)) ", "
+                         (xtdb/sql-ts valid-from)
+                         ")")]
+                   xtdb/opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Aggregate helpers (pure — no database required)

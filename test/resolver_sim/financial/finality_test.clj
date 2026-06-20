@@ -25,8 +25,8 @@
   (testing "Escrow in :pending state has no resolution — :provisional"
     (let [buyer "0xBuyer" seller "0xSeller" resolver "0xRes0"
           snap (snap-fix/escrow-snapshot {:dispute-resolver resolver
-                                         :appeal-window-duration 0
-                                         :escrow-fee-bps 0})
+                                          :appeal-window-duration 0
+                                          :escrow-fee-bps 0})
           world (-> (t/empty-world 1000)
                     (lc/create-escrow buyer "USDC" seller 1000 {} snap)
                     :world)
@@ -40,10 +40,10 @@
   (testing "Scenario A: chain-final but financially non-final — appeal window open"
     (let [buyer "0xBuyer" seller "0xSeller" r0 "0xRes0"
           snap (snap-fix/escrow-snapshot {:dispute-resolver r0
-                                         :appeal-window-duration 60
-                                         :escrow-fee-bps 0
-                                         :max-dispute-level 2
-                                         :escalation-resolvers {1 "0xRes1" 2 "0xRes2"}})
+                                          :appeal-window-duration 60
+                                          :escrow-fee-bps 0
+                                          :max-dispute-level 2
+                                          :escalation-resolvers {1 "0xRes1" 2 "0xRes2"}})
           world0 (-> (t/empty-world 1000)
                      (lc/create-escrow buyer "USDC" seller 1000 {} snap)
                      :world)
@@ -67,8 +67,8 @@
   (testing "Escrow released with no open gates = financially final"
     (let [buyer "0xBuyer" seller "0xSeller" resolver "0xRes0"
           snap (snap-fix/escrow-snapshot {:dispute-resolver resolver
-                                         :appeal-window-duration 0
-                                         :escrow-fee-bps 0})
+                                          :appeal-window-duration 0
+                                          :escrow-fee-bps 0})
           world0 (-> (t/empty-world 1000)
                      (lc/create-escrow buyer "USDC" seller 1000 {} snap)
                      :world)
@@ -88,10 +88,10 @@
   (testing "Scenario B: shortfall exists but recovery window open — no realized loss"
     (let [buyer "0xBuyer" seller "0xSeller" resolver "0xRes0"
           snap (snap-fix/escrow-snapshot {:dispute-resolver resolver
-                                         :appeal-window-duration 120
-                                         :escrow-fee-bps 0
-                                         :max-dispute-level 2
-                                         :escalation-resolvers {1 "0xRes1" 2 "0xRes2"}})
+                                          :appeal-window-duration 120
+                                          :escrow-fee-bps 0
+                                          :max-dispute-level 2
+                                          :escalation-resolvers {1 "0xRes1" 2 "0xRes2"}})
           world0 (-> (t/empty-world 1000)
                      (reg/register-stake resolver 50000)
                      (lc/create-escrow buyer "USDC" seller 1000 {} snap)
@@ -120,8 +120,8 @@
   (testing "chain-final? and financially-final? are never collapsed into one :final? key"
     (let [buyer "0xBuyer" seller "0xSeller" resolver "0xRes0"
           snap (snap-fix/escrow-snapshot {:dispute-resolver resolver
-                                         :appeal-window-duration 120
-                                         :escrow-fee-bps 0})
+                                          :appeal-window-duration 120
+                                          :escrow-fee-bps 0})
           world0 (-> (t/empty-world 1000)
                      (lc/create-escrow buyer "USDC" seller 1000 {} snap)
                      :world)
@@ -166,8 +166,8 @@
           ;; deadline 500 < world time 1000: appeal-window closed
           (is (= #{:pending-settlement} (set (#'fin/open-gates w-pend wf-id (fin/index-pending-slashes w-pend))))))
 
-      (testing "Yield recovery state"
-        (let [w-yield (assoc-in w [:yield/positions "owner1"] {:status :unwinding})
+        (testing "Yield recovery state"
+          (let [w-yield (assoc-in w [:yield/positions "owner1"] {:status :unwinding})
               ;; Requires owner mapping
-              w-yield-mapped (assoc w-yield :yield/owner-map {wf-id "owner1"})]
-          (is (contains? (set (#'fin/open-gates w-yield-mapped wf-id (fin/index-pending-slashes w-yield-mapped))) :yield-recovery))))))))
+                w-yield-mapped (assoc w-yield :yield/owner-map {wf-id "owner1"})]
+            (is (contains? (set (#'fin/open-gates w-yield-mapped wf-id (fin/index-pending-slashes w-yield-mapped))) :yield-recovery))))))))

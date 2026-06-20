@@ -26,7 +26,7 @@
 
 (deftest diff-traces-length-mismatch
   (let [result (diff/diff-traces base-trace (conj base-trace
-                                                   {:seq 2 :action "wait" :world {}}))]
+                                                  {:seq 2 :action "wait" :world {}}))]
     (is (= :trace-length-mismatch (:reason result)))
     (is (= 2 (:length-a result)))
     (is (= 3 (:length-b result)))))

@@ -25,7 +25,7 @@
 
    "no-double-settlement"
    #{:single-resolution-payout-consistent :cancellation-mutex
-      :pending-settlement-consistent :terminal-states-unchanged}
+     :pending-settlement-consistent :terminal-states-unchanged}
 
    "pull-first-value-flow"
    #{:settlement-principal-boundary :settlement-yield-boundary
@@ -104,8 +104,8 @@
     (let [required   (canonical-ids-for-evidence evidence-ids)
           world      (:world replay-result)
           _          (when (nil? world)
-                      (throw (ex-info "replay pass result missing :world"
-                                      {:scenario-id (:scenario-id replay-result)})))
+                       (throw (ex-info "replay pass result missing :world"
+                                       {:scenario-id (:scenario-id replay-result)})))
           world-req  (set/intersection required world-invariant-ids)
           check      (check-all-fn world)
           failures   (for [id world-req

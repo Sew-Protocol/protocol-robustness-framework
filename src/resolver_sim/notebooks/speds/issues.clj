@@ -96,22 +96,22 @@
                      (:title finding)
                      "Issue derived from finding")]
     {:issue/id (str "ISSUE-" (or run-id (:run-id config/protocol-defaults)) "-" (truncate-safe (Math/abs (hash (:finding_id finding))) 6))
-   :source-finding-ids [(:finding_id finding)]
-   :scenario/id (:scenario_id finding)
-   :kind :policy-projected
-   :status-kind :open
-   :type :protocol_risk
-   :status :open
-   :severity (keyword (str/lower-case (str (:severity finding))))
-   :priority (or (get-in finding [:story :priority]) 50)
-   :title (str "Investigate: " (:title finding))
-   :one_line_description one-line
-   :summary one-line
-   :story/family (keyword (str/lower-case (str (get-in finding [:story :family] "scenario_deep_dive"))))
-   :evidence/refs (vec (map (fn [r] {:artifact (:artifact r) :path (:path r)}) (or (:evidence_refs finding) [])))
-   :provenance {:run-id run-id
-                :git-sha (get-in finding [:provenance :git_sha])
-                :trace-digest (get-in finding [:provenance :trace_digest])}}))
+     :source-finding-ids [(:finding_id finding)]
+     :scenario/id (:scenario_id finding)
+     :kind :policy-projected
+     :status-kind :open
+     :type :protocol_risk
+     :status :open
+     :severity (keyword (str/lower-case (str (:severity finding))))
+     :priority (or (get-in finding [:story :priority]) 50)
+     :title (str "Investigate: " (:title finding))
+     :one_line_description one-line
+     :summary one-line
+     :story/family (keyword (str/lower-case (str (get-in finding [:story :family] "scenario_deep_dive"))))
+     :evidence/refs (vec (map (fn [r] {:artifact (:artifact r) :path (:path r)}) (or (:evidence_refs finding) [])))
+     :provenance {:run-id run-id
+                  :git-sha (get-in finding [:provenance :git_sha])
+                  :trace-digest (get-in finding [:provenance :trace_digest])}}))
 
 (defn generate-issues-bundle
   "Builds actionable issues from findings + issue policy."
@@ -122,22 +122,22 @@
                              (findings/generate-findings-bundle
                               artifacts
                               {:comparator-config (or comparator-config findings/default-comparator-config)}))
-        run-id (get-in findings-bundle [:run :run_id])
+         run-id (get-in findings-bundle [:run :run_id])
          comparator-config (get findings-bundle :comparator_config findings/default-comparator-config)
-        findings-list (or (:findings findings-bundle) [])
-        issues (->> findings-list
-                    (filter #(should-open-issue? % policy))
-                    (map #(finding->issue % run-id))
-                    (sort-by (juxt (comp - :priority) :scenario/id))
-                    vec)]
-    {:schema/version "speds-issues-v1"
-     :run/id run-id
-     :definitions/hash (defs/definitions-hash)
-     :comparator_config comparator-config
-     :generated-at (str (java.time.Instant/now))
-     :issue-count (count issues)
-     :issues issues
-     :policy policy})))
+         findings-list (or (:findings findings-bundle) [])
+         issues (->> findings-list
+                     (filter #(should-open-issue? % policy))
+                     (map #(finding->issue % run-id))
+                     (sort-by (juxt (comp - :priority) :scenario/id))
+                     vec)]
+     {:schema/version "speds-issues-v1"
+      :run/id run-id
+      :definitions/hash (defs/definitions-hash)
+      :comparator_config comparator-config
+      :generated-at (str (java.time.Instant/now))
+      :issue-count (count issues)
+      :issues issues
+      :policy policy})))
 
 (defn save-issues!
   "Writes issues bundle to results/test-artifacts/issues.json"

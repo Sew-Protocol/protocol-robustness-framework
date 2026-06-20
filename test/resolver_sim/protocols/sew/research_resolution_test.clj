@@ -15,8 +15,8 @@
   "World with one :disputed escrow."
   []
   (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps 50
-                                      :max-dispute-duration 3600
-                                      :appeal-window-duration 1800})
+                                        :max-dispute-duration 3600
+                                        :appeal-window-duration 1800})
         r    (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
                                (t/make-escrow-settings {}) snap)
         w    (:world r)]
@@ -43,10 +43,10 @@
         r-esc (res/escalate-dispute w 0 alice esc-fn)
         ;; Challenge concurrently
         r-chal (res/challenge-resolution w 0 carol esc-fn)]
-    
+
     (testing "Participant escalation succeeds"
       (is (:ok r-esc)))
-    
+
     (testing "Third-party challenge fails because pending settlement is cleared by escalation"
       (let [w1 (:world r-esc)
             r-chal (res/challenge-resolution w1 0 carol esc-fn)]
@@ -59,7 +59,7 @@
         new-resolver "0xNewResolver"
         ;; Resolver rotation should fail because a pending settlement exists
         r (res/rotate-dispute-resolver w 0 new-resolver)]
-    
+
     (testing "Resolver rotation fails when a pending settlement exists"
       (is (false? (:ok r)))
       (is (= :resolution-already-pending (:error r))))))
