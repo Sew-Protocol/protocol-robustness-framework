@@ -54,8 +54,8 @@
   []
   (gen/fmap (fn [[fee-bps dur]]
               (snap-fix/escrow-snapshot {:escrow-fee-bps          fee-bps
-                                       :max-dispute-duration     dur
-                                       :appeal-window-duration   0}))
+                                         :max-dispute-duration     dur
+                                         :appeal-window-duration   0}))
             (gen/tuple gen-bps
                        (gen/large-integer* {:min 100 :max 86400}))))
 
@@ -246,8 +246,8 @@
    [appeal-dur (gen/large-integer* {:min 100 :max 86400})
     time-delta (gen/large-integer* {:min 1 :max 99})]
    (let [snap     (snap-fix/escrow-snapshot {:escrow-fee-bps        0
-                                           :appeal-window-duration appeal-dur
-                                           :max-dispute-duration   200000})
+                                             :appeal-window-duration appeal-dur
+                                             :max-dispute-duration   200000})
          cr       (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" 1000
                                     (t/make-escrow-settings {:custom-resolver "0xRes"}) snap)
          dr       (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))
@@ -320,8 +320,8 @@
     amount     gen-amount
     fee-bps    gen-bps]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps         fee-bps
-                                       :max-dispute-duration   200000
-                                       :appeal-window-duration appeal-dur})
+                                         :max-dispute-duration   200000
+                                         :appeal-window-duration appeal-dur})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                 (t/make-escrow-settings {:custom-resolver "0xResolver"}) snap)
          dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]
@@ -443,8 +443,8 @@
     fee-bps gen-bps
     max-dur (gen/large-integer* {:min 100 :max 3600})]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps        fee-bps
-                                       :max-dispute-duration  max-dur
-                                       :appeal-window-duration 0})
+                                         :max-dispute-duration  max-dur
+                                         :appeal-window-duration 0})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                 (t/make-escrow-settings {:custom-resolver "0xResolver"}) snap)
          dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]
@@ -477,8 +477,8 @@
     fee-bps    gen-bps
     appeal-dur (gen/large-integer* {:min 100 :max 3600})]
    (let [snap (snap-fix/escrow-snapshot {:escrow-fee-bps         fee-bps
-                                       :max-dispute-duration   10000
-                                       :appeal-window-duration appeal-dur})
+                                         :max-dispute-duration   10000
+                                         :appeal-window-duration appeal-dur})
          cr   (lc/create-escrow (t/empty-world 1000) "0xAlice" "0xUSDC" "0xBob" amount
                                 (t/make-escrow-settings {:custom-resolver "0xResolver"}) snap)
          dr   (when (:ok cr) (lc/raise-dispute (:world cr) 0 "0xAlice"))]

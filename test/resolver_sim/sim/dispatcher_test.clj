@@ -27,7 +27,7 @@
 (deftest apply-action-with-evidence-delegates-to-dispatch-action
   (binding [attr/*attribution* test-attribution]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)]
+                  dummy/protocol test-context test-world test-event)]
       (is (:ok result))
       (is (map? (:world result)))
       (is (= (:block-time test-world) (:block-time (:world result)))))))
@@ -35,13 +35,13 @@
 (deftest apply-action-with-evidence-returns-evidence-key
   (binding [attr/*attribution* test-attribution]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)]
+                  dummy/protocol test-context test-world test-event)]
       (is (contains? result :evidence)))))
 
 (deftest apply-action-with-evidence-produces-evidence-record
   (binding [attr/*attribution* test-attribution]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)
+                  dummy/protocol test-context test-world test-event)
           evidence (:evidence result)]
       (is (map? evidence))
       (is (= "evidence-record.v1" (:schema-version evidence)))
@@ -55,7 +55,7 @@
 (deftest apply-action-with-evidence-attribution-in-evidence
   (binding [attr/*attribution* test-attribution]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)
+                  dummy/protocol test-context test-world test-event)
           evidence (:evidence result)]
       (is (:ctx/run-id (:attribution evidence)))
       (is (:ctx/scenario-id (:attribution evidence)))
@@ -65,24 +65,24 @@
 (deftest apply-action-with-evidence-hash-changes-with-world
   (binding [attr/*attribution* test-attribution]
     (let [result1 (dispatcher/apply-action-with-evidence
-                    dummy/protocol test-context test-world test-event)
+                   dummy/protocol test-context test-world test-event)
           modified-world (assoc test-world :extra-key "modified")
           result2 (dispatcher/apply-action-with-evidence
-                    dummy/protocol test-context modified-world test-event)]
+                   dummy/protocol test-context modified-world test-event)]
       (is (not= (:evidence-hash (:evidence result1))
                 (:evidence-hash (:evidence result2)))))))
 
 (deftest apply-action-with-evidence-returns-nil-evidence-without-attribution
   (binding [attr/*attribution* {}]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)]
+                  dummy/protocol test-context test-world test-event)]
       (is (:ok result))
       (is (nil? (:evidence result))))))
 
 (deftest apply-action-with-evidence-still-dispatches-without-attribution
   (binding [attr/*attribution* {}]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)]
+                  dummy/protocol test-context test-world test-event)]
       (is (:ok result))
       (is (map? (:world result))))))
 
@@ -90,14 +90,14 @@
   (binding [attr/*attribution* test-attribution]
     (let [error-event (assoc test-event :action :nonexistent)
           result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world error-event)]
+                  dummy/protocol test-context test-world error-event)]
       (is (:ok result))
       (is (= :transition (:artifact-kind (:evidence result)))))))
 
 (deftest apply-action-with-evidence-preserves-extra-keys
   (binding [attr/*attribution* test-attribution]
     (let [result (dispatcher/apply-action-with-evidence
-                   dummy/protocol test-context test-world test-event)]
+                  dummy/protocol test-context test-world test-event)]
       (is (contains? result :ok))
       (is (contains? result :world))
       (is (contains? result :evidence)))))

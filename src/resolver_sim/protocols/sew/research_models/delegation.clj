@@ -20,17 +20,17 @@
       \"junior-2\" {:bond 1000, :delegated-to \"senior-1\", :tier :junior}})"
   [resolver-specs]
   (reduce
-    (fn [registry [resolver-id spec]]
-      (assoc registry resolver-id
-        {:bond (:bond spec)
-         :original-bond (:bond spec)  ; Track for reference
-         :senior (:delegated-to spec)
-         :tier (:tier spec :solo)
-         :status :active
-         :reserved-coverage 0
-         :slashed-amount 0}))
-    {}
-    resolver-specs))
+   (fn [registry [resolver-id spec]]
+     (assoc registry resolver-id
+            {:bond (:bond spec)
+             :original-bond (:bond spec)  ; Track for reference
+             :senior (:delegated-to spec)
+             :tier (:tier spec :solo)
+             :status :active
+             :reserved-coverage 0
+             :slashed-amount 0}))
+   {}
+   resolver-specs))
 
 (defn coverage-available
   "Calculate coverage available from a senior resolver.
@@ -44,12 +44,12 @@
         _ (assert senior (str "Senior not found: " senior-id))
         total-coverage (long (* (:bond senior) 3 0.5))  ; M=3, U=50%
         reserved (reduce
-                   (fn [sum [resolver-id resolver]]
-                     (if (= (:senior resolver) senior-id)
-                       (+ sum (:reserved-coverage resolver))
-                       sum))
-                   0
-                   registry)]
+                  (fn [sum [resolver-id resolver]]
+                    (if (= (:senior resolver) senior-id)
+                      (+ sum (:reserved-coverage resolver))
+                      sum))
+                  0
+                  registry)]
     {:senior senior-id
      :total-coverage total-coverage
      :reserved reserved
@@ -63,20 +63,20 @@
         senior (registry senior-id)
         _ (assert junior (str "Junior not found: " junior-id))
         _ (assert senior (str "Senior not found: " senior-id))]
-    
+
     (cond
       (not= (:tier junior) :junior)
       {:can-reserve false :reason "Resolver is not a junior"}
-      
+
       (not= (:tier senior) :senior)
       {:can-reserve false :reason "Senior is not a senior resolver"}
-      
+
       (not= (:status junior) :active)
       {:can-reserve false :reason "Junior is not active"}
-      
+
       (not= (:status senior) :active)
       {:can-reserve false :reason "Senior is not active"}
-      
+
       :else
       (let [coverage-info (coverage-available registry senior-id)
             available (:available coverage-info)]
@@ -94,69 +94,69 @@
   [registry resolver-id slash-amount]
   (let [resolver (registry resolver-id)
         _ (assert resolver (str "Resolver not found: " resolver-id))]
-    
+
     (if (zero? slash-amount)
       registry
       (case (:tier resolver)
         ;; Solo resolver: slash their own bond only
         :solo
         (update registry resolver-id
-          (fn [r]
-            (let [available (:bond r)
-                  actual-slash (min slash-amount available)
-                  remaining (max 0 (- (:bond r) actual-slash))]
-              (assoc r
-                :bond remaining
-                :slashed-amount (+ (:slashed-amount r) actual-slash)))))
-        
+                (fn [r]
+                  (let [available (:bond r)
+                        actual-slash (min slash-amount available)
+                        remaining (max 0 (- (:bond r) actual-slash))]
+                    (assoc r
+                           :bond remaining
+                           :slashed-amount (+ (:slashed-amount r) actual-slash)))))
+
         ;; Junior resolver: waterfall logic
         :junior
         (let [senior-id (:senior resolver)
               _ (assert senior-id (str "Junior has no senior: " resolver-id))
-              
+
               ;; Step 1: Slash junior's own bond
               junior-available (:bond resolver)
               slash-from-junior (min slash-amount junior-available)
               remaining-slash (- slash-amount slash-from-junior)
-              
+
               registry-after-junior
               (if (zero? slash-from-junior)
                 registry
                 (update registry resolver-id
-                  (fn [r]
-                    (assoc r
-                      :bond (- (:bond r) slash-from-junior)
-                      :slashed-amount (+ (:slashed-amount r) slash-from-junior)))))
-              
+                        (fn [r]
+                          (assoc r
+                                 :bond (- (:bond r) slash-from-junior)
+                                 :slashed-amount (+ (:slashed-amount r) slash-from-junior)))))
+
               ;; Step 2: Slash senior's reserved coverage
               senior (registry-after-junior senior-id)
               coverage-reserved (:reserved-coverage senior)
               slash-from-senior-coverage (min remaining-slash coverage-reserved)
               remaining-slash-2 (- remaining-slash slash-from-senior-coverage)]
-          
+
           (cond
             ;; No senior slashing needed
             (zero? slash-from-senior-coverage)
             registry-after-junior
-            
+
             ;; Senior coverage is depleted
             :else
             (update registry-after-junior senior-id
-              (fn [s]
-                (assoc s
-                  :reserved-coverage (- (:reserved-coverage s) slash-from-senior-coverage)
-                  :slashed-amount (+ (:slashed-amount s) slash-from-senior-coverage))))))
-        
+                    (fn [s]
+                      (assoc s
+                             :reserved-coverage (- (:reserved-coverage s) slash-from-senior-coverage)
+                             :slashed-amount (+ (:slashed-amount s) slash-from-senior-coverage))))))
+
         ;; Senior resolver: slash own bond
         :senior
         (update registry resolver-id
-          (fn [r]
-            (let [available (:bond r)
-                  actual-slash (min slash-amount available)
-                  remaining (max 0 (- (:bond r) actual-slash))]
-              (assoc r
-                :bond remaining
-                :slashed-amount (+ (:slashed-amount r) actual-slash)))))))))
+                (fn [r]
+                  (let [available (:bond r)
+                        actual-slash (min slash-amount available)
+                        remaining (max 0 (- (:bond r) actual-slash))]
+                    (assoc r
+                           :bond remaining
+                           :slashed-amount (+ (:slashed-amount r) actual-slash)))))))))
 
 (defn freeze-resolver
   "Mark resolver as frozen (cannot participate in new disputes).

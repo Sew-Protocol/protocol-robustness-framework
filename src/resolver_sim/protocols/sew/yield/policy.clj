@@ -26,7 +26,7 @@
             fee     (t/compute-fee yield fee-bps)
             net     (- yield fee)
             preset  (t/normalize-yield-preset (:yield-preset settings :off))
-            
+
             ;; Determine who gets the net yield based on outcome and preset
             [sender-amt recipient-amt]
             (case [settlement-outcome preset]
@@ -34,7 +34,7 @@
               [:released :to-recipient] [0 net]
               [:released :to-sender]    [net 0]
               [:released :split-50-50]  [(quot net 2) (- net (quot net 2))]
-              
+
               ;; If refunded, sender usually gets it; to-recipient preset does not
               ;; pay yield to recipient on refund (escrow returned to sender).
               [:refunded :to-sender]    [net 0]
@@ -44,20 +44,20 @@
               ;; Defaults for :off or other combinations
               [0 0])]
         (let [world' (-> world
-                        (acct/record-fee token fee)
-                        (cond-> (pos? sender-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/yield (:from et) sender-amt))
-                        (cond-> (pos? recipient-amt)
-                          (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
+                         (acct/record-fee token fee)
+                         (cond-> (pos? sender-amt)
+                           (acct/record-claimable-v2 escrow-id :settlement/yield (:from et) sender-amt))
+                         (cond-> (pos? recipient-amt)
+                           (acct/record-claimable-v2 escrow-id :settlement/yield (:to et) recipient-amt))
                         ;; Yield pool reduction: funds move from "held" to "claimable/fees"
-                        (acct/sub-held token yield)
+                         (acct/sub-held token yield)
                         ;; Capture any remaining yield (not allocated to participants) as additional protocol fees
-                        (cond-> (> net (+ sender-amt recipient-amt))
-                          (acct/record-fee token (- net (+ sender-amt recipient-amt)))))]
+                         (cond-> (> net (+ sender-amt recipient-amt))
+                           (acct/record-fee token (- net (+ sender-amt recipient-amt)))))]
           (-> world'
               ;; If there's a shortfall, keep the position active for later recovery
               (cond->
-                shortfall
+               shortfall
                 (assoc-in pos-key (assoc position :realized-yield 0 :unrealized-yield 0))
 
                 (not shortfall)

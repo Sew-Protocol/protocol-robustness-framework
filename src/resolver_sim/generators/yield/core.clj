@@ -51,16 +51,16 @@
   "Token-level yield-config fragment (keyword keys, same shape as scenario JSON after load)."
   [token]
   (gen/fmap
-    (fn [[apy-bps liq-mode failures ratio-bps]]
-      (cond-> {:apy (apy-from-bps apy-bps)
-               :liquidity-mode liq-mode}
-        (seq failures)
-        (assoc :failure-modes failures)
+   (fn [[apy-bps liq-mode failures ratio-bps]]
+     (cond-> {:apy (apy-from-bps apy-bps)
+              :liquidity-mode liq-mode}
+       (seq failures)
+       (assoc :failure-modes failures)
 
-        (= liq-mode :shortfall)
-        (assoc :shortfall {:available-ratio (/ (double ratio-bps) 10000.0)
-                           :reason :liquidity-shortfall})))
-    (gen/tuple gen-apy-bps gen-liquidity-mode gen-yield-failure-set gen-shortfall-ratio-bps)))
+       (= liq-mode :shortfall)
+       (assoc :shortfall {:available-ratio (/ (double ratio-bps) 10000.0)
+                          :reason :liquidity-shortfall})))
+   (gen/tuple gen-apy-bps gen-liquidity-mode gen-yield-failure-set gen-shortfall-ratio-bps)))
 
 (defn yield-config-for-profile
   "Build a minimal {:modules ...} yield-config for a profile id and token."
@@ -72,11 +72,11 @@
         tok (if (string? token) token (name token))
         token-cfg (cond-> {:apy (apy-from-bps apy-bps)
                            :liquidity-mode liquidity-mode}
-                     (seq failure-modes)
-                     (assoc :failure-modes (set failure-modes))
-                     (= liquidity-mode :shortfall)
-                     (assoc :shortfall {:available-ratio (double shortfall-ratio)
-                                        :reason :liquidity-shortfall}))]
+                    (seq failure-modes)
+                    (assoc :failure-modes (set failure-modes))
+                    (= liquidity-mode :shortfall)
+                    (assoc :shortfall {:available-ratio (double shortfall-ratio)
+                                       :reason :liquidity-shortfall}))]
     {:modules {mid {:tokens {tok token-cfg}}}}))
 
 (def gen-yield-config
@@ -90,7 +90,7 @@
 
 (def gen-yield-config-from-preset
   (gen/elements
-    (for [preset-id known-preset-ids
-          :let [cfg (presets/preset->yield-config preset-id)]
-          :when cfg]
-      cfg)))
+   (for [preset-id known-preset-ids
+         :let [cfg (presets/preset->yield-config preset-id)]
+         :when cfg]
+     cfg)))

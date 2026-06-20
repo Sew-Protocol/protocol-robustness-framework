@@ -27,13 +27,13 @@
         ;; Dynamic risk overrides from set-yield-risk
         risk (when resolved-mid (get-in world [:yield/risk resolved-mid tok]))
         risk-shortfall (:shortfall risk)
-        
+
         ;; APY from risk/legacy path (highest priority)
         ;; Try normalized (keyword) key first, fall back to string key for back compat.
         risk-apy (when resolved-mid
                    (or (get-in world [:yield/rates resolved-mid tok])
                        (get-in world [:yield/rates resolved-mid (name tok)])))
-        
+
         ;; Default APY as fallback for schedule lookup
         default-apy (if (some? risk-apy) risk-apy 0.04)]
     (let [schedules* (or schedules {:rate-schedule nil :index-schedule nil :liquidity-schedule nil :module-state-schedule nil})
@@ -61,10 +61,10 @@
          :available-ratio final-ratio
          :module-state resolved-state
          :shortfall-model (if resolved-mid
-                          (or (get-in world [:yield/shortfall-models resolved-mid token])
-                              default-shortfall-model)
-                          default-shortfall-model)
-       :withdrawal-policy (if resolved-mid
-                            (or (get-in world [:yield/withdrawal-policies resolved-mid token])
-                                default-withdrawal-policy)
-                            default-withdrawal-policy)}))))
+                            (or (get-in world [:yield/shortfall-models resolved-mid token])
+                                default-shortfall-model)
+                            default-shortfall-model)
+         :withdrawal-policy (if resolved-mid
+                              (or (get-in world [:yield/withdrawal-policies resolved-mid token])
+                                  default-withdrawal-policy)
+                              default-withdrawal-policy)}))))

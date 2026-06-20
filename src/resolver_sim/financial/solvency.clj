@@ -59,10 +59,10 @@
   [world]
   (let [escrows (get world :escrow-transfers {})]
     (sort-by first
-      (for [[wf-id escrow] escrows
-            :let [state (:escrow-state escrow)
-                  amount (:amount-after-fee escrow 0)]]
-        (str wf-id "|" (name state) "|" amount)))))
+             (for [[wf-id escrow] escrows
+                   :let [state (:escrow-state escrow)
+                         amount (:amount-after-fee escrow 0)]]
+               (str wf-id "|" (name state) "|" amount)))))
 
 (defn- yield-summary-seq
   "Yield positions sorted for stable hashing."
@@ -83,14 +83,14 @@
   "Produce the string that gets hashed — deterministic, sorted, newline-separated."
   [world prev-commitment]
   (str/join "\n"
-    (concat
-      [(str "protocol-version:1")
-       (str "block-time:" (time-ctx/block-ts world))
-       (str "prev-commitment:" (or prev-commitment "none"))]
-      (escrow-summary-seq world)
-      (yield-summary-seq world)
-      (balance-line :total-held world)
-      (balance-line :claimable world))))
+            (concat
+             [(str "protocol-version:1")
+              (str "block-time:" (time-ctx/block-ts world))
+              (str "prev-commitment:" (or prev-commitment "none"))]
+             (escrow-summary-seq world)
+             (yield-summary-seq world)
+             (balance-line :total-held world)
+             (balance-line :claimable world))))
 
 (defn compute-state-commitment
   "Compute a SHA-256 state commitment over the solvency-relevant subset
@@ -163,30 +163,30 @@
                                   :reason "Internal solvency ratio calculation failure"}))
 
          accounting-solvent? (and (:holds? solvency-result true)
-                                 (:holds? balance-result true))
+                                  (:holds? balance-result true))
 
          ;; ── Cryptographic commitment verification ─────────────────────────
          stored-commitment (get-in world [:solvency :commitment-root])
          computed-commitment (when (and stored-commitment
                                         (#{:valid :invalid :mismatch} proof-status))
                                (compute-state-commitment world
-                                 (get-in world [:solvency :prev-commitment])))
+                                                         (get-in world [:solvency :prev-commitment])))
 
          commitment-valid? (and stored-commitment computed-commitment
-                               (= stored-commitment computed-commitment))
-proof-status* (case proof-status
-                 (:nil :unproven) :unproven
-                 :valid    (if commitment-valid? :valid :invalid)
-                 :invalid  :invalid
-                 :mismatch :mismatch
-                 :unproven)
+                                (= stored-commitment computed-commitment))
+         proof-status* (case proof-status
+                         (:nil :unproven) :unproven
+                         :valid    (if commitment-valid? :valid :invalid)
+                         :invalid  :invalid
+                         :mismatch :mismatch
+                         :unproven)
 
-proof-valid? (case proof-status*
-               :unproven nil
-               :invalid  false
-               :mismatch false
-               :valid    true
-               nil)]
+         proof-valid? (case proof-status*
+                        :unproven nil
+                        :invalid  false
+                        :mismatch false
+                        :valid    true
+                        nil)]
      {:solvency/status
       (cond
         (not accounting-solvent?) :insolvent
@@ -205,7 +205,7 @@ proof-valid? (case proof-status*
         (str "accounting insolvent: "
              (count (:violations solvency-result 0)) " violations")
         (= proof-status* :invalid)  (str "commitment mismatch: stored=" stored-commitment
-                                        " computed=" computed-commitment)
+                                         " computed=" computed-commitment)
         (= proof-status* :mismatch) "proof references different state"
         (= proof-status* :valid)    "proof valid, cryptographically solvent"
         :else                       "accounting solvent but no cryptographic proof")})))

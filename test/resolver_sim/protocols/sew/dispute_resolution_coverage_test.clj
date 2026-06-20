@@ -181,9 +181,9 @@
         (when scenario
           (let [replay (replay-scenario scenario)
                 entry (runner/build-entry-result
-                        {:name (:scenario-id scenario)
-                         :replay-result replay
-                         :scenario scenario})]
+                       {:name (:scenario-id scenario)
+                        :replay-result replay
+                        :scenario scenario})]
             (testing (str (:scenario-id scenario) " entry shape")
               (is (contains? entry :pass?))
               (is (contains? entry :outcome))
@@ -283,7 +283,7 @@
           (doseq [r dispute-records]
             (testing (str "evidence " (:evidence/type r))
               (is (not (cstr/blank? (:world/before-hash r)))
-                    (str (:evidence/type r) " must have world/before-hash"))
+                  (str (:evidence/type r) " must have world/before-hash"))
               (is (not (cstr/blank? (:world/after-hash r)))
                   (str (:evidence/type r) " must have world/after-hash"))))))
       (println (str "Evidence summary has " (:evidence-count summary) " records"))
@@ -349,12 +349,12 @@
           known-simulation #{:set-token-liquidity-crunch :set-yield-risk}
           all-gated must-be-gated
           violations (for [action all-gated
-                            :let [p (re-pattern
-                                     (str "defmethod apply-action \"" (name action) "\""
-                                          "[^#]*?"
-                                          "with-governance-actor"))]
-                            :when (not (re-find p source))]
-                        (str (name action) " missing with-governance-actor"))
+                           :let [p (re-pattern
+                                    (str "defmethod apply-action \"" (name action) "\""
+                                         "[^#]*?"
+                                         "with-governance-actor"))]
+                           :when (not (re-find p source))]
+                       (str (name action) " missing with-governance-actor"))
           must-violations (for [action must-be-gated
                                 :let [p (re-pattern
                                          (str "defmethod apply-action \"" (name action) "\""
@@ -388,9 +388,9 @@
           tf-scenarios (for [path paths]
                          (try (load-scenario path) (catch Exception _ nil)))
           tf-valid (filter (fn [s]
-                         (and (= "theory-falsification" (:purpose s))
-                              (not (some #(= "status/todo-stub" %) (:tags s [])))))
-                       tf-scenarios)]
+                             (and (= "theory-falsification" (:purpose s))
+                                  (not (some #(= "status/todo-stub" %) (:tags s [])))))
+                           tf-scenarios)]
       (println "\n=== THEORY-FALSIFICATION SCENARIOS (XFAIL) ===")
       (is (pos? (count tf-valid)) "At least one theory-falsification scenario must exist")
       (doseq [s tf-valid]

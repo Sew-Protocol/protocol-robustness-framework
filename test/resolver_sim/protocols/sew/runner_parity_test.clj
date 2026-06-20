@@ -85,9 +85,9 @@
                       (orig-exec world workflow-id caller is-release resolution-hash resolution-module-fn))]
           (with-redefs [res/execute-resolution probe]
             (runner/run-trial (seeded-rng 42) (assoc {:escrow-size 10000
-                                                       :resolver-fee-bps 50
-                                                       :strategy :honest}
-                                                      :attributed? false)))))
+                                                      :resolver-fee-bps 50
+                                                      :strategy :honest}
+                                                     :attributed? false)))))
       (is (map? @!observed) "Probe was called")
       (is (= "outer-binding" (:ctx/run-id @!observed))
           "Legacy path uses outer *attribution* binding"))))
@@ -107,7 +107,7 @@
           seed 42]
       (binding [attr/*attribution* {:ctx/run-id "async-test"}]
         (let [f (ev/contextual-future
-                  (runner/run-trial (seeded-rng seed) (assoc params :attributed? true)))
+                 (runner/run-trial (seeded-rng seed) (assoc params :attributed? true)))
               result @f]
           (is (map? result))
           (is (contains? result :dispute-correct?))
@@ -121,9 +121,9 @@
           seeds [1 2 3 4 5]]
       (binding [attr/*attribution* {:ctx/run-id "pmap-test"}]
         (let [results (doall (ev/contextual-pmap
-                               (fn [seed]
-                                 (runner/run-trial (seeded-rng seed) (assoc params :attributed? true)))
-                               seeds))]
+                              (fn [seed]
+                                (runner/run-trial (seeded-rng seed) (assoc params :attributed? true)))
+                              seeds))]
           (is (= 5 (count results)))
           (doseq [r results]
             (is (map? r))
@@ -136,9 +136,9 @@
         (let [f (future
                   ;; No binding context — *attribution* is {} in the new thread
                   (runner/run-trial (seeded-rng 42) (assoc {:escrow-size 10000
-                                                             :resolver-fee-bps 50
-                                                             :strategy :honest}
-                                                            :attributed? false)))]
+                                                            :resolver-fee-bps 50
+                                                            :strategy :honest}
+                                                           :attributed? false)))]
           @f
           (is true "Legacy path does not crash in future (but *attribution* is empty)"))))))
 
@@ -153,8 +153,8 @@
       (let [monadic-result (runner/run-trial (seeded-rng seed) (assoc params :attributed? true))]
         ;; Dynamic binding (legacy with same outer attribution)
         (binding [attr/*attribution* {:ctx/run-id "monadic-trial"
-                                       :ctx/strategy :malicious
-                                       :ctx/escrow-amount 10000}]
+                                      :ctx/strategy :malicious
+                                      :ctx/escrow-amount 10000}]
           (let [dynamic-result (runner/run-trial (seeded-rng seed) (assoc params :attributed? false))]
             (is (= (:dispute-correct? monadic-result) (:dispute-correct? dynamic-result)))
             (is (= (:profit-honest monadic-result) (:profit-honest dynamic-result)))
@@ -195,9 +195,9 @@
               w-id 0]
           ;; Build escrow + raise dispute + execute resolution + pending settlement
           (let [cr (t/make-escrow-transfer {:token token :to to :from from
-                                              :amount-after-fee 9500
-                                              :dispute-resolver resolver
-                                              :escrow-state :disputed})]
+                                            :amount-after-fee 9500
+                                            :dispute-resolver resolver
+                                            :escrow-state :disputed})]
             (is (nil? @!evidence) "No evidence captured yet")
             ;; The capture-event-evidence! call is only in execute-fraud-slash
             ;; which requires a pending slash. This test validates the shape

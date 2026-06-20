@@ -31,23 +31,23 @@
     (let [scenario {:initial-block-time 1000}
           world (-> (proto/init-world sew/protocol scenario)
                     (assoc-in [:yield/rates :fixed-rate "USDC"] 0.05)) ; 5% APY
-          
+
           snapshot (snap-fix/escrow-snapshot {:yield-generation-module :fixed-rate})
-          res1  (lc/create-escrow world "sender" "USDC" "recipient" 10000 
-                                 (t/make-escrow-settings {:yield-preset :to-recipient})
-                                 snapshot)
+          res1  (lc/create-escrow world "sender" "USDC" "recipient" 10000
+                                  (t/make-escrow-settings {:yield-preset :to-recipient})
+                                  snapshot)
           world1 (:world res1)
           world2 (time-ctx/advance-time world1 {:seconds 31536000})
           world3 (lc/accrue-yield world2 0)
-          
+
           res3  (lc/release world3 0 "sender" (fn [_ _ _] {:allowed? true}))
           world4 (:world res3)]
-      
+
       (is (:ok res1))
       (let [pos (get-in world3 [:yield/positions [:sew/escrow 0]])]
         (is (= 10000 (:principal pos)))
-        (is (= 500 (:unrealized-yield pos)))) 
-      
+        (is (= 500 (:unrealized-yield pos))))
+
       (is (= 10500 (get-in world4 [:claimable 0 "recipient"]))))))
 
 (deftest test-snapshot-yield-module-identity-immutable

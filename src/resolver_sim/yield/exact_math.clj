@@ -10,23 +10,19 @@
      for carry-forward across accrual intervals.
    - All arithmetic is deterministic and reproducible.")
 
-
 (def seconds-per-year 31536000)
 
 (def scaling-factor 10000)
-
 
 (defn bps->ratio
   "Convert basis points to an exact ratio. 10% = 1000 bps = 1000/10000 = 1/10."
   [bps]
   (/ (long bps) scaling-factor))
 
-
 (defn ratio->bps
   "Convert a ratio back to approximate bps (truncated)."
   [r]
   (long (Math/floor (* (double r) scaling-factor))))
-
 
 (defn index-growth-factor
   "Compute the exact non-negative multiplicative factor for index growth over
@@ -44,7 +40,6 @@
                (* scaling-factor seconds-per-year))]
     (max 0 raw)))
 
-
 (defn ratio
   "Coerce a value to a Clojure ratio. Accepts long, ratio, double, or nil.
    nil defaults to 1/1. Uses a denominator of 1 and numerator of the value
@@ -58,8 +53,7 @@
     (instance? Number x)           (rationalize (double x))
     (nil? x)                       (clojure.lang.Ratio. (biginteger 1) (biginteger 1))
     :else                          (throw (ex-info "Cannot coerce to ratio"
-                                                  {:value x :type (type x)}))))
-
+                                                   {:value x :type (type x)}))))
 
 (defn next-index
   "Compute the next index after accrual: new-index = index * growth-factor.
@@ -68,12 +62,10 @@
   [index apy-bps dt]
   (* (ratio index) (index-growth-factor apy-bps dt)))
 
-
 (defn index-from-bps-and-dt
   "Convenience: compute next-index starting from 1.0 with given bps and dt."
   [apy-bps dt]
   (next-index 1 apy-bps dt))
-
 
 (defn current-value-exact
   "Compute the exact current value of a position in underlying token units
@@ -83,13 +75,11 @@
   [shares current-index]
   (* (ratio shares) (ratio current-index)))
 
-
 (defn principal-from-shares-and-index
   "Reverse-calculate principal from shares and entry-index.
    principal = shares × entry-index (exact ratio)."
   [shares entry-index]
   (* (ratio shares) (ratio entry-index)))
-
 
 (defn shares-from-principal-and-index
   "Calculate shares from principal and entry-index.
@@ -97,7 +87,6 @@
   [principal entry-index]
   (let [idx (ratio entry-index)]
     (if (zero? idx) 0 (/ (ratio principal) idx))))
-
 
 (defn- ratio-num
   "Safe numerator accessor: returns the numerator of a Ratio, or the integer
@@ -135,7 +124,6 @@
         rem (- r units)]
     [units rem]))
 
-
 (defn quantize-with-carry
   "Quantize a ratio into base units, accumulating the fractional remainder
    with a prior carry.
@@ -151,7 +139,6 @@
     {:units units
      :carry rem
      :exact-total total}))
-
 
 (defn floor-and-carry-alloc
   "Allocate `total-available` across `claims` using floor-and-carry policy.
@@ -198,7 +185,6 @@
          :shortage-units 0
          :carry (ratio carry)}))))
 
-
 (defn largest-remainder-alloc
   "Allocate `total-available` across `claims` using largest-remainder method.
 
@@ -242,7 +228,6 @@
          :shortage-units (- total-units (reduce + 0 final-units))
          :carry 0}))))
 
-
 (defn principal-protective-floor-alloc
   "Allocate `total-available` across claims, protecting principal claims first.
 
@@ -277,7 +262,6 @@
                                        (reduce + 0 (map :filled yield-alloc))))
      :carry 0}))
 
-
 (defn adversarial-rounding
   "Round in the worst-case direction for testing rounding-debt conservation.
    All fractional remainders round toward the adversary (up), producing a
@@ -303,7 +287,6 @@
      :rounding-debt rounding-debt
      :carry 0}))
 
-
 (defn apy-degradation
   "Apply stale-oracle APY degradation using exact ratio arithmetic.
 
@@ -327,14 +310,12 @@
             effective (+ floor (first (quantize-base-units exact-product)))]
         (max floor (min base effective))))))
 
-
 (defn shortfall-ratio-exact
   "Compute the exact shortfall ratio: available / needed, capped at 1.0."
   [available needed]
   (if (zero? needed)
     1
     (min 1 (/ (ratio available) (ratio needed)))))
-
 
 (defn split-amount-exact
   "Split an amount into [realized unrealized deferred haircut] based on
@@ -345,7 +326,6 @@
      :unrealized (* t (ratio unrealized-ratio))
      :deferred   (* t (ratio deferred-ratio))
      :haircut    (* t (ratio haircut-ratio))}))
-
 
 (defn ratio->json
   "Serialize a ratio for JSON output as {:num \"...\" :den \"...\"}."

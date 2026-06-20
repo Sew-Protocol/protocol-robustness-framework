@@ -189,9 +189,9 @@
                       "  - " (long (or information-set-nodes-checked 0)) " information-set node(s) (inconclusive)\n"
                       "  - " (long (or not-checkable-nodes 0)) " not-checkable node(s)\n"
                       "  - memoization: " (if (get-in memoization [:enabled])
-                                             (str "enabled, entries=" (long (or (get memoization :entries) 0))
-                                                  ", hits=" (long (or (get memoization :hits) 0)))
-                                             "disabled")
+                                            (str "enabled, entries=" (long (or (get memoization :entries) 0))
+                                                 ", hits=" (long (or (get memoization :hits) 0)))
+                                            "disabled")
                       "\n\n"
                       "Result:\n"
                       (case status

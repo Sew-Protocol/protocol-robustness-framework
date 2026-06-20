@@ -73,8 +73,8 @@
     :reputation/model       :event-penalty
     :reputation-discount-rate 0.9
     :reputation-event-penalties {:resolver-slashed 250 :verdict-reversed 75
-                                  :malicious-verdict-reversed 200 :senior-status-lost 500
-                                  :resolver-suspended 250}}
+                                 :malicious-verdict-reversed 200 :senior-status-lost 500
+                                 :resolver-suspended 250}}
 
    :actor/exiting-resolver
    {:profile/id             :actor/exiting-resolver

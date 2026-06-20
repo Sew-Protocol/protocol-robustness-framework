@@ -24,7 +24,7 @@
    Cost = bribe-amount if successful
    Cost = bribe-amount + detection-loss if caught"
   [resolver-stake detection-probability corruption-value]
-  
+
   (let [detection-loss (* resolver-stake detection-probability)]
     (+ corruption-value detection-loss)))
 
@@ -46,19 +46,19 @@
    
    Returns: Expected cost to attacker"
   [resolver-stake base-accuracy appeal-probability contingent-premium]
-  
+
   (let [; Resolver is incentivized to decide now (gets paid immediately)
         ; Then faces contingent penalty only if overturned on appeal
         resolver-incentive-to-attack (- 1.0 base-accuracy)
-        
+
         ; Expected cost to attacker:
         ; - Base bribe (pay if attack succeeds)
         ; - Premium if appeal fails (contingency payment)
         base-bribe resolver-stake
         contingency-loss (* resolver-stake contingent-premium (- 1.0 base-accuracy))
-        total-expected (+ base-bribe 
-                        (* contingency-loss appeal-probability))]
-    
+        total-expected (+ base-bribe
+                          (* contingency-loss appeal-probability))]
+
     {:base-cost base-bribe
      :contingency-cost contingency-loss
      :appeal-probability appeal-probability
@@ -84,23 +84,23 @@
    
    Returns: Cost to corrupt this round's resolver"
   [round base-stake detection-probability resolver-reputation]
-  
+
   (let [; Higher rounds have higher stakes
         round-multiplier (case round 0 1.0, 1 2.0, 2 3.0, 1.0)
         stake-at-round (* base-stake round-multiplier)
-        
+
         ; Higher reputation = higher cost to damage it
         ; (resolver more reluctant to accept bribe if reputation is strong)
         reputation-discount (/ 1.0 (max 0.5 resolver-reputation))
-        
+
         ; Detection loss
         detection-loss (* stake-at-round detection-probability reputation-discount)
-        
+
         ; Base bribe (must exceed what resolver gains)
         base-bribe (* stake-at-round 0.7)  ; Bribe typically 70% of stake
-        
+
         total-cost (+ base-bribe detection-loss)]
-    
+
     {:round round
      :stake-at-round stake-at-round
      :base-bribe base-bribe
@@ -125,23 +125,23 @@
    Returns: How many attacks affordable with budget recycling"
   [initial-budget bribe-per-attempt detection-rate recovery-rate num-attempts
    & {:keys [rng] :or {rng nil}}]
-  
+
   (loop [attempts 0
          remaining-budget initial-budget
          successful-attacks 0]
-    
+
     (if (or (>= attempts num-attempts) (< remaining-budget bribe-per-attempt))
       {:total-attempts attempts
        :successful-attacks successful-attacks
        :remaining-budget remaining-budget
        :recycling-advantage (/ (* bribe-per-attempt successful-attacks) initial-budget)}
-      
-           (let [detected? (if rng (< (.nextDouble rng) detection-rate)
-                              (< (rand) detection-rate))
+
+      (let [detected? (if rng (< (.nextDouble rng) detection-rate)
+                          (< (rand) detection-rate))
             recovered (if detected? (* bribe-per-attempt recovery-rate) 0)
             new-budget (- remaining-budget bribe-per-attempt)
             final-budget (+ new-budget recovered)]
-        
+
         (recur (inc attempts)
                final-budget
                (if (not detected?) (inc successful-attacks) successful-attacks))))))
@@ -165,55 +165,55 @@
    
    Returns: Cost structure for multi-round attack"
   [base-stakes detection-probs appeal-probs]
-  
+
   (let [num-rounds (count base-stakes)
-        
+
         ; For each round, calculate cost to corrupt
         round-costs (mapv (fn [round stake det-prob appeal-prob]
-                           (let [; Cost to successfully corrupt this round
-                                 base-bribe stake
+                            (let [; Cost to successfully corrupt this round
+                                  base-bribe stake
                                  ; Detection loss at this level (higher = harder)
-                                 detection-loss (* stake det-prob)
+                                  detection-loss (* stake det-prob)
                                  ; Only pays off if attack isn't appealed
-                                 expected-payoff (* (- 1.0 appeal-prob) stake)
+                                  expected-payoff (* (- 1.0 appeal-prob) stake)
                                  ; Total expected cost
-                                 total-cost (+ base-bribe detection-loss)]
-                             
-                             {:round round
-                              :stake stake
-                              :base-bribe base-bribe
-                              :detection-loss detection-loss
-                              :detection-probability det-prob
-                              :appeal-probability appeal-prob
-                              :expected-payoff expected-payoff
-                              :expected-cost total-cost
-                              :profitable? (> expected-payoff total-cost)}))
-                         (range num-rounds) base-stakes detection-probs appeal-probs)
-        
+                                  total-cost (+ base-bribe detection-loss)]
+
+                              {:round round
+                               :stake stake
+                               :base-bribe base-bribe
+                               :detection-loss detection-loss
+                               :detection-probability det-prob
+                               :appeal-probability appeal-prob
+                               :expected-payoff expected-payoff
+                               :expected-cost total-cost
+                               :profitable? (> expected-payoff total-cost)}))
+                          (range num-rounds) base-stakes detection-probs appeal-probs)
+
         ; Total cost if attacker must corrupt all rounds (worst case)
         total-cost-all (apply + (map :expected-cost round-costs))
-        
+
         ; Expected cost considering appeal probability
-        expected-cost-with-appeals 
+        expected-cost-with-appeals
         (apply + (map (fn [{:keys [expected-cost appeal-probability]}]
-                       (* expected-cost (- 1.0 appeal-probability)))
-                     round-costs))
-        
+                        (* expected-cost (- 1.0 appeal-probability)))
+                      round-costs))
+
         ; Cost per round successful corruption
         avg-cost-per-round (/ total-cost-all num-rounds)]
-    
+
     {:round-costs round-costs
      :total-cost-all-rounds total-cost-all
      :expected-cost-with-appeals expected-cost-with-appeals
      :avg-cost-per-round avg-cost-per-round
      :attack-strategy (cond
-                       (< expected-cost-with-appeals (* (apply + base-stakes) 0.5))
-                       "Cheap: Low cost relative to total stakes"
-                       
-                       (< expected-cost-with-appeals (* (apply + base-stakes) 1.5))
-                       "Moderate: Costs ~1.5x base stakes"
-                       
-                       :else "Expensive: High cost, unlikely ROI")}))
+                        (< expected-cost-with-appeals (* (apply + base-stakes) 0.5))
+                        "Cheap: Low cost relative to total stakes"
+
+                        (< expected-cost-with-appeals (* (apply + base-stakes) 1.5))
+                        "Moderate: Costs ~1.5x base stakes"
+
+                        :else "Expensive: High cost, unlikely ROI")}))
 
 (defn attack-feasibility
   "Assess whether multi-round attack is feasible for attacker.
@@ -226,13 +226,13 @@
    
    Returns: Feasibility assessment"
   [attacker-budget attack-cost dispute-value win-probability]
-  
+
   (let [expected-gain (* dispute-value win-probability)
         expected-loss (* attack-cost (- 1.0 win-probability))
         roi (if (> attack-cost 0) (/ expected-gain attack-cost) 0)
         net-expected (- expected-gain expected-loss)
         budget-sufficient? (>= attacker-budget attack-cost)]
-    
+
     {:attack-cost attack-cost
      :dispute-value dispute-value
      :win-probability win-probability
@@ -243,14 +243,14 @@
      :budget-sufficient? budget-sufficient?
      :feasible? (and budget-sufficient? (> net-expected 0))
      :recommendation (cond
-                      (not budget-sufficient?)
-                      "BLOCK: Attacker lacks capital"
-                      
-                      (< net-expected 0)
-                      "BLOCK: Negative expected value"
-                      
-                      (< roi 1.0)
-                      "CAUTION: ROI < 1.0 (capital loss)"
-                      
-                      :else
-                      "RISK: Feasible and profitable attack")}))
+                       (not budget-sufficient?)
+                       "BLOCK: Attacker lacks capital"
+
+                       (< net-expected 0)
+                       "BLOCK: Negative expected value"
+
+                       (< roi 1.0)
+                       "CAUTION: ROI < 1.0 (capital loss)"
+
+                       :else
+                       "RISK: Feasible and profitable attack")}))

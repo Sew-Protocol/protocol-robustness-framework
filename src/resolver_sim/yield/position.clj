@@ -37,7 +37,6 @@
    Statuses: :active, :unwinding, :unwound, :withdrawn, :queued, :settled"
   (:require [resolver-sim.yield.exact-math :as m]))
 
-
 (def default-position
   {:principal 0
    :shares 0
@@ -53,7 +52,6 @@
    :partial-fill-affected? false
    :capital-event-affected? false
    :status :active})
-
 
 (defn make-position
   "Construct a position map with all required fields initialized.
@@ -76,7 +74,6 @@
             :shares (m/ratio (if (zero? shares) (long principal) shares))
             :entry-index (m/ratio entry-index)}
            (dissoc m :owner/id :module/id :token :principal :shares :entry-index :status))))
-
 
 (defn normalize-position
   "Ensure a position map (potentially from legacy code) has all extended fields.
@@ -102,24 +99,20 @@
           :capital-event-affected? (boolean (:capital-event-affected? pos))
           :status (or (:status pos) :active)}))
 
-
 (defn active?
   "Is the position in an active (accruing) state?"
   [pos]
   (= :active (:status pos)))
-
 
 (defn unwinding?
   "Is the position in unwinding state?"
   [pos]
   (= :unwinding (:status pos)))
 
-
 (defn terminal?
   "Is the position in a terminal (non-accruing) state?"
   [pos]
   (contains? #{:withdrawn :unwound :settled} (:status pos)))
-
 
 (defn position-identity
   "Return the canonical position-id vector."
@@ -127,24 +120,20 @@
   (or (:position/id pos)
       [:yield/position (:owner/id pos) (:module/id pos) (:token pos)]))
 
-
 (defn claimable-principal
   "Principal currently claimable (net of impairment)."
   [pos]
   (max 0 (- (long (:principal pos 0)) (long (:principal-impairment pos 0)))))
-
 
 (defn claimable-realized-yield
   "Realized yield currently claimable."
   [pos]
   (long (:realized-yield pos 0)))
 
-
 (defn claimable-unrealized-yield
   "Unrealized yield — only claimable under mark-to-market crystallization."
   [pos]
   (max 0 (long (:unrealized-yield pos 0))))
-
 
 (defn total-claimable
   "Total claimable amount across all buckets (base units)."
@@ -153,7 +142,6 @@
      (claimable-realized-yield pos)
      (claimable-unrealized-yield pos)
      (long (:deferred-yield pos 0))))
-
 
 (defn total-value
   "Total position value including haircut and impairment (gross economic value)."
@@ -164,14 +152,12 @@
      (long (:deferred-yield pos 0))
      (long (:haircut-yield pos 0))))
 
-
 (defn net-equity
   "Net equity after all impairments and haircuts."
   [pos]
   (- (total-value pos)
      (long (:principal-impairment pos 0))
      (long (:haircut-yield pos 0))))
-
 
 (defn projection-fields
   "Return the projection/report fields for a position as specified in the design.

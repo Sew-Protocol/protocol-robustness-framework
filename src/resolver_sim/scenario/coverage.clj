@@ -104,7 +104,7 @@
                           entries))
                 (catch Exception e
                   (log/warn! :scenario-index-read-failed
-                    {:path (str f) :error (.getMessage e)})
+                             {:path (str f) :error (.getMessage e)})
                   idx)))
             {}
             scenario-files)))
@@ -143,7 +143,7 @@
          :guards         guards}))
     (catch Exception e
       (log/warn! :trace-metadata-read-failed
-        {:file (.getName file) :error (.getMessage e)})
+                 {:file (.getName file) :error (.getMessage e)})
       nil)))
 
 (defn- scenario-outcome-label [{:keys [id]}]
@@ -285,24 +285,24 @@
                                (remove seen-transitions)
                                sort
                                vec)]
-     {:total              (count scenarios)
+    {:total              (count scenarios)
      :schema-versions    by-version
-      :enriched-version   (schema-profile/enriched-version)
+     :enriched-version   (schema-profile/enriched-version)
      :by-purpose         by-purpose
      :by-threat-tag      (group-ids-by identity
-                           (for [s scenarios t (:threat-tags s)]
-                             (assoc s :id (:id s) :_tag t)))
+                                       (for [s scenarios t (:threat-tags s)]
+                                         (assoc s :id (:id s) :_tag t)))
      :threat-tag-freq    (threat-tag-frequency scenarios)
      :unclassified-count (count unclassified)
-      :transition-hit-freq transition-hit-freq
-      :transition-outcome-freq transition-outcome-freq
-      :transition-by-purpose-hit-freq transition-by-purpose-hit-freq
-      :transition-by-threat-tag-hit-freq transition-by-threat-tag-hit-freq
-      :guard-hit-freq guard-hit-freq
-      :guard-by-purpose-hit-freq guard-by-purpose-hit-freq
-      :guard-by-threat-tag-hit-freq guard-by-threat-tag-hit-freq
-      :canonical-transitions canonical-transitions
-      :unhit-transitions unhit-transitions
+     :transition-hit-freq transition-hit-freq
+     :transition-outcome-freq transition-outcome-freq
+     :transition-by-purpose-hit-freq transition-by-purpose-hit-freq
+     :transition-by-threat-tag-hit-freq transition-by-threat-tag-hit-freq
+     :guard-hit-freq guard-hit-freq
+     :guard-by-purpose-hit-freq guard-by-purpose-hit-freq
+     :guard-by-threat-tag-hit-freq guard-by-threat-tag-hit-freq
+     :canonical-transitions canonical-transitions
+     :unhit-transitions unhit-transitions
      :scenarios          scenarios}))
 
 ;; ---------------------------------------------------------------------------

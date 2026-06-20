@@ -231,7 +231,7 @@
                      :params {:domains #{[:resolver "0xR0"] [:workflow 0]}}}
                     {:time 1000 :agent "b" :action "touch"
                      :params {:domains #{[:resolver "0xR1"] [:workflow 1]
-                                          [:token :DAI]}}}]))
+                                         [:token :DAI]}}}]))
           e0 (event-by-seq result 0)
           e1 (event-by-seq result 1)]
       (is (= :ok (:result e0)))

@@ -51,7 +51,7 @@
   (testing "RNG splits are deterministic"
     (let [rng1 (rng/make-rng 42)
           [a b] (rng/split-rng rng1)
-          
+
           rng2 (rng/make-rng 42)
           [c d] (rng/split-rng rng2)]
       ; Same seed + split = same sub-seeds
@@ -74,18 +74,18 @@
           ; Run multiple disputes to get average
           honest-results
           (repeatedly 100 #(dispute/resolve-dispute
-                           rng 10000 150 700 2.5 :honest
-                           0.05 0.40 0.10))
-          
+                            rng 10000 150 700 2.5 :honest
+                            0.05 0.40 0.10))
+
           rng2 (rng/make-rng 43)
           malice-results
           (repeatedly 100 #(dispute/resolve-dispute
-                           rng2 10000 150 700 2.5 :malicious
-                           0.05 0.40 0.10))
-          
+                            rng2 10000 150 700 2.5 :malicious
+                            0.05 0.40 0.10))
+
           honest-mean (/ (reduce + (map :profit-honest honest-results)) 100)
           malice-mean (/ (reduce + (map :profit-malice malice-results)) 100)]
-      
+
       ; Honest should be better
       (is (> honest-mean malice-mean)))))
 
@@ -117,7 +117,7 @@
                  :n-seeds 1
                  :parallelism :auto}]
       (is (some? (types/validate-scenario valid)))))
-  
+
   (testing "Invalid fee-bps fails"
     (let [invalid {:resolver-fee-bps -100}]
       (is (thrown? Exception (types/validate-scenario invalid)))))

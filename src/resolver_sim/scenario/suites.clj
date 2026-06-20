@@ -75,7 +75,7 @@
 (def suites
   "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}."
   {:dispute-resolution-scenarios {:paths dispute-resolution-scenario-paths
-                                   :protocol-id "sew-v1"}
+                                  :protocol-id "sew-v1"}
    :sew-yield-scenarios      {:paths yield-scenario-paths
                               :protocol-id "sew-v1"}
    :yield-provider-scenarios {:paths yield-provider-scenario-paths

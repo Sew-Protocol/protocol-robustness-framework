@@ -91,21 +91,21 @@
   [scenario]
   (let [sid (:scenario-id scenario)
         base (cond-> {:schema-version     "1.0"
-                     :scenario-id        sid
-                     :initial-block-time (:initial-block-time scenario 1000)
-                     :agents             (mapv agent->public-json-agent (:agents scenario []))
-                     :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
-                     :events             (:events scenario [])}
-                     (:title scenario) (assoc :title (:title scenario))
-                      (:threat-tags scenario) (assoc :threat-tags (vec (:threat-tags scenario)))
-              (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
-              (:expected-errors scenario)
-              (assoc :expected-errors
-                     (mapv #(update % :error json-value) (:expected-errors scenario)))
-              (:strict-expected-errors? scenario)
-              (assoc :strict-expected-errors? true)
-              (:allow-open-disputes? scenario)
-              (assoc :allow-open-disputes? true))]
+                      :scenario-id        sid
+                      :initial-block-time (:initial-block-time scenario 1000)
+                      :agents             (mapv agent->public-json-agent (:agents scenario []))
+                      :protocol-params    (prepare-protocol-params (:protocol-params scenario {}))
+                      :events             (:events scenario [])}
+               (:title scenario) (assoc :title (:title scenario))
+               (:threat-tags scenario) (assoc :threat-tags (vec (:threat-tags scenario)))
+               (:scenario-author scenario) (assoc :scenario-author (:scenario-author scenario))
+               (:expected-errors scenario)
+               (assoc :expected-errors
+                      (mapv #(update % :error json-value) (:expected-errors scenario)))
+               (:strict-expected-errors? scenario)
+               (assoc :strict-expected-errors? true)
+               (:allow-open-disputes? scenario)
+               (assoc :allow-open-disputes? true))]
     (attach-public-metadata base scenario)))
 
 (def default-export-metadata

@@ -38,7 +38,7 @@
     (let [world  (sample-world)
           w1     (assoc-in world [:escrow-transfers 0 :escrow-state] :released)
           executed (set/union (set (keys (:results (inv/check-all world))))
-                                (set (keys (:results (inv/check-transition world w1)))))]
+                              (set (keys (:results (inv/check-transition world w1)))))]
       (is (set/subset? inv/canonical-ids executed))
       (is (set/subset? executed inv/canonical-ids)))))
 
@@ -88,7 +88,6 @@
     (is (not (:holds? (inv/escrow-state-transition-valid? w0 w1))))
     (is (= [{:workflow-id 0 :from :disputed :to :pending}]
            (:violations (inv/escrow-state-transition-valid? w0 w1))))))
-
 
 (deftest expected-failures-suppresses-known-failure
   (testing "expected-failures in world[:params] flips holds? from false to true"

@@ -10,7 +10,7 @@
 
 (def protocol-param-presets
   "Maps preset id → protocol-params fragment (passed to `snapshot-from-protocol-params`)."
-  {   :sew.preset/baseline
+  {:sew.preset/baseline
    {:resolver-fee-bps 50
     :max-dispute-duration 2592000
     :appeal-window-duration 0

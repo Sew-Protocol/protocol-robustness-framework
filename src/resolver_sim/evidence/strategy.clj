@@ -11,19 +11,19 @@
            trigger-event
            attribution]}]
   (agg/build-evidence-aggregate
-    {:evidence-type :strategy/transition
-     :schema-version "strategy-transition.v1"
+   {:evidence-type :strategy/transition
+    :schema-version "strategy-transition.v1"
 
-     :world world
-     :frame (agg/extract-decision-frame world)
-     :subject {:resolver-id resolver-id}
+    :world world
+    :frame (agg/extract-decision-frame world)
+    :subject {:resolver-id resolver-id}
 
-     :inputs {:from-strategy from-strategy
-              :to-strategy to-strategy
-              :reason reason
-              :trigger-event trigger-event}
+    :inputs {:from-strategy from-strategy
+             :to-strategy to-strategy
+             :reason reason
+             :trigger-event trigger-event}
 
-     :result {:active-strategy to-strategy}
+    :result {:active-strategy to-strategy}
 
-     :dependencies []
-     :attribution attribution}))
+    :dependencies []
+    :attribution attribution}))

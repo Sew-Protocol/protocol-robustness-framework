@@ -225,9 +225,9 @@
         (artifact-stats)
         stat (fn [n label color]
                [:div {:style {:flex "1" :textAlign "center" :padding "12px"
-                               :borderRight "1px solid #e2e8f0"}}
+                              :borderRight "1px solid #e2e8f0"}}
                 [:div {:style {:fontFamily "monospace" :fontSize "1.8em"
-                                :fontWeight "700" :color color}} n]
+                               :fontWeight "700" :color color}} n]
                 [:div {:style {:fontSize "0.72em" :color "#64748b" :marginTop "2px"}} label]])]
     [:div {:style {:display "flex" :border "1px solid #e2e8f0" :borderRadius "8px"
                    :background "#f8fafc" :marginBottom "24px" :overflow "hidden"}}

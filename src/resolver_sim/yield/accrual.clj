@@ -17,52 +17,43 @@
    5. Max index delta cap
    6. Negative yield floor
    7. Recoverable liquidity cap"
-    (:require [resolver-sim.yield.exact-math :as m]
-             [resolver-sim.yield.position :as pos]
-             [resolver-sim.yield.market-state :as market-state]
-             [resolver-sim.yield.token :as tok]
-             [resolver-sim.yield.loss :as loss]
-             [resolver-sim.yield.risk :as risk-utils]
-               [resolver-sim.util.attribution :as attr]
-               [resolver-sim.yield.risk-monitor :as risk]
-               [resolver-sim.io.event-evidence :as evidence]))
-
+  (:require [resolver-sim.yield.exact-math :as m]
+            [resolver-sim.yield.position :as pos]
+            [resolver-sim.yield.market-state :as market-state]
+            [resolver-sim.yield.token :as tok]
+            [resolver-sim.yield.loss :as loss]
+            [resolver-sim.yield.risk :as risk-utils]
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.yield.risk-monitor :as risk]
+            [resolver-sim.io.event-evidence :as evidence]))
 
 (def ^:private schema-version "accrual-decision.v2")
 
-
 (def ^:private default-freeze-statuses
   #{:frozen :paused :emergency-shutdown :disabled-for-new-deposits :module-frozen})
-
 
 (def ^:private default-min-accrual-delta
   "Default dust threshold: accrual deltas below 1 base unit are deferred via
    dust accumulator carry-forward."
   1)
 
-
 (def ^:private default-max-index-delta-ratio
   "Default max allowed index change as a ratio of current index (5%)."
   1/20)
 
-
 (def ^:private default-max-index-delta-policy
   :cap)
-
 
 (def ^:private default-stale-oracle-max-seconds
   "Default max staleness before full degradation (24 hours)."
   86400)
 
-
 (def ^:private default-stale-oracle-floor-bps
   "Default floor APY after stale oracle degradation (0 bps = 0%)."
   0)
 
-
 (defn- normalize-token [token]
   (tok/normalize token))
-
 
 (defn- resolve-module-status
   "Resolve the current status of a yield module from world state, including
@@ -80,7 +71,6 @@
             :active))
       status)))
 
-
 (defn- resolve-module-freeze-statuses
   "Resolve the set of module statuses that trigger zero accrual."
   [world module-id]
@@ -91,7 +81,6 @@
       configured
       ;; Include both legacy and common schedule-driven freeze statuses
       (into default-freeze-statuses #{:frozen :paused :emergency :emergency-shutdown}))))
-
 
 (defn- resolve-position
   "Find a position in world by owner-id, module-id, and token."
@@ -104,7 +93,6 @@
                (= (normalize-token (:token pos)) tok))
       pos)))
 
-
 (defn- resolve-index
   "Resolve the current index for a module/token from world state."
   [world module-id token]
@@ -113,7 +101,6 @@
     (or (get-in world [:yield/indices mid tok])
         (get-in world [:yield/indices mid (name tok)])
         1)))
-
 
 (defn- resolve-base-apy-bps
   "Resolve the base APY in basis points for a module/token."
@@ -124,7 +111,6 @@
                  (get-in world [:yield/rates mid (name tok)])
                  0.04)]
     (long (Math/round (* (double rate) m/scaling-factor)))))
-
 
 (defn- resolve-oracle-staleness
   "Check if oracle is stale and return {:stale? bool :stale-seconds long}.
@@ -147,7 +133,6 @@
     {:stale? stale?
      :stale-seconds stale-seconds}))
 
-
 (defn- resolve-recoverable-liquidity
   "Get the recoverable module assets for a token.
    Uses :total-held as the primary proxy, with :yield/held-balances as a fallback."
@@ -162,7 +147,6 @@
                 (get-in world [:yield/held-balances tok])
                 0)))))
 
-
 (defn- resolve-negative-yield-floor
   "Get the configured negative yield floor for a module/token.
    Default: principal (position value cannot go below principal + floor-margin)."
@@ -174,7 +158,6 @@
                  {})
         floor (get risk :negative-yield-floor)]
     (or floor 0)))
-
 
 (defn- resolve-accrual-config
   "Resolve accrual-specific configuration for a module from world state."
@@ -188,7 +171,6 @@
          :max-index-delta-policy default-max-index-delta-policy
          :stale-oracle-max-seconds default-stale-oracle-max-seconds
          :stale-oracle-floor-bps   default-stale-oracle-floor-bps})))
-
 
 (defn make-decision-base
   "Construct the base decision map with identity fields."
@@ -225,7 +207,6 @@
                 :dt dt
                 :now (or now 0)}}))
 
-
 (defn- apply-dust-threshold
   "Short circuit 1: If absolute accrual delta is below configured min-accrual-delta,
    do not create a balance update. Emits :dust-threshold.
@@ -252,7 +233,6 @@
                   :attempted-delta attempted))
       decision)))
 
-
 (defn- apply-module-frozen
   "Short circuit 2: If module status is in the configured freeze-on set,
    effective APY is zero. Emits :module-frozen-zero-accrual."
@@ -277,7 +257,6 @@
                   :freeze-set (vec freeze-set)))
       decision)))
 
-
 (defn- apply-position-unwinding
   "Short circuit 3: If position status is :unwinding, suspend accrual.
    Emits :position-unwinding-accrual-suspended."
@@ -295,7 +274,6 @@
                   :position-unwinding true
                   :position-status (:status pos)))
       decision)))
-
 
 (defn- apply-stale-oracle-degradation
   "Short circuit 4: If oracle is stale, apply APY degradation.
@@ -324,7 +302,6 @@
                     :floor-apy-bps floor-bps)))
       decision)))
 
-
 (defn- apply-max-index-delta-cap
   "Short circuit 5: If attempted index change exceeds configured max delta,
    cap or zero according to policy. Default policy is :cap.
@@ -336,9 +313,9 @@
         prev-idx (:previous-index decision)
         attempted-idx (:attempted-index decision)
         delta-ratio (if (zero? (double prev-idx))
-                     0
-                     (/ (Math/abs (double (- attempted-idx prev-idx)))
-                        (double prev-idx)))]
+                      0
+                      (/ (Math/abs (double (- attempted-idx prev-idx)))
+                         (double prev-idx)))]
     (if (and (> delta-ratio (double max-ratio)) (pos? (double max-ratio)))
       (case policy
         :cap
@@ -366,7 +343,6 @@
                     :delta-ratio-exceeded (m/ratio delta-ratio)))
         decision)
       decision)))
-
 
 (defn- resolve-loss-mode
   "Get the effective loss-mode for the position's risk config.
@@ -426,7 +402,6 @@
             decision)))
       decision)))
 
-
 (defn- apply-recoverable-liquidity-cap
   "Short circuit 7: If accrued yield would exceed recoverable module assets
    / configured cap, classify excess as :unrealized-yield rather than realized.
@@ -448,12 +423,12 @@
             ;; Compute net module solvency: total liabilities (principal + realized + deferred)
             positions (:yield/positions world {})
             module-liabilities (reduce + 0
-                                      (for [[oid p] positions
-                                            :when (and (= (:module/id p) module-id)
-                                                       (= (normalize-token (:token p)) tok))]
-                                        (+ (max 0 (long (:principal p 0)))
-                                           (max 0 (long (:realized-yield p 0)))
-                                           (max 0 (long (:deferred-yield p 0))))))
+                                       (for [[oid p] positions
+                                             :when (and (= (:module/id p) module-id)
+                                                        (= (normalize-token (:token p)) tok))]
+                                         (+ (max 0 (long (:principal p 0)))
+                                            (max 0 (long (:realized-yield p 0)))
+                                            (max 0 (long (:deferred-yield p 0))))))
             net-solvent (max 0 (- recoverable module-liabilities))
             ;; Optimized path: use provided total if available, otherwise compute
             all-positions-yield (or (:total-unrealized-yield opts)
@@ -482,7 +457,6 @@
                         :unrealized-excess unrealized-excess)))
           decision))
       decision)))
-
 
 (defn- compute-final-deltas
   "Given the decision with final-index set (after all index-modifying short
@@ -526,7 +500,6 @@
       (-> decision
           (assoc :attempted-accrual-delta 0
                  :final-accrual-delta 0)))))
-
 
 (defn accrual-decision
   "Compute a complete yield accrual decision for a position.
@@ -585,7 +558,6 @@
                                :short-circuits (:short-circuits d9)
                                :accrual-mode (:accrual-mode d9)))))
 
-
 (defn apply-accrual-decision
   "Apply a yield accrual decision to the world state.
 
@@ -640,7 +612,6 @@
             (update-in [:total-held tok] (fnil + 0) yield-delta)))
       world')))
 
-
 (defn apply-accrual-decision-with-attribution
   "Apply a yield accrual decision to world state, wrapping the mutation in
    `with-attribution` so that downstream logging, invariant checks, and risk
@@ -674,13 +645,13 @@
          final-ctx (merge explicit-attr ctx)]
      (attr/with-attribution final-ctx
        (let [world' (apply-accrual-decision world decision)]
-          (evidence/capture-event-evidence!
-            :yield-accrual
-            {:accrual/before (select-keys world [:total-held :resolver-stakes :yield-state])}
-            {:accrual/after  (select-keys world' [:total-held :resolver-stakes :yield-state])}
-            {:accrual/decision (dissoc decision :world)}
-            nil
-            {:world-before world
-             :world-after world'})
+         (evidence/capture-event-evidence!
+          :yield-accrual
+          {:accrual/before (select-keys world [:total-held :resolver-stakes :yield-state])}
+          {:accrual/after  (select-keys world' [:total-held :resolver-stakes :yield-state])}
+          {:accrual/decision (dissoc decision :world)}
+          nil
+          {:world-before world
+           :world-after world'})
          (risk/capture-if-risk-event)
          world')))))

@@ -17,8 +17,8 @@
   [n-resolvers ground-truth prior-rate conf corr rng]
   (let [correct (for [_ (range n-resolvers)]
                   (let [signal (if (< (rng/next-double rng) 0.8)
-                               (if ground-truth 1.0 0.0)
-                               (if ground-truth 0.0 1.0))
+                                 (if ground-truth 1.0 0.0)
+                                 (if ground-truth 0.0 1.0))
                         decision (resolver-decides signal prior-rate conf corr)
                         correct? (= (= decision 1) ground-truth)]
                     correct?))
@@ -43,32 +43,32 @@
         early-period 3
         num-wrong (int (* early-skew 0.01 early-period))
         wrong-epochs (set (take num-wrong (shuffle (range early-period))))
-        
+
         ground-truth (for [e (range num-epochs)]
-                      (not (and (< e early-period) (wrong-epochs e))))
-        
+                       (not (and (< e early-period) (wrong-epochs e))))
+
         epochs (loop [e 0 prior 0.5 results []]
-                (if (>= e num-epochs)
-                  results
-                  (let [truth (nth ground-truth e)
-                        res (epoch-results n-resolvers truth prior conf-val correlation-bias rng)
-                        correct? (:consensus res)
-                        new-prior (double (+ prior (if correct? 0.1 -0.1)))
-                        new-prior (min 1.0 (max 0.0 new-prior))]
-                    (recur (inc e)
-                           new-prior
-                           (conj results (assoc res :epoch e :ground-truth truth))))))
-        
+                 (if (>= e num-epochs)
+                   results
+                   (let [truth (nth ground-truth e)
+                         res (epoch-results n-resolvers truth prior conf-val correlation-bias rng)
+                         correct? (:consensus res)
+                         new-prior (double (+ prior (if correct? 0.1 -0.1)))
+                         new-prior (min 1.0 (max 0.0 new-prior))]
+                     (recur (inc e)
+                            new-prior
+                            (conj results (assoc res :epoch e :ground-truth truth))))))
+
         early-acc (if (> (count epochs) 0)
-                   (/ (apply + (map :accuracy (take 3 epochs))) 3.0)
-                   0.5)
+                    (/ (apply + (map :accuracy (take 3 epochs))) 3.0)
+                    0.5)
         late-acc (if (> (count epochs) 0)
-                  (/ (apply + (map :accuracy (drop (max 0 (- (count epochs) 5)) epochs))) 5.0)
-                  0.5)
+                   (/ (apply + (map :accuracy (drop (max 0 (- (count epochs) 5)) epochs))) 5.0)
+                   0.5)
         drift (- late-acc early-acc)
         locked? (and (< early-acc (:early lock-threshold))
                      (< late-acc (:late lock-threshold)))]
-    
+
     {:drift drift :early-accuracy early-acc :late-accuracy late-acc
      :locked? locked? :vulnerable? (and (> (Math/abs drift) drift-threshold) locked?)}))
 
@@ -80,33 +80,33 @@
     {:scenario scenario-name
      :status (if (:vulnerable? result) :vulnerable :safe)
      :confidence (Math/abs (:drift result))
-     :metrics {:drift (:drift result) :early (:early-accuracy result) 
+     :metrics {:drift (:drift result) :early (:early-accuracy result)
                :late (:late-accuracy result) :locked (:locked? result)}
      :reason (format "drift=%.1f%%, early=%.1f%%, late=%.1f%%, locked=%s"
-                    (* 100.0 (:drift result))
-                    (* 100.0 (:early-accuracy result))
-                    (* 100.0 (:late-accuracy result))
-                    (:locked? result))}))
+                     (* 100.0 (:drift result))
+                     (* 100.0 (:early-accuracy result))
+                     (* 100.0 (:late-accuracy result))
+                     (:locked? result))}))
 
 (defn run-phase-v-sweep
   []
   (println "\n" (apply str (repeat 70 "=")))
   (println "Phase V: Correlated Belief Cascades")
   (println (apply str (repeat 70 "=")))
-  
+
   (let [tests [[0 :medium 0.3 "baseline"]
                [20 :medium 0.1 "skew-low-corr"]
                [20 :medium 0.6 "skew-med-corr"]
                [20 :medium 0.9 "skew-high-corr"]
                [20 :low 0.6 "skew-low-conf"]]
-        
+
         results (for [seed (range 42 47)
-                     [skew conf corr name-str] tests]
+                      [skew conf corr name-str] tests]
                   (let [r (test-cascade (str name-str "-s" seed) seed skew conf corr)
                         status-str (if (= (:status r) :vulnerable) "VULN" "safe")]
                     (println (format "%-35s [%s]" (:scenario r) status-str))
                     r))]
-    
+
     (let [vuln    (count (filter #(= :vulnerable (:status %)) results))
           passed? (<= vuln 1)]
       (println "\n" (apply str (repeat 70 "=")))

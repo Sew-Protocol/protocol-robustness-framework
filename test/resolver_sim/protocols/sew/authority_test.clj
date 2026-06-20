@@ -93,7 +93,7 @@
         original (t/get-snapshot w0 0)
         ;; Simulate governance changing a different escrow's snapshot
         w1       (assoc-in w0 [:module-snapshots 99]
-                            (snap-fix/escrow-snapshot {:escrow-fee-bps 999}))]
+                           (snap-fix/escrow-snapshot {:escrow-fee-bps 999}))]
     (is (auth/snapshot-frozen? w1 0 original)
         "escrow 0 snapshot unchanged by governance update to escrow 99")))
 

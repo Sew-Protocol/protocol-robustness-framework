@@ -288,7 +288,6 @@
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
-
 (defn evaluate-mechanism-properties
   "Check all declared :mechanism-properties against the terminal projection.
    Merges built-in generic validators with protocol-specific extra-validators.
@@ -350,8 +349,8 @@
 
                              :else
                              (inconclusive kw :absent-evidence :unsupported-concept
-                                            (str "no validator implemented for equilibrium concept: " (name kw))
-                                            :required [(keyword (name kw))]))]))
+                                           (str "no validator implemented for equilibrium concept: " (name kw))
+                                           :required [(keyword (name kw))]))]))
                    concepts)))))
 
 (defn evaluate-equilibrium
@@ -403,7 +402,7 @@
     {:evidence-schema-version evidence-schema-version
      :equilibrium-claim-tier claim-tier
      :equilibrium-trust-mode trust-mode
-      :provenance          provenance
+     :provenance          provenance
      :mechanism-results  mech-results
      :mechanism-status   (roll-up-status (vals mech-results))
      :mechanism-reasons  (eq-result/domain-status-reasons mech-results)

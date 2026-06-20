@@ -111,7 +111,6 @@
      :manifest manifest
      :golden-reports (load-all-golden-reports)}))
 
-
 ;; ---
 ;; 2. Finding Extraction Heuristics
 
@@ -173,8 +172,8 @@
      :git-sha     git7
      :run-id      (or (:run_id summary) (:run-id config/protocol-defaults))
      :hash        (str "sha256:" (subs (str (hash scenario-id)) 0 8))
-     :title       (or (:title scenario) 
-                      (-> scenario-id 
+     :title       (or (:title scenario)
+                      (-> scenario-id
                           (str/replace #"^scenarios/" "")
                           (str/replace #"-" " ")
                           (str/upper-case)))}))

@@ -57,14 +57,14 @@
         ;; Clear previous balances to ensure fresh aggregation
         world' (assoc world :yield/held-balances {})]
     (reduce
-      (fn [w [oid pos]]
-        (if (= (:status pos) :active)
-          (let [tok (if (keyword? (:token pos)) (name (:token pos)) (str (:token pos)))
-                need (yield-inv/position-custody-need w pos)]
-            (update-in w [:yield/held-balances tok] (fnil + 0) need))
-          w))
-      world'
-      positions)))
+     (fn [w [oid pos]]
+       (if (= (:status pos) :active)
+         (let [tok (if (keyword? (:token pos)) (name (:token pos)) (str (:token pos)))
+               need (yield-inv/position-custody-need w pos)]
+           (update-in w [:yield/held-balances tok] (fnil + 0) need))
+         w))
+     world'
+     positions)))
 
 (defn- with-held-sync [world]
   (ok (sync-held-from-positions world)))
@@ -174,7 +174,7 @@
   (init-world [_ scenario]
     (let [t0 (get scenario :initial-block-time 1000)
           pp (merge {:yield-profile :aave-v3}
-                     (get scenario :protocol-params {}))
+                    (get scenario :protocol-params {}))
           yc (get scenario :yield-config {})]
       (-> (time-ctx/ensure-temporal-context
            {:block-time t0
@@ -182,7 +182,7 @@
           (yield-proto/init-world pp yc)
           (yreg/apply-yield-config yc)
           (assoc-in [:params] (assoc pp :expected-failures (:expected-failures scenario
-                                                               (get-in scenario [:protocol-params :expected-failures] {})))))))
+                                                                               (get-in scenario [:protocol-params :expected-failures] {})))))))
 
   (build-execution-context [_ agents protocol-params]
     {:agent-index (into {} (map (juxt :id identity) agents))

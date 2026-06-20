@@ -17,5 +17,5 @@
 (deftest forking-strategist-scenarios-pass-with-declared-expectations
   (testing "S26–S33 forking-strategist family"
     (doseq [scenario [adversarial/s26 adversarial/s27 adversarial/s28 adversarial/s29
-                     adversarial/s30 adversarial/s31 adversarial/s32 adversarial/s33]]
+                      adversarial/s30 adversarial/s31 adversarial/s32 adversarial/s33]]
       (assert-scenario-passes scenario))))

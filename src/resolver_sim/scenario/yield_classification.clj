@@ -7,8 +7,7 @@
      :scenario/categories    — set of tags for filtering/grouping
      :invariant/profile      — selects the set of applicable invariants
 
-   See `docs/yield/YIELD_BEARING_INVARIANTS.md` for the full taxonomy."
-  )
+   See `docs/yield/YIELD_BEARING_INVARIANTS.md` for the full taxonomy.")
 
 (defn yield-risk-class
   "Determine the :yield/risk-class for a loaded scenario.
@@ -58,10 +57,10 @@
                      (some? mod-ref))
         risk-class (yield-risk-class scenario)
         categories (cond-> #{}
-                    enabled (conj :yield-bearing)
-                    (= risk-class :principal-loss) (conj :principal-loss)
-                    (= risk-class :historical-index-replay) (conj :historical-index-replay)
-                    (= risk-class :liquidity-shortfall) (conj :liquidity-shortfall))]
+                     enabled (conj :yield-bearing)
+                     (= risk-class :principal-loss) (conj :principal-loss)
+                     (= risk-class :historical-index-replay) (conj :historical-index-replay)
+                     (= risk-class :liquidity-shortfall) (conj :liquidity-shortfall))]
     {:yield/enabled? enabled
      :yield/preset   (when enabled (keyword preset))
      :yield/module   (when enabled (keyword mod-ref))

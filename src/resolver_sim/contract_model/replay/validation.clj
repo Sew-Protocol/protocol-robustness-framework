@@ -45,135 +45,134 @@
          known-ids   (set (map :id agents))
          init-time   (get scenario :initial-block-time 1000)
          agent-check (validate-agents agents)]
-    (cond
-      (not (contains? supported-versions version))
-      {:ok false :error :unsupported-schema-version
-       :detail {:expected supported-versions :got version}}
+     (cond
+       (not (contains? supported-versions version))
+       {:ok false :error :unsupported-schema-version
+        :detail {:expected supported-versions :got version}}
 
-      (and (contains? (set (schema-profile/required-fields version)) :id)
-           (not (:id scenario)))
-      {:ok false :error :missing-id :detail "v1.1 scenarios must have a unique :id"}
+       (and (contains? (set (schema-profile/required-fields version)) :id)
+            (not (:id scenario)))
+       {:ok false :error :missing-id :detail "v1.1 scenarios must have a unique :id"}
 
-      (and (contains? (set (schema-profile/required-fields version)) :title)
-           (not (:title scenario)))
-      {:ok false :error :missing-title :detail "v1.1 scenarios must have a human-readable :title"}
+       (and (contains? (set (schema-profile/required-fields version)) :title)
+            (not (:title scenario)))
+       {:ok false :error :missing-title :detail "v1.1 scenarios must have a human-readable :title"}
 
-      (and (contains? (set (schema-profile/required-fields version)) :purpose)
-           (not (:purpose scenario)))
-      {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
+       (and (contains? (set (schema-profile/required-fields version)) :purpose)
+            (not (:purpose scenario)))
+       {:ok false :error :missing-purpose :detail "v1.1 scenarios must declare a :purpose"}
 
-      (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
-           (not (string? (:scenario-author scenario))))
-      {:ok false :error :missing-scenario-author
-       :detail "v1.1 scenarios must include :scenario-author as a non-empty string"}
+       (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
+            (not (string? (:scenario-author scenario))))
+       {:ok false :error :missing-scenario-author
+        :detail "v1.1 scenarios must include :scenario-author as a non-empty string"}
 
-      (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
-           (str/blank? (:scenario-author scenario)))
-      {:ok false :error :blank-scenario-author
-       :detail ":scenario-author must not be blank"}
+       (and (contains? (set (schema-profile/required-fields version)) :scenario-author)
+            (str/blank? (:scenario-author scenario)))
+       {:ok false :error :blank-scenario-author
+        :detail ":scenario-author must not be blank"}
 
       ;; Purpose-based requirements (enriched schemas only; skippable via flags).
-      (and strict?
-           (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-theory? (:purpose scenario))
-           (not (:theory scenario)))
-      {:ok false :error :theory-required
-       :detail "purpose :theory-falsification requires a :theory block"}
+       (and strict?
+            (contains? (set (schema-profile/required-fields version)) :purpose)
+            (schema-profile/requires-theory? (:purpose scenario))
+            (not (:theory scenario)))
+       {:ok false :error :theory-required
+        :detail "purpose :theory-falsification requires a :theory block"}
 
-      (and strict?
-           (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-theory-or-expectations? (:purpose scenario))
-           (not (:theory scenario))
-           (empty? (get-in scenario [:expectations :metrics]))
-           (empty? (get-in scenario [:expectations :terminal]))
-           (empty? (get-in scenario [:expectations :invariants])))
-      {:ok false :error :adversarial-requires-analysis
-       :detail "purpose :adversarial-robustness requires :theory or non-trivial :expectations"}
+       (and strict?
+            (contains? (set (schema-profile/required-fields version)) :purpose)
+            (schema-profile/requires-theory-or-expectations? (:purpose scenario))
+            (not (:theory scenario))
+            (empty? (get-in scenario [:expectations :metrics]))
+            (empty? (get-in scenario [:expectations :terminal]))
+            (empty? (get-in scenario [:expectations :invariants])))
+       {:ok false :error :adversarial-requires-analysis
+        :detail "purpose :adversarial-robustness requires :theory or non-trivial :expectations"}
 
-      (and strict?
-           (:theory scenario) (not (get-in scenario [:theory :claim-id])))
-      {:ok false :error :theory-missing-claim-id
-       :detail ":theory must include a :claim-id"}
+       (and strict?
+            (:theory scenario) (not (get-in scenario [:theory :claim-id])))
+       {:ok false :error :theory-missing-claim-id
+        :detail ":theory must include a :claim-id"}
 
-      (and strict?
-           (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
-      {:ok false :error :theory-missing-assumptions
-       :detail ":theory must include an :assumptions vector (may be empty)"}
+       (and strict?
+            (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
+       {:ok false :error :theory-missing-assumptions
+        :detail ":theory must include an :assumptions vector (may be empty)"}
 
-      (and strict?
-           (:theory scenario)
-           (contains? (set (schema-profile/required-fields version)) :purpose)
-           (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
-           (not (seq (get-in scenario [:theory :falsifies-if])))
-           (not (true? (get-in scenario [:theory :mechanism-only-negative-test?]))))
-      {:ok false :error :theory-falsification-requires-falsifies-if
-       :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer), or :mechanism-only-negative-test? true with mechanism/equilibrium proxies"}
+       (and strict?
+            (:theory scenario)
+            (contains? (set (schema-profile/required-fields version)) :purpose)
+            (schema-profile/requires-metric-falsifies-if? (:purpose scenario))
+            (not (seq (get-in scenario [:theory :falsifies-if])))
+            (not (true? (get-in scenario [:theory :mechanism-only-negative-test?]))))
+       {:ok false :error :theory-falsification-requires-falsifies-if
+        :detail ":purpose :theory-falsification requires a non-empty :falsifies-if (metric disconfirmer), or :mechanism-only-negative-test? true with mechanism/equilibrium proxies"}
 
-      (and strict?
-           (:theory scenario)
-           (not (seq (get-in scenario [:theory :falsifies-if])))
-           (empty? (get-in scenario [:theory :mechanism-properties]))
-           (empty? (get-in scenario [:theory :equilibrium-concept])))
-      {:ok false :error :theory-missing-falsifies-if
-       :detail ":theory must include a non-empty :falsifies-if vector, or declare :mechanism-properties / :equilibrium-concept"}
+       (and strict?
+            (:theory scenario)
+            (not (seq (get-in scenario [:theory :falsifies-if])))
+            (empty? (get-in scenario [:theory :mechanism-properties]))
+            (empty? (get-in scenario [:theory :equilibrium-concept])))
+       {:ok false :error :theory-missing-falsifies-if
+        :detail ":theory must include a non-empty :falsifies-if vector, or declare :mechanism-properties / :equilibrium-concept"}
 
-      (not (:ok agent-check))
-      agent-check
+       (not (:ok agent-check))
+       agent-check
 
-      (empty? events)
-      {:ok false :error :no-events}
+       (empty? events)
+       {:ok false :error :no-events}
 
-      (not= (mapv :seq events) (vec (range (count events))))
-      {:ok false :error :non-contiguous-event-seq :detail {:got (mapv :seq events)}}
+       (not= (mapv :seq events) (vec (range (count events))))
+       {:ok false :error :non-contiguous-event-seq :detail {:got (mapv :seq events)}}
 
-      (some (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events))
-      {:ok false :error :non-monotonic-event-time
-       :detail {:violations (vec (filter (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events)))}}
+       (some (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events))
+       {:ok false :error :non-monotonic-event-time
+        :detail {:violations (vec (filter (fn [[a b]] (> (:time a) (:time b))) (partition 2 1 events)))}}
 
-      (some #(< (:time %) init-time) events)
-      {:ok false :error :event-time-before-initial
-       :detail {:initial-block-time init-time
-                :violations (mapv :time (filter #(< (:time %) init-time) events))}}
+       (some #(< (:time %) init-time) events)
+       {:ok false :error :event-time-before-initial
+        :detail {:initial-block-time init-time
+                 :violations (mapv :time (filter #(< (:time %) init-time) events))}}
 
-      (some #(not (contains? known-ids (:agent %))) events)
-      {:ok false :error :unknown-agent-in-event
-       :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
+       (some #(not (contains? known-ids (:agent %))) events)
+       {:ok false :error :unknown-agent-in-event
+        :detail {:bad-refs (vec (filter #(not (contains? known-ids (:agent %))) events))}}
 
-
-      ;; Population metrics in single-trace theory → hard error (silent inconclusive otherwise).
-      (and (:theory scenario)
-           (not= :population (metrics/theory-metric-scope scenario))
-           (seq (let [refs (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
-                      bad  (vec (filter metrics/population-metrics refs))]
-                  bad)))
-      {:ok false :error :population-metric-in-trace-theory
-       :detail {:metrics (vec (filter metrics/population-metrics
-                               (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
-                :metric-scope (metrics/theory-metric-scope scenario)
-                :hint "Single-trace replay cannot compute population metrics. Use trace metrics (e.g. :coalition-net-profit), or set :theory {:metric-scope :population} for multi-epoch scenarios."}}
+;; Population metrics in single-trace theory → hard error (silent inconclusive otherwise).
+       (and (:theory scenario)
+            (not= :population (metrics/theory-metric-scope scenario))
+            (seq (let [refs (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
+                       bad  (vec (filter metrics/population-metrics refs))]
+                   bad)))
+       {:ok false :error :population-metric-in-trace-theory
+        :detail {:metrics (vec (filter metrics/population-metrics
+                                       (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
+                 :metric-scope (metrics/theory-metric-scope scenario)
+                 :hint "Single-trace replay cannot compute population metrics. Use trace metrics (e.g. :coalition-net-profit), or set :theory {:metric-scope :population} for multi-epoch scenarios."}}
 
       ;; Theory :falsifies-if metrics must be in the active trace metric registry
       ;; (population-scoped metrics are validated by the multi-epoch runner, not here).
-      (let [scope          (metrics/theory-metric-scope scenario)
-            theory-metrics (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
-            trace-metrics  (if (= scope :population)
-                             (vec (remove metrics/population-metrics theory-metrics))
-                             theory-metrics)
-            unknown-theory (vec (remove effective-metrics trace-metrics))]
-        (seq unknown-theory))
-      {:ok false :error :unknown-theory-metric
-       :detail {:unknown (vec (remove effective-metrics
-                               (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
-                :known   effective-metrics
-                :hint    "Declare the metric in the protocol metric-vocabulary or fix the name."}}
+       (let [scope          (metrics/theory-metric-scope scenario)
+             theory-metrics (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))
+             trace-metrics  (if (= scope :population)
+                              (vec (remove metrics/population-metrics theory-metrics))
+                              theory-metrics)
+             unknown-theory (vec (remove effective-metrics trace-metrics))]
+         (seq unknown-theory))
+       {:ok false :error :unknown-theory-metric
+        :detail {:unknown (vec (remove effective-metrics
+                                       (metrics/falsifies-if-metric-refs (get-in scenario [:theory :falsifies-if]))))
+                 :known   effective-metrics
+                 :hint    "Declare the metric in the protocol metric-vocabulary or fix the name."}}
 
       ;; Expectations metrics — separate error code for clearer diagnostics.
-      (let [exp-metrics (map #(metrics/metric-key (:name %)) (get-in scenario [:expectations :metrics] []))
-            unknown-exp (vec (remove effective-metrics exp-metrics))]
-        (seq unknown-exp))
-      {:ok false :error :unknown-expectation-metric
-       :detail {:unknown (vec (remove effective-metrics
-                               (map #(metrics/metric-key (:name %)) (get-in scenario [:expectations :metrics] []))))
-                :known effective-metrics}}
+       (let [exp-metrics (map #(metrics/metric-key (:name %)) (get-in scenario [:expectations :metrics] []))
+             unknown-exp (vec (remove effective-metrics exp-metrics))]
+         (seq unknown-exp))
+       {:ok false :error :unknown-expectation-metric
+        :detail {:unknown (vec (remove effective-metrics
+                                       (map #(metrics/metric-key (:name %)) (get-in scenario [:expectations :metrics] []))))
+                 :known effective-metrics}}
 
-      :else {:ok true}))))
+       :else {:ok true}))))

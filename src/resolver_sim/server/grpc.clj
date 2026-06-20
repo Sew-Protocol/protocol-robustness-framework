@@ -19,12 +19,12 @@
   (:require [clojure.data.json          :as json]
             [clojure.string             :as str]
             [clojure.stacktrace         :as st]
-             [resolver-sim.logging       :as log]
+            [resolver-sim.logging       :as log]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.server.session :as session])
   (:import [io.grpc ServerBuilder MethodDescriptor MethodDescriptor$MethodType
-                    MethodDescriptor$Marshaller
-                    ServerServiceDefinition ServiceDescriptor Status StatusException]
+            MethodDescriptor$Marshaller
+            ServerServiceDefinition ServiceDescriptor Status StatusException]
            [io.grpc.stub ServerCalls]
            [java.io ByteArrayInputStream InputStreamReader]
            [java.nio.charset StandardCharsets]))
@@ -185,13 +185,13 @@
            (.onCompleted observer))
          (catch Throwable t
            (let [msg (str "Internal Simulation Error: " (.getMessage t))]
-              (log/error! "grpc/internal-error" {:error (.getMessage t)})
+             (log/error! "grpc/internal-error" {:error (.getMessage t)})
              (println (str "[grpc] " msg))
              (st/print-stack-trace t)
-              (.onError observer
-                        (-> Status/INTERNAL
-                            (.withDescription msg)
-                            (.asRuntimeException))))))))))
+             (.onError observer
+                       (-> Status/INTERNAL
+                           (.withDescription msg)
+                           (.asRuntimeException))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service definition
@@ -254,7 +254,7 @@
                  (.build)
                  (.start))]
      (reset! server srv)
-      (log/info! "grpc/listening" {:port port})
+     (log/info! "grpc/listening" {:port port})
      (println (str "[grpc] SimulationEngine listening on port " port))
      srv)))
 

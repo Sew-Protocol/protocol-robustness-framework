@@ -109,7 +109,7 @@
 
 (defn save-semantic-facts!
   [facts-bundle]
-    (.mkdirs (java.io.File. (evcfg/artifact-dir)))
+  (.mkdirs (java.io.File. (evcfg/artifact-dir)))
   (spit semantic-facts-path (json/write-str facts-bundle))
   facts-bundle)
 

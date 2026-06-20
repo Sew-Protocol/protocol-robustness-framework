@@ -137,12 +137,12 @@
      :escrow-state      — keyword, default :pending
      :sender-status     — keyword, default :none
      :recipient-status  — keyword, default :none"
-   [{:keys [token to from amount-after-fee dispute-resolver
-            auto-release-time auto-cancel-time
-            escrow-state sender-status recipient-status initial-fee] :as args}]
-   (when (nil? amount-after-fee)
-     (throw (ex-info "make-transfer: :amount-after-fee is required" {:args args})))
-   {:token             token
+  [{:keys [token to from amount-after-fee dispute-resolver
+           auto-release-time auto-cancel-time
+           escrow-state sender-status recipient-status initial-fee] :as args}]
+  (when (nil? amount-after-fee)
+    (throw (ex-info "make-transfer: :amount-after-fee is required" {:args args})))
+  {:token             token
    :to                to
    :from              from
    :amount-after-fee  (long amount-after-fee)
@@ -261,15 +261,15 @@
      :total-bonds-posted  {}   ; {token amount} — cumulative bonds ever posted
      :bond-slashed        {}   ; {workflow-id amount}
      :bond-distribution   {:insurance 0 :protocol 0 :burned 0} ; 50/30/20 split
-      :retained-slash-reserves 0 ; explicit accounting for retained slash residue
+     :retained-slash-reserves 0 ; explicit accounting for retained slash residue
      :resolver-bonds      {}   ; {addr {:stable nat-int :sew nat-int}} — DR3 80/20 mix invariant
      :senior-bonds        {}   ; {addr {:coverage-max nat-int :reserved-coverage nat-int}}
      :resolver-frozen-until {} ; {addr nat-int} — resolver freeze expiry (0 = not frozen)
      :resolver-epoch-slashed {} ; {addr {:epoch-start nat-int :amount nat-int}} — per-epoch slash cap
-      :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
-      :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
-      :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
-      :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
+     :resolver-capacities   {} ; {addr {:max-concurrent nat-int :current-active nat-int}} — mirrors DRM.resolverCapacity
+     :resolver-unavailable #{} ; #{resolver-addr} currently marked unavailable
+     :unavailability-stats {:total-resolvers 0 :unavailable-count 0 :last-update block-time}
+     :circuit-breaker {:active? false :last-trigger 0 :cooldown 3600 :threshold-bps 3000}
      :token-fot-bps          {} ; {token-addr nat-int} — Fee-on-Transfer BPS per token (0 = normal ERC20)
      :token-liquidity-crunch #{} ; #{token-addr} — currently insolvent yield pools
      :last-escalation-block-time-per-addr {} ; {addr block-time} — Sybil mitigation Layer A
@@ -475,21 +475,21 @@
     world))
 
 (defrecord SlashEvent
-    [slash-id
-     workflow-id
-     escrow-contract
-     resolver
-     reason
-     basis-amount
-     basis-kind
-     slash-bps
-     slash-track
-     amount
-     proposed-at
-     executed-at
-     appeal-deadline
-     status
-     proposer
-     evidence-root
-     original-decision-hash
-     reversal-decision-hash])
+           [slash-id
+            workflow-id
+            escrow-contract
+            resolver
+            reason
+            basis-amount
+            basis-kind
+            slash-bps
+            slash-track
+            amount
+            proposed-at
+            executed-at
+            appeal-deadline
+            status
+            proposer
+            evidence-root
+            original-decision-hash
+            reversal-decision-hash])

@@ -39,14 +39,14 @@
                 analytic sanity checks. Phases that do not call resolve-dispute or
                 replay-with-protocol should declare :class :analytic."
   [{:keys [benchmark-id label hypothesis passed? status results summary class]}]
-   {:benchmark-id  benchmark-id
-    :label         label
-    :hypothesis    hypothesis
-    :passed?       (boolean passed?)
-    :status        (or status (if passed? "PASS" "FAIL"))
-    :class         (or class :protocol-kernel-evidence)
-    :results       (or results [])
-    :summary       (or summary {})})
+  {:benchmark-id  benchmark-id
+   :label         label
+   :hypothesis    hypothesis
+   :passed?       (boolean passed?)
+   :status        (or status (if passed? "PASS" "FAIL"))
+   :class         (or class :protocol-kernel-evidence)
+   :results       (or results [])
+   :summary       (or summary {})})
 
 ;; ---------------------------------------------------------------------------
 ;; Parameter sweep runner

@@ -20,7 +20,6 @@
            (get-in world [:yield/behavior :aave-v3 :yield/provider-kind])))
     (is (= #{:withdraw-fails}
            (get-in world [:yield/risk :yield.provider/liquid-lending :USDC :failure-modes])))))
-  
 
 (deftest test-liquid-lending-emergency-unwind-marks-active-positions
   (testing "Emergency unwind marks matching active positions as :unwinding"

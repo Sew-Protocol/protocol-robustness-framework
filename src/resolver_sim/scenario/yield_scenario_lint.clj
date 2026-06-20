@@ -41,7 +41,7 @@
          (or (:failure-modes p) (:failure_modes p)))
         (when-let [shocks (:shocks p)]
           (some #(and (= :failure-mode (keyword (:type %)))
-                    (= :negative-yield (keyword (:mode %))))
+                      (= :negative-yield (keyword (:mode %))))
                 shocks)))))
 
 (defn scenario-configures-negative-yield?

@@ -10,7 +10,6 @@
             [resolver-sim.scenario.outcome-semantics :as ose]
             [clojure.string :as str]))
 
-
 (declare generate-story-by-family)
 
 ;; ---
@@ -92,7 +91,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :threat-detected :value "THREAT_DETECTED" :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-     [(frame-badge "THREAT_DETECTED" (get tokens/palette :sys/alert))
+    [(frame-badge "THREAT_DETECTED" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial sweep identified a critical state-space vulnerability."]]}
@@ -121,7 +120,7 @@
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["SIGNED" [:br] "DETERMINISTIC" [:br] "EVIDENCE"]
                            :claim-id :replay-alignment
-                            :cta "VERIFY DETERMINISTIC REPLAY")])
+                           :cta "VERIFY DETERMINISTIC REPLAY")])
 
 (defn- deadline-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -130,7 +129,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :deadline-scenario :value title :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-      [(frame-badge "BOUNDARY_TEST" (get tokens/palette :sys/alert))
+    [(frame-badge "BOUNDARY_TEST" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Temporal boundary checks verify post-deadline actions are deterministically rejected."]]}
@@ -150,7 +149,7 @@
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#FF9800"}} "LATE APPEAL" [:br] "REJECTED"]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["DETERMINISTIC" [:br] "DEADLINE" [:br] "ENFORCEMENT"]
-                             :claim-id :deadline-replay-alignment)])
+                           :claim-id :deadline-replay-alignment)])
 
 (defn- falsification-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -159,7 +158,7 @@
     :footer-right (str "GIT:" git-sha)
     :claims [{:claim-id :hypothesis :value title :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
-     [(frame-badge "THEORY_FALSIFICATION" (get tokens/palette :sys/alert))
+    [(frame-badge "THEORY_FALSIFICATION" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} "HYPOTHESIS" [:br] "UNDER TEST"]
      [:p {:style {:fontSize "15px" :marginTop "20px" :color "#7ADDDC" :fontWeight 700}}
       "Assumption is stress-tested under adversarial conditions to detect model boundaries."]]}
@@ -182,7 +181,7 @@
       "Negative result is treated as falsification evidence, not protocol marketing output."]]}
    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
                            ["RESEARCH" [:br] "EVIDENCE" [:br] "BUNDLE"]
-                            :claim-id :falsification-replay)])
+                           :claim-id :falsification-replay)])
 
 (defn- collusion-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -190,7 +189,7 @@
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
     :content
-     [(frame-badge "COALITION_FORMATION" (get tokens/palette :sys/alert))
+    [(frame-badge "COALITION_FORMATION" (get tokens/palette :sys/alert))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial actors form a coalition to siphon funds via fraudulent verdicts."]]}
@@ -211,8 +210,8 @@
     [(speds/v-res "Collusion Guard")
      [:div {:style {:marginTop "20px"}} (speds/v-inv :solvency :ok)]
      [:h2 {:style {:fontSize "50px" :fontWeight 900 :lineHeight 0.9 :color "#03DAC6" :marginTop "20px" :textShadow speds/teal-shadow}} "BRIBERY" [:br] "DEFLECTED"]]}
-    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
-                            ["EQUILIBRIUM" [:br] "RESTORED"])])
+   (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                           ["EQUILIBRIUM" [:br] "RESTORED"])])
 
 (defn- economic-solvency-frame-specs
   [{:keys [trace-id git-sha hash title replay-match-label]}]
@@ -220,7 +219,7 @@
     :footer-left trace-id
     :footer-right (str "GIT:" git-sha)
     :content
-     [(frame-badge "ECONOMIC_ROBUSTNESS" (get tokens/palette :sys/primary))
+    [(frame-badge "ECONOMIC_ROBUSTNESS" (get tokens/palette :sys/primary))
      [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Yield conservation and solvency invariants are stress-tested under volatility."]]}
@@ -241,13 +240,12 @@
       (speds/v-inv :solvency :ok)
       (speds/v-inv :conservation :ok)]
      [:h2 {:style {:fontSize "40px" :fontWeight 900 :lineHeight 0.9 :color "#fff"}} "SOLVENCY" [:br] "GUARANTEED"]]}
-    (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
-                            ["DETERMINISTIC" [:br] "SOLVENCY" [:br] "BUNDLE"])])
+   (verified-closing-frame {:replay-match-label replay-match-label :hash hash}
+                           ["DETERMINISTIC" [:br] "SOLVENCY" [:br] "BUNDLE"])])
 
 ;; ---
 ;; 1. The "Deflection" Story Engine
 ;; Optimized for proving resistance to specific attacks (S26, S42, etc.)
-
 
 (defn generate-theory-falsification-story
   "Renders a theory-falsification multi-frame story from a scenario id,
@@ -255,7 +253,7 @@
   ([artifacts]
    (let [scn (some #(when (= :theory-falsification (ose/normalize-purpose (:purpose %))) %) (or (get-in artifacts [:coverage :scenarios]) []))
          scenario-id (or (:id scn) (:default-theory-falsification-scenario-id config/profile))]
-      (generate-story-by-family scenario-id artifacts)))
+     (generate-story-by-family scenario-id artifacts)))
   ([scenario-id artifacts]
    (generate-story-by-family scenario-id artifacts)))
 
@@ -306,14 +304,14 @@
               baseline-note (or (get-in outcome [:outcome :comparison :narrative])
                                 (get-in spec [:baseline_comparison :delta_summary :narrative]))]
           [:div {:style {:border "1px solid #004D59" :padding "16px" :background "#020617"}}
-         [:div {:style {:fontSize "10px" :color "#FF9800"}} (str "FINDING " (:finding_id f) " · " (str/upper-case (str (:severity f))))]
-         [:div {:style {:fontSize "10px" :color "#7ADDDC" :marginTop "4px"}}
-          (str "CLASS: " (str/upper-case (str class-label)) " / " (str/upper-case (str class-status)))]
-         [:h3 {:style {:color "#fff" :margin "8px 0"}} (:title f)]
-         [:p {:style {:fontSize "12px" :color "#cbd5e1"}} (:summary f)]
-         (when (seq baseline-note)
-           [:p {:style {:fontSize "11px" :color "#94a3b8" :marginBottom "10px"}}
-            baseline-note])
+           [:div {:style {:fontSize "10px" :color "#FF9800"}} (str "FINDING " (:finding_id f) " · " (str/upper-case (str (:severity f))))]
+           [:div {:style {:fontSize "10px" :color "#7ADDDC" :marginTop "4px"}}
+            (str "CLASS: " (str/upper-case (str class-label)) " / " (str/upper-case (str class-status)))]
+           [:h3 {:style {:color "#fff" :margin "8px 0"}} (:title f)]
+           [:p {:style {:fontSize "12px" :color "#cbd5e1"}} (:summary f)]
+           (when (seq baseline-note)
+             [:p {:style {:fontSize "11px" :color "#94a3b8" :marginBottom "10px"}}
+              baseline-note])
            (generate-story-by-family (:scenario_id f) artifacts)]))])))
 
 (defn generate-scenario-deep-dive
@@ -379,7 +377,6 @@
        [:h4 {:style {:margin "0 0 10px 0"}} "Scientific Summary"]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6}} determinism-text]
        [:p {:style {:fontSize "12px" :opacity 0.8 :lineHeight 1.6 :marginTop "8px"}} coverage-text]]]]))
-
 
 (defmulti frame-specs-for-family
   "Returns a vector of frame spec maps for the given story family.

@@ -52,15 +52,15 @@
     [:honest :easy]      0.95
     [:honest :medium]    0.80
     [:honest :hard]      0.50
-    
+
     [:lazy :easy]        0.60
     [:lazy :medium]      0.40
     [:lazy :hard]        0.20
-    
+
     [:malicious :easy]   0.40
     [:malicious :medium] 0.30
     [:malicious :hard]   0.15
-    
+
     [:collusive :easy]   0.80
     [:collusive :medium] 0.70
     [:collusive :hard]   0.40))
@@ -104,15 +104,15 @@
     [:honest :easy]      5      ; trivial
     [:honest :medium]    30     ; real investigation
     [:honest :hard]      80     ; deep analysis
-    
+
     [:lazy :easy]        3      ; heuristic only
     [:lazy :medium]      10     ; skim + guess
     [:lazy :hard]        15     ; give up mostly
-    
+
     [:malicious :easy]   5      ; they know answer
     [:malicious :medium] 10     ; same as lazy (can't improve with effort)
     [:malicious :hard]   15     ; same as lazy
-    
+
     [:collusive :easy]   4      ; slightly less than honest
     [:collusive :medium] 20
     [:collusive :hard]   60))
@@ -143,12 +143,12 @@
    Returns true if dispute is attractive target."
   [difficulty escrow-wei attacker-budget-remaining]
   (and
-    (> attacker-budget-remaining 0)
+   (> attacker-budget-remaining 0)
     ; Prefer hard > medium > easy
-    (case difficulty
-      :hard true
-      :medium (> attacker-budget-remaining 10)  ; only if plenty of budget
-      :easy false)))
+   (case difficulty
+     :hard true
+     :medium (> attacker-budget-remaining 10)  ; only if plenty of budget
+     :easy false)))
 
 (defn attacker-targeting-strategy
   "Rank disputes by attractiveness for attack.

@@ -64,18 +64,17 @@
               ;; Adjust height so SVG element aspect = viewBox aspect
               corrected-h (long (Math/round (/ (* w (float vb-h)) (float vb-w))))
               fixed (-> content
-                      (str/replace (re-pattern (str "height=\"" h-str "\""))
-                                   (str "height=\"" corrected-h "\""))
-                      (str/replace
-                        "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
-                        (str "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
-                             " style=\"shape-rendering:crispEdges;text-rendering:geometricPrecision\"")))]
+                        (str/replace (re-pattern (str "height=\"" h-str "\""))
+                                     (str "height=\"" corrected-h "\""))
+                        (str/replace
+                         "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
+                         (str "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
+                              " style=\"shape-rendering:crispEdges;text-rendering:geometricPrecision\"")))]
           (spit svg-path fixed)
           (println (str "    Fixed SVG aspect ratio (" (int w) "x" corrected-h ")")))
         (println (str "    Warning: could not fix SVG dimensions"))))
     (catch Exception e
       (println (str "    Warning: SVG post-processing skipped: " (.getMessage e))))))
-
 
 ;; ── SVG generation ──────────────────────────────────────────────────────────
 
@@ -89,11 +88,11 @@
     (println (str "  Generating SVG: " svg-path))
     (try
       (let [result (shell/sh "bash" "-c"
-                    (str "cat '" cast-path "'"
-                         " | npx -y svg-term-cli --out '" svg-path "'"
-                         " --window --width " (int (or cols 120))
-                         " --height " (int (or rows 36))
-                         " 2>/dev/null"))
+                             (str "cat '" cast-path "'"
+                                  " | npx -y svg-term-cli --out '" svg-path "'"
+                                  " --window --width " (int (or cols 120))
+                                  " --height " (int (or rows 36))
+                                  " 2>/dev/null"))
             exit (:exit result)
             ok? (zero? exit)
             svg-size (when ok? (.length (io/file svg-path)))
@@ -133,19 +132,19 @@
             (try
               (let [data (json/read-str (slurp run-json-path) :key-fn keyword)
                     json-key (fn [k] (if (keyword? k)
-                                      (if-let [ns (namespace k)] (str ns "/" (name k)) (name k))
-                                      (str k)))
+                                       (if-let [ns (namespace k)] (str ns "/" (name k)) (name k))
+                                       (str k)))
                     updated (assoc data
-                              :svg (assoc (:svg data)
-                                     :format "animated-svg"
-                                     :path svg-path
-                                     :size (:svg-size result)
-                                     :generated-at (timestamp)
-                                     :source-cast cast-path
-                                     :terminal (str cols "x" rows)
-                                     :command "svg-term-cli --window"
-                                     :tool-version (tool-version "npx svg-term-cli"))
-                              :readme/embed (str "![" id-str "](" svg-path ")"))]
+                                   :svg (assoc (:svg data)
+                                               :format "animated-svg"
+                                               :path svg-path
+                                               :size (:svg-size result)
+                                               :generated-at (timestamp)
+                                               :source-cast cast-path
+                                               :terminal (str cols "x" rows)
+                                               :command "svg-term-cli --window"
+                                               :tool-version (tool-version "npx svg-term-cli"))
+                                   :readme/embed (str "![" id-str "](" svg-path ")"))]
                 (spit run-json-path
                       (json/write-str updated {:key-fn json-key :indent true})))
               (catch Exception e
@@ -157,7 +156,7 @@
   "Export SVG for all demos found under demos/."
   []
   (let [demo-dirs (filter #(.isDirectory (io/file %))
-                          (map #(str "demos/" %) 
+                          (map #(str "demos/" %)
                                (.list (io/file "demos"))))]
     (run! (fn [d]
             (let [id (last (str/split d #"/"))]

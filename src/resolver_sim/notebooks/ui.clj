@@ -117,7 +117,7 @@
                    :title (str trial-id)
                    :on-click #(swap! !ui-state assoc :selected-trial-id trial-id)}
               (str trial-id)]
-             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"} } (str batch-id)]
+             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str batch-id)]
              [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#e2e8f0"}} (str protocol-id)]
              [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str outcome)]
              [:td {:style {:padding "6px 12px" :textAlign "center"}}

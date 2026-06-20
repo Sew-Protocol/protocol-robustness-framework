@@ -47,8 +47,8 @@
 (deftest test-derive-root-status-errors-dominate
   (testing "errors dominate warnings → :failed"
     (let [root (assoc sut/empty-root
-                     :error-keys #{:yield/mismatch}
-                     :warning-keys #{:yield/drift})]
+                      :error-keys #{:yield/mismatch}
+                      :warning-keys #{:yield/drift})]
       (is (= :failed (sut/derive-root-status root))))))
 
 ;; ── finalize-root ────────────────────────────────────────────────────────────
@@ -85,27 +85,27 @@
   (testing "build-root composes all semantic operations correctly"
     (let [root (sut/build-root
                 (vs/bind (vs/record-pass)
-                  (fn [_]
-                    (vs/bind (vs/record-pass)
-                      (fn [_]
-                        (vs/bind (vs/record-error {:key :yield/deferred-mismatch
-                                                   :severity :critical
-                                                   :message "deferred mismatch"})
-                          (fn [_]
-                            (vs/bind (vs/record-warning {:key :yield/drift
-                                                        :severity :warning
-                                                        :message "small drift"})
-                              (fn [_]
-                                (vs/bind (vs/record-evidence {:check/id :yield/solvency
-                                                              :status :passed})
-                                  (fn [_]
-                                    (vs/bind (vs/set-suite-id :yield)
-                                      (fn [_]
-                                        (vs/bind (vs/set-suite-type :protocol)
-                                          (fn [_]
-                                            (vs/bind (vs/merge-extra {:run-id "run-1"})
-                                              (fn [_]
-                                                (vs/return nil))))))))))))))))))]
+                         (fn [_]
+                           (vs/bind (vs/record-pass)
+                                    (fn [_]
+                                      (vs/bind (vs/record-error {:key :yield/deferred-mismatch
+                                                                 :severity :critical
+                                                                 :message "deferred mismatch"})
+                                               (fn [_]
+                                                 (vs/bind (vs/record-warning {:key :yield/drift
+                                                                              :severity :warning
+                                                                              :message "small drift"})
+                                                          (fn [_]
+                                                            (vs/bind (vs/record-evidence {:check/id :yield/solvency
+                                                                                          :status :passed})
+                                                                     (fn [_]
+                                                                       (vs/bind (vs/set-suite-id :yield)
+                                                                                (fn [_]
+                                                                                  (vs/bind (vs/set-suite-type :protocol)
+                                                                                           (fn [_]
+                                                                                             (vs/bind (vs/merge-extra {:run-id "run-1"})
+                                                                                                      (fn [_]
+                                                                                                        (vs/return nil))))))))))))))))))]
       ;; status derived from error keys
       (is (= :failed (:status root)))
       ;; version
@@ -163,8 +163,8 @@
     (let [s1 {:error-keys #{:e1} :errors [{:key :e1}] :metrics {:checks 1 :failed 1}}
           s2 {:warning-keys #{:w1} :warnings [{:key :w1}] :metrics {:checks 1 :warnings 1}}
           m  (vs/bind (sut/merge-suite-result s1)
-               (fn [_]
-                 (sut/merge-suite-result s2)))
+                      (fn [_]
+                        (sut/merge-suite-result s2)))
           root (sut/finalize-root (vs/exec-state m sut/empty-root))]
       (is (= :failed (:status root)) "errors dominate")
       (is (= 2 (get-in root [:metrics :checks])))
@@ -177,10 +177,10 @@
   (testing "build-root runs computation and finalizes"
     (let [root (sut/build-root
                 (vs/bind (vs/record-pass)
-                  (fn [_]
-                    (vs/bind (vs/record-pass)
-                      (fn [_]
-                        (vs/record-pass))))))]
+                         (fn [_]
+                           (vs/bind (vs/record-pass)
+                                    (fn [_]
+                                      (vs/record-pass))))))]
       (is (= :passed (:status root)))
       (is (= 3 (get-in root [:metrics :passed])))
       (is (= 3 (get-in root [:metrics :checks]))))))
@@ -189,14 +189,14 @@
   (testing "metrics tally correctly across mixed operations"
     (let [root (sut/build-root
                 (vs/bind (vs/record-pass)
-                  (fn [_]
-                    (vs/bind (vs/record-pass)
-                      (fn [_]
-                        (vs/bind (vs/record-error {:key :e1 :message "err"})
-                          (fn [_]
-                            (vs/bind (vs/record-warning {:key :w1 :message "warn"})
-                              (fn [_]
-                                (vs/record-pass))))))))))]
+                         (fn [_]
+                           (vs/bind (vs/record-pass)
+                                    (fn [_]
+                                      (vs/bind (vs/record-error {:key :e1 :message "err"})
+                                               (fn [_]
+                                                 (vs/bind (vs/record-warning {:key :w1 :message "warn"})
+                                                          (fn [_]
+                                                            (vs/record-pass))))))))))]
       (is (= 3 (get-in root [:metrics :passed])))
       (is (= 1 (get-in root [:metrics :failed])))
       (is (= 1 (get-in root [:metrics :warnings])))

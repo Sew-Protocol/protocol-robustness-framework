@@ -19,8 +19,8 @@
 (def world-a
   (-> (t/empty-world 100)
       (assoc-in [:escrow-transfers 0] (t/make-escrow-transfer
-                                        {:token "0xtoken" :to "0xto" :from "0xfrom"
-                                         :amount-after-fee 1000 :escrow-state :pending}))
+                                       {:token "0xtoken" :to "0xto" :from "0xfrom"
+                                        :amount-after-fee 1000 :escrow-state :pending}))
       (assoc-in [:total-held "0xtoken"] 1000)
       (assoc-in [:total-fees "0xtoken"] 10)
       (assoc-in [:dispute-levels 0] 0)))
@@ -32,8 +32,8 @@
       (assoc-in [:dispute-levels 0] 0)
       (assoc-in [:total-held "0xtoken"] 1000)
       (assoc-in [:escrow-transfers 0] (t/make-escrow-transfer
-                                        {:amount-after-fee 1000 :escrow-state :pending
-                                         :token "0xtoken" :to "0xto" :from "0xfrom"}))))
+                                       {:amount-after-fee 1000 :escrow-state :pending
+                                        :token "0xtoken" :to "0xto" :from "0xfrom"}))))
 
 (def world-b
   "world-a with one field changed: amount-after-fee 1000 → 999."

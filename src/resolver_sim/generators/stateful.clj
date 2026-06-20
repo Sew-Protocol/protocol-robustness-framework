@@ -50,14 +50,14 @@
                         (adv/next-time profile world prev-t i)
                         (inc prev-t)))
               valid (if (= profile :phase1-lifecycle)
-                       (->> (actions/valid-next-actions protocol context world seqn t)
+                      (->> (actions/valid-next-actions protocol context world seqn t)
                            (filter #(contains? phase1-allowed-actions (:action %)))
                            vec)
                       (adv/valid-next-actions profile protocol context world seqn t))
               ev    (choose-event valid rng profile)]
           (if-not ev
             {:events events :world world}
-             (let [r (proto/dispatch-action protocol context world ev)]
+            (let [r (proto/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
                 {:events events :world world}))))))))
@@ -82,7 +82,7 @@
                         (adv/next-time profile world prev-t i)
                         (inc prev-t)))
               valid (if (= profile :phase1-lifecycle)
-                       (->> (actions/valid-next-actions protocol context world seqn t)
+                      (->> (actions/valid-next-actions protocol context world seqn t)
                            (filter #(contains? phase1-allowed-actions (:action %)))
                            vec)
                       (adv/valid-next-actions profile protocol context world seqn t))
@@ -91,7 +91,7 @@
                       (nth (vec valid) (mod idx (count valid))))]
           (if-not ev
             {:events events :world world}
-             (let [r (proto/dispatch-action protocol context world ev)]
+            (let [r (proto/dispatch-action protocol context world ev)]
               (if (:ok r)
                 (recur (inc i) (:world r) (conj events ev))
-                 {:events events :world world}))))))))
+                {:events events :world world}))))))))

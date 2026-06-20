@@ -18,7 +18,7 @@
      diagnosis: Plain-text diagnostic summary.
      recommended-next-test: Actionable next step.
      semantic-analysis: Map of protocol-specific state-based metadata."
-  [& {:keys [scenario-id protocol risk-domain failure-class critical-path 
+  [& {:keys [scenario-id protocol risk-domain failure-class critical-path
              relevant-invariants metrics-digest diagnosis recommended-next-test
              semantic-analysis]}]
   (cond-> {:schema_version       schema-version

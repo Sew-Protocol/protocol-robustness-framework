@@ -15,25 +15,23 @@
 
 (def DEFAULT_ESCALATION_CONFIG
   "Default configuration for appeal bonds and resolver stakes."
-  {
-   :resolver-stake-base 10000  ; Base stake in wei (example)
+  {:resolver-stake-base 10000  ; Base stake in wei (example)
    :appeal-bond-base 1000      ; Base appeal bond in wei
    :bond-multiplier 1.5        ; Each level costs more: bond * multiplier
-   
+
    :slashing-rate 0.5          ; Lose 50% of stake if wrong
-   
-   :round-configs {
-     0 {:stake-multiplier 1.0
-        :bond-multiplier 1.0
-        :time-to-appeal-hours 48}
-     
-     1 {:stake-multiplier 2.0   ; Senior stakes more
-        :bond-multiplier 1.5    ; Appeal costs more
-        :time-to-appeal-hours 72}
-     
-     2 {:stake-multiplier 3.0   ; External (Kleros) highest
-        :bond-multiplier 2.0    ; Most expensive appeal
-        :time-to-appeal-hours 0}}  ; Final, no appeal
+
+   :round-configs {0 {:stake-multiplier 1.0
+                      :bond-multiplier 1.0
+                      :time-to-appeal-hours 48}
+
+                   1 {:stake-multiplier 2.0   ; Senior stakes more
+                      :bond-multiplier 1.5    ; Appeal costs more
+                      :time-to-appeal-hours 72}
+
+                   2 {:stake-multiplier 3.0   ; External (Kleros) highest
+                      :bond-multiplier 2.0    ; Most expensive appeal
+                      :time-to-appeal-hours 0}}  ; Final, no appeal
    })
 
 ;; ============ Cost Calculations ============
@@ -49,7 +47,7 @@
    
    Returns: Stake amount in wei"
   [round config]
-  
+
   (let [base-stake (:resolver-stake-base config)
         round-cfg (get-in config [:round-configs round])
         multiplier (:stake-multiplier round-cfg)]
@@ -66,12 +64,12 @@
    
    Returns: Bond amount in wei"
   [from-round config]
-  
+
   (let [base-bond (:appeal-bond-base config)
         round-cfg (get-in config [:round-configs from-round])
         multiplier (:bond-multiplier round-cfg)
         bond-escalation (:bond-multiplier config)]
-    
+
     (* base-bond multiplier bond-escalation)))
 
 (defn total-appeal-cost-to-round
@@ -85,7 +83,7 @@
    
    Returns: Total cost in wei"
   [target-round config]
-  
+
   (let [bonds (for [round (range target-round)]
                 (appeal-bond-at-round round config))]
     (reduce + 0 bonds)))
@@ -101,7 +99,7 @@
    
    Returns: Loss amount in wei"
   [round config]
-  
+
   (let [stake (resolver-stake-at-round round config)
         slashing-rate (:slashing-rate config)]
     (* stake slashing-rate)))
@@ -119,19 +117,19 @@
    
    Returns: net profit for attacker"
   [round dispute-value config]
-  
+
   (let [slashing-loss (slashing-loss-if-wrong round config)
-        
+
         ; Attacker's profit if attack succeeds
-        attack-profit (min dispute-value 
-                          (* 10 slashing-loss))  ; Max reasonable profit
-        
+        attack-profit (min dispute-value
+                           (* 10 slashing-loss))  ; Max reasonable profit
+
         ; Honest resolver's loss if corrupted into wrong decision
         resolver-loss slashing-loss
-        
+
         ; Net gain for attacker paying bribes
         net-gain (- attack-profit resolver-loss)]
-    
+
     (max 0 net-gain)))
 
 ;; ============ Corruption Cost ============
@@ -151,22 +149,22 @@
    
    Returns: Bribe amount needed in wei"
   [round appeal-probability config]
-  
+
   (let [slashing-loss (slashing-loss-if-wrong round config)
         next-bond (if (< round 2)
                     (appeal-bond-at-round round config)
                     0)  ; No further appeal from round 2
-        
+
         ; Bribe must cover:
         ; 1. Slashing loss (probability 1.0 if detected)
         ; 2. Appeal bond if escalated
-        
+
         expected-cost (+ slashing-loss
-                        (* appeal-probability next-bond))
-        
+                         (* appeal-probability next-bond))
+
         ; Add 20% margin for risk
         bribe-needed (* expected-cost 1.2)]
-    
+
     bribe-needed))
 
 ;; ============ Attacker ROI Analysis ============
@@ -183,20 +181,20 @@
    
    Returns: {:bribe-cost, :expected-profit, :roi-percentage}"
   [round dispute-value appeal-probability corruption-success-rate config]
-  
+
   (let [bribe-cost (bribe-cost-to-corrupt-resolver round appeal-probability config)
-        
+
         ; If attack succeeds (bribe sticks AND decision matters)
         success-profit (net-incentive-to-decide-wrong round dispute-value config)
-        
+
         ; Expected value
         expected-profit (* success-profit corruption-success-rate)
-        
+
         ; ROI
         roi (if (> bribe-cost 0)
               (/ (- expected-profit bribe-cost) bribe-cost)
               0.0)]
-    
+
     {:bribe-cost bribe-cost
      :expected-profit expected-profit
      :roi-percentage (* roi 100.0)
@@ -220,18 +218,18 @@
    
    Returns: Total cost for multi-level attack"
   [dispute-value corruption-prob-r0 corruption-prob-r1 appeal-probability config]
-  
+
   (let [; Cost to corrupt Round 0
         r0-bribe (bribe-cost-to-corrupt-resolver 0 appeal-probability config)
-        
+
         ; Only pay R1 bribe if R0 is appealed
         r1-bribe (* (appeal-probability)
-                   (bribe-cost-to-corrupt-resolver 1 0 config))
-        
+                    (bribe-cost-to-corrupt-resolver 1 0 config))
+
         ; Total cost
         total-cost (+ (* r0-bribe corruption-prob-r0)
-                     (* r1-bribe corruption-prob-r1))]
-    
+                      (* r1-bribe corruption-prob-r1))]
+
     total-cost))
 
 (defn escalation-provides-security
@@ -244,29 +242,29 @@
    
    Returns: Security improvement metrics"
   [config]
-  
+
   (let [r0-stake (resolver-stake-at-round 0 config)
         r1-stake (resolver-stake-at-round 1 config)
         r2-stake (resolver-stake-at-round 2 config)
-        
+
         r0-bond (appeal-bond-at-round 0 config)
         r1-bond (appeal-bond-at-round 1 config)
-        
+
         ; Security factors
         stake-improvement-r1 (/ (- r1-stake r0-stake) r0-stake)
         stake-improvement-r2 (/ (- r2-stake r0-stake) r0-stake)
-        
+
         cost-improvement-r1 r0-bond
         cost-improvement-r2 (+ r0-bond r1-bond)]
-    
+
     {:stake-increase-r1 stake-improvement-r1
      :stake-increase-r2 stake-improvement-r2
      :cumulative-appeal-cost-r1 cost-improvement-r1
      :cumulative-appeal-cost-r2 cost-improvement-r2
-     :protection-improvement-r1 (+ stake-improvement-r1 
-                                    (/ cost-improvement-r1 r0-stake))
-     :protection-improvement-r2 (+ stake-improvement-r2 
-                                    (/ cost-improvement-r2 r0-stake))}))
+     :protection-improvement-r1 (+ stake-improvement-r1
+                                   (/ cost-improvement-r1 r0-stake))
+     :protection-improvement-r2 (+ stake-improvement-r2
+                                   (/ cost-improvement-r2 r0-stake))}))
 
 ;; ============ Comparative Analysis ============
 
@@ -277,25 +275,25 @@
    
    Returns: Cost comparison and recommendation"
   [dispute-value config]
-  
+
   (let [; Attack Round 0 only (don't let it escalate)
         r0-only-cost (bribe-cost-to-corrupt-resolver 0 0 config)
-        
+
         ; Attack Round 0 + escalate + attack Round 1
-        r0-then-r1-cost (sequential-escalation-attack-cost 
-                        dispute-value 1.0 1.0 1.0 config)
-        
+        r0-then-r1-cost (sequential-escalation-attack-cost
+                         dispute-value 1.0 1.0 1.0 config)
+
         ; Just attack Round 1 (wait for appeal)
         r1-only-cost (bribe-cost-to-corrupt-resolver 1 0 config)
-        
+
         cheapest (min r0-only-cost r0-then-r1-cost r1-only-cost)]
-    
+
     {:attack-r0-only r0-only-cost
      :attack-r0-then-r1 r0-then-r1-cost
      :attack-r1-only r1-only-cost
      :cheapest-route cheapest
      :attacker-prefers (cond
-                        (= cheapest r0-only-cost) "Corrupt R0, pray it doesn't escalate"
-                        (= cheapest r0-then-r1-cost) "Corrupt R0, then R1 if appealed"
-                        :else "Wait and corrupt R1")}))
+                         (= cheapest r0-only-cost) "Corrupt R0, pray it doesn't escalate"
+                         (= cheapest r0-then-r1-cost) "Corrupt R0, then R1 if appealed"
+                         :else "Wait and corrupt R1")}))
 

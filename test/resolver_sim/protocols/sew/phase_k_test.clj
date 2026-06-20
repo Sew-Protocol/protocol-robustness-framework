@@ -15,10 +15,10 @@
         seller "0xSeller"
         resolver "0xResolver"
         token "0xToken"
-        snap (snap-fix/escrow-snapshot {:dispute-resolver resolver 
-                                      :escrow-fee-bps 0
-                                      :resolver-bond-bps 10000})]
-    
+        snap (snap-fix/escrow-snapshot {:dispute-resolver resolver
+                                        :escrow-fee-bps 0
+                                        :resolver-bond-bps 10000})]
+
     (testing "create-escrow succeeds with zero-stake resolver (no bond enforced)"
       (let [r (lc/create-escrow world buyer token seller 1000 {} snap)]
         (is (true? (:ok r)))
@@ -69,15 +69,15 @@
         world-params (assoc-in world [:params :slash-epoch-cap-bps] 5000)
         r-prop (res/propose-fraud-slash world-params workflow-id gov resolver 5000)
         world-prop (:world r-prop)]
-    
+
     (is (true? (:ok r-prop)))
     (is (= 10000 (reg/get-stake world-prop resolver))) ; Not slashed yet
-    
+
     (testing "Cannot execute before timelock"
       (let [r-exec (res/execute-fraud-slash world-prop workflow-id)]
         (is (false? (:ok r-exec)))
         (is (= :timelock-not-expired (:error r-exec)))))
-    
+
     (testing "Execute after timelock"
       (let [world-time (time-ctx/advance-time world-prop {:to 100000}) ; > 86400
             r-exec (res/execute-fraud-slash world-time workflow-id)

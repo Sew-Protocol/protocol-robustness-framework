@@ -14,11 +14,11 @@
 
 (deftest generated-scenario-preserves-baseline-invariants
   (let [p (prop/for-all [seed (gen/large-integer* {:min 1 :max 100000})]
-            (let [sc (scenario/build-scenario {:seed seed :max-steps 4})
-                  r  (sew/replay-with-sew-protocol sc)]
-              (and (not= :invalid (:outcome r))
-                   (not= :fail (:outcome r))
-                   (nil? (:halt-reason r)))))
+                        (let [sc (scenario/build-scenario {:seed seed :max-steps 4})
+                              r  (sew/replay-with-sew-protocol sc)]
+                          (and (not= :invalid (:outcome r))
+                               (not= :fail (:outcome r))
+                               (nil? (:halt-reason r)))))
         res (tc/quick-check trials p)]
     (is (:pass? res) (pr-str res))))
 
@@ -43,19 +43,19 @@
 
 (deftest intents-interpreter-is-shrink-friendly
   (let [context (proto/build-execution-context sew/protocol
-                                                scenario/default-agents
-                                                scenario/default-protocol-params)
+                                               scenario/default-agents
+                                               scenario/default-protocol-params)
         world0  (proto/init-world sew/protocol {:initial-block-time 1000})
         failing-prop
         (prop/for-all [intents (gen/vector gen/nat 0 8)]
-          (let [{:keys [events]} (stateful/generate-event-sequence-from-intents
-                                  {:intents intents
-                                   :context context
-                                   :world0 world0
-                                   :profile :phase1-lifecycle
-                                   :initial-time 1000})]
+                      (let [{:keys [events]} (stateful/generate-event-sequence-from-intents
+                                              {:intents intents
+                                               :context context
+                                               :world0 world0
+                                               :profile :phase1-lifecycle
+                                               :initial-time 1000})]
             ;; Intentionally strict to force shrink and verify failure minimization path.
-            (<= (count events) 1)))
+                        (<= (count events) 1)))
         res (tc/quick-check 60 failing-prop)]
     (is (false? (:pass? res)) (pr-str res))
     (is (vector? (get-in res [:shrunk :smallest])) (pr-str res))))

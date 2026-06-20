@@ -45,10 +45,10 @@
              :yield/total-haircut           (long (reduce + (map #(:haircut-amount % 0) shortfalls)))
              :yield/total-reclaimed         (long (reduce + (map #(:reclaimed-amount % 0) pos-vals)))
              :yield/total-held              (long (reduce + (vals held)))}
-      
+
       ms (assoc :yield/module-state     (name (:module-state ms))
                 :yield/available-ratio  (:available-ratio ms))
-      
+
       ;; If a specific owner-id is requested, include their specific metrics
       (get-in scenario [:protocol-params :focus-owner-id])
       (merge (let [owner (get-in scenario [:protocol-params :focus-owner-id])

@@ -106,7 +106,7 @@
     :epochs 100
     :seed seed
     :params {}}
-   
+
    {:label "TEST 2: Market Shock (40% exit at epoch 30)"
     :initial-state {:trust 0.75 :participation 0.85}
     :update-fn simulate-epoch-z
@@ -114,7 +114,7 @@
     :epochs 100
     :seed (+ seed 1)
     :params {:shock-epoch 30 :shock-magnitude 0.40}}
-   
+
    {:label "TEST 3: Scam Wave (High FP rate 8%)"
     :initial-state {:trust 0.75 :participation 0.85}
     :update-fn simulate-epoch-z
@@ -122,7 +122,7 @@
     :epochs 100
     :seed (+ seed 2)
     :params {:false-positive-rate 0.08}}
-   
+
    {:label "TEST 4: Combined Shocks"
     :initial-state {:trust 0.75 :participation 0.85}
     :update-fn simulate-epoch-z
@@ -130,7 +130,7 @@
     :epochs 100
     :seed (+ seed 3)
     :params {:shock-epoch 30 :shock-magnitude 0.30 :false-positive-rate 0.06}}
-   
+
    {:label "TEST 5: Cascading Failures (Negative control: low accuracy + slow resolution)"
     :initial-state {:trust 0.75 :participation 0.85}
     :update-fn simulate-epoch-z
@@ -162,9 +162,9 @@
         above-fpr?        (>= fpr fpr-ceiling)
         outside-safe-zone? (or below-accuracy? above-fpr?)
         _ (proto/print-phase-header
-             {:benchmark-id "Z"
-              :label        "Legitimacy & Reflexive Participation Loop"
-              :hypothesis   "System maintains stable participation (>40%) over 100 epochs"})
+           {:benchmark-id "Z"
+            :label        "Legitimacy & Reflexive Participation Loop"
+            :hypothesis   "System maintains stable participation (>40%) over 100 epochs"})
         _ (when outside-safe-zone?
             (when below-accuracy?
               (println (format "   ⚠️  base-accuracy=%.2f < floor=%.2f (Phase 5 sensitivity sweep)"
@@ -174,10 +174,10 @@
               (println (format "   ⚠️  false-positive-rate=%.2f ≥ ceiling=%.2f (Phase 5 sensitivity sweep)"
                                fpr fpr-ceiling))
               (println "   ⚠️  Stability claim only validated at false-positive-rate < 0.20.")))
-        
+
         scenarios (make-scenarios seed)
         results (proto/run-sweep "PHASE Z SWEEP" scenarios params)
-        
+
         expected-neg? (fn [r] (true? (:expected-negative-control? r)))
         gate-results  (remove expected-neg? results)
         class-a (count (filter #(= "A" (:class %)) gate-results))

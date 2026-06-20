@@ -70,16 +70,16 @@
   [n-resolvers n-disputes budget-per-resolver complexity-add d-rng]
   (let [dispute-types (repeatedly n-disputes #(sample-dispute-type d-rng))
         assignments (assign-disputes n-resolvers n-disputes d-rng)
-        
+
         ;; Map: resolver-id -> count of assigned disputes
         resolver-loads (reduce (fn [acc {:keys [resolvers]}]
                                  (reduce (fn [a rid] (update a rid (fnil inc 0))) acc resolvers))
                                {} assignments)
-        
+
         ;; Map: resolver-id -> effort per assigned dispute
         resolver-budgets (into {} (for [[rid load] resolver-loads]
                                     [rid (/ (double budget-per-resolver) load)]))
-        
+
         ;; Evaluate each dispute
         dispute-results (map (fn [type {:keys [resolvers]}]
                                (let [votes (for [rid resolvers]
@@ -92,7 +92,7 @@
                                      correct? (>= correct-count 2)]
                                  correct?))
                              dispute-types assignments)]
-    
+
     {:correct (count (filter identity dispute-results))
      :total n-disputes}))
 
@@ -105,7 +105,7 @@
   (let [rng (rng/make-rng seed)
         results (repeatedly trials #(simulate-epoch-y n-resolvers n-disputes budget complexity-add rng))
         avg-accuracy (/ (reduce + (map #(/ (double (:correct %)) (:total %)) results)) (double trials))]
-    (println (format "   Load: %d disputes, %d resolvers (avg %.1f disputes/resolver)" 
+    (println (format "   Load: %d disputes, %d resolvers (avg %.1f disputes/resolver)"
                      n-disputes n-resolvers (/ (* 3.0 n-disputes) n-resolvers)))
     (println (format "   Budget: %d units, Complexity add: +%d" budget complexity-add))
     (println (format "   Avg accuracy: %.1f%%" (* 100 avg-accuracy)))
@@ -139,15 +139,15 @@
       (println "   ⚠️  The ≥75%% accuracy claim only holds at budget-per-resolver ≥ 50."))
     (println "")
 
-    (let [r1 (test-scenario-y "TEST 1: Baseline (light load, ample budget)" 
+    (let [r1 (test-scenario-y "TEST 1: Baseline (light load, ample budget)"
                               n-resolvers 20 20 0 100 seed accuracy-threshold)
-          r2 (test-scenario-y "TEST 2: High Fog (15% ambiguous/hard)" 
+          r2 (test-scenario-y "TEST 2: High Fog (15% ambiguous/hard)"
                               n-resolvers 30 20 0 100 (+ seed 1) accuracy-threshold)
-          r3 (test-scenario-y "TEST 3: Attacker Fog (High complexity +10)" 
+          r3 (test-scenario-y "TEST 3: Attacker Fog (High complexity +10)"
                               n-resolvers 30 20 10 100 (+ seed 2) accuracy-threshold)
-          r4 (test-scenario-y "TEST 4: Load Spike (100 disputes)" 
+          r4 (test-scenario-y "TEST 4: Load Spike (100 disputes)"
                               n-resolvers 100 20 0 100 (+ seed 3) accuracy-threshold)
-          r5 (test-scenario-y "TEST 5: Extreme Load (200 disputes)" 
+          r5 (test-scenario-y "TEST 5: Extreme Load (200 disputes)"
                               n-resolvers 200 20 0 100 (+ seed 4) accuracy-threshold)
 
           all-results [r1 r2 r3 r4 r5]
@@ -177,8 +177,7 @@
             (println "   1. Add per-dispute effort rewards (based on evidence complexity)")
             (println "   2. Increase attention budget for high-complexity cases (+50%)")
             (println "   3. Implement progressive load scaling (start at 30 disputes, ramp to 200)")
-            (println "   4. Test with tiered budget allocation (urgent vs. routine)")
-            ))
+            (println "   4. Test with tiered budget allocation (urgent vs. routine)")))
       (println "")
 
       (proto/make-result
@@ -223,22 +222,22 @@
                                            (/ (double (:correct r)) (:total r)))))
                        avg-accuracy (/ (apply + accuracy-readings) (double trials))
                        safe?        (>= avg-accuracy accuracy-threshold)]
-                 (println (format "   budget=%3d  accuracy=%.1f%%  %s"
-                                  budget (* 100.0 avg-accuracy)
-                                  (if safe? "✅" "❌")))
-                 {:budget budget :accuracy avg-accuracy :safe? safe?})))
+                   (println (format "   budget=%3d  accuracy=%.1f%%  %s"
+                                    budget (* 100.0 avg-accuracy)
+                                    (if safe? "✅" "❌")))
+                   {:budget budget :accuracy avg-accuracy :safe? safe?})))
 
         ;; Find the minimum budget at which correctness becomes safe
-        safe-budgets (filter :safe? results)
-        threshold    (when (seq safe-budgets)
-                       (:budget (first safe-budgets)))]
+          safe-budgets (filter :safe? results)
+          threshold    (when (seq safe-budgets)
+                         (:budget (first safe-budgets)))]
 
-    (println "")
-    (if threshold
-      (println (format "   ✅ Minimum safe budget: %d units/resolver" threshold))
-      (println (format "   ❌ No tested budget achieves ≥%.0f%% correctness at 200 disputes" (* 100 accuracy-threshold))))
-    (println "")
+      (println "")
+      (if threshold
+        (println (format "   ✅ Minimum safe budget: %d units/resolver" threshold))
+        (println (format "   ❌ No tested budget achieves ≥%.0f%% correctness at 200 disputes" (* 100 accuracy-threshold))))
+      (println "")
 
-     {:safe-budget-threshold threshold
-      :min-safe-budget       threshold
-      :results               results})))
+      {:safe-budget-threshold threshold
+       :min-safe-budget       threshold
+       :results               results})))

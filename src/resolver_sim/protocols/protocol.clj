@@ -53,7 +53,6 @@
   (project-state [adapter world query]
     "Query the world state using a protocol-specific projection query."))
 
-
 ;; ---------------------------------------------------------------------------
 ;; 2. EconomicModel (Optional)
 ;;
@@ -80,7 +79,6 @@
 
   (advisory [model world request-type context]
     "Protocol-specific analysis results (e.g. action suggestions, signals)."))
-
 
 ;; ---------------------------------------------------------------------------
 ;; 3. AnalysisModule (Optional)
@@ -153,4 +151,4 @@
     "Return serialization/conflict domains touched by event in world.
      agent-index maps agent ID strings to agent maps — needed for actions
      (e.g. register-stake) where the resolver address is the performing
-     actor, not a param key.")) 
+     actor, not a param key."))

@@ -82,8 +82,8 @@
 
 (deftest golden-disabled-leaves-check-absent
   (is (true? (runner/scenario-pass?
-               {:outcome :pass :expected-fail? false :checks {} :replay-result {}}
-               {}))))
+              {:outcome :pass :expected-fail? false :checks {} :replay-result {}}
+              {}))))
 
 (deftest missing-golden-check-distinct-from-mismatch
   (let [missing (golden/missing-golden-check :traces/missing "data/fixtures/golden/missing.report.edn"
@@ -93,8 +93,8 @@
     (is (empty? (:mismatches missing)))
     (is (= "golden snapshot missing" (:summary missing)))
     (is (false? (runner/scenario-pass?
-                   {:outcome :pass :checks {:golden missing} :replay-result {}}
-                   {})))))
+                 {:outcome :pass :checks {:golden missing} :replay-result {}}
+                 {})))))
 
 (deftest mismatch-ordering-is-deterministic
   (let [actual (-> base-replay
@@ -109,7 +109,7 @@
 (deftest fixtures-delegates-to-golden
   (let [actual (assoc base-replay :outcome :fail)
         cmp    (fixtures/compare-golden-reports base-replay actual
-                                              {:golden-verify-mode :replay-only})]
+                                                {:golden-verify-mode :replay-only})]
     (is (contains? cmp :summary))
     (is (seq (:mismatches cmp)))
     (is (contains? cmp :expected))

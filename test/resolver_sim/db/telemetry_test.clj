@@ -47,7 +47,7 @@
   (testing "malicious strategy propagates"
     (let [result (run-one :malicious)
           record (tel/trial->outcome-record sew/protocol "t2" :batch-a
-                   (assoc base-params :strategy :malicious) result)]
+                                            (assoc base-params :strategy :malicious) result)]
       (is (= :malicious (get-in record [:metrics :strategy])))))
 
   (testing "numeric fields in :metrics are longs"
@@ -102,7 +102,7 @@
                     :idealized {}
                     :divergence fake-div}
           record   (tel/trial->outcome-record sew/protocol "t10" :batch-a
-                     (assoc base-params :strategy :malicious) result)]
+                                              (assoc base-params :strategy :malicious) result)]
       (is (true? (:divergence? record)))
       (is (= 1 (count (get-in record [:metrics :diffs])))))))
 

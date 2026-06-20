@@ -2,7 +2,7 @@
   (:require [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.benchmark.adapter :as adapter]
-             [resolver-sim.logging :as log]
+            [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.protocols.sew :as sew]
@@ -34,7 +34,7 @@
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
     (find-scenarios-in-suites (:scenario-suites benchmark)))
-  
+
   (execute-benchmark [_ benchmark scenarios]
     (mapv (fn [scenario-file]
             (let [path (.getPath scenario-file)
@@ -46,7 +46,7 @@
                :metrics (:metrics result)
                :invariant-results (get-in result [:metrics :invariant-results] {})}))
           scenarios))
-  
+
   (collect-metrics [_ results]
     {:total (count results)
      :passed (count (filter #(= :pass (:outcome %)) results))}))
@@ -69,10 +69,10 @@
              (log/info! "benchmark/execute" {:scenario-count (count scenarios)
                                              :manifest manifest-path}))
          results (adapter/execute-benchmark adapter manifest scenarios)
-         
+
          metrics (adapter/collect-metrics adapter results)
          passed? (= (:total metrics) (:passed metrics))
-         
+
          evidence {:benchmark manifest
                    :repo      repo-meta
                    :environment {:os-name (System/getProperty "os.name")
@@ -81,15 +81,15 @@
                    :results   results
                    :metrics   metrics
                    :reproduce {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/dispute-liveness.edn"))}}
-         
+
          hashable-evidence (dissoc evidence :timestamp)
          evidence-hash (hashing/hash-evidence hashable-evidence)
          final-evidence (assoc evidence :evidence/hash evidence-hash)]
-     
+
      (when-not passed?
-        (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})
+       (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})
        (println "Benchmark FAILED:" (:passed metrics) "/" (:total metrics) "passed."))
-     
+
      final-evidence)))
 
 (defn write-evidence [evidence output-path]

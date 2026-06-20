@@ -123,10 +123,10 @@
   (testing "proper + information-set + not-checkable = checked-nodes"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
-                             {:world {:claimable {"e1" {"resolver" 200}}}}
-                             {:world {:claimable {"e1" {"seller" 50}}}}]
+                            {:world {:claimable {"e1" {"resolver" 200}}}}
+                            {:world {:claimable {"e1" {"seller" 50}}}}]
                 :decisions [{:seq 1 :agent "buyer" :action "escalate_dispute"}
-                             {:seq 2 :agent "resolver" :action "execute_resolution"}]
+                            {:seq 2 :agent "resolver" :action "execute_resolution"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 1000}})
           ps (:proper-subgames-checked out)
@@ -142,7 +142,7 @@
   (testing "default strategy profile emitted at top level"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
-                             {:world {:claimable {"e1" {"buyer" 100}}}}]
+                            {:world {:claimable {"e1" {"buyer" 100}}}}]
                 :decisions [{:seq 1 :agent "buyer" :action "raise_dispute"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 0}})]
@@ -153,7 +153,7 @@
   (testing "each row has :governing-policy from the strategy profile"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
-                             {:world {:claimable {"e1" {"buyer" 100}}}}]
+                            {:world {:claimable {"e1" {"buyer" 100}}}}]
                 :decisions [{:seq 1 :agent "buyer" :action "raise_dispute"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 0}})
@@ -164,12 +164,12 @@
   (testing "custom strategy profile overrides default"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
-                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                            {:world {:claimable {"e1" {"resolver" 200}}}}]
                 :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 0
-                              :strategy-profile {:id "custom-v1"
-                                                 :resolver :policy/resolver-malicious-v1}}})]
+                             :strategy-profile {:id "custom-v1"
+                                                :resolver :policy/resolver-malicious-v1}}})]
       (is (= "custom-v1" (get-in out [:strategy-profile :id]))))))
 
 ;; ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@
   (testing ":spe/pass emitted when no deviations and no epsilon exceedances"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
-                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                            {:world {:claimable {"e1" {"resolver" 200}}}}]
                 :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 100 :epsilon-abs 0.0}})]
@@ -199,7 +199,7 @@
   (testing ":spe/inconclusive-missing-actions when all nodes are inapplicable"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"buyer" 0}}}}
-                             {:world {:claimable {"e1" {"buyer" 0}}}}]
+                            {:world {:claimable {"e1" {"buyer" 0}}}}]
                 :decisions [{:seq 1 :agent "buyer" :action "unknown_action"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 0}})]
@@ -219,7 +219,7 @@
   (testing "counterexamples is empty on pass"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
-                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                            {:world {:claimable {"e1" {"resolver" 200}}}}]
                 :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 1000}})]
@@ -234,7 +234,7 @@
   (testing ":off-path-coverage map emitted"
     (let [out (cf/evaluate-subgame-counterfactual
                {:raw-trace [{:world {:claimable {"e1" {"resolver" 0}}}}
-                             {:world {:claimable {"e1" {"resolver" 200}}}}]
+                            {:world {:claimable {"e1" {"resolver" 200}}}}]
                 :decisions [{:seq 1 :agent "resolver" :action "execute_resolution"}]
                 :terminal-world {:terminal? true}
                 :spe-config {:regret-threshold 0}})
@@ -244,7 +244,6 @@
       (is (number? (:nodes-evaluated cov)))
       (is (number? (:proper-subgames-checked cov)))
       (is (number? (:max-depth cov))))))
-
 
 (deftest stale-continuation-errors-are-guard-check-keywords
   (let [known-guard-errors

@@ -119,9 +119,9 @@
                                                               :scope #{:detection}
                                                               :on-exhaustion :throw}
                                              :oracle-roll-cursor (atom 0)}
-                                           {:verdict-correct? false
-                                            :appealed? true
-                                            :decision-reversed? false})))
+                                            {:verdict-correct? false
+                                             :appealed? true
+                                             :decision-reversed? false})))
     (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
                                              :reversal-detection-probability 1.0
                                              :oracle-fixture {:mode :fixed-roll-sequence
@@ -129,9 +129,9 @@
                                                               :scope #{:detection}
                                                               :on-exhaustion :throw}
                                              :oracle-roll-cursor (atom 0)}
-                                           {:verdict-correct? false
-                                            :appealed? false
-                                            :decision-reversed? true})))
+                                            {:verdict-correct? false
+                                             :appealed? false
+                                             :decision-reversed? true})))
     (is (not (oracle/reversal-slashed-live? {:reversal-slash-bps 2500
                                              :reversal-detection-probability 0.25
                                              :oracle-fixture {:mode :fixed-roll-sequence
@@ -334,10 +334,10 @@
   [n seed escrow fee-bps bond-bps slash-mult strategy detection-prob opts]
   (let [r       (rng/make-rng seed)
         results (repeatedly n
-                  #(apply dispute/resolve-dispute
-                           r escrow fee-bps bond-bps slash-mult
-                           strategy 0.05 0.4 detection-prob
-                           (apply concat opts)))
+                            #(apply dispute/resolve-dispute
+                                    r escrow fee-bps bond-bps slash-mult
+                                    strategy 0.05 0.4 detection-prob
+                                    (apply concat opts)))
         mean-h  (double (/ (reduce + (map :profit-honest results)) n))
         mean-m  (double (/ (reduce + (map :profit-malice results)) n))]
     {:mean-honest mean-h :mean-malice mean-m}))
@@ -448,9 +448,9 @@
     ;; P(loss) = (1-0.75)*(1-0.88) = 0.03
     (let [r (rng/make-rng 42)
           result (dispute/resolve-dispute r 10000 150 700 2.5 :malicious 0.05 0.4 0.1
-                                         :fraud-model :strict-all-tiers
-                                         :p-l1-reversal 0.75
-                                         :p-l2-reversal 0.88)
+                                          :fraud-model :strict-all-tiers
+                                          :p-l1-reversal 0.75
+                                          :p-l2-reversal 0.88)
           fee (econ/calculate-fee 10000 150)
           expected-upside (long (* (- 10000 fee) 0.03))]
       (when-not (:slashed? result)

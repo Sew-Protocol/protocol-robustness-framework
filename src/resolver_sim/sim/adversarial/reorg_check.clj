@@ -35,26 +35,26 @@
       valid state even if Fork A events are presented as 'stale' (idempotence)."
   [rng-seed n-steps fork-depth]
   (let [rng (rng/make-rng rng-seed)
-        agents [{:id "alice" :address "0xAlice"} {:id "bob" :address "0xBob"} 
+        agents [{:id "alice" :address "0xAlice"} {:id "bob" :address "0xBob"}
                 {:id "resolver0" :address "0xRes0"} {:id "resolver1" :address "0xRes1"}]
         ;; Step 1: Realistic Root generation (pre-populated)
         snap (snap-fix/preset->snapshot :sew.preset/baseline)
         w0 (t/empty-world 1000)
         cr (lc/create-escrow w0 "0xAlice" "0xUSDC" "0xBob" 5000 (t/make-escrow-settings {}) snap)
         world-root (:world cr)
-        
+
         ;; Step 2: Branching
         branch-a-events (map-indexed (fn [i _] (random-event rng ["0" "1"] (map :id agents) i (+ 1001 i))) (range n-steps))
         branch-b-events (map-indexed (fn [i _] (random-event rng ["0" "1"] (map :id agents) i (+ 1001 i))) (range n-steps))
 
         ;; Step 3: Replay
-        run-a (replay/replay-with-protocol (preg/get-protocol "sew-v1") 
+        run-a (replay/replay-with-protocol (preg/get-protocol "sew-v1")
                                            {:schema-version "1.0" :scenario-id "fork-a" :agents agents :events branch-a-events})
-        run-b (replay/replay-with-protocol (preg/get-protocol "sew-v1") 
+        run-b (replay/replay-with-protocol (preg/get-protocol "sew-v1")
                                            {:schema-version "1.0" :scenario-id "fork-b" :agents agents :events branch-b-events})
         world-a (:world run-a)
         world-b (:world run-b)]
-    
+
     {:solvency-ratio-a (inv/calculate-solvency-ratio world-a)
      :solvency-ratio-b (inv/calculate-solvency-ratio world-b)
      :idempotence-ok? (and (not= :fail (:outcome run-a)) (not= :fail (:outcome run-b)))
@@ -64,9 +64,9 @@
 (defn run-reorg-sweep [& {:keys [n-trials] :or {n-trials 1000}}]
   (println "\n=== Reorg & Fork Resilience Sweep ===")
   (println (format "Running %d trials (max-depth=50)..." n-trials))
-  
+
   ;; Simulation logic here...
-  
+
   (println "\n=== SUMMARY (Reorg) ===")
   (println "  Status: ✅ PASS")
   (println "  Solvency drift: 0.0000")

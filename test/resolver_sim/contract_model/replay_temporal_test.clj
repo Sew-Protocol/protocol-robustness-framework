@@ -36,8 +36,8 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (time-ctx/with-temporal-context
-                    (proto/init-world sew/protocol scenario)
-                    {:block-ts 2000})
+                     (proto/init-world sew/protocol scenario)
+                     {:block-ts 2000})
           context  (temporal-step-context scenario)
           event    {:seq 0 :time 1999 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
@@ -57,8 +57,8 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (time-ctx/with-temporal-context
-                    (proto/init-world sew/protocol scenario)
-                    {:block-ts 2000})
+                     (proto/init-world sew/protocol scenario)
+                     {:block-ts 2000})
           context  (temporal-step-context scenario)
           event    {:seq 0 :agent "alice" :action "set-paused" :params {:paused? true}}
           step     (replay/process-step sew/protocol context world event)]
@@ -78,8 +78,8 @@
                              {:id "bob" :type "honest" :address "0xBob"}]
                     :events []}
           world    (time-ctx/with-temporal-context
-                    (proto/init-world sew/protocol scenario)
-                    {:block-ts 2000})
+                     (proto/init-world sew/protocol scenario)
+                     {:block-ts 2000})
           context  (assoc (temporal-step-context scenario)
                           :temporal-rules
                           [{:id :custom-no-set-paused
@@ -101,8 +101,8 @@
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}]
                     :events []}
           world    (time-ctx/with-temporal-context
-                    (proto/init-world sew/protocol scenario)
-                    {:block-ts 1000})
+                     (proto/init-world sew/protocol scenario)
+                     {:block-ts 1000})
           context  (temporal-step-context scenario)
           inst     (java.time.Instant/ofEpochSecond 1005)
           event    {:seq 0 :time inst :agent "alice" :action "set-paused" :params {:paused? true}}
@@ -117,8 +117,8 @@
                     :agents [{:id "alice" :type "honest" :address "0xAlice"}]
                     :events []}
           world    (time-ctx/with-temporal-context
-                    (proto/init-world sew/protocol scenario)
-                    {:block-ts 2000})
+                     (proto/init-world sew/protocol scenario)
+                     {:block-ts 2000})
           context  (temporal-step-context scenario)
           inst     (java.time.Instant/ofEpochSecond 1999)
           event    {:seq 0 :time inst :agent "alice" :action "set-paused" :params {:paused? true}}

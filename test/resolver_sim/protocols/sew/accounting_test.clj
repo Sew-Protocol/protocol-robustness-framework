@@ -15,7 +15,7 @@
 
 (defn- base-world []
   (let [r (lc/create-escrow (t/empty-world 1000) alice usdc bob 1000
-                             (t/make-escrow-settings {}) snap)]
+                            (t/make-escrow-settings {}) snap)]
     (:world r)))
 
 ;; ---------------------------------------------------------------------------

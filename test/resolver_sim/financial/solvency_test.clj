@@ -100,7 +100,7 @@
           stored  (get-in world [:solvency :commitment-root])
           tampered (assoc-in world [:escrow-transfers 0 :escrow-state] :disputed)
           computed (solv/compute-state-commitment tampered
-                    (get-in tampered [:solvency :prev-commitment]))
+                                                  (get-in tampered [:solvency :prev-commitment]))
           result  (solv/classify-solvency tampered nil {:proof-status :valid})]
       (is (string? stored))
       (is (string? computed))

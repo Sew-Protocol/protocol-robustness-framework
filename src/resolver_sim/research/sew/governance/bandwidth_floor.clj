@@ -52,7 +52,7 @@
         ;; Remaining capacity: probabilistic review of high-value
         remaining    (max 0 (- total-capacity floor-reviews))
         hv-candidates (filter (fn [d] (> (rng/next-double d-rng)
-                                        (- 1.0 (governance-review-probability (:value d)))))
+                                         (- 1.0 (governance-review-probability (:value d)))))
                               high-value)
         hv-sorted    (sort-by :value > hv-candidates)
         hv-set       (set (map :id (take remaining hv-sorted)))]
@@ -110,7 +110,7 @@
   "Simulate n-epochs with and without the governance bandwidth floor."
   [label n-epochs disputes-per-epoch total-capacity floor-reviews floor-threshold
    attacker-strategy seed & {:keys [base-win-prob reviewed-win-prob]
-                              :or {base-win-prob 0.22 reviewed-win-prob 0.03}}]
+                             :or {base-win-prob 0.22 reviewed-win-prob 0.03}}]
   (println (format "   %s" label))
   (let [d-rng         (rng/make-rng seed)
         epoch-results (map (fn [_] (run-epoch disputes-per-epoch total-capacity

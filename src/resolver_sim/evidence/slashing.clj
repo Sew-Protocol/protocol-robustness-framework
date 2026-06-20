@@ -40,21 +40,21 @@
            transition-dependencies
            attribution]}]
   (agg/build-evidence-aggregate
-    {:evidence-type :slash/prorata-allocation
-     :schema-version "slash-prorata-allocation.v2"
+   {:evidence-type :slash/prorata-allocation
+    :schema-version "slash-prorata-allocation.v2"
 
-     :world world
-     :frame (agg/extract-decision-frame world)
-     :subject {:slash-id slash-id
-               :workflow-id workflow-id
-               :epoch epoch
-               :trigger trigger}
+    :world world
+    :frame (agg/extract-decision-frame world)
+    :subject {:slash-id slash-id
+              :workflow-id workflow-id
+              :epoch epoch
+              :trigger trigger}
 
-     :inputs {:allocation allocation-input
-              :strategy/context (extract-strategy-context world)
-              :slash/context (extract-slash-context world slash-id workflow-id epoch trigger)}
+    :inputs {:allocation allocation-input
+             :strategy/context (extract-strategy-context world)
+             :slash/context (extract-slash-context world slash-id workflow-id epoch trigger)}
 
-     :result allocation-result
+    :result allocation-result
 
-     :dependencies transition-dependencies
-     :attribution attribution}))
+    :dependencies transition-dependencies
+    :attribution attribution}))

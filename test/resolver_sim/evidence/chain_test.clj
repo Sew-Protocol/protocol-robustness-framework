@@ -13,12 +13,12 @@
 
 (defn- make-sample-evidence [n]
   (ev/make-evidence-record
-    {:artifact-kind :transition
-     :before {:counter (dec n)}
-     :after {:counter n}
-     :action {:type :increment :n n}
-     :result {:ok true}
-     :attribution sample-attribution}))
+   {:artifact-kind :transition
+    :before {:counter (dec n)}
+    :after {:counter n}
+    :action {:type :increment :n n}
+    :result {:ok true}
+    :attribution sample-attribution}))
 
 ;; ── Registry lifecycle ────────────────────────────────────────────────────
 

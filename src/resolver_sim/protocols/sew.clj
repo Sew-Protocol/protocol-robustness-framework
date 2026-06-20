@@ -134,7 +134,7 @@
                (let [wf-id   (compat/wf-id event)
                      pending (t/get-pending world wf-id)]
                  (if (and (:exists pending)
-                           (< event-time (:appeal-deadline pending)))
+                          (< event-time (:appeal-deadline pending)))
                    {:ok? false :error :appeal-window-not-expired}
                    {:ok? true}))
                {:ok? true}))}])
@@ -213,23 +213,23 @@
       (actx/with-resolved-actor-and-unpaused
         agent-index world event
         (fn [caller]
-        (let [token  (keyword (:token p))
-              to     (:to p)
-              amount (:amount p)]
-          (if (or (nil? amount) (<= amount 0) (> amount max-safe-amount))
-            {:ok false :error :amount-out-of-safe-range
-             :detail {:amount amount :max max-safe-amount}}
-            (let [cres     (or (get p :custom-resolver) (get p :dispute-resolver))
-                  settings (t/make-escrow-settings
-                             {:custom-resolver cres
-                              :release-address (:release-address p)
-                              :yield-preset (or (:yield-preset p) (:yield_preset p))
-                              :auto-release-time (:auto-release-time p)
-                              :auto-cancel-time (:auto-cancel-time p)})
-                  result   (lc/create-escrow world caller token to amount settings snapshot)]
-              (if (:ok result)
-                (assoc result :extra {:workflow-id (:workflow-id result)})
-                result)))))))))
+          (let [token  (keyword (:token p))
+                to     (:to p)
+                amount (:amount p)]
+            (if (or (nil? amount) (<= amount 0) (> amount max-safe-amount))
+              {:ok false :error :amount-out-of-safe-range
+               :detail {:amount amount :max max-safe-amount}}
+              (let [cres     (or (get p :custom-resolver) (get p :dispute-resolver))
+                    settings (t/make-escrow-settings
+                              {:custom-resolver cres
+                               :release-address (:release-address p)
+                               :yield-preset (or (:yield-preset p) (:yield_preset p))
+                               :auto-release-time (:auto-release-time p)
+                               :auto-cancel-time (:auto-cancel-time p)})
+                    result   (lc/create-escrow world caller token to amount settings snapshot)]
+                (if (:ok result)
+                  (assoc result :extra {:workflow-id (:workflow-id result)})
+                  result)))))))))
 
 (defmethod apply-action "raise-dispute"
   [{:keys [agent-index]} world event]
@@ -251,8 +251,8 @@
             resolution-hash (get p :resolution-hash "0xsimhash")
             effective-rm-fn (or (when resolution-level-map
                                   (auth/make-kleros-module
-                                    resolution-level-map
-                                    #(t/dispute-level world %)))
+                                   resolution-level-map
+                                   #(t/dispute-level world %)))
                                 resolution-module-fn)]
         (res/execute-resolution world (or workflow-id (compat/wf-id event)) addr
                                 is-release resolution-hash effective-rm-fn)))))
@@ -365,10 +365,10 @@
             current              (reg/get-stake world resolver-addr)
             yield-profile-id     (reg/get-resolver-yield-profile world resolver-addr)
             pending-slash-amount (reduce + 0
-                                  (for [[_ slash] (:pending-fraud-slashes world)
-                                        :when (and (= (:resolver slash) resolver-addr)
-                                                   (#{:pending :appealed} (:status slash)))]
-                                    (:amount slash)))]
+                                         (for [[_ slash] (:pending-fraud-slashes world)
+                                               :when (and (= (:resolver slash) resolver-addr)
+                                                          (#{:pending :appealed} (:status slash)))]
+                                           (:amount slash)))]
         (cond
           (or (nil? amount) (not (number? amount)) (<= amount 0))
           (t/fail :invalid-amount)
@@ -426,8 +426,8 @@
             pos-key  [:yield/positions owner-id]
             old-pos  (get-in world pos-key)
             world'   (yield-proto/apply-op world {:op/type :yield/claim-deferred
-                                                   :owner/id owner-id
-                                                   :module/id module-id})
+                                                  :owner/id owner-id
+                                                  :module/id module-id})
             new-pos  (get-in world' pos-key)
             reclaimed (:reclaimed-amount new-pos 0)]
         (if (pos? reclaimed)
@@ -608,10 +608,10 @@
   [_ctx world event]
   (let [p (:params event)]
     (res/compute-prorata-slash-allocation world
-      {:slash-obligation (:slash-obligation p)
-       :liable-parties   (:liable-parties p)
-       :basis            (:basis p)
-       :cap-field        (:cap-field p)})))
+                                          {:slash-obligation (:slash-obligation p)
+                                           :liable-parties   (:liable-parties p)
+                                           :basis            (:basis p)
+                                           :cap-field        (:cap-field p)})))
 
 (defmethod apply-action "trigger-accrue"
   [_ctx world event]
@@ -813,8 +813,8 @@
        :snapshot             snapshot
        :escalation-fn        esc-fn
        :resolution-module-fn rm-fn
-        :resolution-level-map level-map
-        :temporal-rules       (sew-temporal-rules)}))
+       :resolution-level-map level-map
+       :temporal-rules       (sew-temporal-rules)}))
 
   (dispatch-action [_ context world event]
     (let [flags       (:replay-flags context {})
@@ -845,44 +845,44 @@
     (let [wfs (keys (:escrow-transfers world))]
       (mapcat identity
               (for [wf wfs]
-         (let [et (t/get-transfer world wf)]
-            (cond
+                (let [et (t/get-transfer world wf)]
+                  (cond
               ;; Terminal escrows produce no available actions (explicit boundary)
-              (t/terminal-state? world wf)
-              []
+                    (t/terminal-state? world wf)
+                    []
 
-              (= :pending (:escrow-state et))
-             (into (cond-> []
-                     (or (= actor (:from et)) (= actor (:to et)))
-                     (conj {:action "raise-dispute" :params {:workflow-id wf}})
+                    (= :pending (:escrow-state et))
+                    (into (cond-> []
+                            (or (= actor (:from et)) (= actor (:to et)))
+                            (conj {:action "raise-dispute" :params {:workflow-id wf}})
 
-                     (= actor (:from et))
-                     (into [{:action "release" :params {:workflow-id wf}}
-                            {:action "sender-cancel" :params {:workflow-id wf}}])
+                            (= actor (:from et))
+                            (into [{:action "release" :params {:workflow-id wf}}
+                                   {:action "sender-cancel" :params {:workflow-id wf}}])
 
-                     (= actor (:to et))
-                     (conj {:action "recipient-cancel" :params {:workflow-id wf}})))
+                            (= actor (:to et))
+                            (conj {:action "recipient-cancel" :params {:workflow-id wf}})))
 
              ;; Disputed actions
-             (and (= :disputed (:escrow-state et))
-                  (not (and (= actor (:dispute-resolver et))
-                            (> (get-in world [:resolver-frozen-until actor] 0) (time-ctx/block-ts world)))))
-             (into (let [pending (t/get-pending world wf)
-                         resolver (:dispute-resolver et)]
-                     (cond-> []
+                    (and (= :disputed (:escrow-state et))
+                         (not (and (= actor (:dispute-resolver et))
+                                   (> (get-in world [:resolver-frozen-until actor] 0) (time-ctx/block-ts world)))))
+                    (into (let [pending (t/get-pending world wf)
+                                resolver (:dispute-resolver et)]
+                            (cond-> []
                        ;; Resolver verdict
-                       (and (not (:exists pending)) (= actor resolver))
-                       (into [{:action "execute-resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
-                              {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
+                              (and (not (:exists pending)) (= actor resolver))
+                              (into [{:action "execute-resolution" :params {:workflow-id wf :is-release true :resolution-hash "0xrelease"}}
+                                     {:action "execute-resolution" :params {:workflow-id wf :is-release false :resolution-hash "0xrefund"}}])
 
                        ;; Escalation/Challenge (if pending exists and not expired)
-                       (and (:exists pending) (< (time-ctx/block-ts world) (:appeal-deadline pending)))
-                       (into (cond-> []
-                               (or (= actor (:from et)) (= actor (:to et)))
-                               (conj {:action "escalate-dispute" :params {:workflow-id wf}})
+                              (and (:exists pending) (< (time-ctx/block-ts world) (:appeal-deadline pending)))
+                              (into (cond-> []
+                                      (or (= actor (:from et)) (= actor (:to et)))
+                                      (conj {:action "escalate-dispute" :params {:workflow-id wf}})
 
                                ;; Anyone can challenge (Phase L)
-                               true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
+                                      true (conj {:action "challenge-resolution" :params {:workflow-id wf}}))))))))))))
 
   (created-id [_ action extra]
     (when (= (compat/canonical-action {:action action}) "create-escrow")
@@ -898,12 +898,12 @@
                              (get id-alias-map agent)
                              agent)
             resolved-params (into {} (map (fn [[k v]]
-                                           [k (if (and (string? v) (contains? id-alias-map v))
-                                                (get id-alias-map v)
-                                                v)])
-                                         params))]
+                                            [k (if (and (string? v) (contains? id-alias-map v))
+                                                 (get id-alias-map v)
+                                                 v)])
+                                          params))]
         (tap> {:debug :resolved-agent :agent agent :resolved-agent resolved-agent})
-        {:ok true :event (assoc event 
+        {:ok true :event (assoc event
                                 :agent  resolved-agent
                                 :params resolved-params)})))
 
@@ -1100,7 +1100,7 @@
           (if (and (:enabled? te) (not (:recorder te)))
             (assoc scenario :temporal-evidence
                    (assoc te :recorder temporal/record-from-replay!
-                              :protocol protocol))
+                          :protocol protocol))
             scenario)
           scenario)]
     (replay/replay-with-protocol protocol scenario*)))

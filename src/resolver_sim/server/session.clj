@@ -50,13 +50,13 @@
 (defn- normalise-agents
   [agents]
   (mapv (fn [a]
-        (let [m (keywordize a)]
-          (cond-> m
-            (string? (:id m))       (update :id str)
-            (string? (:address m))  (update :address str)
-            (or (:type m) (not (:role m)))
-            (assoc :role (or (:role m) (:type m) "buyer"))
-            (not (:strategy m)) (assoc :strategy "honest"))))
+          (let [m (keywordize a)]
+            (cond-> m
+              (string? (:id m))       (update :id str)
+              (string? (:address m))  (update :address str)
+              (or (:type m) (not (:role m)))
+              (assoc :role (or (:role m) (:type m) "buyer"))
+              (not (:strategy m)) (assoc :strategy "honest"))))
         agents))
 
 (defn- normalise-params
@@ -79,7 +79,7 @@
          protocol   (get protocol-registry pid)]
      (if-not protocol
        {:ok false :error :unknown-protocol :detail {:protocol-id pid
-                                                     :known (keys protocol-registry)}}
+                                                    :known (keys protocol-registry)}}
        (let [agent-list (normalise-agents agents)
              params     (normalise-params protocol-params)
              validation (replay/validate-agents agent-list)]
@@ -165,9 +165,9 @@
   (if-let [s (get @sessions session-id)]
     (if (satisfies? proto/EconomicModel (:protocol s))
       (let [result (proto/advisory (:protocol s) (:world s)
-                                    :suggest-actions
-                                    {:actor-id    actor-id
-                                     :agent-index (get-in s [:context :agent-index] {})})]
+                                   :suggest-actions
+                                   {:actor-id    actor-id
+                                    :agent-index (get-in s [:context :agent-index] {})})]
         (if (:not-supported result)
           {:ok false :error :not-supported :detail {:session-id session-id}}
           (assoc result :ok true :session-id session-id :actor-id actor-id)))
@@ -190,7 +190,7 @@
   (if-let [s (get @sessions session-id)]
     (if (satisfies? proto/EconomicModel (:protocol s))
       (let [result (proto/advisory (:protocol s) (:world s)
-                                    :evaluate-payoff {:actor-id actor-id})]
+                                   :evaluate-payoff {:actor-id actor-id})]
         (if (:not-supported result)
           {:ok false :error :not-supported :detail {:session-id session-id}}
           (assoc result :ok true :session-id session-id)))
@@ -202,8 +202,8 @@
   (if-let [s (get @sessions session-id)]
     (if (satisfies? proto/EconomicModel (:protocol s))
       (let [result (proto/advisory (:protocol s) (:world s)
-                                    :evaluate-attack-objective
-                                    {:actor-id actor-id :objective objective})]
+                                   :evaluate-attack-objective
+                                   {:actor-id actor-id :objective objective})]
         (if (:not-supported result)
           {:ok false :error :not-supported :detail {:session-id session-id}}
           (assoc result :ok true :session-id session-id)))

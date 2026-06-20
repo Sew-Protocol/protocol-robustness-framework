@@ -75,10 +75,10 @@
       (let [t-after (+ initial-time 31536000 2000)]
         (into base
               [(yield-event 3 t-after owner :set-yield-risk
-                             {:risk-params {:module-id "aave-v3" :token "USDC"
-                                            :liquidity-mode "available"}})
+                            {:risk-params {:module-id "aave-v3" :token "USDC"
+                                           :liquidity-mode "available"}})
                (yield-event 4 (+ t-after 1000) owner :yield/claim-deferred
-                             {:token "USDC"})]))
+                            {:token "USDC"})]))
       base)))
 
 (defn liquidity-shortage-seq

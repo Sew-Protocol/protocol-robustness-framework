@@ -119,8 +119,8 @@
     (if (and failure-modes (nil? loss-mode))
       (let [risk (get-in world' [:yield/risk module-id tok] {})]
         (assoc-in world' [:yield/risk module-id tok :loss-mode]
-                    (effective-loss-mode (assoc risk :failure-modes
-                                                (normalize-failure-modes failure-modes)))))
+                  (effective-loss-mode (assoc risk :failure-modes
+                                              (normalize-failure-modes failure-modes)))))
       world')))
 
 (defn apply-market-shock
