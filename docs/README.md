@@ -12,10 +12,15 @@ Primary project framing and status live in the root `../README.md`.
 | Understand trust controls for game-theoretic claims | `testing/ADDING_GAME_THEORETIC_VALIDATION.md` |
 | Set up and run locally | `quickstart/QUICKSTART.md` |
 | Understand adapter / framework boundaries | `framework-boundaries.md` |
+| Protocol alignment convention (proposed vs current) | `protocol-alignment.md` |
+| Protocol design findings index | `findings/` |
 | Reusable abstractions (kernel/adapter/components) | `overview/REUSABLE_COMPONENTS.md` |
 | Generalized outcomes contract (cross-protocol) | `overview/OUTCOME_MODEL.md` |
 | Scenario index and protocol properties | `scenarios.md` |
 | Evidence for external reviewers | `evidence/RESEARCHER_EVIDENCE_PACK.md` |
+
+- `protocol-alignment.md` — **canonical** protocol status convention (`:protocol/current`, `:protocol/proposed`, `:solidity/*`)
+- `findings/` — protocol design findings, each classified with `:protocol/status`
 
 ## Documentation status convention
 

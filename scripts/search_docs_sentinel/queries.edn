@@ -116,11 +116,11 @@
  {:id :monte-carlo
   :label "Monte Carlo phase system"
   :terms ["Monte Carlo" "phase" "parameter sweep" "run-phase-" "engine.clj"]
-  :expected-paths ["src/resolver_sim/sim/engine.clj"
-                   "src/resolver_sim/sim/batch.clj"
-                   "src/resolver_sim/sim/sweep.clj"
-                   "scripts/run_sweep.sh"
-                   "src/resolver_sim/sim/phase_c_corruption_economics.clj"
+   :expected-paths ["src/resolver_sim/sim/engine.clj"
+                    "src/resolver_sim/sim/batch.clj"
+                    "src/resolver_sim/sim/sweep.clj"
+                    "scripts/run_sweep.sh"
+                    "src/resolver_sim/research/sew/analytic/phase_c_corruption_economics.clj"
                    "src/resolver_sim/sim/trial_router.clj"
                    "docs/overview/REUSABLE_COMPONENTS.md"]
   :tags [:simulation :infrastructure]

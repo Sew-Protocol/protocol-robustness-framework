@@ -1,6 +1,23 @@
 
 # Contributing
 
+## Protocol alignment convention
+
+This framework models both current Solidity behaviour and proposed protocol
+enhancements. Any code, scenario, or documentation modelling a feature not yet
+in Solidity MUST be marked with:
+
+```clojure
+{:protocol/status :protocol/proposed
+ :solidity/status :solidity/not-implemented
+ :finding/id      "S-DR-NNN"
+ :proposal/id     "PRF-PROP-NNN"
+ :scenario/kind   :mitigation-validation}
+```
+
+See `docs/protocol-alignment.md` for the full status reference and
+`docs/findings/` for documented protocol design gaps.
+
 ## Adding a new invariant
 
 1. Define the check function in the appropriate invariants.clj file
