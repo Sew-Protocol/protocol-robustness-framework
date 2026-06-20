@@ -224,7 +224,14 @@
 
    NOTE: Bond inflow is tracked exclusively via :total-bonds-posted.
    Do NOT also increment :total-principal-deposited — that double-counts
-   inflow in the conservation-of-funds and held-delta-accounted invariants."
+   inflow in the conservation-of-funds and held-delta-accounted invariants.
+
+   SIMULATION GAP: No caller-solvency check.  In a real deployment the
+   appellant must have sufficient external balance to post the bond.
+   The simulation does not model external wallets, so this enforcement
+   is absent.  The invariant :challenge-bond-proportional flags cases
+   where the configured bond exceeds the escrow value, which would make
+   challenge uneconomic even if the caller had the funds."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
         {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)

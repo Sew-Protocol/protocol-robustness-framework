@@ -308,9 +308,10 @@
 
 (defmethod apply-action "rotate-dispute-resolver"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
+  (actx/with-governance-actor
     agent-index event
-    (fn [_addr]
+    governance-actor?
+    (fn [addr _agent]
       (let [workflow-id   (compat/wf-id event)
             new-resolver  (get-in event [:params :new-resolver])
             result        (res/rotate-dispute-resolver world workflow-id new-resolver)]
@@ -489,24 +490,25 @@
           (t/ok (update world :params assoc :resolver-fee-bps fee-bps)))))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
+  ;; TODO: should use with-governance-actor — see governance-dispatch-audit test
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor
     agent-index event
     (fn [_addr]
-      (let [agent (get agent-index (:agent event))]
-        (let [p       (:params event)
-              token   (keyword (:token p))
-              active? (get p :active? true)]
-          (t/ok (update world :token-liquidity-crunch
-                        (if active?
-                          #(conj (or % #{}) token)
-                          #(disj % token)))))))))
+      (let [p       (:params event)
+            token   (keyword (:token p))
+            active? (get p :active? true)]
+        (t/ok (update world :token-liquidity-crunch
+                      (if active?
+                        #(conj (or % #{}) token)
+                        #(disj % token))))))))
 
 (defmethod apply-action "set-paused"
   [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
+  (actx/with-governance-actor
     agent-index event
-    (fn [_addr]
+    governance-actor?
+    (fn [_addr _agent]
       (t/ok (assoc world :paused? (get-in event [:params :paused?] true))))))
 
 (defmethod apply-action "register-resolver-bond"
@@ -627,16 +629,7 @@
                                     :track :immediate))))
 
 (defmethod apply-action "set-yield-risk"
-  ;; Inject a yield risk update mid-scenario (e.g. to simulate a market shock).
-  ;;
-  ;; Legacy flat params:
-  ;;   :liquidity-mode, :loss-mode, :failure-modes, :apy, :shortfall
-  ;;
-  ;; Composable shocks (preferred for stress tests):
-  ;;   :shocks [{:type :apy :value -0.2}
-  ;;           {:type :liquidity-mode :mode :shortfall}
-  ;;           {:type :shortfall :available-ratio 0.8}
-  ;;           {:type :failure-mode :mode :negative-yield}]
+  ;; TODO: should use with-governance-actor — see governance-dispatch-audit test
   [_ctx world event]
   (let [{:keys [module-id token]} (:params event)
         mid (yield-module/resolve-module-id world module-id)
@@ -699,20 +692,69 @@
       :yield-evidence      (yield-evi/get-evidence world)})))
 
 (def ^:private sew-state-error-codes
+  ;; State machine / lifecycle transition rejections
   #{:transfer-not-pending
     :transfer-not-in-dispute
     :invalid-state-for-release
     :invalid-state-for-refund
-    :resolution-without-settlement})
+    :resolution-without-settlement
+    :invalid-resolver
+    :invalid-workflow-id
+    :transfer-not-finalized
+    :has-pending-settlement
+    :dispute-timeout-not-exceeded
+    :invalid-token
+    :amount-zero
+    :invalid-amount
+    :invalid-recipient
+    :cannot-set-both-auto-times
+    :insufficient-module-liquidity
+    :token-liquidity-crunch
+    :circuit-breaker-active
+    :resolver-at-capacity
+    :resolver-frozen
+    :insufficient-resolver-stake
+    :active-disputes-block-withdrawal
+    :pending-slash-blocks-withdrawal
+    :missing-fee-bps
+    :no-fees-to-withdraw
+    :liquidity-insufficient
+    :no-claimable-balance
+    :no-bond-to-slash
+    :no-bond-to-return
+    :senior-not-registered
+    :senior-coverage-exceeded
+    :insufficient-stake
+    :protocol-paused})
 
 (def ^:private sew-guard-error-codes
+  ;; Precondition guard rejections
   #{:no-resolution-to-appeal
     :appeal-window-expired
     :appeal-window-not-expired
     :escalation-not-allowed
+    :escalation-not-configured
     :resolution-already-pending
+    :resolver-capacity-exceeded
     :not-participant
-    :not-authorized-resolver})
+    :not-authorized-resolver
+    :not-governance
+    :not-resolver
+    :not-sender
+    :not-recipient
+    :no-pending-slash
+    :invalid-slash-state
+    :slash-not-pending
+    :slash-already-pending
+    :invalid-slash-amount
+    :invalid-resolver-addr
+    :slash-resolver-mismatch
+    :slash-exceeds-max-per-offense
+    :slash-epoch-cap-exceeded
+    :timelock-not-expired
+    :workflow-not-slashable
+    :missing-caller-context
+    :invalid-new-resolver})
 
 (def ^:private adversarial-capable-actions
   "Actions that can constitute an attack when performed by a

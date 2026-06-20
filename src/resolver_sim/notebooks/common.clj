@@ -1,38 +1,14 @@
 (ns resolver-sim.notebooks.common
-  (:require [clojure.java.io :as io]
-            [clojure.edn :as edn]
-            [clojure.data.json :as json]
-            [resolver-sim.logging :as log]))
+  "Backward-compatibility wrapper. New code should use resolver-sim.manifest.common."
+  (:require [resolver-sim.manifest.common :as mc]))
 
-(defn safe-slurp [path]
-  (try
-    (let [f (io/file path)]
-      (when (.exists f) (slurp f)))
-    (catch Exception e
-      (log/warn! "notebook/safe-slurp-failed" {:path path :error (.getMessage e)})
-      (println "WARN: could not read" path "-" (.getMessage e))
-      nil)))
-
-(defn read-json [path]
-  (when-let [s (safe-slurp path)]
-    (try
-      (json/read-str s {:key-fn keyword})
-      (catch Exception e
-        (log/warn! "notebook/read-json-failed" {:path path :error (.getMessage e)})
-        (println "WARN: JSON parse error in" path "-" (.getMessage e))
-        nil))))
-
-(defn read-edn [path]
-  (when-let [s (safe-slurp path)]
-    (try
-      (edn/read-string s)
-      (catch Exception e
-        (log/warn! "notebook/read-edn-failed" {:path path :error (.getMessage e)})
-        (println "WARN: EDN parse error in" path "-" (.getMessage e))
-        nil))))
+(defn safe-slurp [& args] (apply mc/safe-slurp args))
+(defn read-json [& args] (apply mc/read-json args))
+(defn read-edn [& args] (apply mc/read-edn args))
 
 (defn safe-render
-  "Wraps a panel render fn in try/catch. Returns a hiccup error callout on failure."
+  "Wraps a panel render fn in try/catch. Returns a hiccup error callout on failure.
+   Notebook-only helper — not in manifest.common."
   [label f]
   (try
     (f)

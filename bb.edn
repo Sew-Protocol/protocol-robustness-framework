@@ -3,29 +3,31 @@
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
     scenario:run
-    {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a]"
-     :task (let [arg          (first *command-line-args*)
+    {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
+     :task (let [args          (vec *command-line-args*)
                  scenario-map {"kleros/preemptive-escalation-rejected-l0"
                                 "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
                                 ;; deprecated alias (pre-2026-06 rename)
                                 "kleros/escalation-race"
                                 "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-                 scenario     (or (get scenario-map arg) arg)]
+                 pos-arg     (first (remove (fn [a] (.startsWith a "--")) args))
+                 scenario     (or (get scenario-map pos-arg) pos-arg)
+                 save-idx    (.indexOf args "--save-output")
+                 save-dir    (when (<= 0 save-idx) (nth args (inc save-idx) nil))]
              (when-not scenario
                (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
              (let [t0        (System/currentTimeMillis)
                    output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
                    exit (try
-                          (let [args (vec *command-line-args*)
-                                       ;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
-                                       alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
-                                       level-idx (.indexOf args "--result-display-level")
-                                       level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
-                                       alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
-                                       alias-val (when alias-idx (get alias-map (nth args alias-idx)))
-                                       chosen (or level-val alias-val)
-                                       cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
-                                                  chosen (conj "--result-display-level" chosen))]
+                          (let [;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
+                                alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                                level-idx (.indexOf args "--result-display-level")
+                                level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                                alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                                alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                                chosen (or level-val alias-val)
+                                cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                           chosen (conj "--result-display-level" chosen))]
                                 (apply clojure {:dir "." :extra-deps {}}
                                        (conj cli-args "--output-file" output-tmp)))
                           0
@@ -56,8 +58,22 @@
                             "--run-dir" (str (.getPath latest-run)))))
                  (catch Exception e
                    (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
-               ;; 3. Clean up temp file
-               (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil))
+               ;; 3. Save output if requested, otherwise clean up temp file
+               (if save-dir
+                 (try
+                   (let [sd (java.io.File. save-dir)]
+                     (.mkdirs sd)
+                     ;; Copy replay output
+                     (if (.exists (java.io.File. output-tmp))
+                       (shell "cp" output-tmp (str save-dir "/replay-output.json")))
+                     ;; Copy test-artifacts contents
+                     (let [ta (java.io.File. "results/test-artifacts")]
+                       (when (.exists ta)
+                         (shell "cp" "-r" (str (.getCanonicalPath ta) "/.") (str save-dir "/artifacts/"))))
+                     (println (str "Saved demo output to " save-dir)))
+                   (catch Exception e
+                     (println "[scenario:run] --save-output failed:" (.getMessage e))))
+                 (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil)))
                ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
                (try
                  (let [slug (some-> scenario
@@ -605,4 +621,42 @@
 
   notebook:ci
   {:doc "Full notebook validation: lint + load/check"
-   :depends [notebook:lint notebook:check]}}}
+   :depends [notebook:lint notebook:check]}
+
+  demo:record
+  {:doc "Record a demo via asciinema. Usage: bb demo:record <id>
+         Loads demos/<id>/demo.edn, records each section via asciinema rec.
+         The command is visibly printed in the recording before execution.
+         Output: demos/<id>/generated/demo-run.json + recordings/*.cast"
+   :task (apply clojure {:dir "." :extra-deps {}}
+                "-M" "-m" "resolver-sim.demo.recorder" *command-line-args*)}
+
+  demo:validate
+  {:doc "Validate a demo spec. Usage: bb demo:validate <id>"
+   :task (apply clojure {:dir "." :extra-deps {}}
+                "-M" "-m" "resolver-sim.demo.recorder" "--validate" *command-line-args*)}
+
+  demo:scenario-summary
+  {:doc "Print a compact researcher-facing summary of a scenario JSON file.
+         Usage: bb demo:scenario-summary <path-to-scenario.json>"
+   :task (apply clojure {:dir "." :extra-deps {}}
+                "-M" "-m" "resolver-sim.demo.summary" *command-line-args*)}
+
+  demo:export-svg
+  {:doc "Generate README-embeddable animated SVG from a demo recording.
+         Usage: bb demo:export-svg <demo-id>
+         Requires an existing recording (bb demo:record <id> first).
+         Uses svg-term-cli (fetched via npx, no install needed)."
+   :task (apply clojure {:dir "." :extra-deps {}}
+                "-M" "-m" "resolver-sim.demo.export" *command-line-args*)}
+
+  demo:build
+  {:doc "Full demo build: record + export SVG.
+         Usage: bb demo:build <demo-id>
+         Runs bb demo:record then bb demo:export-svg."
+   :task (let [id (first *command-line-args*)]
+           (if-not id
+             (println "Usage: bb demo:build <id>")
+             (do
+               (shell "clojure" "-M" "-m" "resolver-sim.demo.recorder" id)
+               (shell "clojure" "-M" "-m" "resolver-sim.demo.export" id))))}}}

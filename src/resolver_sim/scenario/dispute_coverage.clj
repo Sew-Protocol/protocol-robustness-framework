@@ -10,28 +10,47 @@
 
 (def coverage-categories
   "Coverage category definitions with full scenario file paths."
-  {:basic-lifecycle    {:label "Basic lifecycle"
+  {   :basic-lifecycle    {:label "Basic lifecycle"
                         :scenarios ["S-DR-001-basic-release-ruling"
                                     "S-DR-002-basic-refund-ruling"
                                     "S-DR-003-duplicate-dispute-rejected"
-                                    "S-DR-004-timeout-default-resolution"]}
+                                    "S-DR-004-timeout-default-resolution"
+                                    "S-DR-055-sender-cancel-refund"]}
    :evidence           {:label "Evidence robustness"
                         :scenarios ["S-DR-010-missing-evidence"
-                                    "S-DR-011-contradictory-evidence"]}
+                                    "S-DR-011-contradictory-evidence"
+                                    "S-DR-056-evidence-non-disputed-rejected"]}
    :strategic          {:label "Strategic disputants"
                         :scenarios ["S-DR-020-false-claimant-slashed"
                                     "S-DR-021-griefing-claim-cost"
-                                    "S-DR-022-lazy-counterparty-timeout"]}
+                                    "S-DR-022-lazy-counterparty-timeout"
+                                    "S-DR-072-resolver-unavailable-timeout"]}
    :resolver-integrity {:label "Resolver integrity"
                         :scenarios ["S-DR-030-biased-resolver-appealed"
                                     "S-DR-031-colluding-resolver-detected"
-                                    "S-DR-032-resolver-insufficient-stake"]}
+                                    "S-DR-032-resolver-insufficient-stake"
+                                    "S-DR-050-resolution-module-plus-kleros"
+                                    "S-DR-051-challenge-without-escalation"
+                                    "S-DR-052-custom-resolver-bypasses-module"
+                                    "S-DR-053-module-false-fallthrough"
+                                    "S-DR-054-missing-escalation-level"
+                                    "S-DR-060-rotate-resolver-mid-dispute"
+                                    "S-DR-062-rotate-resolver-rejected"
+                                    "S-DR-070-empty-string-resolver-rejected"
+                                    "S-DR-071-governance-rotate-biased-ruling"
+                                    "S-DR-074-governance-capacity-bypass"
+                                    "S-DR-076-non-governance-rotate-rejected"]}
    :finality           {:label "Finality and payout correctness"
                         :scenarios ["S-DR-040-finality-blocked-during-appeal"
                                     "S-DR-041-finality-after-appeal-window"
                                     "S-DR-042-duplicate-claim-after-finality-rejected"
                                     "S-DR-043-payout-shortfall-deferred"
-                                    "S-DR-044-slash-obligation-unmet-recorded"]}})
+                                    "S-DR-044-slash-obligation-unmet-recorded"
+                                    "S-DR-061-slash-propose-execute"
+                                    "S-DR-063-slash-appeal-upheld"
+                                    "S-DR-064-slash-appeal-rejected-executed"
+                                    "S-DR-073-capacity-exhaustion-permanent-lock"
+                                    "S-DR-075-insufficient-bond-deterrence"]}})
 
 (def coverage-gaps
   "Known research gaps that cannot yet be tested because the model lacks
@@ -69,6 +88,20 @@
   [scenario-id]
   (some #(= "status/todo-stub" %) (scenario-tags scenario-id)))
 
+(def ^:private artifact-dir "results/test-artifacts")
+
+(defn- artifact-exists?
+  [filename]
+  (.exists (io/file artifact-dir filename)))
+
+(defn- artifact-ready?
+  "Check whether a named artifact file exists on disk.
+   Returns true/false. When the artifact dir doesn't exist at all,
+   returns false (no evidence yet generated)."
+  [filename]
+  (and (.exists (io/file artifact-dir))
+       (artifact-exists? filename)))
+
 (defn dispute-resolution-coverage-report
   "Produce a structured coverage report for dispute resolution research.
    Returns a map with :suite, :total-scenarios, :by-coverage, :missing,
@@ -95,15 +128,15 @@
                        {:scenario-id m
                         :coverage (first cat)
                         :reason "scenario file not found on disk"})))
-     :gaps coverage-gaps
-     :researcher-readiness
-     {:trace-summary? true
-      :evidence-summary? true
-      :evidence-world-hashes? true
-      :financial-outcome? true
-      :linked-evidence-group? true
-      :invariant-results? true
-      :dispute-summary? true}}))
+      :gaps coverage-gaps
+      :researcher-readiness
+      {:trace-summary? (artifact-ready? "trace-summary.json")
+       :evidence-summary? (artifact-ready? "evidence-summary.json")
+       :evidence-world-hashes? (artifact-ready? "evidence-summary.json")
+       :financial-outcome? (artifact-ready? "financial-outcome.json")
+       :linked-evidence-group? (artifact-ready? "evidence-summary.json")
+       :invariant-results? (artifact-ready? "invariant-results.json")
+       :dispute-summary? (artifact-ready? "dispute-summary.json")}}))
 
 (defn -main
   "CLI entrypoint: print dispute resolution coverage report as JSON.

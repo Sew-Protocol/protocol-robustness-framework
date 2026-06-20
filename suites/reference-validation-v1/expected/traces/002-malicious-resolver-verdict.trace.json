@@ -211,7 +211,8 @@
    "within_settlement_window":false,
    "pending_delay_seconds":130}},
  "trace_kind":
- ["dispute-resolution", "pending-settlement", "adversarial"],
+ ["dispute-resolution", "pending-settlement", "authorization",
+  "adversarial"],
  "step_count":8,
  "metadata":
  {"scenario_class":"adversarial", "outcome_type":"normal-completion"},

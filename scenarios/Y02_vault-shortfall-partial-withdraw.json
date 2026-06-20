@@ -67,7 +67,7 @@
       {"name": "yield/total-principal", "value": 3000},
       {"name": "yield/focus-principal", "value": 1000},
       {"name": "yield/focus-status", "value": "unwinding"},
-      {"name": "yield/focus-deferred", "value": 500},
+      {"name": "yield/focus-deferred", "value": 1000},
       {"name": "yield/available-ratio", "value": 0.5}
     ]
   }

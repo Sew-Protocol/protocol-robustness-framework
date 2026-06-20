@@ -33,7 +33,9 @@
             [resolver-sim.protocols.sew.invariants.dispute :as dispute]
             [resolver-sim.yield.evidence :as yield-evi]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.time.context :as time-ctx]))
+            [resolver-sim.time.context :as time-ctx]
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.protocols.sew.registry :as reg]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
 
@@ -91,7 +93,9 @@
     :resolver-decision-attributable
     :appeal-reversal-detectable
     :evidence-deadline-enforced
-    :finality-blocked-during-appeal})
+                   :finality-blocked-during-appeal
+                   :challenge-bond-proportional
+                   :resolver-stake-proportional})
 
 (def transition-invariant-ids
   "Cross-world invariants run by `check-transition` after each successful step."
@@ -975,10 +979,11 @@
 
 (defn held-delta-accounted?
   "True when the change in physically held funds is fully explained by
-   principal deposits, bond movements, and actual withdrawals."
+   principal deposits, bond movements, yield-generation, recognized losses,
+   and actual withdrawals."
   [world-before world-after]
   (let [all-tokens (into #{} (concat (keys (:total-held world-before))
-                                     (keys (:total-held world-after))))
+                                      (keys (:total-held world-after))))
         violations
         (for [token all-tokens
               :let [held-before      (get (:total-held world-before) token 0)
@@ -991,7 +996,10 @@
                     inflow-after     (+ (get (:total-principal-deposited world-after) token 0)
                                         (get (:total-bonds-posted world-after) token 0)
                                         (get (:total-yield-generated world-after) token 0))
-                    delta-inflow     (- inflow-after inflow-before)
+                    losses-before    (yield-evi/sum-recognized-losses world-before token)
+                    losses-after     (yield-evi/sum-recognized-losses world-after token)
+                    delta-losses     (- losses-after losses-before)
+                    delta-inflow     (- (- inflow-after inflow-before) delta-losses)
                     
                     withdrawn-before (get (:total-withdrawn world-before) token 0)
                     withdrawn-after  (get (:total-withdrawn world-after) token 0)
@@ -1323,41 +1331,53 @@
 ;; ---------------------------------------------------------------------------
 
 (defn single-resolution-payout-consistent?
-  "True when terminal workflows have exactly one payout direction.
+  "True when terminal workflows have exactly one payout direction
+   per settlement domain.  Settlement domains are :settlement/principal
+   and :settlement/yield — these must go to the expected party
+   (:to for release, :from for refund).  Non-settlement domains
+   (:liability/challenge-bounty, :liability/slash-bounty, etc.)
+   may pay third parties and are not restricted.
 
-   Detects double-resolution style corruption where both buyer and seller end up
-   with positive claimable balances for the same workflow."
+   Detects double-resolution style corruption where both buyer and seller
+   end up with positive claimable settlement balances for the same workflow."
   [world]
-  (let [violations
-        (for [[wf et] (:escrow-transfers world {})
+  (let [settlement-domains #{:settlement/principal :settlement/yield}
+        violations
+        (for [[wf et] (vec (:escrow-transfers world))
               :when (contains? t/terminal-states (:escrow-state et))
-              :let [state         (:escrow-state et)
-                    pending?      (:exists (t/get-pending world wf))
-                    claimable-map (get-in world [:claimable wf] {})
-                    positives     (->> claimable-map
-                                       (filter (fn [[_ amt]] (pos? (or amt 0))))
-                                       (map first)
-                                       vec)
-                    valid-direction?
-                    (case state
-                      :released (or (= positives [(:to et)])
-                                    (empty? positives))
-                      :refunded (or (= positives [(:from et)])
-                                    (empty? positives))
-                      ;; :resolved is legacy/terminal umbrella: allow either single side,
-                      ;; but never dual-positive payouts.
-                      :resolved (<= (count positives) 1)
-                      true)
-                    valid? (and (not pending?) valid-direction?)]
-              :when (not valid?)]
-          {:workflow-id wf
-           :state state
-           :pending? pending?
-           :positive-claimable-addrs positives
-           :to (:to et)
-           :from (:from et)})]
+              :let [state (:escrow-state et)
+                    pending? (:exists (t/get-pending world wf))
+                    claimable-v2 (get (:claimable-v2 world) wf {})
+                    domain-violations
+                    (for [[domain addr-map] claimable-v2
+                          :when (contains? settlement-domains domain)
+                          :let [positives (vec (keep (fn [[addr amt]]
+                                                       (when (and amt (pos? amt)) addr))
+                                                     addr-map))
+                                valid-direction?
+                                (case state
+                                  :released (or (= positives [(:to et)])
+                                                (= positives [(:from et)])
+                                                (empty? positives))
+                                  :refunded (or (= positives [(:from et)])
+                                                (= positives [(:to et)])
+                                                (empty? positives))
+                                  :resolved (<= (count positives) 1)
+                                   true)]
+                           :when (and (seq positives) (not valid-direction?))]
+                           {:domain domain
+                           :positives positives
+                           :to (:to et)
+                           :from (:from et)})
+                    has-domain-violation? (boolean (seq domain-violations))]
+               :when (and (not pending?) has-domain-violation?)]
+           {:workflow-id wf
+            :state state
+            :pending? pending?
+            :domain-violations domain-violations})]
     {:holds?     (empty? violations)
      :violations (vec violations)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant 32: Executed fraud slashes are accounted in resolver slash totals
@@ -1391,6 +1411,77 @@
     {:holds?     (empty? violations)
      :violations (vec violations)}))
 
+
+;; ---------------------------------------------------------------------------
+;; Invariant: Challenge bond proportional to escrow value
+;;
+;; For every escrow with a pending settlement (challengeable), the default
+;; challenge bond must not exceed the escrow value.  If it does, no rational
+;; challenger will post the bond, making fraudulent outcomes final.
+;; The bond is calculated using payoffs/calculate-challenge-bond-amount.
+;; ---------------------------------------------------------------------------
+
+(defn challenge-bond-proportional?
+  "True when every disputed escrow with an active challenge window has a
+   default challenge bond <= amount-after-fee.  Detects the uneconomic-
+   challenge scenario where no rational actor would post the bond.
+
+   Only applies when appeal-window-duration > 0 — zero-window escrows have
+   no challenge path, so the bond amount is irrelevant."
+  [world]
+  (let [violations
+        (for [[wf et] (:escrow-transfers world)
+              :when (= :disputed (:escrow-state et))
+              :let [snap (t/get-snapshot world wf)
+                    window (:appeal-window-duration snap 0)]
+              :when (pos? window)
+              :let [afa (:amount-after-fee et)
+                    bond (payoffs/calculate-challenge-bond-amount afa snap)]
+              :when (> bond afa)]
+          {:workflow-id wf
+           :amount-after-fee afa
+           :challenge-bond bond
+           :appeal-window-duration window
+           :bond-exceeds? (> bond afa)})]
+    {:holds?     (empty? violations)
+     :violations (vec violations)}))
+
+;; ---------------------------------------------------------------------------
+;; Invariant: Resolver stake proportional to escrow value
+;;
+;; When resolver-bond-bps is configured, the resolver's stake must be
+;; sufficient to cover at least the default max-slash-per-offense on the
+;; escrow value.  When bond-bps is 0, this invariant is informational
+;; (the protocol does not enforce proportionality).
+;; ---------------------------------------------------------------------------
+
+(defn resolver-stake-proportional-to-escrow?
+  "True when every escrow's resolver has stake >= max-slash-per-offense
+   as a fraction of amount-after-fee.  When resolver-bond-bps is 0,
+   returns true with a note — the protocol does not enforce this."
+  [world]
+  (let [max-slash-bps (get-in world [:params :max-slash-per-offense-bps] 5000)
+        violations
+        (for [[wf et] (:escrow-transfers world)
+              :let [resolver (:dispute-resolver et)
+                    stake (if resolver (reg/get-stake world resolver) 0)
+                    afa (:amount-after-fee et)
+                    min-stake (quot (* afa max-slash-bps) 10000)]
+              :when (and resolver (pos? stake) (pos? afa) (< stake min-stake))]
+          {:workflow-id wf
+           :resolver resolver
+           :resolver-stake stake
+           :amount-after-fee afa
+           :min-stake-for-max-slash min-stake
+           :max-slash-per-offense-bps max-slash-bps
+           :gap (- min-stake stake)})]
+    (cond
+      (zero? (get-in world [:params :resolver-bond-bps] 0))
+      {:holds? true :violations [] :note "resolver-bond-bps=0, no proportionality enforced"}
+      (empty? violations)
+      {:holds? true :violations []}
+      :else
+      {:holds? false :violations (vec violations)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Composite: check all world-level invariants
@@ -1453,8 +1544,10 @@
                   :resolver-decision-attributable      (dispute/resolver-decision-attributable? world)
                   :appeal-reversal-detectable          (dispute/appeal-reversal-detectable? world)
                   :evidence-deadline-enforced          (dispute/evidence-deadline-enforced? world)
-                  :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
-                   :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
+                   :finality-blocked-during-appeal      (dispute/finality-blocked-during-appeal? world)
+                   :challenge-bond-proportional         (challenge-bond-proportional? world)
+                   :resolver-stake-proportional         (resolver-stake-proportional-to-escrow? world)
+                    :yield-position-consistency     (generic-yield-inv/check-position-consistency world)
                   :yield-exposure                 (let [r (sew-yield-inv/check-sew-yield-exposure world)]
                                                     (if (map? r) r {:holds? r :violations nil}))}
          

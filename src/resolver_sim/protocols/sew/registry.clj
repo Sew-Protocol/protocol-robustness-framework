@@ -122,6 +122,22 @@
         cap   (payoffs/calculate-escrow-cap stake multiplier)]
     (>= cap escrow-amount)))
 
+(defn get-max-escrow-per-case
+  "Mirrors IStakingModule.getMaxEscrowPerCase(resolver).
+   Returns the maximum escrow value a resolver can be assigned,
+   computed as stake * capacity-multiplier.
+   When staking is not configured (no resolver-bond-bps), returns
+   most-positive-fixnum (no limit), mirroring StakingModuleNoOp."
+  [world resolver-addr]
+  (let [bond-bps (get-in world [:params :resolver-bond-bps] 0)]
+    (if (zero? bond-bps)
+      ;; No staking module configured — backward compatible, no limit
+      Long/MAX_VALUE
+      (let [stake (get-stake world resolver-addr)
+            multiplier (get-in world [:params :capacity-multiplier] 4.0)
+            max-per-case (get-in world [:params :max-escrow-per-l0-case] 2000e18)]
+        (min (* stake multiplier) max-per-case)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Slashing
 ;; ---------------------------------------------------------------------------
