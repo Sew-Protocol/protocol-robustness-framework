@@ -1,6 +1,5 @@
 (ns resolver-sim.util.evidence-test
-  (:require [clojure.data.json :as json]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]))
 
@@ -44,6 +43,75 @@
     (is (= attribution (attr/get-attribution attributed)))
     (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
       (is (= {:ctx/run-id "dynamic"} (attr/get-attribution nil))))))
+
+(deftest attribution-map-detects-marker-keys
+  (is (true? (attr/attribution-map? {:ctx/run-id "run-1"})))
+  (is (true? (attr/attribution-map? {:subject/type :escrow})))
+  (is (false? (attr/attribution-map? {:balance 100 :status :active})))
+  (is (false? (attr/attribution-map? nil))))
+
+(deftest resolve-attribution-ignores-arbitrary-maps
+  (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
+    (is (= {:ctx/run-id "dynamic"}
+           (attr/resolve-attribution {:balance 100 :status :active})))))
+
+(deftest resolve-attribution-prefers-explicit-override
+  (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
+    (is (= {:ctx/run-id "explicit"}
+           (attr/resolve-attribution {:ctx/run-id "input"}
+                                     {:ctx/run-id "explicit"})))))
+
+(deftest resolve-attribution-extracts-attributed-state
+  (let [attribution {:ctx/run-id "wrapped"}
+        attributed (attr/wrap-state {:balance 100} attribution)]
+    (is (= attribution (attr/explicit-attribution attributed)))
+    (is (= attribution (attr/resolve-attribution attributed)))))
+
+(deftest nested-attribution-finds-direct-nested-map
+  (is (= {:ctx/run-id "nested"}
+         (attr/nested-attribution {:result {:metadata {:ctx/run-id "nested"}}}))))
+
+(deftest nested-attribution-finds-attribution-envelope
+  (is (= {:ctx/run-id "enveloped"}
+         (attr/nested-attribution {:evidence {:attribution {:attribution/version 1
+                                                            :attribution/context {:ctx/run-id "enveloped"}}}}))))
+
+(deftest nested-attribution-finds-nested-attributed-state
+  (let [attributed (attr/wrap-state {:balance 100} {:ctx/run-id "wrapped-nested"})]
+    (is (= {:ctx/run-id "wrapped-nested"}
+           (attr/nested-attribution {:items [{:state attributed}]})))))
+
+(deftest nested-attribution-ignores-arbitrary-maps
+  (is (nil? (attr/nested-attribution {:result {:balance 100
+                                               :status :active
+                                               :config {:threshold 3}}}))))
+
+(deftest nested-attribution-prefers-shallow-explicit-attribution
+  (is (= {:ctx/run-id "outer"}
+         (attr/nested-attribution {:ctx/run-id "outer"
+                                   :result {:metadata {:ctx/run-id "inner"}}}))))
+
+(deftest sanitize-attribution-is-pure-filter
+  (is (= {:ctx/run-id "run-1"}
+         (attr/sanitize-attribution {:ctx/run-id "run-1"
+                                     :plain-key "dropped"
+                                     "bad" "dropped"}))))
+
+(deftest with-attribution-strict-sanitizes-after-validation
+  (binding [attr/*attribution* {:ctx/run-id "outer"}]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (attr/with-attribution-strict {:plain-key "bad"}
+                   (attr/current-attribution))))
+    (is (= {:ctx/run-id "inner"}
+           (attr/with-attribution-strict {:ctx/run-id "inner"}
+             (attr/current-attribution))))))
+
+(deftest with-resolved-attribution-binds-attributed-state
+  (binding [attr/*attribution* {:ctx/run-id "dynamic"}]
+    (let [attributed (attr/wrap-state {:balance 100} {:ctx/run-id "wrapped"})]
+      (is (= {:ctx/run-id "wrapped"}
+             (attr/with-resolved-attribution attributed
+               (attr/current-attribution)))))))
 
 ;; ── require-attribution! ─────────────────────────────────────────────────────
 

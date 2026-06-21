@@ -20,8 +20,6 @@
             [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
-            [resolver-sim.protocols.sew.accounting :as ac]
-            [resolver-sim.protocols.sew.authority  :as auth]
             [resolver-sim.protocols.sew.invariants :as inv]
             [resolver-sim.util.attribution        :as attr]
             [resolver-sim.util.state-monad        :as sm]
@@ -285,9 +283,8 @@
                                               (throw (ex-info "raise-dispute failed" raise-result))
                                               (sm/bind (sm/get-state)
                                                        (fn [attributed]
-                                                         (let [w2 (attr/unwrap-state attributed)
-                                                               attr-ctx (attr/get-attribution attributed)]
-                                                           (attr/with-attribution attr-ctx
+                                                         (let [w2 (attr/unwrap-state attributed)]
+                                                           (attr/with-resolved-attribution attributed
                                                              (let [tk        (keyword token)
                                                                    fee       (get-in w2 [:total-fees tk] 0)
                                                                    afa       (get-in w2 [:escrow-transfers wf-id :amount-after-fee] 0)

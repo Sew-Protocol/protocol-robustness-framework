@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed (2026-06-21)
+- **Attribution namespace split:** `resolver-sim.util.attribution` is now a compatibility facade over focused context, schema, validation, and logging namespaces. Evidence payload key registry moved to `resolver-sim.util.evidence.schema`; existing attribution call sites remain supported.
+- **Attribution resolution helpers:** Added marker-based attribution detection, safe explicit attribution resolution, nested attribution extraction, pure sanitization, a single warning sanitizer, and `with-resolved-attribution` for bridging AttributedState into legacy dynamic consumers without treating arbitrary maps as attribution.
+
 ### Added (2026-06-19)
 - **Demo factory architecture (Phase 0+1+2+SVG export):** New `resolver-sim.demo.spec` and `resolver-sim.demo.runner` namespaces implement the demo contract and executable runner. `demo.edn` spec files define a demo by pointing to scenarios, commands, expected outputs, and research claims. `bb demo:run <id>` loads `demos/<id>/demo.edn`, validates the spec, runs the scenario, executes section commands via `bash -c`, captures stdout/stderr/exit codes, collects artifacts into `generated/artifacts/`, and writes `generated/demo-run.json`. `bb demo:validate <id>` validates a spec without executing. First demo: `yield-shortfall-partial-fill` (vault shortfall partial withdrawal scenario).
 - **Terminal screenshot renderer (Phase 2):** `resolver-sim.demo.screen` generates SVG terminal screenshots with dark theme, title bar, and monospace text from captured command output. Also produces asciicast v2 format (`*.cast`) for use with asciinema players. Screenshots are automatically generated for every command and the scenario output. Stored in `generated/screenshots/`.
