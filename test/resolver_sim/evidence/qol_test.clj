@@ -1,7 +1,7 @@
 (ns resolver-sim.evidence.qol-test
   "Tests for researcher-quality-of-life additions: Query API, mechanism index,
    coverage report, and static coverage verification.
-   
+
    These tests model researcher questions, not just implementation details:
    - \"Find all evidence for workflow 42\"
    - \"Which mechanisms have evidence artifacts?\"
@@ -9,19 +9,18 @@
    - \"Did we forget to add evidence to a new function?\""
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is]]
             [clojure.walk :as walk]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.evidence.adapters.example :as example-adapter]
             [resolver-sim.evidence.diff :as diff]
+            [resolver-sim.evidence.forensic-adapter :as forensic]
             [resolver-sim.evidence.registry-validation :as reg-val]
             [resolver-sim.io.event-evidence :as evidence]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.sim.fixtures :as fix]
-            [resolver-sim.util.attribution :as attr]
-            [resolver-sim.util.evidence :as ev]
             [resolver-sim.scripts.evidence-coverage :as coverage]))
 
 ;; ── Test Helpers ──────────────────────────────────────────────────────────────
@@ -261,23 +260,46 @@
                        :evidence/group-id gid
                        :evidence/layer "generic-trace"
                        :evidence/hash "gen001"
+                       :evidence/importance :trace
+                       :scenario/id "scenario-1"
+                       :run/id "run-1"
+                       :trial/id "trial-1"
+                       :event/seq 0
                        :action {:type :create_escrow})
         escrow (assoc base :evidence/type "escrow-created"
                       :evidence/chain-seq 1
+                      :evidence/chain-prev-hash "gen001"
+                      :evidence/chain-self-hash "abc111"
                       :evidence/group-id gid
                       :evidence/layer "targeted-protocol"
+                      :evidence/importance :core
+                      :evidence/mechanism :escrow-lifecycle
                       :evidence/hash "abc111"
+                      :scenario/id "scenario-1"
+                      :run/id "run-1"
+                      :trial/id "trial-1"
+                      :event/seq 0
+                      :subject/type :escrow
+                      :subject/id 0
+                      :action/type :escrow/create
+                      :evidence/reason :escrow-created
                       :escrow/workflow-id 0)
         stake (assoc base :evidence/type "stake-registered"
                      :evidence/chain-seq 3
+                     :evidence/chain-prev-hash "abc222"
+                     :evidence/chain-self-hash "abc333"
                      :evidence/group-id gid
                      :evidence/layer "targeted-protocol"
+                     :evidence/mechanism :staking
                      :evidence/hash "abc333"
                      :stake/resolver "0xRes")
         dispute (assoc base :evidence/type "dispute-raised"
                        :evidence/chain-seq 2
+                       :evidence/chain-prev-hash "abc111"
+                       :evidence/chain-self-hash "abc222"
                        :evidence/group-id gid
                        :evidence/layer "targeted-protocol"
+                       :evidence/mechanism :dispute-resolution
                        :evidence/hash "abc222"
                        :dispute/workflow-id 0)]
     (doseq [m [generic escrow dispute stake]]
@@ -388,6 +410,105 @@
       (is (some #(= "generic-trace" (:layer %)) (:artifacts group)) "Has generic-trace")
       (is (some #(= "targeted-protocol" (:layer %)) (:artifacts group)) "Has targeted-protocol"))))
 
+(deftest links-index-v1-reports-read-errors
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group dir)
+        _ (spit (io/file dir "corrupt.json") "{not valid json}")
+        idx (evidence/build-evidence-links-index-v1 dir)]
+    (is (true? (:degraded idx)))
+    (is (= 1 (:read-errors idx)))
+    (is (= ["corrupt.json"] (:read-error-paths idx)))
+    (is (= 1 (:group-count idx)))
+    (is (= 4 (:artifact-count idx)))))
+
+(deftest links-index-v1-includes-envelope-and-group-diagnostics
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group dir)
+        idx (evidence/build-evidence-links-index-v1 dir)
+        group (get-in idx [:groups gid])
+        diagnostics (:diagnostics group)]
+    (is (= "evidence-links-index.v1" (:schema-version idx)))
+    (is (= dir (:artifact-root idx)))
+    (is (= 1 (:group-count idx)))
+    (is (= 4 (:artifact-count idx)))
+    (is (= :linked (:status diagnostics)))
+    (is (= 1 (:generic-trace-count diagnostics)))
+    (is (= 3 (:targeted-count diagnostics)))
+    (is (true? (:has-generic-trace? diagnostics)))
+    (is (true? (:has-targeted-evidence? diagnostics)))
+    (is (true? (:hashes-present? diagnostics)))
+    (is (true? (:chain-fields-present? diagnostics)))))
+
+(deftest links-index-v1-enriches-artifact-fields
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        gid (setup-linked-group dir)
+        idx (evidence/build-evidence-links-index-v1 dir)
+        artifacts (get-in idx [:groups gid :artifacts])
+        escrow (some #(when (= "escrow-created" (:evidence/type %)) %) artifacts)]
+    (is (= "ev-abc111.json" (:relative-path escrow)))
+    (is (= "abc111" (:hash escrow)))
+    (is (= "targeted-protocol" (:evidence/layer escrow)))
+    (is (= "core" (:evidence/importance escrow)))
+    (is (= "escrow-lifecycle" (:evidence/mechanism escrow)))
+    (is (= 1 (:evidence/chain-seq escrow)))
+    (is (= "gen001" (:evidence/chain-prev-hash escrow)))
+    (is (= "abc111" (:evidence/chain-self-hash escrow)))
+    (is (= "scenario-1" (:scenario/id escrow)))
+    (is (= "run-1" (:run/id escrow)))
+    (is (= "trial-1" (:trial/id escrow)))
+    (is (= 0 (:event/seq escrow)))
+    (is (= "escrow" (:subject/type escrow)))
+    (is (= 0 (:subject/id escrow)))
+    (is (= "create" (:action/type escrow)))
+    (is (= "escrow-created" (:evidence/reason escrow)))))
+
+(deftest write-links-index-v1-creates-envelope-file
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-lidx-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group dir)
+        path (evidence/write-evidence-links-index-v1! dir)]
+    (is (.exists (io/file path)))
+    (let [idx (json/read-str (slurp path) :key-fn keyword)]
+      (is (= "evidence-links-index.v1" (:schema-version idx)))
+      (is (map? (:groups idx))))))
+
+(deftest forensic-adapter-output-is-written-and-registered
+  (let [root (str (System/getProperty "java.io.tmpdir") "/qol-forensic-" (java.util.UUID/randomUUID))
+        input (io/file root "input.json")]
+    (.mkdirs (io/file root))
+    (spit input (json/write-str {:evidence/hash "input-hash"}))
+    (chain/with-fresh-registry
+      (let [result (forensic/write-forensic-adapter-output!
+                    {:adapter-id :test/example
+                     :adapter-version "0.1.0"
+                     :adapter-kind :derived-index
+                     :artifact-root root
+                     :output-path "forensics/example.json"
+                     :input-artifacts [{:relative-path "input.json" :hash "input-hash"}]
+                     :output {:finding/count 1}})
+            written (json/read-str (slurp (:path result)) :key-fn keyword)
+            status (chain/registry-status)]
+        (is (.exists (io/file (:path result))))
+        (is (= "forensic-adapter-output.v1" (:schema-version written)))
+        (is (= "input-hash" (get-in written [:input-artifacts 0 :hash])))
+        (is (string? (:output-hash written)))
+        (is (= 1 (:evidence-count status)))
+        (is (= "derived-diagnostic-artifact" (get-in result [:artifact-entry :kind])))))))
+
+(deftest example-forensic-adapter-writes-mechanism-report
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-adapter-" (java.util.UUID/randomUUID))
+        _ (setup-linked-group dir)]
+    (chain/with-fresh-registry
+      (let [result (example-adapter/write-example-mechanism-report!
+                    :mechanism :escrow-lifecycle
+                    :artifact-root dir
+                    :event-evidence-dir dir
+                    :output-path "forensics/escrow-report.json")
+            written (json/read-str (slurp (:path result)) :key-fn keyword)]
+        (is (.exists (io/file (:path result))))
+        (is (= "escrow-lifecycle" (get-in written [:output :mechanism])))
+        (is (= 1 (get-in written [:output :selected-count])))
+        (is (= "abc111" (get-in written [:input-artifacts 0 :hash])))))))
+
 (deftest write-coverage-report-creates-file
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-test-" (java.util.UUID/randomUUID))
         ev-dir (str dir "/event-evidence")
@@ -454,7 +575,7 @@
 
 (deftest chain-integrity-gap
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
-        written (setup-chain-artifacts dir)
+        _ (setup-chain-artifacts dir)
         ;; Find the file with chain-seq 2 to delete
         files (.listFiles (java.io.File. dir))]
     (doseq [f files]
@@ -469,7 +590,7 @@
 
 (deftest chain-integrity-self-hash-mismatch
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-ci-" (java.util.UUID/randomUUID))
-        written (setup-chain-artifacts dir)
+        _ (setup-chain-artifacts dir)
         ;; Find the file with chain-seq 1 and change its evidence/type
         files (.listFiles (java.io.File. dir))
         f (some (fn [f]

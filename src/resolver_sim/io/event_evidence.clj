@@ -13,6 +13,7 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.set :as set]
+            [clojure.string :as str]
             [clojure.walk :as walk]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
@@ -63,11 +64,11 @@
   (let [etype-str (fn [v] (if (keyword? v) (name v) (str v)))
         etype (:evidence/type evidence)
         reason (-> (etype-str etype)
-                   (clojure.string/replace #":|-|/" "-")
-                   (clojure.string/replace #"\\.\\." ""))
+                   (str/replace #":|-|/" "-")
+                   (str/replace #"\\.\\." ""))
         sid    (-> (etype-str (:scenario/id evidence))
-                   (clojure.string/replace #":|-|/" "-")
-                   (clojure.string/replace #"\\.\\." ""))
+                   (str/replace #":|-|/" "-")
+                   (str/replace #"\\.\\." ""))
         idx    (or (:event/seq evidence) "unknown")]
     (str reason "-" sid "-" idx ".json")))
 
@@ -289,54 +290,166 @@
 ;; :evidence/group-id.  Lets researchers navigate from a dispatcher trace event
 ;; to all targeted evidence captured during that same replay event.
 
-(defn build-evidence-links-index
-  "Scan the event-evidence directory and group artifacts by :evidence/group-id.
-   Returns a map keyed by group-id, each entry listing both generic-trace and
-   targeted-protocol artifacts with their paths and hashes.
-   Returns {:degraded true, :read-errors N, ...} if any artifacts could not be read."
+(defn- relative-path
+  [root f]
+  (try
+    (str (.relativize (.toPath (io/file root)) (.toPath (io/file f))))
+    (catch Exception _
+      (.getName (io/file f)))))
+
+(defn- generic-trace-layer? [layer]
+  (or (= "generic-trace" layer)
+      (= :generic-trace layer)))
+
+(defn- evidence-artifact-summary
+  [root f data]
+  (let [attr (attr/nested-attribution data)
+        field (fn [k] (or (get data k) (get attr k)))]
+    (cond-> {:relative-path (relative-path root f)
+             :hash (or (:evidence-hash data) (:evidence/hash data))
+             :evidence/type (:evidence/type data)
+             :evidence/layer (:evidence/layer data)
+             :evidence/importance (:evidence/importance data)
+             :evidence/mechanism (:evidence/mechanism data)
+             :evidence/chain-seq (:evidence/chain-seq data)
+             :evidence/chain-prev-hash (:evidence/chain-prev-hash data)
+             :evidence/chain-self-hash (:evidence/chain-self-hash data)
+             :scenario/id (:scenario/id data)
+             :run/id (:run/id data)
+             :trial/id (:trial/id data)
+             :event/seq (:event/seq data)
+             :subject/type (field :subject/type)
+             :subject/id (field :subject/id)
+             :action/type (field :action/type)
+             :evidence/reason (field :evidence/reason)}
+      ;; Legacy compatibility fields used by existing tests/callers.
+      true (assoc :group-id (:evidence/group-id data)
+                  :layer (:evidence/layer data)
+                  :path (.getPath (io/file f))
+                  :event-type (:evidence/type data)
+                  :artifact-kind (:artifact-kind data)))))
+
+(defn- group-diagnostics
+  [artifacts degraded?]
+  (let [generic-count (count (filter #(generic-trace-layer? (:evidence/layer %)) artifacts))
+        targeted (remove #(generic-trace-layer? (:evidence/layer %)) artifacts)
+        targeted-count (count targeted)
+        hashes-present? (every? #(seq (:hash %)) artifacts)
+        chain-fields-present? (and (seq targeted)
+                                   (every? #(and (contains? % :evidence/chain-seq)
+                                                 (contains? % :evidence/chain-prev-hash)
+                                                 (contains? % :evidence/chain-self-hash))
+                                           targeted))]
+    {:artifact-count (count artifacts)
+     :generic-trace-count generic-count
+     :targeted-count targeted-count
+     :has-generic-trace? (pos? generic-count)
+     :has-targeted-evidence? (pos? targeted-count)
+     :hashes-present? hashes-present?
+     :chain-fields-present? (boolean chain-fields-present?)
+     :status (cond
+               degraded? :degraded
+               (and (pos? generic-count) (pos? targeted-count)) :linked
+               (and (pos? generic-count) (zero? targeted-count)) :no-targeted-evidence
+               :else :partial)}))
+
+(defn- attach-group-diagnostics
+  [groups degraded?]
+  (into {}
+        (map (fn [[gid group]]
+               [gid (assoc group :diagnostics (group-diagnostics (:artifacts group) degraded?))]))
+        groups))
+
+(defn build-evidence-links-index-v1
+  "Build a versioned, forensic-friendly links index envelope. Best-effort:
+   malformed artifacts are logged and counted in :read-errors instead of thrown."
   ([]
-   (build-evidence-links-index (str (evcfg/artifact-dir) "/event-evidence")))
+   (build-evidence-links-index-v1 (str (evcfg/artifact-dir) "/event-evidence")))
   ([dir]
    (let [dir-file (io/file dir)]
      (if-not (.isDirectory dir-file)
        (do (log/warn! :evidence-links-dir-not-found {:path dir})
-           {:degraded true :error :directory-not-found})
-       (let [files (filter #(.isFile %) (file-seq dir-file))
-             results (keep (fn [f]
-                             (try
-                               (let [data (read-evidence-json f)
-                                     gid (:evidence/group-id data)]
-                                 (when gid
-                                   {:group-id gid
-                                    :layer (:evidence/layer data)
-                                    :path (.getPath f)
-                                    :hash (or (:evidence-hash data)
-                                              (:evidence/hash data))
-                                    :event-type (:evidence/type data)
-                                    :artifact-kind (:artifact-kind data)
-                                    :ok true}))
-                               (catch Exception e
-                                 (log/warn! :evidence-read-failed
-                                            {:path (str f) :error (.getMessage e)})
-                                 nil)))
-                           files)
-             read-errors (count (remove :ok results))]
-         (reduce (fn [acc entry]
-                   (update acc (:group-id entry)
-                           (fn [group]
-                             (update (or group {:artifacts []})
-                                     :artifacts conj (dissoc entry :ok)))))
-                 (if (pos? read-errors) {:degraded true :read-errors read-errors} {})
-                 results))))))
+           {:schema-version "evidence-links-index.v1"
+            :generated-at (str (java.time.Instant/now))
+            :artifact-root dir
+            :group-count 0
+            :artifact-count 0
+            :degraded true
+            :error :directory-not-found
+            :read-errors 0
+            :groups {}})
+       (let [read-errors (atom [])
+             files (filter #(.isFile %) (file-seq dir-file))
+             artifacts (vec
+                        (keep (fn [f]
+                                (try
+                                  (let [data (read-evidence-json f)
+                                        gid (:evidence/group-id data)]
+                                    (when gid
+                                      {:group-id gid
+                                       :summary (evidence-artifact-summary dir f data)}))
+                                  (catch Exception e
+                                    (log/warn! :evidence-read-failed
+                                               {:path (str f) :error (.getMessage e)})
+                                    (swap! read-errors conj {:path (relative-path dir f)
+                                                             :error (.getMessage e)})
+                                    nil)))
+                              files))
+             degraded? (pos? (count @read-errors))
+             groups (attach-group-diagnostics
+                     (reduce (fn [acc {:keys [group-id summary]}]
+                               (update acc group-id
+                                       (fn [group]
+                                         (update (or group {:artifacts []})
+                                                 :artifacts conj summary))))
+                             {}
+                             artifacts)
+                     degraded?)]
+         (cond-> {:schema-version "evidence-links-index.v1"
+                  :generated-at (str (java.time.Instant/now))
+                  :artifact-root dir
+                  :group-count (count groups)
+                  :artifact-count (count artifacts)
+                  :degraded degraded?
+                  :read-errors (count @read-errors)
+                  :groups groups}
+           degraded? (assoc :read-error-paths (mapv :path @read-errors))))))))
+
+(defn build-evidence-links-index
+  "Compatibility wrapper returning the legacy bare map keyed by group-id.
+   Degradation metadata is preserved as top-level keys when read errors occur."
+  ([]
+   (build-evidence-links-index (str (evcfg/artifact-dir) "/event-evidence")))
+  ([dir]
+   (let [idx (build-evidence-links-index-v1 dir)]
+     (cond-> (:groups idx)
+       (:degraded idx) (assoc :degraded true
+                              :read-errors (:read-errors idx)
+                              :read-error-paths (:read-error-paths idx))))))
 
 (comment
   ;; (build-evidence-links-index "results/test-artifacts/event-evidence")
   )
 
-(defn write-evidence-links-index!
-  "Build and persist the evidence links index to evidence-links.json.
+(defn write-evidence-links-index-v1!
+  "Build and persist the versioned evidence links index envelope to evidence-links.json.
    Also registers the index in the chain registry for test-artifacts.json.
    Returns the path to the written file."
+  [& [dir]]
+  (let [idx (build-evidence-links-index-v1 dir)
+        out-dir (or dir (str (evcfg/artifact-dir)))
+        f (io/file out-dir "evidence-links.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str idx {:key-fn qualified-key :indent true}))
+    (println "Wrote evidence links index:" (.getPath f))
+    (chain/register-additional-artifact!
+     (chain/index-artifact-entry :evidence-links "evidence-links.json"
+                                 "evidence-links-index.v1" "DIAGNOSTIC"))
+    (.getPath f)))
+
+(defn write-evidence-links-index!
+  "Compatibility writer: persists the legacy bare links map to evidence-links.json.
+   New forensic consumers should prefer write-evidence-links-index-v1!."
   [& [dir]]
   (let [idx (build-evidence-links-index dir)
         out-dir (or dir (str (evcfg/artifact-dir)))
@@ -374,14 +487,14 @@
 
 (defn verify-chain-integrity
   "Verify the evidence chain from artifacts alone.
-   
+
    Reads all artifacts, sorts by :evidence/chain-seq, and checks:
    1. Each artifact's evidence-hash matches a re-computed hash of its content
       (excluding :evidence/hash, :evidence/chain-self-hash, :evidence/chain-prev-hash)
    2. Each artifact's :evidence/chain-prev-hash matches the previous artifact's
       :evidence/chain-self-hash (or :evidence/hash)
    3. No gaps in :evidence/chain-seq numbering
-   
+
    Returns a map:
    :valid       — true if all checks pass
    :artifact-count — total artifacts with chain fields
@@ -389,7 +502,7 @@
    :prev-hash-valid — count of artifacts with matching prev->previous link
    :gaps        — list of missing chain-seq numbers
    :violations  — list of {:chain-seq N :reason ...} maps
-   
+
    Throws if artifact-dir does not exist (fail-closed)."
   [& [artifact-dir]]
   (let [dir (or artifact-dir (str (evcfg/artifact-dir) "/event-evidence"))
@@ -438,7 +551,7 @@
                  [])
           violations (concat
                       (map (fn [a] {:chain-seq (:evidence/chain-seq a)
-                                    :reason (str "Content hash mismatch — evidence content has been modified")})
+                                    :reason "Content hash mismatch — evidence content has been modified"})
                            content-bad)
                       (map (fn [r] {:chain-seq (:evidence/chain-seq (:artifact r))
                                     :reason (str "Prev-hash mismatch: "
@@ -469,17 +582,17 @@
 
 (defn verify-scenario-evidence
   "Compare :expected-evidence declared on a scenario against captured artifacts.
-   
+
    scenario — a scenario map (after normalization) with optional :expected-evidence
    artifact-dir — path to the event-evidence directory
-   
+
    Returns a map:
    :declared   — the full :expected-evidence vector (nil if absent)
    :matched    — entries that were found in captured artifacts
    :missing    — expected entries not found
    :unexpected — captured evidence types not declared as expected
    :degraded   — true if some artifacts could not be read (partial results)
-   
+
    When the scenario has no :expected-evidence, returns nil.
    Returns {:degraded true :error :directory-not-found} when dir does not exist."
   [scenario & [artifact-dir]]
@@ -531,10 +644,10 @@
 
 (defn diff-evidence-directories
   "Compare evidence artifacts between two directories.
-   
+
    dir-a — baseline directory (\"before\")
    dir-b — comparison directory (\"after\")
-   
+
    Returns a map:
    :added       — artifacts in B not in A
    :missing     — artifacts in A not in B
@@ -569,13 +682,13 @@
 
 (defn export-evidence-bundle
   "Copy evidence artifacts matching the given group-ids into an output directory.
-   
+
    group-ids   — one or more :evidence/group-id strings to filter by
    output-dir  — directory to write the bundle into
    artifact-dir   — source event-evidence directory (optional)
-   
+
    Returns the path to output-dir.
-   
+
    The bundle directory contains:
    - All matching JSON artifacts (renamed to chain-seq for stable ordering)
    - manifest.json with source metadata and artifact list"
@@ -615,7 +728,7 @@
 
 (defn linked-evidence-group
   "Researcher-facing helper for inspecting one replay event.
-  
+
    Given an :evidence/group-id, returns the generic transition trace and
    all targeted evidence artifacts captured for that same event.
 
@@ -626,7 +739,7 @@
 
    Given an :evidence/group-id, finds every artifact in the event-evidence directory
    whose :evidence/group-id matches.  Returns nil if no artifacts are found.
-   
+
    Returns a map with:
    :group-id       — the supplied group-id
    :generic-trace  — the artifact whose :evidence/layer is \"generic-trace\" or :generic-trace, or nil
@@ -635,9 +748,9 @@
                      :generic-trace-found?  boolean
                      :targeted-count        number
                      :artifact-count        total number of artifacts in the group
-   
+
    Malformed JSON files are silently skipped.
-   
+
    Usage:
      (linked-evidence-group \"S19-run:3:raise_dispute\")
      (linked-evidence-group \"S19-run:3:raise_dispute\" \"/path/to/event-evidence\")"
@@ -770,7 +883,7 @@
 (defn find-evidence
   "Search targeted evidence artifacts matching all given filters.
    Filters are AND-combined. Returns a vector of lightweight summaries.
-   
+
    Optional keyword arguments:
    :by-type        — evidence type keyword or string
    :by-mechanism   — mechanism keyword (e.g. :slashing, :escrow-lifecycle)
@@ -781,7 +894,7 @@
    :by-scenario-id — scenario-id string
    :include-body?  — boolean, include full parsed artifact body
    :artifact-dir   — override artifact directory path
-   
+
    Examples:
      (find-evidence :by-type :escrow-created)
      (find-evidence :by-workflow 42)
@@ -908,10 +1021,10 @@
 (defn- check-expected-evidence
   "Scan scenario files for :expected-evidence declarations and verify them
    against captured evidence artifacts.
-   
+
    scenarios-dir — directory containing scenario JSON files
    artifact-dir  — directory containing event-evidence/ subdirectory
-   
+
    Returns a map:
    :scenarios-checked — count of scenarios that declare :expected-evidence
    :all-matched?      — true if every declared type was captured
@@ -959,7 +1072,7 @@
    Accepts an optional map with:
    - :dir          — run artifact directory (default: evcfg/artifact-dir)
    - :scenarios-dir — path to scenario JSON files (default: \"scenarios\" in project root)
-   
+
    Returns a structured map suitable for JSON serialization."
   [& [opts]]
   (let [{:keys [dir scenarios-dir]
@@ -971,7 +1084,6 @@
         generic-count (:count generic-result)
         links (read-evidence-links-index artifact-dir)
         targeted-events (when links (count links))
-        group-ids (when links (keys links))
         ;; Count by mechanism using the mechanism index
         mech-idx (build-mechanism-index ev-dir)
         mechanism-counts (into {} (map (fn [[k v]] [k (:count v)]) mech-idx))
@@ -1022,32 +1134,19 @@
 (defn write-evidence-coverage-report!
   "Build and persist the evidence coverage report to evidence-coverage-report.json.
    Also registers the report in the chain registry for test-artifacts.json.
-   
+
    Optional args (varargs or single map):
    - :dir           — run artifact directory
    - :scenarios-dir — path to scenario JSON files
-   
+
    Returns the path to the written file."
   [& args]
-  (let [opts (if (map? (first args)) (first args) (apply hash-map args))
+  (let [opts (cond
+               (map? (first args)) (first args)
+               (= 1 (count args)) {:dir (first args)}
+               :else (apply hash-map args))
         dir (:dir opts)
         report (build-evidence-coverage-report opts)
-        out-dir (or dir (str (evcfg/artifact-dir)))
-        f (io/file out-dir "evidence-coverage-report.json")]
-    (.mkdirs (io/file out-dir))
-    (spit f (json/write-str report {:key-fn qualified-key :indent true}))
-    (println "Wrote evidence coverage report:" (.getPath f))
-    (chain/register-additional-artifact!
-     (chain/index-artifact-entry :evidence-coverage-report "evidence-coverage-report.json"
-                                 "evidence-index.v1" "DIAGNOSTIC"))
-    (.getPath f)))
-
-(defn write-evidence-coverage-report!
-  "Build and persist the evidence coverage report to evidence-coverage-report.json.
-   Also registers the report in the chain registry for test-artifacts.json.
-   Returns the path to the written file."
-  [& [dir]]
-  (let [report (build-evidence-coverage-report dir)
         out-dir (or dir (str (evcfg/artifact-dir)))
         f (io/file out-dir "evidence-coverage-report.json")]
     (.mkdirs (io/file out-dir))
@@ -1063,4 +1162,3 @@
 (let [v (find-var 'resolver-sim.evidence.capture/*capture-event-evidence!*)]
   (when v
     (alter-var-root v (constantly (var-get #'capture-event-evidence!)))))
-
