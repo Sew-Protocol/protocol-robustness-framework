@@ -154,6 +154,7 @@
 (defn- now-iso []
   (str (java.time.Instant/now)))
 
+
 (defn build-registry
   "Build a self-hashed registry map from the accumulated evidence records.
 
@@ -275,7 +276,7 @@
 
 (defn write-chain-cursor-final!
   "Snapshot the chain cursor at run finalization and persist as
-   chain-cursor-final.json.  Registers the artifact for test-artifacts.json.
+   chain-cursor-final.json.  Registers the artifact for test-artifacts.json.(java.security.MessageDigest/getInstance "SHA-256")
    Returns the path written, or nil if the cursor was never used.
     
    When private-key-path is provided, signs the cursor content (final-seq +

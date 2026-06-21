@@ -181,44 +181,44 @@
                             (pos? deferred) fulfilled
                             (>= held (+ fulfilled haircut)) (+ fulfilled haircut)
                             :else fulfilled))
-                        amt)]
-    (let [result (-> world-after-policy
-                     (acct/sub-held token sub-held-amt)
-                     (record-fn token settled-amt)
-                     ;; Track outbound FoT fee
-                     (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
-                     ;; Principal claimable
-                     (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
-                     (update :pending-settlements dissoc workflow-id)
-                     (sm/apply-transition! workflow-id direction)
-                     ;; Reset dispute/cancel statuses
-                     (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))
-          evidence-reason (if (= direction :released) :escrow-released :escrow-refunded)]
-      (attr/with-attribution {:subject/type :escrow
-                              :subject/id workflow-id
-                              :action/type (keyword "escrow" (name direction))
-                              :evidence/reason evidence-reason}
-        (cap/capture-event-evidence!
-         evidence-reason
-         {:finalize/before
-          {:workflow-state (t/escrow-state world workflow-id)
-           :total-held (get-in world [:total-held token])
-           :resolver (:dispute-resolver et)}}
-         {:finalize/after
-          {:workflow-state (t/escrow-state result workflow-id)
-           :total-held (get-in result [:total-held token])}}
-         {:finalize/workflow-id workflow-id
-          :finalize/direction direction
-          :finalize/recipient recipient
-          :finalize/settled-amount settled-amt
-          :finalize/sub-held-amount sub-held-amt
-          :finalize/partial-yield? (boolean partial-yield?)
-          :finalize/shortfall? (boolean pos-shortfall)
-          :finalize/resolver (:dispute-resolver et)}
-         nil
-         {:world-before world
-          :world-after result}))
-      result)))
+                        amt)
+        result (-> world-after-policy
+                   (acct/sub-held token sub-held-amt)
+                   (record-fn token settled-amt)
+                   ;; Track outbound FoT fee
+                   (update-in [:total-fot-fees token] (fnil + 0) (- amt net-amt))
+                   ;; Principal claimable
+                   (acct/record-claimable-v2 workflow-id :settlement/principal recipient settled-amt)
+                   (update :pending-settlements dissoc workflow-id)
+                   (sm/apply-transition! workflow-id direction)
+                   ;; Reset dispute/cancel statuses
+                   (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))
+        evidence-reason (if (= direction :released) :escrow-released :escrow-refunded)]
+    (attr/with-attribution {:subject/type :escrow
+                            :subject/id workflow-id
+                            :action/type (keyword "escrow" (name direction))
+                            :evidence/reason evidence-reason}
+      (cap/capture-event-evidence!
+       evidence-reason
+       {:finalize/before
+        {:workflow-state (t/escrow-state world workflow-id)
+         :total-held (get-in world [:total-held token])
+         :resolver (:dispute-resolver et)}}
+       {:finalize/after
+        {:workflow-state (t/escrow-state result workflow-id)
+         :total-held (get-in result [:total-held token])}}
+       {:finalize/workflow-id workflow-id
+        :finalize/direction direction
+        :finalize/recipient recipient
+        :finalize/settled-amount settled-amt
+        :finalize/sub-held-amount sub-held-amt
+        :finalize/partial-yield? (boolean partial-yield?)
+        :finalize/shortfall? (boolean pos-shortfall)
+        :finalize/resolver (:dispute-resolver et)}
+       nil
+       {:world-before world
+        :world-after result}))
+    result))
 
 (defn finalize-escrow-accounting
   "Shared finalize accounting for release/refund and resolution paths."

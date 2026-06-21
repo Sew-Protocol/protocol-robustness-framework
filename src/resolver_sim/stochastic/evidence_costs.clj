@@ -7,9 +7,18 @@
    This makes shortcuts rational → lazy strategy dominates → system breaks.
    
    Also models: evidence forgery cost < verification cost for hard cases.
-   This creates an asymmetry where attackers can forge faster than honest can verify."
+   This creates an asymmetry where attackers can forge faster than honest can verify.
+   
+   Pro-rata load allocation:
+   When multiple resolvers share a dispute pool, each resolver's rational threshold
+   calculation must use its *individual* dispute load, not the global total.
+   `prorata-dispute-load` distributes the epoch dispute volume proportionally by
+   effort-budget (capacity) using the Hare-quota / largest-remainder method — the
+   same conservation-exact primitive used everywhere else in the framework.
+   Reference: resolver-sim.yield.exact-math/largest-remainder-alloc"
   (:require [resolver-sim.stochastic.difficulty :as diff]
-            [resolver-sim.stochastic.rng :as rng]))
+            [resolver-sim.stochastic.rng :as rng]
+            [resolver-sim.yield.exact-math :as exact-math]))
 
 ;; === Effort Budget Constraints ===
 
@@ -28,17 +37,99 @@
 
 (defn effort-available-per-dispute
   "Average effort available per dispute given load.
-   
+
    effort-per-dispute = effort-budget / num-disputes
-   
+
    At light load (10 disputes): 10 units/dispute → can fully verify all
    At heavy load (100 disputes): 1 unit/dispute → impossible to verify any
-   
+
    This creates load-dependent strategy switching."
   [effort-budget num-disputes]
   (if (zero? num-disputes)
     effort-budget
     (/ effort-budget (double num-disputes))))
+
+(defn prorata-dispute-load
+  "Distribute total-disputes across resolvers proportionally by effort-budget capacity.
+
+   ## Motivation (rational resolver threshold)
+   The strategy payoff model in `optimal-strategy-under-load` takes `num-disputes`
+   as its load signal. Under a uniform assumption every resolver sees the *global*
+   total — but resolvers with different effort budgets receive proportionally
+   different slices of the dispute pool.  A resolver with twice the budget can
+   handle twice the cases, so the market equilibrium assigns it roughly twice the
+   load.  Feeding the global total into per-resolver threshold calculations
+   systematically mis-estimates effort-per-dispute and therefore the
+   honest/lazy/malicious payoff crossover point.
+
+   ## Method — Hare-quota / largest-remainder (Hamilton's method)
+   The same conservation-exact proportional allocation used throughout the
+   framework (yield settlement, slash allocation).  Guarantees:
+     (1) Conservation: Σ resolver-disputes = total-disputes  (no leakage)
+     (2) Quota Rule:   floor(q_i) ≤ alloc_i ≤ ceil(q_i)
+                       where q_i = total × (budget_i / Σ budgets)
+     (3) Determinism:  tie-breaking is index-stable (no hidden randomness)
+
+   ## Parameters
+     resolver-ids   — ordered collection of resolver IDs
+     resolver-budgets — {resolver-id → effort-budget (positive number)}
+                        Missing IDs default to the global effort-budget default.
+                        All-zero budgets fall back to uniform.
+     total-disputes — total epoch dispute count (non-negative integer)
+     default-budget — fallback per-resolver budget (default: epoch-effort-budget)
+
+   ## Returns
+   {resolver-id → integer dispute count}  — every id present, sum = total-disputes.
+
+   ## Evidence
+   Hare quota: Balinski & Young (2001) §3.1 — floor allocation + largest-remainder.
+   Conservation / quota-rule proofs: see pro_rata_proportional_math_spec.md."
+  ([resolver-ids resolver-budgets total-disputes]
+   (prorata-dispute-load resolver-ids resolver-budgets total-disputes (epoch-effort-budget)))
+  ([resolver-ids resolver-budgets total-disputes default-budget]
+   {:pre [(not (neg? total-disputes))
+          (sequential? resolver-ids)
+          (map? resolver-budgets)]}
+   (let [ids-vec (vec resolver-ids)
+         n       (count ids-vec)]
+     (if (zero? n)
+       {}
+       (let [;; Step 1: collect per-resolver capacity weights (effort budgets)
+             ;; Missing IDs fall back to the global default — same invariant as
+             ;; the cfg-level :effort-budget-per-epoch resolution in defection.clj.
+             weights (mapv (fn [id]
+                             (double (max 0.0 (get resolver-budgets id default-budget))))
+                           ids-vec)
+             total-weight (reduce + 0.0 weights)
+             ;; Step 2: if all weights are zero (e.g. no budget info at all),
+             ;; fall back to uniform — each resolver gets an equal share.
+             eff-weights (if (pos? total-weight)
+                           weights
+                           (vec (repeat n 1.0)))
+
+             ;; Step 3: build claims vector for largest-remainder-alloc.
+             ;; :amount = capacity weight → drives the proportional share.
+             ;; :key    = resolver-id    → preserved in allocations output.
+             claims (mapv (fn [id w] {:key id :amount w}) ids-vec eff-weights)
+
+             ;; Step 4: call the canonical pro-rata primitive.
+             ;; This provides the Hare-quota guarantee: conservation + quota rule.
+             alloc-result (exact-math/largest-remainder-alloc total-disputes claims)
+
+             ;; Step 5: extract and return {resolver-id → dispute-count} map.
+             ;; :filled is the integer allocation from largest-remainder-alloc.
+             alloc-map (into {} (map (fn [a] [(:key a) (:filled a)])
+                                     (:allocations alloc-result)))
+
+             ;; Post-condition: conservation invariant must hold.
+             ;; The assertion in largest-remainder-alloc already guarantees this;
+             ;; we re-assert here at this abstraction boundary as a belt-and-suspenders check.
+             total-allocated (reduce + 0 (vals alloc-map))
+             _ (assert (= (long total-disputes) total-allocated)
+                       (str "prorata-dispute-load conservation violation: "
+                            "total-disputes=" total-disputes
+                            " allocated=" total-allocated))]
+         alloc-map)))))
 
 (defn effort-required-to-verify
   "Effort required for full verification by strategy/difficulty.

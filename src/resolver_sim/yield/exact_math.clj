@@ -240,8 +240,11 @@
    ;; => first two claims get 4, 3, 3 (remainder goes to earliest indices)
    "
   [total-available claims]
+  {:pre [(let [tot (ratio total-available)]
+           (and (not (nil? tot)) (>= tot 0)))
+         (sequential? claims)]}
   (let [total (ratio total-available)
-        total-units (first (quantize-base-units total))
+        [total-units total-rem] (quantize-base-units total)
         n (count claims)
         claims-total (reduce + 0 (map (comp ratio :amount) claims))]
     (if (zero? claims-total)
@@ -249,29 +252,53 @@
        :total-available-units total-units
        :total-allocated-units 0
        :shortage-units 0
-       :carry 0}
-      (let [ideal (mapv (fn [c] (* total (/ (ratio (:amount c)) (ratio (or (:basis c) claims-total)))))
+       :carry total-rem}
+      (let [;; Step 1: Calculate the exact ideal proportional shares
+            ideal (mapv (fn [c] (* total (/ (ratio (:amount c)) (ratio (or (:basis c) claims-total)))))
                         claims)
+
+            ;; Step 2: Segment each ideal share into lower-quota (floor) and fractional remainder
             indexed (map-indexed (fn [i c] (assoc c :idx i :ideal (nth ideal i))) claims)
             [units rems] (reduce (fn [[us rs] idx-i]
                                    (let [[u r] (quantize-base-units (:ideal idx-i))]
                                      [(conj us u) (conj rs r)]))
                                  [[] []]
                                  indexed)
+
+            ;; Step 3: Compute the shortage (unallocated units due to flooring)
             sum-units (reduce + 0 units)
             shortage (- total-units sum-units)
+            _ (assert (>= shortage 0) "Shortage must be non-negative (lower-quota sum <= total units)")
+            _ (assert (< shortage n) "Shortage must be strictly less than the number of claims")
+
+            ;; Step 4: Allocate remainder units to claims with largest fractional remainders
             indices-by-rem (->> (range n)
                                 (sort-by #(- (nth rems %)))
                                 (take shortage))
             final-units (reduce (fn [us i] (update us i inc))
                                 (vec units)
-                                indices-by-rem)]
+                                (vec indices-by-rem))
+
+            ;; Step 5: Post-condition verification of conservation and quota invariants
+            total-allocated (reduce + 0 final-units)
+            _ (assert (= total-units total-allocated)
+                      (str "Conservation violation: total-units=" total-units " but total-allocated=" total-allocated))]
+
+        ;; Verify Quota rule: each allocation must satisfy floor(ideal) <= allocated <= ceil(ideal)
+        (dotimes [i n]
+          (let [idl (nth ideal i)
+                [flr rem] (quantize-base-units idl)
+                cel (if (zero? rem) flr (inc flr))
+                alloc (nth final-units i)]
+            (assert (and (>= alloc flr) (<= alloc cel))
+                    (str "Quota rule violation at index " i ": ideal=" idl " allocated=" alloc " range=[" flr "," cel "]"))))
+
         {:allocations (mapv (fn [claim u r ideal-v]
                               (assoc claim :filled u :remainder-exact r :ideal-exact ideal-v))
                             claims final-units rems ideal)
          :total-available-units total-units
-         :total-allocated-units (reduce + 0 final-units)
-         :shortage-units (- total-units (reduce + 0 final-units))
+         :total-allocated-units total-allocated
+         :shortage-units 0
          :carry 0}))))
 
 (defn principal-protective-floor-alloc

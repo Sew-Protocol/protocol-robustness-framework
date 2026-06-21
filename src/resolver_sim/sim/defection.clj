@@ -15,7 +15,15 @@
 
    Backward compatibility:
    - :defection-rate and :defection-model are still supported.
-   - If neither config shape enables adaptation, histories are unchanged."
+   - If neither config shape enables adaptation, histories are unchanged.
+
+   Pro-rata resolver threshold:
+   When the :load-optimal selector is active, each resolver's strategy payoff is
+   evaluated using its *individual* dispute load (not the global epoch total).
+   Dispute volume is distributed proportionally by effort-budget capacity via
+   `ec/prorata-dispute-load` (Hare-quota method), so a resolver with twice the
+   budget correctly sees twice the load in its threshold calculation.
+   See: resolver-sim.stochastic.evidence-costs/prorata-dispute-load"
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.evidence-costs :as ec]))
 
@@ -279,22 +287,70 @@
      resolver-histories)))
 
 (defn- apply-load-optimal
-  [rng resolver-histories epoch {:keys [rate] :as cfg} params]
-  (let [load-snap (load-optimal-snapshot params cfg rng)
+  "Evaluate per-resolver strategy adaptation using load-optimal threshold.
+
+   ## Pro-rata dispute load
+   Rather than passing the global `_epoch-trials` to every resolver's payoff
+   calculation, we first distribute the total dispute volume proportionally
+   by each resolver's effort budget (capacity) using `ec/prorata-dispute-load`
+   (Hare-quota / largest-remainder method).
+
+   Rationale: a resolver with effort-budget B_i facing D_i = D × (B_i / ΣB_j)
+   disputes experiences effort-per-dispute = B_i / D_i = ΣB_j / D — which is
+   the same for all resolvers when budgets are equal (uniform case).  When
+   budgets differ, each resolver correctly sees its own load level and therefore
+   the correct honest/lazy/malicious payoff crossover (rational threshold).
+
+   Evidence: Hare-quota guarantees (conservation + quota rule) are proved in
+   pro_rata_proportional_math_spec.md and enforced by assertions inside
+   `largest-remainder-alloc` and `prorata-dispute-load`."
+  [rng resolver-histories epoch {:keys [rate effort-budget-per-epoch] :as cfg} params]
+  (let [total-disputes  (long (get params :_epoch-trials
+                                   (get params :n-trials-per-epoch
+                                        (get params :num-trials-per-epoch 0))))
+        ;; Build per-resolver budget map.
+        ;; Each resolver may carry a resolver-level :effort-budget override;
+        ;; missing keys fall back to the cfg-level global budget.
+        resolver-budgets (reduce-kv
+                          (fn [acc id resolver]
+                            (assoc acc id (double (or (:effort-budget resolver)
+                                                      effort-budget-per-epoch))))
+                          {}
+                          resolver-histories)
+        ;; Pro-rata allocation: {resolver-id → integer dispute count}
+        ;; Uses Hare-quota with the default budget as the fallback weight.
+        ;; Conservation is asserted inside prorata-dispute-load.
+        per-resolver-disputes (ec/prorata-dispute-load
+                               (keys resolver-histories)
+                               resolver-budgets
+                               total-disputes
+                               effort-budget-per-epoch)
         observed-strategies (set (map :strategy (vals resolver-histories)))]
     (reduce-kv
      (fn [acc id resolver]
-       (let [from     (:strategy resolver)
-             decision (select-next-strategy
-                       :load-optimal
-                       {:rate rate
-                        :rng rng
-                        :cfg cfg
-                        :load-snap load-snap
-                        :observed-strategies observed-strategies
-                        :epoch epoch}
-                       (assoc resolver :resolver-id id))
-             target   (:to decision)]
+       (let [;; Each resolver uses its own pro-rata dispute share as load signal.
+             resolver-disputes (get per-resolver-disputes id 0)
+             ;; Build a resolver-scoped params map so load-optimal-snapshot
+             ;; sees this resolver's individual dispute count.
+             ;; When resolver-disputes=0 (total epoch disputes=0), load-snap
+             ;; is nil and decision short-circuits to {:to from :skip? true}.
+             ;; optimal-strategy-under-load requires pos? num-disputes.
+             resolver-params   (assoc params :_epoch-trials resolver-disputes)
+             load-snap         (when (pos? resolver-disputes)
+                                 (load-optimal-snapshot resolver-params cfg rng))
+             from              (:strategy resolver)
+             decision          (if (nil? load-snap)
+                                 {:to from :skip? true}
+                                 (select-next-strategy
+                                  :load-optimal
+                                  {:rate rate
+                                   :rng rng
+                                   :cfg cfg
+                                   :load-snap load-snap
+                                   :observed-strategies observed-strategies
+                                   :epoch epoch}
+                                  (assoc resolver :resolver-id id)))
+             target            (:to decision)]
          (cond
            (:blocked? decision)
            (-> acc

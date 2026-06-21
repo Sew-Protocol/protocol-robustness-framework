@@ -55,3 +55,463 @@ clj꞉user꞉> 
 clj꞉user꞉> 
 (when-let [requires (resolve 'clojure.main/repl-requires)] (clojure.core/apply clojure.core/require @requires))
 clj꞉user꞉> 
+(when-let [requires (resolve 'clojure.main/repl-requires)] (clojure.core/apply clojure.core/require @requires))
+clj꞉user꞉> 
+(ns resolver-sim.evidence.chain
+  "Content-addressed evidence chain: binds evidence records into a self-hashed
+    artifact registry compatible with test-artifacts.json format.
+
+   Chain:
+     transition-evidence -> evidence-hash
+     evidence-registry   -> registry-hash  (commit to all evidence hashes)
+     manifest            -> artifact-registry-sha (signs the registry hash)
+
+   Forensic-grade extensions:
+     registry-signature  -> Ed25519 signature over the registry-hash
+     cursor-signature    -> Ed25519 signature over the cursor snapshot
+     timestamp-proof     -> local or external timestamp binding
+
+   The registry atom accumulates evidence records during a run, then
+   build-registry produces a self-hashed registry map that can be written
+   to disk or passed to the existing signing infrastructure.
+
+   Use finalize-and-attest! for the full forensic pipeline:
+   build → write → sign → timestamp → cursor."
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [resolver-sim.benchmark.hashing :as h]
+            [resolver-sim.benchmark.signing :as signing]
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.evidence.timestamping :as ts]
+            [resolver-sim.logging :as log]))
+clj꞉resolver-sim.evidence.chain꞉> 
+(def ^:dynamic ^:private evidence-registry-atom
+  (atom {:artifacts []
+         :evidence-hashes []
+         :run-id nil
+         :run-label nil}))
+clj꞉resolver-sim.evidence.chain꞉> 
+
+@evidence-registry-atom
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn reset-registry!
+  "Clear the registry atom for a new run.
+   Optional: run-id and run-label for identification."
+  [& {:keys [run-id run-label]}]
+  (reset! evidence-registry-atom
+          {:artifacts []
+           :evidence-hashes []
+           :run-id run-id
+           :run-label run-label})
+  nil)
+clj꞉resolver-sim.evidence.chain꞉> 
+(defmacro with-fresh-registry
+  "Execute body with a fresh evidence chain registry.
+   The outer registry is restored when body exits.
+   Useful for isolating runs and preventing cross-run contamination."
+  [& body]
+  `(let [fresh# (atom {:artifacts []
+                       :evidence-hashes []
+                       :run-id nil
+                       :run-label nil})]
+     (binding [evidence-registry-atom fresh#]
+       ~@body)))
+clj꞉resolver-sim.evidence.chain꞉> 
+(def ^:dynamic ^:private chain-cursor
+  "Run-scoped evidence chain cursor for targeted event evidence.
+   Tracks sequence number and previous hash for chain linking."
+  (atom {:seq 0 :last-hash nil}))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn reset-chain-cursor!
+  "Reset the evidence chain cursor for a new run.
+   Idempotent — safe to call multiple times."
+  []
+  (reset! chain-cursor {:seq 0 :last-hash nil}))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defmacro with-fresh-chain-cursor
+  "Execute body with a fresh evidence chain cursor.
+   The outer cursor is restored when body exits.
+   Use at the start of a replay run alongside with-fresh-registry."
+  [& body]
+  `(let [fresh# (atom {:seq 0 :last-hash nil})]
+     (binding [chain-cursor fresh#]
+       ~@body)))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn inject-chain-fields
+  "Add :evidence/chain-seq, :evidence/chain-prev-hash, and
+   :evidence/chain-self-hash to the evidence map using the cursor.
+   Uses a single atomic swap! to prevent race conditions on the
+   sequence counter and prev-hash chain linking."
+  [evidence]
+  (let [self-hash (:evidence/hash evidence)
+        {:keys [seq last-hash]}
+        (swap! chain-cursor
+               (fn [cursor]
+                 (let [new-seq (inc (:seq cursor))]
+                   {:seq new-seq
+                    :last-hash self-hash
+                    :prev-hash (:last-hash cursor)})))]
+    (assoc evidence
+           :evidence/chain-seq seq
+           :evidence/chain-prev-hash last-hash
+           :evidence/chain-self-hash self-hash)))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn registry-status
+  "Return summary info from the current registry state: count, run-id."
+  []
+  (let [r @evidence-registry-atom]
+    {:evidence-count (count (:artifacts r))
+     :run-id (:run-id r)
+     :run-label (:run-label r)
+     :has-registry? (boolean (seq (:artifacts r)))}))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn- evidence->artifact-entry
+  "Convert an evidence record (from emit-evidence!) into a registry artifact entry.
+   The entry includes the evidence-hash as both identifier and integrity proof,
+   plus all component hashes for traceability."
+  [evidence]
+  (let [eh (:evidence-hash evidence)]
+    {:id (str "evidence-" (subs eh 0 12))
+     :kind :transition-evidence
+     :schema-version (evcfg/schema :evidence-record)
+     :evidence-hash eh
+     :context-hash (:context-hash evidence)
+     :before-hash (:before-hash evidence)
+     :after-hash (:after-hash evidence)
+     :action-hash (:action-hash evidence)
+     :result-hash (:result-hash evidence)
+     :artifact-kind (:artifact-kind evidence)}))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn register-evidence!
+  "Register an evidence record (map from emit-evidence!) into the chain registry.
+   Returns the evidence-hash. The registry tracks every evidence record produced
+   during a run, enabling the full content-addressed chain to be built later.
+   Idempotent: duplicate evidence-hashes are silently ignored.
+   Logs a warning when evidence has no hash — the record will not be registered."
+  [evidence]
+  (let [eh (:evidence-hash evidence)]
+    (if (and eh (string? eh))
+      (do (swap! evidence-registry-atom
+                 (fn [reg]
+                   (if (some #(= eh (:evidence-hash %)) (:artifacts reg))
+                     reg
+                     (-> reg
+                         (update :artifacts conj (evidence->artifact-entry evidence))
+                         (update :evidence-hashes conj eh)))))
+          eh)
+      (do (log/warn! :evidence-register-missing-hash
+                     {:evidence-type (:evidence/type evidence)
+                      :artifact-kind (:artifact-kind evidence)})
+          eh))
+    eh))
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn- now-iso []
+  (str (java.time.Instant/now)))
+clj꞉resolver-sim.evidence.chain꞉> 
+now-iso
+clj꞉resolver-sim.evidence.chain꞉> 
+@now-iso
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12864 (chain.clj:0).
+; class resolver_sim.evidence.chain$now_iso cannot be cast to class java.util.concurrent.Future (resolver_sim.evidence.chain$now_iso is in unnamed module of loader clojure.lang.DynamicClassLoader @224d0709; java.util.concurrent.Future is in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(now-iso)
+clj꞉resolver-sim.evidence.chain꞉> 
+t1
+; Syntax error compiling at (src/resolver_sim/evidence/chain.clj:0:0).
+; Unable to resolve symbol: t1 in this context
+clj꞉resolver-sim.evidence.chain꞉> 
+now-iso
+clj꞉resolver-sim.evidence.chain꞉> 
+@()
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12907 (chain.clj:0).
+; class clojure.lang.PersistentList$EmptyList cannot be cast to class java.util.concurrent.Future (clojure.lang.PersistentList$EmptyList is in unnamed module of loader 'app'; java.util.concurrent.Future is in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(def t1 @(now-iso))
+; Execution error (ClassCastException) at cider.nrepl.middleware.util.eval/eval-dispatcher$fn (eval.clj:15).
+; class java.lang.String cannot be cast to class java.util.concurrent.Future (java.lang.String and java.util.concurrent.Future are in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(def t1 @(now-iso))
+; Execution error (ClassCastException) at cider.nrepl.middleware.util.eval/eval-dispatcher$fn (eval.clj:15).
+; class java.lang.String cannot be cast to class java.util.concurrent.Future (java.lang.String and java.util.concurrent.Future are in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+@(now-iso)
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12909 (chain.clj:0).
+; class java.lang.String cannot be cast to class java.util.concurrent.Future (java.lang.String and java.util.concurrent.Future are in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn- now-iso []
+  (str (java.time.Instant/now)))
+clj꞉resolver-sim.evidence.chain꞉> 
+@now-iso
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12912 (chain.clj:0).
+; class resolver_sim.evidence.chain$now_iso cannot be cast to class java.util.concurrent.Future (resolver_sim.evidence.chain$now_iso is in unnamed module of loader clojure.lang.DynamicClassLoader @15bc67a5; java.util.concurrent.Future is in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+@(now-iso)
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12914 (chain.clj:0).
+; class java.lang.String cannot be cast to class java.util.concurrent.Future (java.lang.String and java.util.concurrent.Future are in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(now-iso)
+clj꞉resolver-sim.evidence.chain꞉> 
+now-iso
+clj꞉resolver-sim.evidence.chain꞉> 
+()
+clj꞉resolver-sim.evidence.chain꞉> 
+(def t1 (now-iso))
+clj꞉resolver-sim.evidence.chain꞉> 
+t1
+clj꞉resolver-sim.evidence.chain꞉> 
+(def t2 (now-iso))
+clj꞉resolver-sim.evidence.chain꞉> 
+t2
+clj꞉resolver-sim.evidence.chain꞉> 
+(< t1 t2)
+; Execution error (ClassCastException) at resolver-sim.evidence.chain/eval12920 (chain.clj:170).
+; class java.lang.String cannot be cast to class java.lang.Number (java.lang.String and java.lang.Number are in module java.base of loader 'bootstrap')
+clj꞉resolver-sim.evidence.chain꞉> 
+(java.time.Instant/isBefore t1 t2)
+; Syntax error (IllegalArgumentException) compiling java.time.Instant/isBefore at (src/resolver_sim/evidence/chain.clj:168:1).
+; No matching method isBefore found taking 2 args for class java.time.Instant
+clj꞉resolver-sim.evidence.chain꞉> 
+(java.time.Instant/isBefore [t1 t2])
+; Syntax error (IllegalArgumentException) compiling java.time.Instant/isBefore at (src/resolver_sim/evidence/chain.clj:168:1).
+; No matching method isBefore found taking 1 args for class java.time.Instant
+clj꞉resolver-sim.evidence.chain꞉> 
+(java.security.MessageDigest/getInstance "SHA-256")
+clj꞉resolver-sim.evidence.chain꞉> 
+(defn write-evidence-registry!
+  "Build the evidence registry and persist to evidence-registry.json.
+   Also registers the artifact in the chain registry for test-artifacts.json.
+   Returns {:registry-path \"...\" :entry-count N :registry <map>}"
+  [& [dir]]
+  (let [out-dir (or dir (str (evcfg/artifact-dir)))
+        registry (build-evidence-registry (str out-dir "/event-evidence"))
+        f (io/file out-dir "evidence-registry.json")]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str registry {:key-fn io-evidence/qualified-key :indent true}))
+    (println "Wrote evidence registry:" (.getPath f) "-" (count (:entries registry)) "entries")
+    (chain/register-additional-artifact!
+     (chain/index-artifact-entry :evidence-registry "evidence-registry.json"
+                                 "evidence-registry.v1" "CORE"))
+    {:registry-path (.getPath f)
+     :entry-count (count (:entries registry))
+     :registry registry}))
+; Syntax error compiling at (src/resolver_sim/evidence/registry.clj:189:18).
+; Unable to resolve symbol: build-evidence-registry in this context
+clj꞉resolver-sim.evidence.registry꞉> 
+(ns resolver-sim.evidence.registry
+  "Evidence registry: a post-run aggregation of all evidence artifacts
+   for a scenario run.  Built by scanning existing outputs, not by
+   modifying capture paths.
+   
+   Usage:
+     (build-evidence-registry! dir)
+     ;; scans dir/event-evidence/, writes dir/evidence-registry.json
+     ;; runs validation, writes dir/evidence-registry-validation.json
+     ;; registers both in the chain registry for test-artifacts.json"
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.io.event-evidence :as io-evidence]
+            [resolver-sim.logging :as log]))
+
+;; ── Helpers ──────────────────────────────────────────────────────────────────
+
+(defn- safe-str
+  "Safely convert a value to a string, handling nil and keywords."
+  [v]
+  (cond
+    (string? v) v
+    (keyword? v) (name v)
+    (nil? v) ""
+    :else (str v)))
+
+;; ── Evidence Entry Builder ───────────────────────────────────────────────────
+
+(defn- derive-evidence-id
+  "Derive a stable evidence ID from the content hash or chain info."
+  [artifact]
+  (let [hash (or (:evidence/hash artifact)
+                 (:evidence-hash artifact))
+        chain-seq (:evidence/chain-seq artifact)]
+    (cond
+      (and hash (string? hash)) (str "ev-" (subs hash 0 (min 8 (count hash))))
+      chain-seq (str "ev-seq-" chain-seq)
+      :else (str "ev-unknown-" (System/identityHashCode artifact)))))
+
+(defn- derive-evidence-role
+  "Derive evidence role from importance or type."
+  [artifact]
+  (let [imp (or (:evidence/importance artifact) :diagnostic)
+        etype (:evidence/type artifact)]
+    (or (when (keyword? imp)
+          (case imp
+            :core :core
+            :diagnostic :diagnostic
+            :trace :trace
+            nil))
+        :diagnostic)))
+
+(defn- extract-links
+  "Derive cross-links for an evidence entry from the artifact data and indexes."
+  [artifact event-idx group-idx]
+  (let [etype (:evidence/type artifact)
+        gid (:evidence/group-id artifact)]
+    {:mechanism (io-evidence/mechanism-for-type etype)
+     :targeted-count (when (and gid group-idx) (count (get group-idx gid [])) 0)}))
+
+;; ── Registry Builder ─────────────────────────────────────────────────────────
+
+(defn build-evidence-registry
+  "Scan the event-evidence and diff-evidence directories and build an
+   evidence registry map.  Accepts either a run directory (containing
+   event-evidence/ and optionally diff-evidence/) or the event-evidence
+   directory itself.
+   
+   Returns a map with:
+   :entries     — vector of EvidenceEntry maps
+   :indexes     — {:by-event-index, :by-group-id, :by-subject, :by-evidence-type, :by-layer}
+   :run/id      — extracted from the first artifact
+   :scenario/id — extracted from the first artifact
+   
+   Use build-evidence-registry! for the full build+write+validate pipeline."
+  [& [dir]]
+  (let [base-dir (or dir (str (evcfg/artifact-dir)))
+        ;; Accept either run-dir with subdirs, or event-evidence dir directly
+        ev-dir (let [d (io/file base-dir)]
+                 (if (.isDirectory (io/file d "event-evidence"))
+                   (str base-dir "/event-evidence")
+                   base-dir))
+        dir-file (io/file ev-dir)]
+    (if-not (.isDirectory dir-file)
+      {:entries [] :indexes {} :run/id nil :scenario/id nil :error (str "Not a directory: " ev-dir)}
+      (let [ev-dir-file (if (.isDirectory (io/file base-dir "event-evidence"))
+                          (io/file base-dir "event-evidence")
+                          dir-file)
+            diff-dir-file (when (.isDirectory (io/file base-dir "diff-evidence"))
+                            (io/file base-dir "diff-evidence"))
+            ev-files (filter #(.isFile %) (file-seq ev-dir-file))
+            diff-files (when diff-dir-file
+                         (filter #(.isFile %) (file-seq diff-dir-file)))
+            all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
+                              (concat ev-files diff-files))
+            artifacts (vec (sort-by :evidence/chain-seq
+                                    (keep (fn [f]
+                                            (try (io-evidence/read-evidence-json f)
+                                                 (catch Exception _ nil)))
+                                          all-files)))
+            ;; Extract run/scenario from first available
+            first-artifact (first artifacts)
+            run-id (or (:run/id first-artifact)
+                       (get-in first-artifact [:attribution/context :run/id]))
+            scenario-id (or (:scenario/id first-artifact)
+                            (get-in first-artifact [:attribution/context :scenario/id]))
+            ;; Build entries
+            entries (mapv (fn [a]
+                            (let [etype (:evidence/type a)
+                                  ctx (or (:attribution/context a) (:attribution a) {})
+                                  gid (:evidence/group-id a)
+                                  aid (derive-evidence-id a)]
+                              (merge
+                               {:evidence/id aid
+                                :evidence/type (keyword (safe-str etype))
+                                :evidence/layer (if-let [l (:evidence/layer a)] (if (keyword? l) l (keyword (name l))) :targeted-protocol)
+                                :evidence/role (derive-evidence-role a)
+                                :hash/content (or (:evidence/hash a) (:evidence-hash a))
+                                :file/path (str "event-evidence/"
+                                                (io-evidence/evidence-filename a))}
+                               (when (:evidence/chain-seq a)
+                                 {:evidence/chain-seq (:evidence/chain-seq a)})
+                               (when gid {:evidence/group-id gid})
+                               (when scenario-id {:scenario/id scenario-id})
+                               (when run-id {:run/id run-id})
+                               (when-let [eid (:event/seq a)] {:event/index eid})
+                               (when-let [ei (:event/index a)] {:event/index ei})
+                               (when-let [ei (:ctx/event-index ctx)] {:event/index ei})
+                               (when-let [et (:event/type a)] {:event/type (keyword (safe-str et))})
+                               (when-let [et (:ctx/event-type ctx)] {:event/type (keyword (safe-str et))})
+                               (when-let [st (:subject/type ctx)] {:subject/type (if (keyword? st) st (keyword (name st)))})
+                               (when-let [si (:subject/id ctx)] {:subject/id si})
+                               (when-let [at (:action/type ctx)] {:action/type at})
+                               (when-let [er (:evidence/reason ctx)] {:evidence/reason er})
+                               (when-let [wb (:world/before-full-hash a)]
+                                 {:hash/world-before wb})
+                               (when-let [wa (:world/after-full-hash a)]
+                                 {:hash/world-after wa}))))
+                          artifacts)
+            ;; Build indexes
+            indexed-entries (reduce (fn [m e] (assoc m (:evidence/id e) e)) {} entries)
+            by-event-idx (reduce (fn [acc e]
+                                   (if-let [ei (:event/index e)]
+                                     (update acc ei (fnil conj []) (:evidence/id e))
+                                     acc))
+                                 {} entries)
+            by-group-idx (reduce (fn [acc e]
+                                   (if-let [gid (:evidence/group-id e)]
+                                     (update acc gid (fnil conj []) (:evidence/id e))
+                                     acc))
+                                 {} entries)
+            by-subject-idx (reduce (fn [acc e]
+                                     (if-let [st (:subject/type e)]
+                                       (let [si (or (:subject/id e) :unknown)]
+                                         (update acc [st si] (fnil conj []) (:evidence/id e)))
+                                       acc))
+                                   {} entries)
+            by-type-idx (reduce (fn [acc e]
+                                  (if-let [et (:evidence/type e)]
+                                    (update acc et (fnil conj []) (:evidence/id e))
+                                    acc))
+                                {} entries)
+            by-layer-idx (reduce (fn [acc e]
+                                   (if-let [l (:evidence/layer e)]
+                                     (update acc l (fnil conj []) (:evidence/id e))
+                                     acc))
+                                 {} entries)]
+        {:schema/version "evidence-registry.v1"
+         :run/id (safe-str run-id)
+         :scenario/id (safe-str scenario-id)
+         :entries entries
+         :indexes {:by-event-index by-event-idx
+                   :by-group-id by-group-idx
+                   :by-subject by-subject-idx
+                   :by-evidence-type by-type-idx
+                   :by-layer by-layer-idx}}))))
+; Syntax error compiling at (src/resolver_sim/evidence/registry.clj:1:1).
+; namespace 'resolver-sim.io.event-evidence' not found
+; 
+; Syntax error compiling at (src/resolver_sim/evidence/registry.clj:61:17).
+; No such namespace: io-evidence
+; 
+; Syntax error compiling at (src/resolver_sim/evidence/registry.clj:101:50).
+; No such namespace: io-evidence
+clj꞉resolver-sim.evidence.registry꞉> 
+(defn evidence-base
+  "Create a minimal evidence record with schema version and type.
+   
+   Required opts:
+     :type       — evidence type keyword (e.g. :fraud-slash)
+     :importance — :core | :diagnostic | :trace (default :core)
+   
+   Optional:
+     :ctx        — attribution context map (merged into :attribution)"
+  [{:keys [type importance ctx]
+    :or   {importance :core}}]
+  {:evidence/schema-version (evcfg/schema :event-evidence)
+   :evidence/type           (when type (name type))
+   :evidence/importance     (name (or importance :diagnostic))
+   :evidence/context        (when ctx (attr/sanitize-attribution ctx))})
+clj꞉resolver-sim.evidence.capture꞉> 
+(evidence-base)
+; Execution error (ArityException) at resolver-sim.evidence.capture/eval13725 (capture.clj:84).
+; Wrong number of args (0) passed to: resolver-sim.evidence.capture/evidence-base
+clj꞉resolver-sim.evidence.capture꞉> 
+(evidence-base :1)
+clj꞉resolver-sim.evidence.capture꞉> 
+(evidence-base :1 :high )
+; Execution error (ArityException) at resolver-sim.evidence.capture/eval13729 (capture.clj:84).
+; Wrong number of args (2) passed to: resolver-sim.evidence.capture/evidence-base
+clj꞉resolver-sim.evidence.capture꞉> 
+(evidence-base :1 :high [])
+; Execution error (ArityException) at resolver-sim.evidence.capture/eval13731 (capture.clj:84).
+; Wrong number of args (3) passed to: resolver-sim.evidence.capture/evidence-base
+clj꞉resolver-sim.evidence.capture꞉> 

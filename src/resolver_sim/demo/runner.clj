@@ -96,95 +96,95 @@
         out-dir (str demo-dir "/generated")
         _ (ensure-dir! out-dir)
         run-id (timestamp)
-        cmd-results (atom [])]
-    ;; 1. Run scenario command first (produces artifacts)
-    (let [scenario-cmd (demo-spec/scenario-command spec)
-          scenario-result (when scenario-cmd
-                            (do (println (str "  Running scenario: " scenario-cmd))
-                                (run-command scenario-cmd)))
-          ;; Load replay output to get real scenario outcome (process exit may be 0 even on failure)
-          replay-file (str out-dir "/replay-output.json")
-          replay-data (try (json/read-str (slurp replay-file) :key-fn keyword)
-                           (catch Exception _ nil))
-          scenario-outcome (get replay-data :outcome "unknown")
-          scenario-halt (get replay-data :halt-reason nil)]
-      (println (str "  Scenario outcome: " scenario-outcome
-                    (when scenario-halt (str " (" scenario-halt ")"))))
-      ;; Generate scenario screenshot
-      (let [sc-text (or (:stdout scenario-result) "")
-            sc-shot (screen/render-screenshot!
-                     out-dir "scenario" 0 sc-text
-                     {:title (str "Scenario: " (demo-spec/demo-id spec))
-                      :command scenario-cmd})]
-        (println (str "  Wrote screenshot: " (:svg-path sc-shot))))
+        cmd-results (atom [])
+        ;; 1. Run scenario command first (produces artifacts)
+        scenario-cmd (demo-spec/scenario-command spec)
+        scenario-result (when scenario-cmd
+                          (println (str "  Running scenario: " scenario-cmd))
+                          (run-command scenario-cmd))
+        ;; Load replay output to get real scenario outcome (process exit may be 0 even on failure)
+        replay-file (str out-dir "/replay-output.json")
+        replay-data (try (json/read-str (slurp replay-file) :key-fn keyword)
+                         (catch Exception _ nil))
+        scenario-outcome (get replay-data :outcome "unknown")
+        scenario-halt (get replay-data :halt-reason nil)]
+    (println (str "  Scenario outcome: " scenario-outcome
+                  (when scenario-halt (str " (" scenario-halt ")"))))
+    ;; Generate scenario screenshot
+    (let [sc-text (or (:stdout scenario-result) "")
+          sc-shot (screen/render-screenshot!
+                   out-dir "scenario" 0 sc-text
+                   {:title (str "Scenario: " (demo-spec/demo-id spec))
+                    :command scenario-cmd})]
+      (println (str "  Wrote screenshot: " (:svg-path sc-shot))))
 
-      ;; 2. Run section commands (exploratory commands over results)
-      (doseq [section (demo-spec/sections spec)]
-        (doseq [[cmd-idx cmd] (map-indexed vector (:commands section))]
-          (println (str "  Running [" (:id section) "] " cmd))
-          (let [result (run-command cmd)
-                stdout-file (str out-dir "/outputs/" (:id section) "-stdout.txt")
-                stderr-file (str out-dir "/outputs/" (:id section) "-stderr.txt")
-                ;; Render terminal screenshot
-                screenshot (screen/render-screenshot!
-                            out-dir (name (:id section)) cmd-idx (:stdout result)
-                            {:title (str (name (:id section)) " — " cmd)
-                             :command cmd})]
-            (ensure-dir! (str out-dir "/outputs"))
-            (write-string! stdout-file (:stdout result))
-            (write-string! stderr-file (:stderr result))
-            (swap! cmd-results conj
-                   {:section (:id section)
-                    :command cmd
-                    :exit-code (:exit result)
-                    :stdout-path stdout-file
-                    :stderr-path stderr-file
-                    :screenshot (:svg-path screenshot)
-                    :asciicast (:asciicast-path screenshot)}))))
-      ;; 3. Collect artifacts
-      (let [artifacts (collect-artifacts out-dir)
-            run-data {:demo/id id-str
-                      :run-id run-id
-                      :git-commit (git-commit)
-                      :scenario {:exit-code (:exit scenario-result)
-                                 :outcome scenario-outcome
-                                 :halt-reason scenario-halt
-                                 :stdout (:stdout scenario-result)
-                                 :stderr (:stderr scenario-result)}
-                      :commands @cmd-results
-                      :artifacts artifacts
-                      :demo-spec spec}
-            json-key (fn [k] (if (keyword? k) (if-let [ns (namespace k)] (str ns "/" (name k)) (name k)) (str k)))
-            run-json (json/write-str run-data {:key-fn json-key :indent true})]
-        (write-string! (str out-dir "/demo-run.json") run-json)
-        (println (str "Wrote " out-dir "/demo-run.json"))
-        run-data))))
+    ;; 2. Run section commands (exploratory commands over results)
+    (doseq [section (demo-spec/sections spec)]
+      (doseq [[cmd-idx cmd] (map-indexed vector (:commands section))]
+        (println (str "  Running [" (:id section) "] " cmd))
+        (let [result (run-command cmd)
+              stdout-file (str out-dir "/outputs/" (:id section) "-stdout.txt")
+              stderr-file (str out-dir "/outputs/" (:id section) "-stderr.txt")
+              ;; Render terminal screenshot
+              screenshot (screen/render-screenshot!
+                          out-dir (name (:id section)) cmd-idx (:stdout result)
+                          {:title (str (name (:id section)) " — " cmd)
+                           :command cmd})]
+          (ensure-dir! (str out-dir "/outputs"))
+          (write-string! stdout-file (:stdout result))
+          (write-string! stderr-file (:stderr result))
+          (swap! cmd-results conj
+                 {:section (:id section)
+                  :command cmd
+                  :exit-code (:exit result)
+                  :stdout-path stdout-file
+                  :stderr-path stderr-file
+                  :screenshot (:svg-path screenshot)
+                  :asciicast (:asciicast-path screenshot)}))))
+    ;; 3. Collect artifacts
+    (let [artifacts (collect-artifacts out-dir)
+          run-data {:demo/id id-str
+                    :run-id run-id
+                    :git-commit (git-commit)
+                    :scenario {:exit-code (:exit scenario-result)
+                               :outcome scenario-outcome
+                               :halt-reason scenario-halt
+                               :stdout (:stdout scenario-result)
+                               :stderr (:stderr scenario-result)}
+                    :commands @cmd-results
+                    :artifacts artifacts
+                    :demo-spec spec}
+          json-key (fn [k] (if (keyword? k) (if-let [ns (namespace k)] (str ns "/" (name k)) (name k)) (str k)))
+          run-json (json/write-str run-data {:key-fn json-key :indent true})]
+      (write-string! (str out-dir "/demo-run.json") run-json)
+      (println (str "Wrote " out-dir "/demo-run.json"))
+      run-data)
 
-(defn -main
-  "CLI entry point: bb demo:run <id> | bb demo:validate <id>
+    (defn -main
+      "CLI entry point: bb demo:run <id> | bb demo:validate <id>
    Loads demos/<id>/demo.edn, validates, runs, and writes generated outputs.
    Pass --validate as first arg to only validate without running."
-  [& args]
-  (let [validate-only? (= (first args) "--validate")
-        id (if validate-only? (second args) (first args))]
-    (when-not id
-      (println "Usage: bb demo:run <id> | bb demo:validate <id>")
-      (System/exit 1))
-    (let [spec (demo-spec/find-spec id)]
-      (if-not spec
-        (do (println (str "Demo spec not found: " id))
-            (System/exit 1))
-        (let [validation (demo-spec/validate spec)]
-          (if-not (:valid validation)
-            (do (println "Demo spec validation failed:")
-                (doseq [e (:errors validation)]
-                  (println (str "  - " e)))
+      [& args]
+      (let [validate-only? (= (first args) "--validate")
+            id (if validate-only? (second args) (first args))]
+        (when-not id
+          (println "Usage: bb demo:run <id> | bb demo:validate <id>")
+          (System/exit 1))
+        (let [spec (demo-spec/find-spec id)]
+          (if-not spec
+            (do (println (str "Demo spec not found: " id))
                 (System/exit 1))
-            (if validate-only?
-              (println "Demo spec is valid.")
-              (let [result (run-demo spec)
-                    scenario-outcome (get-in result [:scenario :outcome] "unknown")
-                    scenario-ok? (= scenario-outcome "pass")]
-                (println "Demo run complete."
-                         (if scenario-ok? " (passed)" " (failed)"))
-                (System/exit (if scenario-ok? 0 1))))))))))
+            (let [validation (demo-spec/validate spec)]
+              (if-not (:valid validation)
+                (do (println "Demo spec validation failed:")
+                    (doseq [e (:errors validation)]
+                      (println (str "  - " e)))
+                    (System/exit 1))
+                (if validate-only?
+                  (println "Demo spec is valid.")
+                  (let [result (run-demo spec)
+                        scenario-outcome (get-in result [:scenario :outcome] "unknown")
+                        scenario-ok? (= scenario-outcome "pass")]
+                    (println "Demo run complete."
+                             (if scenario-ok? " (passed)" " (failed)"))
+                    (System/exit (if scenario-ok? 0 1))))))))))))
