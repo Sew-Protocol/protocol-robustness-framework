@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s23-preemptive-escalation-blocked",
- :final-state-hash "nTAMO7q6DnPFxDMDlMXsZmXCZAQB+JOQe5BRgYghzKI=",
+ :final-state-hash
+ "008024a387148336fa7e6280027ee74853d62c9ac594a409ea18ff14d68dc021",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

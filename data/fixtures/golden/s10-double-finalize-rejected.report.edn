@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s10-double-finalize-rejected",
- :final-state-hash "evivm6EVQclSrJYXH6Js7P8ymgOJbeuNFN6exWNNCng=",
+ :final-state-hash
+ "f5e92106947eaf8c503e72573a194bf5215ac5c45648bf5b470b551c606c4802",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

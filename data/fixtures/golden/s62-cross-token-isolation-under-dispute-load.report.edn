@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-economic-stress,
  :trace-id "s62-cross-token-isolation-under-dispute-load",
- :final-state-hash "G4LIsUqzEBj3M9S8hvAhizepMxX6yHkn/mk/IYAVr0w=",
+ :final-state-hash
+ "b66da5c8eb02ae242ebcdb5cee8a0b89a743218b75daa920019f34cddc4becd6",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

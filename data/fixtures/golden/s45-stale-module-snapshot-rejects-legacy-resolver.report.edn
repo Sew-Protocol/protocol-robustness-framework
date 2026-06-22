@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-auth-paths,
  :trace-id "s45-stale-module-snapshot-rejects-legacy-resolver",
- :final-state-hash "LK1i3mru9xvSlNV9kDM/z/7HcY7LkIUKqtsjkVJ0fnE=",
+ :final-state-hash
+ "3ec0a15f2455607a9ccf3b64ba50f8be5b945c54b19834c2e46a2df9ba0c5c67",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

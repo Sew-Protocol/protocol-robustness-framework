@@ -221,8 +221,8 @@
              _ (validate-attribution! resolved-attr)
              importance (if (map? ctx-or-opts) (or (:importance ctx-or-opts) :core) :core)
              hash-start (System/nanoTime)
-             before-hash (cap/world-hash pre)
-             after-hash  (cap/world-hash post)
+             before-hash (hc/hash-with-intent {:hash/intent :world-structure} pre)
+             after-hash  (hc/hash-with-intent {:hash/intent :world-structure} post)
              _ (record-hash-latency! hash-start)
              e (-> (cap/evidence-base {:type reason :importance importance
                                        :ctx resolved-attr})
@@ -238,9 +238,9 @@
                    (cap/cap-field :world/before-hash before-hash)
                    (cap/cap-field :world/after-hash after-hash)
                    (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
-                     (assoc :world/before-full-hash (cap/world-hash (:world-before ctx-or-opts)))
+                     (assoc :world/before-full-hash (hc/hash-with-intent {:hash/intent :world-structure} (:world-before ctx-or-opts)))
                      (and (map? ctx-or-opts) (:world-after ctx-or-opts))
-                     (assoc :world/after-full-hash (cap/world-hash (:world-after ctx-or-opts)))
+                     (assoc :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} (:world-after ctx-or-opts)))
                      (:ctx/evidence-group-id resolved-attr)
                      (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
                             :evidence/layer :targeted-protocol))
@@ -517,14 +517,14 @@
                                                       :evidence/chain-self-hash
                                                       :evidence/chain-prev-hash)
                                       expected (hc/hash-with-intent {:hash/intent :evidence-content} content)]
-                                  (= expected (:evidence/hash a))))
+                                  (hc/intent-hash= expected (:evidence/hash a))))
                               sorted)
           ;; Check 2: prev-hash links to previous artifact
           prev-results (mapv (fn [a prev]
                                {:artifact a
-                                :valid (= (:evidence/chain-prev-hash a)
-                                          (or (:evidence/chain-self-hash prev)
-                                              (:evidence/hash prev)))})
+                                :valid (hc/intent-hash= (:evidence/chain-prev-hash a)
+                                                        (or (:evidence/chain-self-hash prev)
+                                                            (:evidence/hash prev)))})
                              sorted (cons nil sorted))
           prev-valid (count (filter :valid (rest prev-results)))
           prev-bad (remove :valid (rest prev-results))

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-accounting-min,
  :trace-id "s53-pending-create-clear-balance-consistency",
- :final-state-hash "Kx3+tG8DJq9dzdmfYZkt0zjv5dKKv3eqeDHuXYGCwGU=",
+ :final-state-hash
+ "7e8b128f99c22acebc7d7ef696491c58d743a9585038d2f5ea768aa219ecc1e2",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

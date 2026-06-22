@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s09-multi-escrow-solvency",
- :final-state-hash "5g0l8aadZBMperl5GXX9kn2nTdxyjAPPsbL+5NpENrU=",
+ :final-state-hash
+ "7132c8dc565efacfdc56e6370a843171200f03a678834e34b2efc53eb95199ed",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

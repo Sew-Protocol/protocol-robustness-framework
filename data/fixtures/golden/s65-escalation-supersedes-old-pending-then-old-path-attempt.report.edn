@@ -2,7 +2,8 @@
  :suite-id :suites/equivalence-money-path-integrity,
  :trace-id
  "s65-escalation-supersedes-old-pending-then-old-path-attempt",
- :final-state-hash "Z/CK0mbfT2FJmnCzCt1MtSszbRaadMkRUQsFw5DfZe0=",
+ :final-state-hash
+ "7dd86401dce0c1d6c1fec4f78bccbb24f134a2a3ee8f70fc77f1eea992b1c55b",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/same-block-ordering,
  :trace-id "same-block-ordering",
- :final-state-hash "Wrm5R1D0lnMyzI0R8L20yeRAOx0sY5zEKazG0tzRZPI=",
+ :final-state-hash
+ "7f7b6565dfa60d3752d69e2c1047ed38eee0d9d9421702a0ee2053b5e1cc88b1",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

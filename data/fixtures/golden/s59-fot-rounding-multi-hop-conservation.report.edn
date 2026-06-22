@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-economic-stress,
  :trace-id "s59-fot-rounding-multi-hop-conservation",
- :final-state-hash "C3GU5sTgTw3eH7vIYRaDYocx+mOgdbgZmNvsX3FASjw=",
+ :final-state-hash
+ "2301373e240f0ef16f6a8bcd6321507efe88ef6843f6d5e702a85738a4b0cb7e",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

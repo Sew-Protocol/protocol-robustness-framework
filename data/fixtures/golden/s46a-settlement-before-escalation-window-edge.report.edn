@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s46a-settlement-before-escalation-window-edge",
- :final-state-hash "mgB7tcvw4YJBQVNyh0LKrHllUjeNlpcQz6q/nWlUUvA=",
+ :final-state-hash
+ "2949d63b9ad9f425c49e1e2a8f6f9d33b43c23c688eccc5688070a1e93815c3d",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

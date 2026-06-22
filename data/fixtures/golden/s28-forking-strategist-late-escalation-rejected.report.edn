@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/forking-strategist,
  :trace-id "s28-forking-strategist-late-escalation-rejected",
- :final-state-hash "pGg5OCiLprr/2p6RWPiOl0FhCFM4ue5P+KieUe/hWVY=",
+ :final-state-hash
+ "f93e792fd21285a51d8ec7b28e1c7644ef0369e4acc537adf7f28179cbeb21de",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

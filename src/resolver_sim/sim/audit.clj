@@ -242,9 +242,9 @@
 (defn params-hash
   "Return a SHA-256 hex digest of params using canonical hashing.
    Stable across runs with the same params map, regardless of key insertion order.
-   Uses domain-hash with an inline domain tag to separate from evidence hashes."
+   Uses hash-with-intent with :params-manifest intent to separate from evidence hashes."
   [params]
-  (hc/domain-hash "PARAMS_MANIFEST_V1" (into (sorted-map) params)))
+  (hc/hash-with-intent {:hash/intent :params-manifest} (into (sorted-map) params)))
 
 (defn make-manifest
   "Build a reproducibility manifest for a completed multi-epoch run.

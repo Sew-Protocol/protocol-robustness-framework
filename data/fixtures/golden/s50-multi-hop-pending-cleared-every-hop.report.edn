@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s50-multi-hop-pending-cleared-every-hop",
- :final-state-hash "WXIRQ+HWWeQ20hn9nSa5LEbClKOWlKj9CWDgbesI3TU=",
+ :final-state-hash
+ "68b94356fca3bd29542e10b84182c18e371aea4627fc0a0bf3f2d661ba5ea6a4",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

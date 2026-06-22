@@ -51,7 +51,7 @@
           proof-data {:evidence/hash hash
                       :timestamped-at ts
                       :schema/version "timestamp-proof.v1"}
-          proof-hash (hc/domain-hash :evidence-record proof-data)
+          proof-hash (hc/hash-with-intent {:hash/intent :evidence-record} proof-data)
           sig (signing/sign-hash proof-hash private-key-path password)]
       (assoc proof-data
              :proof-hash proof-hash

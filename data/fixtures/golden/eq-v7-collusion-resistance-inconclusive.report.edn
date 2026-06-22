@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v7-collusion-resistance-inconclusive",
- :final-state-hash "r5jZbRVmcPQOpJdp6xT/dyJwSksHW7j+vHQykxvV5nk=",
+ :final-state-hash
+ "ac39d96450817dfbe03bab3ed1963adcf0930c951ece4216c5e17a61ffb54b3c",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

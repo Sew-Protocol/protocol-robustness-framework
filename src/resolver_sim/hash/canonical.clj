@@ -36,7 +36,11 @@
 (def domain-tags
   "Map of keyword domain identifiers to their ASCII domain tag strings.
    The domain tag is prepended to canonical bytes before hashing
-   to prevent cross-domain hash collisions."
+   to prevent cross-domain hash collisions.
+
+   NOTE: Maintained for backward compatibility with callers that
+   pass keywords to domain-hash. Intent contracts now use strings
+   directly via :intent/domain-tag."
   {:world-state     "WORLD_STATE_V1"
    :evidence-record "EVIDENCE_RECORD_V1"
    :evidence-chain  "EVIDENCE_CHAIN_V1"
@@ -45,7 +49,11 @@
    :registry        "REGISTRY_V1"
    :manifest        "MANIFEST_V1"
    :provenance      "PROVENANCE_V1"
-   :bundle-root     "BUNDLE_ROOT_V1"})
+   :bundle-root     "BUNDLE_ROOT_V1"
+   :evidence-content "EVIDENCE_CONTENT_V1"
+   :state-diff       "STATE_DIFF_V1"
+   :params-manifest  "PARAMS_MANIFEST_V1"
+   :evm-projection   "EVM_PROJECTION_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -411,12 +419,12 @@
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;;
 ;; Each intent is a machine-readable contract that explicitly declares:
-;;   :intent/name        — unique keyword identifier
 ;;   :intent/description — what kind of data this hash represents
-;;   :intent/scope       — what data categories are intentionally covered
+;;   :intent/includes    — what data categories are intentionally covered
 ;;   :intent/excludes    — what data categories are explicitly excluded
-;;   :project            — projection function applied before hashing
-;;   :domain             — domain tag for domain-separated hashing
+;;   :intent/projection-fn — projection function applied before hashing
+;;   :intent/domain-tag  — domain tag string for domain-separated hashing
+;;   :intent/version     — monotonic integer; projection changes require increment
 ;;
 ;; This eliminates semantic drift between intents, provides explicit
 ;; machine-readable boundaries, and enables future linting support
@@ -425,80 +433,151 @@
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
-   scope, exclusions, projection function, and domain tag.
+   includes, exclusions, projection function, domain tag, and version.
 
    Usage: (hash-with-intent {:hash/intent :world-structure} data)
 
-   See intent contracts below for :intent/scope and :intent/excludes
-   that define machine-readable boundaries for each intent."
+   Per INTENT_REGISTRY_SPEC_V1, each field is required."
   {:world-structure
    {:intent/name        :world-structure
+    :intent/domain-tag  "WORLD_STATE_V1"
     :intent/description "Structural identity of system state for evidence anchoring"
-    :intent/scope       #{:domain-state :positions :balances :config
+    :intent/includes    #{:domain-state :positions :balances :config
                           :oracle-state :resolver-registry :bond-state
                           :dispute-state :escrow-state :time-context}
     :intent/excludes    #{:module-implementations :runtime-values
                           :functions :sets :ratios :instants :doubles}
-    :project project-world-to-structure-view
-    :domain  :world-state}
+    :intent/projection-fn project-world-to-structure-view
+    :intent/version     1}
 
    :evidence-record
    {:intent/name        :evidence-record
+    :intent/domain-tag  "EVIDENCE_RECORD_V1"
     :intent/description "Content identity of an individual evidence record"
-    :intent/scope       #{:attribution :action :result :context
+    :intent/includes    #{:attribution :action :result :context
                           :artifact-kind :temporal-context :sub-hashes}
     :intent/excludes    #{:evidence-hash :timestamp :chain-metadata}
-    :project identity
-    :domain  :evidence-record}
+    :intent/projection-fn identity
+    :intent/version     1}
 
    :evidence-content
    {:intent/name        :evidence-content
+    :intent/domain-tag  "EVIDENCE_CONTENT_V1"
     :intent/description "JSON-round-trippable content hash of an evidence record"
-    :intent/scope       #{:serialized-content :evidence-fields :artifact-body}
+    :intent/includes    #{:serialized-content :evidence-fields :artifact-body}
     :intent/excludes    #{:keywords :hash-fields :chain-metadata :timestamps}
-    :project project-for-content-hash
-    :domain  :evidence-record}
+    :intent/projection-fn project-for-content-hash
+    :intent/version     1}
 
    :evidence-chain
    {:intent/name        :evidence-chain
+    :intent/domain-tag  "EVIDENCE_CHAIN_V1"
     :intent/description "Evidence chain linking structure for audit trails"
-    :intent/scope       #{:chain-links :registry-structure :prev-hash
+    :intent/includes    #{:chain-links :registry-structure :prev-hash
                           :chain-seq :self-hash}
     :intent/excludes    #{:artifact-content :evidence-payload :timestamps}
-    :project identity
-    :domain  :evidence-chain}
+    :intent/projection-fn identity
+    :intent/version     1}
 
    :manifest
    {:intent/name        :manifest
+    :intent/domain-tag  "MANIFEST_V1"
     :intent/description "Bundle manifest identity for artifact packaging"
-    :intent/scope       #{:manifest-metadata :bundle-structure :schema-version}
+    :intent/includes    #{:manifest-metadata :bundle-structure :schema-version}
     :intent/excludes    #{:content-payloads :individual-artifacts}
-    :project identity
-    :domain  :manifest}
+    :intent/projection-fn identity
+    :intent/version     1}
 
    :bundle-root
    {:intent/name        :bundle-root
+    :intent/domain-tag  "BUNDLE_ROOT_V1"
     :intent/description "Top-level benchmark commitment root"
-    :intent/scope       #{:benchmark-metadata :root-commitment :bundle-summary}
+    :intent/includes    #{:benchmark-metadata :root-commitment :bundle-summary}
     :intent/excludes    #{:individual-results :detailed-evidence :traces}
-    :project identity
-    :domain  :bundle-root}
+    :intent/projection-fn identity
+    :intent/version     1}
 
    :registry
    {:intent/name        :registry
+    :intent/domain-tag  "REGISTRY_V1"
     :intent/description "Evidence registry commitment for artifact catalog"
-    :intent/scope       #{:registry-index :artifact-catalog :commitment-root}
+    :intent/includes    #{:registry-index :artifact-catalog :commitment-root}
     :intent/excludes    #{:artifact-content :detailed-evidence :world-state}
-    :project identity
-    :domain  :registry}
+    :intent/projection-fn identity
+    :intent/version     1}
 
    :provenance
    {:intent/name        :provenance
+    :intent/domain-tag  "PROVENANCE_V1"
     :intent/description "Provenance lineage and verification metadata"
-    :intent/scope       #{:provenance-lineage :verification-metadata :links}
+    :intent/includes    #{:provenance-lineage :verification-metadata :links}
     :intent/excludes    #{:raw-evidence-content :world-snapshots}
-    :project identity
-    :domain  :provenance}})
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :evm-projection
+   {:intent/name        :evm-projection
+    :intent/domain-tag  "EVM_PROJECTION_V1"
+    :intent/description "EVM-compatible world subset for cross-system comparison"
+    :intent/includes    #{:comparable-world-subset :computed-invariants}
+    :intent/excludes    #{:sim-only-fields :module-implementations}
+    :intent/projection-fn project-world-to-structure-view
+    :intent/version     1}
+
+   :state-diff
+   {:intent/name        :state-diff
+    :intent/domain-tag  "STATE_DIFF_V1"
+    :intent/description "Structural diff state hash for trace comparisons"
+    :intent/includes    #{:diff-changes :path-stripped-values}
+    :intent/excludes    #{:before-values :after-values :raw-world-state}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :params-manifest
+   {:intent/name        :params-manifest
+    :intent/domain-tag  "PARAMS_MANIFEST_V1"
+    :intent/description "Parameter manifest for multi-epoch reproducibility"
+    :intent/includes    #{:sim-params :config-params :run-params}
+    :intent/excludes    #{:runtime-state :evidence-data}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :invariant-attestation
+   {:intent/name        :invariant-attestation
+    :intent/domain-tag  "INVARIANT_ATTESTATION_V1"
+    :intent/description "Per-step invariant attestation: which invariants held, which failed"
+    :intent/includes    #{:step :invariants :passed :failed :invariant-set-hash}
+    :intent/excludes    #{:full-world-state :action-detail :raw-trace}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :projection-evidence
+   {:intent/name        :projection-evidence
+    :intent/domain-tag  "PROJECTION_EVIDENCE_V1"
+    :intent/description "Projection hash paired with world hash for cross-system comparison"
+    :intent/includes    #{:step :world-hash :projection-hash :projection-version}
+    :intent/excludes    #{:full-world-state :internal-fields}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :checkpoint-evidence
+   {:intent/name        :checkpoint-evidence
+    :intent/domain-tag  "CHECKPOINT_EVIDENCE_V1"
+    :intent/description "Attestable checkpoint with world hash and chain position"
+    :intent/includes    #{:checkpoint-id :event-seq :world-hash :chain-head}
+    :intent/excludes    #{:full-world-state :trace-detail}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :benchmark-certification
+   {:intent/name        :benchmark-certification
+    :intent/domain-tag  "BENCHMARK_CERTIFICATION_V1"
+    :intent/description "Benchmark run certification with invariant summary"
+    :intent/includes    #{:benchmark-id :scenario-count :all-invariants-pass
+                          :final-state-hash :evidence-chain-root :invariant-summary}
+    :intent/excludes    #{:individual-results :detailed-evidence :traces}
+    :intent/projection-fn identity
+    :intent/version     1}})
 
 (defn resolve-intent
   "Look up an intent contract by keyword name from the registry.
@@ -510,6 +589,32 @@
       (throw (ex-info "Unknown hash intent"
                       {:intent intent-kw
                        :known  (vec (keys hash-intents))}))))
+
+(defn validate-registry!
+  "Validate the intent registry against INTENT_REGISTRY_SPEC_V1.
+   Checks that every contract has all required fields with correct types.
+   Returns nil if valid, throws on first violation.
+   Call at startup or in test fixtures to ensure registry integrity."
+  []
+  (doseq [[kw contract] hash-intents]
+    (let [expected-fields [:intent/name :intent/domain-tag :intent/description
+                           :intent/includes :intent/excludes
+                           :intent/projection-fn :intent/version]
+          field-types {:intent/name         keyword?
+                       :intent/domain-tag   string?
+                       :intent/description  string?
+                       :intent/includes     set?
+                       :intent/excludes     set?
+                       :intent/projection-fn fn?
+                       :intent/version      (every-pred integer? pos?)}]
+      (doseq [f expected-fields]
+        (when-not (contains? contract f)
+          (throw (ex-info (str "Intent " kw " missing required field " f)
+                          {:intent kw :missing f}))))
+      (doseq [[f pred] field-types]
+        (when-not (pred (get contract f))
+          (throw (ex-info (str "Intent " kw " field " f " has wrong type")
+                          {:intent kw :field f :value (get contract f)})))))))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Intent Constraint Enforcement
@@ -678,7 +783,7 @@
    See hash-intents for all supported intents with their scope
    and exclusion contracts."
   [{:keys [hash/intent]} value]
-  (let [{:keys [project domain]} (resolve-intent intent)]
+  (let [{:intent/keys [projection-fn domain-tag]} (resolve-intent intent)]
     (when *validate-intent-constraints*
       (validate-intent-constraints! intent value))
-    (domain-hash domain (project value))))
+    (domain-hash domain-tag (projection-fn value))))

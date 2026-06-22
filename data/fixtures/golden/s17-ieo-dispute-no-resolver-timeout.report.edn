@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s17-ieo-dispute-no-resolver-timeout",
- :final-state-hash "SYgNGmfPHJ2zrriGHT0rW66bKzhynhxJIMINjLLBmyI=",
+ :final-state-hash
+ "a6cba72daad5b7015b4a54644a8f0ca601ac4da8bf0d4a5ce43ba9126e2c83f0",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

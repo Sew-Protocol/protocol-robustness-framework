@@ -21,6 +21,7 @@
             [resolver-sim.util.attributed-monad      :as am]
             [resolver-sim.time.context               :as time-ctx]
             [resolver-sim.evidence.capture             :as cap]
+            [resolver-sim.hash.canonical              :as hc]
             [resolver-sim.evidence.slashing           :as slashing-ev]))
 
 (declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability cleanup-orphaned-slashes)
@@ -1141,8 +1142,8 @@
                                                                 [(:proposal-evidence-hash pending)])
                               :attribution (attr/current-attribution)})
                    evidence (assoc evidence
-                                   :world/before-full-hash (cap/world-hash world)
-                                   :world/after-full-hash (cap/world-hash world-slashed))]
+                                   :world/before-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
+                                   :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]
                (attr/with-attribution
                  {:subject/type :slash
                   :subject/id slash-id

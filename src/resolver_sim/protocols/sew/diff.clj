@@ -37,25 +37,6 @@
   (->sorted-deep world))
 
 ;; ---------------------------------------------------------------------------
-;; Hashing
-;; ---------------------------------------------------------------------------
-
-(defn world-hash
-  "Canonical hash of a world state using intent-based hashing.
-
-   Uses (hash-with-intent {:hash/intent :world-structure} world) from
-   resolver-sim.hash.canonical with semantic projection (sets→vectors,
-   instants→strings, etc.). Returns a 64-char hex string.
-
-   Properties:
-   - Deterministic: same world → same hash across JVM restarts and runs
-   - Collision-resistant: SHA-256 with domain separation
-   - Comparable: EVM adapter must produce an identical hash from Anvil state
-     by mapping contract storage → the same canonical map structure"
-  [world]
-  (hc/hash-with-intent {:hash/intent :world-structure} world))
-
-;; ---------------------------------------------------------------------------
 ;; Structural diff
 ;; ---------------------------------------------------------------------------
 
@@ -77,8 +58,8 @@
     (when (or only-a only-b)
       {:only-in-a only-a
        :only-in-b only-b
-       :hash-a    (world-hash world-a)
-       :hash-b    (world-hash world-b)})))
+       :hash-a    (hc/hash-with-intent {:hash/intent :world-structure} world-a)
+       :hash-b    (hc/hash-with-intent {:hash/intent :world-structure} world-b)})))
 
 ;; ---------------------------------------------------------------------------
 ;; EVM state adapter helpers
@@ -126,8 +107,9 @@
   (select-keys world (comparable-keys)))
 
 (defn projection-hash
-  "SHA-256 of the EVM-comparable projection of world, including accounting."
+  "Hash of the EVM-comparable projection of world with :evm-projection intent.
+   Uses :evm-projection domain tag for cross-domain isolation."
   [world]
   (let [proj (-> (projection world)
                  (assoc :accounting-consistent? (acct-inv/accounting-consistent? world)))]
-    (world-hash proj)))
+    (hc/hash-with-intent {:hash/intent :evm-projection} proj)))

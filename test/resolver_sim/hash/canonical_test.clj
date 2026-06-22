@@ -273,10 +273,11 @@
   (let [contract (hc/resolve-intent :world-structure)]
     (is (= :world-structure (:intent/name contract)))
     (is (string? (:intent/description contract)))
-    (is (set? (:intent/scope contract)))
+    (is (set? (:intent/includes contract)))
     (is (set? (:intent/excludes contract)))
-    (is (fn? (:project contract)))
-    (is (keyword? (:domain contract)))))
+    (is (fn? (:intent/projection-fn contract)))
+    (is (string? (:intent/domain-tag contract)))
+    (is (integer? (:intent/version contract)))))
 
 (deftest test-resolve-intent-rejects-unknown
   (is (thrown? Exception (hc/resolve-intent :does-not-exist))))
@@ -287,21 +288,23 @@
       (is (= kw (:intent/name contract)))
       (is (string? (:intent/description contract))
           (str "Missing :intent/description for " kw))
-      (is (set? (:intent/scope contract))
-          (str "Missing :intent/scope for " kw))
+      (is (set? (:intent/includes contract))
+          (str "Missing :intent/includes for " kw))
       (is (set? (:intent/excludes contract))
           (str "Missing :intent/excludes for " kw))
-      (is (fn? (:project contract))
-          (str "Missing :project for " kw))
-      (is (keyword? (:domain contract))
-          (str "Missing :domain for " kw)))))
+      (is (fn? (:intent/projection-fn contract))
+          (str "Missing :intent/projection-fn for " kw))
+      (is (string? (:intent/domain-tag contract))
+          (str "Missing :intent/domain-tag for " kw))
+      (is (integer? (:intent/version contract))
+          (str "Missing :intent/version for " kw)))))
 
-(deftest test-intent-scope-excludes-are-disjoint
+(deftest test-intent-includes-excludes-are-disjoint
   (doseq [[kw contract] hc/hash-intents]
-    (testing (str "Intent " kw " has disjoint scope and excludes")
-      (is (empty? (set/intersection (:intent/scope contract)
+    (testing (str "Intent " kw " has disjoint includes and excludes")
+      (is (empty? (set/intersection (:intent/includes contract)
                                     (:intent/excludes contract)))
-          (str "Scope and excludes overlap for " kw)))))
+          (str "Includes and excludes overlap for " kw)))))
 
 (deftest test-intent-descriptions-are-unique
   (let [descriptions (set (map :intent/description (vals hc/hash-intents)))]
@@ -410,3 +413,173 @@
     (is (not (hc/intent-hash= {:hash/intent :evidence-record :hash/hex h-same}
                               {:hash/intent :world-structure :hash/hex h-diff}
                               {:allow-cross-intent? true})))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Intent Golden Hash Vectors
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Each fixture is hashed with its intent and the result is compared against a
+;; known golden value. If the intent contract (projection, domain tag, encoding)
+;; changes, the golden value will break — alerting the developer.
+
+(def ^:private golden-fixtures
+  "Intent-specific fixtures for golden hash regression testing."
+  {:world-structure   {:step 42 :resolver-unavailable #{:addr1} :total-held {"0xtoken" 1000}}
+   :evm-projection    (let [w {:step 42 :escrow-transfers {0 {:amount-after-fee 1000
+                                                              :escrow-state :pending}}
+                               :total-held {"0xtoken" 1000}
+                               :total-fees {"0xtoken" 10}
+                               :dispute-levels {0 0}
+                               :block-time 1000}]
+                        (assoc (select-keys w [:escrow-transfers :total-held
+                                               :total-fees :dispute-levels
+                                               :block-time])
+                               :accounting-consistent? true))
+   :evidence-record   {:a 1 :b "hello" :scenario/id "test"}
+   :evidence-content  {:scenario/id "test" :event/seq 1 :evidence/type "stake-registered"}
+   :evidence-chain    {:cursor/scope :targeted-evidence :cursor/final-seq 5
+                       :cursor/final-self-hash "abc123" :cursor/total-captured 3}
+   :manifest          {:suite {:scenario "sew-core"} :run-id "test-run" :status :pass}
+   :bundle-root       {:benchmark/id "bm-1" :passed 10 :total 10}
+   :registry          {:registry-hash nil :evidence-count 3 :artifacts []}
+   :provenance        {:provenance/lineage [:evidence-chain]
+                       :provenance/links [{:from "a" :to "b"}]}
+   :state-diff        {:changes [{:path [:escrow :state] :before nil :after nil}]}
+   :params-manifest   {:scenario "sew-core" :seed 42 :n-epochs 10}})
+
+(def ^:private golden-hashes
+  "Known golden hash values for each intent's fixture.
+   If an intent contract changes, these must be recomputed."
+  {:world-structure   "587bc682a51dd99b9830399487cc4eb10017a9fa81485c5dae38763e66531bd1"
+   :evm-projection    "6cf3532b14f8ae4242483bd37784aa6be982418e6ccb899472cf73c21d406e30"
+   :evidence-record   "bb94b6ff9457c613af3fefce33130c4b4e68a8a0f5b587c00124c18cfa848ace"
+   :evidence-content  "aa84921b0d4b447aaad5a450ffee9b36e2e3f9d3d39991c0eb3842162b05630d"
+   :evidence-chain    "365e311bef1cd758d3961a2b08dc59fffc8d636f8826ff4901328cfd4a49a84b"
+   :manifest          "b6398eb7538ee05172ce62d656c2c4042819ad7d62fe1694c5dfafbf3ab242b7"
+   :bundle-root       "689fc33fa03ad8e031515bb68dfbb90a7b8afc8b341cdbffdba215313afe70db"
+   :registry          "ec2edbfaec899d9134ed51aec519e683d23cd7c58e36d9c6f42d5e1af15a6e37"
+   :provenance        "43c51800d4418215e9a0c1c4b25a25733bf4c38e1288fe2e1cdc3be35578196a"
+   :state-diff        "ece887daefd0565ff3770592def75aceb969d8903d8be7156617daea2d1e13a1"
+   :params-manifest   "bf3cd3d2e0b9bf288bad087217c8868ef68e0d5d56e453ff2eaea24972cbc54e"})
+
+(deftest test-golden-hash-vectors
+  (doseq [[intent fixture] golden-fixtures]
+    (testing (str "Golden hash for intent " intent)
+      (let [expected (get golden-hashes intent)
+            actual (hc/hash-with-intent {:hash/intent intent} fixture)]
+        (is (= expected actual)
+            (str "Golden hash mismatch for " intent " — intent contract or encoding may have changed"))))))
+
+(deftest test-golden-hash-vectors-deterministic
+  (doseq [[intent fixture] golden-fixtures]
+    (testing (str "Deterministic hash for intent " intent)
+      (is (= (hc/hash-with-intent {:hash/intent intent} fixture)
+             (hc/hash-with-intent {:hash/intent intent} fixture))))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Intent Registry Validation (IA-level)
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-validate-registry-passes
+  (is (nil? (hc/validate-registry!))
+      "validate-registry! must pass on well-formed registry"))
+
+(deftest test-validate-registry-detects-missing-field
+  (with-redefs [hc/hash-intents (assoc hc/hash-intents
+                                  :bad-intent
+                                  {:intent/name :bad-intent})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
+
+(deftest test-validate-registry-detects-wrong-type
+  (with-redefs [hc/hash-intents (assoc hc/hash-intents
+                                  :bad-intent
+                                  {:intent/name         :bad-intent
+                                   :intent/domain-tag   :not-a-string
+                                   :intent/description  "bad"
+                                   :intent/includes     #{}
+                                   :intent/excludes     #{}
+                                   :intent/projection-fn identity
+                                   :intent/version      1})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
+
+(deftest test-validate-registry-detects-negative-version
+  (with-redefs [hc/hash-intents (assoc hc/hash-intents
+                                  :bad-intent
+                                  {:intent/name         :bad-intent
+                                   :intent/domain-tag   "BAD_V1"
+                                   :intent/description  "bad"
+                                   :intent/includes     #{}
+                                   :intent/excludes     #{}
+                                   :intent/projection-fn identity
+                                   :intent/version      -1})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; New Intent Contract Tests (Evidence Layers 2, 7, 8, 9)
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-invariant-attestation-intent
+  (let [contract (hc/resolve-intent :invariant-attestation)]
+    (is (= :invariant-attestation (:intent/name contract)))
+    (is (string? (:intent/domain-tag contract)))
+    (is (contains? (:intent/includes contract) :invariants))
+    (is (contains? (:intent/includes contract) :invariant-set-hash))))
+
+(deftest test-projection-evidence-intent
+  (let [contract (hc/resolve-intent :projection-evidence)]
+    (is (= :projection-evidence (:intent/name contract)))
+    (is (contains? (:intent/includes contract) :projection-hash))))
+
+(deftest test-checkpoint-evidence-intent
+  (let [contract (hc/resolve-intent :checkpoint-evidence)]
+    (is (= :checkpoint-evidence (:intent/name contract)))
+    (is (contains? (:intent/includes contract) :checkpoint-id))))
+
+(deftest test-benchmark-certification-intent
+  (let [contract (hc/resolve-intent :benchmark-certification)]
+    (is (= :benchmark-certification (:intent/name contract)))
+    (is (contains? (:intent/includes contract) :all-invariants-pass))))
+
+(deftest test-invariant-attestation-hash-is-deterministic
+  (let [data {:step 1
+              :invariants [{:id :conservation-of-value :result :pass}
+                           {:id :no-negative-balances :result :pass}]
+              :passed 2 :failed 0}
+        h1 (hc/hash-with-intent {:hash/intent :invariant-attestation} data)
+        h2 (hc/hash-with-intent {:hash/intent :invariant-attestation} data)]
+    (is (= h1 h2))))
+
+(deftest test-invariant-attestation-hash-changes-on-result-change
+  (let [pass-data {:step 1 :invariants [{:id :test :result :pass}] :passed 1 :failed 0}
+        fail-data {:step 1 :invariants [{:id :test :result :fail}] :passed 0 :failed 1}
+        pass-hash (hc/hash-with-intent {:hash/intent :invariant-attestation} pass-data)
+        fail-hash (hc/hash-with-intent {:hash/intent :invariant-attestation} fail-data)]
+    (is (not= pass-hash fail-hash))))
+
+(deftest test-invariant-attestation-domain-separated
+  (let [data {:step 1 :invariants [] :passed 0 :failed 0}
+        attest-hash (hc/hash-with-intent {:hash/intent :invariant-attestation} data)
+        world-hash (hc/hash-with-intent {:hash/intent :world-structure} data)]
+    (is (not= attest-hash world-hash))))
+
+(deftest test-projection-evidence-hash-is-deterministic
+  (let [data {:step 1 :world-hash "abc" :projection-hash "def" :projection-version 1}
+        h1 (hc/hash-with-intent {:hash/intent :projection-evidence} data)
+        h2 (hc/hash-with-intent {:hash/intent :projection-evidence} data)]
+    (is (= h1 h2))))
+
+(deftest test-checkpoint-evidence-hash-is-deterministic
+  (let [data {:checkpoint-id "cp-1" :event-seq 1 :world-hash "abc" :chain-head 0}
+        h1 (hc/hash-with-intent {:hash/intent :checkpoint-evidence} data)
+        h2 (hc/hash-with-intent {:hash/intent :checkpoint-evidence} data)]
+    (is (= h1 h2))))
+
+(deftest test-benchmark-certification-hash-is-deterministic
+  (let [data {:benchmark-id "bm-1" :scenario-count 10 :all-invariants-pass true
+              :final-state-hash nil :evidence-chain-root nil
+              :invariant-summary {:conservation {:passed 10 :total 10}}}
+        h1 (hc/hash-with-intent {:hash/intent :benchmark-certification} data)
+        h2 (hc/hash-with-intent {:hash/intent :benchmark-certification} data)]
+    (is (= h1 h2))))

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s18-dr3-kleros-l0-resolves",
- :final-state-hash "zmOxC9UD1in7BtPE2BYVTqEZQ9b5hAjFH2/qpIg/HJs=",
+ :final-state-hash
+ "1ad23f8d1cffdb3b5f8b2ca0f572386b473be280a2f99127ce28856939251008",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

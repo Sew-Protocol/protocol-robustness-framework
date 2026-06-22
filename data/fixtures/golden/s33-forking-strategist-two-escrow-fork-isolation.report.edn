@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/forking-strategist,
  :trace-id "s33-forking-strategist-two-escrow-fork-isolation",
- :final-state-hash "dIQcmgYnGvIhVMOftfscBoFpNCheuGwKNyX5MZAxBsI=",
+ :final-state-hash
+ "c9e0e76ee49d42f5954d2197e73ec4dddceb9abd118a8cf572423ce193d22b93",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

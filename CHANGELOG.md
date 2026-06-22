@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed (2026-06-23)
+- **Intent Registry Contract Spec V1:** Migrated `hash-intents` contracts to `INTENT_REGISTRY_SPEC_V1`. All fields now use `:intent/` qualified names: renamed `:intent/scope` → `:intent/includes`, `:project` → `:intent/projection-fn`, `:domain` (keyword) → `:intent/domain-tag` (string). Added `:intent/version` (monotonic integer) to every contract. Added `validate-registry!` for startup/test-time registry integrity checks with field presence, type, and version validation. `domain-tags` map retained for backward compatibility with keyword-based callers.
+
+### Added (2026-06-23)
+- **Evidence Layer 2 — Invariant Attestation:** Per-step invariant attestation evidence emitted during replay. For each event, `build-invariant-attestation` extracts pass/fail from `check-invariants-single`/`check-invariants-transition` results, hashes with new `:invariant-attestation` intent, and registers in evidence chain. Best-effort (catches and logs errors without halting simulation).
+- **Evidence Layer 3 — Invariant Digest:** Attestation includes `:passed`/`:failed` counts and a deterministic invariant-set-hash for fast comparison.
+- **Evidence Layer 7 — Benchmark Certification:** `runner.clj` now produces an `:invariant-summary` in benchmark evidence bundles with per-invariant pass/total counts, total/passed checks, and `all-pass?` flag. Certification artifact hashed with new `:benchmark-certification` intent.
+- **Evidence Layer 8 — Projection Evidence:** Per-step projection evidence emitted when `AnalysisModule` protocol is satisfied, pairing world-hash with projection-hash. Hashed with new `:projection-evidence` intent.
+- **Evidence Layer 9 — Checkpoint Evidence:** Checkpoint evidence emitted at strategic decision points (`raise_dispute`, `escalate_dispute`, `execute_resolution`). Contains checkpoint-ID, world-hash, and chain-head. Hashed with new `:checkpoint-evidence` intent.
+- **New intent contracts:** `:invariant-attestation`, `:projection-evidence`, `:checkpoint-evidence`, `:benchmark-certification` registered in `hash-intents` with domain tags, includes/excludes, projection functions, and version 1.
+
 ### Added (2026-06-22)
 - **P0 canonical hash engine:** `resolver-sim.hash.canonical` with domain-separated typed binary encoding per `CANONICAL_HASH_SPEC_V1_BINARY_ENCODING_ABI.md`. API: `validate-canonical-value!`, `canonical-bytes`, `hash-bytes`, `domain-hash`. Supports null, boolean, integer, string, keyword, vector, and map types with LEB128 varuint, ZigZag signed integers, and byte-level map key ordering. Rejects ratio, symbol, set, list, and non-string map keys. 9 reserved domain tags (WORLD_STATE_V1, EVIDENCE_RECORD_V1, etc.).
 - **Conformance test vectors:** 17 JSON test vectors in `resources/test-vectors/canonical-hash-v1/` covering all base types with canonical bytes hex, domain tag, and SHA-256 hash hex.

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-race-pairs,
  :trace-id "s47b-appeal-window-plus-one-rejected",
- :final-state-hash "RXN+QhomizXn4xzzJJ7i5L0/vwut+L0FJkysuTtg0tg=",
+ :final-state-hash
+ "2c1d9c6f750394f79365cfc14bc814fa73571595b4af5de71fea23ae2c1da81b",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

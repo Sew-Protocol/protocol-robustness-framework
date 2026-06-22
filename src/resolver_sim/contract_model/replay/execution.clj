@@ -7,6 +7,8 @@
             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.time.context :as time-ctx]
@@ -51,6 +53,78 @@
                        nil)))
         _ (when evidence (chain/register-evidence! evidence))]
     (assoc result :evidence evidence)))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Invariant Attestation Evidence (Evidence Layer 2)
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn build-invariant-attestation
+  "Build an invariant attestation map from check-all results.
+   Returns nil if no invariants were checked."
+  [step inv-single inv-trans check-inv?]
+  (when check-inv?
+    (let [extract-results (fn [result-map]
+                            (when-let [results (:results result-map)]
+                              (mapv (fn [[id r]]
+                                      {:id (if (keyword? id) id (keyword (str id)))
+                                       :result (if (:holds? r) :pass :fail)})
+                                    (sort-by key results))))
+          single-results (when (map? inv-single) (extract-results inv-single))
+          trans-results  (when (map? inv-trans) (extract-results inv-trans))
+          all-results    (remove nil? (concat single-results trans-results))
+          passed (count (filter #(= :pass (:result %)) all-results))
+          failed (count (filter #(= :fail (:result %)) all-results))]
+      {:step step
+       :invariants all-results
+       :passed passed
+       :failed failed})))
+
+(defn emit-invariant-attestation!
+  "Build and chain an invariant attestation evidence record.
+   Best-effort — failures are logged but do not halt execution."
+  [step inv-single inv-trans check-inv?]
+  (when-let [attestation (build-invariant-attestation step inv-single inv-trans check-inv?)]
+    (try
+      (let [safe-map {:step step
+                      :passed (:passed attestation)
+                      :failed (:failed attestation)
+                      :invariants (mapv (fn [i] [(name (:id i)) (name (:result i))])
+                                       (:invariants attestation))}
+            h (hc/hash-with-intent {:hash/intent :invariant-attestation} safe-map)
+            evidence {:artifact-kind :invariant-attestation
+                      :evidence-hash h
+                      :attestation/step step
+                      :attestation/passed (:passed attestation)
+                      :attestation/failed (:failed attestation)}]
+        (chain/register-evidence! evidence))
+      (catch Exception e
+        (log/error! :invariant-attestation-failed
+                    {:step step :error (.getMessage e)})))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Projection Evidence (Evidence Layer 8)
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn emit-projection-evidence!
+  "Build and chain a projection evidence record.
+   Best-effort — failures are logged but do not halt execution."
+  [step world-hash projection-hash]
+  (when projection-hash
+    (try
+      (let [data {:step step
+                  :world-hash world-hash
+                  :projection-hash projection-hash
+                  :projection-version 1}
+            h (hc/hash-with-intent {:hash/intent :projection-evidence} data)
+            evidence {:artifact-kind :projection-evidence
+                      :evidence-hash h
+                      :projection/step step
+                      :projection/world-hash world-hash
+                      :projection/projection-hash projection-hash}]
+        (chain/register-evidence! evidence))
+      (catch Exception e
+        (log/error! :projection-evidence-failed
+                    {:step step :error (.getMessage e)})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Execution Mode & Batch Helpers
@@ -193,8 +267,12 @@
             violated?  (and ok? check-inv?
                             (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
-                             (merge (when-not (:ok? inv-single) (:violations inv-single))
-                                    (when-not (:ok? inv-trans)  (:violations inv-trans))))]
+                              (merge (when-not (:ok? inv-single) (:violations inv-single))
+                                     (when-not (:ok? inv-trans)  (:violations inv-trans))))]
+
+        ;; Emit invariant attestation evidence (best-effort)
+        (emit-invariant-attestation! (:seq event) inv-single inv-trans
+                                     (and ok? check-inv?))
 
         (let [result-kw    (cond violated? :invariant-violated ok? :ok :else :rejected)
               error-kw     (when-not ok? (:error result))
@@ -203,11 +281,16 @@
                              #{})
               final-world  (if violated? world-t world-next)
               [proj ph]    (if (satisfies? proto/AnalysisModule protocol)
-                             (proto/compute-projection protocol final-world)
-                             [nil nil])
+                              (proto/compute-projection protocol final-world)
+                              [nil nil])
               metadata     (if (satisfies? proto/AnalysisModule protocol)
                              (proto/classify-transition protocol (:action event) result-kw)
                              nil)]
+          ;; Emit projection evidence (best-effort)
+          (when ph
+            (emit-projection-evidence! (:seq event)
+              (hc/hash-with-intent {:hash/intent :world-structure} final-world)
+              ph))
           {:ok?    (and ok? (not violated?))
            :world  final-world
            :trace-entry
@@ -495,6 +578,9 @@
                 new-states (:states states-result)
                 checkpoint-log' (:checkpoint-log states-result)
                 diagnostics' (:diagnostics states-result)]
+            ;; Emit checkpoint evidence at strategic decision points (best-effort)
+            (replay-checkpoints/emit-checkpoint-evidence-at-strategic-point!
+              checkpoint-log' event)
             (if (:halted? step)
               (do
                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)

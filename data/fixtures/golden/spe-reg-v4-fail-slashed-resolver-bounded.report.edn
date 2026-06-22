@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/spe-regression,
  :trace-id "spe-reg-v4-fail-slashed-resolver-bounded",
- :final-state-hash "TXe/6GtPEVvnas+iKLtXAjL0+gDn2kMP7ZRhIMruVUc=",
+ :final-state-hash
+ "717388ffc531461c521be0eb2332c01e807a5647cc747f68567ec66ef03eb629",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

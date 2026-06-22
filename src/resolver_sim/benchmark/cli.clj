@@ -126,9 +126,9 @@
       (let [bundle-path (first arguments)
             bundle (edn/read-string (slurp bundle-path))
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hc/domain-hash :bundle-root hashable)
+            computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)
             stored-hash (:evidence/hash bundle)
-            hash-ok? (= computed-hash stored-hash)]
+            hash-ok? (hc/intent-hash= computed-hash stored-hash)]
         (println "Verification for:" bundle-path)
         (println "Hash match:" (if hash-ok? "✓" "✗"))
         (when (:evidence/signature bundle)
@@ -142,7 +142,7 @@
       (let [bundle-path (first arguments)
             bundle (edn/read-string (slurp bundle-path))
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hc/domain-hash :bundle-root hashable)]
+            computed-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable)]
         (println computed-hash)
         (System/exit 0))
 

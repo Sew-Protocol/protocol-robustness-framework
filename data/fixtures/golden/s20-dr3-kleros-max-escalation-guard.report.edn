@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s20-dr3-kleros-max-escalation-guard",
- :final-state-hash "x0S/lsl8/Vq81c3/gJIsX9SrwhMto6faL7xRWceG31E=",
+ :final-state-hash
+ "a6501be1a278c72a69cb3001448b7a4524c5068a66e5ac57315f4a0d70779160",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

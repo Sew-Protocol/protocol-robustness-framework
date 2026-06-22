@@ -137,7 +137,7 @@
     (if (and eh (string? eh))
       (do (swap! evidence-registry-atom
                  (fn [reg]
-                   (if (some #(= eh (:evidence-hash %)) (:artifacts reg))
+                   (if (some #(hc/intent-hash= eh (:evidence-hash %)) (:artifacts reg))
                      reg
                      (-> reg
                          (update :artifacts conj (evidence->artifact-entry evidence))
@@ -175,7 +175,7 @@
               :evidence-count (count artifacts)
               :evidence-hashes (:evidence-hashes reg)
               :artifacts artifacts}
-        reg-hash (hc/domain-hash :registry base)]
+        reg-hash (hc/hash-with-intent {:hash/intent :registry} base)]
     (assoc base :registry-hash reg-hash)))
 
 ;; ── Persistence ───────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@
                        :cursor/final-self-hash (:cursor/final-self-hash snapshot)
                        :cursor/total-captured (:cursor/total-captured snapshot)}
           signed (when (and private-key-path (:cursor/final-self-hash snapshot))
-                   (let [cursor-hash (hc/domain-hash :evidence-chain cursor-data)
+                   (let [cursor-hash (hc/hash-with-intent {:hash/intent :evidence-chain} cursor-data)
                          sig (signing/sign-hash cursor-hash private-key-path password)]
                      {:cursor/hash cursor-hash
                       :cursor/signature sig
@@ -336,7 +336,7 @@
   [registry]
   (let [recorded (:registry-hash registry)
         base (dissoc registry :registry-hash)
-        computed (hc/domain-hash :registry base)]
+        computed (hc/hash-with-intent {:hash/intent :registry} base)]
     (if (= recorded computed)
       {:valid true}
       {:valid false :computed computed :recorded recorded})))
@@ -345,7 +345,7 @@
   "Verify that a specific evidence-hash is recorded in the registry.
    Returns {:present true :entry <entry>} or {:present false}."
   [registry evidence-hash]
-  (if-let [entry (some #(when (= evidence-hash (:evidence-hash %)) %)
+  (if-let [entry (some #(when (hc/intent-hash= evidence-hash (:evidence-hash %)) %)
                        (:artifacts registry))]
     {:present true :entry entry}
     {:present false}))
@@ -483,11 +483,11 @@
                        :cursor/final-seq (:cursor/final-seq cursor)
                        :cursor/final-self-hash (:cursor/final-self-hash cursor)
                        :cursor/total-captured (:cursor/total-captured cursor)}
-          h (hc/domain-hash :evidence-chain cursor-data)
+          h (hc/hash-with-intent {:hash/intent :evidence-chain} cursor-data)
           recorded-hash (:cursor/signed-hash cursor)
           forensic (:cursor/forensic cursor)]
       (if (and forensic recorded-hash)
-        (if (= h recorded-hash)
+        (if (hc/intent-hash= h recorded-hash)
           (let [sig (:signature forensic)
                 signer (:signer forensic)
                 pub-key-path (str signer ".pub")]

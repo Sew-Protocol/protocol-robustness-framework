@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s44-escalation-tier-mismatch-rejected",
- :final-state-hash "0GI9A9VO874I5CvbrJKn7Yc3ZRd8h1o6paD3fDE75G8=",
+ :final-state-hash
+ "fecfa1ac0555bcda9b1d76f7c55bc5d02980b58808c37a9678087117052744f8",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

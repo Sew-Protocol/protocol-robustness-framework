@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s02-dr3-dispute-release",
- :final-state-hash "lK+F/WIqJYs2q9Tmt+cSs9PCtB21vxZCiFry1Pg8QRo=",
+ :final-state-hash
+ "39cbfbef6c172c382a397ab8f13a815698279b5318851987143480c2e120c1a0",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

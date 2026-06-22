@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s04-dispute-timeout-autocancel",
- :final-state-hash "b8P4dnAFBhrNsYUXaP8vtaaLqcBinm6ivTwFoTJ8RO0=",
+ :final-state-hash
+ "ff94c55ce450ddf176835bd709607694f9f535fe2e6c3075c86a9f1a799c2c60",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

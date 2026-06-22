@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v12-spe-fail-slashed-resolver",
- :final-state-hash "a9gJ2k3KyDlWtc4CbadZfLYq6EolovqSeJxVle8g+UA=",
+ :final-state-hash
+ "e7239e99c644ab38c65dfcf1d6f36ca2a080aafce593b4b76d873474302e439f",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

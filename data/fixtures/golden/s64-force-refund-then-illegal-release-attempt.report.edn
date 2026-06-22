@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-money-path-integrity,
  :trace-id "s64-force-refund-then-illegal-release-attempt",
- :final-state-hash "YPkOs+kgCGFi1E9VKzIMUwoJo4jnmod46nSya05JLmQ=",
+ :final-state-hash
+ "4b7e53bd5d66c75afbfca53a2175d2a6afa4441093b41442889c4b7a1cb5e44a",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

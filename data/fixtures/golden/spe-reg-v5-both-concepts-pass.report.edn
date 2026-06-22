@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/spe-regression,
  :trace-id "spe-reg-v5-both-concepts-pass",
- :final-state-hash "/HqoSOFr04vlj1K4lYrBap/+EkGGJYYNx3nmJnBwCrY=",
+ :final-state-hash
+ "674d023ecab7c74b8c50bc7126f7417d1fc14037fd9b2a8024e8a4af01f31a7b",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

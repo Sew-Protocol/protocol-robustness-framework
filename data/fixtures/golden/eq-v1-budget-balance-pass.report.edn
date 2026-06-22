@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v1-budget-balance-pass",
- :final-state-hash "ds0mv3QFhLHt6yUqjD5rhfVZQX9ML60aj3tM09oj2Io=",
+ :final-state-hash
+ "d57c76ac937d08bc1b4c848ec7c8eeee2db3f76300c2dfca92ac008baa3271b4",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

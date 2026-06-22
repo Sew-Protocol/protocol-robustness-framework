@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s22-status-leak-agree-cancel-over-dispute",
- :final-state-hash "7uXvg2aZKJDeom2++SZn12ZFG/6fUblBaf88Lpbo1/A=",
+ :final-state-hash
+ "a954c32c988744208fea0a8ca9f0665d71faecf7529c01998b3cd3759947b44f",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

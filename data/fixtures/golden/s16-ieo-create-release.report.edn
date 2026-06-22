@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s16-ieo-create-release",
- :final-state-hash "CI6F+yk2jkKnVdnjUv8j09D5S74qeHaELDzhghAuHNg=",
+ :final-state-hash
+ "5f11024d967e4d2753673c74d2f71b6fa2ba8596f981a73dbdbd20bed11f27b3",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

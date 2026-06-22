@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v10-incentive-compat-fail-attack-success",
- :final-state-hash "LpLNUD3mGeMqU2AZWhhAtCTJWkC9TjQBBRiDKPejw7I=",
+ :final-state-hash
+ "bdddc0f8b94a437fdcc998cf6299c1d53f6027f27ae72067ae573f71c167cbfc",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

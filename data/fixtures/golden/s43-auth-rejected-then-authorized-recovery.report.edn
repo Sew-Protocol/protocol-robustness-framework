@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-auth-paths,
  :trace-id "s43-auth-rejected-then-authorized-recovery",
- :final-state-hash "N6AlLcRNgqeFA6WxY3l1PY52g6s6ANsU0YV52t0Odn0=",
+ :final-state-hash
+ "ef349419a2b343b8d4cfb699f5c09a3522cdec1b47b6f01839b130b21273a719",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

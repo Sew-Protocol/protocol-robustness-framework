@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s01-baseline-happy-path",
- :final-state-hash "DKM9Wf6ihbG/ktxGe4Jktd80WDP8sXxoAtGVXrsi/3c=",
+ :final-state-hash
+ "65d930ed96aab66772062fe4c9446bf735922a949427c52cee4f89a5d3f1a730",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

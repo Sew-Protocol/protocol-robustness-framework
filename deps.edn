@@ -89,7 +89,7 @@
                 org.clojure/data.json       {:mvn/version "2.5.1"}}
    :main-opts ["-m" "nrepl.cmdline"
                "--bind" "localhost"
-               "--port" "0"
+               "--port" "7888"
                "--middleware" "[cider.nrepl/cider-middleware]"]}
 
   ;; Fully loaded terminal REPL.

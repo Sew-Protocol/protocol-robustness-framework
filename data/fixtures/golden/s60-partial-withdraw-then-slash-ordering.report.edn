@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-economic-stress,
  :trace-id "s60-partial-withdraw-then-slash-ordering",
- :final-state-hash "9kaawre4RHkWy0Iz6iO9m5MeTx6A2RSlZ8WdB+SIZM8=",
+ :final-state-hash
+ "0757bf5cb4c3afdc7b6ca3f46dea7b2694a8da9f3d5a3942e30e36267b85c0ee",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

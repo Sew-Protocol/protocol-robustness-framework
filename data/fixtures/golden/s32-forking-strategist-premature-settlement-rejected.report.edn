@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/forking-strategist,
  :trace-id "s32-forking-strategist-premature-settlement-rejected",
- :final-state-hash "vw0AF/euLbGuWkSF9TF/c3+0erzyg+TKotx3Kx1t4fA=",
+ :final-state-hash
+ "f3de47ebc2b2c64393fd025d745767b962e294a5bb7f54cad2deb55720eb7393",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

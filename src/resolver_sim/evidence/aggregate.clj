@@ -15,10 +15,10 @@
    The frame/id is derived from the world content hash for deterministic
    content-addressing — same world always produces the same frame."
   [world]
-  {:frame/id (str "frame-" (cap/world-hash world) "-" (:step world 0))
+  {:frame/id (str "frame-" (hc/hash-with-intent {:hash/intent :world-structure} world) "-" (:step world 0))
    :step (:step world 0)
    :block-ts (time-ctx/block-ts world)
-   :world/hash (cap/world-hash world)})
+   :world/hash (hc/hash-with-intent {:hash/intent :world-structure} world)})
 
 (defn build-evidence-aggregate
   "Construct a consistent evidence envelope.

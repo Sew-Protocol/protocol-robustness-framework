@@ -43,7 +43,7 @@
                      event-data)
         hash-payload (dissoc event :event/hash)]
     (update world :yield/events (fnil conj [])
-            (assoc event :event/hash (str "sha256:" (hc/domain-hash :evidence-record hash-payload))))))
+            (assoc event :event/hash (str "sha256:" (hc/hash-with-intent {:hash/intent :evidence-record} hash-payload))))))
 
 (defn sum-recognized-losses
   "Sum all recognized principal losses for a token across all positions."

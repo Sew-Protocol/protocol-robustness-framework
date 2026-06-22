@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/dr3-critical,
  :trace-id "s49-max-escalation-plus-one-rejected",
- :final-state-hash "105xUxHyXXFDbmRnerf71g7DcshljbnvrtJRiFyLG9g=",
+ :final-state-hash
+ "f16d3213148a895ac47787a2c1ee3b243127deb706b88802af305374deedfc11",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

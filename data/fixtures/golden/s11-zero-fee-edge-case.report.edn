@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s11-zero-fee-edge-case",
- :final-state-hash "zQjCIZN+7H/B2O1Y9eplp6oo12FQD6k7v8d9YiuEAxo=",
+ :final-state-hash
+ "b0b78193b2cfb0e8d07902a73d7ea2142e8267174c5e483a8c62f0eef4b9bd16",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s06-mutual-cancel",
- :final-state-hash "NFPSz3buQMgCq6vnSvzpRElYoOLRkJBD4rKQEWafDhk=",
+ :final-state-hash
+ "f6bb7abe3343c478d4f0d19e6651038bf5bac5275e02941fa0c730933bfc882e",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

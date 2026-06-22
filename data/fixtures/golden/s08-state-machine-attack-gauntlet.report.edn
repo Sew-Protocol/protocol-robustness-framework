@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s08-state-machine-attack-gauntlet",
- :final-state-hash "B4aJ6GpQ0NoTBCcquYUMPTUhy4WtBw9ChdKMA6eo3Xo=",
+ :final-state-hash
+ "81433c3455996f3e82631d841879d7d86dc30fa4a2a3daea2ef9ba3f63ed6186",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

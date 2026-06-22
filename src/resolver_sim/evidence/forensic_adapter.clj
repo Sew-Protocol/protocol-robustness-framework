@@ -59,7 +59,7 @@
                          (input-artifact-summary root a)
                          (input-artifact-summary root {:path (str a)})))
                      input-artifacts)
-        output-hash (hc/domain-hash :evidence-record output)
+        output-hash (hc/hash-with-intent {:hash/intent :evidence-record} output)
         artifact {:schema-version schema-version
                   :generated-at (str (java.time.Instant/now))
                   :adapter/id adapter-id

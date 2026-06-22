@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v6-spe-always-inconclusive",
- :final-state-hash "/n8EwqzzK6mkZgrC6cqXYStp67CYF4i5ZQbsACffxwI=",
+ :final-state-hash
+ "10cb83e336cfe22dc9ae617b812761116f52f8f716578bcad956c1b682747b83",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

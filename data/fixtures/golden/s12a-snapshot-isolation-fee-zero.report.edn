@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s12a-snapshot-isolation-fee-zero",
- :final-state-hash "afcKgF5li5PHfMeWjkK4HJlMSFmy72QHjZ3UbO8Vgg0=",
+ :final-state-hash
+ "4b466684a578927d9a839b80cd40781666c9d272415ba7eef1b68be8886e7cfb",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

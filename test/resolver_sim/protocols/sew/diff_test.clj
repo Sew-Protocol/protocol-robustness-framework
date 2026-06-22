@@ -9,6 +9,7 @@
      5. Projection       — projection-hash is stable for EVM-comparable fields
      6. Nil diff         — identical worlds return nil from diff-worlds"
   (:require [clojure.test :refer [deftest is testing]]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.protocols.sew.diff  :as diff]
             [resolver-sim.protocols.sew.types :as t]))
 
@@ -44,7 +45,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest hash-is-deterministic
-  (is (= (diff/world-hash world-a) (diff/world-hash world-a))
+  (is (= (hc/hash-with-intent {:hash/intent :world-structure} world-a) (hc/hash-with-intent {:hash/intent :world-structure} world-a))
       "Same world produces same hash on repeated calls"))
 
 ;; ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest hash-is-order-independent
-  (is (= (diff/world-hash world-a) (diff/world-hash world-a-reordered))
+  (is (= (hc/hash-with-intent {:hash/intent :world-structure} world-a) (hc/hash-with-intent {:hash/intent :world-structure} world-a-reordered))
       "Logically identical worlds with different insertion order produce same hash"))
 
 ;; ---------------------------------------------------------------------------
@@ -60,7 +61,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest hash-changes-on-mutation
-  (is (not= (diff/world-hash world-a) (diff/world-hash world-b))
+  (is (not= (hc/hash-with-intent {:hash/intent :world-structure} world-a) (hc/hash-with-intent {:hash/intent :world-structure} world-b))
       "Changing amount-after-fee by 1 must change the hash"))
 
 ;; ---------------------------------------------------------------------------
@@ -75,8 +76,8 @@
         "only-in-a should contain world-a's value for the changed field")
     (is (= 999  (get-in result [:only-in-b :escrow-transfers 0 :amount-after-fee]))
         "only-in-b should contain world-b's value for the changed field")
-    (is (= (diff/world-hash world-a) (:hash-a result)))
-    (is (= (diff/world-hash world-b) (:hash-b result)))))
+    (is (= (hc/hash-with-intent {:hash/intent :world-structure} world-a) (:hash-a result)))
+    (is (= (hc/hash-with-intent {:hash/intent :world-structure} world-b) (:hash-b result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; 5. Identical worlds return nil

@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v4-dominant-strategy-pass",
- :final-state-hash "0B4/hJ06Ahwp06GOgrnWHLPbA9mCzjn1FE7MoK4ItT0=",
+ :final-state-hash
+ "4a1e465ae7785e8a5d1e0230229d5b508caa9ebe3e446925b82cb5a462b925dd",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

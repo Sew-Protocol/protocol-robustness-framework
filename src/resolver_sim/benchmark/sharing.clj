@@ -2,6 +2,7 @@
   (:require [resolver-sim.benchmark.runner :as runner]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
+            [resolver-sim.hash.canonical :as hc]
             [clojure.java.shell :refer [sh]]
             [clojure.java.io :as io]
             [clojure.data.json :as json]
@@ -47,7 +48,7 @@
           old-hash (:evidence/hash evidence)]
       (println "Recomputed Hash: " new-hash)
       (println "Original Hash:   " old-hash)
-      (if (= new-hash old-hash)
+      (if (hc/intent-hash= new-hash old-hash)
         (do (println "✓ Hash match! Results are reproducible.") true)
         (do (println "✗ Hash mismatch! Results differ from original run.") false)))))
 

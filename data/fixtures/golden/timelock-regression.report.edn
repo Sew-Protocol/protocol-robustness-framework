@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/timelock-regression,
  :trace-id "timelock-regression",
- :final-state-hash "q3f6WhJF62du08Adgll331B5Meif4QI19IhlSdTxnVw=",
+ :final-state-hash
+ "8de06afb0b66ae99ea8b7b2beffc2b565db07ff30789b3076da2c159bf8cbb0a",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

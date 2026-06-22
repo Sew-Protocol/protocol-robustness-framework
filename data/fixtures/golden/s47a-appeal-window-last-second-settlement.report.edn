@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equivalence-race-pairs,
  :trace-id "s47a-appeal-window-last-second-settlement",
- :final-state-hash "Ae4uU0ydesYKwouIGj7sOLqIDr5k1m5BJFUPLsHOHng=",
+ :final-state-hash
+ "3381b9cbae8b6ad8e4c14ed9013783b76a8b793bf3cc2b28472b36c3abccc7be",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

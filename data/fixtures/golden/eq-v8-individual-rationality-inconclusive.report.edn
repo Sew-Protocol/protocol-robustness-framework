@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v8-individual-rationality-inconclusive",
- :final-state-hash "1/i4F64KFJmgrXhimnMkEXd8BD16X3EyKmLDuKNNq3I=",
+ :final-state-hash
+ "4fc147efac1957ca2b3e2deefaa7fbb9f839ede9d1097635b7d91e9a9da754d8",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

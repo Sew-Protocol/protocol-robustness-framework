@@ -29,18 +29,18 @@
   "Compute a stable SHA-256 over the manifest content, excluding volatile fields.
    Uses domain-separated typed binary encoding via resolver-sim.hash.canonical."
   [manifest]
-  (-> manifest strip-volatile (hc/domain-hash :manifest)))
+  (->> manifest strip-volatile (hc/hash-with-intent {:hash/intent :manifest})))
 
 (defn hash-matches?
   "Return true if two manifests have the same canonical hash."
   [m1 m2]
-  (= (canonical-hash m1) (canonical-hash m2)))
+  (hc/intent-hash= (canonical-hash m1) (canonical-hash m2)))
 
 (defn suite-hash
   "Hash only the suite block — useful for verifying scenario identity
   across different run timestamps."
   [manifest]
-  (-> manifest :suite (hc/domain-hash :manifest)))
+  (->> manifest :suite (hc/hash-with-intent {:hash/intent :manifest})))
 
 (defn artifact-hashes
   "Return a map of artifact-key → sha256 as recorded in the manifest's artifacts block.

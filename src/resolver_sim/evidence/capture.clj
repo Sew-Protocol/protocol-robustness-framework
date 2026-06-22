@@ -20,21 +20,6 @@
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.attribution :as attr]))
 
-;; ── Hashing ───────────────────────────────────────────────────────────────────
-;;
-;; All hashing uses resolver-sim.hash.canonical with explicit intent
-;; declarations. See hash-intents in canonical.clj for available intents.
-;;
-;; For world state: (hash-with-intent {:hash/intent :world-structure} world)
-;; For evidence content: (hash-with-intent {:hash/intent :evidence-content} evidence)
-
-(defn world-hash
-  "Compute a deterministic, content-addressed hash of a world state
-   using the canonical hash engine with semantic projection.
-   Returns a 64-char hex string with :world-state domain separation."
-  [world]
-  (hc/hash-with-intent {:hash/intent :world-structure} world))
-
 ;; ── Required Fields ──────────────────────────────────────────────────────────
 
 (def core-evidence-required-fields

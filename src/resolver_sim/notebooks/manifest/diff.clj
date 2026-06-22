@@ -5,6 +5,7 @@
   Covers: suite params, git-commit, capabilities-resolved,
   artifact hashes, status, duration."
   (:require [resolver-sim.notebooks.manifest.hash :as mhash]
+            [resolver-sim.hash.canonical :as hc]
             [clojure.set :as set]))
 
 ;; ── field extractors ──────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@
     {:scalar-changes    scalars
      :capability-changes caps
      :hash-changes      hashes
-     :hash-match        (= (:canonical-hash fa) (:canonical-hash fb))
+     :hash-match        (hc/intent-hash= (:canonical-hash fa) (:canonical-hash fb))
      :status-changed    (not= (:status fa) (:status fb))
      :run-a-id          (get-in run-a [:manifest :run_id])
      :run-b-id          (get-in run-b [:manifest :run_id])}))

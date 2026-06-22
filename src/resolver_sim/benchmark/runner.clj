@@ -8,9 +8,13 @@
             [resolver-sim.protocols.sew :as sew]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.set :as set]))
+
+;; ── Helpers ──────────────────────────────────────────────────────────────────
 
 (defn- find-scenarios-in-suites [suites]
+  (mapcat (fn [suite-path]
   (mapcat (fn [suite-path]
             (let [dir (io/file suite-path)
                   scenario-dir (io/file dir "scenarios")
@@ -70,21 +74,52 @@
                                              :manifest manifest-path}))
          results (adapter/execute-benchmark adapter manifest scenarios)
 
-         metrics (adapter/collect-metrics adapter results)
-         passed? (= (:total metrics) (:passed metrics))
+          metrics (adapter/collect-metrics adapter results)
+          passed? (= (:total metrics) (:passed metrics))
 
-         evidence {:benchmark manifest
-                   :repo      repo-meta
-                   :environment {:os-name (System/getProperty "os.name")
-                                 :os-version (System/getProperty "os.version")
-                                 :java-version (System/getProperty "java.version")}
-                   :results   results
-                   :metrics   metrics
-                   :reproduce {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/dispute-liveness.edn"))}}
+          ;; Aggregate invariant summary across all scenarios
+          all-inv-results (mapcat :invariant-results results)
+          seen-ids (into #{} (map :id) all-inv-results)
+          id->passes (fn [id] (filter #(and (= id (:id %)) (= :pass (:result %))) all-inv-results))
+          id->total  (fn [id] (count (filter #(= id (:id %)) all-inv-results)))
+          inv-summary (into {}
+                            (map (fn [id]
+                                   [id {:passed (count (id->passes id))
+                                        :total  (id->total id)}]))
+                            seen-ids)
+          total-inv-checks (count all-inv-results)
+          passed-inv-checks (count (filter #(= :pass (:result %)) all-inv-results))
+          all-invariants-pass? (= total-inv-checks passed-inv-checks)
 
-         hashable-evidence (dissoc evidence :timestamp)
-         evidence-hash (hc/domain-hash :bundle-root hashable-evidence)
-         final-evidence (assoc evidence :evidence/hash evidence-hash)]
+          evidence {:benchmark      manifest
+                    :repo           repo-meta
+                    :environment    {:os-name (System/getProperty "os.name")
+                                    :os-version (System/getProperty "os.version")
+                                    :java-version (System/getProperty "java.version")}
+                    :results        results
+                    :metrics        metrics
+                    :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/dispute-liveness.edn"))}
+                    :invariant-summary {:per-invariant  inv-summary
+                                        :total-checks   total-inv-checks
+                                        :passed-checks  passed-inv-checks
+                                        :all-pass?      all-invariants-pass?}}
+
+          hashable-evidence (dissoc evidence :timestamp)
+          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)
+
+          ;; Certification artifact using :benchmark-certification intent
+          certification {:benchmark-id      (or (:id manifest) "unknown")
+                         :scenario-count    (:total metrics)
+                         :all-invariants-pass all-invariants-pass?
+                         :final-state-hash  nil  ;; filled after scenario completes
+                         :evidence-chain-root nil  ;; filled by evidence chain
+                         :invariant-summary inv-summary}
+          cert-hash (hc/hash-with-intent {:hash/intent :benchmark-certification} certification)
+
+          final-evidence (assoc evidence
+                                :evidence/hash bundle-root-hash
+                                :benchmark-certification (assoc certification
+                                                                 :certification-hash cert-hash))]
 
      (when-not passed?
        (log/warn! "benchmark/failed" {:passed (:passed metrics) :total (:total metrics)})

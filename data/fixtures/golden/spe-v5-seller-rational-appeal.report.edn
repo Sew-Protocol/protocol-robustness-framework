@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/spe-validation,
  :trace-id "spe-v5-seller-rational-appeal",
- :final-state-hash "BmuN8aDP6dYD814WbNLSe3Thgk3cDMX5qtD9Ap3dMSM=",
+ :final-state-hash
+ "6ab239becf1268f99248429b789de5401210cdd8e869c7ec07a53b2c714b00a1",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

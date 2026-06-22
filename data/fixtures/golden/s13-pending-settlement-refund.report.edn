@@ -1,7 +1,8 @@
 {:golden-schema-version "2.0",
  :suite-id :suites/all-invariants,
  :trace-id "s13-pending-settlement-refund",
- :final-state-hash "5t80tv0pYY5nuT3uvJuAD9iEjtrPvWxYSp2fxQeskE0=",
+ :final-state-hash
+ "5e1b708e19f16a7a496ae0c6218bef0ec508d2a3de7ef9d25037bf9ece8d4328",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,
