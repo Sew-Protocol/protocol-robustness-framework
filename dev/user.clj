@@ -9,6 +9,7 @@
    [dev.explore :as explore]
    [dev.scenarios :as scenarios]
    [dev.artifacts :as artifacts]
+   [dev.pro-rata :as pro-rata]
    [dev.tests :as tests]))
 
 (defonce portal-instance (atom nil))
@@ -41,6 +42,7 @@
            'dev.explore
            'dev.scenarios
            'dev.artifacts
+           'dev.pro-rata
            'dev.tests
            :reload)
   :ready)
@@ -61,7 +63,10 @@
   (reset-all)
 
   ;; Explore:
-  (explore/find-ns "yield")
-  (explore/find-var "pro-rata")
+  (explore/find-project-ns "yield")
+  (explore/find-project-var "pro-rata")
+  (pro-rata/explain-generic-allocation {:amount 10
+                                        :items [{:id :a :weight 1}
+                                                {:id :b :weight 1}]})
   (scenarios/run-scenario :S103)
   (tests/run-tests-matching "partial-fill"))

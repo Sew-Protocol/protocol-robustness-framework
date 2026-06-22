@@ -15,7 +15,7 @@
             [resolver-sim.protocols.sew.registry      :as reg]
             [resolver-sim.protocols.sew.lifecycle     :as lc]
             [resolver-sim.protocols.sew.yield.policy  :as yield-policy]
-            [resolver-sim.economics.payoffs           :as payoffs]
+            [resolver-sim.protocols.sew.economics     :as sew-econ]
             [resolver-sim.yield.ops                   :as yield-ops]
             [resolver-sim.util.attribution            :as attr]
             [resolver-sim.util.attributed-monad      :as am]
@@ -164,7 +164,7 @@
                 new-evidence?   (get-in world [:evidence-updated? workflow-id] false)
                 slash-bps       (:reversal-slash-bps snap 0)
                 prev-stake      (reg/get-stake world prev-resolver)
-                slash-amt       (payoffs/calculate-slash-amount-from-basis prev-stake slash-bps)
+                slash-amt       (sew-econ/calculate-slash-amount-from-basis prev-stake slash-bps)
                 slash-id        (str workflow-id "-reversal-" (dec level))
                 now             (time-ctx/block-ts world)
                 appeal-window   (:appeal-window-duration snap 0)
@@ -211,7 +211,7 @@
         snap          (t/get-snapshot world workflow-id)
         bps           (long (or slash-bps (:reversal-slash-bps snap 0)))
         prev-stake    (reg/get-stake world prev-resolver)
-        slash-amt     (payoffs/calculate-slash-amount-from-basis (or prev-stake 0) bps)
+        slash-amt     (sew-econ/calculate-slash-amount-from-basis (or prev-stake 0) bps)
         slash-id      (str workflow-id "-force-reversal-0")
         now           (time-ctx/block-ts world)
         appeal-window (:appeal-window-duration snap 0)
@@ -275,10 +275,10 @@
 
    Mirrors the corrected slashForFraud (Fix A): fraud slashes start as PENDING
    with an appeal window, not immediately EXECUTED.
-    
+
    Captures the reversal-detection-probability from the module snapshot to track
    the likelihood that an appeal will succeed.
-   
+
    Emits :fraud-slash-proposed evidence and stores the evidence hash on the
    pending entry for causal linking by execute-fraud-slash."
   [world slash-id workflow-id resolver slash-amt appeal-window reversal-prob]
@@ -629,7 +629,7 @@
               esc-count    (get-in world [:escalation-counts-per-addr caller] 0)
 
                ;; Challenge bond amount
-              base-bond    (payoffs/calculate-challenge-bond-amount (:amount-after-fee et) snap)
+              base-bond    (sew-econ/calculate-challenge-bond-amount (:amount-after-fee et) snap)
               bond-amt     (quot (* base-bond (+ 10000 (* esc-count 1000))) 10000)
 
               world'       (-> world
@@ -805,7 +805,7 @@
                ;; DR3 Sync: handle appeal bond posting
               snap         (t/get-snapshot world workflow-id)
               et           (t/get-transfer world workflow-id)
-              base-bond    (payoffs/calculate-appeal-bond-amount (:amount-after-fee et) snap)
+              base-bond    (sew-econ/calculate-appeal-bond-amount (:amount-after-fee et) snap)
               bond-amt     (quot (* base-bond (+ 10000 (* esc-count 1000))) 10000)
 
                ;; Ensure workflow exists in bond-balances before updating
@@ -881,7 +881,7 @@
        (let [snap        (t/get-snapshot world workflow-id)
              et          (t/get-transfer world workflow-id)
              token       (:token et)
-             bond-amount (payoffs/calculate-appeal-bond-amount (:amount-after-fee et) snap)
+             bond-amount (sew-econ/calculate-appeal-bond-amount (:amount-after-fee et) snap)
              world'      (if (pos? bond-amount)
                            (-> world
                                (assoc-in [:pending-fraud-slashes slash-id :appeal-bond-held] bond-amount)
@@ -1123,8 +1123,8 @@
                                      (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
                                      (update-unavailability resolver true)
                                      (cleanup-orphaned-slashes workflow-id))
-                 allocation      (payoffs/calculate-prorata-slash-allocation
-                                  {:slash-obligation amount
+                 allocation      (sew-econ/calculate-sew-slash-allocation
+                                  {:slash-amount amount
                                    :liable-parties
                                    [{:id resolver
                                      :slashable-stake current-stake
@@ -1153,15 +1153,15 @@
 
 (defn compute-prorata-slash-allocation
   "Non-governance query action: compute pro-rata allocation for a slash obligation.
-   
+
    Accepts {:slash-obligation N :liable-parties [...]} with optional
    :basis and :cap-field overrides.
-   
+
    Pure read — no world mutation.
    Returns {:ok true :allocation <result-map>} with the full allocation
    including :allocations, :recovered-total, :unmet-total."
   [world {:keys [slash-obligation basis cap-field liable-parties]}]
-  (let [allocation (payoffs/calculate-prorata-slash-allocation
+  (let [allocation (sew-econ/calculate-sew-slash-allocation
                     (cond-> {:slash-obligation slash-obligation
                              :liable-parties liable-parties}
                       basis (assoc :basis basis)
@@ -1203,7 +1203,7 @@
 (defn- finalize
   "Internal: transition escrow to terminal state, release accounting.
    direction — :released (to recipient) or :refunded (to sender).
-   
+
    NOTE: cleanup-orphaned-slashes is deliberately NOT called here.
    It runs in execute-pending-settlement (which calls finalize then cleanup).
    Calling it in finalize would remove pending Track 2 reversal slashes

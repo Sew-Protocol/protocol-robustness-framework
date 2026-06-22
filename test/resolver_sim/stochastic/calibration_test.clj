@@ -42,7 +42,7 @@
             [resolver-sim.stochastic.params    :as params]
             [resolver-sim.protocols.sew.snapshot :as snap]
             [resolver-sim.protocols.sew.types  :as t]
-            [resolver-sim.economics.payoffs    :as payoffs]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.oracle.detection     :as oracle]))
 
 ;; ── Test grid ────────────────────────────────────────────────────────────────
@@ -79,13 +79,13 @@
 ;; Fraud/timeout/L1 generic use bond × bps multiplier.
 
 (deftest reversal-slash-formula-identity
-  (testing "oracle reversal slash == payoffs/calculate-reversal-slash on stake"
+  (testing "oracle reversal slash == Sew reversal slash on stake"
     (doseq [stake amounts
             bps slash-bps-values]
       (let [oracle-slash (oracle/slash-amount-for-reason
                           :reversal {:reversal-slash-bps bps}
                           {:resolver-stake stake :bond-total 0 :slash-mult 0})
-            replay-slash (payoffs/calculate-reversal-slash stake bps)]
+            replay-slash (sew-econ/calculate-reversal-slash stake bps)]
         (is (= oracle-slash replay-slash)
             (str "reversal slash mismatch at stake=" stake " bps=" bps))))))
 
@@ -168,7 +168,7 @@
                                           :resolver-stake-wei stake
                                           :reversal-detection-probability 1.0)]
       (when (= (:slashing-reason result) :reversal)
-        (is (= (payoffs/calculate-reversal-slash stake bps)
+        (is (= (sew-econ/calculate-reversal-slash stake bps)
                (- (econ/calculate-fee 10000 150)
                   (:profit-malice result)))
             "malice profit should reflect stake-basis reversal slash")))))
@@ -176,21 +176,21 @@
 ;; ── 4. Appeal bond fee formula ────────────────────────────────────────────────
 ;; Both engines use types/compute-fee for the protocol fee on appeal bonds.
 ;; The stochastic engine does not model bond fee deduction — it uses the gross
-;; bond amount. We verify that payoffs/calculate-appeal-bond-fee deducts correctly
+;; bond amount. We verify that the Sew appeal-bond fee deducts correctly
 ;; and is consistent with types/compute-fee.
 
 (deftest appeal-bond-fee-consistency
-  (testing "payoffs/calculate-appeal-bond-fee net = amount - types/compute-fee"
+  (testing "Sew appeal-bond fee net = amount - types/compute-fee"
     (doseq [amt [100 1000 10000]
             fee-bps [0 50 100 500]]
-      (let [{:keys [fee net]} (payoffs/calculate-appeal-bond-fee amt fee-bps)]
+      (let [{:keys [fee net]} (sew-econ/calculate-appeal-bond-fee amt fee-bps)]
         (is (= fee (t/compute-fee amt fee-bps))
             (str "bond-fee mismatch at amount=" amt " fee-bps=" fee-bps))
         (is (= net (- amt fee))
             (str "net mismatch at amount=" amt " fee-bps=" fee-bps))))))
 
 ;; ── 5. Slashing distribution adds up ─────────────────────────────────────────
-;; payoffs/calculate-slashing-distribution must be lossless (no wei destroyed).
+;; Sew slashing distribution must be lossless (no wei destroyed).
 ;; insurance + protocol + retained = amount - bounty.
 
 (deftest slashing-distribution-conservation
@@ -199,7 +199,7 @@
             bounty [0 10 50]]
       (when (<= bounty amount)
         (let [{:keys [insurance protocol retained]}
-              (payoffs/calculate-slashing-distribution amount bounty)
+              (sew-econ/calculate-slashing-distribution amount bounty)
               total (+ insurance protocol retained)]
           (is (= total (- amount bounty))
               (str "distribution not lossless: amount=" amount

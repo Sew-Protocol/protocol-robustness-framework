@@ -12,9 +12,9 @@
      - RESOLVER_SLASH_CAP_BPS = 20% (per epoch/period)"
   (:require [resolver-sim.protocols.sew.types      :as t]
             [resolver-sim.protocols.sew.accounting :as acct]
-            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.protocols.sew.economics  :as sew-econ]
             [resolver-sim.util.attribution         :as attr]
-            [resolver-sim.util.math                 :as math]
+            [resolver-sim.util.math                :as math]
             [resolver-sim.evidence.capture         :as cap]))
 
 (declare get-stake)
@@ -44,7 +44,7 @@
 (defn register-stake
   "Deposit stake for a resolver address.
    Returns updated world.
-    
+
    If yield-profile-id is provided, the stake will be managed by that yield module."
   ([world resolver-addr amount] (register-stake world resolver-addr amount nil))
   ([world resolver-addr amount yield-profile-id]
@@ -119,7 +119,7 @@
   [world resolver-addr escrow-amount]
   (let [stake (get-stake world resolver-addr)
         multiplier (get-in world [:params :capacity-multiplier] 1.0)
-        cap   (payoffs/calculate-escrow-cap stake multiplier)]
+        cap   (sew-econ/calculate-escrow-cap stake multiplier)]
     (>= cap escrow-amount)))
 
 (defn get-max-escrow-per-case
@@ -146,13 +146,13 @@
   "Slash a portion of a resolver's stake.
    Returns updated world with the slashed amount removed from registry
    and distributed according to protocol rules.
-   
+
    No guards here — the per-offense cap (50%) and epoch cap (20%) are
    enforced at the governance slash pipeline level (propose-fraud-slash,
    execute-fraud-slash).  Automatic Track 1 reversal slashes and timeout
    slashes (auto-cancel) are not subject to these caps — they are immediate
    and deterministic, not governance-proposed.
-   
+
    Matches DR3 slashing distribution (50/30/20).
    Supports optional challenger bounty for Phase L."
   ([world resolver-addr amount] (slash-resolver-stake world resolver-addr amount nil 0 nil))

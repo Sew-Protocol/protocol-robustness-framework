@@ -28,17 +28,87 @@
   {:extra-paths ["test"]
    :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}}
 
- :dev
-  {:extra-paths ["dev"]
+  :dev/base
+  {:extra-paths ["dev" "test" "notebooks"]
    :extra-deps {nrepl/nrepl             {:mvn/version "1.3.1"}
                 cider/cider-nrepl       {:mvn/version "0.57.0"}
                 djblue/portal            {:mvn/version "0.59.1"}
-                clj-kondo/clj-kondo      {:mvn/version "2026.04.15"}}
-   :main-opts ["-m" "nrepl.cmdline" "--bind" "localhost" "--port" "7888"]}
+                clj-kondo/clj-kondo      {:mvn/version "2026.04.15"}
+                org.clojure/tools.namespace {:mvn/version "1.5.0"}
+                mvxcvi/puget                {:mvn/version "1.3.4"}
+                fipp/fipp                   {:mvn/version "0.6.27"}
+                org.clojure/tools.trace     {:mvn/version "0.7.11"}
+                org.clojure/data.json       {:mvn/version "2.5.1"}}
+   :main-opts ["-m" "nrepl.cmdline" "--bind" "localhost" "--port" "7888" "--middleware" "[cider.nrepl/cider-middleware]"]}
+
+;; Terminal-first REPL.
+   ;; Best for up-arrow history, ctrl-r, multiline input, colours, completion.
+  :dev/rebel
+  {:extra-deps
+   {com.bhauman/rebel-readline {:mvn/version "0.1.4"}}
+   :main-opts
+   ["-m" "rebel-readline.main"]}
+
+  :dev/full
+  {:extra-paths ["dev" "test" "notebooks"]
+   :extra-deps {nrepl/nrepl             {:mvn/version "1.3.1"}
+                cider/cider-nrepl       {:mvn/version "0.57.0"}
+                djblue/portal            {:mvn/version "0.59.1"}
+                clj-kondo/clj-kondo      {:mvn/version "2026.04.15"}
+                org.clojure/tools.namespace {:mvn/version "1.5.0"}
+                mvxcvi/puget                {:mvn/version "1.3.4"}
+                fipp/fipp                   {:mvn/version "0.6.27"}
+                org.clojure/tools.trace     {:mvn/version "0.7.11"}
+                org.clojure/data.json       {:mvn/version "2.5.1"}}
+   :main-opts ["-m" "nrepl.cmdline" "--bind" "localhost" "--port" "7888" "--middleware" "[cider.nrepl/cider-middleware]"]}
+
+  ;; Classpath-only dev environment for smoke checks and one-off evals.
+  ;; Usage: clojure -M:dev/env -e "(require 'user)"
+  :dev/env
+  {:extra-paths ["dev" "test"]
+   :extra-deps {nrepl/nrepl                 {:mvn/version "1.3.1"}
+                cider/cider-nrepl           {:mvn/version "0.57.0"}
+                djblue/portal               {:mvn/version "0.59.1"}
+                org.clojure/tools.namespace {:mvn/version "1.5.0"}
+                mvxcvi/puget                {:mvn/version "1.3.4"}
+                fipp/fipp                   {:mvn/version "0.6.27"}
+                org.clojure/data.json       {:mvn/version "2.5.1"}}}
+
+;; Project nREPL starting point for editor/agent use.
+  ;; Uses port 0 to avoid stale-port collisions; inspect .nrepl-port or use
+  ;; clj-nrepl-eval --discover-ports after startup.
+  ;; Usage: clojure -M:repl/nrepl
+  :repl/nrepl
+  {:extra-paths ["dev" "test"]
+   :extra-deps {nrepl/nrepl                 {:mvn/version "1.3.1"}
+                cider/cider-nrepl           {:mvn/version "0.57.0"}
+                djblue/portal               {:mvn/version "0.59.1"}
+                org.clojure/tools.namespace {:mvn/version "1.5.0"}
+                mvxcvi/puget                {:mvn/version "1.3.4"}
+                fipp/fipp                   {:mvn/version "0.6.27"}
+                org.clojure/data.json       {:mvn/version "2.5.1"}}
+   :main-opts ["-m" "nrepl.cmdline"
+               "--bind" "localhost"
+               "--port" "0"
+               "--middleware" "[cider.nrepl/cider-middleware]"]}
+
+  ;; Fully loaded terminal REPL.
+  :repl/terminal
+  {:extra-paths ["dev" "test" "notebooks"]
+   :extra-deps
+   {org.clojure/tools.namespace {:mvn/version "1.5.0"}
+    djblue/portal               {:mvn/version "0.59.1"}
+    mvxcvi/puget                {:mvn/version "1.3.4"}
+    fipp/fipp                   {:mvn/version "0.6.27"}
+    org.clojure/tools.trace     {:mvn/version "0.7.11"}
+    org.clojure/data.json       {:mvn/version "2.5.1"}
+    com.bhauman/rebel-readline  {:mvn/version "0.1.4"}}
+   :main-opts
+   ["-m" "rebel-readline.main"]}
 
   :build
   {:extra-deps {io.github.clojure/tools.build {:git/tag "v0.10.7"
-                                                :git/sha "573711e"}}
+                                               :git/sha "573711e"}}
    :ns-default build}
 
   :lint

@@ -33,7 +33,7 @@
             [resolver-sim.yield.evidence :as yield-evi]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.time.context :as time-ctx]
-            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.protocols.sew.registry :as reg]))
 
 (defn cancellation-mutex? [world] (escrow/cancellation-mutex? world))
@@ -728,7 +728,7 @@
   "True when every unit of inflow is accounted for in one of the state partitions.
    Inflow = [Principal Deposited] + [Yield Generated] + [Bonds Posted] - [Recognized Losses]
    Accounted = [Physical Held] + [Actual Withdrawn] + [Claimable Entitlements] + [Distributed Slashes]
-   
+
    These partitions are mutually exclusive."
   [world]
   (let [all-tokens (-> #{}
@@ -915,16 +915,16 @@
 
 (defn calculate-solvency-ratio
   "Returns the robust solvency ratio: Total-Assets / Total-Inflows.
-    
+
    Total-Assets includes:
      - Current balances (held, claimable, fees, bond-balances, bond-fees)
      - Slashed distributions (insurance, protocol, retained reserves)
      - Cumulative outflows (total-withdrawn)
-    
+
    Total-Inflows includes:
      - Initial-Principal-Deposits (escrows + bonds)
      - Total-Yield-Generated (as an internal inflow)
-    
+
    A ratio >= 1.0 indicates perfect value conservation."
   [world]
   (let [held      (reduce + 0 (vals (:total-held world {})))
@@ -1412,7 +1412,7 @@
 ;; For every escrow with a pending settlement (challengeable), the default
 ;; challenge bond must not exceed the escrow value.  If it does, no rational
 ;; challenger will post the bond, making fraudulent outcomes final.
-;; The bond is calculated using payoffs/calculate-challenge-bond-amount.
+;; The bond is calculated using sew-econ/calculate-challenge-bond-amount.
 ;; ---------------------------------------------------------------------------
 
 (defn challenge-bond-proportional?
@@ -1430,7 +1430,7 @@
                     window (:appeal-window-duration snap 0)]
               :when (pos? window)
               :let [afa (:amount-after-fee et)
-                    bond (payoffs/calculate-challenge-bond-amount afa snap)]
+                    bond (sew-econ/calculate-challenge-bond-amount afa snap)]
               :when (> bond afa)]
           {:workflow-id wf
            :amount-after-fee afa

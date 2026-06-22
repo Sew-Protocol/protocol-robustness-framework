@@ -2,8 +2,14 @@
   "Dispute lifecycle and resolution mechanics."
   (:require [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.stochastic.economics :as econ]
-            [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.stochastic.detection :as detection]))
+
+(defn- distribute-bond-loss
+  "Stochastic-model diagnostic split for detected bond loss."
+  [amount]
+  {:insurance (quot (* amount 5000) 10000)
+   :protocol  (quot (* amount 3000) 10000)
+   :retained  (quot (* amount 2000) 10000)})
 
 ;; Dispute resolution for a single trial
 ;; Phase D: Track slashing reasons (timeout/reversal/fraud) without RNG changes
@@ -15,7 +21,7 @@
      2. Appeal roll          — 1× next-double
      3. Oracle rolls         — N× roll-double  (detection, reversal, l1/l2 phases)
      4. Escrow-size (caller) — var. next-double (not part of this function)
-   
+
    Changes to earlier draws (verdict, appeal) shift all downstream oracle
    rolls for that trial.  For fully scripted trials use :fixed-or with
    :scope :detection (oracle) and manage strategy/appeal externally.
@@ -252,7 +258,7 @@
         ;; Only populated when the resolver is slashed.
         slash-distributed
         (when slashed-detected?
-          (payoffs/calculate-slashing-distribution bond-loss 0))]
+          (distribute-bond-loss bond-loss))]
 
     {:dispute-correct?      verdict-correct?
      :appeal-triggered?     appealed?

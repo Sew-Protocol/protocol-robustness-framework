@@ -11,7 +11,7 @@
 
    All arithmetic uses integer division (uint256 truncation semantics)."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.evidence.capture :as cap]))
 
@@ -234,7 +234,7 @@
    challenge uneconomic even if the caller had the funds."
   [world workflow-id appellant snap token amount]
   (let [fee-bps (or (:appeal-bond-protocol-fee-bps snap) 0)
-        {:keys [fee net]} (payoffs/calculate-appeal-bond-fee amount fee-bps)
+        {:keys [fee net]} (sew-econ/calculate-appeal-bond-fee amount fee-bps)
         world' (-> world
                    (update-in [:bond-balances workflow-id appellant] (fnil + 0) net)
                    (update-in [:bond-fees token] (fnil + 0) fee)
@@ -272,9 +272,9 @@
   ([world amount challenger bounty-bps]
    (distribute-slashed-funds world amount challenger bounty-bps nil))
   ([world amount challenger bounty-bps workflow-id]
-   (let [bounty (payoffs/calculate-bounty amount bounty-bps)
+   (let [bounty (sew-econ/calculate-bounty amount bounty-bps)
          split-opts (select-keys (:params world) [:insurance-cut-bps :protocol-retained-bps])
-         dist   (payoffs/calculate-slashing-distribution amount bounty split-opts)
+         dist   (sew-econ/calculate-slashing-distribution amount bounty split-opts)
          world' (-> world
                     (update-in [:bond-distribution :insurance] (fnil + 0) (:insurance dist))
                     (update-in [:bond-distribution :protocol]  (fnil + 0) (:protocol dist))
@@ -292,7 +292,7 @@
                                       {:bounty-claimable 0}
                                       {:bounty-claimable bounty}
                                       {:slash-amount amount :bounty-bps bounty-bps}
-                                      {:formula "payoffs/calculate-bounty"}
+                                      {:formula "sew-econ/calculate-bounty"}
                                       {:world-before world
                                        :world-after world'})))
 

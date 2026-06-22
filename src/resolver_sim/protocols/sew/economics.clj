@@ -1,0 +1,158 @@
+(ns resolver-sim.protocols.sew.economics
+  "SEW-specific economic adapters.
+
+   This namespace maps SEW protocol state and policy into generic economics
+   functions. Generic resolver-sim.economics namespaces must not depend on SEW."
+  (:require [resolver-sim.economics.payoffs :as payoffs]))
+
+(def ECONOMIC-POLICIES
+  "Recommended SEW parameter bands for governance.
+   Conservative: launch-ready, fully/mostly bond-backed.
+   Balanced: growth phase, partially bond-backed.
+   Aggressive: research/testing."
+  {:conservative {:capacity-multiplier 1.0
+                  :insurance-cut-bps  8000
+                  :alpha-bps          500}
+   :balanced     {:capacity-multiplier 1.5
+                  :insurance-cut-bps  5000
+                  :alpha-bps          1000}
+   :aggressive   {:capacity-multiplier 4.0
+                  :insurance-cut-bps  2000
+                  :alpha-bps          3000}})
+
+(defn calculate-escrow-fee
+  "Calculate the SEW escrow creation fee."
+  [amount fee-bps]
+  (payoffs/calculate-bps-amount amount fee-bps))
+
+(defn calculate-appeal-bond-fee
+  "Calculate the SEW protocol fee deducted from an appeal bond."
+  [amount fee-bps]
+  (payoffs/calculate-net-after-bps-fee amount fee-bps))
+
+(defn calculate-challenge-bond-amount
+  "Calculate the required SEW challenge bond amount.
+
+   Priority:
+   1. :challenge-bond-bps > 0 => bps of amount-after-fee
+   2. :appeal-bond-amount > 0 => absolute value
+   3. otherwise => 0"
+  [amount-after-fee snap]
+  (cond
+    (pos? (:challenge-bond-bps snap 0))
+    (payoffs/calculate-bps-amount amount-after-fee (:challenge-bond-bps snap))
+
+    (pos? (:appeal-bond-amount snap 0))
+    (:appeal-bond-amount snap)
+
+    :else 0))
+
+(defn calculate-appeal-bond-amount
+  "Calculate the required SEW appeal bond amount."
+  [amount-after-fee snap]
+  (cond
+    (pos? (:appeal-bond-amount snap 0))
+    (:appeal-bond-amount snap)
+
+    (and (number? amount-after-fee)
+         (pos? amount-after-fee)
+         (pos? (:appeal-bond-bps snap 0)))
+    (payoffs/calculate-bps-amount amount-after-fee (:appeal-bond-bps snap 0))
+
+    :else 0))
+
+(defn calculate-bounty
+  "Calculate the SEW challenge bounty from a slash amount."
+  [slash-amount bounty-bps]
+  (if (pos? bounty-bps)
+    (payoffs/calculate-bps-amount slash-amount bounty-bps)
+    0))
+
+(defn calculate-slashing-distribution
+  "Calculate SEW distribution for slashed funds with optional governance overrides."
+  ([amount bounty]
+   (calculate-slashing-distribution amount bounty nil))
+  ([amount bounty {:keys [insurance-cut-bps protocol-retained-bps]
+                   :or {insurance-cut-bps 5000
+                        protocol-retained-bps 3000}}]
+   (let [insurance (payoffs/calculate-bps-amount amount insurance-cut-bps)
+         protocol (payoffs/calculate-bps-amount amount protocol-retained-bps)
+         retained (- amount insurance protocol)
+         bounty-from-insurance (quot bounty 2)
+         bounty-from-protocol (- bounty bounty-from-insurance)]
+     {:insurance (- insurance bounty-from-insurance)
+      :protocol (- protocol bounty-from-protocol)
+      :retained retained})))
+
+(defn calculate-slash-amount-from-basis
+  "Calculate a SEW slash amount from slashable stake and bps."
+  [slashable-stake slash-bps]
+  (payoffs/calculate-bps-amount slashable-stake slash-bps))
+
+(defn calculate-reversal-slash
+  "Calculate a SEW stake-basis reversal slash."
+  [slashable-stake slash-bps]
+  (calculate-slash-amount-from-basis slashable-stake slash-bps))
+
+(defn calculate-escrow-cap
+  "Compute the maximum escrow amount a SEW resolver can handle from stake."
+  ([stake] (calculate-escrow-cap stake 1.0))
+  ([stake multiplier]
+   (payoffs/calculate-capacity-limit stake multiplier)))
+
+(defn calculate-sew-slash-allocation
+  "Allocate a SEW slash amount across liable parties.
+
+   SEW defaults:
+   - weight/basis: :slashable-stake
+   - cap: :available-slashable
+   - unmet policy: :record-only
+
+   Returns the historical SEW-shaped allocation map for compatibility with
+   evidence builders and call sites."
+  [{:keys [slash-amount slash-obligation liable-parties slash-policy basis cap-field unmet-policy]
+    :or {basis :slashable-stake
+         cap-field :available-slashable
+         unmet-policy :record-only}}]
+  (let [amount (or slash-amount slash-obligation 0)
+        total-basis (reduce + 0 (map #(max 0 (long (or (basis %) 0))) liable-parties))]
+    (if (zero? total-basis)
+      {:status :no-liable-basis
+       :basis basis
+       :cap-field cap-field
+       :unmet-policy unmet-policy
+       :slash-policy slash-policy
+       :slash-obligation amount
+       :total-basis 0
+       :recovered-total 0
+       :unmet-total amount
+       :allocations []}
+      (let [generic (payoffs/allocate-pro-rata
+                     {:amount amount
+                      :items liable-parties
+                      :id-fn :id
+                      :weight-fn basis
+                      :cap-fn cap-field
+                      :rounding :floor-with-largest-remainder
+                      :remainder-policy :unallocated
+                      :ordering-policy :input-order})
+            allocations (mapv (fn [party allocation]
+                                (let [basis-amount (max 0 (long (or (basis party) 0)))]
+                                  {:id (:id party)
+                                   :basis-amount basis-amount
+                                   :share (if (pos? total-basis)
+                                            (/ basis-amount total-basis)
+                                            0)
+                                   :owed (+ (:allocated allocation) (:unmet allocation))
+                                   :paid (:allocated allocation)
+                                   :unmet (:unmet allocation)}))
+                              liable-parties (:allocations generic))]
+        {:basis basis
+         :cap-field cap-field
+         :unmet-policy unmet-policy
+         :slash-policy slash-policy
+         :slash-obligation amount
+         :total-basis total-basis
+         :recovered-total (:total-allocated generic)
+         :unmet-total (:total-unmet generic)
+         :allocations allocations}))))

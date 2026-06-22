@@ -17,7 +17,7 @@
             [resolver-sim.protocols.sew.state-machine :as sm]
             [resolver-sim.protocols.sew.accounting    :as acct]
             [resolver-sim.protocols.sew.registry      :as reg]
-            [resolver-sim.economics.payoffs            :as payoffs]
+            [resolver-sim.protocols.sew.economics     :as sew-econ]
             [resolver-sim.yield.ops                    :as yield-ops]
             [resolver-sim.yield.accounting             :as yield-acct]
             [resolver-sim.yield.expectations           :as yield-exp]
@@ -287,7 +287,7 @@
       :else
       (let [workflow-id   (get world :next-workflow-id 0)]
         (let [fee-bps       (:escrow-fee-bps snapshot 0)
-              fee           (payoffs/calculate-escrow-fee amount fee-bps)
+              fee           (sew-econ/calculate-escrow-fee amount fee-bps)
               afa           (- amount fee)
             ;; _applyEscrowSettings: compute effective auto times
               snap-rel      (:default-auto-release-delay snapshot 0)
@@ -620,7 +620,7 @@
           has-resolver?   (and resolver
                                (not= resolver t/zero-address))
 
-          ;; Ensure finalize, slash, and distribution are handled 
+          ;; Ensure finalize, slash, and distribution are handled
           ;; as a single, atomic state transition to satisfy invariants.
           world-finalized (finalize world workflow-id :refunded)
           world-slashed   (if has-resolver?

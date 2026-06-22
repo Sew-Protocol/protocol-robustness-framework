@@ -187,7 +187,7 @@
    first fixture roll). This means :fixed-roll-sequence patterns are per-trial,
    not per-batch — roll 1 repeats trial after trial, roll 2 repeats on the
    second detection check in every trial, etc.
-   
+
    To persist cursors across a batch, call prepare-oracle-params ONCE and reuse
    the returned params map across trials, or manage cursors externally.
 
@@ -648,7 +648,7 @@
    detected as a timeout."
   [reason params {:keys [bond-total resolver-stake slash-mult timeout-detected?]}]
   (case reason
-    :reversal (payoffs/calculate-reversal-slash resolver-stake (:reversal-slash-bps params (:reversal default-slash-bps)))
+    :reversal (payoffs/calculate-bps-amount resolver-stake (:reversal-slash-bps params (:reversal default-slash-bps)))
     :l2       (long (* bond-total (/ (:l2-slash-bps params (:l2 default-slash-bps)) 10000.0)))
     :fraud    (long (* bond-total (/ (:fraud-slash-bps params (:fraud default-slash-bps)) 10000.0)))
     :timeout  (if timeout-detected?

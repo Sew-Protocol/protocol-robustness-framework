@@ -515,3 +515,5 @@ clj꞉resolver-sim.evidence.capture꞉> 
 ; Execution error (ArityException) at resolver-sim.evidence.capture/eval13731 (capture.clj:84).
 ; Wrong number of args (3) passed to: resolver-sim.evidence.capture/evidence-base
 clj꞉resolver-sim.evidence.capture꞉> 
+(when-let [requires (resolve 'clojure.main/repl-requires)] (clojure.core/apply clojure.core/require @requires))
+joyride꞉user-activate꞉> 

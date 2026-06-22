@@ -1,5 +1,6 @@
 (ns dev.repl
   (:require
+   [dev.explore :as explore]
    [clojure.pprint :refer [pprint]]
    [clojure.string :as str]))
 
@@ -43,3 +44,17 @@
   [x]
   (tap> (summarize-map x))
   x)
+
+(defn preload-framework!
+  []
+  (doseq [ns-sym (explore/all-project-ns)]
+    (when (or (str/starts-with? (str ns-sym) "resolver-sim.")
+              (str/starts-with? (str ns-sym) "benchmark.")
+              (str/starts-with? (str ns-sym) "validation."))
+      (try
+        (require ns-sym)
+        (catch Throwable e
+          (tap> {:type :preload/error
+                 :ns ns-sym
+                 :message (.getMessage e)})))))
+  :preload/done)

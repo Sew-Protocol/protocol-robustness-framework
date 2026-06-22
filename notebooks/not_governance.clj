@@ -12,7 +12,7 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.rng :as rng]
-            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.notebook.views :as views]
             [resolver-sim.notebook.checks :as checks]))
 
@@ -60,7 +60,7 @@
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce slash-dist
-  (payoffs/calculate-slashing-distribution slash-obligation 0))
+  (sew-econ/calculate-slashing-distribution slash-obligation 0))
 
 ;; Helpers
 ;; badge, notice-box, trace-table moved to resolver-sim.notebook.views
@@ -78,8 +78,8 @@
    (fn [i p]
      (let [seed (+ (:seed const) (* (inc i) 1000))
            r (deref (run-batch-with-seed seed 500 {:malicious 1.0}
-                           {:slashing-detection-probability p
-                            :resolver-bond-bps bond-bps}))]
+                                         {:slashing-detection-probability p
+                                          :resolver-bond-bps bond-bps}))]
        {:detection-prob p
         :slash-rate (or (:slash-rate r) 0)
         :fraud-detected (get r :fraud-slashed-count 0)
@@ -125,11 +125,11 @@
    :protocol-params {:resolver-fee-bps 0 :appeal-window-duration 0
                      :max-dispute-duration 300}
    :events [{:seq 0 :time 1000 :agent "alice"   :action "create_escrow"
-              :params {:token "USDC" :to "0xBob" :amount 1000 :custom-resolver "0xResolver"}}
-             {:seq 1 :time 1060 :agent "alice"   :action "raise_dispute"
-              :params {:workflow-id 0}}
-             {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
-              :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
+             :params {:token "USDC" :to "0xBob" :amount 1000 :custom-resolver "0xResolver"}}
+            {:seq 1 :time 1060 :agent "alice"   :action "raise_dispute"
+             :params {:workflow-id 0}}
+            {:seq 2 :time 1120 :agent "resolver" :action "execute_resolution"
+             :params {:workflow-id 0 :is-release true :resolution-hash "0xhash"}}]})
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce lifecycle-result
@@ -177,8 +177,8 @@
     ;; Event trace table
     [:div {:style {:marginTop "8px"}} (views/trace-table trace)]
     (views/notice-box "What to notice"
-      "Defaults were merged automatically — no governance parameters required."
-      "Each event moves the escrow through a state machine step.")]))
+                      "Defaults were merged automatically — no governance parameters required."
+                      "Each event moves the escrow through a state machine step.")]))
 
 ;; ## 2. Malicious Resolver Attempt
 
@@ -215,9 +215,9 @@
         [:div {:style {:color "#fbbf24" :fontWeight 700 :marginBottom "4px"}} "Demo note"]
         [:div {:style {:color "#d4d4d8"}} msg]])]
     (views/notice-box "What to notice"
-      "Detection is stochastic — one draw may show zero detections."
-      "The important result is the structural divergence between honest and malicious payoff profiles."
-      "See the Detection Probability Sweep for the full detection vs. escaped-harm curve.")]))
+                      "Detection is stochastic — one draw may show zero detections."
+                      "The important result is the structural divergence between honest and malicious payoff profiles."
+                      "See the Detection Probability Sweep for the full detection vs. escaped-harm curve.")]))
 
 ;; ## 3. Slashing Distribution: Who Covers the Loss?
 
@@ -235,9 +235,9 @@
     [:div {:style {:fontSize "20px" :fontWeight 800 :color "#22c55e"}} (str (+ (:insurance slash-dist) (:protocol slash-dist) (:retained slash-dist)) " USDC")]]]
   [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "500px"}}
    [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-     [:th {:style {:padding "6px 8px" :textAlign "left"}} "Bucket"]
-     [:th {:style {:padding "6px 8px" :textAlign "right"}} "Amount"]
-     [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]]]
+            [:th {:style {:padding "6px 8px" :textAlign "left"}} "Bucket"]
+            [:th {:style {:padding "6px 8px" :textAlign "right"}} "Amount"]
+            [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]]]
    [:tbody
     [:tr {:style {:borderBottom "1px solid #0f172a"}}
      [:td {:style {:padding "6px 8px" :color "#f8fafc"}} "Insurance pool"]
@@ -252,8 +252,8 @@
      [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (str (:retained slash-dist))]
      [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} "20%"]]]]
   (views/notice-box "What to notice"
-    "Recovered slash funds are split 50/30/20 across insurance, protocol, and retained reserves."
-    "The split is configurable via governance BPS overrides.")])
+                    "Recovered slash funds are split 50/30/20 across insurance, protocol, and retained reserves."
+                    "The split is configurable via governance BPS overrides.")])
 
 ;; ## 4. Pro-Rata Slash Allocation
 
@@ -263,12 +263,12 @@
         stake-a (quot ea 10)
         stake-b (* stake-a 3)
         stake-c (- ea stake-a stake-b)]
-    (payoffs/calculate-prorata-slash-allocation
-      {:slash-obligation (quot ea 2)
-       :liable-parties
-       [{:id "Resolver A" :slashable-stake stake-a :available-slashable stake-a}
-        {:id "Resolver B" :slashable-stake stake-b :available-slashable stake-b}
-        {:id "Resolver C" :slashable-stake stake-c :available-slashable stake-c}]})))
+    (sew-econ/calculate-sew-slash-allocation
+     {:slash-obligation (quot ea 2)
+      :liable-parties
+      [{:id "Resolver A" :slashable-stake stake-a :available-slashable stake-a}
+       {:id "Resolver B" :slashable-stake stake-b :available-slashable stake-b}
+       {:id "Resolver C" :slashable-stake stake-c :available-slashable stake-c}]})))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce prorata-display
@@ -289,23 +289,23 @@
     [:span {:style {:color "#94a3b8" :marginLeft "12px"}} "obligation = paid + unmet"]]
    [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "650px"}}
     [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-      [:th {:style {:padding "6px 8px" :textAlign "left"}} "Party"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Stake"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Owed"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Paid"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Unmet"]
-      [:th {:style {:padding "6px 8px" :textAlign "right"}} "Remaining"]]]
+             [:th {:style {:padding "6px 8px" :textAlign "left"}} "Party"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Stake"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Share"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Owed"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Paid"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Unmet"]
+             [:th {:style {:padding "6px 8px" :textAlign "right"}} "Remaining"]]]
     (into [:tbody]
-      (for [a (:allocations prorata-alloc)]
-        [:tr {:style {:borderBottom "1px solid #0f172a"}}
-         [:td {:style {:padding "6px 8px" :color "#c4b5fd"}} (:id a)]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f8fafc"}} (:basis-amount a)]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} (str (:share a))]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f8fafc"}} (:owed a)]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color "#22c55e"}} (:paid a)]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color (if (pos? (:unmet a)) "#f59e0b" "#64748b")}} (:unmet a)]
-         [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (- (:basis-amount a) (:paid a))]]))]])
+          (for [a (:allocations prorata-alloc)]
+            [:tr {:style {:borderBottom "1px solid #0f172a"}}
+             [:td {:style {:padding "6px 8px" :color "#c4b5fd"}} (:id a)]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f8fafc"}} (:basis-amount a)]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color "#94a3b8"}} (str (:share a))]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color "#f8fafc"}} (:owed a)]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color "#22c55e"}} (:paid a)]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color (if (pos? (:unmet a)) "#f59e0b" "#64748b")}} (:unmet a)]
+             [:td {:style {:padding "6px 8px" :textAlign "right" :color "#38bdf8"}} (- (:basis-amount a) (:paid a))]]))]])
 
 ^{::clerk/visibility {:code :fold :result :show}}
 (clerk/html prorata-display)
@@ -343,33 +343,33 @@
      [:div {:style {:color "#d4d4d8"}} "Honest vs malicious under the same detection parameters."]]
     [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "750px"}}
      [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-       [:th {:style {:padding "8px" :textAlign "left"}} "Metric"]
-       [:th {:style {:padding "8px" :textAlign "right"}} "Honest"]
-       [:th {:style {:padding "8px" :textAlign "right"}} "Malicious"]
-       [:th {:style {:padding "8px" :textAlign "right" :color "#a78bfa"}} "Delta"]]]
+              [:th {:style {:padding "8px" :textAlign "left"}} "Metric"]
+              [:th {:style {:padding "8px" :textAlign "right"}} "Honest"]
+              [:th {:style {:padding "8px" :textAlign "right"}} "Malicious"]
+              [:th {:style {:padding "8px" :textAlign "right" :color "#a78bfa"}} "Delta"]]]
      (into [:tbody]
-       (for [[metric honest malicious delta] rows]
-         [:tr {:style {:borderBottom "1px solid #0f172a"}}
-          [:td {:style {:padding "8px" :color "#f8fafc"}} metric]
-          [:td {:style {:padding "8px" :textAlign "right" :color "#22c55e"}} (str honest)]
-          [:td {:style {:padding "8px" :textAlign "right" :color (if (re-find #"-" (str malicious)) "#ef4444" "#f59e0b")}} (str malicious)]
-          [:td {:style {:padding "8px" :textAlign "right" :color "#a78bfa" :fontFamily "monospace"}} (str delta)]]))]
+           (for [[metric honest malicious delta] rows]
+             [:tr {:style {:borderBottom "1px solid #0f172a"}}
+              [:td {:style {:padding "8px" :color "#f8fafc"}} metric]
+              [:td {:style {:padding "8px" :textAlign "right" :color "#22c55e"}} (str honest)]
+              [:td {:style {:padding "8px" :textAlign "right" :color (if (re-find #"-" (str malicious)) "#ef4444" "#f59e0b")}} (str malicious)]
+              [:td {:style {:padding "8px" :textAlign "right" :color "#a78bfa" :fontFamily "monospace"}} (str delta)]]))]
     (views/notice-box "What to notice"
-      "Malicious resolvers face slashing under detection."
-      "The delta column shows the magnitude of the divergence."
-      "Higher detection intensifies the divergence.")]))
+                      "Malicious resolvers face slashing under detection."
+                      "The delta column shows the magnitude of the divergence."
+                      "Higher detection intensifies the divergence.")]))
 
 ;; ## 6. Detection Probability Sweep
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce sweep-default
   (delay (sweep-at-bond "Default bond (10%)" (:resolver-bond-bps-default const)
-          (:sweep-detection-probs const))))
+                        (:sweep-detection-probs const))))
 
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce sweep-breakeven
   (delay (sweep-at-bond "Breakeven bond (210%)" (:resolver-bond-bps-breakeven const)
-          (:sweep-detection-probs const))))
+                        (:sweep-detection-probs const))))
 
 ^{::clerk/visibility {:code :fold :result :show}
   ::clerk/auto-expand-results? true
@@ -400,18 +400,18 @@
        [:th {:style {:padding "4px 8px" :textAlign "right"}} "Slash rate"]
        [:th {:style {:padding "4px 8px" :textAlign "right"}} "Escaped harm"]]]
      (into [:tbody]
-       (for [[d br] (map vector default-r breakeven-r)]
-         [:tr {:style {:borderBottom "1px solid #0f172a"}}
-          [:td {:style {:padding "8px" :fontWeight 600 :color "#f8fafc"}} (format "%.0f%%" (double (* 100 (:detection-prob d))))]
-          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate d)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate d))))]
-          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm d)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm d)))]
-          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate br)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate br))))]
-          [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm br)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm br)))]]))]
+           (for [[d br] (map vector default-r breakeven-r)]
+             [:tr {:style {:borderBottom "1px solid #0f172a"}}
+              [:td {:style {:padding "8px" :fontWeight 600 :color "#f8fafc"}} (format "%.0f%%" (double (* 100 (:detection-prob d))))]
+              [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate d)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate d))))]
+              [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm d)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm d)))]
+              [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:slash-rate br)) "#f59e0b" "#64748b")}} (format "%.1f%%" (double (* 100 (:slash-rate br))))]
+              [:td {:style {:padding "8px" :textAlign "right" :color (if (pos? (:escaped-harm br)) "#f59e0b" "#22c55e")}} (format "%.0f" (double (:escaped-harm br)))]]))]
     (views/notice-box "What to notice"
-      (str "At default bond (10%), the state machine absorbs attacks.")
-      (str "At breakeven bond (210%), rising detection produces a visible slash rate.")
-      "This confirms: bond-at-stake must be high enough for detection to act as a meaningful security layer."
-      "The state machine -- not the bond -- is the load-bearing security mechanism.")]))
+                      (str "At default bond (10%), the state machine absorbs attacks.")
+                      (str "At breakeven bond (210%), rising detection produces a visible slash rate.")
+                      "This confirms: bond-at-stake must be high enough for detection to act as a meaningful security layer."
+                      "The state machine -- not the bond -- is the load-bearing security mechanism.")]))
 
 ;; ## 7. Inline Invariant Check
 
@@ -459,8 +459,8 @@
  [:div {:style {:maxWidth "900px"}}
   [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "13px" :maxWidth "600px"}}
    [:thead [:tr {:style {:borderBottom "1px solid #134e4a" :color "#94a3b8"}}
-     [:th {:style {:padding "8px" :textAlign "left"}} "Artifact"]
-     [:th {:style {:padding "8px" :textAlign "left"}} "What a researcher can verify"]]]
+            [:th {:style {:padding "8px" :textAlign "left"}} "Artifact"]
+            [:th {:style {:padding "8px" :textAlign "left"}} "What a researcher can verify"]]]
    [:tbody
     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Scenario input"]   [:td {:style {:padding "8px" :color "#94a3b8"}} "Exact event sequence"]]
     [:tr {:style {:borderBottom "1px solid #0f172a"}} [:td {:style {:padding "8px" :color "#f8fafc"}} "Event trace"]      [:td {:style {:padding "8px" :color "#94a3b8"}} "What happened step by step"]]

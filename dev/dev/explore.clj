@@ -7,7 +7,7 @@
 (def source-dirs
   ["src" "test" "dev" "notebooks"])
 
-(defn all-ns
+(defn all-project-ns
   []
   (->> source-dirs
        (map io/file)
@@ -16,10 +16,10 @@
        sort
        vec))
 
-(defn find-ns
+(defn find-project-ns
   [needle]
   (let [needle (str/lower-case (str needle))]
-    (->> (all-ns)
+    (->> (all-project-ns)
          (filter #(str/includes? (str/lower-case (str %)) needle))
          vec)))
 
@@ -31,10 +31,10 @@
        sort
        vec))
 
-(defn find-var
+(defn find-project-var
   [needle]
   (let [needle (str/lower-case (str needle))]
-    (->> (all-ns)
+    (->> (all-project-ns)
          (mapcat
           (fn [ns-sym]
             (try
@@ -50,5 +50,5 @@
 
 (defn apropos+
   [needle]
-  {:namespaces (find-ns needle)
-   :vars       (find-var needle)})
+  {:namespaces (find-project-ns needle)
+   :vars       (find-project-var needle)})

@@ -6,7 +6,7 @@
             [resolver-sim.protocols.sew.lifecycle  :as lc]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
-            [resolver-sim.economics.payoffs        :as payoffs]
+            [resolver-sim.protocols.sew.economics  :as sew-econ]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
 
@@ -112,7 +112,7 @@
             slash-total (get-in world-slashed [:resolver-slash-total res] 0)
 
             ;; Calculate expected distribution based on default 50/30/20 split
-            expected-dist (payoffs/calculate-slashing-distribution slash-amount 0)
+            expected-dist (sew-econ/calculate-slashing-distribution slash-amount 0)
             expected-total (+ (:insurance expected-dist) (:protocol expected-dist) (:retained expected-dist))]
 
         (is (= (- stake-amount slash-amount) post-stake) "Post-slash stake should match")
@@ -532,7 +532,7 @@
           ;; Calculate allocation using fixed basis
           liable-parties [{:id r1 :slashable-stake basis-r1 :available-slashable 1000}
                           {:id r2 :slashable-stake basis-r2 :available-slashable 1000}]
-          allocation (payoffs/calculate-prorata-slash-allocation
+          allocation (sew-econ/calculate-sew-slash-allocation
                       {:slash-obligation slash-obligation
                        :liable-parties liable-parties})
 
@@ -540,7 +540,7 @@
           w1 (:world (reg/slash-resolver-stake initial-world r1 (get-in allocation [:allocations 0 :paid])))
           w2 (:world (reg/slash-resolver-stake w1 r2 (get-in allocation [:allocations 1 :paid])))
 
-          ;; The invariant: The total basis used MUST remain 2000, 
+          ;; The invariant: The total basis used MUST remain 2000,
           ;; even though the world state mutated to 1900.
           ]
       (is (= 2000 total-basis) "Invariant: Total basis must be snapshotted at transition start")
