@@ -336,6 +336,10 @@ run_dispute_resolution() {
     echo "Running CI gate validation..."
     python3 scripts/ci_gate_validation.py || return $?
   fi
+  
+  # CI Gate: coverage gates
+  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
+  
   return $dr_exit
 }
 
@@ -386,104 +390,10 @@ run_contracts() {
   grep -q 'snake_case' src/resolver_sim/server/grpc.clj
 
   # Scenario naming convention sanity checks (supports legacy + canonical ids)
-  python - <<'PY'
-import json
-import pathlib
-import re
-import sys
-
-root = pathlib.Path('data/fixtures/traces')
-pat_s = re.compile(r'^s\d{2}[a-z]?-[a-z0-9\-]+\.trace\.json$')
-pat_other = re.compile(r'^(eq-v\d+|spe-v\d+)-[a-z0-9\-]+\.trace\.json$')
-bad = []
-for p in sorted(root.glob('*.trace.json')):
-    name = p.name
-    is_eq_spe = name.startswith('eq-v') or name.startswith('spe-v')
-    is_sxx = bool(re.match(r'^s\d{2}[a-z]?-', name))
-
-    # Validate known canonical families only; allow legacy/non-canonical
-    # traces (e.g. same-block-ordering.trace.json) to coexist.
-    if is_eq_spe:
-        if not pat_other.match(name):
-            bad.append(f"bad-filename:{p}")
-            continue
-    elif is_sxx:
-        if not pat_s.match(name):
-            bad.append(f"bad-filename:{p}")
-            continue
-
-    if is_eq_spe and not pat_other.match(name):
-        bad.append(f"bad-filename:{p}")
-        continue
-    try:
-        obj = json.loads(p.read_text())
-    except Exception as e:
-        bad.append(f"bad-json:{p}:{e}")
-        continue
-    sid = obj.get('id')
-    if sid:
-        sid_s = str(sid)
-        stem = p.name.replace('.trace.json', '')
-        valid_ids = {stem, f"scenarios/{stem}"}
-        if sid_s not in valid_ids:
-            bad.append(f"id-mismatch:{p}:id={sid_s}:expected-one-of={sorted(valid_ids)}")
-
-if bad:
-    print("Scenario naming/ID convention checks failed:")
-    for b in bad:
-        print(" -", b)
-    sys.exit(1)
-
-print("Scenario naming/ID convention checks passed")
-PY
+  python scripts/validate_scenario_naming.py
 
   # P1: Fixture/claim alignment checks for collusion assertions
-  python - <<'PY'
-import json
-from pathlib import Path
-
-root = Path('data/fixtures/traces')
-errors = []
-
-for p in sorted(root.glob('*.trace.json')):
-    try:
-        obj = json.loads(p.read_text())
-    except Exception:
-        continue
-
-    theory = obj.get('theory') or {}
-    mech = theory.get('mechanism-properties') or []
-    claim = str(theory.get('claim', '')).lower()
-    tags = [str(t).lower() for t in (obj.get('threat-tags') or [])]
-    needs_collusion_alignment = (
-        ('collusion-resistance' in mech)
-        or ('collusion' in claim)
-        or any('collusion' in t for t in tags)
-    )
-    if not needs_collusion_alignment:
-        continue
-
-    agents = obj.get('agents') or []
-    has_explicit_collusive_actor = any(
-        str(a.get('type', '')).lower() == 'collusive' for a in agents if isinstance(a, dict)
-    )
-
-    # Allow dedicated inconclusive fixture by id/title to remain actor-agnostic.
-    sid = str(obj.get('scenario-id', ''))
-    title = str(obj.get('title', '')).lower()
-    inconclusive_fixture = ('collusion-resistance-inconclusive' in sid) or ('inconclusive' in title)
-
-    if (not has_explicit_collusive_actor) and (not inconclusive_fixture):
-        errors.append(f"collusion-alignment-missing:{p}:expected at least one agent.type='collusive'")
-
-if errors:
-    print('Collusion fixture/claim alignment checks failed:')
-    for e in errors:
-        print(' -', e)
-    raise SystemExit(1)
-
-print('Collusion fixture/claim alignment checks passed')
-PY
+  python scripts/validate_collusion_alignment.py
 
   # Artifact registry integrity + compatibility checks
   python scripts/validate_artifact_registry.py
@@ -506,11 +416,11 @@ run_triage() {
 }
 
 run_suites() {
-  require_clojure || return $?
-  echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
-  local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
+   require_clojure || return $?
+   echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
+   local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
 
-  clojure -M:test -e "
+   clojure -M:test -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites $suite_filter
       results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
@@ -523,9 +433,11 @@ run_suites() {
         (when (not= :pass (:outcome r))
           (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
-  # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
-  touch -m "notebooks/report.clj" 2>/dev/null || true
-  return $?
+   # Extract suite failures into risk digest format for test-summary.json visibility
+   python3 scripts/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
+   # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
+   touch -m "notebooks/report.clj" 2>/dev/null || true
+   return $?
 }
 
 run_routed_suites() {
@@ -535,7 +447,7 @@ run_routed_suites() {
     echo "No suites impacted by changes. Skipping."
     return 0
   fi
-  
+
   local suite_filter
   if [ "$routed" = "all" ]; then
     echo "Changes impact all suites. Running full suite."
@@ -655,87 +567,7 @@ run_layering_lint() {
 
 run_comparison_lint() {
   echo "Running comparison metadata lint..."
-  python - <<'PY'
-import json
-import sys
-from pathlib import Path
-
-traces_dir = Path("data/fixtures/traces")
-files = sorted(traces_dir.glob("*.trace.json"))
-
-entries = []
-errors = []
-
-for p in files:
-    try:
-        obj = json.loads(p.read_text())
-    except Exception as e:
-        errors.append(f"bad-json:{p}:{e}")
-        continue
-
-    comp = obj.get("comparison")
-    if not comp:
-        continue
-    if not isinstance(comp, dict):
-        errors.append(f"comparison-not-object:{p}")
-        continue
-
-    sid = str(obj.get("scenario-id") or obj.get("id") or p.stem.replace('.trace', ''))
-    group = str(comp.get("comparison_group", "")).strip()
-    variant = str(comp.get("variant", "")).strip()
-    cf = str(comp.get("counterfactual_of", "")).strip()
-
-    if not group:
-        errors.append(f"missing-comparison-group:{p}")
-    if variant not in {"A", "B"}:
-        errors.append(f"invalid-variant:{p}:{variant}")
-    if not cf:
-        errors.append(f"missing-counterfactual-of:{p}")
-
-    es = obj.get("expected_semantics", {})
-    pc = es.get("path_constraints", {}) if isinstance(es, dict) else {}
-    mo = pc.get("must_observe") if isinstance(pc, dict) else None
-    if not isinstance(mo, list) or len(mo) == 0:
-        errors.append(f"missing-path-constraints.must_observe:{p}")
-
-    entries.append({
-        "id": sid,
-        "group": group,
-        "variant": variant,
-        "counterfactual_of": cf,
-        "path": str(p),
-    })
-
-by_id = {e["id"]: e for e in entries}
-groups = {}
-for e in entries:
-    groups.setdefault(e["group"], []).append(e)
-
-for grp, members in groups.items():
-    if len(members) != 2:
-        errors.append(f"group-size-not-2:{grp}:{len(members)}")
-        continue
-    variants = {m["variant"] for m in members}
-    if variants != {"A", "B"}:
-        errors.append(f"group-variants-invalid:{grp}:{sorted(variants)}")
-
-    a, b = members[0], members[1]
-    if a["counterfactual_of"] not in by_id:
-        errors.append(f"counterfactual-target-missing:{a['id']}->{a['counterfactual_of']}")
-    if b["counterfactual_of"] not in by_id:
-        errors.append(f"counterfactual-target-missing:{b['id']}->{b['counterfactual_of']}")
-
-    if a["counterfactual_of"] != b["id"] or b["counterfactual_of"] != a["id"]:
-        errors.append(f"counterfactual-not-reciprocal:{grp}:{a['id']}<->{b['id']}")
-
-if errors:
-    print("Comparison metadata lint failed:")
-    for e in errors:
-        print(" -", e)
-    sys.exit(1)
-
-print(f"Comparison metadata lint passed for {len(entries)} traces across {len(groups)} groups")
-PY
+  python scripts/validate_comparison_metadata.py
   return $?
 }
 
@@ -745,49 +577,7 @@ run_coverage_gates() {
   mkdir -p "$ARTIFACT_DIR"
   _cov_out=$(python3 -c "from evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_path('coverage'))" 2>/dev/null) || _cov_out="$ARTIFACT_DIR/coverage.json"
   clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$_cov_out" || return $?
-  python - <<PY
-import json, sys
-from pathlib import Path
-p = Path("$ARTIFACT_DIR/coverage.json")
-if not p.exists():
-    print("Missing coverage artifact:", p)
-    sys.exit(1)
-obj = json.loads(p.read_text())
-unhit = obj.get("unhit-transitions", [])
-max_unhit = int("$MAX_UNHIT_TRANSITIONS")
-print(f"unhit-transitions={len(unhit)} threshold={max_unhit}")
-if len(unhit) > max_unhit:
-    print("Coverage gate failed: too many unhit transitions")
-    print("Unhit:", unhit)
-    sys.exit(1)
-required_categories = {
-    "creation", "state-change", "escalation", "resolution", "timeout", "governance", "economic"
-}
-hits = obj.get("transition-hit-freq", {})
-def category_of(action):
-    s = str(action)
-    if "create_escrow" in s:
-        return "creation"
-    if "raise_dispute" in s or "sender_cancel" in s or "recipient_cancel" in s:
-        return "state-change"
-    if "escalate_dispute" in s or "challenge_resolution" in s:
-        return "escalation"
-    if "execute_resolution" in s or "execute_pending_settlement" in s:
-        return "resolution"
-    if "auto_cancel_disputed" in s:
-        return "timeout"
-    if "automate_timed_actions" in s or "register_stake" in s:
-        return "governance"
-    if "release" in s:
-        return "economic"
-    return None
-seen = {c for c in (category_of(k) for k in hits.keys()) if c}
-missing = sorted(required_categories - seen)
-if missing:
-    print("Coverage gate failed: missing required transition categories:", missing)
-    sys.exit(1)
-print("Coverage gates passed")
-PY
+  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS"
   return $?
 }
 
@@ -811,18 +601,22 @@ latest = Path("$latest_dir")
 regions = latest / "regions.json"
 promos = latest / "promotions.json"
 if not regions.exists() or not promos.exists():
-    print("Missing required artifacts in", latest)
+    print("Missing regions.json or promotions.json in", latest)
     sys.exit(1)
-r = json.loads(regions.read_text())
-p = json.loads(promos.read_text())
-families = r.get("families", {})
+
+regions_data = json.loads(regions.read_text())
+promos_data = json.loads(promos.read_text())
+
+families = regions_data.get("families", {})
 if not families:
     print("No family data found in regions.json")
     sys.exit(1)
-top = p.get("top", [])
+
+top = promos_data.get("top", [])
 if len(top) < 3:
     print("Gate failed: expected at least 3 promoted candidates, got", len(top))
     sys.exit(1)
+
 # Placeholder bounded-growth gate: enforce per-family unsafe ratio <= 100%
 # (real baseline delta comparison can be layered in CI with persisted baseline snapshots).
 for fam, vals in families.items():
@@ -833,6 +627,7 @@ for fam, vals in families.items():
     if ratio > 1.0:
         print("Gate failed: invalid unsafe ratio for", fam)
         sys.exit(1)
+
 print("Adversarial gates passed for", latest)
 PY
   return $?
@@ -851,7 +646,7 @@ run_monte_carlo() {
   # algebraic checks, not protocol-kernel evidence).  See
   # src/resolver_sim/core/phases.clj phase-evidence-tiers for the full registry.
   #
-  # Phases NOT CI-gated but still :analytic: AB, AC, AD, AE, AF, AG, AH, AI,
+  # Phases NOT CI-gated but still :analytic: AB, AC, AE, AF, AG, AH, AI,
   # T, Y, Z, market-exit, phase-c-dr, phase-e-dr, phase-m-dr.
   # Phases :exploratory (not CI-gated): Q, R, U, V, W, X.
   # ──────────────────────────────────────────────────────────────────────────
@@ -1106,6 +901,9 @@ case "$MODE" in
     echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     run_outcome_classification_report || true
+    
+    # CI Gate: coverage gates validation for all mode
+    python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown mode: $MODE"

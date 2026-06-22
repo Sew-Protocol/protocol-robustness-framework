@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added (2026-06-22)
+- **Pro-rata parity test vectors:** Added canonical liquidity-fulfillment and Sew slash-allocation vector emitters, deterministic JSON/hash helpers, committed golden fixtures under `resources/test-vectors/pro-rata/`, invariant tests, and `docs/pro_rata_test_vectors.md` for future Solidity/Foundry differential testing.
+
 ### Changed (2026-06-21)
 - **Attribution namespace split:** `resolver-sim.util.attribution` is now a compatibility facade over focused context, schema, validation, and logging namespaces. Evidence payload key registry moved to `resolver-sim.util.evidence.schema`; existing attribution call sites remain supported.
 - **Attribution resolution helpers:** Added marker-based attribution detection, safe explicit attribution resolution, nested attribution extraction, pure sanitization, a single warning sanitizer, and `with-resolved-attribution` for bridging AttributedState into legacy dynamic consumers without treating arbitrary maps as attribution.
