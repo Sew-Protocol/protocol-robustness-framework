@@ -5,9 +5,9 @@
    without mutating source evidence or changing capture semantics."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.event-evidence :as event-evidence]))
 
 (defprotocol ForensicEvidenceAdapter
@@ -59,7 +59,7 @@
                          (input-artifact-summary root a)
                          (input-artifact-summary root {:path (str a)})))
                      input-artifacts)
-        output-hash (hashing/stable-hash output)
+        output-hash (hc/domain-hash :evidence-record output)
         artifact {:schema-version schema-version
                   :generated-at (str (java.time.Instant/now))
                   :adapter/id adapter-id

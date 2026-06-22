@@ -13,6 +13,7 @@
             [clojure.walk :as walk]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.event-evidence :as io-evidence]))
 
 (declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
@@ -50,11 +51,13 @@
         :delta (- (safe-bytes av) (safe-bytes bv))}))))
 
 (defn stable-diff-hash
-  "Compute a stable hash of a diff's changes vector."
+  "Compute a stable content hash of a diff's changes vector.
+   Strips before/after values so structural identity is
+   independent of the actual values at the changed paths."
   [changes]
-  (let [stripped (for [c changes]
-                   (assoc c :before nil :after nil))]
-    (hash stripped)))
+  (let [stripped (vec (for [c changes]
+                        (assoc c :before nil :after nil)))]
+    (hc/domain-hash "STATE_DIFF_V1" {:changes stripped})))
 
 ;; ?? Diff Artifact Builder ????????????????????????????????????????????????????
 

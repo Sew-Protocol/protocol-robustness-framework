@@ -1,6 +1,5 @@
 (ns resolver-sim.benchmark.sharing
   (:require [resolver-sim.benchmark.runner :as runner]
-            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [clojure.java.shell :refer [sh]]

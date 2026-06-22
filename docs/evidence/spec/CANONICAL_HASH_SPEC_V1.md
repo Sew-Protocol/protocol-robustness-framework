@@ -55,6 +55,9 @@ MUST NOT hash identically to:
 Integer
 Arbitrary precision signed integer.
 Implementations MUST support values larger than 64-bit range.
+Implementations MUST accept native integer types as well as arbitrary-precision
+wrapper types (e.g., Clojure BigInt, Java BigInteger). All integer types
+are encoded identically via the signed integer encoding.
 Vector
 Ordered sequence of values.
 Ordering is significant.
@@ -65,11 +68,6 @@ Keys MUST be:
     • keyword
     • string
 No other key types are permitted.
-Instant
-UTC timestamp represented as an ISO-8601 string.
-Example:
-2026-06-22T12:34:56.123Z
-Implementations MUST normalize to UTC before hashing.
 
 4. Unsupported Types
 The following types are prohibited:
@@ -77,7 +75,6 @@ The following types are prohibited:
     • symbol
     • set
     • list
-    • bigint wrapper types
     • bigdec
     • record
     • function
@@ -110,79 +107,83 @@ or
 Implementations MUST reject raw records.
 
 6. Canonical Encoding
-Each value is encoded as a typed binary sequence.
-Null
-Encoding:
-N
-ASCII byte:
-0x4E
+Each value is encoded as a typed binary sequence per the Binary Encoding ABI.
+Every value begins with a single-byte type tag, followed by a type-specific payload.
 
-Boolean
-true:
-T
-false:
-F
+6.1 Type Tags
+Tag   Type
+0x00  null
+0x01  boolean false
+0x02  boolean true
+0x10  signed integer (INT)
+0x20  string (UTF-8)
+0x22  keyword
+0x30  vector (ARRAY)
+0x31  map
 
-String
-Encoding:
-S:
-Example:
-"abc"
-encodes as:
-S3:abc
-Length is the number of UTF-8 bytes.
+6.2 Null
+Encoding: 0x00
+No payload.
 
-Keyword
-Encoding:
-K:
-Example:
-:resolver/id
-encodes as:
-K11:resolver/id
-Namespace separators are preserved.
+6.3 Boolean
+false: 0x01
+true:  0x02
+No payload.
 
-Integer
-Encoding:
-I:
+6.4 Integer
+All integers (including BigInt/BigInteger) are encoded as signed integers.
+Encoding: 0x10 || zigzag(varuint)
+Steps:
+    1. Apply ZigZag transform: n → (n << 1) ^ (n >> (bit-length - 1)), where bit-length is the minimum needed to represent n in two's complement
+    2. Encode the resulting unsigned value as LEB128 varuint (little-endian base-128, continuation bit in MSB)
 Examples:
-0
-I1:0
-123
-I3:123
--42
-I3:-42
-No leading zeros permitted.
+0       → 0x10 0x00
+1       → 0x10 0x02
+-1      → 0x10 0x01
+123     → 0x10 0xF6 0x01
+-123    → 0x10 0xF5 0x01
+127     → 0x10 0xFE 0x01
+-127    → 0x10 0xFD 0x01
 
-Vector
-Encoding:
-V[item1][item2]...[itemN]
-Example:
-["a" "b"]
-V2S1:aS1:b
-Ordering is preserved.
+6.5 String
+Encoding: 0x20 || length(varuint) || UTF-8 bytes
+Length is the number of UTF-8 bytes (not characters).
+Examples:
+"active" → 0x20 0x06 0x61 0x63 0x74 0x69 0x76 0x65
+"hello"  → 0x20 0x05 0x68 0x65 0x6C 0x6C 0x6F
 
-Map
-Maps are encoded in canonical key order.
-Canonical key order is:
-    1. keywords
-    2. strings
-Within each category:
-UTF-8 lexicographic ordering of the canonical key representation.
-Encoding:
-M[key1][value1]...[keyN][valueN]
-Example:
-{
-:a 1
-:b 2
-}
-M2K1:aI1:1K1:bI1:2
+6.6 Keyword
+Keywords are distinct from strings and use a separate type tag.
+Encoding: 0x22 || length(varuint) || UTF-8 bytes
+Length is the number of UTF-8 bytes of the keyword name (including namespace prefix).
+The colon prefix and optional namespace separator (/) are preserved in the byte payload.
+Examples:
+:active      → 0x22 0x06 0x61 0x63 0x74 0x69 0x76 0x65
+:resolver/id → 0x22 0x0B 0x72 0x65 0x73 0x6F 0x6C 0x76 0x65 0x72 0x2F 0x69 0x64
 
-Instant
-Encoding:
-TS:
-Example:
-2026-06-22T12:34:56Z
-TS20:2026-06-22T12:34:56Z
+6.7 Vector
+Encoding: 0x30 || count(varuint) || concat(element_encodings)
+Count is the number of elements (not byte length).
+Each element is fully encoded (type tag + payload).
+Ordering is significant and preserved.
+Examples:
+[]       → 0x30 0x00
+[1 2 3]  → 0x30 0x03 0x10 0x02 0x10 0x04 0x10 0x06
+
+6.8 Map
+Encoding: 0x31 || count(varuint) || concat(kv_pairs)
+Count is the number of key-value pairs (not byte length).
+Each pair: encode(key) || encode(value)
+Map keys MUST be sorted in canonical key order:
+    1. All keys are sorted lexicographically by their full encoded canonical bytes (type tag + payload), using unsigned byte comparison.
+    2. Since keyword tag (0x22) < string tag (0x20) in unsigned comparison, keywords sort before strings.
+    3. Within each tag group, keys sort by payload bytes (UTF-8 lexicographic).
+No duplicate keys are permitted.
+Examples:
+{}        → 0x31 0x00
+{:a 1}    → 0x31 0x01 0x22 0x01 0x61 0x10 0x02
+{:a 1 :b 2} → 0x31 0x02 0x22 0x01 0x61 0x10 0x02 0x22 0x01 0x62 0x10 0x04
+
 
 7. Canonical Equality
 Values are equal only when:
@@ -239,4 +240,85 @@ Each test vector SHALL specify:
     • domain tag
     • expected SHA-256 digest
 All implementations MUST pass the published test vectors.
+
+11. World State Projection (Semantic Identity Lens)
+Domain: WORLD_STATE_V1
+
+The simulation world state is a runtime structure containing both domain data
+and simulation infrastructure (yield module implementations, temporal objects,
+non-canonical collection types). Before hashing, the world state SHALL be
+projected through a semantic identity lens called
+`project-world-to-structure-view`.
+
+11.1 Purpose
+The projection selects the identity-relevant structure from the world state
+by transforming runtime and non-canonical types into canonical-safe
+representations. This is NOT a data-cleaning step — it is an intentional
+identity lens. Every transformation is explicit and documented.
+
+11.2 Transformation Rules
+
+| Source Type              | Projected Form              | Rationale |
+|--------------------------|------------------------------|-----------|
+| Canonical types (null, bool, int, string, keyword, vector, map) | Pass through unchanged | Already hash-safe |
+| java.time.Instant        | ISO-8601 string (.toString)  | JVM interop type; string is deterministic and portable |
+| Double, Float            | Scientific notation string (%.17g) | Floating-point precision is environment-sensitive; string is deterministic |
+| Ratio / Rational         | Scientific notation string (%.17g) | Ratio is implementation-specific; double approximation is deterministic and portable |
+| PersistentHashSet        | Sorted vector (sorted by element projection, then vec) | Set ordering is implementation-dependent; sorted vector is deterministic |
+| List, LazySeq, other sequential types | Vector (recursively projected) | Only vector is a canonical type; other seqs MUST be converted |
+| Function / IFn           | :fn keyword                  | Functions are simulation infrastructure, not domain state |
+| All other non-canonical types | Error (rejected)          | No silent coercion; all runtime types have explicit projections defined |
+
+11.3 Idempotency
+The projection is idempotent: applying it to an already-projected value returns
+the same projected value. Projected values pass validate-canonical-value!
+and are safe for direct canonical encoding.
+
+11.4 Domain Exclusions
+No data is silently excluded. All world state keys pass through the
+projection recursively. The projection rejects types it cannot handle,
+preventing silent data loss.
+
+11.5 Intent Registry Contracts
+Each hash intent is a machine-readable contract with explicit declarations.
+Contracts are defined in `hash-intents` and include:
+
+Fields:
+    • :intent/name        — unique keyword identifier
+    • :intent/description — human-readable description of the intent
+    • :intent/scope       — set of data categories intentionally covered
+    • :intent/excludes    — set of data categories explicitly excluded
+    • :project            — projection function (see 11.2 for rules)
+    • :domain             — domain tag (see 8 for reservations)
+
+Intent contracts prevent semantic drift by making boundaries explicit
+and machine-readable. Future tooling MAY validate that data being hashed
+matches the declared :intent/scope and does not include :intent/excludes.
+
+Registered Contracts:
+
+| Intent              | Scope                                                          | Excludes                                                  |
+|---------------------|----------------------------------------------------------------|-----------------------------------------------------------|
+| :world-structure    | domain-state, positions, balances, config, oracle-state,       | module-implementations, runtime-values, functions,         |
+|                     | resolver-registry, bond-state, dispute-state, escrow-state,    | sets, ratios, instants, doubles                           |
+|                     | time-context                                                   |                                                           |
+| :evidence-record    | attribution, action, result, context, artifact-kind,           | evidence-hash, timestamp, chain-metadata                  |
+|                     | temporal-context, sub-hashes                                   |                                                           |
+| :evidence-content   | serialized-content, evidence-fields, artifact-body             | keywords, hash-fields, chain-metadata, timestamps         |
+| :evidence-chain     | chain-links, registry-structure, prev-hash, chain-seq,         | artifact-content, evidence-payload, timestamps            |
+|                     | self-hash                                                      |                                                           |
+| :manifest           | manifest-metadata, bundle-structure, schema-version            | content-payloads, individual-artifacts                    |
+| :bundle-root        | benchmark-metadata, root-commitment, bundle-summary            | individual-results, detailed-evidence, traces             |
+| :registry           | registry-index, artifact-catalog, commitment-root              | artifact-content, detailed-evidence, world-state          |
+| :provenance         | provenance-lineage, verification-metadata, links               | raw-evidence-content, world-snapshots                     |
+
+11.6 Implementation Reference
+Clojure reference implementation: `resolver-sim.hash.canonical/project-world-to-structure-view`
+Intent-based API: `resolver-sim.hash.canonical/hash-with-intent`
+Contract lookup: `resolver-sim.hash.canonical/resolve-intent`
+See `hash-intents` for all supported intents and their projections.
+
+Files migrated to use intent-based hashing: util/evidence, capture, checkpoints,
+aggregate, event-evidence, benchmark/runner, yield/evidence, notebooks/manifest
+All use (hash-with-intent {:hash/intent intent-keyword} data)
 

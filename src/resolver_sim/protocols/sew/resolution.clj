@@ -1141,8 +1141,8 @@
                                                                 [(:proposal-evidence-hash pending)])
                               :attribution (attr/current-attribution)})
                    evidence (assoc evidence
-                                   :world/before-full-hash (cap/hash-world world)
-                                   :world/after-full-hash (cap/hash-world world-slashed))]
+                                   :world/before-full-hash (cap/world-hash world)
+                                   :world/after-full-hash (cap/world-hash world-slashed))]
                (attr/with-attribution
                  {:subject/type :slash
                   :subject/id slash-id

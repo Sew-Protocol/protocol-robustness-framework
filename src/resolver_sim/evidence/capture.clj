@@ -16,22 +16,24 @@
        -> capture-event-evidence!
    
    See also resolver-sim.io.event-evidence for durable persistence."
-  (:require [clojure.walk :as walk]
-            [resolver-sim.benchmark.hashing :as hashing]
-            [resolver-sim.evidence.config :as evcfg]
+  (:require [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.attribution :as attr]))
 
-;; ── Stable Hashing ───────────────────────────────────────────────────────────
+;; ── Hashing ───────────────────────────────────────────────────────────────────
 ;;
-;; Delegates to resolver-sim.benchmark.hashing for the single canonical
-;; implementation. The prefixed variant is used for schema-compliant
-;; evidence hashes; callers that need plain hex use hashing/stable-hash directly.
+;; All hashing uses resolver-sim.hash.canonical with explicit intent
+;; declarations. See hash-intents in canonical.clj for available intents.
+;;
+;; For world state: (hash-with-intent {:hash/intent :world-structure} world)
+;; For evidence content: (hash-with-intent {:hash/intent :evidence-content} evidence)
 
-(defn stable-hash
-  "Compute a deterministic, content-addressed hash with 'sha256:' prefix.
-   Delegates to benchmark.hashing/stable-hash-prefixed."
-  [x]
-  (hashing/stable-hash-prefixed x))
+(defn world-hash
+  "Compute a deterministic, content-addressed hash of a world state
+   using the canonical hash engine with semantic projection.
+   Returns a 64-char hex string with :world-state domain separation."
+  [world]
+  (hc/hash-with-intent {:hash/intent :world-structure} world))
 
 ;; ── Required Fields ──────────────────────────────────────────────────────────
 
@@ -158,28 +160,8 @@
    Returns the finalized evidence map."
   [evidence]
   (let [hash-input (dissoc evidence :evidence/hash :evidence/timestamp)
-        evidence-hash (stable-hash hash-input)]
+        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-content} hash-input)]
     (assoc evidence :evidence/hash evidence-hash)))
-
-;; ── World Hashing ──────────────────────────────────────────────────────────
-
-(defn hash-world
-  "Content hash of a world state for deterministic forensic anchoring.
-   Canonicalizes map keys so the same logical world always produces the
-   same hash across JVM invocations. Falls back to stable sort for maps
-   with mixed key types that sorted-map cannot compare."
-  [world]
-  (let [canon (walk/postwalk
-               (fn [x]
-                 (if (map? x)
-                   (try (into (sorted-map) x)
-                        (catch ClassCastException _
-                          (into (array-map) (sort-by (fn [[k _]] (str k)) x))))
-                   x))
-               world)
-        digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (pr-str canon) "UTF-8"))
-    (apply str (map (partial format "%02x") (.digest digest)))))
 
 ;; ── Dynamic dispatch for I/O capture ──────────────────────────────────────
 

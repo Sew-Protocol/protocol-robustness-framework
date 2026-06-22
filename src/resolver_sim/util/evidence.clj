@@ -9,10 +9,9 @@
    See `make-evidence-record` for the canonical evidence record shape, and
    `emit-evidence!` for the primary emission API."
   (:require [clojure.walk :as walk]
-            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.util.attribution :as attr])
-  (:import [java.security MessageDigest]))
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.util.attribution :as attr]))
 
 ;; ── Attribution Context ──────────────────────────────────────────────────────
 
@@ -56,17 +55,10 @@
                         :explicit? (some? explicit-attr)})))
      attr)))
 
-;; ── Stable Hashing ───────────────────────────────────────────────────────────
+;; ── Hashing ───────────────────────────────────────────────────────────────────
 ;;
-;; Delegates to resolver-sim.benchmark.hashing for the single canonical
-;; implementation.
-
-(defn stable-hash
-  "Compute a deterministic, content-addressed hash of any Clojure value.
-   Same input always produces the same hex string, across JVM invocations.
-   Delegates to benchmark.hashing/stable-hash."
-  [x]
-  (hashing/stable-hash x))
+;; All hashing uses resolver-sim.hash.canonical with explicit intent
+;; declarations. See hash-intents in canonical.clj for available intents.
 
 ;; ── Evidence Record ──────────────────────────────────────────────────────────
 
@@ -86,11 +78,11 @@
    The returned record includes an :evidence-hash that covers all other fields,
    making the record tamper-evident."
   [{:keys [artifact-kind block-time step before after action result attribution]}]
-  (let [context-hash (stable-hash attribution)
-        before-hash (stable-hash before)
-        after-hash (stable-hash after)
-        action-hash (stable-hash action)
-        result-hash (stable-hash result)
+  (let [context-hash (hc/hash-with-intent {:hash/intent :evidence-record} attribution)
+        before-hash (hc/hash-with-intent {:hash/intent :world-structure} before)
+        after-hash (hc/hash-with-intent {:hash/intent :world-structure} after)
+        action-hash (hc/hash-with-intent {:hash/intent :evidence-record} action)
+        result-hash (hc/hash-with-intent {:hash/intent :evidence-record} result)
         base {:schema-version (evcfg/schema :evidence-record)
               :artifact-kind artifact-kind
               :temporal-context {:block-time block-time :step step}
@@ -102,7 +94,7 @@
               :action-hash action-hash
               :result result
               :result-hash result-hash}
-        evidence-hash (stable-hash base)
+        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-record} base)
         group-id (:ctx/evidence-group-id attribution)]
     (cond-> (assoc base :evidence-hash evidence-hash)
       group-id (assoc :evidence/group-id group-id :evidence/layer :generic-trace))))

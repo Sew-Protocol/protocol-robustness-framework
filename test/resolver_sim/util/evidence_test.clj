@@ -1,7 +1,8 @@
 (ns resolver-sim.util.evidence-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.util.evidence :as ev]
-            [resolver-sim.util.attribution :as attr]))
+            [resolver-sim.util.attribution :as attr]
+            [resolver-sim.hash.canonical :as hc]))
 
 ;; Sample data for tests
 (def ^:private sample-world
@@ -138,30 +139,44 @@
     (let [result (ev/require-attribution! :unknown-kind)]
       (is (map? result)))))
 
-;; ── stable-hash ──────────────────────────────────────────────────────────────
+;; ── hash-with-intent ──────────────────────────────────────────────────────────
 
-(deftest stable-hash-is-deterministic
+(deftest hash-with-intent-deterministic
   (let [data {:a 1 :b [2 3] :c {:nested "value"}}
-        h1 (ev/stable-hash data)
-        h2 (ev/stable-hash data)
-        h3 (ev/stable-hash (into (sorted-map) data))]
+        h1 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+        h2 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+        h3 (hc/hash-with-intent {:hash/intent :evidence-record} (into (sorted-map) data))]
     (is (string? h1))
     (is (= 64 (count h1)))
     (is (= h1 h2))
     (is (= h1 h3))))
 
-(deftest stable-hash-differs-for-different-inputs
-  (is (not= (ev/stable-hash {:a 1}) (ev/stable-hash {:a 2}))))
+(deftest hash-with-intent-differs-for-different-inputs
+  (is (not= (hc/hash-with-intent {:hash/intent :evidence-record} {:a 1})
+            (hc/hash-with-intent {:hash/intent :evidence-record} {:a 2}))))
 
-(deftest stable-hash-handles-keyword-values
-  (let [h (ev/stable-hash {:status :active :tags #{:a :b}})]
+(deftest hash-with-intent-handles-keyword-values
+  (let [h (hc/hash-with-intent {:hash/intent :evidence-record} {:status :active :tags [:a :b]})]
     (is (string? h))
     (is (= 64 (count h)))))
 
-(deftest stable-hash-handles-empty-map
-  (let [h (ev/stable-hash {})]
+(deftest hash-with-intent-handles-empty-map
+  (let [h (hc/hash-with-intent {:hash/intent :evidence-record} {})]
     (is (string? h))
     (is (= 64 (count h)))))
+
+(deftest hash-with-intent-rejects-unknown-intent
+  (is (thrown? Exception (hc/hash-with-intent {:hash/intent :nonexistent} {:a 1}))))
+
+(deftest hash-with-intent-world-structure-projects
+  (let [world {:step 42 :resolver-unavailable #{:addr1}}
+        h (hc/hash-with-intent {:hash/intent :world-structure} world)]
+    (is (string? h))
+    (is (= 64 (count h)))))
+
+(deftest hash-intents-differ-by-intent
+  (is (not= (hc/hash-with-intent {:hash/intent :evidence-record} {:a 1})
+            (hc/hash-with-intent {:hash/intent :world-structure} {:a 1}))))
 
 ;; ── make-evidence-record ─────────────────────────────────────────────────────
 

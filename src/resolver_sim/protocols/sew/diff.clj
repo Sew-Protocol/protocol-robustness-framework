@@ -11,12 +11,11 @@
      3. Compare hashes; on mismatch use (diff-worlds sim-world evm-world) to
         locate the first point of divergence.
 
-   Canonical form: all nested maps are key-sorted so pr-str output is
-   deterministic regardless of Clojure hash-map insertion order."
+   Hashing uses resolver-sim.hash.canonical with :world-structure intent.
+   Structural diff uses clojure.data/diff on sorted-map representations."
   (:require [clojure.data :as data]
-            [resolver-sim.protocols.sew.invariants.accounting :as acct-inv])
-  (:import [java.security MessageDigest]
-           [java.util Base64]))
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.protocols.sew.invariants.accounting :as acct-inv]))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical form
@@ -32,8 +31,8 @@
     :else           x))
 
 (defn canonical-world
-  "Return a canonically-ordered copy of world.
-   Two worlds with identical logical content always produce identical pr-str."
+  "Return a canonically-ordered copy of world (all maps → sorted-map).
+   Used by diff-worlds for structural comparison with clojure.data/diff."
   [world]
   (->sorted-deep world))
 
@@ -42,18 +41,19 @@
 ;; ---------------------------------------------------------------------------
 
 (defn world-hash
-  "SHA-256 of (pr-str (canonical-world world)), Base64-encoded (no padding).
+  "Canonical hash of a world state using intent-based hashing.
+
+   Uses (hash-with-intent {:hash/intent :world-structure} world) from
+   resolver-sim.hash.canonical with semantic projection (sets→vectors,
+   instants→strings, etc.). Returns a 64-char hex string.
 
    Properties:
    - Deterministic: same world → same hash across JVM restarts and runs
-   - Collision-resistant: suitable as a per-step checkpoint
+   - Collision-resistant: SHA-256 with domain separation
    - Comparable: EVM adapter must produce an identical hash from Anvil state
      by mapping contract storage → the same canonical map structure"
   [world]
-  (let [s   (pr-str (canonical-world world))
-        md  (MessageDigest/getInstance "SHA-256")
-        raw (.digest md (.getBytes s "UTF-8"))]
-    (.encodeToString (Base64/getEncoder) raw)))
+  (hc/hash-with-intent {:hash/intent :world-structure} world))
 
 ;; ---------------------------------------------------------------------------
 ;; Structural diff

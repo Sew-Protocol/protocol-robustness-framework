@@ -1,7 +1,7 @@
 (ns resolver-sim.benchmark.runner
   (:require [resolver-sim.benchmark.repo :as repo]
-            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.benchmark.adapter :as adapter]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
@@ -83,7 +83,7 @@
                    :reproduce {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/dispute-liveness.edn"))}}
 
          hashable-evidence (dissoc evidence :timestamp)
-         evidence-hash (hashing/hash-evidence hashable-evidence)
+         evidence-hash (hc/domain-hash :bundle-root hashable-evidence)
          final-evidence (assoc evidence :evidence/hash evidence-hash)]
 
      (when-not passed?

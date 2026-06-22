@@ -1,7 +1,7 @@
 (ns resolver-sim.benchmark.runner-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.benchmark.runner :as runner]
-            [resolver-sim.benchmark.hashing :as hashing]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.benchmark.sharing :as sharing]
@@ -14,15 +14,22 @@
 (deftest test-hashing-determinism
   (testing "Identical data produces identical hashes"
     (let [data {:a 1 :b [1 2 3] :c {:d "foo"}}
-          h1 (hashing/hash-evidence data)
-          h2 (hashing/hash-evidence data)]
+          h1 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+          h2 (hc/hash-with-intent {:hash/intent :evidence-record} data)]
       (is (= h1 h2))))
 
   (testing "Map key order does not affect hash"
     (let [data1 {:a 1 :b 2}
           data2 {:b 2 :a 1}
-          h1 (hashing/hash-evidence data1)
-          h2 (hashing/hash-evidence data2)]
+          h1 (hc/hash-with-intent {:hash/intent :evidence-record} data1)
+          h2 (hc/hash-with-intent {:hash/intent :evidence-record} data2)]
+      (is (= h1 h2)))))
+
+(deftest test-hash-stability
+  (testing "Hashing is stable across different instances of same data"
+    (let [data {:repo {:commit "abc"}}
+          h1 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+          h2 (hc/hash-with-intent {:hash/intent :evidence-record} (into {} data))]
       (is (= h1 h2)))))
 
 (deftest test-repo-metadata
@@ -48,8 +55,8 @@
 (deftest test-hash-stability
   (testing "Hashing is stable across different instances of same data"
     (let [data {:repo {:commit "abc"}}
-          h1 (hashing/hash-evidence data)
-          h2 (hashing/hash-evidence (into {} data))]
+          h1 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+          h2 (hc/hash-with-intent {:hash/intent :evidence-record} (into {} data))]
       (is (= h1 h2)))))
 
 (deftest test-share-summary

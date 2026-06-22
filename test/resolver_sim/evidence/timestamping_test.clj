@@ -1,14 +1,14 @@
 (ns resolver-sim.evidence.timestamping-test
   (:require [clojure.test :refer :all]
             [resolver-sim.evidence.timestamping :as ts]
-            [resolver-sim.benchmark.hashing :as h]))
+            [resolver-sim.hash.canonical :as hc]))
 
 (defn- test-tsa-url []
   (or (System/getenv "TSA_URL") "https://freetsa.org/tsr"))
 
 (deftest tsa-request-freetsa
   (let [url (test-tsa-url)
-        test-hash (h/hash-evidence {:test "freetsa-integration" :time (str (java.time.Instant/now))})
+        test-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "freetsa-integration" :time (str (java.time.Instant/now))})
         result (ts/tsa-request test-hash :tsa-url url :timeout-ms 30000)]
     (if (:error result)
       (do
@@ -41,7 +41,7 @@
 
 (deftest write-tsa-timestamp-creates-files
   (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/tsa-test-" (java.util.UUID/randomUUID))
-        test-hash (h/hash-evidence {:test "write-test"})
+        test-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "write-test"})
         result (ts/write-tsa-timestamp! test-hash :dir tmp-dir :tsa-url (test-tsa-url) :timeout-ms 30000)]
     (if (:error result)
       (println "TSA write test note:" (:error result))
@@ -55,7 +55,7 @@
 
 (deftest verify-tsa-token-round-trip
   (let [url (test-tsa-url)
-        test-hash (h/hash-evidence {:test "verify-round-trip"})
+        test-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "verify-round-trip"})
         req-result (ts/tsa-request test-hash :tsa-url url :timeout-ms 30000)]
     (if (:error req-result)
       (println "TSA verify test note: TSA unavailable, skipping:" (:error req-result))
@@ -67,18 +67,18 @@
 
 (deftest verify-tsa-token-tampered-hash
   (let [url (test-tsa-url)
-        test-hash (h/hash-evidence {:test "tamper-test"})
+        test-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "tamper-test"})
         req-result (ts/tsa-request test-hash :tsa-url url :timeout-ms 30000)]
     (if (:error req-result)
       (println "TSA tamper test note: TSA unavailable, skipping:" (:error req-result))
-      (let [wrong-hash (h/hash-evidence {:test "tampered-data"})
+      (let [wrong-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "tampered-data"})
             verify-result (ts/verify-tsa-token (:response-hex req-result) wrong-hash)]
         (is (not (:valid verify-result)) "Tampered hash does NOT verify")
         (is (:error verify-result) "Error message present for tampered hash")))))
 
 (deftest verify-tsa-token-from-file-round-trip
   (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/tsa-verify-" (java.util.UUID/randomUUID))
-        test-hash (h/hash-evidence {:test "verify-from-file"})
+        test-hash (hc/hash-with-intent {:hash/intent :evidence-record} {:test "verify-from-file"})
         write-result (ts/write-tsa-timestamp! test-hash :dir tmp-dir :tsa-url (test-tsa-url) :timeout-ms 30000)]
     (if (:error write-result)
       (println "TSA verify-from-file test note: TSA unavailable, skipping:" (:error write-result))

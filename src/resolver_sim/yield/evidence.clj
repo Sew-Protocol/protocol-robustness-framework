@@ -1,7 +1,7 @@
 (ns resolver-sim.yield.evidence
   "Extract explainable yield evidence for trace annotations."
-  (:require [resolver-sim.yield.market-state :as market-state]
-            [resolver-sim.benchmark.hashing :as hashing]))
+  (:require [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.yield.market-state :as market-state]))
 
 (defn- extract-position-evidence [oid pos ms]
   {:owner-id (:owner/id pos)
@@ -43,7 +43,7 @@
                      event-data)
         hash-payload (dissoc event :event/hash)]
     (update world :yield/events (fnil conj [])
-            (assoc event :event/hash (hashing/stable-hash-prefixed hash-payload)))))
+            (assoc event :event/hash (str "sha256:" (hc/domain-hash :evidence-record hash-payload))))))
 
 (defn sum-recognized-losses
   "Sum all recognized principal losses for a token across all positions."

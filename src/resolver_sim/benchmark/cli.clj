@@ -3,8 +3,8 @@
             [resolver-sim.benchmark.sharing :as sharing]
             [resolver-sim.benchmark.registry :as registry]
             [resolver-sim.benchmark.signing :as signing]
-            [resolver-sim.benchmark.hashing :as hashing]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.evidence.timestamping :as ts]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -126,7 +126,7 @@
       (let [bundle-path (first arguments)
             bundle (edn/read-string (slurp bundle-path))
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hashing/hash-evidence hashable)
+            computed-hash (hc/domain-hash :bundle-root hashable)
             stored-hash (:evidence/hash bundle)
             hash-ok? (= computed-hash stored-hash)]
         (println "Verification for:" bundle-path)
@@ -142,7 +142,7 @@
       (let [bundle-path (first arguments)
             bundle (edn/read-string (slurp bundle-path))
             hashable (dissoc bundle :timestamp :evidence/hash :evidence/signature)
-            computed-hash (hashing/hash-evidence hashable)]
+            computed-hash (hc/domain-hash :bundle-root hashable)]
         (println computed-hash)
         (System/exit 0))
 

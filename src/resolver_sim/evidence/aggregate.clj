@@ -2,22 +2,23 @@
   "Generic evidence aggregate builder.
    Provides a consistent envelope for structured protocol evidence."
   (:require [resolver-sim.evidence.capture :as cap]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.time.context :as time-ctx]))
 
 (defn evidence-content-hash
   "Compute the content-addressable hash of the evidence map inputs."
   [content]
-  (cap/stable-hash content))
+  (hc/hash-with-intent {:hash/intent :evidence-record} content))
 
 (defn extract-decision-frame
   "Extract the decision frame (world state metadata) from the world.
    The frame/id is derived from the world content hash for deterministic
    content-addressing — same world always produces the same frame."
   [world]
-  {:frame/id (str "frame-" (cap/stable-hash world) "-" (:step world 0))
+  {:frame/id (str "frame-" (cap/world-hash world) "-" (:step world 0))
    :step (:step world 0)
    :block-ts (time-ctx/block-ts world)
-   :world/hash (cap/stable-hash world)})
+   :world/hash (cap/world-hash world)})
 
 (defn build-evidence-aggregate
   "Construct a consistent evidence envelope.

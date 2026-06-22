@@ -109,6 +109,55 @@ run_unit() {
 (require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (let [results (t/run-tests
+    'resolver-sim.core-tests
+    'resolver-sim.protocol-alignment-test
+    'resolver-sim.protocols.sew.replay-test
+    'resolver-sim.protocols.sew.forking-strategist-expectations-test
+    'resolver-sim.protocols.sew.slashing-test
+    'resolver-sim.protocols.sew.phase-k-test
+    'resolver-sim.protocols.sew.phase-m-test
+    'resolver-sim.scenario.expectations-test
+    'resolver-sim.scenario.equilibrium-test
+    'resolver-sim.sim.multi-epoch-test
+    'resolver-sim.sim.defection-test
+    'resolver-sim.sim.strategy-adaptation-test
+    'resolver-sim.sim.waterfall-test
+    'resolver-sim.io.scenario-fixture-parity-test
+    'resolver-sim.contract-model.replay-batch-test
+    'resolver-sim.contract-model.replay-batch-sew-test
+    'resolver-sim.contract-model.replay-batch-appeal-test
+    'resolver-sim.contract-model.replay-batch-slash-domain-test
+    'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
+  return $?
+}
+
+run_unit() {
+  require_clojure || return $?
+  echo "Running unit tests (all — framework + Sew)..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.core-tests])
+(require '[resolver-sim.protocol-alignment-test])
+(require '[resolver-sim.protocols.sew.replay-test])
+(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
+(require '[resolver-sim.scenario.expectations-test])
+(require '[resolver-sim.scenario.equilibrium-test])
+(require '[resolver-sim.sim.multi-epoch-test])
+(require '[resolver-sim.sim.defection-test])
+(require '[resolver-sim.sim.strategy-adaptation-test])
+(require '[resolver-sim.protocols.sew.slashing-test])
+(require '[resolver-sim.protocols.sew.phase-k-test])
+(require '[resolver-sim.protocols.sew.phase-m-test])
+(require '[resolver-sim.sim.waterfall-test])
+(require '[resolver-sim.io.scenario-fixture-parity-test])
+(require '[resolver-sim.contract-model.replay-batch-test])
+(require '[resolver-sim.contract-model.replay-batch-sew-test])
+(require '[resolver-sim.contract-model.replay-batch-appeal-test])
+(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
+(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
+(let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
                 'resolver-sim.protocols.sew.replay-test
@@ -343,6 +392,28 @@ run_dispute_resolution() {
   return $dr_exit
 }
 
+run_dispute_resolution() {
+  require_clojure || return $?
+  echo "Running dispute resolution coverage scenarios (S-DR-* via test namespace)..."
+  clojure -M:test -e "
+(require '[clojure.test :as t])
+(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
+(let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+  (when (pos? (+ (:error results) (:fail results)))
+    (System/exit 1)))"
+  local dr_exit=$?
+  # CI Gate: validate artifact registry
+  if [[ -f "scripts/ci_gate_validation.py" ]]; then
+    echo "Running CI gate validation..."
+    python3 scripts/ci_gate_validation.py || return $?
+  fi
+  
+  # CI Gate: coverage gates
+  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
+  
+  return $dr_exit
+}
+
 run_yield_scenarios() {
   require_clojure || return $?
   echo "Running yield scenario path suite (JSON, normalized)..."
@@ -359,11 +430,52 @@ run_generators() {
 (require '[resolver-sim.generators.fixtures-test])
 (require '[resolver-sim.properties.invariants-test])
 (let [results (t/run-tests
-                'resolver-sim.generators.equilibrium-test
-                'resolver-sim.generators.fixtures-test
-                'resolver-sim.properties.invariants-test)]
+    'resolver-sim.generators.equilibrium-test
+    'resolver-sim.generators.fixtures-test
+    'resolver-sim.properties.invariants-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
+  return $?
+}
+
+run_contracts() {
+  echo "Running cross-layer contract checks (proto/service/wire compatibility)..."
+  
+  # Proto service + RPC contract
+  grep -q 'package sew.simulation;' proto/simulation.proto
+  grep -q 'service SimulationEngine' proto/simulation.proto
+  grep -q 'rpc StartSession' proto/simulation.proto
+  grep -q 'rpc Step' proto/simulation.proto
+  grep -q 'rpc DestroySession' proto/simulation.proto
+  
+  # Python client must target same service/methods
+  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
+  grep -q 'StartSession' python/sim_api/grpc_client.py
+  grep -q 'DestroySession' python/sim_api/grpc_client.py
+  
+  # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
+  grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
+  grep -q 'make-method "StartSession"' src/resolver_sim/server/grpc.clj
+  grep -q 'make-method "Step"' src/resolver_sim/server/grpc.clj
+  grep -q 'make-method "DestroySession"' src/resolver_sim/server/grpc.clj
+  grep -q 'snake_case' src/resolver_sim/server/grpc.clj
+  
+  # Scenario naming convention sanity checks (supports legacy + canonical ids)
+  python scripts/validate_scenario_naming.py
+  
+  # P1: Fixture/claim alignment checks for collusion assertions
+  python scripts/validate_collusion_alignment.py
+  
+  # Artifact registry integrity + compatibility checks
+  python scripts/validate_artifact_registry.py
+  
+  # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
+  if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
+    python scripts/validate_claim_registry.py --strict-theory-claims
+  else
+    python scripts/validate_claim_registry.py
+  fi
+  
   return $?
 }
 
@@ -427,6 +539,31 @@ run_suites() {
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (f/emit-suite-result suite-id result)
+    (println (str suite-id " → " (if (:ok? result) "PASS" "FAIL")))
+    (when-not (:ok? result)
+      (doseq [r (:results result)]
+        (when (not= :pass (:outcome r))
+          (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
+  (when any-fail (System/exit 1)))"
+   # Extract suite failures into risk digest format for test-summary.json visibility
+   python3 scripts/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
+   # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
+   touch -m "notebooks/report.clj" 2>/dev/null || true
+   return $?
+}
+
+run_suites() {
+   require_clojure || return $?
+   echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
+   local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
+
+   clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [suites $suite_filter
+      results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
+      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
+  (doseq [[suite-id result] results]
+    (f/emit-suite-result suite-id result)
     (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
     (when-not (:ok? result)
       (doseq [r (:results result)]
@@ -465,12 +602,21 @@ run_routed_suites() {
       any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
   (doseq [[suite-id result] results]
     (f/emit-suite-result suite-id result)
-    (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
+    (println (str suite-id " → " (if (:ok? result) "PASS" "FAIL")))
     (when-not (:ok? result)
       (doseq [r (:results result)]
         (when (not= :pass (:outcome r))
-          (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
+          (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
   (when any-fail (System/exit 1)))"
+  return $?
+}
+
+run_reference_validation() {
+  require_clojure || return $?
+  echo "Running reference validation suite v1..."
+  make clean-reference-validation-v1 >/dev/null
+  make reference-validation-v1
+  make verify-reference-validation-v1
   return $?
 }
 
@@ -492,11 +638,11 @@ run_dr3_coverage() {
 (require '[resolver-sim.sim.fixtures :as f])
 (let [r (f/run-suite :suites/dr3-critical)]
   (f/emit-suite-result :suites/dr3-critical r)
-  (println (str :suites/dr3-critical \" → \" (if (:ok? r) \"PASS\" \"FAIL\")))
+  (println (str :suites/dr3-critical " → " (if (:ok? r) "PASS" "FAIL")))
   (when-not (:ok? r)
     (doseq [x (:results r)]
       (when (not= :pass (:outcome x))
-        (println (str \"  FAIL: \" (:trace-id x) \" [\" (:outcome x) \"]\")))))
+        (println (str "  FAIL: " (:trace-id x) " [" (:outcome x) "]"))))))
   (when-not (:ok? r) (System/exit 1)))" || return $?
 
   # 2) Verify DR3 release mapping file references valid traces and suite IDs.
@@ -504,28 +650,58 @@ run_dr3_coverage() {
 (require '[clojure.edn :as edn]
          '[clojure.java.io :as io])
 
-(let [m (edn/read-string (slurp \"data/fixtures/protocol/dr3-release-modules.edn\"))
+(let [m (edn/read-string (slurp "data/fixtures/protocol/dr3-release-modules.edn"))
       traces (:dr3-critical-traces m)
       suites (:dr3-critical-suites m)
       missing-traces (->> traces
                           (map name)
-                          (map #(str \"data/fixtures/traces/\" % \".trace.json\"))
+                          (map #(str "data/fixtures/traces/" % ".trace.json"))
                           (remove #(-> % io/file .exists))
                           vec)
       missing-suites (->> suites
                           (map name)
-                          (map #(str \"data/fixtures/suites/\" % \".edn\"))
+                          (map #(str "data/fixtures/suites/" % ".edn"))
                           (remove #(-> % io/file .exists))
                           vec)]
   (when (seq missing-traces)
-    (println \"Missing DR3 mapped traces:\")
-    (doseq [p missing-traces] (println \" -\" p))
+    (println "Missing DR3 mapped traces:")
+    (doseq [p missing-traces] (println " -" p))
     (System/exit 1))
   (when (seq missing-suites)
-    (println \"Missing DR3 mapped suites:\")
-    (doseq [p missing-suites] (println \" -\" p))
+    (println "Missing DR3 mapped suites:")
+    (doseq [p missing-suites] (println " -" p))
     (System/exit 1))
-  (println \"DR3 mapping drift checks passed\"))" || return $?
+  (println "DR3 mapping drift checks passed"))" || return $?
+
+  return $?
+}
+
+run_equivalence_new() {
+  require_clojure || return $?
+  echo "Running new equivalence comparison suites (auth/race/escalation/accounting + money-path)..."
+  clojure -M:test -e "
+(require '[resolver-sim.sim.fixtures :as f])
+(let [suites [:suites/equivalence-auth-paths
+          :suites/equivalence-race-pairs
+          :suites/equivalence-escalation-boundaries
+          :suites/equivalence-accounting-min
+          :suites/equivalence-money-path-integrity]
+      results (map (fn [id] [id (f/run-suite id)]) suites)
+      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
+  (doseq [[suite-id result] results]
+    (f/emit-suite-result suite-id result)
+    (println (str suite-id " → " (if (:ok? result) "PASS" "FAIL")))
+    (when-not (:ok? result)
+      (doseq [r (:results result)]
+        (when (not= :pass (:outcome r))
+          (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
+  (when any-fail (System/exit 1)))"
+
+  _eq_out=$(python3 -c "from evidence_config import EvidenceConfig; c=EvidenceConfig(); print(c.artifact_path('equivalence-summary'))")
+  python3 python/equivalence_pair_diff.py \
+    --traces-dir data/fixtures/traces \
+    --out "$_eq_out" \
+    --replay-dir "$ARTIFACT_DIR/equivalence-pairs" || true
 
   return $?
 }
@@ -571,6 +747,12 @@ run_comparison_lint() {
   return $?
 }
 
+run_comparison_lint() {
+  echo "Running comparison metadata lint..."
+  python scripts/validate_comparison_metadata.py
+  return $?
+}
+
 run_coverage_gates() {
   require_clojure || return $?
   echo "Running transition/guard coverage report + gates..."
@@ -578,6 +760,12 @@ run_coverage_gates() {
   _cov_out=$(python3 -c "from evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_path('coverage'))" 2>/dev/null) || _cov_out="$ARTIFACT_DIR/coverage.json"
   clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$_cov_out" || return $?
   python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS"
+  return $?
+}
+
+run_adversarial_sweep() {
+  echo "Running adversarial profitability sweep..."
+  python3 python/adversarial_profitability_sweep.py --top-n 10
   return $?
 }
 
@@ -631,6 +819,64 @@ for fam, vals in families.items():
 print("Adversarial gates passed for", latest)
 PY
   return $?
+}
+
+run_monte_carlo() {
+  # ──────────────────────────────────────────────────────────────────────────
+  # HOW THE TWO SIMULATION ENGINES RELATE
+  #
+  # Engine 1 — Monte Carlo (stochastic + sim/economic|adversarial|governance/)
+  # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
+  #
+  # This sweep runs representative phases for expected-value/regime checks.
+  #
+  # The CI gate runs 5 phases (O, P, AA, AD, F).  All are :analytic (closed-form
+  # algebraic checks, not protocol-kernel evidence).  See
+  # src/resolver_sim/core/phases.clj phase-evidence-tiers for the full registry.
+  #
+  # Phases NOT CI-gated but still :analytic: AB, AC, AE, AF, AG, AH, AI,
+  # T, Y, Z, market-exit, phase-c-dr, phase-e-dr, phase-m-dr.
+  # Phases :exploratory (not CI-gated): Q, R, U, V, W, X.
+  # ──────────────────────────────────────────────────────────────────────────
+
+  echo "Running Monte Carlo representative sweep (4 domains)..."
+  echo ""
+  echo "  Phase O  — Economic:    market exit cascade (honest vs malice profitability)"
+  echo "  Phase P  — Adversarial: appeals falsification (difficulty/evidence/herding)"
+  echo "  Phase AA — Governance:  governance-as-adversary (selective enforcement gaming)"
+  echo "  Phase AD — Governance:  bandwidth floor safeguard (AA remediation)"
+  echo "  Phase F  — Adversarial: collusion ring deterrence (waterfall slashing)"
+  echo ""
+
+  local mc_fail=0
+
+  echo "── Phase O: Market Exit Cascade ──────────────────────────────────────────"
+  clojure -M:run -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase P Lite: Appeals Falsification ───────────────────────────────────"
+  clojure -M:run -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase AA: Governance as Adversary ─────────────────────────────────────"
+  clojure -M:run -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase AD: Governance Bandwidth Floor (AA safeguard) ───────────────────"
+  clojure -M:run -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  echo "── Phase F: Collusion Ring Deterrence ────────────────────────────────────"
+  clojure -M:run -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
+  echo ""
+
+  if [ "$mc_fail" -eq 0 ]; then
+    echo "Monte Carlo sweep: all 5 phases PASSED"
+  else
+    echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
+  fi
+
+  return $mc_fail
 }
 
 run_monte_carlo() {
@@ -749,6 +995,52 @@ PY
   return $?
 }
 
+run_outcome_classification_report() {
+  echo ""
+  echo "Outcome classification report"
+  echo "============================="
+  python - <<PY
+import json
+from pathlib import Path
+
+artifact = Path("$ARTIFACT_FILE")
+if not artifact.exists():
+    print("No test summary found; skipping classification report.")
+    raise SystemExit(0)
+
+data = json.loads(artifact.read_text())
+targets = data.get("targets", [])
+
+hard_fail_targets = [t for t in targets if t.get("status") == "fail"]
+print("1) Gate/Test status")
+if hard_fail_targets:
+    print(f"   FAIL: {len(hard_fail_targets)} failing target(s)")
+    for t in hard_fail_targets:
+        print(f"   - {t.get('target')} (exit={t.get('exit_code')})")
+else:
+    print("   PASS: all executed targets passed")
+
+mc = next((t for t in targets if t.get("target") == "monte-carlo"), None)
+print("\n2) Model findings (non-gating diagnostics)")
+if not mc:
+    print("   Monte Carlo target not run in this mode.")
+    raise SystemExit(0)
+
+log_path = Path(mc.get("log_file", ""))
+if not log_path.exists():
+    print("   Monte Carlo log missing; cannot summarize findings.")
+    raise SystemExit(0)
+
+txt = log_path.read_text(errors="ignore")
+claim_fails = txt.count("❌")
+claim_pass = txt.count("✅")
+
+print(f"   Indicators in Monte Carlo output: ✅={claim_pass}, ❌={claim_fails}")
+print("   Note: these are model/theory outcome signals, not unit-test assertion failures.")
+PY
+  return $?
+}
+
 run_long_horizon() {
   require_clojure || return $?
   echo "Running long-horizon coverage suite (extended epoch scenarios)..."
@@ -787,7 +1079,7 @@ run_long_horizon() {
   z_log="$(mktemp)"
   clojure -M:run -- -Z -p data/params/phase-z-legitimacy.edn >"$z_log" 2>&1 || lh_fail=$((lh_fail + 1))
   cat "$z_log"
-  if grep -Eq "Hypothesis holds\\? ❌ NO|UNEXPECTED DEATH SPIRAL" "$z_log"; then
+  if grep -Eq "Hypothesis holds\? ❌ NO|UNEXPECTED DEATH SPIRAL" "$z_log"; then
     echo "HARD GATE: Phase Z reported legitimacy instability; marking long-horizon as failed."
     echo "critical|phase-z|Z_LEGITIMACY_FAILURE|Phase Z reports legitimacy instability or death spiral" >> "$lh_risk_lines"
     lh_fail=$((lh_fail + 1))
@@ -912,476 +1204,119 @@ case "$MODE" in
     ;;
 esac
 
-if [ -f "$ARTIFACT_DIR/.targets-${RUN_ID}.csv" ]; then
-  emit_claimable_classification || true
-  if ls results/test-artifacts/suite-*.json >/dev/null 2>&1; then
-    python3 scripts/emit_validation_root.py --input-dir results/test-artifacts --output-dir results/test-artifacts
-    python3 scripts/ci_gate_validation.py
-  fi
-  python - <<PY
-import csv, json, pathlib, datetime, subprocess, sys
-sys.path.insert(0, "scripts")
-from evidence_config import EvidenceConfig
-_cfg = EvidenceConfig()
-csv_path = pathlib.Path("$ARTIFACT_DIR/.targets-${RUN_ID}.csv")
-risk_path = pathlib.Path("$ARTIFACT_DIR/.risk-${RUN_ID}.lines")
-lh_meta_path = pathlib.Path("$ARTIFACT_DIR/.long-horizon-${RUN_ID}.meta")
-force_refund_trace = pathlib.Path("data/fixtures/traces/s64-force-refund-then-illegal-release-attempt.trace.json")
-rows = []
-for r in csv.reader(csv_path.read_text().splitlines()):
-    if len(r) != 5:
-        continue
-    rows.append({
-        "target": r[0],
-        "status": r[1],
-        "exit_code": int(r[2]),
-        "duration_ms": int(r[3]),
-        "log_file": r[4]
-    })
-
-risk_digest = {
-  "critical_findings": [],
-  "warnings": [],
-  "infos": [],
-  "gates_failed": [],
-  "gates_passed": []
-}
-if risk_path.exists():
-    for line in risk_path.read_text().splitlines():
-        # Expected format: severity|phase|code|message
-        # Use maxsplit=3 so free-form message text is preserved.
-        parts = line.split("|", 3)
-        if len(parts) != 4:
-            continue
-        severity, phase, code, message = parts[0], parts[1], parts[2], parts[3]
-        item = {"phase": phase, "code": code, "message": message}
-        if severity == "critical":
-            risk_digest["critical_findings"].append(item)
-            risk_digest["gates_failed"].append(code)
-        elif severity == "warning":
-            risk_digest["warnings"].append(item)
-        else:
-            risk_digest["infos"].append(item)
-            risk_digest["gates_passed"].append(code)
-
-# P1 clarity: enrich risk digest from target logs (OOM/kill signals, etc.)
-for t in rows:
-    lp = pathlib.Path(t.get("log_file", ""))
-    if not lp.exists():
-        continue
-    txt = lp.read_text(errors="ignore")
-    if "Killed                  clojure -M:run -- -U" in txt or " Killed                  clojure -M:run -- -U" in txt:
-        risk_digest["warnings"].append({
-            "phase": "phase-ah",
-            "code": "AH_RUNTIME_KILLED",
-            "message": "Phase AH process was killed (likely resource exhaustion); interpret downstream results with caution"
-        })
-
-overall = "pass" if $FAILURES == 0 else "fail"
-if risk_digest["critical_findings"]:
-    decision = "REJECTED_CRITICAL"
-elif overall == "pass" and risk_digest["warnings"]:
-    decision = "ACCEPTED_WITH_WARNINGS"
-elif overall == "pass":
-    decision = "PASS_CLEAN"
-else:
-    decision = "REJECTED"
-
-out = {
-  "schema_version": _cfg.schema("test-summary"),
-  "run_id": "$RUN_ID",
-  "mode": "$MODE",
-  "overall_status": overall,
-  "acceptance_decision": decision,
-  "failure_count": $FAILURES,
-  "risk_digest": risk_digest,
-  "targets": rows,
-}
-
-def scenario_capabilities_summary(scenarios_dir: pathlib.Path):
-    profiles = set()
-    archetypes = set()
-    module_statuses = set()
-    liquidity_modes = set()
-    failure_modes = set()
-    required_capabilities = set()
-    actor_abilities_present = 0
-    yield_enabled_scenarios = 0
-    yield_disabled_scenarios = 0
-    shortfall_related_scenarios = 0
-    partial_liquidity_enabled_scenarios = 0
-
-    for p in sorted(scenarios_dir.glob("*.json")):
-        try:
-            obj = json.loads(p.read_text())
-        except Exception:
-            continue
-        if not isinstance(obj, dict):
-            continue
-
-        req_caps = obj.get("required_capabilities") or []
-        for c in req_caps:
-            required_capabilities.add(str(c))
-
-        if obj.get("actor_abilities"):
-            actor_abilities_present += 1
-
-        ycfg = obj.get("yield_config") or {}
-        modules = (ycfg.get("modules") or {}) if isinstance(ycfg, dict) else {}
-        if not isinstance(modules, dict):
-            modules = {}
-        if modules:
-            yield_enabled_scenarios += 1
-        else:
-            yield_disabled_scenarios += 1
-
-        for module_id, module_cfg in modules.items():
-            profiles.add(str(module_id))
-            if isinstance(module_cfg, dict):
-                module_statuses.add(str(module_cfg.get("module_status", "active")))
-                tokens = module_cfg.get("tokens") or {}
-                if not isinstance(tokens, dict):
-                    tokens = {}
-                for _, token_cfg in tokens.items():
-                    if not isinstance(token_cfg, dict):
-                        continue
-                    lm = str(token_cfg.get("liquidity_mode", "available"))
-                    liquidity_modes.add(lm)
-                    fms = [str(x) for x in (token_cfg.get("failure_modes") or [])]
-                    for fm in fms:
-                        failure_modes.add(str(fm))
-                    if lm == "shortfall" or "partial-liquidity" in fms:
-                        shortfall_related_scenarios += 1
-                    if "partial-liquidity" in fms:
-                        partial_liquidity_enabled_scenarios += 1
-
-        pp = obj.get("protocol_params") or {}
-        if not isinstance(pp, dict):
-            pp = {}
-        yid = pp.get("yield_generation_module")
-        if yid:
-            profiles.add(str(yid))
-            if str(yid) == "aave-v3":
-                archetypes.add("yield.provider/liquid-lending")
-
-    return {
-        "yield": {
-            "enabled": yield_enabled_scenarios > 0,
-            "profile_ids": sorted(profiles),
-            "archetypes": sorted(archetypes),
-            "module_statuses": sorted(module_statuses),
-            "liquidity_modes": sorted(liquidity_modes),
-            "failure_modes": sorted(failure_modes),
-            "enabled_scenarios": yield_enabled_scenarios,
-            "disabled_scenarios": yield_disabled_scenarios,
-            "shortfall_related_scenarios": shortfall_related_scenarios,
-            "partial_liquidity_enabled_scenarios": partial_liquidity_enabled_scenarios,
-        },
-        "required_capabilities_seen": sorted(required_capabilities),
-        "actor_abilities_scenarios": actor_abilities_present,
-    }
-
-caps = scenario_capabilities_summary(pathlib.Path("scenarios"))
-claimable_path = pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE")
-if claimable_path.exists():
-  claimable_classification = json.loads(claimable_path.read_text())
-else:
-  claimable_classification = {
-    "schema_version": _cfg.schema("claimable-classification"),
-    "observations_status": "taxonomy-only",
-    "shortfall_policy": {
-      "mode": "partial-liquidity-supported",
-      "allocation": "fulfilled-plus-deferred",
-      "rounding_policy": _cfg.rounding_policy
-    },
-    "classes": {}
-  }
-run_manifest = {
-  "schema_version": _cfg.schema("test-run"),
-  "contract_version": _cfg.contract_version,
-  "produced_by": {
-    "name": "test-run-emitter",
-    "version": "v1"
-  },
-  "run_id": "$RUN_ID",
-  "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-  "framework": {
-    "name": _cfg.framework["name"],
-    "version": _cfg.framework["version"],
-    "git_commit": None
-  },
-  "model": {
-    "id": "sew",
-    "version": "sew-model.v1",
-    "git_commit": None
-  },
-  "suite": {
-    "id": "$MODE",
-    "version": "suite.v1"
-  },
-  "capabilities_resolved": {
-    "yield": caps["yield"],
-    "withdrawals": {"enabled": True, "delivery_model": "pull"},
-    "dispute_resolution": {"enabled": True},
-    "module_snapshotting": {"enabled": True},
-    "settlement_delivery": {"enabled": True, "mode": "pull-claimable"},
-    "invariants": {"enabled": True},
-    "projection": {"enabled": True}
-  },
-  "artifacts": {
-    "test_summary": "$ARTIFACT_FILE",
-    "test_artifacts": "$ARTIFACT_REGISTRY_FILE",
-    "claimable_classification": "$CLAIMABLE_CLASSIFICATION_FILE",
-    "coverage": _cfg.artifact_path("coverage"),
-    "findings": _cfg.artifact_path("findings"),
-    "issues": _cfg.artifact_path("issues")
-  }
-}
-
-try:
-    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    run_manifest["framework"]["git_commit"] = git_sha
-    run_manifest["model"]["git_commit"] = git_sha
-except Exception:
-    pass
-
-out["run_manifest"] = {
-  "schema_version": run_manifest["schema_version"],
-  "path": "$RUN_MANIFEST_FILE",
-  "run_id": run_manifest["run_id"]
-}
-out["yield_context"] = caps["yield"]
-out["shortfall_exposure"] = {
-  "shortfall_related_scenarios": caps["yield"].get("shortfall_related_scenarios", 0),
-  "partial_liquidity_enabled_scenarios": caps["yield"].get("partial_liquidity_enabled_scenarios", 0),
-  "rounding_policy": _cfg.rounding_policy
-}
-out["claimable_classification"] = {
-  "schema_version": claimable_classification["schema_version"],
-  "path": "$CLAIMABLE_CLASSIFICATION_FILE"
-}
-
-# Status-count block for quick dashboard/CLI consumption
-target_total = len(rows)
-target_pass = sum(1 for r in rows if r.get("status") == "pass")
-target_fail = sum(1 for r in rows if r.get("status") == "fail")
-target_unknown = max(0, target_total - target_pass - target_fail)
-
-critical_count = len(risk_digest.get("critical_findings", []))
-warning_count = len(risk_digest.get("warnings", []))
-info_count = len(risk_digest.get("infos", []))
-gates_failed_count = len(risk_digest.get("gates_failed", []))
-gates_passed_count = len(risk_digest.get("gates_passed", []))
-
-out["status_counts"] = {
-  "targets": {
-    "total": target_total,
-    "pass": target_pass,
-    "fail": target_fail,
-    "unknown": target_unknown
-  },
-  "risk": {
-    "critical": critical_count,
-    "warning": warning_count,
-    "info": info_count
-  },
-  "gates": {
-    "failed": gates_failed_count,
-    "passed": gates_passed_count
-  }
-}
-
-# P2: per-phase failure counters for dashboard-friendly aggregation
-phase_failures = {
-    "phase_ai": 0,
-    "phase_z": 0,
-    "phase_ah": 0,
-    "contracts": 0,
-    "other": 0
-}
-
-# Count known hard-gate failures from structured risk digest
-for item in risk_digest.get("critical_findings", []):
-    code = str(item.get("code", ""))
-    if code == "AI_CRITICAL_FAILURE":
-        phase_failures["phase_ai"] += 1
-    elif code == "Z_LEGITIMACY_FAILURE":
-        phase_failures["phase_z"] += 1
-    else:
-        phase_failures["other"] += 1
-
-# Enrich counters from log signatures (captures non-critical failures too)
-for t in rows:
-    target = str(t.get("target", ""))
-    status = str(t.get("status", ""))
-    lp = pathlib.Path(t.get("log_file", ""))
-    txt = lp.read_text(errors="ignore") if lp.exists() else ""
-
-    if target == "contracts" and status == "fail":
-        phase_failures["contracts"] += 1
-
-    if "Killed                  clojure -M:run -- -U" in txt or " Killed                  clojure -M:run -- -U" in txt:
-        phase_failures["phase_ah"] += 1
-
-out["phase_failures"] = phase_failures
-
-if lh_meta_path.exists():
-    meta = {}
-    for line in lh_meta_path.read_text().splitlines():
-        if "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        meta[k.strip()] = v.strip()
-    if "internal_failures" in meta:
-        try:
-            out["long_horizon_internal_failures"] = int(meta["internal_failures"])
-        except ValueError:
-            out["long_horizon_internal_failures"] = meta["internal_failures"]
-
-# P1 force-refund forward-only fixture signal
-force_refund_signal = {
-    "checked": False,
-    "status": "inconclusive",
-    "offending_workflows": [],
-    "note": "fixture not found"
-}
-if force_refund_trace.exists():
-    force_refund_signal["checked"] = True
-    try:
-        obj = json.loads(force_refund_trace.read_text())
-        events = obj.get("events", [])
-        # Heuristic fixture-level check: after buyer-winning execute_resolution,
-        # a seller release attempt must exist (forward-only guard regression pattern).
-        has_buyer_win = any(
-            e.get("action") == "execute_resolution" and
-            str(e.get("params", {}).get("winner", "")).lower() == "buyer"
-            for e in events
-        )
-        has_seller_release_attempt = any(
-            e.get("action") == "release" and str(e.get("agent", "")).lower() == "seller"
-            for e in events
-        )
-        if has_buyer_win and has_seller_release_attempt:
-            force_refund_signal.update({
-                "status": "pass",
-                "note": "force-refund forward-only regression pattern is present in fixture"
-            })
-        else:
-            force_refund_signal.update({
-                "status": "fail",
-                "note": "expected force-refund forward-only regression pattern missing in fixture"
-            })
-    except Exception as e:
-        force_refund_signal.update({
-            "status": "inconclusive",
-            "note": f"unable to parse force-refund fixture: {e}"
-        })
-out["force_refund_forward_only"] = force_refund_signal
-
-pathlib.Path("$ARTIFACT_FILE").write_text(json.dumps(out, indent=2))
-pathlib.Path("$RUN_MANIFEST_FILE").write_text(json.dumps(run_manifest, indent=2))
-if not claimable_path.exists():
-  pathlib.Path("$CLAIMABLE_CLASSIFICATION_FILE").write_text(json.dumps(claimable_classification, indent=2))
-
-def sha256_file(path: pathlib.Path):
-    if not path.exists():
-        return None
-    import hashlib
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-def artifact_meta(path_s: str):
-    p = pathlib.Path(path_s)
-    if not p.exists():
-        return None
-    st = p.stat()
-    return {
-      "sha256": sha256_file(p),
-      "bytes": st.st_size,
-      "mtime_utc": datetime.datetime.fromtimestamp(st.st_mtime, datetime.timezone.utc).isoformat()
-    }
-
-def _make_entry_v1(aid, path_s, input_versions=None):
-    a = _cfg.artifact(aid)
-    if not a or not path_s:
-        return None
-    p = pathlib.Path(path_s)
-    m = artifact_meta(path_s)
-    if not m:
-        return None
-    return {
-      "id": aid,
-      "kind": a["kind"],
-      "path": str(p),
-      "schema_version": _cfg.schema(a["schema_key"]),
-      "contract_version": _cfg.contract_version,
-      "producer": _cfg.producer(a["producer_key"]),
-      "verifies_against": list(a.get("verifies_against", [])),
-      "input_versions": input_versions or {},
-      "sha256": m["sha256"],
-      "bytes": m["bytes"],
-      "mtime_utc": m["mtime_utc"]
-    }
-
-def _input_versions(aid):
-    """Build input_versions dict for v1 registry entries."""
-    iv = {}
-    for dep_id in _cfg.artifact_input_dependencies(aid):
-        dep = _cfg.artifact(dep_id)
-        if dep:
-            dep_schema = _cfg.schema(dep["schema_key"])
-            iv[dep_id.replace("-", "_")] = dep_schema
-    return iv
-
-artifact_registry = {
-  "schema_version": "test-artifacts.v1",
-  "contract_version": _cfg.contract_version,
-  "run_id": "$RUN_ID",
-  "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-  "generator": {"name": "artifact-registry-emitter", "version": "v1"},
-  "root_dir": _cfg.artifact_dir,
-  "run_manifest": {
-    "path": "$RUN_MANIFEST_FILE",
-    "schema_version": run_manifest["schema_version"],
-    "sha256": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("sha256"),
-    "bytes": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("bytes"),
-    "mtime_utc": (artifact_meta("$RUN_MANIFEST_FILE") or {}).get("mtime_utc")
-  },
-  "artifacts": []
-}
-
-_v1_aids = ["test-summary", "test-run", "claimable-classification",
-            "validation-root", "coverage", "findings", "issues"]
-_path_map = {
-    "test-summary": "$ARTIFACT_FILE",
-    "test-run": "$RUN_MANIFEST_FILE",
-    "claimable-classification": "$CLAIMABLE_CLASSIFICATION_FILE",
-}
-
-entries = []
-for aid in _v1_aids:
-    path_s = _path_map.get(aid) or _cfg.artifact_path(aid)
-    e = _make_entry_v1(aid, path_s, _input_versions(aid))
-    if e:
-        entries.append(e)
-
-artifact_registry["artifacts"] = [e for e in entries if e is not None]
-pathlib.Path("$ARTIFACT_REGISTRY_FILE").write_text(json.dumps(artifact_registry, indent=2))
-print(f"Wrote machine-readable summary: $ARTIFACT_FILE")
-print(f"Wrote run manifest: $RUN_MANIFEST_FILE")
-print(f"Wrote artifact registry: $ARTIFACT_REGISTRY_FILE")
-print(f"Wrote claimable classification: $CLAIMABLE_CLASSIFICATION_FILE")
-
-status_word = "PASS" if overall == "pass" else "FAIL"
-fail_detail = ""
-if target_fail > 0:
-    fail_detail = f" ({target_fail}/{target_total} failed)"
-print(f"")
-print(f"Overall: {status_word}{fail_detail}  |  Acceptance: {decision}")
-PY
-fi
+python3 scripts/generate_test_summary.py \
+  "$ARTIFACT_DIR" \
+  "$RUN_ID" \
+  "$FAILURES" \
+  "$MODE" \
+  "$ARTIFACT_FILE" \
+  "$RUN_MANIFEST_FILE" \
+  "$ARTIFACT_REGISTRY_FILE" \
+  "$CLAIMABLE_CLASSIFICATION_FILE"
 
 exit $FAILURES
+
+
+case "$MODE" in
+  unit)
+    run_unit || FAILURES=$((FAILURES + 1))
+    ;;
+  framework)
+    run_framework || FAILURES=$((FAILURES + 1))
+    ;;
+  sew)
+    run_sew || FAILURES=$((FAILURES + 1))
+    ;;
+  invariants)
+    run_invariants || FAILURES=$((FAILURES + 1))
+    ;;
+  dispute-resolution)
+    run_dispute_resolution || FAILURES=$((FAILURES + 1))
+    ;;
+  yield-scenarios)
+    run_yield_scenarios || FAILURES=$((FAILURES + 1))
+    ;;
+  yield)
+    run_yield || FAILURES=$((FAILURES + 1))
+    ;;
+  generators)
+    run_generators || FAILURES=$((FAILURES + 1))
+    ;;
+  contracts)
+    run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
+    ;;
+  triage)
+    run_target triage run_triage || FAILURES=$((FAILURES + 1))
+    ;;
+  suites)
+    run_target suites run_suites || FAILURES=$((FAILURES + 1))
+    ;;
+  routed-suites)
+    run_target routed-suites run_routed_suites || FAILURES=$((FAILURES + 1))
+    ;;
+  reference-validation)
+    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+    ;;
+  dr3-coverage)
+    run_target dr3-coverage run_dr3_coverage || FAILURES=$((FAILURES + 1))
+    ;;
+  equivalence-new)
+    run_target equivalence-new run_equivalence_new || FAILURES=$((FAILURES + 1))
+    ;;
+  comparison-lint)
+    run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
+    ;;
+  layering-lint)
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    ;;
+  coverage)
+    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    ;;
+  adversarial-sweep)
+    run_target adversarial-sweep run_adversarial_sweep || FAILURES=$((FAILURES + 1))
+    ;;
+  adversarial-gates)
+    run_target adversarial-gates run_adversarial_gates || FAILURES=$((FAILURES + 1))
+    ;;
+  monte-carlo)
+    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+    ;;
+  long-horizon)
+    run_target long-horizon run_long_horizon || FAILURES=$((FAILURES + 1))
+    ;;
+  all)
+    : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
+    run_target unit run_unit || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target generators run_generators || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target suites run_suites || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target triage run_triage || FAILURES=$((FAILURES + 1))
+    echo ""
+    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
+    run_outcome_classification_report || true
+    
+    # CI Gate: coverage gates validation for all mode
+    python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
+    ;;
+  *)
+    echo "Unknown mode: $MODE"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    exit 1
+    ;;
+esac
+
+python3 write_test_summary.py
+
+exit $FAILURES:

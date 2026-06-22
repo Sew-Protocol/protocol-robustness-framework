@@ -10,9 +10,8 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is]]
-            [clojure.walk :as walk]
-            [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.evidence.adapters.example :as example-adapter]
             [resolver-sim.evidence.diff :as diff]
             [resolver-sim.evidence.forensic-adapter :as forensic]
@@ -523,16 +522,10 @@
 
 (defn- compute-content-hash
   "Compute the content hash the way finalize-evidence does:
-   dissoc chain fields, canonicalize, stable-hash."
+   dissoc chain fields, canonicalize, hash with :evidence-content intent."
   [m]
-  (let [content (dissoc m :evidence/hash :evidence/chain-self-hash :evidence/chain-prev-hash)
-        canon (walk/postwalk
-               (fn [v]
-                 (cond (instance? clojure.lang.Keyword v) (name v)
-                       (map? v) (into (sorted-map) v)
-                       :else v))
-               content)]
-    (cap/stable-hash canon)))
+  (let [content (dissoc m :evidence/hash :evidence/chain-self-hash :evidence/chain-prev-hash)]
+    (hc/hash-with-intent {:hash/intent :evidence-content} content)))
 
 (defn- setup-chain-artifacts
   "Write a valid 3-artifact chain into dir."

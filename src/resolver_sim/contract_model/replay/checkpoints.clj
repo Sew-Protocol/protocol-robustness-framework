@@ -19,7 +19,7 @@
                 {:checkpoint/index (count (get acc :checkpoint-log []))
                  :event/seq        seq-val
                  :event/id         (:event/id event)
-                 :world/hash       (cap/stable-hash checkpoint-data)
+                 :world/hash       (cap/world-hash checkpoint-data)
                  :checkpoint/type  :post-event})
         (cond-> already-exists?
           (update-in [:diagnostics :checkpoint-collisions] (fnil conj [])

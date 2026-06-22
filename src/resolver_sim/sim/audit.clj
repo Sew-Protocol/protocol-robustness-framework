@@ -20,10 +20,8 @@
             [resolver-sim.vcs            :as vcs]
             [clojure.string               :as str]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.logging :as log])
-  (:import [java.security MessageDigest]
-           [java.math BigInteger]))
-
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.logging :as log]))
 ;; ---------------------------------------------------------------------------
 ;; Utility
 ;; ---------------------------------------------------------------------------
@@ -241,19 +239,12 @@
       (log/warn! :git-sha-resolution-failed {:error (.getMessage e)})
       "unknown")))
 
-(defn- sha256-hex
-  "Return SHA-256 hex digest of string s."
-  [s]
-  (let [md  (MessageDigest/getInstance "SHA-256")
-        raw (.digest md (.getBytes s "UTF-8"))]
-    (format "%064x" (BigInteger. 1 raw))))
-
 (defn params-hash
-  "Return a SHA-256 hex digest of the EDN representation of params.
-   Stable across runs with the same params map, regardless of key insertion order,
-   because pr-str produces deterministic output for sorted/record maps."
+  "Return a SHA-256 hex digest of params using canonical hashing.
+   Stable across runs with the same params map, regardless of key insertion order.
+   Uses domain-hash with an inline domain tag to separate from evidence hashes."
   [params]
-  (sha256-hex (pr-str (into (sorted-map) params))))
+  (hc/domain-hash "PARAMS_MANIFEST_V1" (into (sorted-map) params)))
 
 (defn make-manifest
   "Build a reproducibility manifest for a completed multi-epoch run.

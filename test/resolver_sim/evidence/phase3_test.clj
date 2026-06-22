@@ -9,6 +9,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.io.event-evidence :as evidence]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.util.evidence :as ev]
@@ -103,7 +104,8 @@
                 (cap/cap-field :actor/id "0xAlice")
                 cap/finalize-evidence)]
       (is (string? (:evidence/hash e)))
-      (is (.startsWith (:evidence/hash e) "sha256:"))
+      (is (= 64 (count (:evidence/hash e)))
+          "Evidence hash is a 64-char hex string (no sha256: prefix)")
       ;; Hash is deterministic for same inputs
       (let [e2 (-> (cap/evidence-base {:type :test :importance :core :ctx {}})
                    (cap/cap-field :actor/id "0xAlice")
@@ -191,20 +193,21 @@
       ;; Output parity is already proven — this confirms the hash chain is stable
       (is (= result1 result2) "Deterministic: same seed produces identical output"))))
 
-(deftest test-deterministic-stable-hash
-  (testing "cap/stable-hash is deterministic across invocations"
+(deftest test-deterministic-hash-with-intent
+  (testing "hash-with-intent is deterministic across invocations"
     (let [data {:scenario/id "test" :run/id "run-1" :event/seq 42}
-          h1 (cap/stable-hash data)
-          h2 (cap/stable-hash data)
-          h3 (cap/stable-hash (into (sorted-map) data))]
+          h1 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+          h2 (hc/hash-with-intent {:hash/intent :evidence-record} data)
+          h3 (hc/hash-with-intent {:hash/intent :evidence-record} (into (sorted-map) data))]
       (is (string? h1))
-      (is (.startsWith h1 "sha256:"))
+      (is (= 64 (count h1)))
       (is (= h1 h2))
       (is (= h1 h3)))))
 
 (deftest test-deterministic-hash-differs-for-different-inputs
-  (testing "stable-hash differs for different inputs"
-    (is (not= (cap/stable-hash {:a 1}) (cap/stable-hash {:a 2})))))
+  (testing "hash-with-intent differs for different inputs"
+    (is (not= (hc/hash-with-intent {:hash/intent :evidence-record} {:a 1})
+              (hc/hash-with-intent {:hash/intent :evidence-record} {:a 2})))))
 
 ;; ── Task 4: capture-event-evidence! Integration ──────────────────────────────
 ;;
@@ -269,10 +272,10 @@
       (is (= "fraud-detected" (:caused-by/rule e)))
       (is (= 500 (:financial/amount e)))
       (is (= "USDC" (:financial/asset e)))
-      (is (= "sha256:abc123" (:world/before-hash e)))
-      (is (= "sha256:def456" (:world/after-hash e)))
+      (is (string? (:world/before-hash e)))
+      (is (string? (:world/after-hash e)))
       (is (string? (:evidence/hash e)))
-      (is (.startsWith (:evidence/hash e) "sha256:"))
+      (is (= 64 (count (:evidence/hash e))))
       ;; Hash chain stability: same inputs => same hash
       (let [e2 (-> (cap/evidence-base {:type :fraud-slash :importance :core
                                        :ctx sample-attribution})

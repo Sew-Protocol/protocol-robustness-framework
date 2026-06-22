@@ -15,9 +15,9 @@
    and can be independently verified without access to the signing key."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [resolver-sim.benchmark.hashing :as h]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log])
   (:import (java.net URI)
            (java.net.http HttpClient HttpRequest HttpResponse
@@ -51,7 +51,7 @@
           proof-data {:evidence/hash hash
                       :timestamped-at ts
                       :schema/version "timestamp-proof.v1"}
-          proof-hash (h/hash-evidence proof-data)
+          proof-hash (hc/domain-hash :evidence-record proof-data)
           sig (signing/sign-hash proof-hash private-key-path password)]
       (assoc proof-data
              :proof-hash proof-hash

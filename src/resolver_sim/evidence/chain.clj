@@ -20,10 +20,10 @@
    build → write → sign → timestamp → cursor."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [resolver-sim.benchmark.hashing :as h]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.timestamping :as ts]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]))
 
 ;; ── Registry Atom ─────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@
               :evidence-count (count artifacts)
               :evidence-hashes (:evidence-hashes reg)
               :artifacts artifacts}
-        reg-hash (h/hash-evidence base)]
+        reg-hash (hc/domain-hash :registry base)]
     (assoc base :registry-hash reg-hash)))
 
 ;; ── Persistence ───────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@
                        :cursor/final-self-hash (:cursor/final-self-hash snapshot)
                        :cursor/total-captured (:cursor/total-captured snapshot)}
           signed (when (and private-key-path (:cursor/final-self-hash snapshot))
-                   (let [cursor-hash (h/hash-evidence cursor-data)
+                   (let [cursor-hash (hc/domain-hash :evidence-chain cursor-data)
                          sig (signing/sign-hash cursor-hash private-key-path password)]
                      {:cursor/hash cursor-hash
                       :cursor/signature sig
@@ -336,7 +336,7 @@
   [registry]
   (let [recorded (:registry-hash registry)
         base (dissoc registry :registry-hash)
-        computed (h/hash-evidence base)]
+        computed (hc/domain-hash :registry base)]
     (if (= recorded computed)
       {:valid true}
       {:valid false :computed computed :recorded recorded})))
@@ -483,7 +483,7 @@
                        :cursor/final-seq (:cursor/final-seq cursor)
                        :cursor/final-self-hash (:cursor/final-self-hash cursor)
                        :cursor/total-captured (:cursor/total-captured cursor)}
-          h (h/hash-evidence cursor-data)
+          h (hc/domain-hash :evidence-chain cursor-data)
           recorded-hash (:cursor/signed-hash cursor)
           forensic (:cursor/forensic cursor)]
       (if (and forensic recorded-hash)

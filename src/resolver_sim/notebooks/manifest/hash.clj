@@ -7,8 +7,8 @@
 
   This lets you assert that two runs of the same scenario under the same
   commit produced structurally identical results."
-  (:require [resolver-sim.benchmark.hashing :as bh]
-            [clojure.walk :as walk]))
+  (:require [clojure.walk :as walk]
+            [resolver-sim.hash.canonical :as hc]))
 
 ;; Fields excluded from canonical hash — volatile across runs for the same scenario
 (def ^:private volatile-keys
@@ -27,9 +27,9 @@
 
 (defn canonical-hash
   "Compute a stable SHA-256 over the manifest content, excluding volatile fields.
-  Uses the same canonicalize (sorted-map) + pr-str approach as benchmark.hashing."
+   Uses domain-separated typed binary encoding via resolver-sim.hash.canonical."
   [manifest]
-  (-> manifest strip-volatile bh/hash-evidence))
+  (-> manifest strip-volatile (hc/domain-hash :manifest)))
 
 (defn hash-matches?
   "Return true if two manifests have the same canonical hash."
@@ -40,7 +40,7 @@
   "Hash only the suite block — useful for verifying scenario identity
   across different run timestamps."
   [manifest]
-  (-> manifest :suite bh/hash-evidence))
+  (-> manifest :suite (hc/domain-hash :manifest)))
 
 (defn artifact-hashes
   "Return a map of artifact-key → sha256 as recorded in the manifest's artifacts block.

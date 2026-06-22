@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added (2026-06-22)
+- **P0 canonical hash engine:** `resolver-sim.hash.canonical` with domain-separated typed binary encoding per `CANONICAL_HASH_SPEC_V1_BINARY_ENCODING_ABI.md`. API: `validate-canonical-value!`, `canonical-bytes`, `hash-bytes`, `domain-hash`. Supports null, boolean, integer, string, keyword, vector, and map types with LEB128 varuint, ZigZag signed integers, and byte-level map key ordering. Rejects ratio, symbol, set, list, and non-string map keys. 9 reserved domain tags (WORLD_STATE_V1, EVIDENCE_RECORD_V1, etc.).
+- **Conformance test vectors:** 17 JSON test vectors in `resources/test-vectors/canonical-hash-v1/` covering all base types with canonical bytes hex, domain tag, and SHA-256 hash hex.
+- **Unit tests:** `test/resolver_sim/hash/canonical_test.clj` — 47 tests (type encoding, domain hashing, type validation, conformance vector verification, projection, hash-with-intent).
+- **World state projection:** `resolver-sim.hash.canonical/project-world-to-structure-view` — semantic identity lens that transforms runtime types (Instant, Double, Set, Function, Ratio) into canonical-safe representations before hashing. Every transformation is explicit and documented. Spec section 11 added with full rule table.
+- **Hash Intent Declaration:** `resolver-sim.hash.canonical/hash-with-intent` — explicit intent map (`{:hash/intent :world-structure}`) replaces implicit hash function dispatch. Each intent is a full Intent Registry Contract with `:intent/name`, `:intent/description`, `:intent/scope`, `:intent/excludes`. 8 intents registered. `resolve-intent` available for inspection and future linting. Machine-readable boundaries prevent semantic drift. Spec section 11.5 added with contract table.
+
+### Changed (2026-06-22)
+- **Old hashing removed:** `resolver-sim.benchmark.hashing` namespace stripped to throwing stubs. All 3 functions (hash-evidence, stable-hash, stable-hash-prefixed) removed. Remaining callers migrated to `hash-with-intent`.
+- **Call site migration:** Evidence chain, timestamping, forensic adapter, yield evidence, manifest hashing, and benchmark runner/cli migrated to `resolver-sim.hash.canonical` with explicit intents.
+- **Spec updated:** `CANONICAL_HASH_SPEC_V1.md` Sections 6 and 11 updated. Section 11: Ratio added to projection rules. `project-for-content-hash` added for JSON-round-trippable evidence content hashing.
+- **Test migration:** `canonical_test.clj` — 47 tests with new projection/hash-with-intent coverage. `evidence_test.clj` — stable-hash tests replaced with hash-with-intent tests. `phase3_test.clj` — stable-hash/prefix checks removed. `runner_test.clj` — old hashing replaced. `timestamping_test.clj` — old hashing replaced.
+
+### Added (2026-06-22)
 - **Pro-rata parity test vectors:** Added canonical liquidity-fulfillment and Sew slash-allocation vector emitters, deterministic JSON/hash helpers, committed golden fixtures under `resources/test-vectors/pro-rata/`, invariant tests, and `docs/pro_rata_test_vectors.md` for future Solidity/Foundry differential testing.
 
 ### Changed (2026-06-21)

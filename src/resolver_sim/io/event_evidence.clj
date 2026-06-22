@@ -4,7 +4,7 @@
 
    Phase 3 enhancements:
      - Pure builder layer in resolver-sim.evidence.capture (cap-field, cap-fields, require-fields, finalize-evidence)
-     - Content-addressed before/after world hashes via stable-hash
+     - Content-addressed before/after world hashes via world-hash
      - Replay coordinates (seed, oracle mode/fixture/cursor) from attribution context
      - Causality links (caused-by/evidence-id, caused-by/rule, caused-by/action)
      - Evidence importance levels (:core, :diagnostic, :trace)
@@ -14,10 +14,10 @@
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
-            [clojure.walk :as walk]
             [resolver-sim.evidence.capture :as cap]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.logging :as log]))
 
@@ -113,7 +113,7 @@
 ;; Phase 4: Latency tracking for evidence capture pipeline.
 ;; Metrics collected:
 ;;   - capture-latency-ms: wall-clock time per capture-event-evidence! call
-;;   - hash-latency-ms: wall-clock time per stable-hash computation
+;;   - hash-latency-ms: wall-clock time per hash-with-intent computation
 ;;   - serialize-latency-ms: wall-clock time per JSON serialization + disk write
 ;;
 ;; Access metrics from tests or production monitors:
@@ -221,8 +221,8 @@
              _ (validate-attribution! resolved-attr)
              importance (if (map? ctx-or-opts) (or (:importance ctx-or-opts) :core) :core)
              hash-start (System/nanoTime)
-             before-hash (cap/stable-hash pre)
-             after-hash  (cap/stable-hash post)
+             before-hash (cap/world-hash pre)
+             after-hash  (cap/world-hash post)
              _ (record-hash-latency! hash-start)
              e (-> (cap/evidence-base {:type reason :importance importance
                                        :ctx resolved-attr})
@@ -238,9 +238,9 @@
                    (cap/cap-field :world/before-hash before-hash)
                    (cap/cap-field :world/after-hash after-hash)
                    (cond-> (and (map? ctx-or-opts) (:world-before ctx-or-opts))
-                     (assoc :world/before-full-hash (cap/hash-world (:world-before ctx-or-opts)))
+                     (assoc :world/before-full-hash (cap/world-hash (:world-before ctx-or-opts)))
                      (and (map? ctx-or-opts) (:world-after ctx-or-opts))
-                     (assoc :world/after-full-hash (cap/hash-world (:world-after ctx-or-opts)))
+                     (assoc :world/after-full-hash (cap/world-hash (:world-after ctx-or-opts)))
                      (:ctx/evidence-group-id resolved-attr)
                      (assoc :evidence/group-id (:ctx/evidence-group-id resolved-attr)
                             :evidence/layer :targeted-protocol))
@@ -464,21 +464,6 @@
 
 ;; ── Content Hash Verification Helper ──────────────────────────────────────────
 
-(defn- canonicalize-for-verification
-  "Canonicalize an evidence artifact for hash re-computation.
-   Converts keywords to strings (matching JSON serialization behavior)
-   and sorts map keys for deterministic ordering.
-   This allows the re-computed hash to match the original hash computed
-   by finalize-evidence before JSON serialization."
-  [data]
-  (walk/postwalk
-   (fn [v]
-     (cond
-       (instance? clojure.lang.Keyword v) (name v)
-       (map? v) (into (sorted-map) v)
-       :else v))
-   data))
-
 ;; ── Post-hoc Chain Integrity Verification ──────────────────────────────────────
 ;;
 ;; Scans all targeted evidence artifacts in a directory, validates internal
@@ -524,14 +509,14 @@
                                (let [content (dissoc a :evidence/hash
                                                      :evidence/chain-self-hash
                                                      :evidence/chain-prev-hash)
-                                     expected (cap/stable-hash (canonicalize-for-verification content))]
+                                     expected (hc/hash-with-intent {:hash/intent :evidence-content} content)]
                                  (= expected (:evidence/hash a))))
                              sorted)
           content-bad (remove (fn [a]
                                 (let [content (dissoc a :evidence/hash
                                                       :evidence/chain-self-hash
                                                       :evidence/chain-prev-hash)
-                                      expected (cap/stable-hash (canonicalize-for-verification content))]
+                                      expected (hc/hash-with-intent {:hash/intent :evidence-content} content)]
                                   (= expected (:evidence/hash a))))
                               sorted)
           ;; Check 2: prev-hash links to previous artifact
