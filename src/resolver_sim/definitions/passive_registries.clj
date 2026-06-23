@@ -1,21 +1,27 @@
 (ns resolver-sim.definitions.passive-registries
-  "Passive semantic registries for identity/projection/claim/attestor metadata.
+  "Semantic registries validated on namespace load.
 
-   These registries are intentionally not wired into runtime protocol execution
-   yet. Validation is permissive by default and only hard-fails when explicitly
-   requested with :strict? true or the strict feature flag."
+   Registries validated at startup:
+   - intent-registry
+   - projection-definition-registry
+   - claim-definition-registry
+   - attestor-registry
+   - execution-registry
+   - evidence-policy-registry
+   - hash-projection-registry (wraps canonical.clj hash-intents)
+   - domain-tag-registry (wraps canonical.clj domain-tags)
+
+   Validation throws on startup if any registry is invalid.
+   This is a hard-fail — the system will not start with corrupt registries."
   (:require [clojure.set :as set]
-            [resolver-sim.hash.canonical :as hc]))
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.logging :as log]))
 
-(def ^:dynamic *strict-passive-registry-validation*
-  "When true, validate-passive-registries! throws on invalid passive registries.
-   Runtime callers should leave this false until registry adoption is explicit."
-  false)
-
-(defn strict-passive-registry-validation?
-  []
-  (or *strict-passive-registry-validation*
-      (= "true" (System/getenv "RESOLVER_SIM_STRICT_PASSIVE_REGISTRIES"))))
+(def ^:dynamic *startup-registry-validation-enabled*
+  "When false, startup registry validation is skipped.
+   Set to false only for test fixtures that need to load without valid registries.
+   Defaults to true — corrupted registries are a hard-fail."
+  true)
 
 (defn- canonical-entry-hash
   [intent entry]
@@ -322,6 +328,130 @@
   {:registry-version 1
    :attestors attestors})
 
+;; ── Execution Registry ─────────────────────────────────────────────────
+
+(def execution-registry-definitions
+  "EXECUTION_REGISTRY_SPEC_V1 entries: registered execution modes."
+  [{:id :execution/simulation
+    :version 1
+    :execution/type :simulation
+    :execution/mode :full
+    :description "Full Monte Carlo simulation from protocol params."
+    :claims #{:deterministic-replay :evidence-completeness}}
+   {:id :execution/replay
+    :version 1
+    :execution/type :replay
+    :execution/mode :deterministic
+    :description "Deterministic replay from recorded trace."
+    :claims #{:deterministic-replay :trace-fidelity}}
+   {:id :execution/server
+    :version 1
+    :execution/type :server
+    :execution/mode :long-running
+    :description "Long-running gRPC server for interactive simulation."
+    :claims #{:evidence-completeness}}
+   {:id :execution/batch
+    :version 1
+    :execution/type :batch
+    :execution/mode :sweep
+    :description "Parameter sweep or batch execution over multiple trials."
+    :claims #{:deterministic-replay}}
+   {:id :execution/diff
+    :version 1
+    :execution/type :diff
+    :execution/mode :comparison
+    :description "Trace diff between two simulation runs."
+    :claims #{:trace-fidelity}}
+   {:id :execution/validation
+    :version 1
+    :execution/type :validation
+    :execution/mode :static
+    :description "Static validation of registries, fixtures, or scenarios."
+    :claims #{}}])
+
+(def execution-registry
+  {:registry-version 1
+   :executions execution-registry-definitions})
+
+;; ── Evidence Policy Registry ───────────────────────────────────────────
+
+(def evidence-policy-registry-definitions
+  "EVIDENCE_POLICY_REGISTRY_SPEC_V1 entries: registered evidence policies."
+  [{:id :evidence-policy/in-band
+    :version 1
+    :evidence-policy/type :capture
+    :evidence-policy/source :action
+    :description "Evidence captured inline during action execution."
+    :constraints #{:deterministic :replayable}}
+   {:id :evidence-policy/deterministic
+    :version 1
+    :evidence-policy/type :capture
+    :evidence-policy/source :state
+    :description "Evidence computable deterministically from world state alone."
+    :constraints #{:state-derived :recomputable}}
+   {:id :evidence-policy/out-of-band
+    :version 1
+    :evidence-policy/type :attestation
+    :evidence-policy/source :external
+    :description "External evidence submitted via out-of-band channel."
+    :constraints #{:externally-sourced}}
+   {:id :evidence-policy/attested
+    :version 1
+    :evidence-policy/type :attestation
+    :evidence-policy/source :attestor
+    :description "Evidence requiring explicit attestation for verification."
+    :constraints #{:attestor-signed}}
+   {:id :evidence-policy/computed
+    :version 1
+    :evidence-policy/type :computed
+    :evidence-policy/source :derived
+    :description "Evidence derived from existing evidence via transformation."
+    :constraints #{:deterministic :derived}}])
+
+(def evidence-policy-registry
+  {:registry-version 1
+   :evidence-policies evidence-policy-registry-definitions})
+
+;; ── Hash Projection Registry ───────────────────────────────────────────
+
+(defn- hash-intent->registry-entry
+  [kw intent]
+  (assoc intent
+         :id kw
+         :version (:intent/version intent)
+         :hash-projection/id kw))
+
+(def hash-projection-registry-definitions
+  "HASH_PROJECTION_REGISTRY_SPEC_V1 entries: registered hash projections
+   from resolver-sim.hash.canonical/hash-intents.
+   Note: entries contain :intent/projection-fn which is not canonical-safe,
+   so entry validation omits canonical hash checks for this registry."
+  (mapv (partial hash-intent->registry-entry)
+        (keys hc/hash-intents)
+        (vals hc/hash-intents)))
+
+(def hash-projection-registry
+  {:registry-version 1
+   :projections hash-projection-registry-definitions})
+
+;; ── Domain Tag Registry ────────────────────────────────────────────────
+
+(defn- domain-tag->registry-entry
+  [[kw tag-string]]
+  {:id kw
+   :tag/id kw
+   :tag/domain-string tag-string
+   :version 1})
+
+(def domain-tag-registry-definitions
+  "DOMAIN_TAG_REGISTRY_SPEC_V1 entries: registered domain tags
+   from resolver-sim.hash.canonical/domain-tags."
+  (mapv domain-tag->registry-entry (seq hc/domain-tags)))
+
+(def domain-tag-registry
+  {:registry-version 1
+   :domain-tags domain-tag-registry-definitions})
+
 (def ^:private registry-specs
   {:intent-registry
    {:registry intent-registry
@@ -359,7 +489,35 @@
     :required-entry-fields #{:id :type :display-name :status
                              :verification :attestor-hash}
     :hash-intent :attestor
-    :hash-key :attestor-hash}})
+    :hash-key :attestor-hash}
+
+   :execution-registry
+   {:registry execution-registry
+    :entries-key :executions
+    :required-registry-fields #{:registry-version :executions}
+    :required-entry-fields #{:id :version :execution/type :execution/mode
+                             :description :claims}}
+
+   :evidence-policy-registry
+   {:registry evidence-policy-registry
+    :entries-key :evidence-policies
+    :required-registry-fields #{:registry-version :evidence-policies}
+    :required-entry-fields #{:id :version :evidence-policy/type
+                             :evidence-policy/source :description :constraints}}
+
+   :hash-projection-registry
+   {:registry hash-projection-registry
+    :entries-key :projections
+    :required-registry-fields #{:registry-version :projections}
+    :required-entry-fields #{:id :version :intent/name :intent/domain-tag
+                             :intent/description :intent/includes :intent/excludes
+                             :intent/projection-fn}}
+
+   :domain-tag-registry
+   {:registry domain-tag-registry
+    :entries-key :domain-tags
+    :required-registry-fields #{:registry-version :domain-tags}
+    :required-entry-fields #{:tag/id :tag/domain-string :version}}})
 
 (defn- missing-fields
   [required m]
@@ -450,10 +608,15 @@
 (defn validate-projection-definition-registry [] (registry-result :projection-definition-registry))
 (defn validate-claim-definition-registry [] (registry-result :claim-definition-registry))
 (defn validate-attestor-registry [] (registry-result :attestor-registry))
+(defn validate-execution-registry [] (registry-result :execution-registry))
+(defn validate-evidence-policy-registry [] (registry-result :evidence-policy-registry))
+(defn validate-hash-projection-registry [] (registry-result :hash-projection-registry))
+(defn validate-domain-tag-registry [] (registry-result :domain-tag-registry))
 
 (defn validate-passive-registries
-  "Validate all passive registries and return an aggregate result.
-   This function is passive and never throws."
+  "Validate all registries and return an aggregate result.
+   This function is passive and never throws.
+   Includes all 8 registered registry types."
   []
   (let [results (mapv registry-result (keys registry-specs))
         errors (vec (mapcat :errors results))]
@@ -461,12 +624,69 @@
      :results results
      :errors errors}))
 
-(defn validate-passive-registries!
-  "Validate all passive registries.
-   Throws only when :strict? true or the strict feature flag is enabled."
-  ([] (validate-passive-registries! {}))
-  ([{:keys [strict?] :or {strict? (strict-passive-registry-validation?)}}]
-   (let [result (validate-passive-registries)]
-     (when (and strict? (not (:valid? result)))
-       (throw (ex-info "Passive registry validation failed" result)))
-     result)))
+(defn- registry-summary
+  "Build a summary map of all registry validation results for startup evidence."
+  [validation-result]
+  {:registry-count (count (:results validation-result))
+   :valid? (:valid? validation-result)
+   :registries (mapv (fn [r]
+                       {:name (name (:registry r))
+                        :valid? (:valid? r)
+                        :error-count (count (:errors r))})
+                     (:results validation-result))
+   :generated-at (str (java.time.Instant/now))
+   :schema-version "startup-validation.v1"})
+
+(defn emit-startup-evidence!
+  "Register a startup validation evidence record in the chain.
+   Best-effort — failures are logged but do not halt execution.
+   Uses requiring-resolve to avoid a hard dependency on chain when
+   no evidence context is active."
+  [validation-result]
+  (try
+    (let [register! (requiring-resolve 'resolver-sim.evidence.chain/register-evidence!)
+          summary (registry-summary validation-result)
+          h (hc/hash-with-intent {:hash/intent :startup-validation} summary)
+          evidence {:artifact-kind :startup-validation
+                    :evidence-hash h
+                    :startup/valid? (:valid? validation-result)
+                    :startup/registry-count (:registry-count summary)
+                    :startup/registries (:registries summary)
+                    :startup/generated-at (:generated-at summary)
+                    :startup/schema-version (:schema-version summary)}]
+      (register! evidence))
+    (catch Exception e
+      (log/warn! :startup-evidence-failed
+                 {:error (.getMessage e)
+                  :valid? (:valid? validation-result)}))))
+
+(defn validate-all-registries!
+  "Validate all registries. Throws on any validation failure.
+   Called at namespace load. This is a hard-fail — the system will not
+   start with corrupt registries.
+
+   Set *startup-registry-validation-enabled* to false to disable
+   (for test fixtures that need to load without valid registries)."
+  []
+  (when *startup-registry-validation-enabled*
+    (let [result (validate-passive-registries)]
+      (when-not (:valid? result)
+        (throw (ex-info "Registry validation failed — system cannot start with corrupt registries"
+                        {:results (:results result)
+                         :errors (:errors result)})))
+      (hc/validate-registry!)
+      (emit-startup-evidence! result)
+      nil)))
+
+(def validate-passive-registries!
+  "Legacy alias for validate-all-registries!."
+  (fn
+    ([] (validate-all-registries!))
+    ([{:keys [_strict?]}]
+     (validate-all-registries!))))
+
+
+;; ── Startup validation ─────────────────────────────────────────────────
+;; Runs when this namespace is loaded.
+(when *startup-registry-validation-enabled*
+  (validate-all-registries!))

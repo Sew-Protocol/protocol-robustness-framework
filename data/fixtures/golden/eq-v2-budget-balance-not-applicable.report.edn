@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v2-budget-balance-not-applicable",
  :final-state-hash
- "c67dae223e9fb129db242a436da8cc1420b8c796eb4bcd5af5c76d163dff7dda",
+ "da1d9dcedf6a4af15acdd2accbec9559d194395daf688361ffe73cc374110288",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

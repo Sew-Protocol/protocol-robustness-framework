@@ -2,7 +2,7 @@
  :suite-id :suites/spe-regression,
  :trace-id "spe-reg-v8-profile-matrix",
  :final-state-hash
- "c9808bd8bb2d5813066602ab8c9962347b7839996362732a2dd67aeb36700873",
+ "cf0d275e1d079f47dcad74dde92ed02d7f57d5d04d4f6fbbfff9616ac82cd967",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

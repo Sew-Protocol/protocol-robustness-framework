@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v7-collusion-resistance-inconclusive",
  :final-state-hash
- "ac39d96450817dfbe03bab3ed1963adcf0930c951ece4216c5e17a61ffb54b3c",
+ "f479df6173f202362a1bcfd6eccbce12415e94f6d5c3f8326441d55b39ebcd26",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

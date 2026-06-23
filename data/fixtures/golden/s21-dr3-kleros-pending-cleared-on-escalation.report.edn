@@ -2,7 +2,7 @@
  :suite-id :suites/dr3-critical,
  :trace-id "s21-dr3-kleros-pending-cleared-on-escalation",
  :final-state-hash
- "0c972ec850da7dde6fbb95730c913b5f4b20df7c254a8683ed8c05112f22ab7b",
+ "4e967948c6b4c864920a3e6a5076c6a023c6480c84ec01b6515d8ea7f6d0447a",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

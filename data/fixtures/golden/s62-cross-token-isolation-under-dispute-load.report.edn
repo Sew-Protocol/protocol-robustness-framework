@@ -2,7 +2,7 @@
  :suite-id :suites/equivalence-economic-stress,
  :trace-id "s62-cross-token-isolation-under-dispute-load",
  :final-state-hash
- "b66da5c8eb02ae242ebcdb5cee8a0b89a743218b75daa920019f34cddc4becd6",
+ "0e3bcf521a514795c956c8cd409c0de927df88d19449b813b73089a81eadb239",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

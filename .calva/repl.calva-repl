@@ -1130,3 +1130,5 @@ clj꞉dev.pro-rata꞉> 
 clj꞉dev.pro-rata꞉> 
 (demo-all)
 clj꞉dev.pro-rata꞉> 
+(demo-vs)
+clj꞉dev.pro-rata꞉> 

@@ -2,7 +2,14 @@
   "SEW-specific economic adapters.
 
    This namespace maps SEW protocol state and policy into generic economics
-   functions. Generic resolver-sim.economics namespaces must not depend on SEW."
+   functions. Generic resolver-sim.economics namespaces must not depend on SEW.
+
+   Architecture note:
+   Projection artifact creation is owned by the evidence/projection layer.
+   This namespace should expose pure allocation helpers that consume
+   already-derived allocation input. Do not add world-reading allocation
+   wrappers unless/until the projection artifact API is explicitly promoted
+   to the primary execution path."
   (:require [resolver-sim.economics.payoffs :as payoffs]))
 
 (def ECONOMIC-POLICIES
@@ -222,4 +229,5 @@
                              :owed (+ allocated unmet)
                              :paid allocated
                              :unmet unmet})
-                          (:allocations generic))})))
+                           (:allocations generic))})))
+

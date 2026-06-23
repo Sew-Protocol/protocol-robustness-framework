@@ -1195,22 +1195,24 @@
                                      (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
                                      (update-unavailability resolver true)
                                      (cleanup-orphaned-slashes workflow-id))
-                 allocation-input {:slash-obligation amount
-                                   :liable-parties [{:id resolver
-                                                     :slashable-stake current-stake
-                                                     :available-slashable current-stake}]}
-                 allocation      (sew-econ/calculate-sew-slash-allocation allocation-input)]
-             (let [evidence (slashing-ev/build-prorata-slash-evidence
-                             {:world world-slashed
-                              :slash-id slash-id
-                              :workflow-id workflow-id
-                              :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                              :trigger :fraud-slash
-                              :allocation-input allocation-input
-                              :allocation-result allocation
-                              :transition-dependencies (filterv some?
-                                                                [(:proposal-evidence-hash pending)])
-                              :attribution (attr/current-attribution)})
+                  allocation-input {:slash-obligation amount
+                                    :liable-parties [{:id resolver
+                                                      :slashable-stake current-stake
+                                                      :available-slashable current-stake}]}
+                  projection      (sew-econ/build-sew-slash-projection-artifact allocation-input)
+                  allocation      (sew-econ/calculate-sew-slash-allocation-from-projection projection)]
+              (let [evidence (slashing-ev/build-prorata-slash-evidence
+                              {:world world-slashed
+                               :slash-id slash-id
+                               :workflow-id workflow-id
+                               :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
+                               :trigger :fraud-slash
+                               :allocation-input allocation-input
+                               :projection-artifact projection
+                               :allocation-result allocation
+                               :transition-dependencies (filterv some?
+                                                                 [(:proposal-evidence-hash pending)])
+                               :attribution (attr/current-attribution)})
                    evidence (assoc evidence
                                    :world/before-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
                                    :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]

@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v6-spe-always-inconclusive",
  :final-state-hash
- "10cb83e336cfe22dc9ae617b812761116f52f8f716578bcad956c1b682747b83",
+ "c48ba9fb68925888c857f0be591a71d12b41b2af4673655d568a49f694d73b75",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

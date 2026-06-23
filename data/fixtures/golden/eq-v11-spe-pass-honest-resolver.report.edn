@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v11-spe-pass-honest-resolver",
  :final-state-hash
- "674d023ecab7c74b8c50bc7126f7417d1fc14037fd9b2a8024e8a4af01f31a7b",
+ "d4ffa2309a3e78467995ffe8883148eac09a0c24d074ceda9e0ec5fcd61ff4e8",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

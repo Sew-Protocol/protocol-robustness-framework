@@ -2,7 +2,7 @@
  :suite-id :suites/all-invariants,
  :trace-id "s07-unauthorized-resolver-rejected",
  :final-state-hash
- "ef349419a2b343b8d4cfb699f5c09a3522cdec1b47b6f01839b130b21273a719",
+ "2582eb4535a864c2b1b4576b5b70cec99c48bec7c2fba604d57b3f1427e4138f",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

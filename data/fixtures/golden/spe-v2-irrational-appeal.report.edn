@@ -2,7 +2,7 @@
  :suite-id :suites/spe-validation,
  :trace-id "spe-v2-irrational-appeal",
  :final-state-hash
- "6ab239becf1268f99248429b789de5401210cdd8e869c7ec07a53b2c714b00a1",
+ "621341c3c4f8dac2567ecf1a1a8b9cac1507ebe5925180c65e9685025ee20c96",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

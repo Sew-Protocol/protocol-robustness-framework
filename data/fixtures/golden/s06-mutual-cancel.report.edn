@@ -2,7 +2,7 @@
  :suite-id :suites/all-invariants,
  :trace-id "s06-mutual-cancel",
  :final-state-hash
- "f6bb7abe3343c478d4f0d19e6651038bf5bac5275e02941fa0c730933bfc882e",
+ "25cd85212a4774d32e7cb31dd299df3556b1932d8610766922f052d43aa3dcc2",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

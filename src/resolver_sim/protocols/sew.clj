@@ -63,6 +63,15 @@
   (let [r (or (:role agent) (:type agent) "")]
     (contains? #{"governance" :governance} r)))
 
+(defn- governance-pred
+  "Build a governance predicate from the execution context.
+   In :full mode every agent passes; otherwise only governance-role agents pass."
+  [context]
+  (let [mode (get context :governance-mode :restricted)]
+    (fn [agent]
+      (or (= :full mode)
+          (governance-actor? agent)))))
+
 (defn- event-workflow-id
   [event]
   (let [p (:params event)]
@@ -307,10 +316,10 @@
           result)))))
 
 (defmethod apply-action "rotate-dispute-resolver"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
     agent-index event
-    governance-actor?
+    (governance-pred context)
     (fn [addr _agent]
       (let [workflow-id   (compat/wf-id event)
             new-resolver  (get-in event [:params :new-resolver])
@@ -465,12 +474,12 @@
         final-res))))
 
 (defmethod apply-action "withdraw-fees"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (if (:paused? world)
     (t/fail :protocol-paused)
     (actx/with-governance-actor
       agent-index event
-      governance-actor?
+      (governance-pred context)
       (fn [_addr _agent]
         (let [p     (:params event)
               token (:token p)
@@ -478,10 +487,10 @@
           (acct/withdraw-fees world token))))))
 
 (defmethod apply-action "governance-update-fee"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
     agent-index event
-    governance-actor?
+    (governance-pred context)
     (fn [_addr _agent]
       (let [p         (:params event)
             fee-bps   (or (:fee-bps p) (:resolver-fee-bps p) (:escrow-fee-bps p))]
@@ -504,10 +513,10 @@
                         #(disj % token))))))))
 
 (defmethod apply-action "set-paused"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
     agent-index event
-    governance-actor?
+    (governance-pred context)
     (fn [_addr _agent]
       (t/ok (assoc world :paused? (get-in event [:params :paused?] true))))))
 
@@ -551,10 +560,10 @@
                               new-reserved)))))))))
 
 (defmethod apply-action "propose-fraud-slash"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
     agent-index event
-    governance-actor?
+    (governance-pred context)
     (fn [addr _agent]
       (let [p             (:params event)
             workflow-id   (event-workflow-id event)
@@ -587,10 +596,10 @@
                         (event-slash-id event)))))
 
 (defmethod apply-action "resolve-appeal"
-  [{:keys [agent-index]} world event]
+  [{:keys [agent-index] :as context} world event]
   (actx/with-governance-actor
     agent-index event
-    governance-actor?
+    (governance-pred context)
     (fn [addr _agent]
       (let [p (:params event)]
         (res/resolve-appeal world
@@ -811,11 +820,12 @@
                              {:ok true :new-resolver new-resolver}
                              {:ok false :error :escalation-not-allowed}))))]
       {:agent-index          (into {} (map (juxt :id identity) agents))
-       :snapshot             snapshot
-       :escalation-fn        esc-fn
-       :resolution-module-fn rm-fn
-       :resolution-level-map level-map
-       :temporal-rules       (sew-temporal-rules)}))
+        :snapshot             snapshot
+        :escalation-fn        esc-fn
+        :resolution-module-fn rm-fn
+        :resolution-level-map level-map
+        :temporal-rules       (sew-temporal-rules)
+        :governance-mode      (get pp :governance-mode :restricted)}))
 
   (dispatch-action [_ context world event]
     (let [flags       (:replay-flags context {})

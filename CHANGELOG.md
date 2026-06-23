@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added (2026-06-23)
+- **Phase 10 — Startup evidence node:** `validate-all-registries!` now emits a `:startup-validation` evidence record on successful startup validation, recording all 8 registry names, per-registry validity/error-counts, and a canonical hash under the new `:startup-validation` hash intent. Best-effort (logs warning on chain unavailability).
+- **Phase 9 — Tighten startup validation:** Expanded from 4 to 8 registries: added execution-registry (6 modes), evidence-policy-registry (5 policies), hash-projection-registry (wraps `canonical.clj/hash-intents`), domain-tag-registry (wraps `canonical.clj/domain-tags`). `validate-passive-registries!` renamed to `validate-all-registries!` with hard-fail by default; old name retained as legacy alias. Startup validation runs at namespace load.
+- **Phase 8 — Switch call sites:** `execute-fraud-slash` now builds a projection artifact once, allocates from it via `calculate-sew-slash-allocation-from-projection`, and passes the prebuilt artifact to `build-prorata-slash-evidence`, eliminating duplicate projection construction. `build-prorata-slash-evidence` accepts optional `:projection-artifact` key (backward compat). `economics.clj` remains pure.
+- **Phase 7 — Evidence node integration:** `evidence/slashing.clj` updated to carry `:projection` and `:pro-rata` evidence sections with hashes, claims, summaries. Fraud-slash execution feeds allocation frame into evidence builder.
+- **Phase 6 — Pro-rata claim evaluators:** Added `pro_rata_claims.clj` with 7 evaluators (`:projection-deterministic`, `:projection-canonical-safe`, `:allocation-complete`, `:non-negative`, `:conservation`, `:rounding-bounded`, `:ordering-independent`). Registered in `passive_registries.clj` claim-definitions.
+
+### Added (2026-06-23)
 - **Projection pro-rata Phase 5 shadow path:** Added `calculate-prorata-from-projection` to replay allocation from validated projection artifacts, plus a SEW-shaped `calculate-sew-slash-allocation-from-projection` adapter and focused parity tests comparing projection-derived output with the current direct allocation path on the same fixtures.
 - **Projection artifacts Phase 4:** Added passive pro-rata projection artifact construction beside current allocation code, with registered pro-rata intent/projection/claim entries and focused tests for stable projection hashes, canonical safety, registered intent/definition lookup, embedded summaries, and full projection storage.
 - **Projection Pro-Rata Spec V1:** Added `docs/specs/PROJECTION_PRORATA_SPEC_V1.md`, defining the required world → registered intent → registered projection definition → projection artifact → allocation → claims → evidence node flow before runtime refactors.

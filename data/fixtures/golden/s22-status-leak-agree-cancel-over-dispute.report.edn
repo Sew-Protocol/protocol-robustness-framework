@@ -2,7 +2,7 @@
  :suite-id :suites/all-invariants,
  :trace-id "s22-status-leak-agree-cancel-over-dispute",
  :final-state-hash
- "a954c32c988744208fea0a8ca9f0665d71faecf7529c01998b3cd3759947b44f",
+ "13775909768fc3c5075ddf2886cd5f2e4e3bc9ba4a84e9a72d6130920b7cdc2b",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

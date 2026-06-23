@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v10-incentive-compat-fail-attack-success",
  :final-state-hash
- "bdddc0f8b94a437fdcc998cf6299c1d53f6027f27ae72067ae573f71c167cbfc",
+ "9e0dc35b9b42f81752af64c89494a65e6a1e3b9ec2f5828d737770815a2ec4c1",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

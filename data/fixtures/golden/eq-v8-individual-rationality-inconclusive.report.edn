@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v8-individual-rationality-inconclusive",
  :final-state-hash
- "4fc147efac1957ca2b3e2deefaa7fbb9f839ede9d1097635b7d91e9a9da754d8",
+ "251500d589c88ceee2b37e046d2f3aa6898aad73992ed851134695507faa519c",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

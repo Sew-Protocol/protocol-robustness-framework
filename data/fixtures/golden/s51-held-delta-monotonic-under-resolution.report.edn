@@ -2,7 +2,7 @@
  :suite-id :suites/equivalence-accounting-min,
  :trace-id "s51-held-delta-monotonic-under-resolution",
  :final-state-hash
- "39cbfbef6c172c382a397ab8f13a815698279b5318851987143480c2e120c1a0",
+ "04173835ae3b8ca780ede1745782dba7044ebf3fac989cae39c819c0e34c5347",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

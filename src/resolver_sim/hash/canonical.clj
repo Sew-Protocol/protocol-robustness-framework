@@ -61,7 +61,8 @@
    :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
    :projection-artifact "PROJECTION_ARTIFACT_V1"
    :claim-definition "CLAIM_DEFINITION_V1"
-   :attestor         "ATTESTOR_V1"})
+    :attestor         "ATTESTOR_V1"
+    :startup-validation "STARTUP_VALIDATION_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -798,6 +799,15 @@
     :intent/description "Evidence recorded when an invariant check fails and halts the simulation"
     :intent/includes    #{:step :scenario-id :invariant-ids :details :halt-reason}
     :intent/excludes    #{:full-world-state :raw-trace :internal-state}
+    :intent/projection-fn project-identity
+    :intent/version     1}
+
+   :startup-validation
+   {:intent/name        :startup-validation
+    :intent/domain-tag  "STARTUP_VALIDATION_V1"
+    :intent/description "Startup registry validation evidence — records that all semantic registries passed validation at system start"
+    :intent/includes    #{:registry-count :valid? :registry-summary :generated-at :schema-version}
+    :intent/excludes    #{:registry-detail :full-registry-data}
     :intent/projection-fn project-identity
     :intent/version     1}})
 

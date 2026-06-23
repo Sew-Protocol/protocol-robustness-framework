@@ -2,7 +2,7 @@
  :suite-id :suites/same-block-ordering,
  :trace-id "same-block-ordering",
  :final-state-hash
- "7f7b6565dfa60d3752d69e2c1047ed38eee0d9d9421702a0ee2053b5e1cc88b1",
+ "9d56c1ae9bd2adc932a6c970c542d84c2222014d8f398e0b928dec1d4038740a",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

@@ -2,7 +2,7 @@
  :suite-id :suites/equilibrium-validation,
  :trace-id "eq-v1-budget-balance-pass",
  :final-state-hash
- "d57c76ac937d08bc1b4c848ec7c8eeee2db3f76300c2dfca92ac008baa3271b4",
+ "3bc4d3e946e10e9707091bcaeb51aba1a6bb05d520d89030b89010bebe9e6e34",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

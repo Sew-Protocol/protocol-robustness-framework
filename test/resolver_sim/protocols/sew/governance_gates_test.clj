@@ -16,8 +16,10 @@
 
 (deftest test-governance-full-mode
   (testing "Governance actions proceed normally in :full mode"
-    (let [scenario (assoc base-scenario :events
-                          [{:seq 0 :time 1000 :agent "resolver" :action "set-paused" :params {:paused? true}}])
+    (let [scenario (-> base-scenario
+                       (assoc-in [:protocol-params :governance-mode] :full)
+                       (assoc :events
+                              [{:seq 0 :time 1000 :agent "resolver" :action "set-paused" :params {:paused? true}}]))
           result (sew/replay-with-sew-protocol scenario)]
       (is (= :pass (:outcome result)))
       (is (true? (get-in result [:world :paused?]))))))

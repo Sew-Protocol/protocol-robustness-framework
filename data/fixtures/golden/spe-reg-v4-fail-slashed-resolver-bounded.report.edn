@@ -2,7 +2,7 @@
  :suite-id :suites/spe-regression,
  :trace-id "spe-reg-v4-fail-slashed-resolver-bounded",
  :final-state-hash
- "717388ffc531461c521be0eb2332c01e807a5647cc747f68567ec66ef03eb629",
+ "552c8d63ff2a70b374e8b52c19681050ef7b3bd7d7bc52cae807e529490f6d4f",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

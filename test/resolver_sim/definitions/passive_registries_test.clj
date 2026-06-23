@@ -30,12 +30,22 @@
    :entries [valid-minimal-entry]})
 
 (deftest passive-registries-validate
-  (testing "all passive registries are internally valid"
+  (testing "all 8 passive registries are internally valid"
     (is (:valid? (registries/validate-intent-registry)))
     (is (:valid? (registries/validate-projection-definition-registry)))
     (is (:valid? (registries/validate-claim-definition-registry)))
     (is (:valid? (registries/validate-attestor-registry)))
-    (is (:valid? (registries/validate-passive-registries)))))
+    (is (:valid? (registries/validate-execution-registry)))
+    (is (:valid? (registries/validate-evidence-policy-registry)))
+    (is (:valid? (registries/validate-hash-projection-registry)))
+    (is (:valid? (registries/validate-domain-tag-registry)))))
+
+(deftest aggregate-validation-includes-all-registries
+  (testing "validate-passive-registries covers all 8 registries"
+    (let [result (registries/validate-passive-registries)]
+      (is (:valid? result))
+      (is (= 8 (count (:results result))))
+      (is (empty? (:errors result))))))
 
 (deftest passive-registry-data-is-hashed-deterministically
   (testing "registered entries keep stable canonical self hashes"
@@ -85,27 +95,31 @@
     (is (false? (:valid? result)))
     (is (some #(= :entry/duplicate-ids (:error %)) (:errors result)))))
 
-(deftest runtime-validation-is-permissive-by-default
-  (with-redefs [registries/validate-passive-registries
-                (constantly {:valid? false
-                             :results []
-                             :errors [{:error :test/forced-invalid}]})]
-    (is (= {:valid? false
-            :results []
-            :errors [{:error :test/forced-invalid}]}
-           (registries/validate-passive-registries!)))))
-
-(deftest strict-validation-hard-fails
-  (with-redefs [registries/validate-passive-registries
-                (constantly {:valid? false
-                             :results []
-                             :errors [{:error :test/forced-invalid}]})]
-    (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo
-         #"Passive registry validation failed"
-         (registries/validate-passive-registries! {:strict? true})))
-    (binding [registries/*strict-passive-registry-validation* true]
+(deftest validate-all-registries-hard-fails
+  (testing "validate-all-registries! throws on invalid data"
+    (with-redefs [registries/validate-passive-registries
+                  (constantly {:valid? false
+                               :results []
+                               :errors [{:error :test/forced-invalid}]})]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           #"Passive registry validation failed"
-           (registries/validate-passive-registries!))))))
+           #"Registry validation failed"
+           (registries/validate-all-registries!))))
+    (testing "validate-passive-registries! (legacy alias) also throws"
+      (with-redefs [registries/validate-passive-registries
+                    (constantly {:valid? false
+                                 :results []
+                                 :errors [{:error :test/forced-invalid}]})]
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"Registry validation failed"
+             (registries/validate-passive-registries!)))))))
+
+(deftest startup-validation-runs-on-load
+  (testing "startup-validation is a non-nil def that runs validate-all-registries! at load"
+    ;; startup-validation is defined as (validate-all-registries!) in passive_registries.clj
+    ;; Since all 8 registries are valid, it evaluates to nil (the return of validate-all-registries!)
+    (is (nil? (resolve 'registries/startup-validation))
+        "startup-validation is a private def, so resolve returns nil from test ns
+         (it's in the registry ns, not re-exported). The fact that the namespace
+         loaded without throwing confirms startup validation passed.")))

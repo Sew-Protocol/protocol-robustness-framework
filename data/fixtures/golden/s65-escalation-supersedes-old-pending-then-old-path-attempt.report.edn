@@ -3,7 +3,7 @@
  :trace-id
  "s65-escalation-supersedes-old-pending-then-old-path-attempt",
  :final-state-hash
- "7dd86401dce0c1d6c1fec4f78bccbb24f134a2a3ee8f70fc77f1eea992b1c55b",
+ "1e58c1c398e504005a05d6fdf744a0ce6a1f88fec7fc2a9c89ff8ad536590694",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

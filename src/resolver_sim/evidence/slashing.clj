@@ -73,10 +73,12 @@
            epoch
            trigger
            allocation-input
+           projection-artifact
            allocation-result
            transition-dependencies
            attribution]}]
-  (let [projection-artifact (sew-economics/build-sew-slash-projection-artifact allocation-input)
+  (let [projection-artifact (or projection-artifact
+                                (sew-economics/build-sew-slash-projection-artifact allocation-input))
         claim-results-by-id (pro-rata-claims/evaluate-all {:sew-slash-input allocation-input})
         claim-results (mapv (fn [claim-id]
                               (claim-result-entry claim-id (get claim-results-by-id claim-id)))

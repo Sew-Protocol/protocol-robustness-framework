@@ -2,7 +2,7 @@
  :suite-id :suites/dr3-critical,
  :trace-id "s46b-escalation-before-settlement-window-edge",
  :final-state-hash
- "1428d27c4d3f495afffc4c099dceb5236dc59e8bac36c15aa32b9f23bb15d4b9",
+ "e26fc36050bb4c40bd1cd537fa678ec7fb2d263cff0c49ee8b689c21492eb760",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

@@ -2,7 +2,7 @@
  :suite-id :suites/equivalence-economic-stress,
  :trace-id "s62-resolver-capacity-concurrent-dispute-load",
  :final-state-hash
- "a05874bc52e5d55f485ef8097300facf11521d9725da66e81e410f96fdacc77d",
+ "87c5fce424bd9fea25c0533d4f5fb723c12bfb7d33951eab7513c5b85a03c6fd",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,

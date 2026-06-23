@@ -2,7 +2,7 @@
  :suite-id :suites/all-invariants,
  :trace-id "s12b-snapshot-isolation-fee-500",
  :final-state-hash
- "ab0ae352156058c622de9ead37a4a63c82f1d22a41c36563c256392dc4108859",
+ "4ab8f5003caaf879f10a7c6ca35f4846ace8d6b5989930d90d54bd7cd59392ee",
  :metrics
  {:yield/escrow-unrealized 0,
   :invariant-violations 0,
