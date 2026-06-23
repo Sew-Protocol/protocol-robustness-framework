@@ -149,9 +149,9 @@
 (deftest single-resolution-payout-consistency-detects-dual-claimable
   (let [w0 (base-world)
         w1 (assoc-in w0 [:escrow-transfers 0 :escrow-state] :released)
-        w2 (assoc-in w1 [:claimable 0 bob] 995)
+        w2 (assoc-in w1 [:claimable-v2 0 :settlement/principal bob] 995)
         ;; corruption: both sides become claimable for same finalized workflow
-        bad (assoc-in w2 [:claimable 0 alice] 995)
+        bad (assoc-in w2 [:claimable-v2 0 :settlement/principal alice] 995)
         r (inv/single-resolution-payout-consistent? bad)]
     (is (false? (:holds? r)))
     (is (= 0 (-> r :violations first :workflow-id)))))

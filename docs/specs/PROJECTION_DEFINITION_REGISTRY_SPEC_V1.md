@@ -259,6 +259,18 @@ Example:
   :required? true}
 
  {:claim-id :allocation-complete
+  :required? true}
+
+ {:claim-id :non-negative
+  :required? true}
+
+ {:claim-id :conservation
+  :required? true}
+
+ {:claim-id :rounding-bounded
+  :required? true}
+
+ {:claim-id :ordering-independent
   :required? true}]
 ```
 
@@ -328,6 +340,10 @@ Example:
   {:claim-id :non-negative
    :required? true}
   {:claim-id :conservation
+   :required? true}
+  {:claim-id :rounding-bounded
+   :required? true}
+  {:claim-id :ordering-independent
    :required? true}]}
 ```
 

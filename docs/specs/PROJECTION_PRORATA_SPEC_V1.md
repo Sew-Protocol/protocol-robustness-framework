@@ -218,7 +218,7 @@ Canonical projection definition shape:
  :claims
  [{:claim-id :projection-deterministic
    :required? true}
-  {:claim-id :projection-canonical-safe
+ {:claim-id :projection-canonical-safe
    :required? true}
   {:claim-id :allocation-complete
    :required? true}
@@ -227,12 +227,12 @@ Canonical projection definition shape:
   {:claim-id :conservation
    :required? true}
   {:claim-id :rounding-bounded
+   :required? true}
+  {:claim-id :ordering-independent
    :required? true}]
 
  :canonical-hash "sha256:..."}
 ```
-
-TODO(agent): Confirm final projection definition identifiers and claim identifiers when the passive registries are extended for pro-rata.
 
 ------
 
@@ -339,6 +339,7 @@ Required claim categories:
 - non-negative allocation
 - conservation
 - bounded rounding / remainder behavior
+- ordering independence
 
 Claim result shape:
 
@@ -356,8 +357,6 @@ Claim result shape:
 
 Claim definitions SHALL be registered before runtime code treats claim IDs as normative.
 
-TODO(agent): Add pro-rata claim definitions to the passive Claim Definition Registry before wiring runtime enforcement.
-
 ------
 
 ### 4.7 Step 7: Evidence Node
@@ -368,12 +367,34 @@ Evidence node result shape:
 
 ```clojure
 {:result/type :pro-rata-allocation
- :intent-id :pro-rata/slash-obligation-allocation
- :projection-definition-id :projection/pro-rata-slash-obligation
- :projection-definition-hash "sha256:..."
- :projection-artifact-hash "sha256:..."
- :allocation-hash "sha256:..."
- :claim-results [...]
+ :projection {:projection-hash "sha256:..."
+              :projection-definition-hash "sha256:..."
+              :summary {:participant-count 0
+                       :eligible-count 0
+                       :total-weight 0
+                       :total-obligation 0}}
+ :pro-rata {:intent {:id :pro-rata/slash-obligation-allocation
+                     :version 1}
+            :projection-hash "sha256:..."
+            :allocation-hash "sha256:..."
+            :claims [{:claim-id :projection-deterministic
+                      :claim-definition-hash "sha256:..."
+                      :holds? true
+                      :violations []
+                      :status :pass
+                      :claim-result-hash "sha256:..."}]
+            :summary {:claim-count 7
+                     :passed-count 7
+                     :failed-count 0
+                     :holds? true
+                     :total-requested 0
+                     :total-allocated 0
+                     :total-unmet 0
+                     :remainder 0
+                     :policy {:rounding :floor-with-largest-remainder
+                              :remainder-policy :unallocated
+                              :ordering-policy :input-order
+                              :total-weight 0}}}
  :status :pass}
 ```
 
@@ -381,12 +402,15 @@ Evidence payload shape:
 
 ```clojure
 {:evidence/type :projection-prorata
- :world-hash "sha256:..."
- :intent-hash "sha256:..."
- :projection-definition-hash "sha256:..."
- :projection-artifact-hash "sha256:..."
- :allocation-hash "sha256:..."
- :claim-result-hashes [...]
+ :projection {:projection-hash "sha256:..."
+              :projection-definition-hash "sha256:..."
+              :summary {...}}
+ :pro-rata {:intent {:id :pro-rata/slash-obligation-allocation
+                     :version 1}
+            :projection-hash "sha256:..."
+            :allocation-hash "sha256:..."
+            :claims [...]
+            :summary {...}}
  :parent-hashes [...]}
 ```
 
@@ -481,4 +505,3 @@ For a projection-based pro-rata allocation, an auditor SHALL be able to answer:
 - Which claims were evaluated?
 - Which evidence node recorded the result?
 - Can each hash in the chain be recomputed?
-

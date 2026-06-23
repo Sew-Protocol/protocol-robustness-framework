@@ -31,7 +31,8 @@
 
 (def intent-definitions
   "Passive INTENT_REGISTRY_SPEC_V1 entries.
-   These describe the semantic intents used by the Phase 1 hash projections."
+   These describe semantic intents used by hash projections and additive
+   projection-based pro-rata artifacts."
   (mapv (partial attach-hash :intent-registry-entry :canonical-hash)
         [{:id :identity/intent-dsl
           :version 1
@@ -106,7 +107,25 @@
           :constraints #{:canonical-safe :domain-separated :self-hash-excluded}
           :output {:type :canonical-hash
                    :hash/intent :attestor}
-          :description "Canonical identity for one attestor registry entry."}]))
+          :description "Canonical identity for one attestor registry entry."}
+         {:id :pro-rata/slash-obligation-allocation
+          :version 1
+          :intent/type :pro-rata/allocation
+          :intent/purpose :slash-obligation-allocation
+          :scope {:protocols #{:sew}
+                  :domains #{:economic-allocation}
+                  :modules #{:slashing}}
+          :inputs #{:obligations :weights :caps :balances :eligible-participants}
+          :constraints #{:conservation :non-negative :allocation-completeness
+                         :rounding-bounded}
+          :output {:type :allocation-vector
+                   :unit :wei
+                   :rounding :floor-with-largest-remainder}
+          :input-policy :exact
+          :constraint-policy :require-all
+          :extensions-policy {:allowed? true
+                              :require-namespaced-keys? true}
+          :description "Projection-based pro-rata allocation intent for Sew slash obligations."}]))
 
 (def intent-registry
   (attach-registry-hash
@@ -153,7 +172,50 @@
           :transforms [:strip-self-hash-fields :canonical-artifact-value]
           :output {:type :projection-artifact-view}
           :claims [{:claim-id :projection-deterministic}
-                   {:claim-id :projection-canonical-safe}]}]))
+                   {:claim-id :projection-canonical-safe}]}
+         {:id :projection/pro-rata-slash-obligation
+          :version 1
+          :projection-type :pro-rata-allocation
+          :intent-types #{:pro-rata/allocation}
+          :intent-purposes #{:slash-obligation-allocation}
+          :source {:type :allocation-input}
+          :include-paths [[:amount]
+                          [:items]
+                          [:rounding]
+                          [:remainder-policy]
+                          [:ordering-policy]]
+          :exclude-paths [[:id-fn]
+                          [:weight-fn]
+                          [:cap-fn]
+                          [:runtime]
+                          [:debug]
+                          [:telemetry]]
+          :transforms [:canonical-artifact-value]
+          :output {:type :allocation-frame
+                   :unit :wei
+                   :rounding :floor-with-largest-remainder
+                   :remainder-policy :unallocated
+                   :ordering-policy :input-order
+                   :required-keys #{:participants
+                                    :eligible-participants
+                                    :weights
+                                    :caps
+                                    :total-obligation
+                                    :constraints}}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}
+                   {:claim-id :allocation-complete
+                    :required? true}
+                   {:claim-id :non-negative
+                    :required? true}
+                   {:claim-id :conservation
+                    :required? true}
+                   {:claim-id :rounding-bounded
+                    :required? true}
+                   {:claim-id :ordering-independent
+                    :required? true}]}]))
 
 (def projection-definition-registry
   (attach-registry-hash
@@ -187,7 +249,48 @@
           :inputs [:registry-entry]
           :evaluation {:type :hash-recompute
                        :expected :entry-self-hash}
-          :outputs [:passed? :expected-hash :actual-hash]}]))
+          :outputs [:passed? :expected-hash :actual-hash]}
+         {:id :allocation-complete
+          :version 1
+          :category :invariant
+          :description "Every eligible participant has a corresponding allocation row."
+          :inputs [:projection-artifact :allocation-result]
+          :evaluation {:type :set-coverage
+                       :expected :eligible-participants-covered}
+          :outputs [:passed? :missing-participants :extra-participants]}
+         {:id :non-negative
+          :version 1
+          :category :invariant
+          :description "Allocation, unmet, weight, and cap values are never negative."
+          :inputs [:allocation-result]
+          :evaluation {:type :numeric-predicate
+                       :predicate :all-values-non-negative}
+          :outputs [:passed? :violations]}
+         {:id :conservation
+          :version 1
+          :category :invariant
+          :description "Requested amount equals allocated plus unmet plus remainder."
+          :inputs [:allocation-result]
+          :evaluation {:type :arithmetic-equality
+                       :left :total-requested
+                       :right [:total-allocated :total-unmet :remainder]}
+          :outputs [:passed? :difference]}
+         {:id :rounding-bounded
+          :version 1
+          :category :invariant
+          :description "Rounding behavior is bounded by the registered allocation policy."
+          :inputs [:projection-artifact :allocation-result]
+          :evaluation {:type :policy-check
+                       :policy :floor-with-largest-remainder}
+          :outputs [:passed? :violations]}
+         {:id :ordering-independent
+          :version 1
+          :category :invariant
+          :description "Allocation result is invariant under permutation of input items (multi-set equality)."
+          :inputs [:allocation-input :allocation-result]
+          :evaluation {:type :permutation-test
+                       :policy :multi-set-equality}
+          :outputs [:passed? :violations]}]))
 
 (def claim-definition-registry
   {:registry-version 1
@@ -367,4 +470,3 @@
      (when (and strict? (not (:valid? result)))
        (throw (ex-info "Passive registry validation failed" result)))
      result)))
-

@@ -156,3 +156,70 @@
          :recovered-total (:total-allocated generic)
          :unmet-total (:total-unmet generic)
          :allocations allocations}))))
+
+(defn build-sew-slash-projection-artifact
+  "Build a passive projection artifact from the same SEW slash allocation input.
+   This is additive and does not change calculate-sew-slash-allocation."
+  [{:keys [slash-amount slash-obligation liable-parties slash-policy basis cap-field unmet-policy source metadata]
+    :or {basis :slashable-stake
+         cap-field :available-slashable
+         unmet-policy :record-only}}]
+  (let [amount (or slash-amount slash-obligation 0)]
+    (payoffs/build-projection-artifact
+     {:amount amount
+      :items liable-parties
+      :id-fn :id
+      :weight-fn basis
+      :cap-fn cap-field
+      :rounding :floor-with-largest-remainder
+      :remainder-policy :unallocated
+      :ordering-policy :input-order}
+     {:source (merge {:source/type :sew-slash-allocation-input
+                      :basis basis
+                      :cap-field cap-field
+                      :unmet-policy unmet-policy
+                      :slash-policy slash-policy}
+                     (or source {}))
+      :metadata metadata})))
+
+(defn calculate-sew-slash-allocation-from-projection
+  "Return the historical SEW allocation shape from a projection artifact.
+   This is a shadow path for comparing against calculate-sew-slash-allocation;
+   call sites should continue using the current function until replacement is explicit."
+  [artifact]
+  (let [generic (payoffs/calculate-prorata-from-projection artifact)
+        total-basis (get-in artifact [:summary :total-weight] 0)
+        amount (:total-requested generic)
+        basis (get-in artifact [:source :basis] :slashable-stake)
+        cap-field (get-in artifact [:source :cap-field] :available-slashable)
+        unmet-policy (get-in artifact [:source :unmet-policy] :record-only)
+        slash-policy (get-in artifact [:source :slash-policy])]
+    (if (zero? total-basis)
+      {:status :no-liable-basis
+       :basis basis
+       :cap-field cap-field
+       :unmet-policy unmet-policy
+       :slash-policy slash-policy
+       :slash-obligation amount
+       :total-basis 0
+       :recovered-total 0
+       :unmet-total amount
+       :allocations []}
+      {:basis basis
+       :cap-field cap-field
+       :unmet-policy unmet-policy
+       :slash-policy slash-policy
+       :slash-obligation amount
+       :total-basis total-basis
+       :recovered-total (:total-allocated generic)
+       :unmet-total (:total-unmet generic)
+       :allocations (mapv (fn [{:keys [id weight allocated unmet]}]
+                            {:id id
+                             :basis-amount weight
+                             :share (if (pos? total-basis)
+                                      (/ weight total-basis)
+                                      0)
+                             :owed (+ allocated unmet)
+                             :paid allocated
+                             :unmet unmet})
+                          (:allocations generic))})))

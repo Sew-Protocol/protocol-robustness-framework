@@ -1,6 +1,7 @@
 (ns resolver-sim.protocols.sew.economics-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.protocols.sew.economics :as sew-econ]))
 
 (deftest sew-economic-policy-helpers
@@ -62,6 +63,73 @@
       (is (= 5 (:unmet-total result)))
       (is (= [70 25] (mapv :paid (:allocations result))))
       (is (= [5 0] (mapv :unmet (:allocations result)))))))
+
+(deftest sew-slash-projection-artifact-uses-current-allocation-input
+  (testing "SEW sidecar projection artifact comes from the same parties, basis, caps, and amount"
+    (let [input {:slash-obligation 100
+                 :liable-parties [{:id :resolver-a
+                                   :slashable-stake 300
+                                   :available-slashable 70}
+                                  {:id :resolver-b
+                                   :slashable-stake 100
+                                   :available-slashable 100}]
+                 :source {:world-hash "sha256:sew-world"}}
+          allocation (sew-econ/calculate-sew-slash-allocation input)
+          artifact (sew-econ/build-sew-slash-projection-artifact input)]
+      (is (= 95 (:recovered-total allocation)))
+      (is (= 100N (get-in artifact [:projection :total-obligation])))
+      (is (= {:resolver-a 300N :resolver-b 100N}
+             (get-in artifact [:projection :weights])))
+      (is (= {:resolver-a 70N :resolver-b 100N}
+             (get-in artifact [:projection :caps])))
+      (is (= :slashable-stake (get-in artifact [:source :basis])))
+      (is (= :available-slashable (get-in artifact [:source :cap-field])))
+      (is (= "sha256:sew-world" (get-in artifact [:source :world-hash])))
+      (is (nil? (hc/validate-canonical-value! artifact)))
+      (is (= (:projection-hash artifact)
+             (hc/hash-with-intent {:hash/intent :projection-artifact}
+                                  (dissoc artifact :projection-hash)))))))
+
+(deftest sew-slash-allocation-from-projection-shadows-current-path
+  (testing "projection-based SEW allocation matches the current SEW allocation on the same fixtures"
+    (doseq [input [{:slash-obligation 100
+                    :slash-policy {:policy/id :test-policy}
+                    :liable-parties [{:id :resolver-a
+                                      :slashable-stake 300
+                                      :available-slashable 300}
+                                     {:id :resolver-b
+                                      :slashable-stake 100
+                                      :available-slashable 100}]}
+                   {:slash-obligation 100
+                    :liable-parties [{:id :resolver-a
+                                      :slashable-stake 300
+                                      :available-slashable 70}
+                                     {:id :resolver-b
+                                      :slashable-stake 100
+                                      :available-slashable 100}]}
+                   {:slash-obligation 100
+                    :liable-parties [{:id :resolver-a
+                                      :slashable-stake 0
+                                      :available-slashable 70}
+                                     {:id :resolver-b
+                                      :slashable-stake 0
+                                      :available-slashable 100}]}
+                   {:slash-obligation 7
+                    :basis :custom-weight
+                    :cap-field :custom-cap
+                    :liable-parties [{:id :resolver-a
+                                      :custom-weight 1
+                                      :custom-cap 10}
+                                     {:id :resolver-b
+                                      :custom-weight 1
+                                      :custom-cap 1}
+                                     {:id :resolver-c
+                                      :custom-weight 1
+                                      :custom-cap 10}]}]]
+      (let [current (sew-econ/calculate-sew-slash-allocation input)
+            artifact (sew-econ/build-sew-slash-projection-artifact input)
+            from-projection (sew-econ/calculate-sew-slash-allocation-from-projection artifact)]
+        (is (= current from-projection))))))
 
 (deftest sew-resolution-call-site-uses-sew-economics-adapter
   (testing "resolution query path does not call the deprecated payoffs slash wrapper directly"

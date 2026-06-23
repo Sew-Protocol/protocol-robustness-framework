@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added (2026-06-23)
+- **Projection pro-rata Phase 5 shadow path:** Added `calculate-prorata-from-projection` to replay allocation from validated projection artifacts, plus a SEW-shaped `calculate-sew-slash-allocation-from-projection` adapter and focused parity tests comparing projection-derived output with the current direct allocation path on the same fixtures.
+- **Projection artifacts Phase 4:** Added passive pro-rata projection artifact construction beside current allocation code, with registered pro-rata intent/projection/claim entries and focused tests for stable projection hashes, canonical safety, registered intent/definition lookup, embedded summaries, and full projection storage.
 - **Projection Pro-Rata Spec V1:** Added `docs/specs/PROJECTION_PRORATA_SPEC_V1.md`, defining the required world → registered intent → registered projection definition → projection artifact → allocation → claims → evidence node flow before runtime refactors.
 - **Passive registries Phase 2:** Added data-only Intent, Projection Definition, Claim Definition, and Attestor registries with canonical entry hashes and validators. Validation remains permissive at runtime unless strict mode is requested; focused registry tests now hard-fail on invalid registry data.
 - **Canonical hash Phase 1 projections:** Added registered hash intents, domain tags, explicit projection functions, startup registry validation, and focused tests for `:intent-dsl`, `:intent-registry-entry`, `:intent-registry`, `:projection-definition`, `:projection-definition-registry`, `:projection-artifact`, `:claim-definition`, and `:attestor`. No call sites were migrated.

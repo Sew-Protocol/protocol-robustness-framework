@@ -1,7 +1,8 @@
 (ns resolver-sim.economics.payoffs-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [resolver-sim.economics.payoffs :as payoffs]))
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.hash.canonical :as hc]))
 
 (deftest allocate-pro-rata-equal-weights
   (testing "equal weights split evenly"
@@ -145,6 +146,70 @@
                (+ (:total-allocated result)
                   (:total-unmet result)
                   (:remainder result))))))))
+
+(deftest build-projection-artifact-validates-phase-4-contract
+  (testing "projection artifacts are stable, canonical-safe, registered, summarized, and complete"
+    (let [input {:amount 10
+                 :rounding :floor-with-largest-remainder
+                 :items [{:id :a :weight 1}
+                         {:id :b :weight 1}
+                         {:id :c :weight 1}]}
+          artifact (payoffs/build-projection-artifact
+                    input
+                    {:source {:source/type :unit-test
+                              :world-hash "sha256:test-world"}})
+          artifact-again (payoffs/build-projection-artifact
+                          input
+                          {:source {:source/type :unit-test
+                                    :world-hash "sha256:test-world"}})]
+      (is (= (:projection-hash artifact) (:projection-hash artifact-again)))
+      (is (= (:projection-hash artifact)
+             (hc/hash-with-intent {:hash/intent :projection-artifact}
+                                  (dissoc artifact :projection-hash))))
+      (is (nil? (hc/validate-canonical-value! artifact)))
+      (is (payoffs/registered-intent (get-in artifact [:intent :id])))
+      (is (payoffs/registered-projection-definition (:projection-definition-id artifact)))
+      (is (= {:participant-count 3
+              :eligible-count 3
+              :total-weight 3N
+              :total-obligation 10N}
+             (:summary artifact)))
+      (is (= [:a :b :c] (get-in artifact [:projection :participants])))
+      (is (= [:a :b :c] (get-in artifact [:projection :eligible-participants])))
+      (is (= {:a 1N :b 1N :c 1N} (get-in artifact [:projection :weights])))
+      (is (= 10N (get-in artifact [:projection :total-obligation])))
+      (is (= :floor-with-largest-remainder
+             (get-in artifact [:projection :constraints :rounding])))
+      (is (seq (:claims artifact)))
+      (is (:source-hash (:source artifact))))))
+
+(deftest calculate-prorata-from-projection-shadows-direct-allocation
+  (testing "projection artifacts replay to the same generic pro-rata allocation as direct input"
+    (doseq [input [{:amount 400
+                    :items [{:id :a :weight 1000 :cap 1000}
+                            {:id :b :weight 500 :cap 60}
+                            {:id :c :weight 500 :cap 500}]
+                    :cap-fn :cap
+                    :rounding :floor-with-largest-remainder
+                    :remainder-policy :unallocated
+                    :ordering-policy :input-order}
+                   {:amount 10
+                    :items [{:id :a :weight 1}
+                            {:id :b :weight 1}
+                            {:id :c :weight 1}]
+                    :rounding :floor-with-largest-remainder
+                    :remainder-policy :unallocated
+                    :ordering-policy :input-order}
+                   {:amount 100
+                    :items [{:id :a :weight 0}
+                            {:id :b :weight 0}]
+                    :rounding :floor-with-largest-remainder
+                    :remainder-policy :unallocated
+                    :ordering-policy :input-order}]]
+      (let [artifact (payoffs/build-projection-artifact input)
+            direct (payoffs/allocate-pro-rata input)
+            from-projection (payoffs/calculate-prorata-from-projection artifact)]
+        (is (= direct from-projection))))))
 
 (deftest payoffs-namespace-remains-protocol-generic
   (testing "generic economics has no namespace dependency on resolver-sim.protocols.sew"

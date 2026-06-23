@@ -7,6 +7,7 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
             [resolver-sim.protocols.sew.economics  :as sew-econ]
+            [resolver-sim.evidence.slashing :as slashing-ev]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
 
@@ -514,6 +515,34 @@
       (is (= :executed (get-in world-exec [:pending-fraud-slashes workflow-id :status])))
       (is (= 9700 (reg/get-stake world-exec resolver-addr))
           "stake reduced by 300"))))
+
+(deftest execute-fraud-slash-emits-projection-and-claims-evidence
+  (testing "build-prorata-slash-evidence carries projection and pro-rata proof fields"
+    (let [resolver-addr "0xRes"
+          world0 (reg/register-stake (t/empty-world 1000) resolver-addr 10000)
+          allocation-input {:slash-obligation 300
+                            :liable-parties [{:id resolver-addr
+                                              :slashable-stake 10000
+                                              :available-slashable 10000}]}
+          allocation-result (sew-econ/calculate-sew-slash-allocation allocation-input)
+          evidence (slashing-ev/build-prorata-slash-evidence
+                    {:world world0
+                     :slash-id "0-fraud-slash-0"
+                     :workflow-id 0
+                     :epoch 0
+                     :trigger :fraud-slash
+                     :allocation-input allocation-input
+                     :allocation-result allocation-result
+                     :transition-dependencies []
+                     :attribution nil})
+          result (:evidence/result evidence)]
+      (is (some? (:evidence/hash evidence)))
+      (is (some? (get-in result [:projection :projection-hash])))
+      (is (some? (get-in result [:projection :projection-definition-hash])))
+      (is (map? (get result :pro-rata)))
+      (is (= 7 (count (get-in result [:pro-rata :claims]))))
+      (is (= true (get-in result [:pro-rata :summary :holds?])))
+      (is (some? (get-in result [:pro-rata :allocation-hash]))))))
 
 (deftest test-proportional-slashing-basis-invariance
   (testing "Proportional slashing must be invariant to intermediate stake mutations"

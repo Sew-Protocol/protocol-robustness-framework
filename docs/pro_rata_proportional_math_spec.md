@@ -6,17 +6,6 @@ This document presents the formal mathematical specification, proofs of key inva
 
 In decentralized finance (DeFi) and dispute-resolution systems, we frequently need to distribute a discrete integer amount of resources $A \in \mathbb{N}$ (e.g., token base units/wei) across a set of $n$ claimants. Each claimant $i$ has a weight $w_i \in \mathbb{R}^+$ (e.g., stake basis, withdrawal request amount).
 
-$$
-W = \sum_{j=1}^{n} w_j
-$$
-
-$$
-W = \sum_{j=1}^{n} w_j
-$$
-
-$ x^2 + y^2 = z^2 $
-
-
 Let:
 - $W = \sum_{j=1}^{n} w_j$ be the total weight.
 - $Ideal_i = A \times \frac{w_i}{W}$ be the exact real-valued proportional share of claimant $i$.

@@ -1195,19 +1195,18 @@
                                      (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
                                      (update-unavailability resolver true)
                                      (cleanup-orphaned-slashes workflow-id))
-                 allocation      (sew-econ/calculate-sew-slash-allocation
-                                  {:slash-amount amount
-                                   :liable-parties
-                                   [{:id resolver
-                                     :slashable-stake current-stake
-                                     :available-slashable current-stake}]})]
+                 allocation-input {:slash-obligation amount
+                                   :liable-parties [{:id resolver
+                                                     :slashable-stake current-stake
+                                                     :available-slashable current-stake}]}
+                 allocation      (sew-econ/calculate-sew-slash-allocation allocation-input)]
              (let [evidence (slashing-ev/build-prorata-slash-evidence
                              {:world world-slashed
                               :slash-id slash-id
                               :workflow-id workflow-id
                               :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
                               :trigger :fraud-slash
-                              :allocation-input {:slash-obligation amount :resolver resolver}
+                              :allocation-input allocation-input
                               :allocation-result allocation
                               :transition-dependencies (filterv some?
                                                                 [(:proposal-evidence-hash pending)])

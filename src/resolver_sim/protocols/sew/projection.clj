@@ -59,7 +59,7 @@
     (when world
       {:trace trace
        :world world
-       :world-checkpoints (or (:checkpoint-log result) (:world-checkpoints result {}))
+       :world-checkpoints (or (:world-checkpoints result {}) (:checkpoint-log result))
        :protocol (:protocol result)
        :metrics (:metrics result {})
        :agents (:agents result [])

@@ -3,7 +3,7 @@
 
 (defn run-shortfall
   []
-  ((requiring-resolve 'resolver-sim.scenarios.yield/run-shortfall-demo)))
+  ((requiring-resolve 'resolver-sim.scenario.runner/run-scenario) :S103))
 
 (defn explain-partial-fill
   [input]
