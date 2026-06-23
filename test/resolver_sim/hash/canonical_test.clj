@@ -485,34 +485,34 @@
 
 (deftest test-validate-registry-detects-missing-field
   (with-redefs [hc/hash-intents (assoc hc/hash-intents
-                                  :bad-intent
-                                  {:intent/name :bad-intent})]
+                                       :bad-intent
+                                       {:intent/name :bad-intent})]
     (is (thrown? clojure.lang.ExceptionInfo
                  (hc/validate-registry!)))))
 
 (deftest test-validate-registry-detects-wrong-type
   (with-redefs [hc/hash-intents (assoc hc/hash-intents
-                                  :bad-intent
-                                  {:intent/name         :bad-intent
-                                   :intent/domain-tag   :not-a-string
-                                   :intent/description  "bad"
-                                   :intent/includes     #{}
-                                   :intent/excludes     #{}
-                                   :intent/projection-fn identity
-                                   :intent/version      1})]
+                                       :bad-intent
+                                       {:intent/name         :bad-intent
+                                        :intent/domain-tag   :not-a-string
+                                        :intent/description  "bad"
+                                        :intent/includes     #{}
+                                        :intent/excludes     #{}
+                                        :intent/projection-fn identity
+                                        :intent/version      1})]
     (is (thrown? clojure.lang.ExceptionInfo
                  (hc/validate-registry!)))))
 
 (deftest test-validate-registry-detects-negative-version
   (with-redefs [hc/hash-intents (assoc hc/hash-intents
-                                  :bad-intent
-                                  {:intent/name         :bad-intent
-                                   :intent/domain-tag   "BAD_V1"
-                                   :intent/description  "bad"
-                                   :intent/includes     #{}
-                                   :intent/excludes     #{}
-                                   :intent/projection-fn identity
-                                   :intent/version      -1})]
+                                       :bad-intent
+                                       {:intent/name         :bad-intent
+                                        :intent/domain-tag   "BAD_V1"
+                                        :intent/description  "bad"
+                                        :intent/includes     #{}
+                                        :intent/excludes     #{}
+                                        :intent/projection-fn identity
+                                        :intent/version      -1})]
     (is (thrown? clojure.lang.ExceptionInfo
                  (hc/validate-registry!)))))
 
@@ -583,3 +583,73 @@
         h1 (hc/hash-with-intent {:hash/intent :benchmark-certification} data)
         h2 (hc/hash-with-intent {:hash/intent :benchmark-certification} data)]
     (is (= h1 h2))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; New Intent Contract Tests (Evidence Layers 4, 6)
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-decision-evidence-intent
+  (let [contract (hc/resolve-intent :decision-evidence)]
+    (is (= :decision-evidence (:intent/name contract)))
+    (is (contains? (:intent/includes contract) :decision-id))
+    (is (contains? (:intent/includes contract) :alternatives))
+    (is (contains? (:intent/includes contract) :selected))))
+
+(deftest test-invariant-failure-intent
+  (let [contract (hc/resolve-intent :invariant-failure)]
+    (is (= :invariant-failure (:intent/name contract)))
+    (is (contains? (:intent/includes contract) :invariant-ids))
+    (is (contains? (:intent/includes contract) :halt-reason))))
+
+(deftest test-decision-evidence-hash-is-deterministic
+  (let [data {:decision-id "resolve-0-1" :step 5
+              :alternatives [:release :refund] :selected :release
+              :reasoning "Resolver alice released escrow 0"
+              :caller "alice" :workflow-id "0"}
+        h1 (hc/hash-with-intent {:hash/intent :decision-evidence} data)
+        h2 (hc/hash-with-intent {:hash/intent :decision-evidence} data)]
+    (is (= h1 h2))))
+
+(deftest test-decision-evidence-hash-changes-on-different-selection
+  (let [release-data {:decision-id "resolve-0-1" :step 5
+                      :alternatives [:release :refund] :selected :release
+                      :reasoning "Release" :caller "alice" :workflow-id "0"}
+        refund-data {:decision-id "resolve-0-1" :step 5
+                     :alternatives [:release :refund] :selected :refund
+                     :reasoning "Refund" :caller "alice" :workflow-id "0"}
+        release-hash (hc/hash-with-intent {:hash/intent :decision-evidence} release-data)
+        refund-hash (hc/hash-with-intent {:hash/intent :decision-evidence} refund-data)]
+    (is (not= release-hash refund-hash))))
+
+(deftest test-invariant-failure-hash-is-deterministic
+  (let [data {:step 5 :scenario-id "scen-1"
+              :invariant-ids [:no-negative-balances]
+              :details {"no-negative-balances" "balance -5"}
+              :halt-reason :invariant-violation}
+        h1 (hc/hash-with-intent {:hash/intent :invariant-failure} data)
+        h2 (hc/hash-with-intent {:hash/intent :invariant-failure} data)]
+    (is (= h1 h2))))
+
+(deftest test-invariant-failure-hash-changes-on-different-invariant
+  (let [data-a {:step 5 :scenario-id "scen-1"
+                :invariant-ids [:no-negative-balances]
+                :details {} :halt-reason :invariant-violation}
+        data-b {:step 5 :scenario-id "scen-1"
+                :invariant-ids [:conservation-of-value]
+                :details {} :halt-reason :invariant-violation}
+        hash-a (hc/hash-with-intent {:hash/intent :invariant-failure} data-a)
+        hash-b (hc/hash-with-intent {:hash/intent :invariant-failure} data-b)]
+    (is (not= hash-a hash-b))))
+
+(deftest test-decision-evidence-domain-separated
+  (let [data {:decision-id "d1" :step 1 :alternatives [] :selected :none
+              :reasoning "test" :caller "alice" :workflow-id "0"}
+        dec-hash (hc/hash-with-intent {:hash/intent :decision-evidence} data)
+        world-hash (hc/hash-with-intent {:hash/intent :world-structure} data)]
+    (is (not= dec-hash world-hash))))
+
+(deftest test-invariant-failure-domain-separated
+  (let [data {:step 1 :scenario-id "s" :invariant-ids [] :details {} :halt-reason :invariant-violation}
+        fail-hash (hc/hash-with-intent {:hash/intent :invariant-failure} data)
+        world-hash (hc/hash-with-intent {:hash/intent :world-structure} data)]
+    (is (not= fail-hash world-hash))))

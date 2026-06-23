@@ -21,10 +21,38 @@
             [resolver-sim.util.attributed-monad      :as am]
             [resolver-sim.time.context               :as time-ctx]
             [resolver-sim.evidence.capture             :as cap]
+            [resolver-sim.evidence.chain              :as chain]
             [resolver-sim.hash.canonical              :as hc]
-            [resolver-sim.evidence.slashing           :as slashing-ev]))
+            [resolver-sim.evidence.slashing           :as slashing-ev]
+            [resolver-sim.logging                     :as log]))
 
 (declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability cleanup-orphaned-slashes)
+
+;; ── Decision Evidence (Evidence Layer 4) ──────────────────────────────────
+
+(defn emit-decision-evidence!
+  "Build and chain a decision evidence record.
+   Best-effort — failures are logged but do not halt execution."
+  [{:keys [decision-id step alternatives selected reasoning caller workflow-id]}]
+  (try
+    (let [data {:decision-id decision-id
+                :step step
+                :alternatives (vec alternatives)
+                :selected selected
+                :reasoning (str reasoning)
+                :caller caller
+                :workflow-id workflow-id}
+          h (hc/hash-with-intent {:hash/intent :decision-evidence} data)
+          evidence {:artifact-kind :decision-evidence
+                    :evidence-hash h
+                    :decision/id decision-id
+                    :decision/step step
+                    :decision/selected selected
+                    :decision/reasoning (str reasoning)}]
+      (chain/register-evidence! evidence))
+    (catch Exception e
+      (log/warn! :decision-evidence-failed
+                 {:decision-id decision-id :error (.getMessage e)}))))
 
 (defn rotate-dispute-resolver
   "Governance-triggered resolver rotation for an in-flight dispute.
@@ -480,7 +508,16 @@
             world'''       (assoc-in world'' [:escrow-transfers workflow-id :resolution]
                                      {:resolved-by caller
                                       :is-release is-release
-                                      :resolution-hash resolution-hash})]
+                                      :resolution-hash resolution-hash})
+            decision-info {:decision-id (str "resolve-" workflow-id "-" (t/dispute-level world workflow-id))
+                           :step (time-ctx/block-ts world)
+                           :alternatives [:release :refund]
+                           :selected (if is-release :release :refund)
+                           :reasoning (str "Resolver " caller " " (if is-release "releases" "refunds")
+                                           " escrow " workflow-id)
+                           :caller caller
+                           :workflow-id workflow-id}]
+        (emit-decision-evidence! decision-info)
         (if (or final-round? (not (pos? window-dur)))
         ;; Final round or no windows: execute immediately
           (t/ok (if is-release
@@ -850,6 +887,15 @@
              nil
              {:world-before world
               :world-after world'}))
+          (emit-decision-evidence!
+           {:decision-id (str "escalate-" workflow-id "-" current-level)
+            :step (time-ctx/block-ts world)
+            :alternatives [:accept-resolution :escalate]
+            :selected :escalate
+            :reasoning (str "Participant " caller " escalated dispute " workflow-id
+                            " from level " current-level " to " new-level)
+            :caller caller
+            :workflow-id workflow-id})
           (assoc (t/ok world')
                  :new-level    new-level
                  :new-resolver new-resolver))))))
@@ -1050,6 +1096,14 @@
                               (acct/record-claimable-v2 wf-id :bond/refund resolver bond-held))
                           :always
                           (assoc-in [:pending-fraud-slashes slash-id :status] :reversed))]
+             (emit-decision-evidence!
+              {:decision-id (str "resolve-appeal-" slash-id)
+               :step (time-ctx/block-ts world)
+               :alternatives [:uphold-appeal :reject-appeal]
+               :selected :uphold-appeal
+               :reasoning (str "Governance " caller " upheld the appeal for slash " slash-id)
+               :caller caller
+               :workflow-id wf-id})
              (emit-appeal-resolution! world' :reversed))
 
            (pos? bond-held)
@@ -1058,10 +1112,27 @@
                             (assoc-in [:pending-fraud-slashes slash-id :status] :pending)
                             (update-in [:appeal-bond-distributions-by-token bond-token] (fnil + 0) bond-held)
                             (update :appeal-bonds-forfeited-insurance (fnil + 0) bond-held))]
+             (emit-decision-evidence!
+              {:decision-id (str "resolve-appeal-" slash-id)
+               :step (time-ctx/block-ts world)
+               :alternatives [:uphold-appeal :reject-appeal]
+               :selected :reject-appeal
+               :reasoning (str "Governance " caller " rejected the appeal for slash " slash-id
+                               "; bond " bond-held " " bond-token " forfeited")
+               :caller caller
+               :workflow-id wf-id})
              (emit-appeal-resolution! world' :rejected))
 
            :else
            (let [world' (assoc-in world-base [:pending-fraud-slashes slash-id :status] :pending)]
+             (emit-decision-evidence!
+              {:decision-id (str "resolve-appeal-" slash-id)
+               :step (time-ctx/block-ts world)
+               :alternatives [:uphold-appeal :reject-appeal]
+               :selected :reject-appeal
+               :reasoning (str "Governance " caller " rejected the appeal for slash " slash-id "; no bond to forfeit")
+               :caller caller
+               :workflow-id wf-id})
              (emit-appeal-resolution! world' :rejected-no-bond))))))))
 
 (defn- cleanup-orphaned-slashes

@@ -89,7 +89,7 @@
                       :passed (:passed attestation)
                       :failed (:failed attestation)
                       :invariants (mapv (fn [i] [(name (:id i)) (name (:result i))])
-                                       (:invariants attestation))}
+                                        (:invariants attestation))}
             h (hc/hash-with-intent {:hash/intent :invariant-attestation} safe-map)
             evidence {:artifact-kind :invariant-attestation
                       :evidence-hash h
@@ -124,6 +124,34 @@
         (chain/register-evidence! evidence))
       (catch Exception e
         (log/error! :projection-evidence-failed
+                    {:step step :error (.getMessage e)})))))
+
+;; ---------------------------------------------------------------------------
+;; Invariant Failure Evidence (Evidence Layer 6)
+;; ---------------------------------------------------------------------------
+
+(defn emit-invariant-failure-evidence!
+  "Build and chain an invariant failure evidence record when a scenario halts.
+   Best-effort — failures are logged but do not halt execution."
+  [step scenario-id violations]
+  (when (seq violations)
+    (try
+      (let [inv-ids (vec (map (fn [[k _]] (if (keyword? k) (name k) (str k))) violations))
+            safe-details (into {} (map (fn [[k v]] [(name k) (str v)]) (take 5 violations)))
+            data {:step step
+                  :scenario-id scenario-id
+                  :invariant-ids inv-ids
+                  :details safe-details
+                  :halt-reason :invariant-violation}
+            h (hc/hash-with-intent {:hash/intent :invariant-failure} data)
+            evidence {:artifact-kind :invariant-failure
+                      :evidence-hash h
+                      :failure/step step
+                      :failure/invariant-ids inv-ids
+                      :failure/scenario-id scenario-id}]
+        (chain/register-evidence! evidence))
+      (catch Exception e
+        (log/error! :invariant-failure-evidence-failed
                     {:step step :error (.getMessage e)})))))
 
 ;; ---------------------------------------------------------------------------
@@ -267,8 +295,8 @@
             violated?  (and ok? check-inv?
                             (not (and (:ok? inv-single) (:ok? inv-trans))))
             all-violations (when violated?
-                              (merge (when-not (:ok? inv-single) (:violations inv-single))
-                                     (when-not (:ok? inv-trans)  (:violations inv-trans))))]
+                             (merge (when-not (:ok? inv-single) (:violations inv-single))
+                                    (when-not (:ok? inv-trans)  (:violations inv-trans))))]
 
         ;; Emit invariant attestation evidence (best-effort)
         (emit-invariant-attestation! (:seq event) inv-single inv-trans
@@ -281,16 +309,16 @@
                              #{})
               final-world  (if violated? world-t world-next)
               [proj ph]    (if (satisfies? proto/AnalysisModule protocol)
-                              (proto/compute-projection protocol final-world)
-                              [nil nil])
+                             (proto/compute-projection protocol final-world)
+                             [nil nil])
               metadata     (if (satisfies? proto/AnalysisModule protocol)
                              (proto/classify-transition protocol (:action event) result-kw)
                              nil)]
           ;; Emit projection evidence (best-effort)
           (when ph
             (emit-projection-evidence! (:seq event)
-              (hc/hash-with-intent {:hash/intent :world-structure} final-world)
-              ph))
+                                       (hc/hash-with-intent {:hash/intent :world-structure} final-world)
+                                       ph))
           {:ok?    (and ok? (not violated?))
            :world  final-world
            :trace-entry
@@ -493,6 +521,11 @@
             (if (:halted? batch-result)
               (do
                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world batch-result) (:metrics batch-result) (:trace batch-result))
+                (let [failed-entry (some (fn [e] (when (seq (:violations e)) e))
+                                         (reverse (:trace batch-result)))]
+                  (emit-invariant-failure-evidence!
+                   (or (:seq failed-entry) 0) scenario-id
+                   (:violations failed-entry)))
                 {:outcome :fail :scenario-id scenario-id :events-processed (count (:trace batch-result)) :halt-reason :invariant-violation :trace (:trace batch-result) :metrics (:metrics batch-result) :execution {:mode :deterministic-batch :batch-policy batch-commit-policy} :protocol protocol :world-checkpoints (:world-checkpoints batch-result) :last-valid-world (:world batch-result)})
               (let [post-single (when check-inv?
                                   (proto/check-invariants-single protocol (:world batch-result)))
@@ -580,7 +613,7 @@
                 diagnostics' (:diagnostics states-result)]
             ;; Emit checkpoint evidence at strategic decision points (best-effort)
             (replay-checkpoints/emit-checkpoint-evidence-at-strategic-point!
-              checkpoint-log' event)
+             checkpoint-log' event)
             (if (:halted? step)
               (do
                 (temporal/maybe-record-temporal! temporal-cfg temporal-enabled? scenario-id :fail (:world step) new-metrics new-trace)
@@ -588,6 +621,9 @@
                   {:ctx/scenario-id scenario-id
                    :ctx/run-id run-id}
                   (attr/log-with-attr :error "scenario/halt" {:id scenario-id :seq (:seq event) :reason :invariant-violation}))
+                (emit-invariant-failure-evidence!
+                 (:seq event) scenario-id
+                 (get-in step [:trace-entry :violations]))
                 {:outcome :fail
                  :scenario-id scenario-id
                  :events-processed (count new-trace)

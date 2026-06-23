@@ -577,6 +577,25 @@
                           :final-state-hash :evidence-chain-root :invariant-summary}
     :intent/excludes    #{:individual-results :detailed-evidence :traces}
     :intent/projection-fn identity
+    :intent/version     1}
+
+   :decision-evidence
+   {:intent/name        :decision-evidence
+    :intent/domain-tag  "DECISION_EVIDENCE_V1"
+    :intent/description "Structured record of a decision with alternatives and selection"
+    :intent/includes    #{:decision-id :step :alternatives :selected :reasoning
+                          :caller :workflow-id}
+    :intent/excludes    #{:full-world-state :trace-detail :internal-fields}
+    :intent/projection-fn identity
+    :intent/version     1}
+
+   :invariant-failure
+   {:intent/name        :invariant-failure
+    :intent/domain-tag  "INVARIANT_FAILURE_V1"
+    :intent/description "Evidence recorded when an invariant check fails and halts the simulation"
+    :intent/includes    #{:step :scenario-id :invariant-ids :details :halt-reason}
+    :intent/excludes    #{:full-world-state :raw-trace :internal-state}
+    :intent/projection-fn identity
     :intent/version     1}})
 
 (defn resolve-intent
