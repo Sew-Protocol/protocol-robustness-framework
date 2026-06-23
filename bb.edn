@@ -342,8 +342,7 @@
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
 
   lint {:doc "Lint code with clj-kondo"
-        :task (clojure {:dir "." :extra-deps {clj-kondo/clj-kondo {:mvn/version "2024.01.11"}}}
-                       "-m" "clj-kondo.main" "--lint" "src:test")}
+        :task (shell "clj -M:lint" "--lint" "src:test")}
 
   fmt {:doc "Format code with cljfmt"
        :task (shell "clojure -M:fmt")}

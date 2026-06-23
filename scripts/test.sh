@@ -108,6 +108,7 @@ run_unit() {
 (require '[resolver-sim.contract-model.replay-batch-appeal-test])
 (require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
+(require '[resolver-sim.financial.pro-rata-characterization-test])
 (let [results (t/run-tests
     'resolver-sim.core-tests
     'resolver-sim.protocol-alignment-test
@@ -127,7 +128,8 @@ run_unit() {
     'resolver-sim.contract-model.replay-batch-sew-test
     'resolver-sim.contract-model.replay-batch-appeal-test
     'resolver-sim.contract-model.replay-batch-slash-domain-test
-    'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+    'resolver-sim.protocols.sew.dispute-resolution-coverage-test
+    'resolver-sim.financial.pro-rata-characterization-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -157,6 +159,7 @@ run_unit() {
 (require '[resolver-sim.contract-model.replay-batch-appeal-test])
 (require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
+(require '[resolver-sim.financial.pro-rata-characterization-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
@@ -176,7 +179,8 @@ run_unit() {
                 'resolver-sim.contract-model.replay-batch-sew-test
                 'resolver-sim.contract-model.replay-batch-appeal-test
                 'resolver-sim.contract-model.replay-batch-slash-domain-test
-                'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
+                'resolver-sim.protocols.sew.dispute-resolution-coverage-test
+                'resolver-sim.financial.pro-rata-characterization-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -197,6 +201,7 @@ run_framework() {
 (require '[resolver-sim.sim.waterfall-test])
 (require '[resolver-sim.io.scenario-fixture-parity-test])
 (require '[resolver-sim.contract-model.replay-batch-test])
+(require '[resolver-sim.financial.pro-rata-characterization-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
@@ -207,7 +212,8 @@ run_framework() {
                 'resolver-sim.sim.strategy-adaptation-test
                 'resolver-sim.sim.waterfall-test
                 'resolver-sim.io.scenario-fixture-parity-test
-                'resolver-sim.contract-model.replay-batch-test)]
+                'resolver-sim.contract-model.replay-batch-test
+                'resolver-sim.financial.pro-rata-characterization-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -1204,15 +1210,17 @@ case "$MODE" in
     ;;
 esac
 
-python3 scripts/generate_test_summary.py \
-  "$ARTIFACT_DIR" \
-  "$RUN_ID" \
-  "$FAILURES" \
-  "$MODE" \
-  "$ARTIFACT_FILE" \
-  "$RUN_MANIFEST_FILE" \
-  "$ARTIFACT_REGISTRY_FILE" \
-  "$CLAIMABLE_CLASSIFICATION_FILE"
+if [ -f scripts/generate_test_summary.py ]; then
+  python3 scripts/generate_test_summary.py \
+    "$ARTIFACT_DIR" \
+    "$RUN_ID" \
+    "$FAILURES" \
+    "$MODE" \
+    "$ARTIFACT_FILE" \
+    "$RUN_MANIFEST_FILE" \
+    "$ARTIFACT_REGISTRY_FILE" \
+    "$CLAIMABLE_CLASSIFICATION_FILE"
+fi
 
 exit $FAILURES
 

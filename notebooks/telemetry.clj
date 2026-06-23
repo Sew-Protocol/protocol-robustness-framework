@@ -223,4 +223,4 @@
            [:div [:strong "invariants_ok: "] (if (:invariants_ok trial) "true" "false")]
            [:div [:strong "divergence: "] (if (:divergence trial) "true" "false")]
            [:div [:strong "Events: "] (count events)]]
-          (ui/event-timeline-view events)])])
+           (ui/event-timeline-view events)])])]))

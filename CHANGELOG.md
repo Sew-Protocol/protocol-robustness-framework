@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added (2026-06-23)
+- **Projection Pro-Rata Spec V1:** Added `docs/specs/PROJECTION_PRORATA_SPEC_V1.md`, defining the required world → registered intent → registered projection definition → projection artifact → allocation → claims → evidence node flow before runtime refactors.
+- **Passive registries Phase 2:** Added data-only Intent, Projection Definition, Claim Definition, and Attestor registries with canonical entry hashes and validators. Validation remains permissive at runtime unless strict mode is requested; focused registry tests now hard-fail on invalid registry data.
+- **Canonical hash Phase 1 projections:** Added registered hash intents, domain tags, explicit projection functions, startup registry validation, and focused tests for `:intent-dsl`, `:intent-registry-entry`, `:intent-registry`, `:projection-definition`, `:projection-definition-registry`, `:projection-artifact`, `:claim-definition`, and `:attestor`. No call sites were migrated.
+
+### Changed (2026-06-23)
+- **Agent project guide:** Replaced `.ai/project.md` scaffold with a repository-grounded guide covering framework vs Sew components, generated artifacts, tooling, specs, important namespaces/directories, current subsystem state, concrete `bb` commands, invariant/workflow constraints, and agent checklists.
+
 ### Changed (2026-06-23)
 - **Intent Registry Contract Spec V1:** Migrated `hash-intents` contracts to `INTENT_REGISTRY_SPEC_V1`. All fields now use `:intent/` qualified names: renamed `:intent/scope` → `:intent/includes`, `:project` → `:intent/projection-fn`, `:domain` (keyword) → `:intent/domain-tag` (string). Added `:intent/version` (monotonic integer) to every contract. Added `validate-registry!` for startup/test-time registry integrity checks with field presence, type, and version validation. `domain-tags` map retained for backward compatibility with keyword-based callers.
 

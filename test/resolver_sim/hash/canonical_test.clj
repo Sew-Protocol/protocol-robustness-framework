@@ -160,37 +160,48 @@
       (is (= (:hash_hex v) (hc/domain-hash :evidence-record {:a 1}))))))
 
 (deftest test-projected-value-passes-validation
-  (let [input {:a 1 :b "hello" :c [1 2 3]}]
-    (is (= input (hc/project-world-to-structure-view input)))))
+  (let [input {:a 1 :b "hello" :c [1 2 3]}
+        result (hc/project-world-to-structure-view input :test-intent)]
+    (is (= :test-intent (:intent result)))
+    (is (= input (:structure result)))))
 
 (deftest test-projection-converts-set-to-vector
-  (let [result (hc/project-world-to-structure-view {:tags #{:a :b :c}})]
-    (is (vector? (:tags result)))
-    (is (= [:a :b :c] (:tags result)))))
+  (let [result (hc/project-world-to-structure-view {:tags #{:a :b :c}} :test-intent)]
+    (is (vector? (get-in result [:structure :tags])))
+    (is (= [:a :b :c] (get-in result [:structure :tags])))))
 
 (deftest test-projection-converts-empty-set
-  (is (= [] (hc/project-world-to-structure-view #{}))))
+  (let [result (hc/project-world-to-structure-view #{} :test-intent)]
+    (is (= [] (:structure result)))))
 
 (deftest test-projection-converts-instant-to-string
   (let [now (Instant/now)
-        result (hc/project-world-to-structure-view {:ts now})]
-    (is (string? (:ts result)))
-    (is (= (.toString now) (:ts result)))))
+        result (hc/project-world-to-structure-view {:ts now} :test-intent)]
+    (is (string? (get-in result [:structure :ts])))
+    (is (= (.toString now) (get-in result [:structure :ts])))))
 
-(deftest test-projection-converts-double-to-string
-  (let [result (hc/project-world-to-structure-view {:rate 3.14})]
-    (is (string? (:rate result)))))
+(deftest test-projection-converts-double-to-tagged
+  (let [result (hc/project-world-to-structure-view {:rate 3.14} :test-intent)
+        rate (get-in result [:structure :rate])]
+    (is (= :float64 (:type rate)))
+    (is (string? (:value-str rate)))
+    (is (re-matches #"3\.14.*" (:value-str rate)))))
 
-(deftest test-projection-converts-float-to-string
-  (let [result (hc/project-world-to-structure-view {:rate (float 1.5)})]
-    (is (string? (:rate result)))))
+(deftest test-projection-converts-float-to-tagged
+  (let [result (hc/project-world-to-structure-view {:rate (float 1.5)} :test-intent)
+        rate (get-in result [:structure :rate])]
+    (is (= :float64 (:type rate)))
+    (is (= "1.50000000000000000" (:value-str rate)))))
 
-(deftest test-projection-converts-function-to-fn
-  (is (= :fn (hc/project-world-to-structure-view (fn [x] x))))
-  (is (= :fn (hc/project-world-to-structure-view map))))
+(deftest test-projection-converts-function-to-struct-marker
+  (let [r1 (hc/project-world-to-structure-view (fn [x] x) :test-intent)
+        r2 (hc/project-world-to-structure-view map :test-intent)]
+    (is (= {:type :fn} (:structure r1)))
+    (is (= {:type :fn} (:structure r2)))))
 
 (deftest test-projection-converts-list-to-vector
-  (is (= [1 2 3] (hc/project-world-to-structure-view '(1 2 3)))))
+  (let [result (hc/project-world-to-structure-view '(1 2 3) :test-intent)]
+    (is (= [1 2 3] (:structure result)))))
 
 (deftest test-projection-nested-map-with-sets
   (let [input {:yield/risk {"m1" {"t1" {:failure-modes #{:a :b :c
@@ -198,10 +209,10 @@
                                         :rate-mode :fixed}}}
                :resolver-unavailable #{:addr1 :addr2}
                :token-liquidity-crunch #{}}
-        result (hc/project-world-to-structure-view input)]
-    (is (vector? (get-in result [:yield/risk "m1" "t1" :failure-modes])))
-    (is (vector? (:resolver-unavailable result)))
-    (is (= [] (:token-liquidity-crunch result)))))
+        s (get-in (hc/project-world-to-structure-view input :test-intent) [:structure])]
+    (is (vector? (get-in s [:yield/risk "m1" "t1" :failure-modes])))
+    (is (vector? (:resolver-unavailable s)))
+    (is (= [] (:token-liquidity-crunch s)))))
 
 (deftest test-projection-idempotent
   (let [input {:nested {:set #{3 1 2}
@@ -209,13 +220,13 @@
                         :kw :hello}
                :instant (Instant/now)
                :fn (fn [x] x)}
-        once (hc/project-world-to-structure-view input)
-        twice (hc/project-world-to-structure-view once)]
+        once (hc/project-world-to-structure-view input :test-intent)
+        twice (hc/project-world-to-structure-view (:structure once) :test-intent)]
     (is (= once twice))
     (is (nil? (hc/validate-canonical-value! once)))))
 
 (deftest test-projection-rejects-unsupported
-  (is (thrown? Exception (hc/project-world-to-structure-view (java.util.Date.)))))
+  (is (thrown? Exception (hc/project-world-to-structure-view (java.util.Date.) :test-intent))))
 
 (deftest test-projected-value-passes-validation
   (let [world {:step 42
@@ -224,21 +235,23 @@
                :context/time {:instant (Instant/now)
                               :step 42}
                :yield/risk {"m1" {"t1" {:failure-modes #{:liquidity-crunch}
-                                        :rate-mode (fn [x] x)}}}}]
-    (is (nil? (hc/validate-canonical-value!
-               (hc/project-world-to-structure-view world))))))
+                                        :rate-mode (fn [x] x)}}}}
+        result (hc/project-world-to-structure-view world :test-intent)]
+    (is (nil? (hc/validate-canonical-value! result)))
+    (is (= :test-intent (:intent result)))))
 
 (deftest test-world-hash-roundtrip
   (let [world-1 {:step 1 :resolver-unavailable #{:addr1}}
-        world-2 {:step 1 :resolver-unavailable [:addr1]}
-        h1 (hc/domain-hash :world-state (hc/project-world-to-structure-view world-1))
-        h2 (hc/domain-hash :world-state (hc/project-world-to-structure-view world-2))]
-    (is (= h1 h2))
-    (is (= 64 (count h1)))))
+        world-2 {:step 1 :resolver-unavailable [:addr1]}]
+    (is (= (hc/domain-hash :world-state world-1)
+           (hc/domain-hash :world-state world-2)))
+    (is (= 64 (count (hc/domain-hash :world-state world-1))))))
 
-(deftest test-projection-converts-ratio-to-string
-  (let [result (hc/project-world-to-structure-view {:ratio (/ 1 3)})]
-    (is (string? (:ratio result)))))
+(deftest test-projection-converts-ratio-to-tagged
+  (let [result (hc/project-world-to-structure-view {:ratio (/ 1 3)} :test-intent)
+        ratio (get-in result [:structure :ratio])]
+    (is (= :ratio (:type ratio)))
+    (is (string? (:value-str ratio)))))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Hash Intent Declaration
@@ -513,6 +526,163 @@
                                         :intent/excludes     #{}
                                         :intent/projection-fn identity
                                         :intent/version      -1})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
+
+(def ^:private phase-1-projection-intents
+  [:intent-dsl
+   :intent-registry-entry
+   :intent-registry
+   :projection-definition
+   :projection-definition-registry
+   :projection-artifact
+   :claim-definition
+   :attestor])
+
+(def ^:private phase-1-projection-fixtures
+  {:intent-dsl
+   {:intent/type :pro-rata/allocation
+    :intent/version 1
+    :intent/purpose :slash-obligation-allocation
+    :intent/scope {:protocol :sew :module :slashing :domain :economic-allocation}
+    :intent/inputs #{:obligations :weights :caps}
+    :intent/constraints #{:conservation :non-negative}
+    :intent/output :allocation}
+
+   :intent-registry-entry
+   {:intent/name :projection-definition
+    :intent/domain-tag "PROJECTION_DEFINITION_V1"
+    :intent/description "Projection definition identity"
+    :intent/includes #{:id :version :projection-type}
+    :intent/excludes #{:canonical-hash}
+    :intent/projection-fn 'resolver-sim.hash.canonical/project-projection-definition
+    :intent/version 1}
+
+   :intent-registry
+   {:registry-version 1
+    :intent-definitions [{:intent/name :intent-dsl
+                          :intent/domain-tag "INTENT_DSL_V1"}]
+    :intent-hashes ["abc"]
+    :registry-hash "self-hash-to-strip"}
+
+   :projection-definition
+   {:id :projection/pro-rata-slash-obligation
+    :version 1
+    :projection-type :pro-rata-allocation
+    :intent-types #{:pro-rata/allocation}
+    :intent-purposes #{:slash-obligation-allocation}
+    :source {:type :world-state}
+    :include-paths [[:resolver-stakes] [:pending-slashes]]
+    :exclude-paths [[:runtime/cache]]
+    :transforms [{:op 'resolver-sim.projection/sort-by-id}]
+    :output {:type :allocation-basis}
+    :claims [{:claim-id :projection-deterministic}]
+    :canonical-hash "self-hash-to-strip"}
+
+   :projection-definition-registry
+   {:registry-version 1
+    :projection-definitions [{:id :projection/world-structure :version 1}]
+    :definition-hashes ["def"]
+    :registry-hash "self-hash-to-strip"}
+
+   :projection-artifact
+   {:schema-version 1
+    :projection-id "proj-1"
+    :projection-type :pro-rata-allocation
+    :projection-version 1
+    :intent {:intent/type :pro-rata/allocation
+             :intent/version 1
+             :intent/purpose :slash-obligation-allocation}
+    :projection-definition-hash "definition-hash"
+    :source {:type :world-state :world-hash "world-hash"}
+    :projection {:liable-parties [{:id :alice :weight 2} {:id :bob :weight 1}]
+                 :observed-at (Instant/ofEpochSecond 0)}
+    :summary {:party-count 2}
+    :claims [{:claim-id :projection-canonical-safe}]
+    :metadata {:debug "not identity"}
+    :projection-hash "self-hash-to-strip"}
+
+   :claim-definition
+   {:id :accounting-consistency
+    :version 1
+    :category :invariant
+    :description "Accounting balances sum correctly"
+    :inputs [:world-state :projection-artifact]
+    :evaluation {:type :pure-predicate
+                 :fn 'resolver-sim.claims/accounting-consistency}
+    :outputs [:passed? :violations]
+    :canonical-hash "self-hash-to-strip"}
+
+   :attestor
+   {:id :github-actions
+    :type :ci-runner
+    :display-name "GitHub Actions"
+    :status :active
+    :verification {:type :public-key
+                   :algorithm :ed25519
+                   :key-id "key-001"
+                   :public-key "abc"}
+    :metadata {:owner :protocol-robustness}
+    :attestor-hash "self-hash-to-strip"}})
+
+(deftest test-phase-1-projection-intents-registered
+  (doseq [intent phase-1-projection-intents]
+    (testing (str intent)
+      (let [contract (hc/resolve-intent intent)]
+        (is (= intent (:intent/name contract)))
+        (is (string? (:intent/domain-tag contract)))
+        (is (fn? (:intent/projection-fn contract)))))))
+
+(deftest test-phase-1-domain-tags-registered
+  (doseq [intent phase-1-projection-intents]
+    (testing (str intent)
+      (let [contract (hc/resolve-intent intent)]
+        (is (= (:intent/domain-tag contract) (get hc/domain-tags intent)))))))
+
+(deftest test-phase-1-projections-produce-canonical-safe-data
+  (doseq [[intent fixture] phase-1-projection-fixtures]
+    (testing (str intent)
+      (let [project-fn (:intent/projection-fn (hc/resolve-intent intent))
+            projection (project-fn fixture intent)]
+        (is (nil? (hc/validate-canonical-value! projection)))
+        (is (= intent (:intent projection)))))))
+
+(deftest test-phase-1-hashes-are-deterministic-and-domain-separated
+  (doseq [[intent fixture] phase-1-projection-fixtures]
+    (testing (str intent)
+      (let [project-fn (:intent/projection-fn (hc/resolve-intent intent))
+            projected (project-fn fixture intent)
+            hash-a (hc/hash-with-intent {:hash/intent intent} fixture)
+            hash-b (hc/hash-with-intent {:hash/intent intent} fixture)
+            other-domain-hash (hc/domain-hash "EVIDENCE_RECORD_V1" projected)]
+        (is (= hash-a hash-b))
+        (is (= 64 (count hash-a)))
+        (is (not= hash-a other-domain-hash))))))
+
+(deftest test-phase-1-self-hash-fields-do-not-affect-artifact-identity
+  (doseq [[intent self-key] {:intent-registry :registry-hash
+                             :projection-definition :canonical-hash
+                             :projection-definition-registry :registry-hash
+                             :projection-artifact :projection-hash
+                             :claim-definition :canonical-hash
+                             :attestor :attestor-hash}]
+    (testing (str intent)
+      (let [fixture (get phase-1-projection-fixtures intent)
+            a (assoc fixture self-key "aaa")
+            b (assoc fixture self-key "bbb")]
+        (is (= (hc/hash-with-intent {:hash/intent intent} a)
+               (hc/hash-with-intent {:hash/intent intent} b)))))))
+
+(deftest test-phase-1-identity-fields-affect-artifact-identity
+  (let [fixture (:projection-artifact phase-1-projection-fixtures)
+        changed (assoc fixture :projection-id "proj-2")]
+    (is (not= (hc/hash-with-intent {:hash/intent :projection-artifact} fixture)
+              (hc/hash-with-intent {:hash/intent :projection-artifact} changed)))))
+
+(deftest test-validate-registry-detects-duplicate-domain-tags
+  (with-redefs [hc/hash-intents (assoc-in hc/hash-intents
+                                          [:attestor :intent/domain-tag]
+                                          "INTENT_DSL_V1")]
     (is (thrown? clojure.lang.ExceptionInfo
                  (hc/validate-registry!)))))
 

@@ -53,7 +53,15 @@
    :evidence-content "EVIDENCE_CONTENT_V1"
    :state-diff       "STATE_DIFF_V1"
    :params-manifest  "PARAMS_MANIFEST_V1"
-   :evm-projection   "EVM_PROJECTION_V1"})
+   :evm-projection   "EVM_PROJECTION_V1"
+   :intent-dsl       "INTENT_DSL_V1"
+   :intent-registry-entry "INTENT_REGISTRY_ENTRY_V1"
+   :intent-registry "INTENT_REGISTRY_V1"
+   :projection-definition "PROJECTION_DEFINITION_V1"
+   :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
+   :projection-artifact "PROJECTION_ARTIFACT_V1"
+   :claim-definition "CLAIM_DEFINITION_V1"
+   :attestor         "ATTESTOR_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -268,89 +276,99 @@
                     {:type (type v) :value v}))))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
+;; Projection Helpers
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn project-identity
+  "Identity projection: pass through unchanged.
+   Accepts optional intent arg (ignored) for hash-with-intent
+   compatibility with the projection-fn calling convention."
+  [x & _]
+  x)
+
+;; ──────────────────────────────────────────────────────────────────────────────
 ;; World State Projection
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;;
-;; Semantic projection that selects the identity-relevant structure from a
-;; simulation world state, transforming runtime and non-canonical types into
-;; canonical-safe representations. Every transformation is explicit and
-;; documented — no fields are silently dropped.
+;; Intent-aware semantic projection. This is NOT generic serialization.
+;; It extracts identity-relevant structure from a simulation world state
+;; for downstream claims, invariants, and projection-based allocation.
 ;;
-;; Transformation rules:
-;;   java.time.Instant   → ISO-8601 string (.toString)
-;;   Double, Float       → deterministic scientific notation (%.17g)
-;;   PersistentHashSet   → sorted vector (deterministic ordering)
-;;   Function / IFn      → :fn keyword (implementation detail marker)
-;;   List, Seq           → vector (for canonical encoding compliance)
-;;   Canonical types     → passed through unchanged
+;; Projection boundary rules:
+;;   PRESERVE (identity-critical):
+;;     - integers, strings, keywords, booleans
+;;     - maps, vectors (structural identity)
+;;   TRANSFORM (canonicalize only):
+;;     - sets              → sorted vectors
+;;     - java.time.Instant → ISO-8601 string
+;;     - Double/Float      → {:type :float64 :value-str "..."}
+;;     - Ratio             → {:type :ratio :value-str "..."}
+;;   REPLACE (structure-only abstraction):
+;;     - functions → {:type :fn}   (structured marker, not bare keyword)
 ;;
-;; The result is a pure canonical value tree suitable for validation via
-;; validate-canonical-value! and encoding via canonical-bytes.
+;; The result is a pure canonical value tree with the intent bound
+;; explicitly: {:intent <kw> :structure <walked-world>}.
 
 (defn project-world-to-structure-view
-  "Project a simulation world state into a deterministic, canonical-safe
-   structure view for content-addressed hashing.
+  "Project world state into a deterministic, canonical-safe structure view.
 
-   This is a *semantic projection*: it selects the identity-relevant
-   structure from the world state, transforming runtime or non-canonical
-   types into their canonical representations. It is NOT a data-cleaning
-   step — it is an intentional identity lens.
+   This is a *semantic projection*, not serialization. It selects
+   identity-relevant structure for downstream claims, invariants, and
+   projection-based allocation systems.
 
-   The projection is idempotent and fully deterministic across JVM
-   invocations. The result passes validate-canonical-value! and is safe
-   to pass directly to canonical-bytes or domain-hash.
+   Intent-aware: the intent keyword is bound into the output, making
+   the projection lens explicit for hash-with-intent and evidence chain
+   reproducibility.
 
-   Identity-critical world state substructures like position maps,
-   risk configurations, token balances, resolver states, and accounting
-   data pass through unchanged. Yield module implementations (:ops
-   functions) are projected to :fn markers — they are simulation
-   infrastructure, not domain state."
-  [world]
+   Projection boundary (what is preserved vs transformed vs replaced):
+     Preserve — integers, strings, keywords, booleans, maps, vectors
+     Transform — sets→sorted-vectors, Instant→ISO-string,
+                 Float/Double→{:type :float64 :value-str \"%.17g\"}
+                 Ratio→{:type :ratio :value-str \"%.17g\"}
+     Replace  — functions→{:type :fn} (structured marker)
+
+   Idempotent and fully deterministic across JVM invocations.
+   Output passes validate-canonical-value! and is safe for canonical-bytes."
+  [world intent]
   (letfn [(walk [x]
             (cond
-              ;; Canonical types — pass through unchanged
+              ;; Primitives — pass through unchanged
               (nil? x) nil
-              (instance? Boolean x) x
-              (instance? Long x) x
-              (instance? Integer x) x
-              (instance? Short x) x
-              (instance? Byte x) x
-              (instance? clojure.lang.BigInt x) x
-              (instance? java.math.BigInteger x) x
-              (instance? String x) x
-              (instance? clojure.lang.Keyword x) x
-              (instance? clojure.lang.IPersistentVector x)
-              (mapv walk x)
-              ;; Map — recurse keys and values; ordering is handled at encode time
-              (instance? clojure.lang.IPersistentMap x)
-              (persistent!
-               (reduce-kv (fn [m k v] (assoc! m (walk k) (walk v)))
-                          (transient {}) x))
-              ;; Set → sorted vector
-              (instance? clojure.lang.IPersistentSet x)
-              (vec (sort (map walk x)))
+              (boolean? x) x
+              (integer? x) x
+              (string? x) x
+              (keyword? x) x
               ;; java.time.Instant → ISO-8601 string
               (instance? java.time.Instant x)
               (.toString x)
-              ;; Double, Float → deterministic scientific notation
+              ;; Double, Float → tagged representation (preserves type identity)
               (instance? Double x)
-              (format "%.17g" (double x))
+              {:type :float64 :value-str (format "%.17g" (double x))}
               (instance? Float x)
-              (format "%.17g" (float x))
-              ;; Ratio — convert to double string (deterministic, portable)
+              {:type :float64 :value-str (format "%.17g" (float x))}
+              ;; Ratio → tagged representation
               (instance? clojure.lang.Ratio x)
-              (format "%.17g" (double x))
-              ;; Function / IFn — simulation infrastructure marker
+              {:type :ratio :value-str (format "%.17g" (double x))}
+              ;; Function → structured marker (NOT lossy :fn atom)
               (fn? x)
-              :fn
-              ;; List, LazySeq, etc. — must be vectors for canonical encoding
-              (sequential? x)
-              (mapv walk x)
+              {:type :fn}
+              ;; Vector — recurse elements
+              (vector? x) (mapv walk x)
+              ;; Map — recurse keys and values; ordering at encode time
+              (map? x)
+              (persistent!
+               (reduce-kv (fn [m k v] (assoc! m (walk k) (walk v)))
+                          (transient {}) x))
+              ;; Set → sorted deterministic vector
+              (set? x) (vec (sort (map walk x)))
+              ;; List, LazySeq, etc. → vector for canonical encoding compliance
+              (sequential? x) (mapv walk x)
               :else
               (throw (ex-info
                       "Cannot project unsupported type to structure view"
                       {:type (type x) :value x}))))]
-    (walk world)))
+    {:intent intent
+     :structure (walk world)}))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Hashing
@@ -400,8 +418,10 @@
   "Project an evidence record into a form suitable for content-addressed
    hashing that survives JSON serialization/deserialization.
    Keywords are converted to strings (matching JSON behavior) and
-   maps are sorted for deterministic ordering."
-  [data]
+   maps are sorted for deterministic ordering.
+   Accepts optional intent arg (ignored) for compatibility with
+   hash-with-intent's projection-fn signature."
+  [data & _]
   (letfn [(walk [v]
             (cond
               (instance? clojure.lang.Keyword v) (name v)
@@ -430,6 +450,109 @@
 ;; machine-readable boundaries, and enables future linting support
 ;; (e.g., check that data being hashed matches declared scope).
 
+(def ^:private self-hash-keys
+  "Fields excluded from artifact self-hash projections.
+   These fields hold the result of hashing the surrounding artifact and must not
+   participate in the hash input."
+  #{:canonical-hash
+    :hash
+    :intent-hash
+    :registry-hash
+    :projection-hash
+    :claim-definition-hash
+    :attestor-hash})
+
+(defn- stable-symbol-name
+  [x]
+  (cond
+    (symbol? x) (str x)
+    (var? x) (str (.-sym ^clojure.lang.Var x))
+    (fn? x) (or (some-> x meta :name str)
+                (.getName (class x)))
+    :else (str x)))
+
+(defn- project-canonical-artifact-value
+  "Project registry/spec artifacts into canonical-safe data.
+   This is intentionally generic and additive: it preserves artifact structure
+   while converting runtime-only values into stable representations."
+  [value]
+  (letfn [(walk [x]
+            (cond
+              (nil? x) nil
+              (boolean? x) x
+              (integer? x) x
+              (string? x) x
+              (keyword? x) x
+              (symbol? x) {:type :symbol :value (stable-symbol-name x)}
+              (instance? java.time.Instant x) (.toString x)
+              (instance? Double x) {:type :float64 :value-str (format "%.17g" (double x))}
+              (instance? Float x) {:type :float64 :value-str (format "%.17g" (float x))}
+              (instance? clojure.lang.Ratio x) {:type :ratio :value-str (format "%.17g" (double x))}
+              (fn? x) {:type :fn :name (stable-symbol-name x)}
+              (var? x) {:type :var :value (stable-symbol-name x)}
+              (vector? x) (mapv walk x)
+              (map? x) (persistent!
+                        (reduce-kv (fn [m k v]
+                                     (assoc! m (walk k) (walk v)))
+                                   (transient {})
+                                   x))
+              (set? x) (vec (sort-by pr-str (map walk x)))
+              (sequential? x) (mapv walk x)
+              :else (throw (ex-info "Cannot project unsupported artifact value"
+                                    {:type (type x) :value x}))))]
+    (walk value)))
+
+(defn- strip-self-hash-fields
+  [value]
+  (if (map? value)
+    (apply dissoc value self-hash-keys)
+    value))
+
+(defn- project-canonical-artifact
+  [value intent]
+  {:intent intent
+   :artifact (project-canonical-artifact-value (strip-self-hash-fields value))})
+
+(defn project-intent-dsl
+  "Canonical projection for INTENT_DSL_SPEC_V1 intent objects."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-intent-registry-entry
+  "Canonical projection for a single registered intent entry."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-intent-registry
+  "Canonical projection for intent registry artifacts."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-projection-definition
+  "Canonical projection for PROJECTION_DEFINITION_REGISTRY_SPEC_V1 entries."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-projection-definition-registry
+  "Canonical projection for projection definition registries."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-projection-artifact
+  "Canonical projection for PROJECTION_ARTIFACT_SPEC_V1 artifacts."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-claim-definition
+  "Canonical projection for CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-attestor
+  "Canonical projection for ATTESTOR_REGISTRY_SPEC_V1 attestor entries."
+  [value intent]
+  (project-canonical-artifact value intent))
+
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
@@ -457,7 +580,7 @@
     :intent/includes    #{:attribution :action :result :context
                           :artifact-kind :temporal-context :sub-hashes}
     :intent/excludes    #{:evidence-hash :timestamp :chain-metadata}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :evidence-content
@@ -476,7 +599,7 @@
     :intent/includes    #{:chain-links :registry-structure :prev-hash
                           :chain-seq :self-hash}
     :intent/excludes    #{:artifact-content :evidence-payload :timestamps}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :manifest
@@ -485,7 +608,7 @@
     :intent/description "Bundle manifest identity for artifact packaging"
     :intent/includes    #{:manifest-metadata :bundle-structure :schema-version}
     :intent/excludes    #{:content-payloads :individual-artifacts}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :bundle-root
@@ -494,7 +617,7 @@
     :intent/description "Top-level benchmark commitment root"
     :intent/includes    #{:benchmark-metadata :root-commitment :bundle-summary}
     :intent/excludes    #{:individual-results :detailed-evidence :traces}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :registry
@@ -503,7 +626,7 @@
     :intent/description "Evidence registry commitment for artifact catalog"
     :intent/includes    #{:registry-index :artifact-catalog :commitment-root}
     :intent/excludes    #{:artifact-content :detailed-evidence :world-state}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :provenance
@@ -512,7 +635,7 @@
     :intent/description "Provenance lineage and verification metadata"
     :intent/includes    #{:provenance-lineage :verification-metadata :links}
     :intent/excludes    #{:raw-evidence-content :world-snapshots}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :evm-projection
@@ -530,7 +653,7 @@
     :intent/description "Structural diff state hash for trace comparisons"
     :intent/includes    #{:diff-changes :path-stripped-values}
     :intent/excludes    #{:before-values :after-values :raw-world-state}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :params-manifest
@@ -539,7 +662,7 @@
     :intent/description "Parameter manifest for multi-epoch reproducibility"
     :intent/includes    #{:sim-params :config-params :run-params}
     :intent/excludes    #{:runtime-state :evidence-data}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :invariant-attestation
@@ -548,7 +671,7 @@
     :intent/description "Per-step invariant attestation: which invariants held, which failed"
     :intent/includes    #{:step :invariants :passed :failed :invariant-set-hash}
     :intent/excludes    #{:full-world-state :action-detail :raw-trace}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :projection-evidence
@@ -557,7 +680,7 @@
     :intent/description "Projection hash paired with world hash for cross-system comparison"
     :intent/includes    #{:step :world-hash :projection-hash :projection-version}
     :intent/excludes    #{:full-world-state :internal-fields}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :checkpoint-evidence
@@ -566,7 +689,7 @@
     :intent/description "Attestable checkpoint with world hash and chain position"
     :intent/includes    #{:checkpoint-id :event-seq :world-hash :chain-head}
     :intent/excludes    #{:full-world-state :trace-detail}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :benchmark-certification
@@ -576,7 +699,87 @@
     :intent/includes    #{:benchmark-id :scenario-count :all-invariants-pass
                           :final-state-hash :evidence-chain-root :invariant-summary}
     :intent/excludes    #{:individual-results :detailed-evidence :traces}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
+    :intent/version     1}
+
+   :intent-dsl
+   {:intent/name        :intent-dsl
+    :intent/domain-tag  "INTENT_DSL_V1"
+    :intent/description "Canonical identity of an INTENT_DSL_SPEC_V1 intent object"
+    :intent/includes    #{:intent/type :intent/version :intent/purpose :intent/scope
+                          :intent/inputs :intent/constraints :intent/output}
+    :intent/excludes    #{:runtime-values :functions}
+    :intent/projection-fn project-intent-dsl
+    :intent/version     1}
+
+   :intent-registry-entry
+   {:intent/name        :intent-registry-entry
+    :intent/domain-tag  "INTENT_REGISTRY_ENTRY_V1"
+    :intent/description "Canonical identity of one registered intent contract"
+    :intent/includes    #{:intent/name :intent/domain-tag :intent/description
+                          :intent/includes :intent/excludes :intent/projection-fn
+                          :intent/version}
+    :intent/excludes    #{:runtime-values}
+    :intent/projection-fn project-intent-registry-entry
+    :intent/version     1}
+
+   :intent-registry
+   {:intent/name        :intent-registry
+    :intent/domain-tag  "INTENT_REGISTRY_V1"
+    :intent/description "Canonical identity of an intent registry artifact"
+    :intent/includes    #{:registry-version :intent-definitions :intent-hashes}
+    :intent/excludes    #{:registry-hash :runtime-values}
+    :intent/projection-fn project-intent-registry
+    :intent/version     1}
+
+   :projection-definition
+   {:intent/name        :projection-definition
+    :intent/domain-tag  "PROJECTION_DEFINITION_V1"
+    :intent/description "Canonical identity of one projection definition"
+    :intent/includes    #{:id :version :projection-type :intent-types :intent-purposes
+                          :source :include-paths :exclude-paths :transforms
+                          :output :claims}
+    :intent/excludes    #{:canonical-hash :runtime-values :functions}
+    :intent/projection-fn project-projection-definition
+    :intent/version     1}
+
+   :projection-definition-registry
+   {:intent/name        :projection-definition-registry
+    :intent/domain-tag  "PROJECTION_DEFINITION_REGISTRY_V1"
+    :intent/description "Canonical identity of a projection definition registry artifact"
+    :intent/includes    #{:registry-version :projection-definitions :definition-hashes}
+    :intent/excludes    #{:registry-hash :runtime-values}
+    :intent/projection-fn project-projection-definition-registry
+    :intent/version     1}
+
+   :projection-artifact
+   {:intent/name        :projection-artifact
+    :intent/domain-tag  "PROJECTION_ARTIFACT_V1"
+    :intent/description "Canonical identity of a projection artifact excluding its self hash"
+    :intent/includes    #{:schema-version :projection-id :projection-type
+                          :projection-version :intent :projection-definition-hash
+                          :source :projection :claims}
+    :intent/excludes    #{:projection-hash :metadata :runtime-values}
+    :intent/projection-fn project-projection-artifact
+    :intent/version     1}
+
+   :claim-definition
+   {:intent/name        :claim-definition
+    :intent/domain-tag  "CLAIM_DEFINITION_V1"
+    :intent/description "Canonical identity of one claim definition"
+    :intent/includes    #{:id :version :category :description :inputs
+                          :evaluation :outputs}
+    :intent/excludes    #{:canonical-hash :runtime-values :functions}
+    :intent/projection-fn project-claim-definition
+    :intent/version     1}
+
+   :attestor
+   {:intent/name        :attestor
+    :intent/domain-tag  "ATTESTOR_V1"
+    :intent/description "Canonical identity of one attestor registry entry"
+    :intent/includes    #{:id :type :display-name :status :verification}
+    :intent/excludes    #{:attestor-hash :runtime-values :private-keys}
+    :intent/projection-fn project-attestor
     :intent/version     1}
 
    :decision-evidence
@@ -586,7 +789,7 @@
     :intent/includes    #{:decision-id :step :alternatives :selected :reasoning
                           :caller :workflow-id}
     :intent/excludes    #{:full-world-state :trace-detail :internal-fields}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}
 
    :invariant-failure
@@ -595,7 +798,7 @@
     :intent/description "Evidence recorded when an invariant check fails and halts the simulation"
     :intent/includes    #{:step :scenario-id :invariant-ids :details :halt-reason}
     :intent/excludes    #{:full-world-state :raw-trace :internal-state}
-    :intent/projection-fn identity
+    :intent/projection-fn project-identity
     :intent/version     1}})
 
 (defn resolve-intent
@@ -611,21 +814,22 @@
 
 (defn validate-registry!
   "Validate the intent registry against INTENT_REGISTRY_SPEC_V1.
-   Checks that every contract has all required fields with correct types.
+   Checks that every contract has all required fields with correct types,
+   unique domain tags, and projection functions that return canonical-safe data.
    Returns nil if valid, throws on first violation.
    Call at startup or in test fixtures to ensure registry integrity."
   []
-  (doseq [[kw contract] hash-intents]
-    (let [expected-fields [:intent/name :intent/domain-tag :intent/description
-                           :intent/includes :intent/excludes
-                           :intent/projection-fn :intent/version]
-          field-types {:intent/name         keyword?
-                       :intent/domain-tag   string?
-                       :intent/description  string?
-                       :intent/includes     set?
-                       :intent/excludes     set?
-                       :intent/projection-fn fn?
-                       :intent/version      (every-pred integer? pos?)}]
+  (let [expected-fields [:intent/name :intent/domain-tag :intent/description
+                         :intent/includes :intent/excludes
+                         :intent/projection-fn :intent/version]
+        field-types {:intent/name         keyword?
+                     :intent/domain-tag   string?
+                     :intent/description  string?
+                     :intent/includes     set?
+                     :intent/excludes     set?
+                     :intent/projection-fn fn?
+                     :intent/version      (every-pred integer? pos?)}]
+    (doseq [[kw contract] hash-intents]
       (doseq [f expected-fields]
         (when-not (contains? contract f)
           (throw (ex-info (str "Intent " kw " missing required field " f)
@@ -633,7 +837,34 @@
       (doseq [[f pred] field-types]
         (when-not (pred (get contract f))
           (throw (ex-info (str "Intent " kw " field " f " has wrong type")
-                          {:intent kw :field f :value (get contract f)})))))))
+                          {:intent kw :field f :value (get contract f)}))))
+      (when-not (= kw (:intent/name contract))
+        (throw (ex-info "Intent registry key must match :intent/name"
+                        {:intent kw :intent/name (:intent/name contract)})))
+      (let [projection ((:intent/projection-fn contract) {:sample [:a :b]
+                                                          :n 1}
+                                                         kw)]
+        (try
+          (validate-canonical-value! projection)
+          (catch Exception e
+            (throw (ex-info "Intent projection must produce canonical-safe data"
+                            {:intent kw
+                             :projection projection
+                             :cause (.getMessage e)}
+                            e))))))
+    (let [tag->intents (reduce-kv (fn [acc kw contract]
+                                    (update acc (:intent/domain-tag contract) (fnil conj []) kw))
+                                  {}
+                                  hash-intents)]
+      (doseq [[tag intents] tag->intents]
+        (when (< 1 (count intents))
+          (throw (ex-info "Intent domain tags must be unique"
+                          {:domain-tag tag :intents intents})))))
+    nil))
+
+(def ^:private registry-startup-validation
+  "Forces intent registry validation when this namespace is loaded."
+  (validate-registry!))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Intent Constraint Enforcement
@@ -805,4 +1036,4 @@
   (let [{:intent/keys [projection-fn domain-tag]} (resolve-intent intent)]
     (when *validate-intent-constraints*
       (validate-intent-constraints! intent value))
-    (domain-hash domain-tag (projection-fn value))))
+    (domain-hash domain-tag (projection-fn value intent))))

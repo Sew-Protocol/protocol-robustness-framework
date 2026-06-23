@@ -95,7 +95,7 @@
   [:span {:style (merge status-badge-base-style (kind-badge-style "Expected negative"))} "Expected negative"]
   " "
   [:span {:style (merge status-badge-base-style (kind-badge-style "Missing data"))} "Missing data"]
-  "."]
+  "."])
 ;; ---
 
 ;; ## Style Layer
