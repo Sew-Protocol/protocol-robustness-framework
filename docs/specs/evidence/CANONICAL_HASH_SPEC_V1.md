@@ -312,8 +312,39 @@ Registered Contracts:
 | :registry           | registry-index, artifact-catalog, commitment-root              | artifact-content, detailed-evidence, world-state          |
 | :provenance         | provenance-lineage, verification-metadata, links               | raw-evidence-content, world-snapshots                     |
 
-11.6 Implementation Reference
+11.6 Attestor Registry Projection
+Domain: ATTESTOR_V1
+
+The `:attestor` intent defines the canonical identity of one attestor registry
+entry for registry-backed attestation verification.
+
+Purpose:
+    • identify the stable attestor identity and verification surface
+    • support audit-grade attestation verification against the registry
+    • exclude presentation-only and runtime-only data from canonical identity
+
+Canonical projection fields:
+    • :id
+    • :type
+    • :status
+    • :verification
+    • :delegates
+    • :key-history
+
+Excluded from the projection:
+    • :canonical-hash
+    • :attestor-hash
+    • display metadata and non-identity metadata
+    • transient runtime state
+    • cached verification data
+
+If `:delegates` or `:key-history` are absent in source data, they SHALL be
+projected as empty vectors so the attestor projection remains explicit and
+stable across implementations.
+
+11.7 Implementation Reference
 Clojure reference implementation: `resolver-sim.hash.canonical/project-world-to-structure-view`
+Attestor projection: `resolver-sim.hash.canonical/project-attestor`
 Intent-based API: `resolver-sim.hash.canonical/hash-with-intent`
 Contract lookup: `resolver-sim.hash.canonical/resolve-intent`
 See `hash-intents` for all supported intents and their projections.

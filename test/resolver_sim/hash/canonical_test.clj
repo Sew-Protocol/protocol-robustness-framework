@@ -2,6 +2,9 @@
   (:require [clojure.test :refer :all]
             [clojure.data.json :as json]
             [clojure.set :as set]
+            [clojure.test.check :as tc]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [resolver-sim.hash.canonical :as hc])
   (:import [java.util Arrays]
            [java.security MessageDigest]
@@ -679,6 +682,231 @@
     (is (not= (hc/hash-with-intent {:hash/intent :projection-artifact} fixture)
               (hc/hash-with-intent {:hash/intent :projection-artifact} changed)))))
 
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Claim Definition Projection Property Tests
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn- claim-def-fixture
+  ([] (claim-def-fixture {}))
+  ([overrides]
+   (merge {:id :test-claim
+           :version 1
+           :category :invariant
+           :description "Test claim"
+           :inputs [:world-state]
+           :evaluation {:type :pure-predicate :fn 'test-claims/check}
+           :outputs [:passed? :violations]}
+          overrides)))
+
+(deftest test-claim-definition-projection-includes-required-fields
+  (let [fixture (claim-def-fixture)
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (= :test-claim (:id projected)))
+    (is (= 1 (:version projected)))
+    (is (= :invariant (:category projected)))
+    (is (= [:world-state] (:inputs projected)))
+    (is (= {:type :pure-predicate :fn {:type :symbol :value "test-claims/check"}}
+           (:evaluation projected)))
+    (is (= [:passed? :violations] (:outputs projected)))))
+
+(deftest test-claim-definition-projection-excludes-description
+  (let [fixture (claim-def-fixture)
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (nil? (:description projected))
+        "Description must not be part of canonical identity")))
+
+(deftest test-claim-definition-projection-excludes-canonical-hash
+  (let [fixture (claim-def-fixture {:canonical-hash "abc123"})
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (nil? (:canonical-hash projected))
+        "Self hash field must not be part of canonical identity")))
+
+(deftest test-claim-definition-projection-includes-depends-on-when-present
+  (let [fixture (claim-def-fixture {:depends-on [:projection-deterministic]})
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (= [:projection-deterministic] (:depends-on projected))
+        "depends-on must be included in projection when present")))
+
+(deftest test-claim-definition-projection-excludes-depends-on-when-absent
+  (let [fixture (claim-def-fixture)
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (nil? (:depends-on projected))
+        "depends-on must not appear in projection when absent from source")))
+
+(deftest test-claim-definition-hash-deterministic
+  (let [fixture (claim-def-fixture)
+        h1 (hc/hash-with-intent {:hash/intent :claim-definition} fixture)
+        h2 (hc/hash-with-intent {:hash/intent :claim-definition} fixture)]
+    (is (= h1 h2))))
+
+(deftest test-claim-definition-hash-identical-for-identical-inputs
+  (let [a (claim-def-fixture)
+        b (claim-def-fixture)]
+    (is (= (hc/hash-with-intent {:hash/intent :claim-definition} a)
+           (hc/hash-with-intent {:hash/intent :claim-definition} b)))))
+
+(deftest test-claim-definition-hash-changes-on-semantic-change
+  (let [base (claim-def-fixture)
+        different-id (assoc base :id :other-claim)
+        different-version (assoc base :version 2)
+        different-category (assoc base :category :safety)
+        different-inputs (assoc base :inputs [:projection-artifact])
+        different-outputs (assoc base :outputs [:passed?])
+        base-hash (hc/hash-with-intent {:hash/intent :claim-definition} base)]
+    (is (not= base-hash (hc/hash-with-intent {:hash/intent :claim-definition} different-id)))
+    (is (not= base-hash (hc/hash-with-intent {:hash/intent :claim-definition} different-version)))
+    (is (not= base-hash (hc/hash-with-intent {:hash/intent :claim-definition} different-category)))
+    (is (not= base-hash (hc/hash-with-intent {:hash/intent :claim-definition} different-inputs)))
+    (is (not= base-hash (hc/hash-with-intent {:hash/intent :claim-definition} different-outputs)))))
+
+(deftest test-claim-definition-hash-not-affected-by-key-ordering
+  (let [a (claim-def-fixture)
+        ;; Same content, different insertion order
+        b (into {} (reverse (seq a)))]
+    (is (= (hc/hash-with-intent {:hash/intent :claim-definition} a)
+           (hc/hash-with-intent {:hash/intent :claim-definition} b)))))
+
+(deftest test-claim-definition-hash-not-affected-by-metadata
+  (let [base (claim-def-fixture)
+        with-meta (assoc base :generated-at "2026-06-23T00:00:00Z"
+                         :display-name "Test Display"
+                         :notes "some notes")]
+    (is (= (hc/hash-with-intent {:hash/intent :claim-definition} base)
+           (hc/hash-with-intent {:hash/intent :claim-definition} with-meta)))))
+
+(deftest test-claim-definition-hash-changes-when-depends-on-changes
+  (let [a (claim-def-fixture {:depends-on [:proj-a]})
+        b (claim-def-fixture {:depends-on [:proj-b]})]
+    (is (not= (hc/hash-with-intent {:hash/intent :claim-definition} a)
+              (hc/hash-with-intent {:hash/intent :claim-definition} b)))))
+
+(deftest test-claim-definition-hash-domain-separated
+  (let [fixture (claim-def-fixture)
+        claim-hash (hc/hash-with-intent {:hash/intent :claim-definition} fixture)
+        other-hash (hc/hash-with-intent {:hash/intent :attestor} fixture)]
+    (is (not= claim-hash other-hash))
+    (is (not= claim-hash (hc/hash-with-intent {:hash/intent :projection-definition} fixture)))))
+
+(defn- attestor-fixture
+  ([] (attestor-fixture {}))
+  ([overrides]
+   (merge {:id :ci-validation
+           :version 1
+           :type :ci-runner
+           :display-name "CI validation runner"
+           :status :active
+           :verification {:type :public-key
+                          :algorithm :ed25519
+                          :key-id "ci-validation-v1"
+                          :public-key "ci-validation-placeholder-public-key"}
+           :delegates [{:id :ci-validation-signing-key
+                        :status :active}]
+           :key-history [{:key-id "ci-validation-v0"
+                          :status :retired}
+                         {:key-id "ci-validation-v1"
+                          :status :active}]
+           :attestor-hash "self-hash-placeholder"
+           :canonical-hash "legacy-self-hash-placeholder"
+           :cached-verification-data {:last-checked-at "2026-06-23T00:00:00Z"
+                                      :verification-result :ok}
+           :runtime-state {:pid 42}
+           :metadata {:intended-use #{:validation :attestation}}}
+          overrides)))
+
+(defn- reorder-map
+  [m]
+  (into {} (reverse (seq m))))
+
+(deftest test-attestor-projection-includes-canonical-fields-only
+  (let [fixture (attestor-fixture)
+        projected (:artifact (hc/project-attestor fixture :attestor))]
+    (is (= #{:id :type :status :verification :delegates :key-history}
+           (set (keys projected))))
+    (is (= :ci-validation (:id projected)))
+    (is (= :ci-runner (:type projected)))
+    (is (= :active (:status projected)))
+    (is (= [{:id :ci-validation-signing-key :status :active}]
+           (:delegates projected)))
+    (is (= [{:key-id "ci-validation-v0" :status :retired}
+            {:key-id "ci-validation-v1" :status :active}]
+           (:key-history projected)))
+    (is (nil? (:display-name projected)))
+    (is (nil? (:metadata projected)))
+    (is (nil? (:attestor-hash projected)))
+    (is (nil? (:canonical-hash projected)))
+    (is (nil? (:cached-verification-data projected)))
+    (is (nil? (:runtime-state projected)))))
+
+(deftest test-attestor-projection-normalizes-missing-collections
+  (let [fixture (-> (attestor-fixture)
+                    (dissoc :delegates)
+                    (dissoc :key-history))
+        projected (:artifact (hc/project-attestor fixture :attestor))]
+    (is (= [] (:delegates projected)))
+    (is (= [] (:key-history projected)))))
+
+(deftest attestor-hash-stable-under-map-ordering-changes
+  (let [p (prop/for-all [key-id gen/string-alphanumeric
+                         public-key gen/string-alphanumeric
+                         delegate-id gen/string-alphanumeric]
+                        (let [base (attestor-fixture
+                                    {:verification {:type :public-key
+                                                    :algorithm :ed25519
+                                                    :key-id key-id
+                                                    :public-key public-key}
+                                     :delegates [{:id delegate-id
+                                                  :status :active}]
+                                     :key-history [{:key-id "v0" :status :retired}
+                                                   {:key-id key-id :status :active}]})
+                              reordered (-> base
+                                            (update :verification reorder-map)
+                                            (update :delegates #(mapv reorder-map %))
+                                            (update :key-history #(mapv reorder-map %))
+                                            reorder-map)]
+                          (= (hc/hash-with-intent {:hash/intent :attestor} base)
+                             (hc/hash-with-intent {:hash/intent :attestor} reordered))))
+        result (tc/quick-check 50 p)]
+    (is (:pass? result) (pr-str result))))
+
+(deftest attestor-hash-changes-when-verification-keys-change
+  (let [p (prop/for-all [key-a (gen/such-that seq gen/string-alphanumeric)
+                         key-b (gen/such-that seq gen/string-alphanumeric)]
+                        (if (= key-a key-b)
+                          true
+                          (let [base (attestor-fixture {:verification {:type :public-key
+                                                                       :algorithm :ed25519
+                                                                       :key-id "ci-validation-v1"
+                                                                       :public-key key-a}})
+                                changed (attestor-fixture {:verification {:type :public-key
+                                                                          :algorithm :ed25519
+                                                                          :key-id "ci-validation-v1"
+                                                                          :public-key key-b}})]
+                            (not= (hc/hash-with-intent {:hash/intent :attestor} base)
+                                  (hc/hash-with-intent {:hash/intent :attestor} changed)))))
+        result (tc/quick-check 50 p)]
+    (is (:pass? result) (pr-str result))))
+
+(deftest attestor-hash-changes-when-delegates-change
+  (let [p (prop/for-all [delegate-a (gen/such-that seq gen/string-alphanumeric)
+                         delegate-b (gen/such-that seq gen/string-alphanumeric)]
+                        (if (= delegate-a delegate-b)
+                          true
+                          (let [base (attestor-fixture {:delegates [{:id delegate-a :status :active}]})
+                                changed (attestor-fixture {:delegates [{:id delegate-b :status :active}]})]
+                            (not= (hc/hash-with-intent {:hash/intent :attestor} base)
+                                  (hc/hash-with-intent {:hash/intent :attestor} changed)))))
+        result (tc/quick-check 50 p)]
+    (is (:pass? result) (pr-str result))))
+
+(deftest attestor-hash-changes-when-status-changes
+  (let [p (prop/for-all [status (gen/elements [:revoked :retired])]
+                        (not= (hc/hash-with-intent {:hash/intent :attestor}
+                                                   (attestor-fixture {:status :active}))
+                              (hc/hash-with-intent {:hash/intent :attestor}
+                                                   (attestor-fixture {:status status}))))
+        result (tc/quick-check 50 p)]
+    (is (:pass? result) (pr-str result))))
+
 (deftest test-validate-registry-detects-duplicate-domain-tags
   (with-redefs [hc/hash-intents (assoc-in hc/hash-intents
                                           [:attestor :intent/domain-tag]
@@ -689,6 +917,20 @@
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; New Intent Contract Tests (Evidence Layers 2, 7, 8, 9)
 ;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-validate-registry-detects-unregistered-domain-tags
+  (with-redefs [hc/domain-tags (dissoc hc/domain-tags :attestor)]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
+
+(deftest test-validate-registry-detects-nondeterministic-projections
+  (with-redefs [hc/hash-intents (assoc-in hc/hash-intents
+                                          [:attestor :intent/projection-fn]
+                                          (fn [_ intent]
+                                            {:intent intent
+                                             :artifact {:nonce (str (java.util.UUID/randomUUID))}}))]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (hc/validate-registry!)))))
 
 (deftest test-invariant-attestation-intent
   (let [contract (hc/resolve-intent :invariant-attestation)]

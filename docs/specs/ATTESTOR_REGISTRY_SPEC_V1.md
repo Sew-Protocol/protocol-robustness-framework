@@ -193,20 +193,43 @@ Startup SHALL fail if:
 
 ## 10. Hashing
 
-Canonical hash SHALL exclude:
+Purpose:
 
-```clojure
-:canonical-hash
+The attestor canonical hash identifies the stable attestation-verification
+surface of one attestor registry entry. It is used for registry-backed
+validation, auditability, and replay-safe attestation verification.
+
+Hashing domain tag:
+
+```text
+ATTESTOR_V1
 ```
 
-Canonical hash SHALL include:
+Canonical projection SHALL include exactly:
 
 ```clojure
 :id
 :type
 :status
 :verification
+:delegates
+:key-history
 ```
+
+Canonical projection SHALL exclude:
+
+```clojure
+:canonical-hash
+:attestor-hash
+:display-name
+:metadata
+```
+
+It SHALL also exclude transient runtime state and cached verification data.
+
+If `:delegates` or `:key-history` are absent in source data, implementations
+SHALL project them as empty vectors so the projected attestor shape remains
+explicit and deterministic.
 
 ------
 

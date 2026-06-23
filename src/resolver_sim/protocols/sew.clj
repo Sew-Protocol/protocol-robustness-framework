@@ -820,12 +820,12 @@
                              {:ok true :new-resolver new-resolver}
                              {:ok false :error :escalation-not-allowed}))))]
       {:agent-index          (into {} (map (juxt :id identity) agents))
-        :snapshot             snapshot
-        :escalation-fn        esc-fn
-        :resolution-module-fn rm-fn
-        :resolution-level-map level-map
-        :temporal-rules       (sew-temporal-rules)
-        :governance-mode      (get pp :governance-mode :restricted)}))
+       :snapshot             snapshot
+       :escalation-fn        esc-fn
+       :resolution-module-fn rm-fn
+       :resolution-level-map level-map
+       :temporal-rules       (sew-temporal-rules)
+       :governance-mode      (get pp :governance-mode :restricted)}))
 
   (dispatch-action [_ context world event]
     (let [flags       (:replay-flags context {})

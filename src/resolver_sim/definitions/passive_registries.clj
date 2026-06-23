@@ -312,6 +312,8 @@
           :status :active
           :verification {:type :local-process
                          :trust-boundary :developer-workstation}
+          :delegates []
+          :key-history []
           :metadata {:intended-use #{:tests :local-replay}}}
          {:id :ci-validation
           :version 1
@@ -322,6 +324,12 @@
                          :algorithm :ed25519
                          :key-id "ci-validation-placeholder"
                          :public-key "ci-validation-placeholder-public-key"}
+          :delegates [{:id :ci-validation-signing-key
+                       :status :active}]
+          :key-history [{:key-id "ci-validation-v0"
+                         :status :retired}
+                        {:key-id "ci-validation-placeholder"
+                         :status :active}]
           :metadata {:intended-use #{:validation :attestation}}}]))
 
 (def attestor-registry
@@ -684,7 +692,6 @@
     ([] (validate-all-registries!))
     ([{:keys [_strict?]}]
      (validate-all-registries!))))
-
 
 ;; ── Startup validation ─────────────────────────────────────────────────
 ;; Runs when this namespace is loaded.

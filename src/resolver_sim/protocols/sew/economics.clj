@@ -229,5 +229,5 @@
                              :owed (+ allocated unmet)
                              :paid allocated
                              :unmet unmet})
-                           (:allocations generic))})))
+                          (:allocations generic))})))
 

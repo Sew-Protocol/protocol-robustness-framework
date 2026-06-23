@@ -54,6 +54,10 @@
    :state-diff       "STATE_DIFF_V1"
    :params-manifest  "PARAMS_MANIFEST_V1"
    :evm-projection   "EVM_PROJECTION_V1"
+   :invariant-attestation "INVARIANT_ATTESTATION_V1"
+   :projection-evidence "PROJECTION_EVIDENCE_V1"
+   :checkpoint-evidence "CHECKPOINT_EVIDENCE_V1"
+   :benchmark-certification "BENCHMARK_CERTIFICATION_V1"
    :intent-dsl       "INTENT_DSL_V1"
    :intent-registry-entry "INTENT_REGISTRY_ENTRY_V1"
    :intent-registry "INTENT_REGISTRY_V1"
@@ -61,8 +65,10 @@
    :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
    :projection-artifact "PROJECTION_ARTIFACT_V1"
    :claim-definition "CLAIM_DEFINITION_V1"
-    :attestor         "ATTESTOR_V1"
-    :startup-validation "STARTUP_VALIDATION_V1"})
+   :attestor         "ATTESTOR_V1"
+   :decision-evidence "DECISION_EVIDENCE_V1"
+   :invariant-failure "INVARIANT_FAILURE_V1"
+   :startup-validation "STARTUP_VALIDATION_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -545,14 +551,42 @@
   (project-canonical-artifact value intent))
 
 (defn project-claim-definition
-  "Canonical projection for CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries."
+  "Canonical projection for CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries.
+   Includes only the fields that define claim identity:
+     :id, :version, :category, :inputs, :evaluation, :outputs
+   Optionally includes :depends-on if present in the source value.
+   Excludes :canonical-hash, runtime state, cached values, and generated metadata.
+   Non-canonical types (symbols, vars, fns) are projected to canonical-safe
+   representations via project-canonical-artifact-value."
   [value intent]
-  (project-canonical-artifact value intent))
+  (let [keep-keys [:id :version :category :inputs :evaluation :outputs]
+        artifact (select-keys value keep-keys)
+        artifact (if (contains? value :depends-on)
+                   (assoc artifact :depends-on (:depends-on value))
+                   artifact)
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
 
 (defn project-attestor
-  "Canonical projection for ATTESTOR_REGISTRY_SPEC_V1 attestor entries."
+  "Canonical projection for ATTESTOR_REGISTRY_SPEC_V1 attestor entries.
+   Purpose: hash the stable attestor identity and verification surface only.
+   Includes exactly:
+     :id, :type, :status, :verification, :delegates, :key-history
+   Excludes self-hash fields, display/metadata fields, transient runtime state,
+   and cached verification data.
+   Missing :delegates or :key-history are normalized to empty vectors so the
+   projection shape remains explicit and deterministic."
   [value intent]
-  (project-canonical-artifact value intent))
+  (let [artifact {:id (:id value)
+                  :type (:type value)
+                  :status (:status value)
+                  :verification (:verification value)
+                  :delegates (vec (or (:delegates value) []))
+                  :key-history (vec (or (:key-history value) []))}
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
 
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
@@ -768,18 +802,20 @@
    {:intent/name        :claim-definition
     :intent/domain-tag  "CLAIM_DEFINITION_V1"
     :intent/description "Canonical identity of one claim definition"
-    :intent/includes    #{:id :version :category :description :inputs
-                          :evaluation :outputs}
-    :intent/excludes    #{:canonical-hash :runtime-values :functions}
+    :intent/includes    #{:id :version :category :inputs
+                          :evaluation :outputs :depends-on}
+    :intent/excludes    #{:canonical-hash :runtime-values :functions
+                          :cached-values :generated-metadata :description}
     :intent/projection-fn project-claim-definition
-    :intent/version     1}
+    :intent/version     2}
 
    :attestor
    {:intent/name        :attestor
     :intent/domain-tag  "ATTESTOR_V1"
     :intent/description "Canonical identity of one attestor registry entry"
-    :intent/includes    #{:id :type :display-name :status :verification}
-    :intent/excludes    #{:attestor-hash :runtime-values :private-keys}
+    :intent/includes    #{:id :type :status :verification :delegates :key-history}
+    :intent/excludes    #{:canonical-hash :attestor-hash :display-name :metadata
+                          :runtime-values :cached-verification-data :private-keys}
     :intent/projection-fn project-attestor
     :intent/version     1}
 
@@ -851,17 +887,27 @@
       (when-not (= kw (:intent/name contract))
         (throw (ex-info "Intent registry key must match :intent/name"
                         {:intent kw :intent/name (:intent/name contract)})))
-      (let [projection ((:intent/projection-fn contract) {:sample [:a :b]
-                                                          :n 1}
-                                                         kw)]
+      (let [sample {:sample [:a :b]
+                    :n 1}
+            projection-a ((:intent/projection-fn contract) sample kw)
+            projection-b ((:intent/projection-fn contract) sample kw)]
         (try
-          (validate-canonical-value! projection)
+          (validate-canonical-value! projection-a)
           (catch Exception e
             (throw (ex-info "Intent projection must produce canonical-safe data"
                             {:intent kw
-                             :projection projection
+                             :projection projection-a
                              :cause (.getMessage e)}
-                            e))))))
+                            e))))
+        (when (not= projection-a projection-b)
+          (throw (ex-info "Intent projection must be deterministic"
+                          {:intent kw
+                           :projection-a projection-a
+                           :projection-b projection-b})))
+        (when-not ((set (vals domain-tags)) (:intent/domain-tag contract))
+          (throw (ex-info "Intent domain tag must be registered in domain-tags"
+                          {:intent kw
+                           :domain-tag (:intent/domain-tag contract)})))))
     (let [tag->intents (reduce-kv (fn [acc kw contract]
                                     (update acc (:intent/domain-tag contract) (fnil conj []) kw))
                                   {}
