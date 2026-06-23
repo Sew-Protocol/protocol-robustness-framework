@@ -10,7 +10,9 @@
      1. Add a require above.
      2. Add an entry to phase-runners.
      3. Add a cli-option entry in core.cli."
-  (:require [resolver-sim.io.params   :as params]
+  (:require [clojure.string :as str]
+            [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.io.params   :as params]
             [resolver-sim.io.results  :as results]
             [resolver-sim.sim.batch   :as batch]
             [resolver-sim.sim.sweep   :as sweep]
@@ -116,71 +118,90 @@
 ;; ---------------------------------------------------------------------------
 
 (defn run-simulation [params output-dir]
-  (let [scenario-id (sid/validate-scenario-id! (:scenario-id params "unnamed"))
-        run-dir (results/create-run-directory output-dir scenario-id)
-        rng (rng/make-rng (:rng-seed params))
+  (ev-node/with-execution-node
+    {:execution-id :execution/simulation
+     :inputs {:params params
+              :output-dir output-dir}
+     :outputs-fn (fn [batch-result]
+                   {:scenario-id (:scenario-id params "unnamed")
+                    :output-dir output-dir
+                    :result batch-result})}
+    (fn []
+      (let [scenario-id (sid/validate-scenario-id! (:scenario-id params "unnamed"))
+            run-dir (results/create-run-directory output-dir scenario-id)
+            rng (rng/make-rng (:rng-seed params))
 
-        _ (println (format "\n📊 Running simulation: %s" scenario-id))
-        _ (println (format "   Seed: %d" (:rng-seed params)))
-        _ (println (format "   Trials: %d" (:n-trials params)))
+            _ (println (format "\n📊 Running simulation: %s" scenario-id))
+            _ (println (format "   Seed: %d" (:rng-seed params)))
+            _ (println (format "   Trials: %d" (:n-trials params)))
 
-        batch-result (batch/run-batch rng (:n-trials params) params)
+            batch-result (batch/run-batch rng (:n-trials params) params)
 
-        _ (println "\n✓ Simulation complete. Results:")
-        _ (println (format "   Honest avg profit: %.2f" (:honest-mean batch-result)))
-        _ (println (format "   Malice avg profit: %.2f" (:malice-mean batch-result)))
-        _ (println (format "   Dominance ratio: %.2f" (:dominance-ratio batch-result)))]
+            _ (println "\n✓ Simulation complete. Results:")
+            _ (println (format "   Honest avg profit: %.2f" (:honest-mean batch-result)))
+            _ (println (format "   Malice avg profit: %.2f" (:malice-mean batch-result)))
+            _ (println (format "   Dominance ratio: %.2f" (:dominance-ratio batch-result)))]
 
-    (results/write-edn (format "%s/summary.edn" run-dir) batch-result)
-    (results/write-csv (format "%s/results.csv" run-dir) [batch-result])
-    (results/write-run-metadata (format "%s/metadata.edn" run-dir)
-                                {:scenario-id scenario-id
-                                 :params params
-                                 :batch-result batch-result})
+        (results/write-edn (format "%s/summary.edn" run-dir) batch-result)
+        (results/write-csv (format "%s/results.csv" run-dir) [batch-result])
+        (results/write-run-metadata (format "%s/metadata.edn" run-dir)
+                                    {:scenario-id scenario-id
+                                     :params params
+                                     :batch-result batch-result})
 
-    (println (format "\n💾 Results saved to: %s" run-dir))
-    batch-result))
+        (println (format "\n💾 Results saved to: %s" run-dir))
+        batch-result))))
 
 (defn run-sweep [params output-dir]
-  (let [scenario-id       (:scenario-id params "unnamed")
-        custom-sweep-params (:sweep-params params)
-        run-dir (results/create-run-directory output-dir (str scenario-id "-sweep"))
+  (ev-node/with-execution-node
+    {:execution-id :execution/batch
+     :inputs {:params params
+              :output-dir output-dir}
+     :outputs-fn (fn [results-list]
+                   {:scenario-id (:scenario-id params "unnamed")
+                    :output-dir output-dir
+                    :result-count (count results-list)
+                    :results results-list})}
+    (fn []
+      (let [scenario-id       (:scenario-id params "unnamed")
+            custom-sweep-params (:sweep-params params)
+            run-dir (results/create-run-directory output-dir (str scenario-id "-sweep"))
 
-        _ (if custom-sweep-params
-            (println (format "\n📊 Running parameter sweep: %s" scenario-id))
-            (println (format "\n📊 Running strategy sweep: %s" scenario-id)))
-        _ (println (format "   Seed: %d" (:rng-seed params)))
-        _ (println (format "   Trials per combo: %d" (:n-trials params)))
+            _ (if custom-sweep-params
+                (println (format "\n📊 Running parameter sweep: %s" scenario-id))
+                (println (format "\n📊 Running strategy sweep: %s" scenario-id)))
+            _ (println (format "   Seed: %d" (:rng-seed params)))
+            _ (println (format "   Trials per combo: %d" (:n-trials params)))
 
-        results-list (if custom-sweep-params
-                       (sweep/run-parameter-sweep params (:rng-seed params) custom-sweep-params)
-                       (sweep/run-strategy-sweep  params (:rng-seed params)))]
+            results-list (if custom-sweep-params
+                           (sweep/run-parameter-sweep params (:rng-seed params) custom-sweep-params)
+                           (sweep/run-strategy-sweep  params (:rng-seed params)))]
 
-    (println (format "\n✓ Sweep complete. %d results:" (count results-list)))
-    (if custom-sweep-params
-      (doseq [result results-list]
-        (let [param-str (->> custom-sweep-params
-                             keys
-                             (map #(format "%s=%s" (name %) (get result %)))
-                             (clojure.string/join " "))]
-          (println (format "   %s: honest=%.2f, malice=%.2f, ratio=%.2f"
-                           param-str (:honest-mean result) (:malice-mean result)
-                           (:dominance-ratio result)))))
-      (doseq [result results-list]
-        (println (format "   %s: honest=%.2f, malice=%.2f, ratio=%.2f"
-                         (:strategy result) (:honest-mean result) (:malice-mean result)
-                         (:dominance-ratio result)))))
+        (println (format "\n✓ Sweep complete. %d results:" (count results-list)))
+        (if custom-sweep-params
+          (doseq [result results-list]
+            (let [param-str (->> custom-sweep-params
+                                 keys
+                                 (map #(format "%s=%s" (name %) (get result %)))
+                                 (str/join " "))]
+              (println (format "   %s: honest=%.2f, malice=%.2f, ratio=%.2f"
+                               param-str (:honest-mean result) (:malice-mean result)
+                               (:dominance-ratio result)))))
+          (doseq [result results-list]
+            (println (format "   %s: honest=%.2f, malice=%.2f, ratio=%.2f"
+                             (:strategy result) (:honest-mean result) (:malice-mean result)
+                             (:dominance-ratio result)))))
 
-    (results/write-edn (format "%s/summary.edn" run-dir) results-list)
-    (results/write-csv (format "%s/results.csv" run-dir) results-list)
-    (results/write-run-metadata (format "%s/metadata.edn" run-dir)
-                                {:scenario-id scenario-id
-                                 :sweep-type (if custom-sweep-params :parameter :strategy)
-                                 :params params
-                                 :results results-list})
+        (results/write-edn (format "%s/summary.edn" run-dir) results-list)
+        (results/write-csv (format "%s/results.csv" run-dir) results-list)
+        (results/write-run-metadata (format "%s/metadata.edn" run-dir)
+                                    {:scenario-id scenario-id
+                                     :sweep-type (if custom-sweep-params :parameter :strategy)
+                                     :params params
+                                     :results results-list})
 
-    (println (format "\n💾 Sweep results saved to: %s" run-dir))
-    results-list))
+        (println (format "\n💾 Sweep results saved to: %s" run-dir))
+        results-list))))
 
 (defn run-ring-simulation [params output-dir]
   (let [scenario-id (:scenario-id params "unnamed")
@@ -238,11 +259,11 @@
 
 (defn run-probabilistic-waterfall-simulation
   "Run probabilistic waterfall with MC dispute economics.
-   
+
    Each dispute trial calls resolve-dispute with the full stochastic model,
    so slash amount, frequency, and reason reflect probabilistic detection,
    variable escrow sizes, and strategy-dependent behavior.
-   
+
    Per-epoch caps (20% junior / 10% senior) are enforced per the contract invariant."
   [params output-dir]
   (let [scenario-id   (:scenario-id params "unnamed")

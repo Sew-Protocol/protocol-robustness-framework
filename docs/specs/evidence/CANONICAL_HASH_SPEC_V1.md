@@ -312,11 +312,42 @@ Registered Contracts:
 | :registry           | registry-index, artifact-catalog, commitment-root              | artifact-content, detailed-evidence, world-state          |
 | :provenance         | provenance-lineage, verification-metadata, links               | raw-evidence-content, world-snapshots                     |
 
-11.6 Attestor Registry Projection
-Domain: ATTESTOR_V1
+11.6 Claim Definition Registry Projection
+Domain: CLAIM_DEFINITION
+
+The `:claim-definition` intent defines the canonical identity of one claim
+registry entry for registry-backed claim verification.
+
+The registered `:claim-definition` contract currently uses version 1.
+
+Purpose:
+    • identify the stable claim identity and semantic inputs
+    • support audit-grade claim verification against the registry
+    • exclude presentation-only and runtime-only data from canonical identity
+
+Canonical projection fields:
+    • :id
+    • :version
+    • :category
+    • :inputs
+    • :evaluation
+    • :outputs
+    • :depends-on (when present)
+
+Excluded from the projection:
+    • :canonical-hash
+    • :description
+    • display metadata and non-identity metadata
+    • transient runtime state
+    • cached values
+
+11.7 Attestor Registry Projection
+Domain: ATTESTOR
 
 The `:attestor` intent defines the canonical identity of one attestor registry
 entry for registry-backed attestation verification.
+
+The registered `:attestor` contract currently uses version 1.
 
 Purpose:
     • identify the stable attestor identity and verification surface

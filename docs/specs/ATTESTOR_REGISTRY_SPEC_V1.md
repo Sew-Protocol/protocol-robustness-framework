@@ -202,7 +202,7 @@ validation, auditability, and replay-safe attestation verification.
 Hashing domain tag:
 
 ```text
-ATTESTOR_V1
+ATTESTOR
 ```
 
 Canonical projection SHALL include exactly:

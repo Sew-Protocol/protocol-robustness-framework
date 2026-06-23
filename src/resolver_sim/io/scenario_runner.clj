@@ -5,6 +5,7 @@
    Table output via `scenario.report/print-report`; legacy fixture detail via
    `sim.reporter` when `:report-format :fixture`."
   (:require [clojure.java.io :as io]
+            [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.contract-model.replay :as replay]
@@ -175,21 +176,39 @@
      :protocol       — protocol id (default sew-v1)
      opts are forwarded to report/runner."
   [dispatch opts]
-  (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)
-        dispatch*   (if (and (:suite dispatch) (not (:protocol dispatch)))
-                      (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
-                      dispatch)]
-    (cond
-      (:fixture-suite dispatch*)
-      (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)
+  (ev-node/with-execution-node
+    {:execution-id :execution/replay
+     :inputs {:dispatch dispatch
+              :opts {:protocol (:protocol opts)
+                     :report-format (:report-format opts)
+                     :suite-id (:suite-id opts)}}
+     :status-fn #(if (zero? %) :pass :fail)
+     :outputs-fn (fn [exit-code]
+                   {:exit-code exit-code
+                    :dispatch dispatch})
+     :failure-details-fn (fn [exit-code]
+                           (if (zero? exit-code)
+                             []
+                             [{:failure-type :replay-failed
+                               :class :unexpected
+                               :message (str "Replay exited with code " exit-code)
+                               :expected? false}]))}
+    (fn []
+      (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)
+            dispatch*   (if (and (:suite dispatch) (not (:protocol dispatch)))
+                          (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
+                          dispatch)]
+        (cond
+          (:fixture-suite dispatch*)
+          (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)
 
-      (:suite dispatch*)
-      (run-named-suite-and-report (:suite dispatch*) opts)
+          (:suite dispatch*)
+          (run-named-suite-and-report (:suite dispatch*) opts)
 
-      (:scenario dispatch*)
-      (run-scenario-file-and-report (:scenario dispatch*)
-                                    (:output-file dispatch*)
-                                    (assoc opts :protocol protocol-id))
+          (:scenario dispatch*)
+          (run-scenario-file-and-report (:scenario dispatch*)
+                                        (:output-file dispatch*)
+                                        (assoc opts :protocol protocol-id))
 
-      :else
-      (run-registry-suite-and-report opts))))
+          :else
+          (run-registry-suite-and-report opts))))))

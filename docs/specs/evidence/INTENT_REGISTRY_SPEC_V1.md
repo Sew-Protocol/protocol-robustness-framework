@@ -67,7 +67,8 @@ Requirements:
 * immutable once published
 * unique across registry
 * uppercase ASCII
-* version suffix mandatory
+* stable and human-readable
+* version suffix may be used when appropriate
 
 ---
 

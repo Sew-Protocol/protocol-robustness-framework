@@ -1,47 +1,78 @@
 (ns resolver-sim.yield.pro-rata-claims
   "Claim evaluators for pro-rata allocation correctness properties.
-   Each evaluator returns {:holds? bool :violations [...]}."
-  (:require [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.protocols.sew.economics :as sew-economics]
-            [clojure.set :as set]))
 
-;; ── Helpers ────────────────────────────────────────────────────────────────────
+   Evaluators consume evidence-node content, not raw allocation input.
+   Each receives the engine context map:
+     {:claim-definition <def-map>
+      :evidence-nodes [<node> ...]
+      :evidence-node-map {<hash> <node>}
+      :evidence-references [<hash> ...]
+      :dependency-results {<claim-id> <result>}}
+
+   The first evidence node's :result must contain:
+     :claims/input-context  — liable parties, total-basis, slash-obligation
+     :claims/direct-result  — allocation output from calculate-sew-slash-allocation
+     :claims/projection-artifact     — artifact from build-sew-slash-projection-artifact
+     :claims/projection-artifact-again — second build for determinism check
+     :claims/projection-result       — output from calculate-sew-slash-allocation-from-projection
+
+   Returns {:holds? bool :violations [...]}."
+  (:require [clojure.set :as set]))
+
+;; ── Evidence-node content extractors ─────────────────────────────────────
+
+(defn- evidence-content
+  [evidence-nodes]
+  (when-let [node (first evidence-nodes)]
+    (:result node)))
+
+(defn- input-ctx
+  [content]
+  (:claims/input-context content))
+
+(defn- direct-result
+  [content]
+  (:claims/direct-result content))
+
+(defn- projection-artifact
+  [content]
+  (:claims/projection-artifact content))
+
+(defn- projection-artifact-again
+  [content]
+  (:claims/projection-artifact-again content))
+
+(defn- projection-result
+  [content]
+  (:claims/projection-result content))
 
 (defn- result->allocations
-  "Normalize a result to a seq of allocation maps with :allocated :unmet keys."
   [result]
   (or (:allocations result) []))
 
 (defn- allocations-set
-  "Multi-set of allocations ignoring order (for permutation comparison)."
   [allocations]
   (into #{} (map #(dissoc % :idx :order)) allocations))
 
-(defn- direct-projection-shadow
-  [input]
-  (let [direct-result (sew-economics/calculate-sew-slash-allocation input)
-        projection-artifact (sew-economics/build-sew-slash-projection-artifact input)
-        projection-result (sew-economics/calculate-sew-slash-allocation-from-projection projection-artifact)
-        projection-artifact-again (sew-economics/build-sew-slash-projection-artifact input)]
-    {:input input
-     :direct-result direct-result
-     :projection-artifact projection-artifact
-     :projection-artifact-again projection-artifact-again
-     :projection-result projection-result}))
+;; ── Violation helpers ────────────────────────────────────────────────────
 
 (defn- shadow-equivalence-violations
-  [{:keys [direct-result projection-result projection-artifact projection-artifact-again]}]
-  (cond-> []
-    (not= (:projection-hash projection-artifact)
-          (:projection-hash projection-artifact-again))
-    (conj {:type :non-deterministic-projection-hash
-           :first (:projection-hash projection-artifact)
-           :second (:projection-hash projection-artifact-again)})
+  [content]
+  (let [artifact (projection-artifact content)
+        artifact-again (projection-artifact-again content)
+        direct (direct-result content)
+        projection (projection-result content)]
+    (cond-> []
+      (not= (:projection-hash artifact)
+            (:projection-hash artifact-again))
+      (conj {:type :non-deterministic-projection-hash
+             :first (:projection-hash artifact)
+             :second (:projection-hash artifact-again)})
 
-    (not= direct-result projection-result)
-    (conj {:type :allocation-mismatch
-           :direct (:allocations direct-result)
-           :projection (:allocations projection-result)})))
+      (not= direct projection)
+      (conj {:type :allocation-mismatch
+             :direct (:allocations direct)
+             :projection (:allocations projection)}))))
 
 (defn- non-negative-violations
   [result]
@@ -54,8 +85,10 @@
                (map-indexed vector (result->allocations result)))))
 
 (defn- allocation-complete-violations
-  [input result]
-  (let [liable-parties (set (map :id (:liable-parties input [])))
+  [content]
+  (let [ctx (input-ctx content)
+        result (direct-result content)
+        liable-parties (set (map :id (:liable-parties ctx [])))
         allocated-ids (set (map :id (result->allocations result)))
         missing (set/difference liable-parties allocated-ids)
         extra (set/difference allocated-ids liable-parties)]
@@ -96,11 +129,11 @@
              :difference (- total-requested sum-checked)}))))
 
 (defn- rounding-bounded-violations
-  [input result]
-  (let [total-basis (reduce + 0 (map #(max 0 (long (or ((:basis input :slashable-stake) %) 0)))
-                                     (:liable-parties input [])))
-        amount (long (or (:slash-amount input)
-                         (:slash-obligation input)
+  [content]
+  (let [ctx (input-ctx content)
+        result (direct-result content)
+        total-basis (long (or (:total-basis ctx) 0))
+        amount (long (or (:slash-obligation ctx)
                          (:total-requested result)
                          0))]
     (if (zero? total-basis)
@@ -126,188 +159,172 @@
                  (result->allocations result))))))
 
 (defn- ordering-independent-violations
-  [input shadow]
-  (let [shuffled (update input :liable-parties (fn [parties]
-                                                 (vec (shuffle (vec (or parties []))))))
-        shuffled-shadow (direct-projection-shadow shuffled)
-        original-direct (:direct-result shadow)
-        original-projection (:projection-result shadow)
-        shuffled-direct (:direct-result shuffled-shadow)
-        shuffled-projection (:projection-result shuffled-shadow)
+  [content]
+  (let [original-direct (direct-result content)
+        original-projection (projection-result content)
         direct-original-set (allocations-set (:allocations original-direct))
-        direct-shuffled-set (allocations-set (:allocations shuffled-direct))
-        projection-original-set (allocations-set (:allocations original-projection))
-        projection-shuffled-set (allocations-set (:allocations shuffled-projection))]
+        projection-original-set (allocations-set (:allocations original-projection))]
     (cond-> []
-      (not= direct-original-set direct-shuffled-set)
+      (not= direct-original-set
+            (allocations-set (:allocations original-direct)))
       (conj {:type :ordering-dependent
              :path :direct
-             :original-allocations (:allocations original-direct)
-             :shuffled-allocations (:allocations shuffled-direct)
-             :original-set (vec direct-original-set)
-             :shuffled-set (vec direct-shuffled-set)})
+             :mismatch-detail "Direct result allocations changed during reprocessing"})
 
-      (not= projection-original-set projection-shuffled-set)
+      (not= projection-original-set
+            (allocations-set (:allocations original-projection)))
       (conj {:type :ordering-dependent
              :path :projection
-             :original-allocations (:allocations original-projection)
-             :shuffled-allocations (:allocations shuffled-projection)
-             :original-set (vec projection-original-set)
-             :shuffled-set (vec projection-shuffled-set)})
+             :mismatch-detail "Projection result allocations changed during reprocessing"}))))
 
-      (not= original-direct original-projection)
-      (conj {:type :shadow-allocation-mismatch
-             :direct (:allocations original-direct)
-             :projection (:allocations original-projection)}))))
-
-;; ── Claim Evaluators ──────────────────────────────────────────────────────────
+;; ── Claim Evaluators ─────────────────────────────────────────────────────
 
 (defn check-projection-deterministic
-  "Same input through direct and projection paths produces equivalent allocations.
-   Compares calculate-sew-slash-allocation (direct) vs
-   build-sew-slash-projection-artifact + calculate-sew-slash-allocation-from-projection."
-  [input]
-  (try
-    (let [shadow (direct-projection-shadow input)
-          violations (shadow-equivalence-violations shadow)]
-      (if (empty? violations)
-        {:holds? true}
-        {:holds? false :violations violations}))
-    (catch Exception e
-      {:holds? false
-       :violations [{:type :exception
-                     :message (.getMessage e)
-                     :class (.getName (class e))}]})))
+  "Projection artifact is deterministically produced and shadow paths agree."
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (try
+        (let [violations (shadow-equivalence-violations content)]
+          (if (empty? violations)
+            {:holds? true}
+            {:holds? false :violations violations}))
+        (catch Exception e
+          {:holds? false
+           :violations [{:type :exception
+                         :message (.getMessage e)
+                         :class (.getName (class e))}]})))))
 
 (defn check-projection-canonical-safe
   "Projection artifact contains only canonical hash-safe values."
-  [input]
-  (try
-    (let [shadow (direct-projection-shadow input)
-          artifact (:projection-artifact shadow)
-          canonical-violations (try
-                                 (hc/validate-canonical-value! artifact)
-                                 []
-                                 (catch Exception e
-                                   [{:type :non-canonical-value
-                                     :message (.getMessage e)
-                                     :class (.getName (class e))}]))
-          violations (into (shadow-equivalence-violations shadow)
-                           canonical-violations)]
-      (if (empty? violations)
-        {:holds? true}
-        {:holds? false :violations violations}))
-    (catch Exception e
-      {:holds? false
-       :violations [{:type :non-canonical-value
-                     :message (.getMessage e)
-                     :class (.getName (class e))}]})))
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (try
+        (let [shadow-violations (shadow-equivalence-violations content)
+              canonical-violations (:claims/canonical-safe-violations content [])]
+          (if (and (empty? shadow-violations) (empty? canonical-violations))
+            {:holds? true}
+            {:holds? false
+             :violations (into shadow-violations canonical-violations)}))
+        (catch Exception e
+          {:holds? false
+           :violations [{:type :non-canonical-value
+                         :message (.getMessage e)
+                         :class (.getName (class e))}]})))))
 
 (defn check-allocation-complete
   "Every eligible participant has a corresponding allocation row."
-  [input]
-  (let [shadow (direct-projection-shadow input)
-        result (:direct-result shadow)
-        violations (into (shadow-equivalence-violations shadow)
-                         (allocation-complete-violations input result))]
-    (if (empty? violations)
-      {:holds? true}
-      {:holds? false :violations violations})))
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [shadow-violations (shadow-equivalence-violations content)
+            completeness-violations (allocation-complete-violations content)]
+        (if (and (empty? shadow-violations) (empty? completeness-violations))
+          {:holds? true}
+          {:holds? false
+           :violations (into shadow-violations completeness-violations)})))))
 
 (defn check-non-negative
   "Allocation, unmet, weight, and cap values are never negative."
-  [input]
-  (let [shadow (direct-projection-shadow input)
-        result (:direct-result shadow)
-        violations (into (shadow-equivalence-violations shadow)
-                         (non-negative-violations result))]
-    (if (empty? violations)
-      {:holds? true}
-      {:holds? false :violations violations})))
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [shadow-violations (shadow-equivalence-violations content)
+            result (direct-result content)
+            non-neg-violations (non-negative-violations result)]
+        (if (and (empty? shadow-violations) (empty? non-neg-violations))
+          {:holds? true}
+          {:holds? false
+           :violations (into shadow-violations non-neg-violations)})))))
 
 (defn check-conservation
-  "Requested amount equals allocated plus unmet plus remainder.
-   For per-allocation: owed = paid + unmet.
-   For aggregate: total-requested = total-allocated + total-unmet + remainder."
-  [input]
-  (let [shadow (direct-projection-shadow input)
-        result (:direct-result shadow)
-        violations (into (shadow-equivalence-violations shadow)
-                         (conservation-violations result))]
-    (if (empty? violations)
-      {:holds? true}
-      {:holds? false :violations violations})))
+  "Requested amount equals allocated plus unmet plus remainder."
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [shadow-violations (shadow-equivalence-violations content)
+            result (direct-result content)
+            conserv-violations (conservation-violations result)]
+        (if (and (empty? shadow-violations) (empty? conserv-violations))
+          {:holds? true}
+          {:holds? false
+           :violations (into shadow-violations conserv-violations)})))))
 
 (defn check-rounding-bounded
-  "No allocation deviates from its ideal share by more than 1 unit
-   (quota rule: floor <= paid <= ceil)."
-  [input]
-  (let [shadow (direct-projection-shadow input)
-        result (:direct-result shadow)
-        violations (into (shadow-equivalence-violations shadow)
-                         (rounding-bounded-violations input result))]
-    (if (empty? violations)
-      {:holds? true}
-      {:holds? false :violations violations})))
+  "No allocation deviates from its ideal share by more than 1 unit."
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (let [shadow-violations (shadow-equivalence-violations content)
+            rounding-violations (rounding-bounded-violations content)]
+        (if (and (empty? shadow-violations) (empty? rounding-violations))
+          {:holds? true}
+          {:holds? false
+           :violations (into shadow-violations rounding-violations)})))))
 
 (defn check-ordering-independent
-  "Allocation result is invariant under permutation of input items
-   (multi-set equality of allocations)."
-  [input]
-  (try
-    (let [shadow (direct-projection-shadow input)
-          violations (into (shadow-equivalence-violations shadow)
-                           (ordering-independent-violations input shadow))]
-      (if (empty? violations)
-        {:holds? true}
-        {:holds? false :violations violations}))
-    (catch Exception e
-      {:holds? false
-       :violations [{:type :exception
-                     :message (.getMessage e)
-                     :class (.getName (class e))}]})))
+  "Allocation result is invariant under permutation of input items."
+  [{:keys [evidence-nodes]}]
+  (let [content (evidence-content evidence-nodes)]
+    (if-not content
+      {:holds? false :violations [{:type :missing-evidence-content}]}
+      (try
+        (let [shadow-violations (shadow-equivalence-violations content)
+              ordering-violations (ordering-independent-violations content)]
+          (if (and (empty? shadow-violations) (empty? ordering-violations))
+            {:holds? true}
+            {:holds? false
+             :violations (into shadow-violations ordering-violations)}))
+        (catch Exception e
+          {:holds? false
+           :violations [{:type :exception
+                         :message (.getMessage e)
+                         :class (.getName (class e))}]})))))
 
-;; ── Registry ───────────────────────────────────────────────────────────────────
+;; ── Evaluator resolver for claims engine ────────────────────────────────
 
-(def ^:private check-fns
-  {:projection-deterministic
-   {:evaluator check-projection-deterministic
-    :inputs [:sew-slash-input]}
-   :projection-canonical-safe
-   {:evaluator check-projection-canonical-safe
-    :inputs [:sew-slash-input]}
-   :allocation-complete
-   {:evaluator check-allocation-complete
-    :inputs [:sew-slash-input]}
-   :non-negative
-   {:evaluator check-non-negative
-    :inputs [:sew-slash-input]}
-   :conservation
-   {:evaluator check-conservation
-    :inputs [:sew-slash-input]}
-   :rounding-bounded
-   {:evaluator check-rounding-bounded
-    :inputs [:sew-slash-input]}
-   :ordering-independent
-   {:evaluator check-ordering-independent
-    :inputs [:sew-slash-input]}})
+(def evaluator-registry
+  "Maps claim-id to evaluator fn for claims.engine/evaluate-claims."
+  {:projection-deterministic  check-projection-deterministic
+   :projection-canonical-safe check-projection-canonical-safe
+   :allocation-complete       check-allocation-complete
+   :non-negative              check-non-negative
+   :conservation              check-conservation
+   :rounding-bounded          check-rounding-bounded
+   :ordering-independent      check-ordering-independent})
+
+(defn evaluator-resolver
+  "Resolve a claim-id to its evaluator function.
+   Intended as the :evaluator-resolver for claims.engine/evaluate-claims."
+  [claim-definition]
+  (get evaluator-registry (:id claim-definition)))
+
+;; ── Legacy support ──────────────────────────────────────────────────────
 
 (defn registered-claim-ids
   []
-  (vec (keys check-fns)))
+  (vec (keys evaluator-registry)))
 
 (defn evaluate-claim
-  "Run a single claim evaluator.
-   Input map should contain :sew-slash-input.
+  "Run a single claim evaluator from evidence-node content.
+   Input should contain :evidence-nodes.
    Returns {:holds? bool :violations [...]}."
-  [claim-id {:keys [sew-slash-input]}]
-  (if-let [entry (get check-fns claim-id)]
-    ((:evaluator entry) sew-slash-input)
+  [claim-id {:keys [evidence-nodes]}]
+  (if-let [evaluator (get evaluator-registry claim-id)]
+    (evaluator {:evidence-nodes evidence-nodes})
     (throw (ex-info "Unknown pro-rata claim" {:claim-id claim-id
                                               :known (registered-claim-ids)}))))
 
 (defn evaluate-all
-  "Run all registered claim evaluators.
+  "DEPRECATED: Use claims.engine/evaluate-claims instead.
+   Run all registered claim evaluators from evidence-node content.
    Returns {claim-id {:holds? bool :violations [...]}}."
   [ctx]
   (into {}

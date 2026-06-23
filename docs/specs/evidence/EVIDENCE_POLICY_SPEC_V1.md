@@ -193,12 +193,18 @@ Example:
 ```clojure
 {:failure-policy
 
- {:include-expected-failures? false}}
+ {:include-expected-failures? false
+  :exclude-classes #{:environment :debug}}}
 ```
 
 ------
 
 Expected failures SHALL remain counted in execution summaries even when details are excluded.
+
+Filtered or hidden failure details SHALL NOT change the canonical node hash.
+
+Node integrity MUST be computed from the unfiltered canonical execution projection,
+not from policy-filtered presentation output.
 
 ------
 

@@ -19,6 +19,7 @@
   (:require [clojure.data.json          :as json]
             [clojure.string             :as str]
             [clojure.stacktrace         :as st]
+            [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.logging       :as log]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.server.session :as session])
@@ -246,17 +247,24 @@
    Throws if a server is already running."
   ([] (start! 7070))
   ([port]
-   (when @server
-     (throw (ex-info "gRPC server already running" {:port port})))
-   (let [srv (-> (ServerBuilder/forPort port)
-                 (.addService (build-engine-service))
-                 (.addService (build-advisory-service))
-                 (.build)
-                 (.start))]
-     (reset! server srv)
-     (log/info! "grpc/listening" {:port port})
-     (println (str "[grpc] SimulationEngine listening on port " port))
-     srv)))
+   (ev-node/with-execution-node
+     {:execution-id :execution/server
+      :inputs {:port port}
+      :outputs-fn (fn [srv]
+                    {:port (.getPort srv)
+                     :state :listening})}
+     (fn []
+       (when @server
+         (throw (ex-info "gRPC server already running" {:port port})))
+       (let [srv (-> (ServerBuilder/forPort port)
+                     (.addService (build-engine-service))
+                     (.addService (build-advisory-service))
+                     (.build)
+                     (.start))]
+         (reset! server srv)
+         (log/info! "grpc/listening" {:port port})
+         (println (str "[grpc] SimulationEngine listening on port " port))
+         srv)))))
 
 (defn port
   "Return bound port for the running server, or nil if not running."
@@ -275,4 +283,3 @@
   "Block until the server shuts down. Useful for CLI entry points."
   []
   (some-> @server .awaitTermination))
-

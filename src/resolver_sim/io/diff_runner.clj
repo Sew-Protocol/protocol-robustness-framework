@@ -2,6 +2,7 @@
   "Shell: load replay JSON files and run structural trace diff."
   (:require [clojure.data.json :as json]
             [clojure.tools.cli :refer [parse-opts]]
+            [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.io.diff :as diff])
   (:gen-class))
 
@@ -24,9 +25,26 @@
 (defn run-diff-traces!
   "Print a human-readable report and return exit code (0 = match, 1 = diverged)."
   [baseline-path candidate-path]
-  (let [result (diff-replay-files baseline-path candidate-path)]
-    (diff/print-diff-report result)
-    (if result 1 0)))
+  (ev-node/with-execution-node
+    {:execution-id :execution/diff
+     :inputs {:baseline-path baseline-path
+              :candidate-path candidate-path}
+     :status-fn #(if (zero? %) :pass :fail)
+     :outputs-fn (fn [exit-code]
+                   {:baseline-path baseline-path
+                    :candidate-path candidate-path
+                    :exit-code exit-code})
+     :failure-details-fn (fn [exit-code]
+                           (if (zero? exit-code)
+                             []
+                             [{:failure-type :trace-divergence
+                               :class :unexpected
+                               :message "Replay traces diverged"
+                               :expected? false}]))}
+    (fn []
+      (let [result (diff-replay-files baseline-path candidate-path)]
+        (diff/print-diff-report result)
+        (if result 1 0)))))
 
 (def ^:private cli-options
   [["-b" "--baseline PATH" "Baseline replay JSON"]

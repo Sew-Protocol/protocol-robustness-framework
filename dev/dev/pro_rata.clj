@@ -83,12 +83,31 @@
 
 (defn explain-claims
   "Evaluate all 7 pro-rata claims on a SEW slash input.
+   Uses claims.engine/evaluate-claims with evidence-node references.
    Returns {claim-id {:holds? bool :violations [...]}}.
    See explain-sew-slash-allocation for input shape."
   [sew-slash-input]
-  (let [evaluate-all (requiring-resolve
-                      'resolver-sim.yield.pro-rata-claims/evaluate-all)
-        results (evaluate-all {:sew-slash-input sew-slash-input})]
+  (let [engine (requiring-resolve 'resolver-sim.claims.engine)
+        pro-rata-claims (requiring-resolve 'resolver-sim.yield.pro-rata-claims)
+        alloc (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation)
+        proj (requiring-resolve 'resolver-sim.protocols.sew.economics/build-sew-slash-projection-artifact)
+        from-proj (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation-from-projection)
+        build-node (requiring-resolve 'resolver-sim.evidence.slashing/build-claim-evaluation-node)
+        direct-result (alloc sew-slash-input)
+        projection-artifact (proj sew-slash-input)
+        projection-artifact-again (proj sew-slash-input)
+        projection-result (from-proj projection-artifact)
+        node (build-node sew-slash-input projection-artifact direct-result
+              projection-artifact-again projection-result)
+        requests (mapv (fn [claim-id]
+                         {:claim-id claim-id
+                          :evidence-references [(:node-hash node)]})
+                       (pro-rata-claims/registered-claim-ids))
+        {:keys [claim-results]}
+        (engine/evaluate-claims
+         requests [node]
+         {:evaluator-resolver pro-rata-claims/evaluator-resolver})
+        results (into {} (map (juxt :claim-id identity) claim-results))]
     (tap> {:type :pro-rata/claims :results results})
     (doseq [[k v] (sort results)]
       (println (name k) (if (:holds? v) "✓" "✗")

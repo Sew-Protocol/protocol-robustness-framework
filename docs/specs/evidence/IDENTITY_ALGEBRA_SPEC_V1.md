@@ -69,6 +69,8 @@ Intent	Domain Tag
 :bundle-root	BUNDLE_ROOT_V1
 :registry	REGISTRY_V1
 :provenance	PROVENANCE_V1
+:claim-definition	CLAIM_DEFINITION
+:attestor	ATTESTOR
 5. Identity Equivalence
 5.1 Strong Equivalence
 

@@ -5,6 +5,18 @@
             [clojure.test.check.properties :as prop]
             [resolver-sim.hash.canonical :as hc]))
 
+(defn- claim-def-fixture
+  ([] (claim-def-fixture {}))
+  ([overrides]
+   (merge {:id :test-claim
+           :version 1
+           :category :invariant
+           :description "Test claim"
+           :inputs [:world-state]
+           :evaluation {:type :pure-predicate :fn 'test-claims/check}
+           :outputs [:passed? :violations]}
+          overrides)))
+
 (defn- attestor-fixture
   ([] (attestor-fixture {}))
   ([overrides]
@@ -35,10 +47,59 @@
   [m]
   (into {} (reverse (seq m))))
 
+(deftest claim-definition-intent-contract-is-registered
+  (let [contract (hc/resolve-intent :claim-definition)]
+    (is (= :claim-definition (:intent/name contract)))
+    (is (= "CLAIM_DEFINITION" (:intent/domain-tag contract)))
+    (is (= 1 (:intent/version contract)))
+    (is (= #{:id :version :category :inputs :evaluation :outputs :depends-on}
+           (:intent/includes contract)))
+    (is (contains? hc/domain-tags :claim-definition))))
+
+(deftest claim-definition-projection-includes-canonical-fields-only
+  (let [fixture (claim-def-fixture)
+        projected (:artifact (hc/project-claim-definition fixture :claim-definition))]
+    (is (= #{:id :version :category :inputs :evaluation :outputs}
+           (set (keys projected))))
+    (is (= :test-claim (:id projected)))
+    (is (= 1 (:version projected)))
+    (is (= :invariant (:category projected)))
+    (is (= [:world-state] (:inputs projected)))
+    (is (= {:type :pure-predicate :fn {:type :symbol :value "test-claims/check"}}
+           (:evaluation projected)))
+    (is (= [:passed? :violations] (:outputs projected)))
+    (is (nil? (:description projected)))
+    (is (nil? (:canonical-hash projected)))
+    (is (nil? (:metadata projected)))
+    (is (nil? (:runtime-state projected)))))
+
+(deftest claim-definition-projection-normalizes-metadata-only-changes
+  (let [base (claim-def-fixture)
+        changed (assoc base
+                       :description "Different display text"
+                       :generated-at "2026-06-23T00:00:00Z"
+                       :notes "metadata only")]
+    (is (= (hc/hash-with-intent {:hash/intent :claim-definition} base)
+           (hc/hash-with-intent {:hash/intent :claim-definition} changed)))))
+
+(deftest claim-definition-hash-stable-under-map-ordering-changes
+  (let [base (claim-def-fixture)
+        reordered (-> base
+                      (update :evaluation reorder-map)
+                      reorder-map)]
+    (is (= (hc/hash-with-intent {:hash/intent :claim-definition} base)
+           (hc/hash-with-intent {:hash/intent :claim-definition} reordered)))))
+
+(deftest claim-definition-hash-changes-on-semantic-change
+  (let [base (claim-def-fixture)
+        changed (claim-def-fixture {:outputs [:failed?]})]
+    (is (not= (hc/hash-with-intent {:hash/intent :claim-definition} base)
+              (hc/hash-with-intent {:hash/intent :claim-definition} changed)))))
+
 (deftest attestor-intent-contract-is-registered
   (let [contract (hc/resolve-intent :attestor)]
     (is (= :attestor (:intent/name contract)))
-    (is (= "ATTESTOR_V1" (:intent/domain-tag contract)))
+    (is (= "ATTESTOR" (:intent/domain-tag contract)))
     (is (= 1 (:intent/version contract)))
     (is (= #{:id :type :status :verification :delegates :key-history}
            (:intent/includes contract)))

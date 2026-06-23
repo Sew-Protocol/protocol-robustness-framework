@@ -64,8 +64,9 @@
    :projection-definition "PROJECTION_DEFINITION_V1"
    :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
    :projection-artifact "PROJECTION_ARTIFACT_V1"
-   :claim-definition "CLAIM_DEFINITION_V1"
-   :attestor         "ATTESTOR_V1"
+   :claim-definition "CLAIM_DEFINITION"
+   :attestor         "ATTESTOR"
+   :evidence-node    "EVIDENCE_NODE_V1"
    :decision-evidence "DECISION_EVIDENCE_V1"
    :invariant-failure "INVARIANT_FAILURE_V1"
    :startup-validation "STARTUP_VALIDATION_V1"})
@@ -588,6 +589,28 @@
     {:intent intent
      :artifact artifact}))
 
+(defn project-evidence-node
+  "Canonical projection for execution evidence nodes.
+   Includes only integrity-relevant execution provenance and evidence hashes.
+   Excludes node self-identifiers, timestamps, and policy-filtered visible output
+   so metadata-only or presentation-only changes do not alter node identity."
+  [value intent]
+  (let [artifact {:schema-version (:schema-version value)
+                  :parent-hashes (vec (or (:parent-hashes value) []))
+                  :bootstrap-roots (vec (or (:bootstrap-roots value) []))
+                  :execution (select-keys (:execution value)
+                                          [:execution-id :execution-kind :runner
+                                           :registry-hash :policy-id :policy-hash])
+                  :result {:status (get-in value [:result :status])
+                           :summary (get-in value [:result :summary])}
+                  :evidence (select-keys (:evidence value)
+                                         [:inputs-hash :outputs-hash])
+                  :attestations (vec (or (:attestations value) []))
+                  :extensions (or (:extensions value) {})}
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
@@ -800,23 +823,34 @@
 
    :claim-definition
    {:intent/name        :claim-definition
-    :intent/domain-tag  "CLAIM_DEFINITION_V1"
+    :intent/domain-tag  "CLAIM_DEFINITION"
     :intent/description "Canonical identity of one claim definition"
     :intent/includes    #{:id :version :category :inputs
                           :evaluation :outputs :depends-on}
     :intent/excludes    #{:canonical-hash :runtime-values :functions
                           :cached-values :generated-metadata :description}
     :intent/projection-fn project-claim-definition
-    :intent/version     2}
+    :intent/version     1}
 
    :attestor
    {:intent/name        :attestor
-    :intent/domain-tag  "ATTESTOR_V1"
+    :intent/domain-tag  "ATTESTOR"
     :intent/description "Canonical identity of one attestor registry entry"
     :intent/includes    #{:id :type :status :verification :delegates :key-history}
     :intent/excludes    #{:canonical-hash :attestor-hash :display-name :metadata
                           :runtime-values :cached-verification-data :private-keys}
     :intent/projection-fn project-attestor
+    :intent/version     1}
+
+   :evidence-node
+   {:intent/name        :evidence-node
+    :intent/domain-tag  "EVIDENCE_NODE_V1"
+    :intent/description "Canonical identity of an execution evidence node"
+    :intent/includes    #{:schema-version :parent-hashes :bootstrap-roots
+                          :execution :result :evidence :attestations :extensions}
+    :intent/excludes    #{:node-id :node-hash :timestamp :policy-output
+                          :visible-failures :filtered-output :runtime-values}
+    :intent/projection-fn project-evidence-node
     :intent/version     1}
 
    :decision-evidence

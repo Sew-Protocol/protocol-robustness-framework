@@ -13,7 +13,9 @@
 
    Validation throws on startup if any registry is invalid.
    This is a hard-fail — the system will not start with corrupt registries."
-  (:require [clojure.set :as set]
+  (:require [clojure.java.io :as io]
+            [clojure.set :as set]
+            [clojure.string :as str]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]))
 
@@ -22,6 +24,14 @@
    Set to false only for test fixtures that need to load without valid registries.
    Defaults to true — corrupted registries are a hard-fail."
   true)
+
+(def ^:dynamic *entry-validation-mode*
+  "Controls execution-entry validation during registry checks.
+   :startup-safe keeps passive startup load behavior.
+   :strict uses requiring-resolve after registries are loaded."
+  :startup-safe)
+
+(declare validate-claim-definition-registry-entries)
 
 (defn- canonical-entry-hash
   [intent entry]
@@ -34,6 +44,8 @@
 (defn- attach-registry-hash
   [intent registry]
   (assoc registry :registry-hash (canonical-entry-hash intent registry)))
+
+(declare validate-execution-registry-entries)
 
 (def intent-definitions
   "Passive INTENT_REGISTRY_SPEC_V1 entries.
@@ -342,36 +354,56 @@
   "EXECUTION_REGISTRY_SPEC_V1 entries: registered execution modes."
   [{:id :execution/simulation
     :version 1
+    :kind :simulation
+    :runner :phase-runner
+    :entry 'resolver-sim.core.phases/run-simulation
     :execution/type :simulation
     :execution/mode :full
     :description "Full Monte Carlo simulation from protocol params."
     :claims #{:deterministic-replay :evidence-completeness}}
    {:id :execution/replay
     :version 1
+    :kind :replay
+    :runner :scenario-runner
+    :entry 'resolver-sim.io.scenario-runner/run-and-report
     :execution/type :replay
     :execution/mode :deterministic
     :description "Deterministic replay from recorded trace."
     :claims #{:deterministic-replay :trace-fidelity}}
    {:id :execution/server
     :version 1
+    :kind :service
+    :runner :grpc-server
+    :entry 'resolver-sim.server.grpc/start!
     :execution/type :server
     :execution/mode :long-running
     :description "Long-running gRPC server for interactive simulation."
     :claims #{:evidence-completeness}}
    {:id :execution/batch
     :version 1
+    :kind :batch
+    :runner :phase-runner
+    :entry 'resolver-sim.core.phases/run-sweep
     :execution/type :batch
     :execution/mode :sweep
+    :depends-on [:execution/simulation]
     :description "Parameter sweep or batch execution over multiple trials."
     :claims #{:deterministic-replay}}
    {:id :execution/diff
     :version 1
+    :kind :differential
+    :runner :differential-runner
+    :entry 'resolver-sim.io.diff-runner/run-diff-traces!
     :execution/type :diff
     :execution/mode :comparison
+    :depends-on [:execution/replay]
     :description "Trace diff between two simulation runs."
     :claims #{:trace-fidelity}}
    {:id :execution/validation
     :version 1
+    :kind :validation
+    :runner :registry-validator
+    :entry 'resolver-sim.definitions.passive-registries/validate-all-registries!
     :execution/type :validation
     :execution/mode :static
     :description "Static validation of registries, fixtures, or scenarios."
@@ -414,7 +446,10 @@
     :evidence-policy/type :computed
     :evidence-policy/source :derived
     :description "Evidence derived from existing evidence via transformation."
-    :constraints #{:deterministic :derived}}])
+    :constraints #{:deterministic :derived}
+    :classes #{:result :inputs :outputs :failures}
+    :failure-policy {:include-expected-failures? false
+                     :exclude-classes #{:environment :debug}}}])
 
 (def evidence-policy-registry
   {:registry-version 1
@@ -488,7 +523,8 @@
     :required-entry-fields #{:id :version :category :description
                              :inputs :evaluation :outputs :canonical-hash}
     :hash-intent :claim-definition
-    :hash-key :canonical-hash}
+    :hash-key :canonical-hash
+    :registry-validator-fn #'validate-claim-definition-registry-entries}
 
    :attestor-registry
    {:registry attestor-registry
@@ -503,8 +539,10 @@
    {:registry execution-registry
     :entries-key :executions
     :required-registry-fields #{:registry-version :executions}
-    :required-entry-fields #{:id :version :execution/type :execution/mode
-                             :description :claims}}
+    :required-entry-fields #{:id :version :kind :runner :entry
+                             :execution/type :execution/mode
+                             :description :claims}
+    :registry-validator-fn #'validate-execution-registry-entries}
 
    :evidence-policy-registry
    {:registry evidence-policy-registry
@@ -545,6 +583,234 @@
   [code data]
   (assoc data :error code))
 
+(def ^:private known-execution-runners
+  {:phase-runner {:description "Core phase runner in resolver-sim.core.phases"}
+   :scenario-runner {:description "Scenario/invariant runner in resolver-sim.io.scenario-runner"}
+   :grpc-server {:description "Interactive gRPC server entry point"}
+   :differential-runner {:description "Trace diff execution runner"}
+   :registry-validator {:description "Registry validation entry point"}})
+
+(defn- namespace-resource-path
+  [ns-sym]
+  (str (-> (name ns-sym)
+           (str/replace "." "/")
+           (str/replace "-" "_"))
+       ".clj"))
+
+(defn- resolve-entry-point
+  ([entry]
+   (resolve-entry-point entry *entry-validation-mode*))
+  ([entry entry-validation-mode]
+   (when (symbol? entry)
+     (try
+       (case entry-validation-mode
+         :strict
+         (let [resolved (try
+                          (requiring-resolve entry)
+                          (catch Throwable _
+                            nil))]
+           resolved)
+
+         :startup-safe
+         (let [ns-sym (symbol (namespace entry))
+               var-sym (symbol (name entry))
+               loaded (find-ns ns-sym)
+               resolved (when loaded (ns-resolve ns-sym var-sym))
+               resource-exists? (boolean (io/resource (namespace-resource-path ns-sym)))]
+           (or resolved
+               (when resource-exists? entry)))
+
+         (let [ns-sym (symbol (namespace entry))
+               var-sym (symbol (name entry))
+               loaded (find-ns ns-sym)
+               resolved (when loaded (ns-resolve ns-sym var-sym))
+               resource-exists? (boolean (io/resource (namespace-resource-path ns-sym)))]
+           (or resolved
+               (when resource-exists? entry))))
+       (catch Throwable _
+         nil)))))
+
+(defn- cycle-path
+  [graph node]
+  (letfn [(visit [node stack seen]
+            (cond
+              (some #{node} stack)
+              (conj (vec (drop-while #(not= node %) stack)) node)
+
+              (seen node)
+              nil
+
+              :else
+              (some #(visit % (conj stack node) (conj seen node))
+                    (get graph node))))]
+    (visit node [] #{})))
+
+(def ^:private known-claim-evaluation-types
+  #{:recompute-and-compare
+    :canonical-value-validation
+    :hash-recompute
+    :set-coverage
+    :numeric-predicate
+    :arithmetic-equality
+    :policy-check
+    :permutation-test
+    :code-reference})
+
+(defn validate-claim-definition-registry-entries
+  "Return claim-definition-registry-specific validation errors for entries.
+   Enforces keyword ids, known dependency references, acyclic claim dependency
+   graphs, and validates code-reference evaluators when present."
+  ([registry-name entries]
+   (validate-claim-definition-registry-entries registry-name entries
+                                               :entry-validation-mode *entry-validation-mode*))
+  ([registry-name entries & {:keys [entry-validation-mode]
+                             :or {entry-validation-mode *entry-validation-mode*}}]
+   (let [ids (set (keep :id entries))
+         graph (into {}
+                     (map (fn [{:keys [id depends-on]}]
+                            [id (vec (or depends-on []))])
+                          entries))]
+     (vec
+      (concat
+       (mapcat (fn [{:keys [id evaluation depends-on]}]
+                 (let [evaluation-type (:type evaluation)
+                       evaluation-entry (:entry evaluation)
+                       errors (cond-> []
+                                (not (keyword? id))
+                                (conj (error :entry/invalid-id
+                                             {:registry registry-name
+                                              :id id}))
+
+                                (not (map? evaluation))
+                                (conj (error :entry/invalid-evaluation
+                                             {:registry registry-name
+                                              :id id
+                                              :evaluation evaluation}))
+
+                                (and (map? evaluation) (not (keyword? evaluation-type)))
+                                (conj (error :entry/invalid-evaluation-type
+                                             {:registry registry-name
+                                              :id id
+                                              :evaluation-type evaluation-type}))
+
+                                (and (keyword? evaluation-type)
+                                     (not (contains? known-claim-evaluation-types evaluation-type)))
+                                (conj (error :entry/unknown-evaluation-type
+                                             {:registry registry-name
+                                              :id id
+                                              :evaluation-type evaluation-type
+                                              :known-types (vec (sort known-claim-evaluation-types))}))
+
+                                (and (some? depends-on) (not (vector? depends-on)))
+                                (conj (error :entry/invalid-dependencies
+                                             {:registry registry-name
+                                              :id id
+                                              :depends-on depends-on}))
+
+                                (some #(not (contains? ids %)) (or depends-on []))
+                                (conj (error :entry/unknown-dependencies
+                                             {:registry registry-name
+                                              :id id
+                                              :unknown-dependencies (vec (filter #(not (contains? ids %)) (or depends-on [])))})))
+                       errors (if (= :code-reference evaluation-type)
+                                (cond-> errors
+                                  (not (symbol? evaluation-entry))
+                                  (conj (error :entry/invalid-evaluation-entry
+                                               {:registry registry-name
+                                                :id id
+                                                :entry evaluation-entry}))
+
+                                  (and (symbol? evaluation-entry)
+                                       (nil? (resolve-entry-point evaluation-entry entry-validation-mode)))
+                                  (conj (error :entry/unresolved-evaluation-entry
+                                               {:registry registry-name
+                                                :id id
+                                                :entry evaluation-entry
+                                                :entry-validation-mode entry-validation-mode})))
+                                errors)]
+                   errors))
+               entries)
+       (keep (fn [id]
+               (when-let [cycle (cycle-path graph id)]
+                 (error :registry/dependency-cycle
+                        {:registry registry-name
+                         :cycle cycle})))
+             (keys graph)))))))
+
+(defn validate-execution-registry-entries
+  "Return execution-registry-specific validation errors for entries.
+   Enforces globally unique keyword ids, known runners, resolvable entry points,
+   known dependencies, and an acyclic dependency graph."
+  ([registry-name entries]
+   (validate-execution-registry-entries registry-name entries
+                                        :entry-validation-mode *entry-validation-mode*))
+  ([registry-name entries & {:keys [entry-validation-mode]
+                             :or {entry-validation-mode *entry-validation-mode*}}]
+   (let [ids (set (keep :id entries))
+         graph (into {}
+                     (map (fn [{:keys [id depends-on]}]
+                            [id (vec (or depends-on []))])
+                          entries))]
+     (vec
+      (concat
+       (mapcat (fn [{:keys [id kind runner entry depends-on]}]
+                 (cond-> []
+                   (not (keyword? id))
+                   (conj (error :entry/invalid-id
+                                {:registry registry-name
+                                 :id id}))
+
+                   (not (keyword? kind))
+                   (conj (error :entry/invalid-kind
+                                {:registry registry-name
+                                 :id id
+                                 :kind kind}))
+
+                   (not (keyword? runner))
+                   (conj (error :entry/invalid-runner
+                                {:registry registry-name
+                                 :id id
+                                 :runner runner}))
+
+                   (and (keyword? runner) (not (contains? known-execution-runners runner)))
+                   (conj (error :entry/unknown-runner
+                                {:registry registry-name
+                                 :id id
+                                 :runner runner
+                                 :known-runners (vec (sort (keys known-execution-runners)))}))
+
+                   (not (symbol? entry))
+                   (conj (error :entry/invalid-entry-point
+                                {:registry registry-name
+                                 :id id
+                                 :entry entry}))
+
+                   (and (symbol? entry) (nil? (resolve-entry-point entry entry-validation-mode)))
+                   (conj (error :entry/unresolved-entry-point
+                                {:registry registry-name
+                                 :id id
+                                 :entry entry
+                                 :entry-validation-mode entry-validation-mode}))
+
+                   (and (some? depends-on) (not (vector? depends-on)))
+                   (conj (error :entry/invalid-dependencies
+                                {:registry registry-name
+                                 :id id
+                                 :depends-on depends-on}))
+
+                   (some #(not (contains? ids %)) (or depends-on []))
+                   (conj (error :entry/unknown-dependencies
+                                {:registry registry-name
+                                 :id id
+                                 :unknown-dependencies (vec (filter #(not (contains? ids %)) (or depends-on [])))}))))
+               entries)
+       (keep (fn [id]
+               (when-let [cycle (cycle-path graph id)]
+                 (error :registry/dependency-cycle
+                        {:registry registry-name
+                         :cycle cycle})))
+             (keys graph)))))))
+
 (defn- validate-entry-hash
   [{:keys [hash-intent hash-key registry-name]} entry]
   (when-let [expected (get entry hash-key)]
@@ -561,7 +827,7 @@
   "Validate one passive registry map. Returns {:valid? bool :errors [...]}
    and never throws."
   [registry-name registry spec]
-  (let [{:keys [entries-key required-registry-fields required-entry-fields]
+  (let [{:keys [entries-key required-registry-fields required-entry-fields registry-validator-fn]
          :as spec} (assoc spec :registry-name registry-name)
         entries (get registry entries-key)
         registry-missing (missing-fields required-registry-fields registry)
@@ -602,7 +868,10 @@
                                      (conj hash-error))))
                                entries)
                        [])
-        errors (vec (concat registry-errors duplicate-errors entry-errors))]
+        registry-specific-errors (if (and (vector? entries) registry-validator-fn)
+                                   (registry-validator-fn registry-name entries)
+                                   [])
+        errors (vec (concat registry-errors duplicate-errors entry-errors registry-specific-errors))]
     {:registry registry-name
      :valid? (empty? errors)
      :errors errors}))
@@ -625,12 +894,15 @@
   "Validate all registries and return an aggregate result.
    This function is passive and never throws.
    Includes all 8 registered registry types."
-  []
-  (let [results (mapv registry-result (keys registry-specs))
-        errors (vec (mapcat :errors results))]
-    {:valid? (empty? errors)
-     :results results
-     :errors errors}))
+  ([] (validate-passive-registries {:entry-validation-mode :startup-safe}))
+  ([{:keys [entry-validation-mode]
+     :or {entry-validation-mode :startup-safe}}]
+   (binding [*entry-validation-mode* entry-validation-mode]
+     (let [results (mapv registry-result (keys registry-specs))
+           errors (vec (mapcat :errors results))]
+       {:valid? (empty? errors)
+        :results results
+        :errors errors}))))
 
 (defn- registry-summary
   "Build a summary map of all registry validation results for startup evidence."
@@ -675,23 +947,36 @@
 
    Set *startup-registry-validation-enabled* to false to disable
    (for test fixtures that need to load without valid registries)."
-  []
-  (when *startup-registry-validation-enabled*
-    (let [result (validate-passive-registries)]
-      (when-not (:valid? result)
-        (throw (ex-info "Registry validation failed — system cannot start with corrupt registries"
-                        {:results (:results result)
-                         :errors (:errors result)})))
-      (hc/validate-registry!)
-      (emit-startup-evidence! result)
-      nil)))
+  ([] (validate-all-registries! {:entry-validation-mode :startup-safe}))
+  ([{:keys [entry-validation-mode]
+     :or {entry-validation-mode :startup-safe}}]
+   (when *startup-registry-validation-enabled*
+     (binding [*entry-validation-mode* entry-validation-mode]
+       (let [with-node (requiring-resolve 'resolver-sim.evidence.node/with-execution-node)]
+         (with-node
+           {:execution-id :execution/validation
+            :inputs {:startup-validation? true}
+            :outputs-fn (fn [result]
+                          {:valid? (:valid? result)
+                           :registry-count (count (:results result))
+                           :error-count (count (:errors result))})}
+           (fn []
+             (let [result (validate-passive-registries)]
+               (when-not (:valid? result)
+                 (throw (ex-info "Registry validation failed — system cannot start with corrupt registries"
+                                 {:results (:results result)
+                                  :errors (:errors result)})))
+               (hc/validate-registry!)
+               (emit-startup-evidence! result)
+               result)))
+         nil)))))
 
 (def validate-passive-registries!
   "Legacy alias for validate-all-registries!."
   (fn
     ([] (validate-all-registries!))
-    ([{:keys [_strict?]}]
-     (validate-all-registries!))))
+    ([opts]
+     (validate-all-registries! opts))))
 
 ;; ── Startup validation ─────────────────────────────────────────────────
 ;; Runs when this namespace is loaded.

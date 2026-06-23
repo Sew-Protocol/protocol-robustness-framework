@@ -82,6 +82,8 @@ Canonical structure:
 
  :parent-hashes [...]
 
+ :bootstrap-roots [...]
+
  :timestamp ...
 
  :execution ...
@@ -94,8 +96,18 @@ Canonical structure:
 
  :attestations [...]
 
- :extensions {...}}
+ :extensions {...}
+
+ :policy-output {...}}
 ```
+
+Hashing note:
+
+- `:node-hash` is computed from the canonical execution-node projection.
+- The projection includes `:schema-version`, parent relationships, execution provenance,
+  result summary, evidence hashes, attestations, and extensions.
+- The projection excludes `:node-id`, `:node-hash`, `:timestamp`, and policy-filtered
+  presentation output so metadata-only and visibility-only changes do not alter node integrity.
 
 ------
 
@@ -188,6 +200,12 @@ Consumers SHALL NOT assume a linear chain.
 
 DAG structure is the preferred model.
 
+### :bootstrap-roots
+
+Explicit parent hashes that are allowed to exist outside the local node set.
+
+These are used for replay roots, imported chains, or external anchors.
+
 ------
 
 ## 6. Execution Section
@@ -201,6 +219,7 @@ Structure:
  :execution-kind ...
  :runner ...
  :registry-hash ...
+ :policy-id ...
  :policy-hash ...}
 ```
 

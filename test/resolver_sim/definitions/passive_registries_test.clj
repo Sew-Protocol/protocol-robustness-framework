@@ -29,6 +29,44 @@
   {:registry-version 1
    :entries [valid-minimal-entry]})
 
+(def execution-registry-spec
+  {:entries-key :executions
+   :required-registry-fields #{:registry-version :executions}
+   :required-entry-fields #{:id :version :kind :runner :entry
+                            :execution/type :execution/mode
+                            :description :claims}
+   :registry-validator-fn registries/validate-execution-registry-entries})
+
+(defn- execution-entry
+  ([] (execution-entry {}))
+  ([overrides]
+   (merge {:id :execution/test-simulation
+           :version 1
+           :kind :simulation
+           :runner :phase-runner
+           :entry 'resolver-sim.core.phases/run-simulation
+           :execution/type :simulation
+           :execution/mode :full
+           :description "Test execution entry"
+           :claims #{:deterministic-replay}}
+          overrides)))
+
+(defn- claim-definition-entry
+  ([] (claim-definition-entry {}))
+  ([overrides]
+   (with-entry-hash
+     :claim-definition
+     :canonical-hash
+     (merge {:id :claim/test
+             :version 1
+             :category :audit
+             :description "Test claim definition"
+             :inputs [:evidence-node]
+             :evaluation {:type :code-reference
+                          :entry 'resolver-sim.claims.engine/evaluate-presence-claim}
+             :outputs [:holds?]}
+            overrides))))
+
 (deftest passive-registries-validate
   (testing "all 8 passive registries are internally valid"
     (is (:valid? (registries/validate-intent-registry)))
@@ -94,6 +132,118 @@
                 minimal-registry-spec)]
     (is (false? (:valid? result)))
     (is (some #(= :entry/duplicate-ids (:error %)) (:errors result)))))
+
+(deftest execution-registry-detects-unknown-runner
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:runner :missing-runner})]}
+        result (registries/validate-registry
+                :execution-registry
+                registry
+                execution-registry-spec)]
+    (is (false? (:valid? result)))
+    (is (some #(= :entry/unknown-runner (:error %)) (:errors result)))))
+
+(deftest execution-registry-detects-unresolved-entry-point
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:entry 'resolver-sim.missing/does-not-exist})]}
+        result (registries/validate-registry
+                :execution-registry
+                registry
+                execution-registry-spec)]
+    (is (false? (:valid? result)))
+    (is (some #(= :entry/unresolved-entry-point (:error %)) (:errors result)))))
+
+(deftest execution-registry-startup-safe-keeps-passive-load-safe
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:entry 'resolver-sim.core.phases/does-not-exist})]}
+        result (registries/validate-registry
+                :execution-registry
+                registry
+                execution-registry-spec)]
+    (is (:valid? result))
+    (is (empty? (:errors result)))))
+
+(deftest execution-registry-strict-validation-catches-missing-entry-vars
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:entry 'resolver-sim.core.phases/does-not-exist})]}
+        result (binding [registries/*entry-validation-mode* :strict]
+                 (registries/validate-registry
+                  :execution-registry
+                  registry
+                  execution-registry-spec))]
+    (is (false? (:valid? result)))
+    (is (some #(= :entry/unresolved-entry-point (:error %)) (:errors result)))))
+
+(deftest execution-registry-detects-unknown-dependencies
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:depends-on [:execution/missing]})]}
+        result (registries/validate-registry
+                :execution-registry
+                registry
+                execution-registry-spec)]
+    (is (false? (:valid? result)))
+    (is (some #(= :entry/unknown-dependencies (:error %)) (:errors result)))))
+
+(deftest execution-registry-detects-dependency-cycles
+  (let [registry {:registry-version 1
+                  :executions [(execution-entry {:id :execution/a
+                                                 :depends-on [:execution/b]})
+                               (execution-entry {:id :execution/b
+                                                 :entry 'resolver-sim.core.phases/run-sweep
+                                                 :depends-on [:execution/a]})]}
+        result (registries/validate-registry
+                :execution-registry
+                registry
+                execution-registry-spec)]
+    (is (false? (:valid? result)))
+    (is (some #(= :registry/dependency-cycle (:error %)) (:errors result)))))
+
+(deftest claim-definition-registry-detects-unknown-dependencies
+  (let [registry {:registry-version 1
+                  :claim-definitions [(claim-definition-entry {:depends-on [:claim/missing]})]}
+        result (registries/validate-claim-definition-registry-entries
+                :claim-definition-registry
+                (:claim-definitions registry))]
+    (is (false? (:valid? (registries/validate-registry
+                          :claim-definition-registry
+                          registry
+                          {:entries-key :claim-definitions
+                           :required-registry-fields #{:registry-version :claim-definitions}
+                           :required-entry-fields #{:id :version :category :description
+                                                    :inputs :evaluation :outputs :canonical-hash}
+                           :hash-intent :claim-definition
+                           :hash-key :canonical-hash
+                           :registry-validator-fn registries/validate-claim-definition-registry-entries}))))
+    (is (some #(= :entry/unknown-dependencies (:error %)) result))))
+
+(deftest claim-definition-registry-detects-dependency-cycles
+  (let [entries [(claim-definition-entry {:id :claim/a
+                                          :depends-on [:claim/b]})
+                 (claim-definition-entry {:id :claim/b
+                                          :depends-on [:claim/a]})]
+        result (registries/validate-claim-definition-registry-entries
+                :claim-definition-registry
+                entries)]
+    (is (seq result))
+    (is (some #(= :registry/dependency-cycle (:error %)) result))))
+
+(deftest claim-definition-registry-strict-validation-catches-missing-code-reference-vars
+  (let [entries [(claim-definition-entry {:evaluation {:type :code-reference
+                                                       :entry 'resolver-sim.core.phases/does-not-exist}})]
+        result (binding [registries/*entry-validation-mode* :strict]
+                 (registries/validate-claim-definition-registry-entries
+                  :claim-definition-registry
+                  entries))]
+    (is (seq result))
+    (is (some #(= :entry/unresolved-evaluation-entry (:error %)) result))))
+
+(deftest claim-definition-registry-startup-safe-validation-avoids-eager-load-failure
+  (let [entries [(claim-definition-entry {:evaluation {:type :code-reference
+                                                       :entry 'resolver-sim.core.phases/does-not-exist}})]
+        result (registries/validate-claim-definition-registry-entries
+                :claim-definition-registry
+                entries)]
+    (is (empty? result))))
 
 (deftest validate-all-registries-hard-fails
   (testing "validate-all-registries! throws on invalid data"
