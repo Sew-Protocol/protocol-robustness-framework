@@ -166,8 +166,10 @@
           :exclude-paths [[:registry-hash]]
           :transforms [:canonical-artifact-value]
           :output {:type :structure-view}
-          :claims [{:claim-id :projection-deterministic}
-                   {:claim-id :projection-canonical-safe}]}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}]}
          {:id :projection/projection-definition-registry
           :version 1
           :projection-type :registry-view
@@ -178,8 +180,10 @@
           :exclude-paths [[:registry-hash]]
           :transforms [:strip-self-hash-fields :canonical-artifact-value]
           :output {:type :definition-registry-view}
-          :claims [{:claim-id :projection-deterministic}
-                   {:claim-id :projection-canonical-safe}]}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}]}
          {:id :projection/projection-artifact
           :version 1
           :projection-type :projection-artifact
@@ -190,8 +194,10 @@
           :exclude-paths [[:projection-hash]]
           :transforms [:strip-self-hash-fields :canonical-artifact-value]
           :output {:type :projection-artifact-view}
-          :claims [{:claim-id :projection-deterministic}
-                   {:claim-id :projection-canonical-safe}]}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}]}
          {:id :projection/pro-rata-slash-obligation
           :version 1
           :projection-type :pro-rata-allocation
@@ -496,6 +502,8 @@
   {:registry-version 1
    :domain-tags domain-tag-registry-definitions})
 
+(declare validate-projection-definition-registry-entries)
+
 (def ^:private registry-specs
   {:intent-registry
    {:registry intent-registry
@@ -515,7 +523,8 @@
                              :intent-purposes :source :output :claims
                              :canonical-hash}
     :hash-intent :projection-definition
-    :hash-key :canonical-hash}
+    :hash-key :canonical-hash
+    :registry-validator-fn #'validate-projection-definition-registry-entries}
 
    :claim-definition-registry
    {:registry claim-definition-registry
@@ -813,6 +822,94 @@
                          :cycle cycle})))
              (keys graph)))))))
 
+;; ── Projection Definition Registry Validation ───────────────────────────
+;; PROJECTION_DEFINITION_REGISTRY_SPEC_V1: startup SHALL fail on:
+;;   - unknown claim-id (not in claim-definition-registry)
+;;   - duplicate claim-id within a projection's :claims
+;;   - claim entry missing :required? flag
+;;   - malformed claim reference (not a map, missing :claim-id)
+
+(defn validate-projection-definition-registry-entries
+  "Return projection-definition-registry-specific validation errors for entries.
+   Checks that every :claims entry resolves to a registered claim definition,
+   has no duplicates, carries a :required? flag, is well-formed, and that
+   :depends-on references (if any) are valid projection definition IDs with
+   an acyclic dependency graph."
+  [registry-name entries]
+  (let [known-claim-ids (set (keep :id claim-definitions))
+        ids (set (keep :id entries))
+        graph (into {}
+                    (map (fn [{:keys [id depends-on]}]
+                           [id (vec (or depends-on []))])
+                         entries))]
+    (vec
+     (concat
+      (mapcat (fn [{:keys [id claims depends-on]}]
+                (let [claim-errs (if (not (vector? claims))
+                                   [(error :projection/invalid-claims
+                                           {:registry registry-name
+                                            :id id
+                                            :claims claims})]
+                                   (let [claim-ids (mapv :claim-id claims)
+                                         claim-ref-errors (mapcat (fn [claim]
+                                                                    (let [cid (:claim-id claim)]
+                                                                      (cond-> []
+                                                                        (not (map? claim))
+                                                                        (conj (error :projection/invalid-claim-reference
+                                                                                     {:registry registry-name
+                                                                                      :id id
+                                                                                      :claim claim}))
+
+                                                                        (and (map? claim) (nil? cid))
+                                                                        (conj (error :projection/invalid-claim-reference
+                                                                                     {:registry registry-name
+                                                                                      :id id
+                                                                                      :claim claim
+                                                                                      :reason :missing-claim-id}))
+
+                                                                        (and (map? claim) (some? cid) (not (contains? known-claim-ids cid)))
+                                                                        (conj (error :projection/unknown-claim
+                                                                                     {:registry registry-name
+                                                                                      :id id
+                                                                                      :claim-id cid
+                                                                                      :known-claim-ids (vec (sort known-claim-ids))}))
+
+                                                                        (and (map? claim) (not (contains? claim :required?)))
+                                                                        (conj (error :projection/missing-required-flag
+                                                                                     {:registry registry-name
+                                                                                      :id id
+                                                                                      :claim-id cid
+                                                                                      :claim claim})))))
+                                                                  claims)
+                                         duplicates (keys (filter (fn [[_ n]] (< 1 n)) (frequencies claim-ids)))
+                                         dup-errors (mapcat (fn [cid]
+                                                              [(error :projection/duplicate-claim
+                                                                      {:registry registry-name
+                                                                       :id id
+                                                                       :claim-id cid})])
+                                                            (sort duplicates))]
+                                     (into claim-ref-errors dup-errors)))
+                      dep-errs (cond-> []
+                                 (and (some? depends-on) (not (vector? depends-on)))
+                                 (conj (error :entry/invalid-dependencies
+                                              {:registry registry-name
+                                               :id id
+                                               :depends-on depends-on}))
+
+                                 (some #(not (contains? ids %)) (or depends-on []))
+                                 (conj (error :entry/unknown-dependencies
+                                              {:registry registry-name
+                                               :id id
+                                               :unknown-dependencies (vec (filter #(not (contains? ids %)) (or depends-on [])))})))]
+                  (into claim-errs dep-errs)))
+              entries)
+      (keep (fn [id]
+              (when-let [cycle (cycle-path graph id)]
+                (error :registry/dependency-cycle
+                       {:registry registry-name
+                        :cycle cycle})))
+            (keys graph))))))
+
 ;; ── Attestor Registry Validation ────────────────────────────────────────
 ;; ATTESTOR_REGISTRY_SPEC_V1 §9: startup SHALL fail on:
 ;;   - duplicate ids (handled by generic validate-registry)
@@ -850,7 +947,7 @@
                   :known-types (vec (sort known-verification-types))}))
     (and (map? verification) (= :public-key (:type verification)))
     (cond->
-      (not (:algorithm verification))
+     (not (:algorithm verification))
       (conj (error :entry/invalid-verification-method
                    {:registry registry-name :id id
                     :reason :missing-algorithm}))
@@ -1096,7 +1193,7 @@
       ;; passive_registries wraps all runtime hash intents automatically.
       ;; Only passive entries with :intent/type :identity/hash-projection
       ;; are required to map to a runtime hash intent (checked above).
-      ))))
+      []))))
 
 (defn- validate-entry-hash
   [{:keys [hash-intent hash-key registry-name]} entry]

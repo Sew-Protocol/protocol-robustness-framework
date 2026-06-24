@@ -123,9 +123,9 @@
    The remaining args match build-prorata-slash-evidence."
   [& args]
   (let [f (requiring-resolve 'resolver-sim.evidence.slashing/build-prorata-slash-evidence)
-        result (apply f args)]
-    (tap> {:type :pro-rata/evidence :result result})
-    result))
+        {:keys [evidence]} (apply f args)]
+    (tap> {:type :pro-rata/evidence :result evidence})
+    evidence))
 
 (defn explain-evidence-from-input
   "One-shot: given a SEW slash input and a world, build projection artifact,
@@ -143,16 +143,16 @@
         (or ctx {})
         allocation-input sew-slash-input
         allocation (explain-sew-slash-allocation sew-slash-input)
-        evidence (build-evid
-                  {:world world
-                   :slash-id (or slash-id :dev-test)
-                   :workflow-id (or workflow-id 0)
-                   :epoch (or epoch 0)
-                   :trigger (or trigger :dev)
-                   :allocation-input allocation-input
-                   :allocation-result allocation
-                   :transition-dependencies (or transition-dependencies [])
-                   :attribution (or attribution {})})]
+        {:keys [evidence]} (build-evid
+                            {:world world
+                             :slash-id (or slash-id :dev-test)
+                             :workflow-id (or workflow-id 0)
+                             :epoch (or epoch 0)
+                             :trigger (or trigger :dev)
+                             :allocation-input allocation-input
+                             :allocation-result allocation
+                             :transition-dependencies (or transition-dependencies [])
+                             :attribution (or attribution {})})]
     (println "\n── Evidence hash chain ──")
     (println ":evidence/hash" (:evidence/hash evidence))
     (println ":projection-hash" (get-in evidence [:result :projection :projection-hash]))

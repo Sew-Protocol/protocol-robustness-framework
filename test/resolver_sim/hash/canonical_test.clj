@@ -5,7 +5,8 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [resolver-sim.hash.canonical :as hc])
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.economics.payoffs :as payoffs])
   (:import [java.util Arrays]
            [java.security MessageDigest]
            [java.time Instant]))
@@ -335,17 +336,30 @@
   (is (nil? (hc/validate-intent-constraints! :evidence-record {:a 1 :b "hello"})))
   (is (nil? (hc/validate-intent-constraints! :world-structure {:step 42 :run-id "r"}))))
 
-(deftest test-validate-intent-constraints-catches-excluded-types
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure {:fn (fn [x] x)})))
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure {:set #{:a}})))
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure {:instant (Instant/now)})))
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure {:ratio (/ 1 3)})))
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure {:double 3.14}))))
+(deftest test-world-structure-accepts-projectable-types
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:fn (fn [x] x)})))
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:set #{:a}})))
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:instant (Instant/now)})))
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:ratio (/ 1 3)})))
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:double 3.14})))
+  (testing "hash-with-intent succeeds for worlds with projectable runtime types"
+    (is (string? (hc/hash-with-intent {:hash/intent :world-structure}
+                                      {:fn (fn [x] x)
+                                       :set #{:a}
+                                       :instant (Instant/now)
+                                       :ratio (/ 1 3)
+                                       :double 3.14})))
+    (is (string? (hc/hash-with-intent {:hash/intent :world-structure}
+                                      {:resolver-unavailable #{:addr1}
+                                       :total-held {"0xtoken" 1000}
+                                       :liquid-locked (/ 1 3)
+                                       :price 3.14
+                                       :updated-at (Instant/now)})))))
 
 (deftest test-validate-intent-constraints-catches-root-structural-violations
   (is (thrown? Exception
@@ -369,11 +383,13 @@
                                                 {:some-hash "abc" :data "test"}))))
 
 (deftest test-validate-intent-constraints-nested-excludes
-  (is (thrown? Exception
-               (hc/validate-intent-constraints! :world-structure
-                                                {:nested {:fn (fn [x] x)}})))
   (is (nil? (hc/validate-intent-constraints! :world-structure
-                                             {:nested {:a 1}}))))
+                                             {:nested {:fn (fn [x] x)}})))
+  (is (nil? (hc/validate-intent-constraints! :world-structure
+                                             {:nested {:a 1}})))
+  (is (thrown? Exception
+               (hc/validate-intent-constraints! :evidence-record
+                                                {:evidence/hash "abc" :a 1}))))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Dynamic Var Validation in hash-with-intent
@@ -540,7 +556,8 @@
    :projection-definition-registry
    :projection-artifact
    :claim-definition
-   :attestor])
+   :attestor
+   :pro-rata-allocation-result])
 
 (def ^:private phase-1-projection-fixtures
   {:intent-dsl
@@ -597,13 +614,51 @@
              :intent/version 1
              :intent/purpose :slash-obligation-allocation}
     :projection-definition-hash "definition-hash"
-    :source {:type :world-state :world-hash "world-hash"}
+    :source {:type :allocation-input
+             :world-before-hash "world-before-hash"
+             :action-hash-at "action-hash-at-placeholder"
+             :basis :slashable-stake
+             :cap-field :available-slashable
+             :unmet-policy :record-only
+             :slash-policy nil}
     :projection {:liable-parties [{:id :alice :weight 2} {:id :bob :weight 1}]
                  :observed-at (Instant/ofEpochSecond 0)}
     :summary {:party-count 2}
     :claims [{:claim-id :projection-canonical-safe}]
     :metadata {:debug "not identity"}
     :projection-hash "self-hash-to-strip"}
+
+   :pro-rata-allocation-result
+   {:schema-version 1
+    :artifact-kind :pro-rata/allocation-result
+    :allocation-result-id "result-1"
+    :allocation-result-type :pro-rata-allocation
+    :allocation-result-version 1
+    :projection-artifact-hash "proj-hash-1"
+    :projection-definition-id :projection/pro-rata-slash-obligation
+    :projection-definition-hash "def-hash-1"
+    :source {:type :allocation-input
+             :basis :slashable-stake
+             :cap-field :available-slashable}
+    :provenance {:world-before-hash "world-before"
+                 :world-after-hash "world-after"
+                 :action-hash "action-hash"
+                 :action-hash-at "action-hash-at"
+                 :evidence-record-hash "evidence-hash"}
+    :allocation-result {:allocations [{:id :alice :allocated 100 :unmet 0}
+                                      {:id :bob :allocated 50 :unmet 0}]
+                        :total-requested 150
+                        :total-allocated 150
+                        :total-unmet 0
+                        :remainder 0
+                        :policy {:rounding :floor
+                                 :remainder-policy :unallocated
+                                 :ordering-policy :input-order}}
+    :shortfall-outcome nil
+    :claims []
+    :invariant-links []
+    :metadata {:debug "not identity"}
+    :allocation-result-hash "self-hash-to-strip"}
 
    :claim-definition
    {:id :accounting-consistency
@@ -668,7 +723,8 @@
                              :projection-definition-registry :registry-hash
                              :projection-artifact :projection-hash
                              :claim-definition :canonical-hash
-                             :attestor :attestor-hash}]
+                             :attestor :attestor-hash
+                             :pro-rata-allocation-result :allocation-result-hash}]
     (testing (str intent)
       (let [fixture (get phase-1-projection-fixtures intent)
             a (assoc fixture self-key "aaa")
@@ -681,6 +737,20 @@
         changed (assoc fixture :projection-id "proj-2")]
     (is (not= (hc/hash-with-intent {:hash/intent :projection-artifact} fixture)
               (hc/hash-with-intent {:hash/intent :projection-artifact} changed)))))
+
+(deftest test-pro-rata-allocation-result-identity-fields-affect-hash
+  (let [fixture (:pro-rata-allocation-result phase-1-projection-fixtures)
+        changed-proj (assoc fixture :projection-artifact-hash "different-proj-hash")
+        changed-result (assoc fixture :allocation-result
+                              {:allocations [] :total-requested 0
+                               :total-allocated 0 :total-unmet 0 :remainder 0
+                               :policy {}})]
+    (testing "different projection artifact hash changes identity"
+      (is (not= (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result} fixture)
+                (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result} changed-proj))))
+    (testing "different allocation result changes identity"
+      (is (not= (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result} fixture)
+                (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result} changed-result))))))
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Claim Definition Projection Property Tests
@@ -1065,3 +1135,250 @@
         fail-hash (hc/hash-with-intent {:hash/intent :invariant-failure} data)
         world-hash (hc/hash-with-intent {:hash/intent :world-structure} data)]
     (is (not= fail-hash world-hash))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Action / Action-At Hash Properties
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-action-hash-stable-for-equivalent-payloads
+  (let [action {:type :release :escrow-id "0xabc" :actor "0xres"}
+        a (hc/hash-with-intent {:hash/intent :action} action)
+        b (hc/hash-with-intent {:hash/intent :action} action)]
+    (is (= a b))))
+
+(deftest test-action-hash-changes-when-payload-changes
+  (let [action-a {:type :release :escrow-id "0xabc" :actor "0xres"}
+        action-b {:type :release :escrow-id "0xdef" :actor "0xres"}
+        a (hc/hash-with-intent {:hash/intent :action} action-a)
+        b (hc/hash-with-intent {:hash/intent :action} action-b)]
+    (is (not= a b))))
+
+(deftest test-action-hash-at-changes-with-execution-position
+  (let [action-hash "abc123"
+        a (hc/hash-with-intent {:hash/intent :action-at}
+                               {:action-hash action-hash :step 1 :block-time 100})
+        b (hc/hash-with-intent {:hash/intent :action-at}
+                               {:action-hash action-hash :step 2 :block-time 200})]
+    (is (not= a b))))
+
+(deftest test-action-hash-at-includes-action-hash
+  (let [a (hc/hash-with-intent {:hash/intent :action-at}
+                               {:action-hash "abc123" :step 1 :block-time 100})
+        b (hc/hash-with-intent {:hash/intent :action-at}
+                               {:action-hash "def456" :step 1 :block-time 100})]
+    (is (not= a b))
+    (testing "action-hash-at and action-hash are distinct values"
+      (is (not= a "abc123"))
+      (is (not= b "def456")))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Pro-Rata Allocation Result Artifact Tests
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-build-pro-rata-allocation-result-artifact
+  (let [proj-fixture (:pro-rata-allocation-result phase-1-projection-fixtures)
+        projection-artifact (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations [{:id :alice :allocated 100 :unmet 0}
+                                         {:id :bob :allocated 50 :unmet 0}]
+                           :total-requested 150
+                           :total-allocated 150
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {:rounding :floor
+                                    :remainder-policy :unallocated
+                                    :ordering-policy :input-order}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact projection-artifact
+                   :allocation-result allocation-result
+                   :world-before-hash "world-before"
+                   :world-after-hash "world-after"
+                   :action-hash "action-hash"
+                   :action-hash-at "action-hash-at"})]
+    (testing "artifact has allocation-result-hash"
+      (is (string? (:allocation-result-hash artifact))))
+    (testing "artifact has schema-version"
+      (is (= 1 (:schema-version artifact))))
+    (testing "artifact includes allocation-result"
+      (is (= allocation-result (:allocation-result artifact))))
+    (testing "artifact includes provenance"
+      (is (= "world-before" (get-in artifact [:provenance :world-before-hash])))
+      (is (= "world-after" (get-in artifact [:provenance :world-after-hash])))
+      (is (= "action-hash" (get-in artifact [:provenance :action-hash])))
+      (is (= "action-hash-at" (get-in artifact [:provenance :action-hash-at]))))
+    (testing "artifact includes projection reference"
+      (is (= (:projection-hash projection-artifact)
+             (:projection-artifact-hash artifact))))
+    (testing "artifact is canonical-safe"
+      (is (nil? (hc/validate-canonical-value! artifact))))))
+
+(deftest test-pro-rata-allocation-result-validates-successfully
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations [{:id :alice :allocated 100 :unmet 0}
+                                         {:id :bob :allocated 0 :unmet 50}]
+                           :total-requested 150
+                           :total-allocated 100
+                           :total-unmet 50
+                           :remainder 0
+                           :policy {:rounding :floor
+                                    :remainder-policy :unallocated
+                                    :ordering-policy :input-order}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})]
+    (is (some? (payoffs/validate-pro-rata-allocation-result-artifact! artifact))
+        "validate should return truthy on success")))
+
+(deftest test-pro-rata-allocation-result-rejects-hash-mismatch
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations []
+                           :total-requested 0
+                           :total-allocated 0
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})
+        tampered (assoc artifact :allocation-result-hash "tampered")]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/validate-pro-rata-allocation-result-artifact! tampered)))))
+
+(deftest test-pro-rata-allocation-result-rejects-missing-projection-hash
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations []
+                           :total-requested 0
+                           :total-allocated 0
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})
+        tampered (dissoc artifact :projection-artifact-hash)]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/validate-pro-rata-allocation-result-artifact! tampered)))))
+
+(deftest test-pro-rata-allocation-result-rejects-missing-allocation-result
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result {:allocations []
+                                       :total-requested 0
+                                       :total-allocated 0
+                                       :total-unmet 0
+                                       :remainder 0
+                                       :policy {}}
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})
+        tampered (dissoc artifact :allocation-result)]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/validate-pro-rata-allocation-result-artifact! tampered)))))
+
+(deftest test-pro-rata-allocation-result-rejects-bad-totals
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations [{:id :alice :allocated 100 :unmet 0}]
+                           :total-requested 150
+                           :total-allocated 100
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/validate-pro-rata-allocation-result-artifact! artifact)))))
+
+(deftest test-pro-rata-allocation-result-rejects-missing-provenance
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations []
+                           :total-requested 0
+                           :total-allocated 0
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash nil
+                   :action-hash "ah"
+                   :action-hash-at "aha"})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (payoffs/validate-pro-rata-allocation-result-artifact! artifact)))))
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Demo Rendering Tests
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(deftest test-format-pro-rata-result-table-includes-allocation-hash
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        allocation-result {:allocations [{:id :alice :weight 200 :cap nil :allocated 100 :unmet 0}
+                                         {:id :bob :weight 100 :cap nil :allocated 50 :unmet 0}]
+                           :total-requested 150
+                           :total-allocated 150
+                           :total-unmet 0
+                           :remainder 0
+                           :policy {}}
+        artifact (payoffs/build-pro-rata-allocation-result-artifact
+                  {:projection-artifact proj-fixture
+                   :allocation-result allocation-result
+                   :world-before-hash "wb"
+                   :world-after-hash "wa"
+                   :action-hash "ah"
+                   :action-hash-at "aha"})
+        table (payoffs/format-pro-rata-result-table artifact)
+        panel (payoffs/format-proof-panel artifact)]
+    (testing "result table includes allocation fields"
+      (is (string? table))
+      (is (.contains table "Allocated"))
+      (is (.contains table "Unmet"))
+      (is (.contains table "150")))
+    (testing "proof panel includes allocation-result-hash"
+      (is (string? panel))
+      (is (.contains panel "Allocation Result Hash"))
+      (is (.contains panel (:allocation-result-hash artifact))))
+    (testing "proof panel includes action-hash-at"
+      (is (.contains panel "Action Hash-At"))
+      (is (.contains panel "aha")))
+    (testing "proof panel includes world hashes"
+      (is (.contains panel "World Before Hash"))
+      (is (.contains panel "World After Hash"))
+      (is (.contains panel "wb"))
+      (is (.contains panel "wa")))))
+
+(deftest test-shortfall-outcome-changes-result-hash
+  (let [proj-fixture (:projection-artifact phase-1-projection-fixtures)
+        base-allocation {:allocations [] :total-requested 0 :total-allocated 0
+                         :total-unmet 0 :remainder 0 :policy {}}
+        artifact-no-sf (payoffs/build-pro-rata-allocation-result-artifact
+                        {:projection-artifact proj-fixture
+                         :allocation-result base-allocation
+                         :world-before-hash "wb" :world-after-hash "wa"
+                         :action-hash "ah" :action-hash-at "aha"})
+        artifact-with-sf (payoffs/build-pro-rata-allocation-result-artifact
+                          {:projection-artifact proj-fixture
+                           :allocation-result base-allocation
+                           :world-before-hash "wb" :world-after-hash "wa"
+                           :action-hash "ah" :action-hash-at "aha"
+                           :shortfall-outcome {:fulfilled 0 :deferred 50 :haircut 30}})]
+    (is (not= (:allocation-result-hash artifact-no-sf)
+              (:allocation-result-hash artifact-with-sf))
+        "Adding shortfall outcome must change the result hash")))

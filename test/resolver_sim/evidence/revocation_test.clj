@@ -17,16 +17,16 @@
   (let [ts "2026-01-15T10:00:00Z"
         revoked-by {:type :auditor :id "audit-team"}
         r (rev/build-revocation "attestation-uuid-2" :key-compromised
-            {:revoked-by revoked-by :timestamp ts})]
+                                {:revoked-by revoked-by :timestamp ts})]
     (is (= ts (:timestamp r)))
     (is (= revoked-by (:revoked-by r)))))
 
 (deftest build-revocation-accepts-signing-fn
   (let [r (rev/build-revocation "attestation-uuid-3" :policy-violation
-            {:signing-fn (fn [_]
-                           {:algorithm :ed25519
-                            :public-key-id "audit-key-1"
-                            :signature-bytes "hexdeadbeef"})})]
+                                {:signing-fn (fn [_]
+                                               {:algorithm :ed25519
+                                                :public-key-id "audit-key-1"
+                                                :signature-bytes "hexdeadbeef"})})]
     (is (some? (:signature r)))
     (is (= :ed25519 (get-in r [:signature :algorithm])))))
 
@@ -138,7 +138,7 @@
        (rev/build-revocation rev-id :key-compromised))
       ;; Verify with revocation-resolver wired to the revocation registry
       (let [{:keys [valid? checks]} (att/verify-attestation attestation
-                                      {:revocation-resolver rev/attestation-revoked?})
+                                                            {:revocation-resolver rev/attestation-revoked?})
             rev-check (first (filter #(= :revocation-status (:check %)) checks))]
         (is valid? "Revocation is informational — verification still passes")
         (is (true? (:pass? rev-check)) "Revocation check reports revoked")
@@ -154,7 +154,7 @@
       (rev/register-revocation!
        (rev/build-revocation rev-id :key-compromised))
       (let [{:keys [checks]} (att/verify-attestation attestation
-                               {:revocation-resolver rev/attestation-revoked?})
+                                                     {:revocation-resolver rev/attestation-revoked?})
             non-revocation (remove #(= :revocation-status (:check %)) checks)]
         ;; All non-revocation checks must pass
         (is (every? (fn [c] (or (true? (:pass? c))

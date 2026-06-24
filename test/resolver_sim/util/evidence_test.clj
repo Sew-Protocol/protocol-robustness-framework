@@ -205,8 +205,12 @@
     (is (string? (:before-hash record)))
     (is (string? (:after-hash record)))
     (is (string? (:action-hash record)))
+    (is (string? (:action-hash-at record)))
     (is (string? (:result-hash record)))
-    (is (string? (:evidence-hash record)))))
+    (is (string? (:evidence-hash record)))
+    (is (not= (:action-hash record) (:action-hash-at record)))
+    (testing "action-hash-at binds action to execution position"
+      (is (some? (:action-hash-at record))))))
 
 (deftest make-evidence-record-hash-changes-when-attribution-changes
   (let [record1 (ev/make-evidence-record
@@ -270,6 +274,25 @@
         record2 (ev/make-evidence-record spec)]
     (is (= (:evidence-hash record1) (:evidence-hash record2)))
     (is (= record1 record2))))
+
+(deftest test-action-hash-and-action-hash-at-not-interchangeable
+  (let [spec {:artifact-kind :transition
+              :before sample-world
+              :after sample-world
+              :action sample-action
+              :result sample-result
+              :attribution sample-attribution}
+        record (ev/make-evidence-record spec)
+        action-hash (:action-hash record)
+        action-hash-at (:action-hash-at record)]
+    (is (not= action-hash action-hash-at))
+    (testing "swapping would change evidence-hash: construct what-if record"
+      (let [swapped (assoc (dissoc record :action-hash :action-hash-at)
+                           :action-hash action-hash-at
+                           :action-hash-at action-hash)
+            swapped-hash (hc/hash-with-intent {:hash/intent :evidence-record}
+                                              (dissoc swapped :evidence-hash))]
+        (is (not= (:evidence-hash record) swapped-hash))))))
 
 (deftest make-evidence-record-with-different-kinds
   (let [invariant-record (ev/make-evidence-record

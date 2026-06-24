@@ -227,6 +227,43 @@
     (is (seq result))
     (is (some #(= :registry/dependency-cycle (:error %)) result))))
 
+(deftest projection-definition-registry-detects-unknown-dependencies
+  (let [entries [{:id :projection/test
+                  :version 1
+                  :projection-type :test
+                  :intent-types #{:test}
+                  :intent-purposes #{:test}
+                  :source {:type :test}
+                  :output {:type :test}
+                  :claims []
+                  :depends-on [:projection/missing]}]
+        result (registries/validate-projection-definition-registry-entries
+                :projection-definition-registry entries)]
+    (is (some #(= :entry/unknown-dependencies (:error %)) result))))
+
+(deftest projection-definition-registry-detects-dependency-cycles
+  (let [entries [{:id :projection/a
+                  :version 1
+                  :projection-type :test
+                  :intent-types #{:test}
+                  :intent-purposes #{:test}
+                  :source {:type :test}
+                  :output {:type :test}
+                  :claims []
+                  :depends-on [:projection/b]}
+                 {:id :projection/b
+                  :version 1
+                  :projection-type :test
+                  :intent-types #{:test}
+                  :intent-purposes #{:test}
+                  :source {:type :test}
+                  :output {:type :test}
+                  :claims []
+                  :depends-on [:projection/a]}]
+        result (registries/validate-projection-definition-registry-entries
+                :projection-definition-registry entries)]
+    (is (some #(= :registry/dependency-cycle (:error %)) result))))
+
 (deftest claim-definition-registry-strict-validation-catches-missing-code-reference-vars
   (let [entries [(claim-definition-entry {:evaluation {:type :code-reference
                                                        :entry 'resolver-sim.core.phases/does-not-exist}})]

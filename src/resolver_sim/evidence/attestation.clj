@@ -152,9 +152,14 @@
       {:valid? false :errors all-errors}
       {:valid? true})))
 
-;; ── Registry-Backed Verification ────────────────────────────────────────────
+;; ── Attestation Verification (Two Layers) ─────────────────────────────────────
 ;; ATTESTATION_SPEC_V1 §9 and ATTESTOR_REGISTRY_SPEC_V1 §11.
-;; verify-attestation runs all checks and returns per-check results.
+;;
+;; Layer 1 — Registry-backed authorization: attestor exists, active, key authorized.
+;; Layer 2 — Cryptographic-only: verify-fn checks the signature.
+;;
+;; The two layers are independent. verify-attestation runs all checks and returns
+;; per-check results; a caller can decide which layer matters for their use case.
 
 (defn- attestor-id
   "Extract attestor identifier string from an attestation's :attestor field."
@@ -197,7 +202,8 @@
        :detail {:attestor-id id :reason :attestor-not-found}})))
 
 (defn- check-key-authorized
-  "Check that the signing key is authorized for this attestor.
+  "Registry-backed authorization: is the signing key active for this attestor?
+   Uses the attestor registry exclusively — no cryptographic work done here.
    Authorized means: primary key match, active delegate, or active in key-history.
    If the attestation has no signature, this check passes as :unsigned."
   [attestation]
@@ -231,8 +237,9 @@
                             :else :unknown)}}))))
 
 (defn- check-signature
-  "Verify the cryptographic signature, if a verify-fn is provided.
-   Without verify-fn, reports :unavailable (not a pass/fail)."
+  "Cryptographic signature verification. Purely cryptographic — does not
+   check key authorization. Authorization is handled by check-key-authorized
+   via the attestor registry. Without verify-fn, reports :unavailable."
   [attestation verify-fn]
   (let [signature (:signature attestation)]
     (cond
@@ -334,20 +341,24 @@
            :detail {:revoked? false :attestation-id id}})))))
 
 (defn verify-attestation
-  "Verify an attestation against the attestor registry and optional resolvers.
-   Returns {:valid? bool :checks [...]} where each check is:
-     {:check keyword :pass? boolean-or-keyword :detail map}
+  "Verify an attestation. Two independent layers:
 
-   Checks performed:
-     :attestor-exists     — attestor id is in the registry (ATTESTOR_REGISTRY_SPEC_V1 §11)
-     :attestor-active     — attestor status is :active (ATTESTATION_SPEC_V1 §9)
-     :key-authorized      — signing key is active for this attestor (§7)
-     :signature-verified  — cryptographic signature (if verify-fn provided) (§5)
-     :subject-exists      — subject hash/claim-id resolves (if subject-resolver provided) (§10)
-     :revocation-status   — whether the attestation has been revoked (informational, §7)
+     Layer 1 — Registry-backed authorization (mandatory):
+       :attestor-exists     — registry: is the attestor registered?
+       :attestor-active     — registry: is the attestor status :active?
+       :key-authorized      — registry: is the signing key active for this attestor?
 
+     Layer 2 — Cryptographic verification (optional, via :verify-fn):
+       :signature-verified  — cryptographic: does the signature match the data?
+
+     Additional checks:
+       :subject-exists      — does the subject hash/claim-id resolve?
+       :revocation-status   — informational, registry-backed
+
+   Layers are independent. Registry checks do not involve cryptography.
+   The verify-fn does pure cryptographic work — it does not consult the registry.
    Unless all applicable checks pass, :valid? is false.
-   Checks returning :unavailable, :unsigned, or :error do not count as failures.
+   Checks returning :unavailable, :unsigned, :error do not count as failures.
    The :revocation-status check is informational — revocation does not invalidate
    the cryptographic attestation.
 

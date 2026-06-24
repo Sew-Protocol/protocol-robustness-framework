@@ -69,10 +69,13 @@
    :evidence-node    "EVIDENCE_NODE_V1"
    :decision-evidence "DECISION_EVIDENCE_V1"
    :invariant-failure "INVARIANT_FAILURE_V1"
-    :startup-validation "STARTUP_VALIDATION_V1"
-    :claim-result       "CLAIM_RESULT_V1"
-    :attestation        "ATTESTATION_V1"
-    :execution-definition "EXECUTION_DEFINITION_V1"})
+   :startup-validation "STARTUP_VALIDATION_V1"
+   :claim-result       "CLAIM_RESULT_V1"
+   :attestation        "ATTESTATION_V1"
+   :execution-definition "EXECUTION_DEFINITION_V1"
+   :action             "ACTION_V1"
+   :action-at          "ACTION_AT_V1"
+   :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -327,6 +330,16 @@
    identity-relevant structure for downstream claims, invariants, and
    projection-based allocation systems.
 
+   Validation order:
+     runtime world → project-world-to-structure-view → validate-canonical-value!
+     → domain-hash with :world-structure
+
+   The projection function normalizes projectable runtime types BEFORE
+   canonical validation. Type-category exclusions (:functions, :sets,
+   :ratios, :instants, :doubles) are NOT in :intent/excludes because
+   they are handled here, not rejected before projection. Only semantic
+   exclusions (top-level key names) belong in :intent/excludes.
+
    Intent-aware: the intent keyword is bound into the output, making
    the projection lens explicit for hash-with-intent and evidence chain
    reproducibility.
@@ -462,16 +475,36 @@
 ;; (e.g., check that data being hashed matches declared scope).
 
 (def ^:private self-hash-keys
-  "Fields excluded from artifact self-hash projections.
-   These fields hold the result of hashing the surrounding artifact and must not
-   participate in the hash input."
+  "Keys that hold the hash of the artifact currently being hashed.
+
+   These keys are stripped before canonical hashing so an artifact does not
+   recursively commit to its own attached hash.
+
+   Do not add reference hashes here. A reference hash commits to another
+   artifact or contextual component and is part of the current artifact's
+   identity.
+
+   Examples:
+   - self hash:      :node-hash on an evidence node
+   - self hash:      :projection-hash on a projection artifact
+   - reference hash: :action-hash on an evidence record
+   - reference hash: :before-hash / :after-hash on a transition record
+   - reference hash: :action-hash inside an :action-at projection
+
+   Per HASH_INTENT_REGISTRY_SPEC_V1 §2.6: only self-hashes are stripped.
+   Reference hashes are part of the canonical content because they commit
+   the artifact to other artifacts, actions, worlds, claims, attestations,
+   registries, or execution contexts."
   #{:canonical-hash
     :hash
     :intent-hash
     :registry-hash
     :projection-hash
-    :claim-definition-hash
-    :attestor-hash})
+    :allocation-result-hash
+    :self-hash
+    :chain/self-hash
+    :evidence/self-hash
+    :node-hash})
 
 (defn- stable-symbol-name
   [x]
@@ -551,6 +584,11 @@
 
 (defn project-projection-artifact
   "Canonical projection for PROJECTION_ARTIFACT_SPEC_V1 artifacts."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-pro-rata-allocation-result
+  "Canonical projection for PRO_RATA_ALLOCATION_RESULT_V1 artifacts."
   [value intent]
   (project-canonical-artifact value intent))
 
@@ -653,6 +691,20 @@
     {:intent intent
      :artifact artifact}))
 
+(defn project-action
+  "Canonical projection for ACTION_V1 action records.
+   Includes the action payload with self-hash fields stripped.
+   Assumes the action map is already canonical-safe."
+  [value intent]
+  (project-canonical-artifact value intent))
+
+(defn project-action-at
+  "Canonical projection for ACTION_AT_V1 action occurrence records.
+   Includes action reference and temporal context.
+   Assumes the input map is already canonical-safe."
+  [value intent]
+  (project-canonical-artifact value intent))
+
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
@@ -668,8 +720,7 @@
     :intent/includes    #{:domain-state :positions :balances :config
                           :oracle-state :resolver-registry :bond-state
                           :dispute-state :escrow-state :time-context}
-    :intent/excludes    #{:module-implementations :runtime-values
-                          :functions :sets :ratios :instants :doubles}
+    :intent/excludes    #{:module-implementations :runtime-values}
     :intent/projection-fn project-world-to-structure-view
     :intent/version     1}
 
@@ -838,7 +889,7 @@
     :intent/description "Canonical identity of one projection definition"
     :intent/includes    #{:id :version :projection-type :intent-types :intent-purposes
                           :source :include-paths :exclude-paths :transforms
-                          :output :claims}
+                          :output :claims :depends-on}
     :intent/excludes    #{:canonical-hash :runtime-values :functions}
     :intent/projection-fn project-projection-definition
     :intent/version     1}
@@ -861,6 +912,20 @@
                           :source :projection :claims}
     :intent/excludes    #{:projection-hash :metadata :runtime-values}
     :intent/projection-fn project-projection-artifact
+    :intent/version     1}
+
+   :pro-rata-allocation-result
+   {:intent/name        :pro-rata-allocation-result
+    :intent/domain-tag  "PRO_RATA_ALLOCATION_RESULT_V1"
+    :intent/description "Canonical identity of a pro-rata allocation result artifact excluding its self hash"
+    :intent/includes    #{:schema-version :artifact-kind :allocation-result-id
+                          :allocation-result-type :allocation-result-version
+                          :projection-artifact-hash :projection-definition-id
+                          :projection-definition-hash :source :provenance
+                          :allocation-result :shortfall-outcome :claims
+                          :invariant-links}
+    :intent/excludes    #{:allocation-result-hash :metadata :runtime-values}
+    :intent/projection-fn project-pro-rata-allocation-result
     :intent/version     1}
 
    :claim-definition
@@ -948,6 +1013,24 @@
     :intent/includes    #{:id :version :kind :runner :entry :execution/type :execution/mode :claims}
     :intent/excludes    #{:description :depends-on :canonical-hash}
     :intent/projection-fn project-execution-definition
+    :intent/version     1}
+
+   :action
+   {:intent/name        :action
+    :intent/domain-tag  "ACTION_V1"
+    :intent/description "Canonical identity of a normalized action payload."
+    :intent/includes    #{:action/type}
+    :intent/excludes    #{:timestamp :metadata :trace :runtime-values}
+    :intent/projection-fn project-action
+    :intent/version     1}
+
+   :action-at
+   {:intent/name        :action-at
+    :intent/domain-tag  "ACTION_AT_V1"
+    :intent/description "Canonical identity of an action occurrence at a specific execution point."
+    :intent/includes    #{:action-hash :step :block-time}
+    :intent/excludes    #{:action :metadata :world-before :world-after :runtime-values}
+    :intent/projection-fn project-action-at
     :intent/version     1}})
 
 (defn resolve-intent

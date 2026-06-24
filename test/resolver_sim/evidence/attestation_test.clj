@@ -313,7 +313,7 @@
 (deftest verify-revocation-check-reports-revoked
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         {:keys [checks]} (att/verify-attestation attestation
-                          {:revocation-resolver (fn [_] true)})
+                                                 {:revocation-resolver (fn [_] true)})
         rev-check (first (filter #(= :revocation-status (:check %)) checks))]
     (is (true? (:pass? rev-check)))
     (is (true? (get-in rev-check [:detail :revoked?])))))
@@ -321,7 +321,7 @@
 (deftest verify-revocation-check-reports-not-revoked
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         {:keys [checks]} (att/verify-attestation attestation
-                          {:revocation-resolver (fn [_] false)})
+                                                 {:revocation-resolver (fn [_] false)})
         rev-check (first (filter #(= :revocation-status (:check %)) checks))]
     (is (false? (:pass? rev-check)))
     (is (false? (get-in rev-check [:detail :revoked?])))))
@@ -329,7 +329,7 @@
 (deftest verify-does-not-fail-on-revoked-attestation
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         {:keys [valid?]} (att/verify-attestation attestation
-                           {:revocation-resolver (fn [_] true)})]
+                                                 {:revocation-resolver (fn [_] true)})]
     (is valid?
         "Revocation is informational — it must not make verification fail")))
 

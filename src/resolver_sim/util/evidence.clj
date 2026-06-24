@@ -81,7 +81,11 @@
   (let [context-hash (hc/hash-with-intent {:hash/intent :evidence-record} attribution)
         before-hash (hc/hash-with-intent {:hash/intent :world-structure} before)
         after-hash (hc/hash-with-intent {:hash/intent :world-structure} after)
-        action-hash (hc/hash-with-intent {:hash/intent :evidence-record} action)
+        action-hash (hc/hash-with-intent {:hash/intent :action} action)
+        action-hash-at (hc/hash-with-intent {:hash/intent :action-at}
+                                            {:action-hash action-hash
+                                             :step step
+                                             :block-time block-time})
         result-hash (hc/hash-with-intent {:hash/intent :evidence-record} result)
         base {:schema-version (evcfg/schema :evidence-record)
               :artifact-kind artifact-kind
@@ -92,6 +96,7 @@
               :after-hash after-hash
               :action action
               :action-hash action-hash
+              :action-hash-at action-hash-at
               :result result
               :result-hash result-hash}
         evidence-hash (hc/hash-with-intent {:hash/intent :evidence-record} base)

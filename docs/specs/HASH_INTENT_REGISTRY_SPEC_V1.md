@@ -36,6 +36,28 @@ Every intent SHALL define a projection function that transforms the input value 
 
 The registry SHALL be validated at namespace load by `validate-registry!`. A startup hard-fail occurs if any intent contract is invalid, non-deterministic, or produces non-canonical output.
 
+### 2.6 Only Self-Hashes Are Stripped
+
+A hash-bearing field MUST NOT be stripped merely because its name ends in `-hash`.
+
+Only self-hashes are stripped by `project-canonical-artifact` before hashing. A self-hash holds the hash of the artifact currently being hashed — stripping it avoids circular self-reference.
+
+Reference hashes are NOT stripped. A reference hash commits the current artifact to another artifact, action, world state, claim definition, attestation, registry, or execution context. Reference hashes are part of the canonical content because they establish the semantic links that make the artifact meaningful.
+
+Examples:
+
+| Field | Classification | Rationale |
+|---|---|---|
+| `:projection-hash` | Self-hash | Hash of the projection artifact itself |
+| `:node-hash` | Self-hash | Hash of the evidence node itself |
+| `:action-hash` | Reference hash | Points to the action, not the current artifact |
+| `:action-hash-at` | Reference hash | Points to the action-at, not the current artifact |
+| `:before-hash` / `:after-hash` | Reference hash | Points to world states, not the current artifact |
+| `:claim-definition-hash` | Reference hash | Points to a claim definition, not the current artifact |
+| `:attestor-hash` | Reference hash | Points to an attestor entry, not the current artifact |
+
+When a hash key can be either a self-hash or a reference hash depending on context, prefer intent-specific exclusions (`:intent/excludes`) over global stripping. For example, `:evidence-node` explicitly excludes `:node-hash` rather than relying on global stripping, because `:node-hash` could appear as a reference in other artifacts.
+
 ## 3. Registry Source
 
 The intent registry is defined in:
@@ -217,11 +239,17 @@ Domain tags are defined in `resolver-sim.hash.canonical/domain-tags`:
    :intent-registry        "INTENT_REGISTRY_V1"
    :projection-definition  "PROJECTION_DEFINITION_V1"
    :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
-   :projection-artifact    "PROJECTION_ARTIFACT_V1"
-   :evidence-node          "EVIDENCE_NODE_V1"
-   :decision-evidence      "DECISION_EVIDENCE_V1"
-   :invariant-failure      "INVARIANT_FAILURE_V1"
-   :startup-validation     "STARTUP_VALIDATION_V1"})
+    :projection-artifact    "PROJECTION_ARTIFACT_V1"
+    :evidence-node          "EVIDENCE_NODE_V1"
+    :decision-evidence      "DECISION_EVIDENCE_V1"
+    :invariant-failure      "INVARIANT_FAILURE_V1"
+    :startup-validation     "STARTUP_VALIDATION_V1"
+    :claim-result           "CLAIM_RESULT_V1"
+    :attestation            "ATTESTATION_V1"
+    :execution-definition   "EXECUTION_DEFINITION_V1"
+    :action                 "ACTION_V1"
+    :action-at              "ACTION_AT_V1"
+    :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"})
 ```
 
 The domain tag map serves as a registry of domain tag strings. Every `:intent/domain-tag` in `hash-intents` SHALL be a value in this map. Not every entry in this map need have a corresponding intent contract — some tags serve backward-compatible `domain-hash` calls.

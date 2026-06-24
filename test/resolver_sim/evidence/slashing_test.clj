@@ -28,16 +28,17 @@
       :or {world sample-world
            allocation-input sample-allocation-input}}]
   (let [allocation-result (sew-economics/calculate-sew-slash-allocation allocation-input)]
-    (slashing/build-prorata-slash-evidence
-     {:world world
-      :slash-id "test-slash"
-      :workflow-id 0
-      :epoch 0
-      :trigger :test
-      :allocation-input allocation-input
-      :allocation-result allocation-result
-      :transition-dependencies []
-      :attribution nil})))
+    (:evidence
+     (slashing/build-prorata-slash-evidence
+      {:world world
+       :slash-id "test-slash"
+       :workflow-id 0
+       :epoch 0
+       :trigger :test
+       :allocation-input allocation-input
+       :allocation-result allocation-result
+       :transition-dependencies []
+       :attribution nil}))))
 
 ;; ── Integration tests ──────────────────────────────────────────────────
 

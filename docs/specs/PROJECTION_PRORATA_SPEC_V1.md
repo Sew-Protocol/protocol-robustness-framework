@@ -505,3 +505,149 @@ For a projection-based pro-rata allocation, an auditor SHALL be able to answer:
 - Which claims were evaluated?
 - Which evidence node recorded the result?
 - Can each hash in the chain be recomputed?
+
+------
+
+## 9. Projection Artifact Model (Proposed)
+
+The current projection artifact captures only the ex-ante allocation frame (basis, participants, weights, caps, policy). The allocation outcome — what was actually fulfilled, deferred, haircut, waived, or remaining — is absent.
+
+Proposed split into two artifact types:
+
+### 9.1 Projection Frame (`:projection-frame`)
+
+Ex-ante: "This is the rule/input frame we are committing to."
+
+Keeps the current projection artifact shape unchanged:
+
+```clojure
+{:schema-version ...
+ :projection-id ...
+ :projection-type ...
+ :projection-version ...
+ :intent ...
+ :projection-definition-id ...
+ :projection-definition-hash ...
+ :source ...
+ :projection ...
+ :summary ...
+ :claims ...
+ :metadata ...
+ :projection-hash ...}
+```
+
+A `:projection-frame` is computed at allocation time from the allocation input and registered definitions. It commits to the allocation basis — who is eligible, at what weight, under what caps and policy — **without** recording the actual allocation result.
+
+### 9.2 Projection Result (`:projection-result`)
+
+Ex-post: "This is what the allocation produced."
+
+Suggested shape:
+
+```clojure
+{:schema-version             "projection-result.v1"
+ :projection-result-id       "<derived-id>"
+ :projection-result-type     :pro-rata-allocation-result
+ :projection-result-version  1
+
+ :projection-frame-id        "<projection-id>"
+ :projection-frame-hash      "<projection-hash>"
+
+ :projection-definition-id   :projection/pro-rata-slash-obligation
+ :projection-definition-hash "<hash>"
+
+ :source
+ {:type              :allocation-result
+  :world-before-hash "<world-before-hash>"
+  :world-after-hash  "<world-after-hash>"
+  :action-hash       "<action-hash>"
+  :action-hash-at    "<action-hash-at>"
+  :evidence-record-hash "<evidence-record-hash-or-node-hash>"
+  :basis             :slash-obligation
+  :cap-field         :stake
+  :slash-policy      :pro-rata}
+
+ :allocation-result
+ {:allocations      {...}
+  :total-allocated  ...
+  :total-unmet      ...
+  :remainder        ...}
+
+ :shortfall-outcome
+ {:deferred  {...}
+  :haircut   {...}
+  :waived    {...}
+  :fulfilled {...}
+  :shortfall-basis ...}
+
+ :invariant-links
+ [{:id :shortfall-fidelity
+   :status :pass
+   :evidence-hash "<hash>"}
+  {:id :allocation-complete
+   :status :pass
+   :claim-result-hash "<hash>"}]
+
+ :claims
+ [{:claim-id :allocation-complete
+   :claim-definition-hash "<hash>"
+   :claim-result-hash "<hash>"}
+  ...]
+
+ :metadata {...}
+
+ :projection-result-hash "<hash>"}
+```
+
+### 9.3 Separation Rationale
+
+| Aspect | `:projection-frame` | `:projection-result` |
+|---|---|---|
+| When computed | At allocation input time | After allocation executes |
+| Semantics | Ex-ante commitment to rules | Ex-post record of outcome |
+| Contains | Weights, caps, policy, definitions | Allocated amounts, deferred, haircut, waived |
+| World-state linkage | Optional `:world-before-hash` | `:world-before-hash`, `:world-after-hash`, `:action-hash`, `:action-hash-at` |
+| Dependencies | Intent registry, projection-definition registry | Frame artifact, claim results, evidence node |
+| Changed by | Policy/definition changes | Execution of allocation against liquidity |
+| Identity-intent | `:projection-frame` (current `:projection-artifact`) | `:projection-result` (new) |
+
+### 9.4 Forensic Chain
+
+The split produces a complete, auditable provenance chain:
+
+```
+world-before
+  → projection-frame      (ex-ante: this is the rule)
+  → allocate-pro-rata     (computation)
+  → projection-result     (ex-post: this is what happened)
+  → world-after
+  → evidence record       (envelope with before/after hashes)
+  → claim results         (invariant verification)
+```
+
+Each link references its predecessor by hash, forming a content-addressed chain:
+
+```
+projection-frame    ───  :projection-hash
+projection-result   │──  :projection-frame-hash  → frame
+                    │──  :source/:world-before-hash → world state
+                    │──  :source/:action-hash-at → action context
+                    └──  :claims/:claim-result-hash → claim results
+evidence-record     ───  links frame, result, world hashes, action-hash-at
+```
+
+### 9.5 Migration Path
+
+1. Add `:projection-frame` and `:projection-result` hash intents to `hash-intents` with domain tags `PROJECTION_FRAME_V1` and `PROJECTION_RESULT_V1`.
+2. Keep `:projection-artifact` intent as an alias for `:projection-frame` during migration (both resolve to the same projection function).
+3. Update `build-projection-artifact` to produce the `:projection-frame` shape (minimal change — already correct).
+4. Add `build-projection-result` that consumes a frame artifact, the allocation output from `allocate-pro-rata`, and the world/action context.
+5. Wire `build-projection-result` into the SEW slashing resolution and evidence pipelines.
+6. Update artifact-kind registry (`ARTIFACT_KIND_REGISTRY_SPEC_V1.md`) to add projections and result kinds.
+7. Deprecate `:projection-artifact` intent name in favor of `:projection-frame`.
+
+### 9.6 Open Questions
+
+- Should `:projection-result` include the full allocation-per-participant breakdown or only aggregate shortfall categories? (Suggested: full breakdown in `:allocation-result/:allocations`, shortfall summary in `:shortfall-outcome`.)
+- Should `:projection-result` reference the evidence node hash or the action-hash-at directly? The proposed shape includes both `:action-hash-at` and room for `:evidence-record-hash`.
+- Should `:deferred`, `:haircut`, `:waived` be per-participant buckets or aggregate totals? (Suggested: aggregate in `:shortfall-outcome`, per-participant detail in evidence record.)

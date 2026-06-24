@@ -4,9 +4,14 @@
    Claims are now produced through resolver-sim.claims.engine/evaluate-claims
    with explicit evidence-node references, not through raw allocation-input
    tunneling."
-  (:require [resolver-sim.claims.engine :as claims-engine]
+  (:require [clojure.java.io :as io]
+            [clojure.data.json :as json]
+            [resolver-sim.claims.engine :as claims-engine]
             [resolver-sim.definitions.passive-registries :as registries]
             [resolver-sim.evidence.aggregate :as agg]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.protocols.sew.economics :as sew-economics]
             [resolver-sim.yield.pro-rata-claims :as pro-rata-claims]))
@@ -108,6 +113,8 @@
 ;; ── Main evidence constructor ──────────────────────────────────────────
 
 (defn build-prorata-slash-evidence
+  "Build pro-rata slash evidence with embedded allocation result artifact.
+   Returns {:evidence <evidence-map> :artifact <pro-rata-allocation-result-artifact>}."
   [{:keys [world
            slash-id
            workflow-id
@@ -117,37 +124,47 @@
            projection-artifact
            allocation-result
            transition-dependencies
-           attribution]}]
+           attribution
+           world-before-hash
+           action-hash
+           action-hash-at]}]
   (let [projection-artifact (or projection-artifact
-                                (sew-economics/build-sew-slash-projection-artifact allocation-input))
-        ;; Build shadow projection for determinism check
+                                (sew-economics/build-sew-slash-projection-artifact
+                                 (cond-> allocation-input
+                                   world-before-hash (assoc :world-before-hash world-before-hash)
+                                   action-hash-at (assoc :action-hash-at action-hash-at))))
         projection-artifact-again (sew-economics/build-sew-slash-projection-artifact allocation-input)
         projection-result (sew-economics/calculate-sew-slash-allocation-from-projection projection-artifact)
-
-        ;; Build claim evaluation evidence node
         claim-eval-node (build-claim-evaluation-node
                          allocation-input projection-artifact allocation-result
                          projection-artifact-again projection-result)
         claim-eval-hash (:node-hash claim-eval-node)
-
-        ;; Evaluate claims through the engine
         claim-requests (build-claim-requests claim-eval-hash)
         {:keys [claim-results]}
         (claims-engine/evaluate-claims
          claim-requests [claim-eval-node]
          {:evaluator-resolver pro-rata-claims/evaluator-resolver})
-
-        ;; Shape results for envelope
         shaped-claims (mapv (fn [cr]
                               (claim-result-entry (:claim-id cr) cr))
                             claim-results)
-
+        world-after-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
+        result-artifact (payoffs/build-pro-rata-allocation-result-artifact
+                         {:projection-artifact projection-artifact
+                          :allocation-result allocation-result
+                          :world-before-hash world-before-hash
+                          :world-after-hash world-after-hash
+                          :action-hash action-hash
+                          :action-hash-at action-hash-at
+                          :claims shaped-claims
+                          :invariant-links []})
+        allocation-result-hash (:allocation-result-hash result-artifact)
         allocation-hash (hc/hash-with-intent {:hash/intent :evidence-record} allocation-result)
         evidence-result {:projection (projection-summary projection-artifact)
                          :pro-rata {:intent {:id :pro-rata/slash-obligation-allocation
                                              :version 1}
                                     :projection-hash (:projection-hash projection-artifact)
                                     :allocation-hash allocation-hash
+                                    :allocation-result-hash allocation-result-hash
                                     :claims shaped-claims
                                     :summary (merge (claim-summary shaped-claims)
                                                     (pro-rata-summary allocation-result))}
@@ -155,22 +172,35 @@
         evidence-record (agg/build-evidence-aggregate
                          {:evidence-type :slash/prorata-allocation
                           :schema-version "slash-prorata-allocation.v2"
-
                           :world world
                           :frame (agg/extract-decision-frame world)
                           :subject {:slash-id slash-id
                                     :workflow-id workflow-id
                                     :epoch epoch
                                     :trigger trigger}
-
                           :inputs {:allocation allocation-input
                                    :strategy/context (extract-strategy-context world)
                                    :slash/context (extract-slash-context slash-id workflow-id epoch trigger)}
-
                           :result evidence-result
-
                           :dependencies transition-dependencies
                           :attribution attribution})]
-    (assoc evidence-record
-           :evidence/hash (hc/hash-with-intent {:hash/intent :evidence-record}
-                                               (dissoc evidence-record :evidence/hash :evidence-hash)))))
+     {:evidence (assoc evidence-record
+                      :evidence/hash (hc/hash-with-intent {:hash/intent :evidence-record}
+                                                          (dissoc evidence-record :evidence/hash :evidence-hash)))
+      :artifact result-artifact}))
+
+(defn write-allocation-result-artifact!
+  "Persist a pro-rata allocation result artifact to disk and register it in the
+   chain registry. Returns the file path written."
+  [artifact]
+  (let [result-id (:allocation-result-id artifact)
+        filename (str "allocation-result-" result-id ".json")
+        out-dir (str (evcfg/artifact-dir))
+        f (io/file out-dir filename)]
+    (.mkdirs (io/file out-dir))
+    (spit f (json/write-str artifact {:key-fn name :indent true}))
+    (println "Wrote allocation result artifact:" filename)
+    (chain/register-additional-artifact!
+     (chain/index-artifact-entry (keyword result-id) filename
+                                 "allocation-result.v1" "CORE"))
+    (.getPath f)))

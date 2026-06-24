@@ -525,16 +525,17 @@
                                               :slashable-stake 10000
                                               :available-slashable 10000}]}
           allocation-result (sew-econ/calculate-sew-slash-allocation allocation-input)
-          evidence (slashing-ev/build-prorata-slash-evidence
-                    {:world world0
-                     :slash-id "0-fraud-slash-0"
-                     :workflow-id 0
-                     :epoch 0
-                     :trigger :fraud-slash
-                     :allocation-input allocation-input
-                     :allocation-result allocation-result
-                     :transition-dependencies []
-                     :attribution nil})
+          {:keys [evidence]}
+          (slashing-ev/build-prorata-slash-evidence
+           {:world world0
+            :slash-id "0-fraud-slash-0"
+            :workflow-id 0
+            :epoch 0
+            :trigger :fraud-slash
+            :allocation-input allocation-input
+            :allocation-result allocation-result
+            :transition-dependencies []
+            :attribution nil})
           result (:evidence/result evidence)]
       (is (some? (:evidence/hash evidence)))
       (is (some? (get-in result [:projection :projection-hash])))
@@ -542,7 +543,9 @@
       (is (map? (get result :pro-rata)))
       (is (= 7 (count (get-in result [:pro-rata :claims]))))
       (is (= true (get-in result [:pro-rata :summary :holds?])))
-      (is (some? (get-in result [:pro-rata :allocation-hash]))))))
+      (is (some? (get-in result [:pro-rata :allocation-hash])))
+      (is (some? (get-in result [:pro-rata :allocation-result-hash]))
+          "Evidence must link to the canonical pro-rata allocation result artifact"))))
 
 (deftest test-proportional-slashing-basis-invariance
   (testing "Proportional slashing must be invariant to intermediate stake mutations"

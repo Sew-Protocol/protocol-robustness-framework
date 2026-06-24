@@ -295,3 +295,189 @@
               :remainder-policy remainder-policy
               :ordering-policy ordering-policy
               :total-weight total-weight}}))
+
+(def default-pro-rata-allocation-result-kind :pro-rata-allocation)
+(def default-pro-rata-allocation-result-version 1)
+(def default-pro-rata-allocation-result-artifact-kind :pro-rata/allocation-result)
+
+(defn build-pro-rata-allocation-result-artifact
+  "Build a pro-rata allocation result artifact from an allocation result
+   and its provenance context.
+
+   This is the ex-post outcome artifact that captures what was actually
+   allocated, complementing the ex-ante projection frame.
+
+   Required inputs:
+     :projection-artifact        — the ex-ante projection frame
+     :allocation-result          — output from allocate-pro-rata
+     :world-before-hash          — hash of the world before execution
+     :world-after-hash           — hash of the world after execution
+     :action-hash                — hash of the executed action
+     :action-hash-at             — hash of the action at execution time
+
+   Optional inputs:
+     :shortfall-outcome          — shortfall breakdown from evidence layer
+     :claims                     — claim result links
+     :invariant-links            — invariant result links
+     :evidence-record-hash       — evidence envelope hash
+     :metadata                   — additional metadata"
+  [{:keys [projection-artifact
+           allocation-result
+           world-before-hash
+           world-after-hash
+           action-hash
+           action-hash-at
+           shortfall-outcome
+           claims
+           invariant-links
+           evidence-record-hash
+           metadata]}]
+  (let [projection-artifact-hash (:projection-hash projection-artifact)
+        projection-definition-id (:projection-definition-id projection-artifact)
+        projection-definition-hash (:projection-definition-hash projection-artifact)
+        provenance {:world-before-hash world-before-hash
+                    :world-after-hash world-after-hash
+                    :action-hash action-hash
+                    :action-hash-at action-hash-at
+                    :evidence-record-hash evidence-record-hash}
+        source (get projection-artifact :source {})
+        source-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
+                                         {:projection-artifact-hash projection-artifact-hash
+                                          :allocation-result (dissoc allocation-result :policy)
+                                          :provenance provenance
+                                          :shortfall-outcome shortfall-outcome})
+        artifact-base {:schema-version 1
+                       :artifact-kind default-pro-rata-allocation-result-artifact-kind
+                       :allocation-result-id (str "allocation-pro-rata-"
+                                                  (short-hash source-hash))
+                       :allocation-result-type default-pro-rata-allocation-result-kind
+                       :allocation-result-version default-pro-rata-allocation-result-version
+                       :projection-artifact-hash projection-artifact-hash
+                       :projection-definition-id projection-definition-id
+                       :projection-definition-hash projection-definition-hash
+                       :source source
+                       :provenance provenance
+                       :allocation-result allocation-result
+                       :shortfall-outcome shortfall-outcome
+                       :claims (or claims [])
+                       :invariant-links (or invariant-links [])
+                       :metadata (or metadata {})}
+        allocation-result-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
+                                                    artifact-base)
+        artifact (assoc artifact-base :allocation-result-hash allocation-result-hash)]
+    (hc/validate-canonical-value! artifact)
+    artifact))
+
+(defn validate-pro-rata-allocation-result-artifact!
+  "Validate a pro-rata allocation result artifact by:
+   - verifying canonical safety
+   - recomputing and verifying allocation-result-hash
+   - requiring projection-artifact-hash
+   - requiring allocation-result
+   - validating allocation totals
+   - checking provenance fields
+   - rejecting mismatched hash"
+  [artifact]
+  (hc/validate-canonical-value! artifact)
+  (let [expected-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
+                                           (dissoc artifact :allocation-result-hash))]
+    (when-not (= expected-hash (:allocation-result-hash artifact))
+      (throw (ex-info "Pro-rata allocation result hash mismatch"
+                      {:expected expected-hash
+                       :actual (:allocation-result-hash artifact)}))))
+  (let [proj-hash (:projection-artifact-hash artifact)]
+    (when (nil? proj-hash)
+      (throw (ex-info "Missing projection-artifact-hash" {:artifact artifact}))))
+  (let [allocation (:allocation-result artifact)]
+    (when (nil? allocation)
+      (throw (ex-info "Missing allocation-result" {:artifact artifact})))
+    (let [total-requested (:total-requested allocation 0)
+          total-allocated (:total-allocated allocation 0)
+          total-unmet (:total-unmet allocation 0)
+          remainder (:remainder allocation 0)]
+      (when (not= total-requested (+ total-allocated total-unmet remainder))
+        (throw (ex-info "Allocation totals do not sum to total-requested"
+                        {:total-requested total-requested
+                         :sum (+ total-allocated total-unmet remainder)
+                         :total-allocated total-allocated
+                         :total-unmet total-unmet
+                         :remainder remainder})))))
+  (doseq [k [:world-before-hash :world-after-hash :action-hash :action-hash-at]]
+    (when (nil? (get-in artifact [:provenance k]))
+      (throw (ex-info (str "Missing provenance field: " k)
+                      {:field k :artifact artifact}))))
+  artifact)
+
+;; ──────────────────────────────────────────────────────────────────────────────
+;; Demo Rendering: Pro-Rata Result Tables and Proof Panels
+;; ──────────────────────────────────────────────────────────────────────────────
+
+(defn format-pro-rata-result-table
+  "Render a pro-rata allocation result as a formatted text table.
+   Columns: participant, weight, cap, allocated, unmet, remainder.
+
+   Input can be:
+   - A pro-rata allocation result artifact (with :allocation-result)
+   - An allocation-result map directly (with :allocations list)"
+  [artifact-or-result]
+  (let [allocations (if (:allocation-result artifact-or-result)
+                      (:allocations (:allocation-result artifact-or-result))
+                      (:allocations artifact-or-result))
+        result (if (:allocation-result artifact-or-result)
+                 (:allocation-result artifact-or-result)
+                 artifact-or-result)
+        {:keys [total-requested total-allocated total-unmet remainder]} result
+        sb (StringBuilder.)]
+    (.append sb (format "%-20s %8s %8s %8s %8s %8s%n"
+                        "Participant" "Weight" "Cap" "Allocated" "Unmet" "Remainder"))
+    (.append sb (apply str (repeat 60 "-")))
+
+    (doseq [a allocations]
+      (.append sb (format "%n%-20s %8s %8s %8s %8s %8s"
+                          (str (:id a))
+                          (str (:weight a "—"))
+                          (str (if (some? (:cap a)) (:cap a) "—"))
+                          (str (:allocated a))
+                          (str (:unmet a))
+                          (str (or (:remainder a) "—")))))
+
+    (.append sb (format "%n%n%-20s %8s %8s %8s %8s"
+                        "Total" "" "" (str total-allocated) (str total-unmet)))
+    (when (and remainder (pos? (or remainder 0)))
+      (.append sb (format " %8s" (str remainder))))
+
+    (.append sb (format "%nRequested: %s" total-requested))
+    (.append sb (format " | Allocated: %s" total-allocated))
+    (.append sb (format " | Unmet: %s" total-unmet))
+    (when (and remainder (pos? (or remainder 0)))
+      (.append sb (format " | Remainder: %s" remainder)))
+    (str sb)))
+
+(defn format-proof-panel
+  "Render a forensic proof/link panel for a pro-rata allocation result artifact.
+   Shows projection frame hash, allocation result hash, world hashes,
+   action-hash-at, evidence hash, and claim/invariant links."
+  [artifact]
+  (let [sb (StringBuilder.)
+        result-hash (:allocation-result-hash artifact)
+        proj-hash (:projection-artifact-hash artifact)
+        prov (:provenance artifact)
+        claims (:claims artifact [])
+        invariants (:invariant-links artifact [])]
+    (.append sb "=== Proof Panel: Pro-Rata Allocation Result ===\n")
+    (.append sb (format "  Allocation Result Hash:  %s%n" (or result-hash "—")))
+    (.append sb (format "  Projection Frame Hash:   %s%n" (or proj-hash "—")))
+    (.append sb (format "  Projection Def ID:       %s%n" (str (:projection-definition-id artifact "—"))))
+    (.append sb (format "  Projection Def Hash:     %s%n" (str (:projection-definition-hash artifact "—"))))
+    (.append sb (format "  World Before Hash:       %s%n" (or (:world-before-hash prov) "—")))
+    (.append sb (format "  World After Hash:        %s%n" (or (:world-after-hash prov) "—")))
+    (.append sb (format "  Action Hash:             %s%n" (or (:action-hash prov) "—")))
+    (.append sb (format "  Action Hash-At:          %s%n" (or (:action-hash-at prov) "—")))
+    (.append sb (format "  Evidence Record Hash:    %s%n" (or (:evidence-record-hash prov) "—")))
+    (.append sb (format "  Claim Links:             %d%n" (count claims)))
+    (doseq [c claims]
+      (.append sb (format "    - %s%n" (str (:claim-id c) " → " (:claim-result-hash c "—")))))
+    (.append sb (format "  Invariant Links:         %d%n" (count invariants)))
+    (doseq [iv invariants]
+      (.append sb (format "    - %s%n" (str iv))))
+    (str sb)))

@@ -67,6 +67,10 @@ The mapping is defined as a map from artifact-kind keywords to hash intent keywo
 | `:invariant-failure` | `:invariant-failure` | `INVARIANT_FAILURE_V1` | Evidence recorded when an invariant check fails |
 | `:checkpoint-evidence` | `:checkpoint-evidence` | `CHECKPOINT_EVIDENCE_V1` | Attestable checkpoint with world hash and chain position |
 | `:startup-validation` | `:startup-validation` | `STARTUP_VALIDATION_V1` | Startup registry validation evidence |
+| `:action` | `:action` | `ACTION_V1` | Canonical identity of a normalized action payload |
+| `:action-at` | `:action-at` | `ACTION_AT_V1` | Canonical identity of an action occurrence at a specific execution point |
+| `:projection-artifact` | `:projection-artifact` | `PROJECTION_ARTIFACT_V1` | Canonical identity of a projection artifact (ex-ante frame) |
+| `:pro-rata-allocation-result` | `:pro-rata-allocation-result` | `PRO_RATA_ALLOCATION_RESULT_V1` | Canonical identity of a pro-rata allocation result artifact (ex-post outcome) |
 
 ## 4. Artifact Kind Entry Shape
 

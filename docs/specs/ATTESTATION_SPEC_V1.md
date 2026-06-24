@@ -263,18 +263,37 @@ Consensus interpretation is outside the scope of this specification.
 
 ## 9. Attestation Validation
 
+Validation uses two independent layers.
+
+### Layer 1 — Registry-Backed Authorization (Mandatory)
+
+Uses the attestor registry (ATTESTOR_REGISTRY_SPEC_V1 §11) exclusively. No cryptographic work.
+
 Validation SHALL fail if:
 
 - attestor missing
 - subject missing
 - claim missing
 - timestamp missing
+- attestor not registered
+- attestor not active
+- signing key not authorized for attestor
+
+### Layer 2 — Cryptographic Verification (Optional)
+
+Pure signature check. No registry lookups. The verify-fn receives (data, signature) and returns pass/fail.
 
 Signature validation SHALL fail if:
 
 - signature malformed
 - public key unavailable
 - verification fails
+
+Unsigned attestations are valid at Layer 1 (key-authorized returns :unsigned).
+They are not verifiable at Layer 2 (signature-verified returns :unavailable).
+
+The two layers are independent. Registry authorization does not imply cryptographic
+validity. Cryptographic validity does not imply registry authorization.
 
 ------
 

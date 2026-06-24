@@ -145,6 +145,53 @@ The framework has evolved to provide robust tools for audit, traceability, and d
 * **Adversarial suite integration**: Python-based suite available through gRPC bridge.
 * **Artifact validation**: opt-in validation-root and artifact-registry validation available.
 
+## Registry Architecture
+
+The framework uses two complementary registries for content-addressed identity and semantic intent tracking.
+
+### Runtime Hash Intents
+
+File: `src/resolver_sim/hash/canonical.clj`
+
+The `hash-intents` map is the executable hash intent registry. Every content-addressed artifact kind maps to exactly one runtime hash intent, which defines how its canonical hash is computed.
+
+Each entry has the following fields:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `:intent/name` | keyword | Unique intent identifier (e.g. `:evidence-node`, `:action`, `:claim-result`) |
+| `:intent/domain-tag` | string | Domain-separated hash prefix (e.g. `"EVIDENCE_NODE_V1"`, `"ACTION_V1"`) |
+| `:intent/description` | string | Human-readable description of what the hash represents |
+| `:intent/includes` | set of keywords | Top-level keys included in the hash projection |
+| `:intent/excludes` | set of keywords | Top-level keys excluded from the hash projection (self-hash, runtime data) |
+| `:intent/projection-fn` | fn | Deterministic function that transforms input into canonical-safe data for hashing |
+| `:intent/version` | positive int | Monotonic version; incremented when the projection changes |
+
+The `domain-hash` algorithm prepends the domain tag to canonical bytes before SHA-256, preventing cross-domain hash collisions. Excluded keys are stripped by `strip-self-hash-fields` and per-intent projection functions.
+
+### Passive Intent Definitions
+
+File: `src/resolver_sim/definitions/passive_registries.clj`
+
+The `intent-definitions` vector is the DSL/project-level intent registry. These entries describe semantic intents used by hash projections, pro-rata allocation, and additive projection artifacts. They are the passive (non-executable) counterpart to the runtime hash intents.
+
+Each entry has the following fields:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `:id` | keyword | Unique registry identifier (e.g. `:identity/evidence-node`) |
+| `:version` | positive int | Schema version for the definition |
+| `:intent/type` | keyword | Semantic category (e.g. `:identity/hash-projection`, `:pro-rata/allocation`) |
+| `:intent/purpose` | keyword | Specific processing role (e.g. `:evidence-node-identity`, `:slash-obligation-allocation`) |
+| `:scope` | map | Protocol, domain, and module affinity |
+| `:inputs` | set of keywords | Required input fields for the projection |
+| `:constraints` | set of keywords | Invariant constraints on the projection (e.g. `:canonical-safe`, `:domain-separated`, `:self-hash-excluded`, `:conservation`) |
+| `:output` | map | Expected output type, unit, and any intent reference |
+| `:extensions-policy` | map | Whether extensions are allowed and whether they require namespaced keys |
+| `:description` | string | Human-readable description; also drives hash inclusion/exclusion documentation |
+
+The two registries are cross-validated at startup: every passive intent definition whose `:output` references a `:hash/intent` must correspond to a known runtime hash intent in `hash-intents`.
+
 ## Validation State Root
 
 The framework includes an opt-in state monad and validation-root builder for structured result accumulation.

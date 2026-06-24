@@ -166,8 +166,13 @@
 
 (defn build-sew-slash-projection-artifact
   "Build a passive projection artifact from the same SEW slash allocation input.
-   This is additive and does not change calculate-sew-slash-allocation."
-  [{:keys [slash-amount slash-obligation liable-parties slash-policy basis cap-field unmet-policy source metadata]
+   This is additive and does not change calculate-sew-slash-allocation.
+
+   Optional world-state provenance keys (:world-before-hash, :action-hash-at)
+   are included in the source when provided."
+  [{:keys [slash-amount slash-obligation liable-parties slash-policy
+           basis cap-field unmet-policy world-before-hash action-hash-at
+           source metadata]
     :or {basis :slashable-stake
          cap-field :available-slashable
          unmet-policy :record-only}}]
@@ -181,11 +186,15 @@
       :rounding :floor-with-largest-remainder
       :remainder-policy :unallocated
       :ordering-policy :input-order}
-     {:source (merge {:source/type :sew-slash-allocation-input
+     {:source (merge {:type :allocation-input
                       :basis basis
                       :cap-field cap-field
                       :unmet-policy unmet-policy
                       :slash-policy slash-policy}
+                     (when world-before-hash
+                       {:world-before-hash world-before-hash})
+                     (when action-hash-at
+                       {:action-hash-at action-hash-at})
                      (or source {}))
       :metadata metadata})))
 
