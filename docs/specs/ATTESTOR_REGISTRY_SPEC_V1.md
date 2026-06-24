@@ -8,6 +8,7 @@ The Attestor Registry is the authoritative catalog of entities permitted to issu
 
 Attestors may be:
 
+- researchers
 - CI systems
 - replay validators
 - benchmark validators

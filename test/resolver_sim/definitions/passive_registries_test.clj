@@ -273,3 +273,381 @@
         "startup-validation is a private def, so resolve returns nil from test ns
          (it's in the registry ns, not re-exported). The fact that the namespace
          loaded without throwing confirms startup validation passed.")))
+
+;; ── Attestor Registry Runtime Query Tests ────────────────────────────────────
+
+(deftest find-attestor-returns-known-attestor
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (some? attestor))
+    (is (= :ci-runner (:type attestor)))
+    (is (= :active (:status attestor)))
+    (is (= {:type :public-key
+            :algorithm :ed25519
+            :key-id "ci-validation-placeholder"
+            :public-key "ci-validation-placeholder-public-key"}
+           (:verification attestor)))))
+
+(deftest find-attestor-returns-nil-for-unknown
+  (is (nil? (registries/find-attestor :does-not-exist))))
+
+(deftest attestor-status-returns-keyword
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (= :active (registries/attestor-status attestor)))))
+
+(deftest attestor-active-returns-true-for-active-attestor
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (true? (registries/attestor-active? attestor)))))
+
+(deftest attestor-revoked-returns-false-for-active-attestor
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (false? (registries/attestor-revoked? attestor)))))
+
+(deftest key-authorized-returns-true-for-primary-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (true? (registries/key-authorized-for-attestor?
+                attestor "ci-validation-placeholder")))))
+
+(deftest key-authorized-returns-true-for-active-key-history
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (registries/key-authorized-for-attestor?
+         attestor "ci-validation-placeholder"))))
+
+(deftest key-authorized-returns-false-for-retired-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (not (registries/key-authorized-for-attestor?
+              attestor "ci-validation-v0")))))
+
+(deftest key-authorized-returns-false-for-unknown-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (not (registries/key-authorized-for-attestor?
+              attestor "completely-unknown-key")))))
+
+(deftest key-known-returns-true-for-retired-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (registries/key-known-for-attestor?
+         attestor "ci-validation-v0"))))
+
+(deftest key-known-returns-true-for-primary-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (registries/key-known-for-attestor?
+         attestor "ci-validation-placeholder"))))
+
+(deftest key-known-returns-true-for-delegate
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (registries/key-known-for-attestor?
+         attestor :ci-validation-signing-key))))
+
+(deftest key-known-returns-false-for-unknown-key
+  (let [attestor (registries/find-attestor :ci-validation)]
+    (is (not (registries/key-known-for-attestor?
+              attestor "never-heard-of-it")))))
+
+(deftest find-local-development-attestor-returns-expected-structure
+  (let [attestor (registries/find-attestor :local-development)]
+    (is (some? attestor))
+    (is (= :validator (:type attestor)))
+    (is (= :active (:status attestor)))
+    (is (= {:type :local-process :trust-boundary :developer-workstation}
+           (:verification attestor)))
+    (is (= [] (:key-history attestor)))
+    (is (= [] (:delegates attestor)))))
+
+;; ── Attestor Registry Validation Tests ────────────────────────────────────────
+;; ATTESTATOR_REGISTRY_SPEC_V1 §9: startup SHALL fail on:
+;;   invalid verification method, duplicate active key ids, malformed public keys
+
+(defn- valid-attestor-entry
+  ([] (valid-attestor-entry {}))
+  ([overrides]
+   (let [base {:id :test/attestor
+               :version 1
+               :type :validator
+               :display-name "Test attestor"
+               :status :active
+               :verification {:type :public-key
+                              :algorithm :ed25519
+                              :key-id "test-key-001"
+                              :public-key "test-public-key-bytes"}
+               :delegates []
+               :key-history []
+               :metadata {}}
+         merged (merge base overrides)]
+     (with-entry-hash :attestor :attestor-hash merged))))
+
+(defn- run-attestor-validation
+  [registry-name entries]
+  (registries/validate-attestor-registry-entries registry-name entries))
+
+(deftest attestor-registry-accepts-valid-entry
+  (testing "a valid public-key attestor passes validation"
+    (let [entry (valid-attestor-entry)
+          errors (run-attestor-validation :test-registry [entry])]
+      (is (empty? errors)))))
+
+(deftest attestor-registry-accepts-local-process-verification
+  (testing "a non public-key verification method is valid"
+    (let [entry (valid-attestor-entry {:verification {:type :local-process
+                                                      :trust-boundary :developer-workstation}})
+          errors (run-attestor-validation :test-registry [entry])]
+      (is (empty? errors)))))
+
+(deftest attestor-registry-detects-unknown-verification-type
+  (let [entry (valid-attestor-entry {:verification {:type :magic
+                                                    :algorithm :ed25519
+                                                    :key-id "k1"
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-verification-method (:error %)) errors))))
+
+(deftest attestor-registry-detects-non-map-verification
+  (let [entry (valid-attestor-entry {:verification "not-a-map"})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-verification-method (:error %)) errors))))
+
+(deftest attestor-registry-detects-missing-verification-type
+  (let [entry (valid-attestor-entry {:verification {:algorithm :ed25519
+                                                    :key-id "k1"
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-verification-method (:error %)) errors))))
+
+(deftest attestor-registry-detects-missing-algorithm-on-public-key
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :key-id "k1"
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-verification-method (:error %)) errors))))
+
+(deftest attestor-registry-detects-unknown-algorithm
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :algorithm :sha1
+                                                    :key-id "k1"
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-verification-method (:error %)) errors))))
+
+(deftest attestor-registry-detects-missing-key-id
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :algorithm :ed25519
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/missing-key-id (:error %)) errors))))
+
+(deftest attestor-registry-detects-malformed-key-id
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :algorithm :ed25519
+                                                    :key-id 123
+                                                    :public-key "pk"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/malformed-public-key (:error %)) errors))))
+
+(deftest attestor-registry-detects-missing-public-key
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :algorithm :ed25519
+                                                    :key-id "k1"}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/missing-public-key (:error %)) errors))))
+
+(deftest attestor-registry-detects-malformed-public-key
+  (let [entry (valid-attestor-entry {:verification {:type :public-key
+                                                    :algorithm :ed25519
+                                                    :key-id "k1"
+                                                    :public-key 456}})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/malformed-public-key (:error %)) errors))))
+
+(deftest attestor-registry-detects-invalid-status
+  (let [entry (valid-attestor-entry {:status :invalid-status})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-status (:error %)) errors))))
+
+;; ── Delegate Validation ───────────────────────────────────────────────────────
+
+(deftest attestor-registry-detects-non-vector-delegates
+  (let [entry (assoc (valid-attestor-entry) :delegates "not-a-vector")
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-delegates (:error %)) errors))))
+
+(deftest attestor-registry-detects-delegate-without-id
+  (let [entry (valid-attestor-entry {:delegates [{:status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-delegate (:error %)) errors))))
+
+(deftest attestor-registry-detects-delegate-with-invalid-id-type
+  (let [entry (valid-attestor-entry {:delegates [{:id 123 :status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-delegate (:error %)) errors))))
+
+(deftest attestor-registry-detects-delegate-with-invalid-status
+  (let [entry (valid-attestor-entry {:delegates [{:id :test-delegate :status :invalid}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-delegate-status (:error %)) errors))))
+
+;; ── Key History Validation ────────────────────────────────────────────────────
+
+(deftest attestor-registry-detects-non-vector-key-history
+  (let [entry (assoc (valid-attestor-entry) :key-history "not-a-vector")
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-key-history (:error %)) errors))))
+
+(deftest attestor-registry-detects-key-history-entry-without-key-id
+  (let [entry (valid-attestor-entry {:key-history [{:status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-key-history-entry (:error %)) errors))))
+
+(deftest attestor-registry-detects-key-history-entry-with-non-string-key-id
+  (let [entry (valid-attestor-entry {:key-history [{:key-id 123 :status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-key-history-entry (:error %)) errors))))
+
+(deftest attestor-registry-detects-key-history-entry-with-invalid-status
+  (let [entry (valid-attestor-entry {:key-history [{:key-id "k1" :status :invalid}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/invalid-key-history-entry-status (:error %)) errors))))
+
+;; ── Duplicate Active Key IDs ──────────────────────────────────────────────────
+
+(deftest attestor-registry-detects-duplicate-active-key-ids-within-key-history
+  (let [entry (valid-attestor-entry {:key-history [{:key-id "k1" :status :active}
+                                                   {:key-id "k1" :status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/duplicate-active-key-id (:error %)) errors))))
+
+(deftest attestor-registry-detects-duplicate-active-key-ids-within-delegates
+  (let [entry (valid-attestor-entry {:delegates [{:id :dup-key :status :active}
+                                                 {:id :dup-key :status :active}]})
+        errors (run-attestor-validation :test-registry [entry])]
+    (is (seq errors))
+    (is (some #(= :entry/duplicate-active-key-id (:error %)) errors))))
+
+(deftest attestor-registry-detects-duplicate-active-key-ids-across-entries
+  (let [entry-a (valid-attestor-entry {:id :attestor-a
+                                       :verification {:type :public-key
+                                                      :algorithm :ed25519
+                                                      :key-id "shared-key"
+                                                      :public-key "pk-a"}})
+        entry-b (valid-attestor-entry {:id :attestor-b
+                                       :verification {:type :public-key
+                                                      :algorithm :ed25519
+                                                      :key-id "shared-key"
+                                                      :public-key "pk-b"}})
+        errors (run-attestor-validation :test-registry [entry-a entry-b])]
+    (is (seq errors))
+    (is (some #(= :entry/duplicate-active-key-id (:error %)) errors))))
+
+(deftest attestor-registry-allows-same-key-in-different-roles
+  (testing "a key-id appearing both as primary and in key-history is NOT a duplicate"
+    ;; The ci-validation attestor in the real registry has this pattern.
+    (let [entry (valid-attestor-entry {:key-history [{:key-id "test-key-001" :status :active}]})]
+      (is (empty? (run-attestor-validation :test-registry [entry]))))))
+
+(deftest attestor-registry-allows-retired-key-in-key-history-as-non-duplicate
+  (let [entry (valid-attestor-entry {:key-history [{:key-id "test-key-001" :status :retired}]})]
+    (is (empty? (run-attestor-validation :test-registry [entry])))))
+
+(deftest attestor-registry-allows-delegate-with-different-id-than-primary-key
+  (let [entry (valid-attestor-entry {:delegates [{:id :delegate-key :status :active}]})]
+    (is (empty? (run-attestor-validation :test-registry [entry])))))
+
+;; ── Integration: validate-attestor-registry ───────────────────────────────────
+
+(deftest validate-attestor-registry-returns-valid-for-real-entries
+  (testing "the real attestor-registry passes validation"
+    (is (:valid? (registries/validate-attestor-registry)))))
+
+;; ── Cross-Registry Alignment Tests ────────────────────────────────────────────
+;; Validates that validate-intent-registry-alignment catches mismatches between
+;; passive intent-definitions and runtime hash-intents.
+
+(defn- hash-projection-passive-entry
+  "Build a minimal passive intent-definition entry with :identity/hash-projection type."
+  ([hash-intent-kw] (hash-projection-passive-entry hash-intent-kw {}))
+  ([hash-intent-kw overrides]
+   (merge {:id (keyword "identity" (name hash-intent-kw))
+           :version 1
+           :intent/type :identity/hash-projection
+           :intent/purpose (keyword (str (name hash-intent-kw) "-identity"))
+           :scope {:protocols #{:framework}
+                   :domains #{:identity}}
+           :inputs #{:data}
+           :constraints #{:canonical-safe}
+           :output {:type :canonical-hash
+                    :hash/intent hash-intent-kw}
+           :extensions-policy {:allowed? false}}
+          overrides)))
+
+(defn- runtime-hash-intent-entry
+  "Build a minimal runtime hash-intent contract entry."
+  ([kw] (runtime-hash-intent-entry kw {}))
+  ([kw overrides]
+   (merge {:intent/name kw
+           :intent/domain-tag (str (clojure.string/upper-case (name kw)) "_V1")
+           :intent/description (str "Test intent for " kw)
+           :intent/includes #{:data}
+           :intent/excludes #{:metadata}
+           :intent/projection-fn identity
+           :intent/version 1}
+          overrides)))
+
+(deftest cross-registry-accepts-valid-mapping
+  (let [passive (hash-projection-passive-entry :test-intent)
+        runtime {:test-intent (runtime-hash-intent-entry :test-intent)}
+        errors (registries/validate-intent-registry-alignment [passive] runtime)]
+    (is (empty? errors))))
+
+(deftest cross-registry-detects-missing-hash-intent-ref
+  (let [passive (assoc (hash-projection-passive-entry :test-intent)
+                       :output {:type :canonical-hash})  ;; missing :hash/intent
+        runtime {:test-intent (runtime-hash-intent-entry :test-intent)}
+        errors (registries/validate-intent-registry-alignment [passive] runtime)]
+    (is (seq errors))
+    (is (some #(= :cross/missing-hash-intent-ref (:error %)) errors))))
+
+(deftest cross-registry-detects-unknown-hash-intent
+  (let [passive (hash-projection-passive-entry :no-such-intent)
+        runtime {}  ;; empty runtime registry
+        errors (registries/validate-intent-registry-alignment [passive] runtime)]
+    (is (seq errors))
+    (is (some #(= :cross/missing-hash-intent (:error %)) errors))))
+
+(deftest cross-registry-detects-version-mismatch
+  (let [passive (hash-projection-passive-entry :test-intent {:version 2})
+        runtime {:test-intent (runtime-hash-intent-entry :test-intent {:intent/version 1})}
+        errors (registries/validate-intent-registry-alignment [passive] runtime)]
+    (is (seq errors))
+    (is (some #(= :cross/version-mismatch (:error %)) errors))))
+
+(deftest cross-registry-ignores-non-hash-projection-entries
+  (let [passive {:id :pro-rata/test-allocation
+                 :version 1
+                 :intent/type :pro-rata/allocation
+                 :intent/purpose :test-allocation
+                 :scope {:protocols #{:test}}
+                 :inputs #{:data}
+                 :constraints #{:conservation}
+                 :output {:type :allocation-vector}}
+        errors (registries/validate-intent-registry-alignment [passive] {})]
+    (is (empty? errors))))
+
+(deftest cross-registry-works-with-real-registries
+  (testing "validate-passive-registries includes cross-registry alignment and passes for real data"
+    (is (:valid? (registries/validate-passive-registries)))))

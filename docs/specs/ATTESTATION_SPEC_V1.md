@@ -17,6 +17,7 @@ Examples:
 - CI verified execution
 - Replay verifier confirmed determinism
 - External auditor certified benchmark
+- Researcher attests to the results of another researcher
 - Human reviewer approved report
 
 ------

@@ -2,9 +2,17 @@
 
 Status: Draft V1
 
+## 0. Scope
+
+This spec defines the **passive intent definitions registry** in `resolver-sim.definitions.passive-registries`. This registry catalogs semantic intent types, purposes, scopes, inputs, constraints, and output shapes. It is the governance surface for what intents exist and what they mean.
+
+**This spec does NOT define the executable hash intent registry.** Executable hash semantics — domain tags, projection functions, includes/excludes, and runtime `hash-with-intent` resolution — are defined by [`HASH_INTENT_REGISTRY_SPEC_V1`](./HASH_INTENT_REGISTRY_SPEC_V1.md).
+
+Passive intent definitions may reference, classify, or describe runtime hash intents, but the validation rules and entry shapes are different. See §14 for the relationship between the two registries.
+
 ## 1. Purpose
 
-The Intent Registry is the authoritative catalog of allowed semantic intents.
+The passive Intent Registry is the authoritative catalog of allowed semantic intents for the system.
 
 It defines:
 
@@ -16,7 +24,7 @@ It defines:
 - compatible scopes
 - validation rules
 
-Intent objects SHALL be validated against this registry at startup and before use in hashing, projection, evidence generation, claim evaluation, or attestation signing.
+Intent objects SHALL be validated against this registry at startup and before use in projection, evidence generation, claim evaluation, or attestation signing.
 
 ------
 
@@ -48,11 +56,10 @@ Intent registry entries SHALL have canonical hashes.
 
 Invalid intent objects SHALL NOT be accepted by:
 
-- `hash-with-intent`
 - projection functions
 - evidence node generation
 - claim evaluation
-- attestation creation
+- attestation signing
 
 ------
 
@@ -427,16 +434,21 @@ Development warning-only mode MAY exist but MUST be explicit.
 
 ------
 
-## 14. Relationship to `hash-with-intent`
+## 14. Relationship to `HASH_INTENT_REGISTRY_SPEC_V1`
 
-`hash-with-intent` SHALL:
+The passive intent definitions registry (this spec) and the executable hash intent registry ([`HASH_INTENT_REGISTRY_SPEC_V1`](./HASH_INTENT_REGISTRY_SPEC_V1.md)) serve different purposes:
 
-1. validate the intent object against INTENT_DSL_SPEC_V1
-2. validate the intent object against INTENT_REGISTRY_SPEC_V1
-3. hash both data and canonical intent object
-4. use a domain-separated hash
+| Aspect | This spec | HASH_INTENT_REGISTRY_SPEC_V1 |
+|---|---|---|
+| Location | `passive_registries.clj` (intent-definitions) | `canonical.clj` (hash-intents) |
+| Entry shape | `:id`, `:version`, `:intent/type`, `:intent/purpose`, `:scope`, `:inputs`, `:constraints`, `:output` | `:intent/name`, `:intent/domain-tag`, `:intent/description`, `:intent/includes`, `:intent/excludes`, `:intent/projection-fn`, `:intent/version` |
+| Purpose | Semantic governance — what intents exist and what they mean | Runtime hash execution — how to project and hash data for a given intent |
+| Validated by | `validate-passive-registries!` (startup hard-fail) | `validate-registry!` (namespace-load hard-fail) |
+| Used by | Projection definitions, claim evaluations, evidence policy | `hash-with-intent` callsites |
 
-Invalid intent objects SHALL NOT be hashable.
+Both registries MUST pass validation at startup. A failure in either prevents system start.
+
+`hash-with-intent` is defined by `HASH_INTENT_REGISTRY_SPEC_V1`. It resolves against the executable hash intent registry, not the passive intent definitions registry. The passive registry wraps the executable registry entries (`hash-projection-registry-definitions` in `passive_registries.clj`) so they appear in the passive validation surface.
 
 ------
 

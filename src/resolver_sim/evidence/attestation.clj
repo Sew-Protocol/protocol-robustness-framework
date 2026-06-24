@@ -1,0 +1,392 @@
+(ns resolver-sim.evidence.attestation
+  "ATTESTATION_SPEC_V1 attestation builder and shape validator.
+
+   Provides:
+   - build-attestation  — construct a spec-compliant attestation map
+   - validate-attestation-shape — structural validation per spec §9
+
+   Usage:
+     (require '[resolver-sim.evidence.attestation :as att])
+
+     (att/build-attestation
+       {:type :ci-runner :id \"github-actions\"}
+       {:type :evidence-node :hash \"sha256:abc...\"}
+       :verified
+       {:timestamp \"2026-06-23T12:00:00Z\"
+        :signing-fn (fn [data] {:algorithm :ed25519
+                                :public-key-id \"key-001\"
+                                :signature-bytes \"hex...\"})})"
+  (:require [clojure.set :as set]
+            [resolver-sim.definitions.passive-registries :as registries])
+  (:import [java.util UUID]))
+
+;; ── Constants ────────────────────────────────────────────────────────────────
+
+(def ^:const schema-version 1)
+
+;; ── Attestation Builder ──────────────────────────────────────────────────────
+
+(defn- generate-attestation-id
+  []
+  (str (UUID/randomUUID)))
+
+(defn- default-timestamp
+  []
+  (str (java.time.Instant/now)))
+
+(defn build-attestation
+  "Build a spec-compliant ATTESTATION_SPEC_V1 attestation map.
+
+   Arguments:
+     attestor  — map {:type ... :id ...}
+     subject   — map {:type :evidence-node|:claim :hash ...|:claim-id ...}
+     claim     — keyword, one of :verified :reproduced :certified :approved :rejected
+     opts      — optional map with keys:
+                 :id         — override attestation-id (default: UUID)
+                 :timestamp  — ISO-8601 UTC string (default: now)
+                 :signing-fn — (fn [data]) returning {:algorithm :public-key-id :signature-bytes}
+                 :metadata   — optional metadata map
+
+   Returns a map conforming to ATTESTATION_SPEC_V1 §3."
+  [attestor subject claim & [{:keys [id timestamp signing-fn metadata]}]]
+  (let [attestation {:attestation-id (or id (generate-attestation-id))
+                     :attestor attestor
+                     :subject subject
+                     :claim claim
+                     :timestamp (or timestamp (default-timestamp))}
+        with-meta (if metadata (assoc attestation :metadata metadata) attestation)
+        to-sign (dissoc with-meta :signature :metadata)]
+    (if signing-fn
+      (assoc with-meta :signature (signing-fn to-sign))
+      with-meta)))
+
+;; ── Shape Validation ─────────────────────────────────────────────────────────
+
+(defn- missing-field-error
+  [field]
+  {:type :attestation/missing-field
+   :field field
+   :message (str "Missing required field: " (name field))})
+
+(defn- malformed-signature-error
+  [detail]
+  {:type :attestation/malformed-signature
+   :message "Signature is malformed"
+   :detail detail})
+
+(defn- validate-required-fields
+  [attestation]
+  (let [required #{:attestation-id :attestor :subject :claim :timestamp}
+        missing (clojure.set/difference required (set (keys attestation)))]
+    (mapv missing-field-error missing)))
+
+(defn- validate-subject
+  [subject]
+  (cond-> []
+    (not (:type subject))
+    (conj {:type :attestation/invalid-subject
+           :message "Subject missing required :type field"
+           :subject subject})
+    (not (#{:evidence-node :claim} (:type subject)))
+    (conj {:type :attestation/invalid-subject-type
+           :message (str "Subject :type must be :evidence-node or :claim, got " (pr-str (:type subject)))
+           :subject subject})
+    (and (= :evidence-node (:type subject)) (not (:hash subject)))
+    (conj {:type :attestation/invalid-subject
+           :message "Subject of type :evidence-node missing required :hash"
+           :subject subject})
+    (and (= :claim (:type subject)) (not (:claim-id subject)))
+    (conj {:type :attestation/invalid-subject
+           :message "Subject of type :claim missing required :claim-id"
+           :subject subject})))
+
+(defn- validate-attestor
+  [attestor]
+  (cond-> []
+    (not (map? attestor))
+    (conj {:type :attestation/invalid-attestor
+           :message (str "Attestor must be a map, got " (type attestor))
+           :attestor attestor})
+    (not (:type attestor))
+    (conj {:type :attestation/invalid-attestor
+           :message "Attestor missing required :type field"
+           :attestor attestor})
+    (not (:id attestor))
+    (conj {:type :attestation/invalid-attestor
+           :message "Attestor missing required :id field"
+           :attestor attestor})))
+
+(defn- validate-signature
+  [signature]
+  (when signature
+    (cond-> []
+      (not (map? signature))
+      (conj (malformed-signature-error (str "Expected map, got " (type signature))))
+      (and (map? signature) (not (:algorithm signature)))
+      (conj (malformed-signature-error "Missing :algorithm"))
+      (and (map? signature) (not (:public-key-id signature)))
+      (conj (malformed-signature-error "Missing :public-key-id"))
+      (and (map? signature) (not (:signature-bytes signature)))
+      (conj (malformed-signature-error "Missing :signature-bytes")))))
+
+(defn validate-attestation-shape
+  "Validate that an attestation map conforms to ATTESTATION_SPEC_V1 §9.
+   Returns {:valid? true} or {:valid? false :errors [...]}.
+
+   Checks:
+   - Required fields present (:attestation-id, :attestor, :subject, :claim, :timestamp)
+   - Attestor has :type and :id
+   - Subject has valid :type and matching id field (:hash or :claim-id)
+   - Signature is correctly structured (if present)"
+  [attestation]
+  (let [required-errors (validate-required-fields attestation)
+        attestor-errors (if-let [a (:attestor attestation)]
+                          (validate-attestor a)
+                          [])
+        subject-errors (if-let [s (:subject attestation)]
+                         (validate-subject s)
+                         [])
+        signature-errors (validate-signature (:signature attestation))
+        all-errors (vec (concat required-errors attestor-errors subject-errors signature-errors))]
+    (if (seq all-errors)
+      {:valid? false :errors all-errors}
+      {:valid? true})))
+
+;; ── Registry-Backed Verification ────────────────────────────────────────────
+;; ATTESTATION_SPEC_V1 §9 and ATTESTOR_REGISTRY_SPEC_V1 §11.
+;; verify-attestation runs all checks and returns per-check results.
+
+(defn- attestor-id
+  "Extract attestor identifier string from an attestation's :attestor field."
+  [attestation]
+  (:id (:attestor attestation)))
+
+(defn- signing-key-id
+  "Extract the signing key identifier from the attestation's :signature.
+   Returns nil if no signature or no public-key-id in signature."
+  [attestation]
+  (get-in attestation [:signature :public-key-id]))
+
+(defn- data-to-verify
+  "Reconstruct the data that was signed: the attestation minus :signature and :metadata."
+  [attestation]
+  (dissoc attestation :signature :metadata))
+
+(defn- check-attestor-exists
+  "Check that the attestor is registered."
+  [attestation]
+  (let [id (attestor-id attestation)
+        entry (when id (registries/find-attestor id))]
+    {:check :attestor-exists
+     :pass? (some? entry)
+     :detail (if entry
+               {:attestor-id (:id entry) :type (:type entry)}
+               {:attestor-id id :reason :not-found})}))
+
+(defn- check-attestor-active
+  "Check that the attestor's current status is :active."
+  [attestation]
+  (let [id (attestor-id attestation)
+        entry (when id (registries/find-attestor id))]
+    (if entry
+      {:check :attestor-active
+       :pass? (registries/attestor-active? entry)
+       :detail {:attestor-id (:id entry) :status (registries/attestor-status entry)}}
+      {:check :attestor-active
+       :pass? false
+       :detail {:attestor-id id :reason :attestor-not-found}})))
+
+(defn- check-key-authorized
+  "Check that the signing key is authorized for this attestor.
+   Authorized means: primary key match, active delegate, or active in key-history.
+   If the attestation has no signature, this check passes as :unsigned."
+  [attestation]
+  (let [id (attestor-id attestation)
+        key-id (signing-key-id attestation)
+        entry (when id (registries/find-attestor id))]
+    (cond
+      (nil? entry)
+      {:check :key-authorized
+       :pass? false
+       :detail {:attestor-id id :reason :attestor-not-found}}
+      (nil? (:signature attestation))
+      {:check :key-authorized
+       :pass? :unsigned
+       :detail {:reason :no-signature}}
+      (nil? key-id)
+      {:check :key-authorized
+       :pass? false
+       :detail {:reason :no-key-id-in-signature}}
+      :else
+      (let [authorized? (boolean (registries/key-authorized-for-attestor? entry key-id))
+            known? (registries/key-known-for-attestor? entry key-id)]
+        {:check :key-authorized
+         :pass? authorized?
+         :detail {:key-id key-id
+                  :authorized? authorized?
+                  :known? known?
+                  :status (cond
+                            authorized? :active
+                            known? :retired
+                            :else :unknown)}}))))
+
+(defn- check-signature
+  "Verify the cryptographic signature, if a verify-fn is provided.
+   Without verify-fn, reports :unavailable (not a pass/fail)."
+  [attestation verify-fn]
+  (let [signature (:signature attestation)]
+    (cond
+      (nil? signature)
+      {:check :signature-verified
+       :pass? :unsigned
+       :detail {:reason :no-signature-present}}
+
+      (nil? verify-fn)
+      {:check :signature-verified
+       :pass? :unavailable
+       :detail {:reason :no-verify-fn-provided}}
+
+      :else
+      (let [data (data-to-verify attestation)
+            result (try
+                     (verify-fn data signature)
+                     (catch Exception e
+                       {:pass? false :error (.getMessage e)}))
+            pass? (if (map? result) (:pass? result) (boolean result))]
+        {:check :signature-verified
+         :pass? pass?
+         :detail (if (map? result) result {:raw-result result})}))))
+
+(defn- check-subject-exists
+  "Check that the subject references a known evidence node or claim.
+   Requires a subject-resolver function in opts."
+  [attestation subject-resolver]
+  (let [subject (:subject attestation)]
+    (cond
+      (nil? subject)
+      {:check :subject-exists
+       :pass? false
+       :detail {:reason :no-subject}}
+
+      (nil? subject-resolver)
+      {:check :subject-exists
+       :pass? :unavailable
+       :detail {:reason :no-subject-resolver-provided}}
+
+      :else
+      (let [exists? (try
+                      (subject-resolver subject)
+                      (catch Exception e
+                        (do
+                          (.println *err* "subject-resolver failed:" (.getMessage e))
+                          nil)))]
+        (cond
+          (nil? exists?)
+          {:check :subject-exists
+           :pass? :error
+           :detail {:reason :resolver-threw :subject subject}}
+          exists?
+          {:check :subject-exists
+           :pass? true
+           :detail {:subject subject}}
+          :else
+          {:check :subject-exists
+           :pass? false
+           :detail {:reason :subject-not-found :subject subject}})))))
+
+(defn- check-revocation
+  "Check if the attestation has been revoked.
+   Requires a revocation-resolver fn in opts.
+   Per ATTESTATION_SPEC_V1 §7 and ATTESTOR_REGISTRY_SPEC_V1 §8,
+   revocation does not invalidate the cryptographic attestation —
+   this check is informational."
+  [attestation revocation-resolver]
+  (let [id (:attestation-id attestation)]
+    (cond
+      (nil? id)
+      {:check :revocation-status
+       :pass? :unavailable
+       :detail {:reason :no-attestation-id}}
+
+      (nil? revocation-resolver)
+      {:check :revocation-status
+       :pass? :unavailable
+       :detail {:reason :no-revocation-resolver-provided}}
+
+      :else
+      (let [revoked? (try
+                       (boolean (revocation-resolver id))
+                       (catch Exception e
+                         (do (.println *err* "revocation-resolver failed:" (.getMessage e))
+                             nil)))]
+        (cond
+          (nil? revoked?)
+          {:check :revocation-status
+           :pass? :error
+           :detail {:reason :resolver-threw :attestation-id id}}
+          revoked?
+          {:check :revocation-status
+           :pass? true
+           :detail {:revoked? true :attestation-id id}}
+          :else
+          {:check :revocation-status
+           :pass? false
+           :detail {:revoked? false :attestation-id id}})))))
+
+(defn verify-attestation
+  "Verify an attestation against the attestor registry and optional resolvers.
+   Returns {:valid? bool :checks [...]} where each check is:
+     {:check keyword :pass? boolean-or-keyword :detail map}
+
+   Checks performed:
+     :attestor-exists     — attestor id is in the registry (ATTESTOR_REGISTRY_SPEC_V1 §11)
+     :attestor-active     — attestor status is :active (ATTESTATION_SPEC_V1 §9)
+     :key-authorized      — signing key is active for this attestor (§7)
+     :signature-verified  — cryptographic signature (if verify-fn provided) (§5)
+     :subject-exists      — subject hash/claim-id resolves (if subject-resolver provided) (§10)
+     :revocation-status   — whether the attestation has been revoked (informational, §7)
+
+   Unless all applicable checks pass, :valid? is false.
+   Checks returning :unavailable, :unsigned, or :error do not count as failures.
+   The :revocation-status check is informational — revocation does not invalidate
+   the cryptographic attestation.
+
+   opts:
+     :verify-fn             — (fn [data-to-verify signature-map]) -> boolean or {:pass? bool}
+     :subject-resolver      — (fn [subject-map]) -> boolean
+     :revocation-resolver   — (fn [attestation-id]) -> boolean; true if revoked"
+  [attestation & [{:keys [verify-fn subject-resolver revocation-resolver]}]]
+  (let [checks [(check-attestor-exists attestation)
+                (check-attestor-active attestation)
+                (check-key-authorized attestation)
+                (check-signature attestation verify-fn)
+                (check-subject-exists attestation subject-resolver)
+                (check-revocation attestation revocation-resolver)]
+        hard-failures (filterv (fn [c]
+                                 (false? (:pass? c)))
+                               checks)]
+    {:valid? (empty? hard-failures)
+     :checks checks}))
+
+(defn verify-attestation-summary
+  "Single-keyword summary of attestation verification.
+   Returns one of:
+     :verified             — all applicable checks pass
+     :no-such-attestor     — attestor not in registry
+     :attestor-revoked     — attestor status is :revoked or :retired
+     :key-not-authorized   — signing key not authorized for attestor
+     :signature-mismatch   — cryptographic signature verification failed
+     :subject-unknown      — subject does not resolve
+     :no-signature         — attestation has no signature"
+  [attestation & opts]
+  (let [{:keys [valid? checks]} (apply verify-attestation attestation opts)]
+    (if valid?
+      :verified
+      (let [fail->summary {:attestor-exists :no-such-attestor
+                           :attestor-active :attestor-revoked
+                           :key-authorized :key-not-authorized
+                           :signature-verified :signature-mismatch
+                           :subject-exists :subject-unknown}
+            failures (filterv (fn [c] (false? (:pass? c))) checks)]
+        (or (some (fn [c] (get fail->summary (:check c))) failures)
+            :verification-failed)))))

@@ -69,7 +69,10 @@
    :evidence-node    "EVIDENCE_NODE_V1"
    :decision-evidence "DECISION_EVIDENCE_V1"
    :invariant-failure "INVARIANT_FAILURE_V1"
-   :startup-validation "STARTUP_VALIDATION_V1"})
+    :startup-validation "STARTUP_VALIDATION_V1"
+    :claim-result       "CLAIM_RESULT_V1"
+    :attestation        "ATTESTATION_V1"
+    :execution-definition "EXECUTION_DEFINITION_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -611,6 +614,45 @@
     {:intent intent
      :artifact artifact}))
 
+(defn project-claim-result
+  "Canonical projection for CLAIM_RESULT_SPEC_V1 claim evaluation results.
+   Includes only the fields that define claim result identity:
+     :claim-id, :claim-definition-hash, :holds?, :status
+   Excludes :violations (transient diagnostic detail), :evidence-references
+   (runtime addressing), and :depends-on (dependency graph)."
+  [value intent]
+  (let [artifact {:claim-id (:claim-id value)
+                  :claim-definition-hash (:claim-definition-hash value)
+                  :holds? (boolean (:holds? value))
+                  :status (:status value)}
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
+(defn project-attestation
+  "Canonical projection for ATTESTATION_SPEC_V1 attestation records.
+   Includes only the fields that define attestation identity:
+     :attestation-id, :attestor, :subject, :claim, :timestamp
+   Excludes :signature (cryptographic proof, not identity) and
+   :metadata (ephemeral)."
+  [value intent]
+  (let [artifact (select-keys value [:attestation-id :attestor :subject :claim :timestamp])
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
+(defn project-execution-definition
+  "Canonical projection for EXECUTION_REGISTRY_SPEC_V1 execution definition entries.
+   Includes only the fields that define execution identity:
+     :id, :version, :kind, :runner, :entry, :execution/type, :execution/mode, :claims
+   Excludes :description (documentation) and :depends-on (dependency graph)."
+  [value intent]
+  (let [keep-keys [:id :version :kind :runner :entry :execution/type :execution/mode :claims]
+        artifact (select-keys value keep-keys)
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
@@ -879,6 +921,33 @@
     :intent/includes    #{:registry-count :valid? :registry-summary :generated-at :schema-version}
     :intent/excludes    #{:registry-detail :full-registry-data}
     :intent/projection-fn project-identity
+    :intent/version     1}
+
+   :claim-result
+   {:intent/name        :claim-result
+    :intent/domain-tag  "CLAIM_RESULT_V1"
+    :intent/description "Canonical identity of a claim evaluation result"
+    :intent/includes    #{:claim-id :claim-definition-hash :holds? :status}
+    :intent/excludes    #{:violations :evidence-references :depends-on :metadata}
+    :intent/projection-fn project-claim-result
+    :intent/version     1}
+
+   :attestation
+   {:intent/name        :attestation
+    :intent/domain-tag  "ATTESTATION_V1"
+    :intent/description "Canonical identity of an attestation record"
+    :intent/includes    #{:attestation-id :attestor :subject :claim :timestamp}
+    :intent/excludes    #{:signature :metadata :canonical-hash}
+    :intent/projection-fn project-attestation
+    :intent/version     1}
+
+   :execution-definition
+   {:intent/name        :execution-definition
+    :intent/domain-tag  "EXECUTION_DEFINITION_V1"
+    :intent/description "Canonical identity of an execution registry definition entry"
+    :intent/includes    #{:id :version :kind :runner :entry :execution/type :execution/mode :claims}
+    :intent/excludes    #{:description :depends-on :canonical-hash}
+    :intent/projection-fn project-execution-definition
     :intent/version     1}})
 
 (defn resolve-intent

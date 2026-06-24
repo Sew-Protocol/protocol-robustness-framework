@@ -32,6 +32,7 @@
   :startup-safe)
 
 (declare validate-claim-definition-registry-entries)
+(declare validate-attestor-registry-entries)
 
 (defn- canonical-entry-hash
   [intent entry]
@@ -533,7 +534,8 @@
     :required-entry-fields #{:id :type :display-name :status
                              :verification :attestor-hash}
     :hash-intent :attestor
-    :hash-key :attestor-hash}
+    :hash-key :attestor-hash
+    :registry-validator-fn #'validate-attestor-registry-entries}
 
    :execution-registry
    {:registry execution-registry
@@ -811,6 +813,291 @@
                          :cycle cycle})))
              (keys graph)))))))
 
+;; ── Attestor Registry Validation ────────────────────────────────────────
+;; ATTESTOR_REGISTRY_SPEC_V1 §9: startup SHALL fail on:
+;;   - duplicate ids (handled by generic validate-registry)
+;;   - invalid verification method
+;;   - duplicate active key ids
+;;   - malformed public keys
+
+(def ^:private known-verification-types
+  #{:public-key :local-process})
+
+(def ^:private known-key-algorithms
+  #{:ed25519 :secp256k1})
+
+(def ^:private known-attestor-statuses
+  #{:active :revoked :retired})
+
+(defn- validate-attestor-verification
+  "Validate an attestor's :verification map.
+   Returns a vector of error maps (possibly empty)."
+  [registry-name id verification]
+  (cond-> []
+    (not (map? verification))
+    (conj (error :entry/invalid-verification-method
+                 {:registry registry-name :id id
+                  :reason :not-a-map :verification verification}))
+    (and (map? verification) (not (:type verification)))
+    (conj (error :entry/invalid-verification-method
+                 {:registry registry-name :id id
+                  :reason :missing-type :type (:type verification)}))
+    (and (map? verification) (:type verification)
+         (not (contains? known-verification-types (:type verification))))
+    (conj (error :entry/invalid-verification-method
+                 {:registry registry-name :id id
+                  :reason :unknown-type :type (:type verification)
+                  :known-types (vec (sort known-verification-types))}))
+    (and (map? verification) (= :public-key (:type verification)))
+    (cond->
+      (not (:algorithm verification))
+      (conj (error :entry/invalid-verification-method
+                   {:registry registry-name :id id
+                    :reason :missing-algorithm}))
+      (and (:algorithm verification)
+           (not (contains? known-key-algorithms (:algorithm verification))))
+      (conj (error :entry/invalid-verification-method
+                   {:registry registry-name :id id
+                    :reason :unknown-algorithm :algorithm (:algorithm verification)
+                    :known-algorithms (vec (sort known-key-algorithms))}))
+      (not (:key-id verification))
+      (conj (error :entry/missing-key-id
+                   {:registry registry-name :id id}))
+      (and (:key-id verification)
+           (not (and (string? (:key-id verification))
+                     (seq (:key-id verification)))))
+      (conj (error :entry/malformed-public-key
+                   {:registry registry-name :id id
+                    :reason :key-id-not-non-empty-string
+                    :key-id (:key-id verification)}))
+      (not (:public-key verification))
+      (conj (error :entry/missing-public-key
+                   {:registry registry-name :id id}))
+      (and (:public-key verification)
+           (not (and (string? (:public-key verification))
+                     (seq (:public-key verification)))))
+      (conj (error :entry/malformed-public-key
+                   {:registry registry-name :id id
+                    :reason :public-key-not-non-empty-string})))))
+
+(defn- validate-attestor-delegates
+  "Validate an attestor's :delegates vector.
+   Returns a vector of error maps (possibly empty)."
+  [registry-name id delegates]
+  (cond-> []
+    (not (vector? delegates))
+    (conj (error :entry/invalid-delegates
+                 {:registry registry-name :id id
+                  :reason :not-a-vector}))
+    (vector? delegates)
+    (into (mapcat (fn [d idx]
+                    (let [did (:id d)]
+                      (cond-> []
+                        (nil? did)
+                        (conj (error :entry/invalid-delegate
+                                     {:registry registry-name :id id
+                                      :reason :missing-id
+                                      :delegate-index idx}))
+                        (and did (not (or (keyword? did) (string? did))))
+                        (conj (error :entry/invalid-delegate
+                                     {:registry registry-name :id id
+                                      :reason :invalid-id-type
+                                      :delegate-id did
+                                      :delegate-index idx}))
+                        (and (contains? d :status)
+                             (not (contains? known-attestor-statuses (:status d))))
+                        (conj (error :entry/invalid-delegate-status
+                                     {:registry registry-name :id id
+                                      :delegate-id did
+                                      :delegate-index idx
+                                      :status (:status d)
+                                      :known-statuses (vec (sort known-attestor-statuses))})))))
+                  delegates (range)))))
+
+(defn- validate-attestor-key-history
+  "Validate an attestor's :key-history vector.
+   Returns a vector of error maps (possibly empty)."
+  [registry-name id key-history]
+  (cond-> []
+    (not (vector? key-history))
+    (conj (error :entry/invalid-key-history
+                 {:registry registry-name :id id
+                  :reason :not-a-vector}))
+    (vector? key-history)
+    (into (mapcat (fn [kh-entry idx]
+                    (let [key-id (:key-id kh-entry)]
+                      (cond-> []
+                        (nil? key-id)
+                        (conj (error :entry/invalid-key-history-entry
+                                     {:registry registry-name :id id
+                                      :reason :missing-key-id
+                                      :key-history-index idx}))
+                        (and key-id (not (string? key-id)))
+                        (conj (error :entry/invalid-key-history-entry
+                                     {:registry registry-name :id id
+                                      :reason :key-id-not-string
+                                      :key-id key-id
+                                      :key-history-index idx}))
+                        (and (contains? kh-entry :status)
+                             (not (contains? known-attestor-statuses (:status kh-entry))))
+                        (conj (error :entry/invalid-key-history-entry-status
+                                     {:registry registry-name :id id
+                                      :key-id key-id
+                                      :key-history-index idx
+                                      :status (:status kh-entry)
+                                      :known-statuses (vec (sort known-attestor-statuses))})))))
+                  key-history (range)))))
+
+(defn- active-key-id-pairs
+  "Return all [key-id source-info] pairs for active keys in an entry.
+   Active key IDs come from:
+   - primary verification :key-id (when attestor status is :active and verification type is :public-key)
+   - delegate :id (when delegate status is :active or absent)
+   - key-history :key-id (when key-history status is :active or absent)"
+  [entry]
+  (let [id (:id entry)
+        status (:status entry)]
+    (concat
+     (when (and (= :active status)
+                (= :public-key (get-in entry [:verification :type])))
+       (when-let [kid (get-in entry [:verification :key-id])]
+         [[kid {:source :primary :attestor-id id}]]))
+     (keep (fn [d]
+             (when (= :active (get d :status :active))
+               (when-let [did (:id d)]
+                 [did {:source :delegate :attestor-id id}])))
+           (:delegates entry))
+     (keep (fn [kh]
+             (when (= :active (get kh :status :active))
+               (when-let [kid (:key-id kh)]
+                 [kid {:source :key-history :attestor-id id}])))
+           (:key-history entry)))))
+
+(defn- find-duplicate-active-key-ids
+  "Detect key-id values that are active in more than one role across the registry.
+   A key used as :primary and also listed in :key-history for the same attestor
+   is NOT a duplicate — the key-history includes the current key.
+   All other duplicate occurrences are flagged (same key-id in multiple delegates,
+   multiple key-history entries, different attestors, etc.).
+   Returns a vector of error maps."
+  [entries]
+  (let [all-pairs (mapcat active-key-id-pairs entries)
+        by-kid (group-by first all-pairs)]
+    (mapcat (fn [[key-id pairs]]
+              (let [sources (mapv second pairs)
+                    by-attestor (group-by :attestor-id sources)]
+                (if (> (count by-attestor) 1)
+                  ;; Key appears in multiple attestors — always a duplicate
+                  [(error :entry/duplicate-active-key-id
+                          {:key-id key-id
+                           :sources sources})]
+                  ;; Within a single attestor
+                  (let [srcs (first (vals by-attestor))
+                        roles (set (map :source srcs))]
+                    (when (and (> (count srcs) 1)
+                               (not= #{:primary :key-history} roles))
+                      [(error :entry/duplicate-active-key-id
+                              {:key-id key-id
+                               :sources srcs})])))))
+            by-kid)))
+
+(defn validate-attestor-registry-entries
+  "Return attestor-registry-specific validation errors for entries.
+   ATTESTATOR_REGISTRY_SPEC_V1 §9 checks:
+   - :verification is a valid map with required fields
+   - :delegates is a vector of valid delegates
+   - :key-history is a vector of valid entries
+   - no duplicate active key-ids across the registry"
+  [registry-name entries]
+  (vec
+   (concat
+    (mapcat (fn [entry]
+              (let [id (:id entry)]
+                (concat
+                 (validate-attestor-verification registry-name id (:verification entry))
+                 (when (contains? entry :status)
+                   (let [s (:status entry)]
+                     (when (and s (not (contains? known-attestor-statuses s)))
+                       [(error :entry/invalid-status
+                               {:registry registry-name :id id
+                                :status s
+                                :known-statuses (vec (sort known-attestor-statuses))})])))
+                 (validate-attestor-delegates registry-name id (:delegates entry))
+                 (validate-attestor-key-history registry-name id (:key-history entry)))))
+            entries)
+    (find-duplicate-active-key-ids entries))))
+
+;; ── Cross-Registry Alignment Validation ───────────────────────────────
+;; Validates that passive intent-definitions (INTENT_REGISTRY_SPEC_V1) and
+;; runtime hash-intents (HASH_INTENT_REGISTRY_SPEC_V1) are consistent.
+
+(defn- hash-intent-ref
+  "Extract the :hash/intent reference from a passive intent-definition entry.
+   Returns the hash-intent keyword or nil if not a hash-projection entry."
+  [entry]
+  (get-in entry [:output :hash/intent]))
+
+(defn validate-intent-registry-alignment
+  "Cross-validate passive intent-definitions against runtime hash-intents.
+   
+   For each passive entry with :intent/type :identity/hash-projection:
+     - :output :hash/intent must be present
+     - the referenced hash intent must exist in hc/hash-intents
+     - versions must match between passive and runtime
+   
+   For runtime hash intents:
+     - lists any hash intent not referenced by a passive intent-definition
+       (informational — some intents are projection-only, not semantic)
+   
+   Returns a vector of error maps (never throws)."
+  [intent-definitions hash-intents-map]
+  (let [hash-projection-entries (filter #(= :identity/hash-projection (:intent/type %))
+                                        intent-definitions)]
+    (vec
+     (concat
+      ;; Check 1: passive hash-projection entries must have :output :hash/intent
+      ;;         and the referenced runtime hash intent must exist
+      (mapcat (fn [entry]
+                (let [hid (hash-intent-ref entry)
+                      id (:id entry)
+                      errors (cond-> []
+                               (nil? hid)
+                               (conj (error :cross/missing-hash-intent-ref
+                                            {:registry :intent-registry
+                                             :id id
+                                             :reason :output-missing-hash-intent
+                                             :output (:output entry)}))
+                               (and hid (not (contains? hash-intents-map hid)))
+                               (conj (error :cross/missing-hash-intent
+                                            {:registry :intent-registry
+                                             :id id
+                                             :hash-intent hid
+                                             :reason :not-found-in-runtime-registry})))]
+                  ;; Version check (separate to avoid cond-> threading into let)
+                  (if (and hid (contains? hash-intents-map hid))
+                    (let [runtime-version (:intent/version (get hash-intents-map hid))
+                          passive-version (:version entry)]
+                      (if (and runtime-version passive-version
+                               (not= runtime-version passive-version))
+                        (conj errors
+                              (error :cross/version-mismatch
+                                     {:registry :intent-registry
+                                      :id id
+                                      :hash-intent hid
+                                      :passive-version passive-version
+                                      :runtime-version runtime-version}))
+                        errors))
+                    errors)))
+              hash-projection-entries)
+
+      ;; Check 2 is intentionally omitted: most runtime hash intents are
+      ;; projection-only (world-structure, evidence-record, etc.) and do not
+      ;; require passive intent-definitions. The hash-projection-registry in
+      ;; passive_registries wraps all runtime hash intents automatically.
+      ;; Only passive entries with :intent/type :identity/hash-projection
+      ;; are required to map to a runtime hash intent (checked above).
+      ))))
+
 (defn- validate-entry-hash
   [{:keys [hash-intent hash-key registry-name]} entry]
   (when-let [expected (get entry hash-key)]
@@ -893,13 +1180,17 @@
 (defn validate-passive-registries
   "Validate all registries and return an aggregate result.
    This function is passive and never throws.
-   Includes all 8 registered registry types."
+   Includes all 8 registered registry types plus cross-registry alignment."
   ([] (validate-passive-registries {:entry-validation-mode :startup-safe}))
   ([{:keys [entry-validation-mode]
      :or {entry-validation-mode :startup-safe}}]
    (binding [*entry-validation-mode* entry-validation-mode]
      (let [results (mapv registry-result (keys registry-specs))
-           errors (vec (mapcat :errors results))]
+           registry-errors (vec (mapcat :errors results))
+           ;; Cross-registry alignment: passive intent-definitions vs runtime hash-intents
+           cross-errors (validate-intent-registry-alignment
+                         intent-definitions hc/hash-intents)
+           errors (vec (concat registry-errors cross-errors))]
        {:valid? (empty? errors)
         :results results
         :errors errors}))))
@@ -977,6 +1268,75 @@
     ([] (validate-all-registries!))
     ([opts]
      (validate-all-registries! opts))))
+
+;; ── Attestor Registry Runtime Query ─────────────────────────────────────
+;; ATTESTOR_REGISTRY_SPEC_V1 runtime lookup functions.
+;; These are the only entrypoints for runtime attestor identity checks.
+
+(defn find-attestor
+  "Look up an attestor entry by :id in the attestor-registry.
+   Returns the attestor map or nil if not found."
+  [attestor-id]
+  (some #(when (= (:id %) attestor-id) %)
+        (:attestors attestor-registry)))
+
+(defn attestor-status
+  "Returns the current :status of an attestor entry.
+   One of :active, :revoked, :retired."
+  [attestor]
+  (:status attestor))
+
+(defn attestor-active?
+  "True if the attestor's current status is :active."
+  [attestor]
+  (= :active (:status attestor)))
+
+(defn attestor-revoked?
+  "True if the attestor's current status is :revoked."
+  [attestor]
+  (= :revoked (:status attestor)))
+
+(defn- id-match?
+  "Match two identifiers regardless of keyword/string type.
+   e.g., (id-match? :foo \"foo\") => true, (id-match? \"bar\" :bar) => true,
+   (id-match? :foo :foo) => true, (id-match? \"bar\" \"bar\") => true."
+  [a b]
+  (= (name a) (name b)))
+
+(defn key-history-entry
+  "Find a key-history entry for key-id. Returns the entry map or nil."
+  [attestor key-id]
+  (some #(when (id-match? (:key-id %) key-id) %)
+        (:key-history attestor)))
+
+(defn delegate-entry
+  "Find a delegate entry by delegate-id. Returns the entry map or nil."
+  [attestor delegate-id]
+  (some #(when (id-match? (:id %) delegate-id) %)
+        (:delegates attestor)))
+
+(defn key-authorized-for-attestor?
+  "True if key-id is currently authorized for this attestor.
+   Checks, in order:
+   1. Is key-id the attestor's primary verification key?
+   2. Is key-id an active delegate?
+   3. Is key-id active in key-history?
+   Returns false if the key is unknown or retired for this attestor."
+  [attestor key-id]
+  (or (id-match? (:key-id (:verification attestor)) key-id)
+      (let [delegate (delegate-entry attestor key-id)]
+        (and delegate (= :active (:status delegate))))
+      (let [history (key-history-entry attestor key-id)]
+        (and history (= :active (:status history))))))
+
+(defn key-known-for-attestor?
+  "True if key-id is known for this attestor, regardless of status.
+   Covers primary key, all key-history entries, and all delegates.
+   This is the broadest check — used for historical attestation verification."
+  [attestor key-id]
+  (or (id-match? (:key-id (:verification attestor)) key-id)
+      (boolean (key-history-entry attestor key-id))
+      (boolean (delegate-entry attestor key-id))))
 
 ;; ── Startup validation ─────────────────────────────────────────────────
 ;; Runs when this namespace is loaded.
