@@ -13,12 +13,24 @@
 (defn extract-decision-frame
   "Extract the decision frame (world state metadata) from the world.
    The frame/id is derived from the world content hash for deterministic
-   content-addressing — same world always produces the same frame."
+   content-addressing — same world always produces the same frame.
+   
+   Includes the full temporal context (:context/time) when available,
+   providing event-seq, clock mode, tick-seconds, and ISO instant
+   alongside block-ts and step for forensic ordering and reproducibility."
   [world]
-  {:frame/id (str "frame-" (hc/hash-with-intent {:hash/intent :world-structure} world) "-" (:step world 0))
-   :step (:step world 0)
-   :block-ts (time-ctx/block-ts world)
-   :world/hash (hc/hash-with-intent {:hash/intent :world-structure} world)})
+  (let [tc (time-ctx/temporal-context world)
+        world-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
+        step-val (or (:step tc) (:step world 0))
+        event-seq (:event-seq tc 0)]
+    {:frame/id (str "frame-" world-hash "-" step-val "-" event-seq)
+     :step step-val
+     :event-seq event-seq
+     :block-ts (time-ctx/block-ts world)
+     :instant (str (time-ctx/now world))
+     :clock/mode (:clock/mode tc :discrete-step)
+     :tick-seconds (:tick-seconds tc 86400)
+     :world/hash world-hash}))
 
 (defn build-evidence-aggregate
   "Construct a consistent evidence envelope.

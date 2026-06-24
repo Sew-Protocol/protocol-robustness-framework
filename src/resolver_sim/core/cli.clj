@@ -48,7 +48,7 @@
    [nil "--invariants" "Run S01-S100 deterministic invariant scenarios (in-process, no gRPC)"]
    [nil "--suite SUITE" "Run a named scenario path suite (e.g. yield-provider-scenarios, sew-yield-scenarios; use with --invariants)"]
    [nil "--fixture-suite SUITE" "Run a composed EDN fixture suite (e.g. suites/all-invariants; use with --invariants)"]
-   [nil "--scenario PATH" "Path to a single scenario JSON file to run (requires --invariants)"]
+   [nil "--scenario PATH" "Path to a single executable scenario file to run (requires --invariants; EDN preferred, JSON deprecated)"]
    [nil "--output-file PATH" "Path to write the replay result JSON (requires --scenario)"]
    [nil "--diff-traces" "Structural world diff between two replay JSON files"]
    [nil "--baseline PATH" "Baseline replay JSON (use with --diff-traces)"]
@@ -76,7 +76,7 @@
         "  clojure -M:run -- --invariants           # S01–S100 invariant registry"
         "  clojure -M:run -- --invariants --suite yield-provider-scenarios"
         "  clojure -M:run -- --invariants --fixture-suite suites/all-invariants"
-        "  clojure -M:run -- --invariants --scenario scenarios/S108_negative-yield-mild.json"
+        "  clojure -M:run -- --invariants --scenario scenarios/edn/S62_load-gradual-fallback.edn"
         "  clojure -M:run -- --diff-traces --baseline results/a.json --candidate results/b.json"
         "  clojure -M:diff-traces --baseline results/a.json --candidate results/b.json"]
        (str/join "\n")))

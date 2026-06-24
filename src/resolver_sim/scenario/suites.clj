@@ -79,25 +79,25 @@
 (def suites
   "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}.
 
-   The registry is the source of truth for named JSON scenario suites. Keep the
+   The registry is the source of truth for named file-backed scenario suites. Keep the
    metadata here aligned with task/docs entrypoints and protocol inference."
   {:dispute-resolution-scenarios {:paths        dispute-resolution-scenario-paths
                                   :protocol-id  "sew-v1"
                                   :title        "Dispute-resolution scenarios"
                                   :description  "Sew dispute-resolution coverage scenarios."
-                                  :kind         :json-path-suite
+                                  :kind         :file-path-suite
                                   :ci-tier      :coverage}
    :sew-yield-scenarios          {:paths        yield-scenario-paths
                                   :protocol-id  "sew-v1"
                                   :title        "Sew yield integration scenarios"
                                   :description  "Sew escrow scenarios that exercise yield integration behavior."
-                                  :kind         :json-path-suite
+                                  :kind         :file-path-suite
                                   :ci-tier      :integration}
    :yield-provider-scenarios     {:paths        yield-provider-scenario-paths
                                   :protocol-id  "yield-v1"
                                   :title        "Yield provider scenarios"
                                   :description  "Standalone yield-v1 scenarios backed by canonical top-level scenarios/Y01..Y05 files."
-                                  :kind         :json-path-suite
+                                  :kind         :file-path-suite
                                   :ci-tier      :provider}})
 
 (defn resolve-suite-key

@@ -6,9 +6,14 @@
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
-#   ./scripts/test.sh yield-provider-scenarios # Standalone yield-v1 JSON scenarios
-#   ./scripts/test.sh sew-yield-scenarios      # Sew escrow + yield integration JSON scenarios
-#   ./scripts/test.sh yield-scenarios          # Compatibility alias: runs both yield path suites
+#   ./scripts/test.sh yield-provider-scenarios # Standalone yield-v1 file-backed scenarios
+#   ./scripts/test.sh sew-yield-scenarios      # Sew escrow + yield integration file-backed scenarios
+#   ./scripts/test.sh yield-scenarios          # Compatibility alias: runs both yield path suites (deprecated)
+#   ./scripts/test.sh yield-provider-scenarios # Recommended: standalone yield-v1 file-backed scenarios
+#   ./scripts/test.sh sew-yield-scenarios      # Recommended: Sew escrow + yield integration file-backed scenarios
+#   ./scripts/test.sh scenario-registry        # Validate the canonical scenario registries (invariant + file-backed)
+#   ./scripts/test.sh scenario-registry:strict # Strict validation (fails on JSON scenario deprecation warnings)
+#   ./scripts/test.sh lint:cleanup          # Clean up lint warnings (interactive)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
@@ -112,6 +117,7 @@ run_unit() {
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (require '[resolver-sim.financial.pro-rata-characterization-test])
 (require '[resolver-sim.scenario.suites-test])
+(require '[resolver-sim.validation.scenario-registry-test])
 (let [results (t/run-tests
     'resolver-sim.core-tests
     'resolver-sim.protocol-alignment-test
@@ -133,7 +139,8 @@ run_unit() {
     'resolver-sim.contract-model.replay-batch-slash-domain-test
     'resolver-sim.protocols.sew.dispute-resolution-coverage-test
     'resolver-sim.financial.pro-rata-characterization-test
-    'resolver-sim.scenario.suites-test)]
+    'resolver-sim.scenario.suites-test
+    'resolver-sim.validation.scenario-registry-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -155,6 +162,7 @@ run_framework() {
 (require '[resolver-sim.io.scenario-fixture-parity-test])
 (require '[resolver-sim.contract-model.replay-batch-test])
 (require '[resolver-sim.financial.pro-rata-characterization-test])
+(require '[resolver-sim.validation.scenario-registry-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
@@ -166,7 +174,8 @@ run_framework() {
                 'resolver-sim.sim.waterfall-test
                 'resolver-sim.io.scenario-fixture-parity-test
                 'resolver-sim.contract-model.replay-batch-test
-                'resolver-sim.financial.pro-rata-characterization-test)]
+                'resolver-sim.financial.pro-rata-characterization-test
+                'resolver-sim.validation.scenario-registry-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -371,6 +380,13 @@ run_yield_scenarios() {
   echo "yield-scenarios is a compatibility alias; running yield-provider-scenarios then sew-yield-scenarios."
   run_yield_provider_scenarios || return $?
   run_sew_yield_scenarios
+}
+
+run_scenario_registry() {
+  require_clojure || return $?
+  echo "Validating canonical scenario registries..."
+  clojure -M -m resolver-sim.validation.scenario-registry
+  return $?
 }
 
 run_generators() {
@@ -860,6 +876,9 @@ case "$MODE" in
   yield-scenarios)
     run_yield_scenarios || FAILURES=$((FAILURES + 1))
     ;;
+  scenario-registry)
+    run_scenario_registry || FAILURES=$((FAILURES + 1))
+    ;;
   yield)
     run_yield || FAILURES=$((FAILURES + 1))
     ;;
@@ -918,6 +937,8 @@ case "$MODE" in
     echo ""
     run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
     echo ""
+    run_target scenario-registry run_scenario_registry || FAILURES=$((FAILURES + 1))
+    echo ""
     run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
     echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
@@ -936,7 +957,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|scenario-registry|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

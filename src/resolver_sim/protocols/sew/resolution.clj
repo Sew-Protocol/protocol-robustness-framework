@@ -1207,7 +1207,7 @@
                                   :amount amount
                                   :reason :fraud-slash}
                  action-hash     (hc/hash-with-intent {:hash/intent :action} action-map)
-                 step            (:ctx/step (attr/current-attribution) 0)
+                  step            (:ctx/event-index (attr/current-attribution) 0)
                  block-time      (time-ctx/block-ts world)
                  action-hash-at  (hc/hash-with-intent {:hash/intent :action-at}
                                                       {:action-hash action-hash
@@ -1218,32 +1218,33 @@
                                          :world-before-hash world-before-hash
                                          :action-hash-at action-hash-at))
                  allocation      (sew-econ/calculate-sew-slash-allocation-from-projection projection)]
-             (let [{:keys [evidence artifact]}
-                   (slashing-ev/build-prorata-slash-evidence
-                    {:world world-slashed
-                     :slash-id slash-id
-                     :workflow-id workflow-id
-                     :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                     :trigger :fraud-slash
-                     :allocation-input allocation-input
-                     :projection-artifact projection
-                     :allocation-result allocation
-                     :transition-dependencies (filterv some?
-                                                       [(:proposal-evidence-hash pending)])
-                     :world-before-hash world-before-hash
-                     :action-hash action-hash
-                     :action-hash-at action-hash-at
-                     :attribution (attr/current-attribution)})
-                   evidence (assoc evidence
-                                   :world/before-full-hash world-before-hash
-                                   :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]
-               (attr/with-attribution
-                 {:subject/type :slash
-                  :subject/id slash-id
-                  :action/type :slash/execute
-                  :evidence/reason :fraud-slash-executed}
-                 (cap/capture-event-evidence! evidence))
-               (slashing-ev/write-allocation-result-artifact! artifact))
+              (let [slash-attribution {:subject/type :slash
+                                       :subject/id slash-id
+                                       :action/type :slash/execute
+                                       :evidence/reason :fraud-slash-executed}]
+                (attr/with-attribution
+                  slash-attribution
+                  (let [{:keys [evidence artifact]}
+                        (slashing-ev/build-prorata-slash-evidence
+                         {:world world-slashed
+                          :slash-id slash-id
+                          :workflow-id workflow-id
+                          :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
+                          :trigger :fraud-slash
+                          :allocation-input allocation-input
+                          :projection-artifact projection
+                          :allocation-result allocation
+                          :transition-dependencies (filterv some?
+                                                            [(:proposal-evidence-hash pending)])
+                          :world-before-hash world-before-hash
+                          :action-hash action-hash
+                          :action-hash-at action-hash-at
+                          :attribution (attr/current-attribution)})
+                        evidence (assoc evidence
+                                        :world/before-full-hash world-before-hash
+                                        :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]
+                    (cap/capture-event-evidence! evidence)
+                    (slashing-ev/write-allocation-result-artifact! artifact))))
              (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation

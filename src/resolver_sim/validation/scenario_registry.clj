@@ -1,0 +1,199 @@
+(ns resolver-sim.validation.scenario-registry
+  "Validation entrypoint for the canonical deterministic scenario registries.
+
+   Covers:
+   - in-process invariant registry (`resolver-sim.protocols.sew.invariant-scenarios`)
+   - file-backed scenario suite registry (`resolver-sim.scenario.suites`)
+
+   The file-backed validation path intentionally reuses
+   `resolver-sim.io.scenario-runner/resolve-path-run-request` so registry
+   validation exercises the same protocol inference, dispatcher selection,
+   scenario-id checks, and metadata normalization used during actual scenario
+   execution."
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [resolver-sim.io.scenario-runner :as sr]
+            [resolver-sim.protocols.registry :as preg]
+            [resolver-sim.protocols.sew.invariant-scenarios :as inv-sc]
+            [resolver-sim.scenario.suites :as suites]))
+
+(defn- duplicate-values
+  [xs]
+  (->> xs
+       frequencies
+       (filter (fn [[_ n]] (> n 1)))
+       (map first)
+       sort
+       vec))
+
+(defn- known-protocol-id?
+  [protocol-id]
+  ((set (preg/known-protocol-ids)) protocol-id))
+
+(defn- validate-suite-definition!
+  [suite-key {:keys [paths protocol-id kind] :as suite-def}]
+  (when-not (map? suite-def)
+    (throw (ex-info "Malformed file-backed suite registry entry"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :suite-definition-not-a-map})))
+  (when-not (= :file-path-suite kind)
+    (throw (ex-info "File-backed suite registry entry must declare :kind :file-path-suite"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :unexpected-suite-kind
+                     :expected :file-path-suite
+                     :actual kind})))
+  (when-not (vector? paths)
+    (throw (ex-info "File-backed suite registry entry must provide :paths as a vector"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :suite-paths-not-a-vector
+                     :actual paths})))
+  (when-not (seq paths)
+    (throw (ex-info "File-backed suite registry entry must provide at least one path"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :suite-paths-empty})))
+  (when-not (every? string? paths)
+    (throw (ex-info "File-backed suite registry paths must all be strings"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :suite-path-not-a-string
+                     :paths paths})))
+  (when-not (string? protocol-id)
+    (throw (ex-info "File-backed suite registry entry must provide :protocol-id as a string"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :suite-protocol-not-a-string
+                     :actual protocol-id})))
+  (when-not (known-protocol-id? protocol-id)
+    (throw (ex-info "File-backed suite registry entry references an unknown protocol"
+                    {:suite/key suite-key
+                     :suite/definition suite-def
+                     :reason :unknown-suite-protocol
+                     :actual protocol-id
+                     :known-protocols (vec (preg/known-protocol-ids))})))
+  (let [duplicate-paths (duplicate-values paths)]
+    (when (seq duplicate-paths)
+      (throw (ex-info "File-backed suite registry entry contains duplicate scenario paths"
+                      {:suite/key suite-key
+                       :suite/definition suite-def
+                       :reason :duplicate-suite-paths
+                       :duplicates duplicate-paths})))))
+
+(defn- validate-suite-scenario-entry!
+  [suite-key protocol-id path]
+  (when-not (.exists (io/file path))
+    (throw (ex-info "File-backed suite registry references a missing scenario file"
+                    {:suite/key         suite-key
+                     :suite/protocol-id protocol-id
+                     :scenario/path     path
+                     :reason            :missing-scenario-file})))
+  (let [{request :scenario-run/request}
+        (sr/resolve-path-run-request [path] {:suite-id suite-key
+                                             :protocol protocol-id})
+        entry                  (first (:entries request))
+        explicit-scenario-id   (get-in entry [:scenario :scenario-id])
+        expected-dispatcher-id (keyword "protocol" protocol-id)]
+    (when-not explicit-scenario-id
+      (throw (ex-info "File-backed scenario is missing an explicit :scenario-id"
+                      {:suite/key         suite-key
+                       :suite/protocol-id protocol-id
+                       :scenario/path     path
+                       :reason            :missing-explicit-scenario-id})))
+    (when-not (= protocol-id (:protocol entry))
+      (throw (ex-info "File-backed suite protocol does not match the scenario protocol"
+                      {:suite/key         suite-key
+                       :suite/protocol-id protocol-id
+                       :scenario/path     path
+                       :scenario/id       explicit-scenario-id
+                       :reason            :scenario-protocol-mismatch
+                       :expected          protocol-id
+                       :actual            (:protocol entry)})))
+    (when-not (= expected-dispatcher-id (:dispatcher-id entry))
+      (throw (ex-info "File-backed scenario dispatcher does not match the resolved protocol"
+                      {:suite/key         suite-key
+                       :suite/protocol-id protocol-id
+                       :scenario/path     path
+                       :scenario/id       explicit-scenario-id
+                       :reason            :scenario-dispatcher-mismatch
+                       :expected          expected-dispatcher-id
+                       :actual            (:dispatcher-id entry)})))
+    {:suite/key       suite-key
+     :scenario/path   path
+     :scenario/id     explicit-scenario-id
+     :protocol/id     (:protocol entry)
+     :dispatcher/id   (:dispatcher-id entry)
+     :source          (:source entry)
+     :scenario-format (cond
+                        (str/ends-with? path ".edn") :edn
+                        (str/ends-with? path ".json") :json
+                        :else :unknown)}))
+
+(defn validate-file-backed-suite-registry!
+  "Validate the canonical file-backed scenario suite registry.
+
+   Checks:
+   - every suite entry is well formed
+   - every suite protocol is known
+   - every suite path exists
+   - every file-backed scenario has an explicit stable :scenario-id
+   - every file-backed scenario resolves through the expected protocol/dispatcher
+   - scenario ids are unique across all registered file-backed suites"
+  ([]
+   (validate-file-backed-suite-registry! (suites/known-suite-definitions)))
+  ([suite-registry]
+   (let [suite-keys   (->> (keys suite-registry) sort vec)
+         entries      (mapcat (fn [suite-key]
+                                (let [{:keys [paths protocol-id] :as suite-def}
+                                      (get suite-registry suite-key)]
+                                  (validate-suite-definition! suite-key suite-def)
+                                  (mapv #(validate-suite-scenario-entry! suite-key protocol-id %)
+                                        paths)))
+                              suite-keys)
+         scenario-ids (mapv :scenario/id entries)
+         duplicates   (duplicate-values scenario-ids)]
+     (when (seq duplicates)
+       (throw (ex-info "Duplicate file-backed scenario-id(s) detected"
+                       {:reason     :duplicate-file-backed-scenario-ids
+                        :duplicates duplicates
+                        :entries    (->> entries
+                                         (filter (fn [{scenario-id :scenario/id}]
+                                                   ((set duplicates) scenario-id)))
+                                         vec)})))
+     {:ok?                            true
+      :suite-count                    (count suite-keys)
+      :scenario-count                 (count entries)
+      :suite-keys                     suite-keys
+      :scenario-entries               (vec entries)
+      :deprecated-json-scenario-count (count (filter #(= :json (:scenario-format %)) entries))})))
+
+(defn validate-all!
+  "Validate all canonical deterministic scenario registries used by the runner."
+  ([]
+   (validate-all! (suites/known-suite-definitions)))
+  ([suite-registry]
+   (inv-sc/validate-all-scenarios!)
+   (let [file-backed-summary (validate-file-backed-suite-registry! suite-registry)]
+     {:ok?                   true
+      :registry/invariants   {:ok? true
+                              :scenario-count (count (set (keys inv-sc/scenario-type-registry)))}
+      :registry/file-backed  file-backed-summary})))
+
+(defn -main
+  [& _args]
+  (try
+    (let [{:registry/keys [invariants file-backed]} (validate-all!)]
+      (println "Scenario registry validation passed.")
+      (println (format "  Invariant scenarios: %d" (:scenario-count invariants)))
+      (println (format "  File-backed suites: %d" (:suite-count file-backed)))
+      (println (format "  File-backed scenarios: %d" (:scenario-count file-backed)))
+      (println (format "  Deprecated JSON executable scenarios: %d" (:deprecated-json-scenario-count file-backed))))
+    (catch Exception e
+      (binding [*out* *err*]
+        (println "Scenario registry validation failed:")
+        (println (str "  " (.getMessage e)))
+        (when-let [data (ex-data e)]
+          (println (pr-str data))))
+      (System/exit 1))))

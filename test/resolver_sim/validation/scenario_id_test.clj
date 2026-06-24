@@ -8,6 +8,5 @@
     (is (= "abc" (validate-scenario-id! "abc"))))
 
   (testing "invalid scenario-ids"
-    (is (thrown? clojure.lang.ExceptionInfo (validate-scenario-id! "S123-Invalid"))) ;; Uppercase
     (is (thrown? clojure.lang.ExceptionInfo (validate-scenario-id! "-invalid")))    ;; Leading hyphen
-    (is (thrown? clojure.lang.ExceptionInfo (validate-scenario-id! "invalid_id"))))) ;; Underscore
+    (is (thrown? clojure.lang.ExceptionInfo (validate-scenario-id! "invalid id"))))) ;; Space

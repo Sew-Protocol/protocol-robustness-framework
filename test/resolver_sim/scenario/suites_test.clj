@@ -1,9 +1,13 @@
 (ns resolver-sim.scenario.suites-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json]
+            [clojure.edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.registry :as preg]
-            [resolver-sim.scenario.suites :as suites]))
+            [resolver-sim.scenario.suites :as suites]
+            [resolver-sim.io.scenario-runner :as sr]
+            [resolver-sim.io.serialization :as ser]))
 
 (def ^:private expected-suite-keys
   #{:yield-provider-scenarios
@@ -26,6 +30,7 @@
         (is (map? definition))
         (is (= expected-metadata-keys (clojure.core/set (keys metadata)))
             (str "metadata keys: " (pr-str (keys metadata))))
+        (is (= :file-path-suite (:kind definition)))
         (is (seq paths))
         (is (= (count paths) (suites/suite-path-count suite-key)))
         (is (every? #(.exists (io/file %)) paths)
@@ -45,3 +50,18 @@
     (is (every? #(str/starts-with? % "scenarios/Y") paths))
     (is (not-any? #(str/includes? % "scenarios/yield/") paths))
     (is (= "yield-v1" (suites/suite-protocol-id :yield-provider-scenarios)))))
+
+(deftest machine-readable-suite-summary-can-be-parsed
+  (let [summaries (sr/known-suite-summaries)
+        edn-str (pr-str {:suites summaries})
+        parsed (clojure.edn/read-string edn-str)]
+    (is (map? parsed))
+    (is (contains? parsed :suites))
+    (is (vector? (:suites parsed)))))
+
+(deftest machine-readable-json-format-can-be-parsed
+  (let [summaries (sr/known-suite-summaries)
+        json-str (ser/serialize-artifact {:suites summaries} {:pretty? true})
+        parsed (clojure.data.json/read-str json-str)]
+    (is (map? parsed))
+    (is (contains? parsed "suites"))))

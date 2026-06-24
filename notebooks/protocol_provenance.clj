@@ -298,9 +298,9 @@
                             :overflow-y    "auto"
                             :border-radius "0 4px 4px 4px"
                             :margin        "0"}}
-              (or (get data active) "(not found — run bb run:scenario first)")
-             [:div {:style {:font-size "10px" :color "#64748b" :margin-top "12px"}}
-              "SHA-256: " (or (:hash data) "\u2014")]]))))}
+               (or (get data active) "(not found — run bb run:scenario first)")]
+              [:div {:style {:font-size "10px" :color "#64748b" :margin-top "12px"}}
+               "SHA-256: " (or (:hash data) "\u2014")]]))))}
   artifact-explorer-data)
 
 ;; ─────────────────────────────────────────────────────────────────────────────

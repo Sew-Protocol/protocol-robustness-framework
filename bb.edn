@@ -3,101 +3,95 @@
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
   run:scenario
-  {:doc "Run a named scenario alias. Usage: bb run:scenario <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
-   :task (let [args          (vec *command-line-args*)
-               scenario-map {"kleros/preemptive-escalation-rejected-l0"
-                             "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
-                                ;; deprecated alias (pre-2026-06 rename)
-                             "kleros/escalation-race"
-                             "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
-               pos-arg     (first (remove (fn [a] (.startsWith a "--")) args))
-               scenario     (or (get scenario-map pos-arg) pos-arg)
-               save-idx    (.indexOf args "--save-output")
-               save-dir    (when (<= 0 save-idx) (nth args (inc save-idx) nil))]
-           (when-not scenario
-             (throw (ex-info "Missing scenario alias/path. Usage: bb run:scenario <alias|scenario-path>" {})))
-           (let [t0        (System/currentTimeMillis)
-                 output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
-                 exit (try
-                        (let [;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
-                              alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
-                              level-idx (.indexOf args "--result-display-level")
-                              level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
-                              alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
-                              alias-val (when alias-idx (get alias-map (nth args alias-idx)))
-                              chosen (or level-val alias-val)
-                              cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
-                                         chosen (conj "--result-display-level" chosen))]
-                          (apply clojure {:dir "." :extra-deps {}}
-                                 (conj cli-args "--output-file" output-tmp)))
-                        0
-                        (catch clojure.lang.ExceptionInfo e
-                          (or (:exit (ex-data e)) 1)))
-                 dur  (- (System/currentTimeMillis) t0)]
-               ;; 1. Write the run manifest stubs (creates run-specific directory)
-             (shell "python3" "scripts/write_scenario_run_manifest.py"
-                    "--scenario"    scenario
-                    "--status"      (if (zero? exit) "pass" "fail")
-                    "--duration-ms" (str dur))
-               ;; 2. Extract scenario-scoped artifacts from the replay output
-             (try
-               (let [slug (some-> scenario
-                                  (clojure.string/replace (re-pattern "^.*/") "")
-                                  (clojure.string/replace (re-pattern "\\.json$") ""))
-                     runs-dir (java.io.File. "results/runs")
-                     dirs (when (.exists runs-dir)
-                            (->> (.listFiles runs-dir)
-                                 (filter (fn [x] (.isDirectory x)))
-                                 (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
-                                 (sort-by (fn [x] (.lastModified x)))
-                                 vec))
-                     latest-run (last dirs)]
-                 (when (and latest-run (.exists (java.io.File. output-tmp)))
-                   (shell "python3" "scripts/extract_scenario_artifacts.py"
-                          "--replay" output-tmp
-                          "--run-dir" (str (.getPath latest-run)))))
-               (catch Exception e
-                 (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
-               ;; 3. Save output if requested, otherwise clean up temp file
-             (if save-dir
-               (try
-                 (let [sd (java.io.File. save-dir)]
-                   (.mkdirs sd)
-                     ;; Copy replay output
-                   (if (.exists (java.io.File. output-tmp))
-                     (shell "cp" output-tmp (str save-dir "/replay-output.json")))
-                     ;; Copy test-artifacts contents
-                   (let [ta (java.io.File. "results/test-artifacts")]
-                     (when (.exists ta)
-                       (shell "cp" "-r" (str (.getCanonicalPath ta) "/.") (str save-dir "/artifacts/"))))
-                   (println (str "Saved demo output to " save-dir)))
-                 (catch Exception e
-                   (println (str "[run:scenario] --save-output failed:" (.getMessage e)))))
-               (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil)))
-               ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
-             (try
-               (let [slug (some-> scenario
-                                  (clojure.string/replace (re-pattern "^.*/") "")
-                                  (clojure.string/replace (re-pattern "\\.json$") ""))
-                     runs-dir (java.io.File. "results/runs")
-                     dirs (when (.exists runs-dir)
-                            (->> (.listFiles runs-dir)
-                                 (filter (fn [x] (.isDirectory x)))
-                                 (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
-                                 (sort-by (fn [x] (.lastModified x)))
-                                 vec))
-                     latest-run (last dirs)
-                     registry-path (when latest-run
-                                     (str (.getPath latest-run) "/test-artifacts.json"))]
-                 (if (and registry-path (.exists (java.io.File. registry-path)))
-                   (do
-                     (println (str "[artifact-registry-validation] Validating " registry-path))
-                     (apply clojure {:dir "." :extra-deps {}}
-                            ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
-                   (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
-               (catch Exception e
-                 (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
-             (when-not (zero? exit) (System/exit exit))))}
+{:doc "Run a scenario through the registry-driven execution path. Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
+    :task (let [args          (vec *command-line-args*)
+                scenario-id   (first (remove (fn [a] (.startsWith a "--")) args))
+                save-idx    (.indexOf args "--save-output")
+                save-dir    (when (<= 0 save-idx) (nth args (inc save-idx) nil))]
+            (when-not scenario-id
+              (throw (ex-info "Missing scenario-id. Usage: bb run:scenario <scenario-id>" {})))
+            (let [t0        (System/currentTimeMillis)
+                  output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
+                  exit (try
+                         (let [;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
+                               alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
+                               level-idx (.indexOf args "--result-display-level")
+                               level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
+                               alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
+                               alias-val (when alias-idx (get alias-map (nth args alias-idx)))
+                               chosen (or level-val alias-val)
+                               cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario-id" scenario-id]
+                                          chosen (conj "--result-display-level" chosen))]
+                           (apply clojure {:dir "." :extra-deps {}}
+                                  (conj cli-args "--output-file" output-tmp)))
+                         0
+                         (catch clojure.lang.ExceptionInfo e
+                           (or (:exit (ex-data e)) 1)))
+                  dur  (- (System/currentTimeMillis) t0)]
+                ;; 1. Write the run manifest stubs (creates run-specific directory)
+              (shell "python3" "scripts/write_scenario_run_manifest.py"
+                     "--scenario-id"    scenario-id
+                     "--status"      (if (zero? exit) "pass" "fail")
+                     "--duration-ms" (str dur))
+                ;; 2. Extract scenario-scoped artifacts from the replay output
+              (try
+                (let [slug (some-> scenario-id
+                                   (clojure.string/replace (re-pattern "^.*/") "")
+                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
+                      runs-dir (java.io.File. "results/runs")
+                      dirs (when (.exists runs-dir)
+                             (->> (.listFiles runs-dir)
+                                  (filter (fn [x] (.isDirectory x)))
+                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                  (sort-by (fn [x] (.lastModified x)))
+                                  vec))
+                      latest-run (last dirs)]
+                  (when (and latest-run (.exists (java.io.File. output-tmp)))
+                    (shell "python3" "scripts/extract_scenario_artifacts.py"
+                           "--replay" output-tmp
+                           "--run-dir" (str (.getPath latest-run)))))
+                (catch Exception e
+                  (println "[scenario-artifacts] Extraction skipped:" (.getMessage e))))
+                ;; 3. Save output if requested, otherwise clean up temp file
+              (if save-dir
+                (try
+                  (let [sd (java.io.File. save-dir)]
+                    (.mkdirs sd)
+                      ;; Copy replay output
+                    (if (.exists (java.io.File. output-tmp))
+                      (shell "cp" output-tmp (str save-dir "/replay-output.json")))
+                      ;; Copy test-artifacts contents
+                    (let [ta (java.io.File. "results/test-artifacts")]
+                      (when (.exists ta)
+                        (shell "cp" "-r" (str (.getCanonicalPath ta) "/.") (str save-dir "/artifacts/"))))
+                    (println (str "Saved demo output to " save-dir)))
+                  (catch Exception e
+                    (println (str "[run:scenario] --save-output failed:" (.getMessage e)))))
+                (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil)))
+                ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
+              (try
+                (let [slug (some-> scenario-id
+                                   (clojure.string/replace (re-pattern "^.*/") "")
+                                   (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
+                      runs-dir (java.io.File. "results/runs")
+                      dirs (when (.exists runs-dir)
+                             (->> (.listFiles runs-dir)
+                                  (filter (fn [x] (.isDirectory x)))
+                                  (filter (fn [x] (.startsWith (.getName x) (or slug ""))))
+                                  (sort-by (fn [x] (.lastModified x)))
+                                  vec))
+                      latest-run (last dirs)
+                      registry-path (when latest-run
+                                      (str (.getPath latest-run) "/test-artifacts.json"))]
+                  (if (and registry-path (.exists (java.io.File. registry-path)))
+                    (do
+                      (println (str "[artifact-registry-validation] Validating " registry-path))
+                      (apply clojure {:dir "." :extra-deps {}}
+                             ["-M" "-m" "resolver-sim.validation.integration.artifact-registry" registry-path]))
+                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
+                (catch Exception e
+                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
+              (when-not (zero? exit) (System/exit exit))))}
 
   run:scenario:family
   {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:scenario:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
@@ -108,7 +102,8 @@
                  scenarios (->> (file-seq (clojure.java.io/file "scenarios"))
                                 (filter (fn [f] (.isFile f)))
                                 (map (fn [f] (.getPath f)))
-                                (filter (fn [p] (clojure.string/ends-with? p ".json")))
+                                (filter (fn [p] (or (clojure.string/ends-with? p ".json")
+                                                    (clojure.string/ends-with? p ".edn"))))
                                 (filter (fn [p]
                                           (let [hay (str (clojure.string/lower-case p)
                                                          "\n"
@@ -210,7 +205,7 @@
                               (or given
                                   (let [slug (some-> scenario
                                                      (clojure.string/replace (re-pattern "^.*/") "")
-                                                     (clojure.string/replace (re-pattern "\\.json$") ""))]
+                                                     (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))]
                                     (str "results/evidence/" slug ".result.json"))))]
            (when-not scenario
              (throw (ex-info "Missing --scenario value. Usage: bb evidence:build --scenario <alias|scenario-path>" {})))
@@ -233,7 +228,7 @@
              (try
                (let [slug (some-> scenario
                                   (clojure.string/replace (re-pattern "^.*/") "")
-                                  (clojure.string/replace (re-pattern "\\.json$") ""))
+                                  (clojure.string/replace (re-pattern "\\.(json|edn)$") ""))
                      runs-dir (java.io.File. "results/runs")
                      dirs (when (.exists runs-dir)
                             (->> (.listFiles runs-dir)
@@ -307,6 +302,11 @@
   test:yield-scenarios {:doc "Compatibility alias for both yield path suites"
                         :task (shell "./scripts/test.sh yield-scenarios")}
 
+  scenario-registry:validate
+  {:doc "Validate the invariant scenario registry and file-backed scenario suite registry"
+   :task (clojure {:dir "." :extra-deps {}}
+                  "-M" "-m" "resolver-sim.validation.scenario-registry")}
+
   run:scenario:suite
   {:doc "Run a registered scenario path suite. Usage: bb run:scenario:suite <suite-key>"
    :task (let [suite-key (first *command-line-args*)]
@@ -317,10 +317,20 @@
                   (rest *command-line-args*)))}
 
   run:scenario:suites
-  {:doc "List registered scenario path suites."
-   :task (clojure {:dir "." :extra-deps {}}
-                  "-M" "-e"
-                  "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite-key :protocol-id :kind :ci-tier :path-count :title] (sr/known-suite-summaries))")}
+  {:doc "List registered scenario path suites. Usage: bb run:scenario:suites [--format edn|json]"
+   :task (let [args (vec *command-line-args*)
+               format-idx (.indexOf args "--format")
+               format-val (when (<= 0 format-idx) (nth args (inc format-idx) "table"))]
+           (case format-val
+             "edn" (clojure {:dir "." :extra-deps {}}
+                            "-M" "-e"
+                            "(require '[resolver-sim.io.scenario-runner :as sr]) (println (pr-str {:suites (sr/known-suite-summaries)}))")
+             "json" (clojure {:dir "." :extra-deps {}}
+                             "-M" "-e"
+                             "(require '[resolver-sim.io.scenario-runner :as sr] '[resolver-sim.io.serialization :as ser]) (println (ser/serialize-artifact {:suites (sr/known-suite-summaries)} {:pretty? true}))")
+             (clojure {:dir "." :extra-deps {}}
+                      "-M" "-e"
+                      "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite/key :suite/type :suite/protocols :suite/scenario-count :suite/title] (sr/known-suite-summaries))")))}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}
@@ -371,9 +381,19 @@
   fmt {:doc "Format code with cljfmt"
        :task (shell "clojure -M:fmt")}
 
-  validate {:doc "Structural validation pipeline: lint (fmt skipped due to env artifact issues)"
-            :task (do (println "Running structural validation (fmt skipped)...")
-                      (shell "clj -M:lint"))}
+  validate {:doc "Structural validation pipeline: lint + notebook namespace check"
+            :task (let [ok? (fn [ok?-label ok?-f]
+                              (print (str "▶ " ok?-label "... "))
+                              (flush)
+                              (let [ok (try (ok?-f) true (catch Exception _ false))]
+                                (println (if ok "PASS" "FAIL"))
+                                ok))
+                        lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint" "--lint" "src:test")))
+                        nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M" "-e" "(require (quote [resolver-sim.notebook.checks])) (require (quote [notebooks.report]))")))]
+                    (if (and lint-ok nb-ok)
+                      (println "VALIDATION PASSED")
+                      (do (println "VALIDATION FAILED")
+                          (System/exit 1))))}
 
   scenario:run
   {:doc "Compatibility alias for `run:scenario`."

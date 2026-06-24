@@ -4,12 +4,10 @@
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
-            [resolver-sim.protocols.registry :as preg]
             [resolver-sim.protocols.sew :as sew]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
-            [clojure.set :as set]))
+            [clojure.string :as str]))
 
 ;; ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,16 +27,14 @@
           suites))
 
 (defn- load-scenario [path]
-  (if (.endsWith path ".json")
-    (io-sc/load-scenario-file path)
-    (edn/read-string (slurp path))))
+  (io-sc/load-scenario-file path))
 
 (defrecord SewAdapter []
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
     (find-scenarios-in-suites (:scenario-suites benchmark)))
 
-  (execute-benchmark [_ benchmark scenarios]
+  (execute-benchmark [_ _benchmark scenarios]
     (mapv (fn [scenario-file]
             (let [path (.getPath scenario-file)
                   scenario (load-scenario path)

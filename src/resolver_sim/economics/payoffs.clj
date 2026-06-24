@@ -316,30 +316,38 @@
      :action-hash-at             — hash of the action at execution time
 
    Optional inputs:
-     :shortfall-outcome          — shortfall breakdown from evidence layer
-     :claims                     — claim result links
-     :invariant-links            — invariant result links
-     :evidence-record-hash       — evidence envelope hash
-     :metadata                   — additional metadata"
+      :shortfall-outcome          — shortfall breakdown from evidence layer
+      :claims                     — claim result links
+      :invariant-links            — invariant result links
+      :evidence-record-hash       — evidence envelope hash
+      :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
+      :metadata                   — additional metadata"
   [{:keys [projection-artifact
-           allocation-result
-           world-before-hash
-           world-after-hash
-           action-hash
-           action-hash-at
-           shortfall-outcome
-           claims
-           invariant-links
-           evidence-record-hash
-           metadata]}]
+            allocation-result
+            world-before-hash
+            world-after-hash
+            action-hash
+            action-hash-at
+            shortfall-outcome
+            claims
+            invariant-links
+            evidence-record-hash
+            attribution
+            metadata]}]
   (let [projection-artifact-hash (:projection-hash projection-artifact)
         projection-definition-id (:projection-definition-id projection-artifact)
         projection-definition-hash (:projection-definition-hash projection-artifact)
-        provenance {:world-before-hash world-before-hash
-                    :world-after-hash world-after-hash
-                    :action-hash action-hash
-                    :action-hash-at action-hash-at
-                    :evidence-record-hash evidence-record-hash}
+        provenance (merge
+                    {:world-before-hash world-before-hash
+                     :world-after-hash world-after-hash
+                     :action-hash action-hash
+                     :action-hash-at action-hash-at
+                     :evidence-record-hash evidence-record-hash}
+                    (when attribution
+                      {:scenario-id (:ctx/scenario-id attribution)
+                       :run-id (:ctx/run-id attribution)
+                       :event-index (:ctx/event-index attribution)
+                       :event-type (:ctx/event-type attribution)}))
         source (get projection-artifact :source {})
         source-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
                                          {:projection-artifact-hash projection-artifact-hash

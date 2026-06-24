@@ -1,11 +1,13 @@
 (ns resolver-sim.scenario.runner-test
-  (:require [clojure.string :as str]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [resolver-sim.scenario.runner :as runner]
-            [resolver-sim.scenario.report :as report]
+            [resolver-sim.io.scenario-runner :as scenario-runner]
             [resolver-sim.io.scenarios :as sc]
-            [resolver-sim.scenario.normalize :as norm]
             [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.scenario.normalize :as norm]
+            [resolver-sim.scenario.report :as report]
+            [resolver-sim.scenario.runner :as runner]
             [resolver-sim.sim.fixtures :as fixtures]))
 
 (deftest scenario-pass-respects-fixture-checks
@@ -49,7 +51,7 @@
         "should not re-evaluate when replay already has expectations")))
 
 (deftest yield-suite-summary-shape
-  (let [summary ((requiring-resolve 'resolver-sim.io.scenario-runner/run-paths)
+  (let [summary (scenario-runner/run-paths
                  ["scenarios/S108_negative-yield-mild.json"]
                  {:suite-id :yield-scenarios})]
     (is (= 1 (:total summary)))
@@ -57,7 +59,7 @@
     (is (= :yield-scenarios (:suite-id summary)))))
 
 (deftest yield-scenario-protocol-is-inferred-from-file
-  (let [summary ((requiring-resolve 'resolver-sim.io.scenario-runner/run-paths)
+  (let [summary (scenario-runner/run-paths
                  ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
                  {:suite-id :yield-scenarios})]
     (is (= 1 (:total summary)))
@@ -66,11 +68,162 @@
 
 (deftest yield-scenario-announces-inferred-protocol
   (let [out (with-out-str
-              ((requiring-resolve 'resolver-sim.io.scenario-runner/run-paths)
+              (scenario-runner/run-paths
                ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
                {:suite-id :yield-scenarios}))]
     (is (str/includes? out "[run:scenario]"))
     (is (str/includes? out "protocol yield-v1"))))
+
+(deftest path-run-request-captures-stable-run-metadata
+  (let [{request :scenario-run/request}
+        (scenario-runner/resolve-path-run-request
+         ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+         {:suite-id :yield-provider-scenarios})
+        entry (first (:entries request))]
+    (is (= :local-current (:runner/backend request)))
+    (is (= :yield-provider-scenarios (:suite/key request)))
+    (is (= 1 (:entry-count request)))
+    (is (= "Y02_vault-shortfall-partial-withdraw" (:scenario-id entry)))
+    (is (= "yield-v1" (:protocol entry)))
+    (is (= :protocol/yield-v1 (:dispatcher-id entry)))
+    (is (= "scenarios/Y02_vault-shortfall-partial-withdraw.json" (:scenario-path entry)))))
+
+(deftest suite-scenario-details-uses-run-request-path
+  (let [details (scenario-runner/suite-scenario-details
+                 "scenarios/Y02_vault-shortfall-partial-withdraw.json")]
+    (is (= "Y02_vault-shortfall-partial-withdraw" (:scenario/id details)))
+    (is (= :yield-v1 (:scenario/protocol details)))
+    (is (= :file (:scenario/source details)))
+    (is (= :protocol/yield-v1 (:scenario/dispatcher-id details)))))
+
+(defn- with-temp-scenario-file
+  ([body f]
+   (with-temp-scenario-file body ".json" f))
+  ([body suffix f]
+   (let [file (java.io.File/createTempFile "scenario-runner-" suffix)]
+     (spit file body)
+     (try
+       (f (.getAbsolutePath file))
+       (finally
+         (io/delete-file file true))))))
+
+(deftest json-scenario-load-emits-deprecation-warning
+  (with-temp-scenario-file
+    (str "{"
+         "\"scenario-id\":\"json-deprecated\","
+         "\"protocol\":\"sew-v1\","
+         "\"events\":[]"
+         "}")
+    (fn [path]
+      (let [out (with-out-str
+                  (scenario-runner/resolve-path-run-request [path] {:suite-id :json-deprecation-suite}))]
+        (is (str/includes? out "scenario-json-deprecated"))
+        (is (str/includes? out "Executable JSON scenario input is deprecated"))))))
+
+(deftest resolve-path-run-request-preserves-scenario-metadata-contract
+  (with-temp-scenario-file
+    (str
+     "{"
+     "\"scenario-id\":\"metadata-contract\","
+     "\"protocol\":\"sew-v1\","
+     "\"expected-outcome\":{\"status\":\"pass\"},"
+     "\"theory\":{\"assumptions\":[\"steady-liquidity\"],\"claim-id\":\"claim.partial-fill\"},"
+     "\"scenario/model-scope\":\"vault-shortfall\","
+     "\"scenario/evidence-profile\":\"research\","
+     "\"scenario/output-profile\":\"forensic\","
+     "\"scenario/output-overrides\":{\"artifact-level\":\"summary\"},"
+     "\"scenario/custom-tag\":\"carry-through\","
+     "\"events\":[]"
+     "}")
+    (fn [path]
+      (let [{request :scenario-run/request}
+            (scenario-runner/resolve-path-run-request [path] {:suite-id :metadata-suite})
+            entry (first (:entries request))
+            metadata (:scenario-metadata entry)
+            out (with-out-str
+                  (scenario-runner/resolve-path-run-request [path] {:suite-id :metadata-suite}))]
+        (is (= :metadata-suite (:suite/key request)))
+        (is (= :research (:evidence/profile request)))
+        (is (= :forensic (:output/profile request)))
+        (is (= ["steady-liquidity"] (:scenario/assumptions metadata)))
+        (is (= ["claim.partial-fill"] (:scenario/claim-intents metadata)))
+        (is (= "vault-shortfall" (:scenario/model-scope metadata)))
+        (is (= {:status "pass"} (:scenario/expected-outcome metadata)))
+        (is (= :research (:scenario/evidence-profile metadata)))
+        (is (= :forensic (:scenario/output-profile metadata)))
+        (is (= {:artifact-level "summary"} (:scenario/output-overrides metadata)))
+        (is (= {:scenario/custom-tag "carry-through"}
+               (:scenario/metadata-extra metadata)))
+        (is (str/includes? out "scenario-json-deprecated"))
+        (is (str/includes? out "scenario-metadata-fallback"))
+        (is (str/includes? out "scenario-metadata-extra"))))))
+
+(deftest edn-scenario-loads-through-request-boundary
+  (with-temp-scenario-file
+    (pr-str {:scenario-id "edn-load"
+             :protocol "yield-v1"
+             :events []
+             :scenario/evidence-profile :minimal})
+    ".edn"
+    (fn [path]
+      (let [{request :scenario-run/request}
+            (scenario-runner/resolve-path-run-request [path] {:suite-id :edn-suite})
+            out (with-out-str
+                  (scenario-runner/resolve-path-run-request [path] {:suite-id :edn-suite}))]
+        (is (= :edn-suite (:suite/key request)))
+        (is (= path (-> request :entries first :scenario-path)))
+        (is (= "edn-load" (-> request :entries first :scenario-id)))
+        (is (= :minimal (get-in request [:entries 0 :scenario-metadata :scenario/evidence-profile])))
+        (is (empty? out))))))
+(deftest resolve-path-run-request-rejects-unknown-supported-profile-values
+  (with-temp-scenario-file
+    (str
+     "{"
+     "\"scenario-id\":\"bad-profile\","
+     "\"protocol\":\"sew-v1\","
+     "\"scenario/evidence-profile\":\"not-a-real-profile\","
+     "\"events\":[]"
+     "}")
+    (fn [path]
+      (let [ex (try
+                 (scenario-runner/resolve-path-run-request [path] {})
+                 nil
+                 (catch Exception e e))]
+        (is ex)
+        (is (str/includes? (.getMessage ex) "Unknown scenario evidence profile"))))))
+
+(deftest normalize-run-result-preserves-request-and-entry-metadata
+  (with-temp-scenario-file
+    (str
+     "{"
+     "\"scenario-id\":\"normalized-result-contract\","
+     "\"protocol\":\"yield-v1\","
+     "\"scenario/evidence-profile\":\"minimal\","
+     "\"scenario/output-profile\":\"research\","
+     "\"theory\":{\"claim-id\":\"claim.run.normalized\"},"
+     "\"events\":[]"
+     "}")
+    (fn [path]
+      (let [{request :scenario-run/request}
+            (scenario-runner/resolve-path-run-request [path] {:suite-id :normalized-suite})
+            scenario-id (-> request :entries first :scenario-id)
+            result (scenario-runner/normalize-run-result
+                    request
+                    {:ok? true
+                     :suite-id :normalized-suite
+                     :results [{:scenario-id scenario-id :outcome :pass}]})
+            normalized-entry (-> result :scenario-run/result :results first)]
+        (is (= :pass (get-in result [:scenario-run/result :status])))
+        (is (= :minimal (get-in result [:scenario-run/result :evidence/profile])))
+        (is (= :research (get-in result [:scenario-run/result :output/profile])))
+        (is (= path (:scenario-path normalized-entry)))
+        (is (= :protocol/yield-v1 (:dispatcher-id normalized-entry)))
+        (is (= {:backend :local-current
+                :protocol-id "yield-v1"
+                :dispatcher-id :protocol/yield-v1}
+               (:runner normalized-entry)))
+        (is (= ["claim.run.normalized"]
+               (get-in normalized-entry [:scenario-metadata :scenario/claim-intents])))))))
 
 (deftest report-surfaces-expectation-violations
   (let [lines (report/format-check-failures

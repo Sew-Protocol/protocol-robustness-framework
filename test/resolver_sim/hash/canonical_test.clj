@@ -1171,6 +1171,51 @@
       (is (not= a "abc123"))
       (is (not= b "def456")))))
 
+(deftest test-action-hash-ignores-self-reference-fields
+  (let [action {:action/type :release :escrow-id "0xabc"}
+        with-self-hash (assoc action :canonical-hash "should-be-ignored"
+                              :node-hash "also-ignored"
+                              :hash "ignored-too")
+        a (hc/hash-with-intent {:hash/intent :action} action)
+        b (hc/hash-with-intent {:hash/intent :action} with-self-hash)]
+    (is (= a b))))
+
+(deftest test-action-at-rejects-extra-keys
+  (is (thrown? clojure.lang.ExceptionInfo
+               (hc/hash-with-intent {:hash/intent :action-at}
+                                    {:action-hash "abc"
+                                     :step 1
+                                     :block-time 100
+                                     :unexpected-key "nope"}))))
+
+(deftest test-action-at-requires-all-fields
+  (is (thrown? clojure.lang.ExceptionInfo
+               (hc/hash-with-intent {:hash/intent :action-at}
+                                    {:action-hash "abc" :step 1}))))
+
+(deftest test-action-at-hash-deterministic
+  (let [input {:action-hash "abc" :step 1 :block-time 100}
+        a (hc/hash-with-intent {:hash/intent :action-at} input)
+        b (hc/hash-with-intent {:hash/intent :action-at} input)]
+    (is (= a b))))
+
+(deftest test-action-at-rejects-block-time-only
+  (is (thrown? clojure.lang.ExceptionInfo
+               (hc/hash-with-intent {:hash/intent :action-at}
+                                    {:block-time 100}))))
+
+(deftest test-action-normalizes-type-keyword
+  (let [action-a {:type :release :escrow-id "0xabc"}
+        action-b {:action/type :release :escrow-id "0xabc"}
+        a (hc/hash-with-intent {:hash/intent :action} action-a)
+        b (hc/hash-with-intent {:hash/intent :action} action-b)]
+    (is (= a b))))
+
+(deftest test-action-rejects-missing-type
+  (is (thrown? clojure.lang.ExceptionInfo
+               (hc/hash-with-intent {:hash/intent :action}
+                                    {:escrow-id "0xabc"}))))
+
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; Pro-Rata Allocation Result Artifact Tests
 ;; ──────────────────────────────────────────────────────────────────────────────

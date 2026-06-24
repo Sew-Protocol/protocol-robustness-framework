@@ -133,7 +133,10 @@
                                  (cond-> allocation-input
                                    world-before-hash (assoc :world-before-hash world-before-hash)
                                    action-hash-at (assoc :action-hash-at action-hash-at))))
-        projection-artifact-again (sew-economics/build-sew-slash-projection-artifact allocation-input)
+        projection-artifact-again (sew-economics/build-sew-slash-projection-artifact
+                                   (cond-> allocation-input
+                                     world-before-hash (assoc :world-before-hash world-before-hash)
+                                     action-hash-at (assoc :action-hash-at action-hash-at)))
         projection-result (sew-economics/calculate-sew-slash-allocation-from-projection projection-artifact)
         claim-eval-node (build-claim-evaluation-node
                          allocation-input projection-artifact allocation-result
@@ -149,14 +152,15 @@
                             claim-results)
         world-after-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
         result-artifact (payoffs/build-pro-rata-allocation-result-artifact
-                         {:projection-artifact projection-artifact
-                          :allocation-result allocation-result
-                          :world-before-hash world-before-hash
-                          :world-after-hash world-after-hash
-                          :action-hash action-hash
-                          :action-hash-at action-hash-at
-                          :claims shaped-claims
-                          :invariant-links []})
+                          {:projection-artifact projection-artifact
+                           :allocation-result allocation-result
+                           :world-before-hash world-before-hash
+                           :world-after-hash world-after-hash
+                           :action-hash action-hash
+                           :action-hash-at action-hash-at
+                           :claims shaped-claims
+                           :invariant-links []
+                           :attribution attribution})
         allocation-result-hash (:allocation-result-hash result-artifact)
         allocation-hash (hc/hash-with-intent {:hash/intent :evidence-record} allocation-result)
         evidence-result {:projection (projection-summary projection-artifact)

@@ -693,17 +693,47 @@
 
 (defn project-action
   "Canonical projection for ACTION_V1 action records.
-   Includes the action payload with self-hash fields stripped.
-   Assumes the action map is already canonical-safe."
+   Accepts a map (with :action/type or :type) or a simple value (string/keyword).
+   - map: normalizes :type to :action/type, strips self-hashes
+   - simple: wraps as {:action/type value}
+   Requires :action/type to be present after normalization."
   [value intent]
-  (project-canonical-artifact value intent))
+  (let [value (cond
+                (or (string? value) (keyword? value))
+                {:action/type value}
+                (and (map? value) (not (:action/type value)) (:type value))
+                (-> (assoc value :action/type (:type value))
+                    (dissoc :type))
+                :else
+                value)
+        _ (when-not (:action/type value)
+            (throw (ex-info "Action must have :action/type"
+                            {:value value})))
+        artifact (-> value
+                     strip-self-hash-fields
+                     project-canonical-artifact-value)]
+    {:intent intent
+     :artifact artifact}))
 
 (defn project-action-at
   "Canonical projection for ACTION_AT_V1 action occurrence records.
-   Includes action reference and temporal context.
-   Assumes the input map is already canonical-safe."
+   Whitelist-only: includes exactly :action-hash, :step, and :block-time.
+   Rejects unexpected keys and requires all three fields."
   [value intent]
-  (project-canonical-artifact value intent))
+  (let [allowed #{:action-hash :step :block-time}
+        extra (remove allowed (keys value))]
+    (when (seq extra)
+      (throw (ex-info (str "Unexpected keys in action-at: " (pr-str extra))
+                      {:extra extra :value value})))
+    (when (or (nil? (:action-hash value))
+              (nil? (:step value))
+              (nil? (:block-time value)))
+      (throw (ex-info "action-at requires :action-hash, :step, and :block-time"
+                      {:value value})))
+    (let [artifact (project-canonical-artifact-value
+                    (select-keys value [:action-hash :step :block-time]))]
+      {:intent intent
+       :artifact artifact})))
 
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
@@ -1018,11 +1048,12 @@
    :action
    {:intent/name        :action
     :intent/domain-tag  "ACTION_V1"
-    :intent/description "Canonical identity of a normalized action payload."
-    :intent/includes    #{:action/type}
-    :intent/excludes    #{:timestamp :metadata :trace :runtime-values}
+    :intent/description "Canonical identity of a normalized action payload. Includes normalized action content minus self-hash fields."
+    :intent/includes    #{:action/type :action/content}
+    :intent/excludes    #{:type :timestamp :metadata :trace :runtime-values
+                          :canonical-hash :hash :node-hash}
     :intent/projection-fn project-action
-    :intent/version     1}
+    :intent/version     2}
 
    :action-at
    {:intent/name        :action-at
@@ -1073,8 +1104,10 @@
       (when-not (= kw (:intent/name contract))
         (throw (ex-info "Intent registry key must match :intent/name"
                         {:intent kw :intent/name (:intent/name contract)})))
-      (let [sample {:sample [:a :b]
-                    :n 1}
+      (let [validation-samples
+            {:action "test-action"
+             :action-at {:action-hash "test-hash" :step 1 :block-time 100}}
+            sample (get validation-samples kw {:sample [:a :b] :n 1})
             projection-a ((:intent/projection-fn contract) sample kw)
             projection-b ((:intent/projection-fn contract) sample kw)]
         (try

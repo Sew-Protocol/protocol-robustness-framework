@@ -22,11 +22,23 @@
                     {:id :resolver-b :slashable-stake 2}
                     {:id :resolver-c :slashable-stake 1}]})
 
+(def sample-attribution
+  "Sample researcher attribution context."
+  {:ctx/scenario-id "test-scenario"
+   :ctx/run-id "test-run"
+   :ctx/event-index 5
+   :ctx/event-type "execute_resolution"
+   :subject/type :slash
+   :subject/id "test-slash"
+   :action/type :slash/execute
+   :evidence/reason :fraud-slash-executed})
+
 (defn- build-evidence
   "Build full pro-rata slash evidence from sample inputs."
-  [& {:keys [world allocation-input]
+  [& {:keys [world allocation-input attribution]
       :or {world sample-world
-           allocation-input sample-allocation-input}}]
+           allocation-input sample-allocation-input
+           attribution sample-attribution}}]
   (let [allocation-result (sew-economics/calculate-sew-slash-allocation allocation-input)]
     (:evidence
      (slashing/build-prorata-slash-evidence
@@ -38,7 +50,7 @@
        :allocation-input allocation-input
        :allocation-result allocation-result
        :transition-dependencies []
-       :attribution nil}))))
+       :attribution attribution}))))
 
 ;; ── Integration tests ──────────────────────────────────────────────────
 

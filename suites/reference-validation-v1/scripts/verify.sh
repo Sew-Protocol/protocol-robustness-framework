@@ -8,6 +8,14 @@ EXPECTED="$ROOT/expected"
 # Derive suite name from root directory basename (e.g. reference-validation-v1)
 SUITE="${ROOT##*/}"
 
+# ── Stale hash sidecar guard ─────────────────────────────────────────────
+stale="$(find "$EXPECTED" -name '*.json.sha256' -maxdepth 3 2>/dev/null | head -5)"
+if [[ -n "$stale" ]]; then
+  echo "FAIL $SUITE: stale *.json.sha256 orphan files detected (use basename.sha256 instead):"
+  echo "$stale"
+  exit 1
+fi
+
 canon() {
   python3 - <<'PY' "$1"
 import json,sys

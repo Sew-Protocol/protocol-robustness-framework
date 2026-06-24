@@ -77,25 +77,26 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (clerk/html
- [:div {:style {:display "flex" :gap "12px" :flexWrap "wrap" :alignItems "center" :marginBottom "6px"}}
-  [:span {:style {:fontSize "0.82em" :fontWeight "600" :color (:text/body notebook-theme)}} "status semantics"]
-  [:span {:style (merge status-badge-base-style (tone-style :green))} "🟢 Validation holds"]
-  [:span {:style (merge status-badge-base-style (tone-style :amber))} "🟠 Inconclusive / warning"]
-  [:span {:style (merge status-badge-base-style (tone-style :red))} "🔴 Hard failure"]
-  [:span {:style (merge status-badge-base-style
-                        {:backgroundColor (:status/neutral-bg notebook-theme)
-                         :color (:status/neutral-text notebook-theme)})} "⚪ Neutral"]]
- [:div {:style {:marginTop "6px" :fontSize "0.78em" :color (:text/muted notebook-theme) :lineHeight "1.5"}}
-  "Red can mean a validation failure OR a successful falsification (expected-negative). "
-  "Always inspect the status-kind badge: "
-  [:span {:style (merge status-badge-base-style (kind-badge-style "Validation"))} "Validation"]
-  " "
-  [:span {:style (merge status-badge-base-style (kind-badge-style "Research finding"))} "Research finding"]
-  " "
-  [:span {:style (merge status-badge-base-style (kind-badge-style "Expected negative"))} "Expected negative"]
-  " "
-  [:span {:style (merge status-badge-base-style (kind-badge-style "Missing data"))} "Missing data"]
-  "."])
+ [:div
+  [:div {:style {:display "flex" :gap "12px" :flexWrap "wrap" :alignItems "center" :marginBottom "6px"}}
+   [:span {:style {:fontSize "0.82em" :fontWeight "600" :color (:text/body notebook-theme)}} "status semantics"]
+   [:span {:style (merge status-badge-base-style (tone-style :green))} "🟢 Validation holds"]
+   [:span {:style (merge status-badge-base-style (tone-style :amber))} "🟠 Inconclusive / warning"]
+   [:span {:style (merge status-badge-base-style (tone-style :red))} "🔴 Hard failure"]
+   [:span {:style (merge status-badge-base-style
+                         {:backgroundColor (:status/neutral-bg notebook-theme)
+                          :color (:status/neutral-text notebook-theme)})} "⚪ Neutral"]]
+  [:div {:style {:marginTop "6px" :fontSize "0.78em" :color (:text/muted notebook-theme) :lineHeight "1.5"}}
+   "Red can mean a validation failure OR a successful falsification (expected-negative). "
+   "Always inspect the status-kind badge: "
+   [:span {:style (merge status-badge-base-style (kind-badge-style "Validation"))} "Validation"]
+   " "
+   [:span {:style (merge status-badge-base-style (kind-badge-style "Research finding"))} "Research finding"]
+   " "
+   [:span {:style (merge status-badge-base-style (kind-badge-style "Expected negative"))} "Expected negative"]
+   " "
+   [:span {:style (merge status-badge-base-style (kind-badge-style "Missing data"))} "Missing data"]
+   "."]])
 ;; ---
 
 ;; ## Style Layer

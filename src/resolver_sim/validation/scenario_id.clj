@@ -1,7 +1,7 @@
 (ns resolver-sim.validation.scenario-id
   (:require [clojure.string :as str]))
 
-(def ^:private scenario-id-regex #"^[a-z0-9][a-z0-9-]*$")
+(def ^:private scenario-id-regex #"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 (defn validate-scenario-id!
   "Validates a scenario-id format. Throws exception if invalid."
