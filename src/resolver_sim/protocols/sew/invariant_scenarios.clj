@@ -8,12 +8,17 @@
    event produces workflow-id N-1 (zero-indexed by creation order).
 
    Split across invariant-scenarios.* sub-namespaces; this ns aggregates
-   all-scenarios and scenario-type-registry."
-  (:require [resolver-sim.protocols.sew.invariant-scenarios.baseline :as baseline]
+   all-scenarios, scenario-type-registry, and startup validation for the
+   full invariant scenario registry."
+  (:require [clojure.set :as set]
+            [resolver-sim.contract-model.replay.metrics :as metrics]
+            [resolver-sim.contract-model.replay.validation :as replay-validation]
             [resolver-sim.protocols.sew.invariant-scenarios.adversarial :as adversarial]
+            [resolver-sim.protocols.sew.invariant-scenarios.baseline :as baseline]
             [resolver-sim.protocols.sew.invariant-scenarios.extended :as extended]
             [resolver-sim.protocols.sew.invariant-scenarios.gaps :as gaps]
-            [resolver-sim.protocols.sew.invariant-scenarios.reversal :as reversal]))
+            [resolver-sim.protocols.sew.invariant-scenarios.reversal :as reversal]
+            [resolver-sim.validation.scenario-id :as sid]))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario registry
@@ -356,7 +361,7 @@
    {:scenario/type :governance
     :tests #{:resolver-availability :timeout-fallback :state-recovery}}
 
-   "s56-rapid-resolver-rotation"
+   "s56-resolver-diversity"
    {:scenario/type :governance
     :tests #{:resolver-rotation :state-continuity :multi-authority}}
 
@@ -550,3 +555,79 @@
    {:scenario/type :settlement-variants
     :tests #{:recipient-deny :denial-override :release-override}}})
 
+(defn- scenario-registry-entries []
+  (mapcat (fn [[display-name entry]]
+            (cond
+              (map? entry)
+              [{:display-name display-name
+                :scenario entry}]
+
+              (vector? entry)
+              (mapv (fn [scenario]
+                      {:display-name display-name
+                       :scenario scenario})
+                    entry)
+
+              :else
+              [{:display-name display-name
+                :entry entry}]))
+          all-scenarios))
+
+(defn- validate-registry-entry!
+  [{:keys [display-name scenario entry]}]
+  (when-not (map? scenario)
+    (throw (ex-info "Malformed invariant scenario registry entry"
+                    {:display-name display-name
+                     :entry entry
+                     :reason :entry-not-a-scenario-map})))
+  (sid/validate-scenario-id! (:scenario-id scenario))
+  (when-let [theory (:theory scenario)]
+    (when-not (map? theory)
+      (throw (ex-info "Malformed invariant scenario theory"
+                      {:display-name display-name
+                       :scenario-id (:scenario-id scenario)
+                       :reason :theory-not-a-map}))))
+  (let [validation (replay-validation/validate-scenario (dissoc scenario :theory)
+                                                        metrics/base-metrics
+                                                        {:strict-validation? false})]
+    (when-not (:ok validation)
+      (throw (ex-info "Malformed invariant scenario definition"
+                      {:display-name display-name
+                       :scenario-id (:scenario-id scenario)
+                       :validation validation})))))
+
+(defn validate-all-scenarios!
+  "Validate the full invariant scenario registry.
+
+   Checks:
+   - every registry entry resolves to one or more scenario maps
+   - every scenario has a stable, explicit :scenario-id
+   - :scenario-id values are unique across the registry
+   - each scenario passes structural replay validation
+   - scenario-type-registry covers the same scenario-id set"
+  []
+  (let [entries (scenario-registry-entries)
+        _       (doseq [entry entries]
+                  (validate-registry-entry! entry))
+        ids     (mapv (comp :scenario-id :scenario) entries)
+        dupes   (->> ids frequencies
+                     (filter (fn [[_ n]] (> n 1)))
+                     (mapv first))
+        ids-set (set ids)
+        type-ids (set (keys scenario-type-registry))
+        missing-type-ids (vec (sort (set/difference ids-set type-ids)))
+        orphan-type-ids (vec (sort (set/difference type-ids ids-set)))]
+    (when (seq dupes)
+      (throw (ex-info "Duplicate invariant scenario-id(s) detected"
+                      {:duplicates dupes})))
+    (when (seq missing-type-ids)
+      (throw (ex-info "Scenario type registry is missing scenario-id(s)"
+                      {:missing missing-type-ids})))
+    (when (seq orphan-type-ids)
+      (throw (ex-info "Scenario type registry contains orphan scenario-id(s)"
+                      {:orphan orphan-type-ids})))
+    true))
+
+;; Startup validation ---------------------------------------------------------
+
+(validate-all-scenarios!)

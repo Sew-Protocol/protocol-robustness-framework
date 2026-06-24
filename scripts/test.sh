@@ -111,6 +111,7 @@ run_unit() {
 (require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (require '[resolver-sim.financial.pro-rata-characterization-test])
+(require '[resolver-sim.scenario.suites-test])
 (let [results (t/run-tests
     'resolver-sim.core-tests
     'resolver-sim.protocol-alignment-test
@@ -131,7 +132,8 @@ run_unit() {
     'resolver-sim.contract-model.replay-batch-appeal-test
     'resolver-sim.contract-model.replay-batch-slash-domain-test
     'resolver-sim.protocols.sew.dispute-resolution-coverage-test
-    'resolver-sim.financial.pro-rata-characterization-test)]
+    'resolver-sim.financial.pro-rata-characterization-test
+    'resolver-sim.scenario.suites-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -342,17 +344,17 @@ run_dispute_resolution() {
     echo "Running CI gate validation..."
     python3 scripts/ci_gate_validation.py || return $?
   fi
-  
+
   # CI Gate: coverage gates
   python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
-  
+
   return $dr_exit
 }
 
 run_named_path_suite() {
   require_clojure || return $?
   local suite="$1"
-  echo "Running scenario path suite: $suite"
+  echo "Running registry-backed scenario path suite: $suite"
   clojure -M:run -- --invariants --suite "$suite"
   return $?
 }
@@ -390,42 +392,42 @@ run_generators() {
 
 run_contracts() {
   echo "Running cross-layer contract checks (proto/service/wire compatibility)..."
-  
+
   # Proto service + RPC contract
   grep -q 'package sew.simulation;' proto/simulation.proto
   grep -q 'service SimulationEngine' proto/simulation.proto
   grep -q 'rpc StartSession' proto/simulation.proto
   grep -q 'rpc Step' proto/simulation.proto
   grep -q 'rpc DestroySession' proto/simulation.proto
-  
+
   # Python client must target same service/methods
   grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
   grep -q 'StartSession' python/sim_api/grpc_client.py
   grep -q 'DestroySession' python/sim_api/grpc_client.py
-  
+
   # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
   grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
   grep -q 'make-method "StartSession"' src/resolver_sim/server/grpc.clj
   grep -q 'make-method "Step"' src/resolver_sim/server/grpc.clj
   grep -q 'make-method "DestroySession"' src/resolver_sim/server/grpc.clj
   grep -q 'snake_case' src/resolver_sim/server/grpc.clj
-  
+
   # Scenario naming convention sanity checks (supports legacy + canonical ids)
   python scripts/validate_scenario_naming.py
-  
+
   # P1: Fixture/claim alignment checks for collusion assertions
   python scripts/validate_collusion_alignment.py
-  
+
   # Artifact registry integrity + compatibility checks
   python scripts/validate_artifact_registry.py
-  
+
   # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
   if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
     python scripts/validate_claim_registry.py --strict-theory-claims
   else
     python scripts/validate_claim_registry.py
   fi
-  
+
   return $?
 }
 
@@ -928,7 +930,7 @@ case "$MODE" in
     echo ""
     run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
     run_outcome_classification_report || true
-    
+
     # CI Gate: coverage gates validation for all mode
     python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
     ;;

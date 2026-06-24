@@ -252,7 +252,7 @@
                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
                (catch Exception e
                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
-             (when-not (zero? exit) (System/exit exit))))} 
+             (when-not (zero? exit) (System/exit exit))))}
 
   evidence:sign
   {:doc "Sign the focused or latest run manifest after ensuring artifact registry exists. Usage: bb evidence:sign <path-to-private-key>"
@@ -306,6 +306,21 @@
 
   test:yield-scenarios {:doc "Compatibility alias for both yield path suites"
                         :task (shell "./scripts/test.sh yield-scenarios")}
+
+  run:scenario:suite
+  {:doc "Run a registered scenario path suite. Usage: bb run:scenario:suite <suite-key>"
+   :task (let [suite-key (first *command-line-args*)]
+           (when-not (seq suite-key)
+             (throw (ex-info "Missing suite key. Usage: bb run:scenario:suite <suite-key>" {})))
+           (apply clojure {:dir "." :extra-deps {}}
+                  "-M:run" "--" "--invariants" "--suite" suite-key
+                  (rest *command-line-args*)))}
+
+  run:scenario:suites
+  {:doc "List registered scenario path suites."
+   :task (clojure {:dir "." :extra-deps {}}
+                  "-M" "-e"
+                  "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite-key :protocol-id :kind :ci-tier :path-count :title] (sr/known-suite-summaries))")}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}

@@ -156,6 +156,23 @@
                     ". Known: " (str/join ", " (map name (suites/known-suite-keys)))))
       1)))
 
+(defn known-suite-summaries
+  "Return registry-backed metadata for all named scenario suites."
+  []
+  (mapv (fn [suite-key]
+          (let [{:keys [title description kind ci-tier protocol-id paths] :as defn*}
+                (suites/suite-definition suite-key)]
+            {:suite-key    suite-key
+             :title        title
+             :description  description
+             :kind         kind
+             :ci-tier      ci-tier
+             :protocol-id  protocol-id
+             :path-count   (count paths)
+             :paths        paths
+             :definition   defn*}))
+        (suites/known-suite-keys)))
+
 (defn run-fixture-suite
   "Run a composed EDN fixture suite (e.g. :suites/all-invariants).
    Returns the unified summary map; does not print unless opts request it."

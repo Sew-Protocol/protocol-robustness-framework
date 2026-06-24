@@ -2,7 +2,7 @@
   "Named deterministic scenario collections (path lists) for run-collection.
 
    Suite naming:
-     :yield-provider-scenarios — standalone `yield-v1` (scenarios/yield/Y*)
+     :yield-provider-scenarios — standalone `yield-v1` provider scenarios (scenarios/Y01..Y05)
      :sew-yield-scenarios       — Sew escrow + yield integration (scenarios/S*)
      :yield-scenarios           — removed June 2026; use :sew-yield-scenarios")
 
@@ -77,13 +77,28 @@
    "scenarios/S110_resolver-yield-accrual.json"])
 
 (def suites
-  "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}."
-  {:dispute-resolution-scenarios {:paths dispute-resolution-scenario-paths
-                                  :protocol-id "sew-v1"}
-   :sew-yield-scenarios      {:paths yield-scenario-paths
-                              :protocol-id "sew-v1"}
-   :yield-provider-scenarios {:paths yield-provider-scenario-paths
-                              :protocol-id "yield-v1"}})
+  "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}.
+
+   The registry is the source of truth for named JSON scenario suites. Keep the
+   metadata here aligned with task/docs entrypoints and protocol inference."
+  {:dispute-resolution-scenarios {:paths        dispute-resolution-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "Dispute-resolution scenarios"
+                                  :description  "Sew dispute-resolution coverage scenarios."
+                                  :kind         :json-path-suite
+                                  :ci-tier      :coverage}
+   :sew-yield-scenarios          {:paths        yield-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "Sew yield integration scenarios"
+                                  :description  "Sew escrow scenarios that exercise yield integration behavior."
+                                  :kind         :json-path-suite
+                                  :ci-tier      :integration}
+   :yield-provider-scenarios     {:paths        yield-provider-scenario-paths
+                                  :protocol-id  "yield-v1"
+                                  :title        "Yield provider scenarios"
+                                  :description  "Standalone yield-v1 scenarios backed by canonical top-level scenarios/Y01..Y05 files."
+                                  :kind         :json-path-suite
+                                  :ci-tier      :provider}})
 
 (defn resolve-suite-key
   "Resolve suite keyword (identity — no remaining deprecated aliases)."
@@ -100,5 +115,26 @@
   [suite-key]
   (get-in suites [(resolve-suite-key suite-key) :paths]))
 
+(defn suite-definition
+  "Return the registry entry for a named suite keyword, or nil if unknown."
+  [suite-key]
+  (get suites (resolve-suite-key suite-key)))
+
+(defn suite-metadata
+  "Return suite metadata without the path list."
+  [suite-key]
+  (some-> (suite-definition suite-key)
+          (dissoc :paths)))
+
+(defn suite-path-count
+  "Return the number of scenario files registered for suite-key."
+  [suite-key]
+  (count (or (suite-paths suite-key) [])))
+
 (defn known-suite-keys []
   (vec (sort (keys suites))))
+
+(defn known-suite-definitions
+  "Return the full registry map for all named scenario suites."
+  []
+  suites)

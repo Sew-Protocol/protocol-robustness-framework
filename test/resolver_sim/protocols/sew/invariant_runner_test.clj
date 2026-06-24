@@ -8,6 +8,13 @@
 (deftest test-registry-size
   (is (= 116 (count sc/all-scenarios))))
 
+(deftest test-registry-validation-passes
+  (is (true? (sc/validate-all-scenarios!))))
+
+(deftest test-scenario-type-registry-covers-all-scenarios
+  (let [scenario-ids (set (map :scenario-id (mapcat (fn [[_ entry]] (if (vector? entry) entry [entry])) sc/all-scenarios)))]
+    (is (= scenario-ids (set (keys sc/scenario-type-registry))))))
+
 (deftest test-run-all-all-pass
   (let [{:keys [passed total results]} (runner/run-all)]
     (is (= passed total))
