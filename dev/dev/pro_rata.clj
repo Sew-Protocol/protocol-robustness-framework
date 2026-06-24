@@ -1,6 +1,8 @@
 (ns dev.pro-rata
   (:require [clojure.pprint :as pp]
-            [clojure.data]))
+            [clojure.data]
+            [resolver-sim.claims.engine :as engine]
+            [resolver-sim.yield.pro-rata-claims :as pro-rata-claims]))
 
 ;; ── Old / Direct Path ─────────────────────────────────────────────────────
 ;; These are the original allocation functions. Compare their output
@@ -87,9 +89,7 @@
    Returns {claim-id {:holds? bool :violations [...]}}.
    See explain-sew-slash-allocation for input shape."
   [sew-slash-input]
-  (let [engine (requiring-resolve 'resolver-sim.claims.engine)
-        pro-rata-claims (requiring-resolve 'resolver-sim.yield.pro-rata-claims)
-        alloc (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation)
+  (let [alloc (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation)
         proj (requiring-resolve 'resolver-sim.protocols.sew.economics/build-sew-slash-projection-artifact)
         from-proj (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation-from-projection)
         build-node (requiring-resolve 'resolver-sim.evidence.slashing/build-claim-evaluation-node)

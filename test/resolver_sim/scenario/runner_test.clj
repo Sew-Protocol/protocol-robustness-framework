@@ -56,6 +56,22 @@
     (is (contains? summary :passed))
     (is (= :yield-scenarios (:suite-id summary)))))
 
+(deftest yield-scenario-protocol-is-inferred-from-file
+  (let [summary ((requiring-resolve 'resolver-sim.io.scenario-runner/run-paths)
+                 ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+                 {:suite-id :yield-scenarios})]
+    (is (= 1 (:total summary)))
+    (is (= 1 (:passed summary)))
+    (is (= 1 (count (:results summary))))))
+
+(deftest yield-scenario-announces-inferred-protocol
+  (let [out (with-out-str
+              ((requiring-resolve 'resolver-sim.io.scenario-runner/run-paths)
+               ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+               {:suite-id :yield-scenarios}))]
+    (is (str/includes? out "[run:scenario]"))
+    (is (str/includes? out "protocol yield-v1"))))
+
 (deftest report-surfaces-expectation-violations
   (let [lines (report/format-check-failures
                {:checks {:expectations {:ok? false

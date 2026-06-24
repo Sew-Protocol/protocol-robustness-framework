@@ -1132,3 +1132,58 @@ clj꞉dev.pro-rata꞉> 
 clj꞉dev.pro-rata꞉> 
 (demo-vs)
 clj꞉dev.pro-rata꞉> 
+(when-let [requires (resolve 'clojure.main/repl-requires)] (clojure.core/apply clojure.core/require @requires))
+clj꞉user꞉> 
+(ns notebooks.pro-rata-allocation-result
+  {:nextjournal.clerk/visibility {:code :fold :result :show}}
+  (:require [nextjournal.clerk :as clerk]
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
+            [resolver-sim.protocols.sew.types :as types]
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.evidence.slashing :as slashing]))
+; Syntax error compiling at (nextjournal/clerk/builder_ui.clj:1:1).
+; namespace 'nextjournal.clerk.viewer' not found
+clj꞉notebooks.pro-rata-allocation-result꞉> 
+^{:nextjournal.clerk/visibility {:code :show :result :hide}}
+(def world
+  (-> (types/empty-world 1000)
+      (assoc-in [:resolver-stakes "0xAlice"] 1000)
+      (assoc-in [:resolver-stakes "0xBob"] 1000)
+      (assoc-in [:resolver-epoch-slashed "0xAlice"] {:amount 0 :epoch-start 0})
+      (assoc-in [:resolver-epoch-slashed "0xBob"] {:amount 0 :epoch-start 0})))
+; Syntax error compiling at (notebooks/pro_rata_allocation_result.clj:36:7).
+; No such namespace: types
+clj꞉notebooks.pro-rata-allocation-result꞉> 
+^{:nextjournal.clerk/visibility {:code :show :result :hide}}
+(def world
+  (-> (types/empty-world 1000)
+      (assoc-in [:resolver-stakes "0xAlice"] 1000)
+      (assoc-in [:resolver-stakes "0xBob"] 1000)
+      (assoc-in [:resolver-epoch-slashed "0xAlice"] {:amount 0 :epoch-start 0})
+      (assoc-in [:resolver-epoch-slashed "0xBob"] {:amount 0 :epoch-start 0})))
+; Syntax error compiling at (notebooks/pro_rata_allocation_result.clj:36:7).
+; No such namespace: types
+clj꞉notebooks.pro-rata-allocation-result꞉> 
+(ns notebooks.pro-rata-allocation-result
+  {:nextjournal.clerk/visibility {:code :fold :result :show}}
+  (:require [nextjournal.clerk :as clerk]
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
+            [resolver-sim.protocols.sew.types :as types]
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.evidence.slashing :as slashing]))
+; Syntax error compiling at (nextjournal/clerk/builder_ui.clj:1:1).
+; namespace 'nextjournal.clerk.viewer' not found
+clj꞉notebooks.pro-rata-allocation-result꞉> 
+(ns notebooks.pro-rata-allocation-result
+  {:nextjournal.clerk/visibility {:code :fold :result :show}}
+  (:require [nextjournal.clerk :as clerk]
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.protocols.sew.economics :as sew-econ]
+            [resolver-sim.protocols.sew.types :as types]
+            [resolver-sim.economics.payoffs :as payoffs]
+            [resolver-sim.evidence.slashing :as slashing]))
+; Syntax error compiling at (nextjournal/clerk/builder_ui.clj:1:1).
+; namespace 'nextjournal.clerk.viewer' not found
+clj꞉notebooks.pro-rata-allocation-result꞉> 

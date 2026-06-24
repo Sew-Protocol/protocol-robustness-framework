@@ -20,7 +20,13 @@
   [result & {:keys [workflow-id owner-id]}]
   (let [trace      (:trace result)
         last-world (when (seq trace) (:world (last trace)))
-        oid        (resolve-owner-id workflow-id owner-id)
+        positions  (when last-world (or (:yield/positions last-world)
+                                        (:yield-positions last-world)
+                                        {}))
+        oid        (or owner-id
+                       (get-in result [:scenario :protocol-params :default-owner-id])
+                       (when (= 1 (count positions)) (first (keys positions)))
+                       (resolve-owner-id workflow-id owner-id))
         pos        (yield-position last-world oid)
         shortfall  (:shortfall pos)
         token      (or (:token pos) :USDC)
@@ -45,7 +51,8 @@
              :yield/gross         (long (+ (or (:principal pos) 0)
                                            (or (:unrealized-yield pos) 0)))
              :yield/available-ratio (or (:available-ratio ms) 1.0)}
-      ;; Backwards compatibility aliases for :yield/escrow-*
+      ;; Backwards compatibility aliases for :yield/escrow-* and the older
+      ;; provider scenario metric names (:yield/position-*).
       true (assoc :yield/escrow-principal (long (or (:principal pos) 0))
                   :yield/escrow-unrealized (long (or (:unrealized-yield pos) 0))
                   :yield/escrow-realized (long (or (:realized-yield pos) 0))
@@ -56,7 +63,19 @@
                                                         (+ (or (:principal pos) 0)
                                                            (or (:unrealized-yield pos) 0))))
                   :yield/escrow-gross (long (+ (or (:principal pos) 0)
-                                               (or (:unrealized-yield pos) 0))))
+                                               (or (:unrealized-yield pos) 0)))
+                  :yield/position-principal (long (or (:principal pos) 0))
+                  :yield/position-unrealized (long (or (:unrealized-yield pos) 0))
+                  :yield/position-realized (long (or (:realized-yield pos) 0))
+                  :yield/position-deferred (long (or (:deferred-amount shortfall) 0))
+                  :yield/position-haircut (long (or (:haircut-amount shortfall) 0))
+                  :yield/position-reclaimed (long (or (:reclaimed-amount pos) 0))
+                  :yield/position-current-value (long (or (:current-value pos)
+                                                          (+ (or (:principal pos) 0)
+                                                             (or (:unrealized-yield pos) 0))))
+                  :yield/position-gross (long (+ (or (:principal pos) 0)
+                                                 (or (:unrealized-yield pos) 0)))
+                  :yield/position-status (when (:status pos) (name (:status pos))))
 
       (:current-index pos) (assoc :yield/current-index (:current-index pos)
                                   :yield/escrow-current-index (:current-index pos))

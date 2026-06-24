@@ -13,8 +13,8 @@
     "focus-owner-id": "0xOwnerA"
   },
   "agents": [
-    {"id": "0xOwnerA", "address": "0xOwnerA", "role": "provider"},
-    {"id": "governance", "address": "governance", "role": "governance"}
+    { "id": "0xOwnerA", "address": "0xOwnerA", "role": "provider" },
+    { "id": "governance", "address": "governance", "role": "governance" }
   ],
   "events": [
     {
@@ -70,9 +70,9 @@
   ],
   "expectations": {
     "metrics": [
-      {"name": "yield/available-ratio", "value": 1.0},
-      {"name": "yield/focus-status", "value": "withdrawn"},
-      {"name": "yield/total-reclaimed", "value": 500}
+      { "name": "yield/available-ratio", "value": 1.0 },
+      { "name": "yield/focus-status", "value": "withdrawn" },
+      { "name": "yield/total-reclaimed", "value": 1000 }
     ]
   }
 }

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed (2026-06-24)
+- **`bb run:scenario` is now the canonical scenario replay command:** file-backed replays inspect each scenario's declared `:protocol` and select the matching replay dispatcher before falling back to the CLI default. This fixes `yield-v1` scenarios being replayed through Sew-only dispatch when `--protocol` is omitted. The provider replay path now also exposes legacy `yield/position-*` aliases and `yield-positions` world snapshots so older scenario expectations keep working. `bb scenario:run` remains as a compatibility alias.
+- **Scenario protocol inference centralized:** `resolver-sim.io.scenario-runner` now uses one helper to load, normalize, and infer protocol for file-backed scenarios so file replay and execution metadata stay in sync.
+- **Scenario runner hardens unknown protocol handling:** named suites and file-backed scenarios now fail fast when a protocol id is not registered instead of falling through to the wrong replay path.
+- **Yield provider suite alignment:** `yield-provider-scenarios` now points at the canonical top-level `scenarios/Y01..Y05` provider scenarios, while the replay layer preserves legacy `yield/position-*` metric aliases and `yield-positions` snapshot compatibility for older tests and fixtures. `Y03`/`Y04` expectations were updated to match current replay semantics.
+
 ### Added (2026-06-23)
 - **Execution evidence nodes / Phase 3 foundation:** Added `resolver-sim.evidence.node` with canonical `:evidence-node` hashing (`EVIDENCE_NODE_V1` domain), node registry helpers, DAG validation, parent/bootstrap-root checks, hash-integrity validation, and policy-aware visible output filtering that does not affect node identity. Registered execution wrappers now emit nodes for `:execution/simulation`, `:execution/batch`, `:execution/replay`, `:execution/diff`, `:execution/server`, and `:execution/validation`, including pass/fail/error outcomes plus execution registry hash, policy hash, inputs hash, and outputs hash.
 - **Execution evidence node persistence:** Execution nodes now persist as standalone EDN artifacts under `evidence-nodes/node-<short-hash>.edn`, register artifact entries with canonical node hashes, and support readback verification of hashes, parent links, bootstrap roots, and registry/file integrity. Startup-safe execution-entry validation remains the passive default; strict validation now uses `requiring-resolve` after registries are loaded.

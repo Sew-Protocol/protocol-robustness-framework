@@ -2,8 +2,8 @@
  {sim:run {:doc "Run a simulation with EDN params"
            :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
 
-  scenario:run
-  {:doc "Run a named scenario alias. Usage: bb scenario:run <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
+  run:scenario
+  {:doc "Run a named scenario alias. Usage: bb run:scenario <alias|scenario-path> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
    :task (let [args          (vec *command-line-args*)
                scenario-map {"kleros/preemptive-escalation-rejected-l0"
                              "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
@@ -15,7 +15,7 @@
                save-idx    (.indexOf args "--save-output")
                save-dir    (when (<= 0 save-idx) (nth args (inc save-idx) nil))]
            (when-not scenario
-             (throw (ex-info "Missing scenario alias/path. Usage: bb scenario:run <alias|scenario-path>" {})))
+             (throw (ex-info "Missing scenario alias/path. Usage: bb run:scenario <alias|scenario-path>" {})))
            (let [t0        (System/currentTimeMillis)
                  output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
                  exit (try
@@ -72,7 +72,7 @@
                        (shell "cp" "-r" (str (.getCanonicalPath ta) "/.") (str save-dir "/artifacts/"))))
                    (println (str "Saved demo output to " save-dir)))
                  (catch Exception e
-                   (println "[scenario:run] --save-output failed:" (.getMessage e))))
+                   (println (str "[run:scenario] --save-output failed:" (.getMessage e)))))
                (try (.delete (java.io.File. output-tmp)) (catch Exception _ nil)))
                ;; 4. Validate the emitted artifact registry (additive, slug-filtered)
              (try
@@ -99,11 +99,11 @@
                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
              (when-not (zero? exit) (System/exit exit))))}
 
-  scenario:run:family
-  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb scenario:run:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
+  run:scenario:family
+  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:scenario:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
    :task (let [selector (first *command-line-args*)]
            (when-not (seq selector)
-             (throw (ex-info "Missing selector. Usage: bb scenario:run:family <selector>" {})))
+             (throw (ex-info "Missing selector. Usage: bb run:scenario:family <selector>" {})))
            (let [selector-lc (clojure.string/lower-case selector)
                  scenarios (->> (file-seq (clojure.java.io/file "scenarios"))
                                 (filter (fn [f] (.isFile f)))
@@ -252,7 +252,7 @@
                    (println (str "[artifact-registry-validation] No artifact registry found for slug: " slug))))
                (catch Exception e
                  (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
-             (when-not (zero? exit) (System/exit exit))))}
+             (when-not (zero? exit) (System/exit exit))))} 
 
   evidence:sign
   {:doc "Sign the focused or latest run manifest after ensuring artifact registry exists. Usage: bb evidence:sign <path-to-private-key>"
@@ -297,6 +297,15 @@
 
   test:yield {:doc "Run yield protocol unit tests only"
               :task (shell "./scripts/test.sh yield")}
+
+  test:yield-provider-scenarios {:doc "Run standalone yield-v1 JSON scenarios"
+                                 :task (shell "./scripts/test.sh yield-provider-scenarios")}
+
+  test:sew-yield-scenarios {:doc "Run Sew escrow + yield integration JSON scenarios"
+                            :task (shell "./scripts/test.sh sew-yield-scenarios")}
+
+  test:yield-scenarios {:doc "Compatibility alias for both yield path suites"
+                        :task (shell "./scripts/test.sh yield-scenarios")}
 
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}
@@ -351,6 +360,14 @@
             :task (do (println "Running structural validation (fmt skipped)...")
                       (shell "clj -M:lint"))}
 
+  scenario:run
+  {:doc "Compatibility alias for `run:scenario`."
+   :task (apply shell "bb" "run:scenario" *command-line-args*)}
+
+  scenario:run:family
+  {:doc "Compatibility alias for `run:scenario:family`."
+   :task (apply shell "bb" "run:scenario:family" *command-line-args*)}
+
   validation:artifact-registry
   {:doc "Validate an artifact registry (test-artifacts.json) and write a
          validation-root.v1 result beside it.
@@ -371,7 +388,7 @@
            skipped and do not block the caller.
 
          Integrated into:
-           bb scenario:run — runs automatically after registry emission."
+           bb run:scenario — runs automatically after registry emission."
    :task (let [registry-path (or (first *command-line-args*)
                                  "results/test-artifacts/test-artifacts.json")]
            (println (str "[artifact-registry-validation] Validating " registry-path "..."))
@@ -435,8 +452,8 @@
                       (println "   bb test:invariants")
                       (println "")
                       (println "3) Run a specific scenario:")
-                      (println "   bb scenario:run S01_baseline-happy-path.json")
-                      (println "   bb scenario:run:family escalation-abuse")
+                      (println "   bb run:scenario S01_baseline-happy-path.json")
+                      (println "   bb run:scenario:family escalation-abuse")
                       (println "")
                       (println "4) Reference validation suite:")
                       (println "   make reference-validation-v1")
@@ -589,7 +606,7 @@
              (doseq [d (sort (.listFiles root))]
                (when (.isDirectory d)
                  (println (.getName d))))
-             (println "No runs found. Run bb scenario:run <scenario> first.")))}
+             (println "No runs found. Run bb run:scenario <scenario> first.")))}
 
   manifest:sign
   {:doc "Sign the focused (or latest) run manifest with Ed25519. Usage: bb manifest:sign [key-path]"

@@ -7,13 +7,11 @@
      :yield-scenarios           — removed June 2026; use :sew-yield-scenarios")
 
 (def ^:private yield-provider-scenario-paths
-  ["scenarios/yield/Y01_deposit-accrue-positive.json"
-   "scenarios/yield/Y02_negative-yield-mtm.json"
-   "scenarios/yield/Y03_partial-liquidity-shortfall-affected.json"
-   "scenarios/yield/Y04_liquidity-shortfall-withdraw.json"
-   "scenarios/yield/Y05_shortfall-affected-recovery.json"
-   "scenarios/yield/Y06_liquidity-shortage-deposit-blocked.json"
-   "scenarios/yield/Y07_monthly-accrual-one-year.json"])
+  ["scenarios/Y01_vault-shared-liquidity.json"
+   "scenarios/Y02_vault-shortfall-partial-withdraw.json"
+   "scenarios/Y03_vault-risk-override-schedule-shadowing.json"
+   "scenarios/Y04_vault-recovery-claim-deferred.json"
+   "scenarios/Y05_auto-generated-shortfall.json"])
 
 (def ^:private dispute-resolution-scenario-paths
   ["scenarios/S-DR-001-basic-release-ruling.json"

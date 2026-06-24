@@ -365,7 +365,9 @@
         allocation-result-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
                                                     artifact-base)
         artifact (assoc artifact-base :allocation-result-hash allocation-result-hash)]
-    (hc/validate-canonical-value! artifact)
+    (hc/validate-canonical-value!
+     (:artifact (hc/project-pro-rata-allocation-result
+                 artifact {:hash/intent :pro-rata-allocation-result})))
     artifact))
 
 (defn validate-pro-rata-allocation-result-artifact!
@@ -412,9 +414,15 @@
 ;; Demo Rendering: Pro-Rata Result Tables and Proof Panels
 ;; ──────────────────────────────────────────────────────────────────────────────
 
+(defn- sew-shaped?
+  [allocations]
+  (some :basis-amount (take 1 allocations)))
+
 (defn format-pro-rata-result-table
   "Render a pro-rata allocation result as a formatted text table.
-   Columns: participant, weight, cap, allocated, unmet, remainder.
+
+   Handles both SEW-shaped allocations (with :basis-amount :share :owed :paid)
+   and generic allocations (with :weight :cap :allocated :unmet :remainder).
 
    Input can be:
    - A pro-rata allocation result artifact (with :allocation-result)
@@ -426,31 +434,44 @@
         result (if (:allocation-result artifact-or-result)
                  (:allocation-result artifact-or-result)
                  artifact-or-result)
-        {:keys [total-requested total-allocated total-unmet remainder]} result
+        sew? (sew-shaped? allocations)
         sb (StringBuilder.)]
-    (.append sb (format "%-20s %8s %8s %8s %8s %8s%n"
-                        "Participant" "Weight" "Cap" "Allocated" "Unmet" "Remainder"))
-    (.append sb (apply str (repeat 60 "-")))
-
-    (doseq [a allocations]
-      (.append sb (format "%n%-20s %8s %8s %8s %8s %8s"
-                          (str (:id a))
-                          (str (:weight a "—"))
-                          (str (if (some? (:cap a)) (:cap a) "—"))
-                          (str (:allocated a))
-                          (str (:unmet a))
-                          (str (or (:remainder a) "—")))))
-
-    (.append sb (format "%n%n%-20s %8s %8s %8s %8s"
-                        "Total" "" "" (str total-allocated) (str total-unmet)))
-    (when (and remainder (pos? (or remainder 0)))
-      (.append sb (format " %8s" (str remainder))))
-
-    (.append sb (format "%nRequested: %s" total-requested))
-    (.append sb (format " | Allocated: %s" total-allocated))
-    (.append sb (format " | Unmet: %s" total-unmet))
-    (when (and remainder (pos? (or remainder 0)))
-      (.append sb (format " | Remainder: %s" remainder)))
+    (if sew?
+      (do
+        (.append sb (format "%-20s %8s %8s %8s %8s%n"
+                            "Participant" "Basis" "Owed" "Paid" "Unmet"))
+        (.append sb (apply str (repeat 52 "-")))
+        (doseq [a allocations]
+          (.append sb (format "%n%-20s %8s %8s %8s %8s"
+                              (str (:id a))
+                              (str (:basis-amount a))
+                              (str (:owed a))
+                              (str (:paid a))
+                              (str (:unmet a)))))
+        (let [total-owed (apply + (map :owed allocations))
+              total-paid (apply + (map :paid allocations))
+              total-unmet (apply + (map :unmet allocations))]
+          (.append sb (format "%n%n%-20s %8s %8s %8s %8s"
+                              "Total" "" (str total-owed) (str total-paid) (str total-unmet)))))
+      (do
+        (.append sb (format "%-20s %8s %8s %8s %8s %8s%n"
+                            "Participant" "Weight" "Cap" "Allocated" "Unmet" "Remainder"))
+        (.append sb (apply str (repeat 60 "-")))
+        (doseq [a allocations]
+          (.append sb (format "%n%-20s %8s %8s %8s %8s %8s"
+                              (str (:id a))
+                              (str (or (:weight a) "—"))
+                              (str (if (some? (:cap a)) (:cap a) "—"))
+                              (str (:allocated a))
+                              (str (:unmet a))
+                              (str (or (:remainder a) "—")))))
+        (let [total-allocated (get result :total-allocated)
+              total-unmet (get result :total-unmet)
+              remainder (get result :remainder)]
+          (.append sb (format "%n%n%-20s %8s %8s %8s %8s"
+                              "Total" "" "" (str total-allocated) (str total-unmet)))
+          (when (and remainder (pos? (or remainder 0)))
+            (.append sb (format " %8s" (str remainder)))))))
     (str sb)))
 
 (defn format-proof-panel

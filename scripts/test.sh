@@ -6,7 +6,9 @@
 #   ./scripts/test.sh unit       # Clojure unit tests only
 #   ./scripts/test.sh generators # Generator + equilibrium regression tests (pinned seeds)
 #   ./scripts/test.sh invariants # S01–S100 deterministic invariant scenarios only
-#   ./scripts/test.sh yield-scenarios # Sew+yield integration scenarios (alias for sew-yield-scenarios)
+#   ./scripts/test.sh yield-provider-scenarios # Standalone yield-v1 JSON scenarios
+#   ./scripts/test.sh sew-yield-scenarios      # Sew escrow + yield integration JSON scenarios
+#   ./scripts/test.sh yield-scenarios          # Compatibility alias: runs both yield path suites
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
 #   ./scripts/test.sh reference-validation  # public reference evidence harness (suites/reference-validation-v1)
@@ -130,57 +132,6 @@ run_unit() {
     'resolver-sim.contract-model.replay-batch-slash-domain-test
     'resolver-sim.protocols.sew.dispute-resolution-coverage-test
     'resolver-sim.financial.pro-rata-characterization-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
-  return $?
-}
-
-run_unit() {
-  require_clojure || return $?
-  echo "Running unit tests (all — framework + Sew)..."
-  clojure -M:test -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.core-tests])
-(require '[resolver-sim.protocol-alignment-test])
-(require '[resolver-sim.protocols.sew.replay-test])
-(require '[resolver-sim.protocols.sew.forking-strategist-expectations-test])
-(require '[resolver-sim.scenario.expectations-test])
-(require '[resolver-sim.scenario.equilibrium-test])
-(require '[resolver-sim.sim.multi-epoch-test])
-(require '[resolver-sim.sim.defection-test])
-(require '[resolver-sim.sim.strategy-adaptation-test])
-(require '[resolver-sim.protocols.sew.slashing-test])
-(require '[resolver-sim.protocols.sew.phase-k-test])
-(require '[resolver-sim.protocols.sew.phase-m-test])
-(require '[resolver-sim.sim.waterfall-test])
-(require '[resolver-sim.io.scenario-fixture-parity-test])
-(require '[resolver-sim.contract-model.replay-batch-test])
-(require '[resolver-sim.contract-model.replay-batch-sew-test])
-(require '[resolver-sim.contract-model.replay-batch-appeal-test])
-(require '[resolver-sim.contract-model.replay-batch-slash-domain-test])
-(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
-(require '[resolver-sim.financial.pro-rata-characterization-test])
-(let [results (t/run-tests
-                'resolver-sim.core-tests
-                'resolver-sim.protocol-alignment-test
-                'resolver-sim.protocols.sew.replay-test
-                'resolver-sim.protocols.sew.forking-strategist-expectations-test
-                'resolver-sim.protocols.sew.slashing-test
-                'resolver-sim.protocols.sew.phase-k-test
-                'resolver-sim.protocols.sew.phase-m-test
-                'resolver-sim.scenario.expectations-test
-                'resolver-sim.scenario.equilibrium-test
-                'resolver-sim.sim.multi-epoch-test
-                'resolver-sim.sim.defection-test
-                'resolver-sim.sim.strategy-adaptation-test
-                'resolver-sim.sim.waterfall-test
-                'resolver-sim.io.scenario-fixture-parity-test
-                'resolver-sim.contract-model.replay-batch-test
-                'resolver-sim.contract-model.replay-batch-sew-test
-                'resolver-sim.contract-model.replay-batch-appeal-test
-                'resolver-sim.contract-model.replay-batch-slash-domain-test
-                'resolver-sim.protocols.sew.dispute-resolution-coverage-test
-                'resolver-sim.financial.pro-rata-characterization-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -398,33 +349,26 @@ run_dispute_resolution() {
   return $dr_exit
 }
 
-run_dispute_resolution() {
+run_named_path_suite() {
   require_clojure || return $?
-  echo "Running dispute resolution coverage scenarios (S-DR-* via test namespace)..."
-  clojure -M:test -e "
-(require '[clojure.test :as t])
-(require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
-(let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
-  (when (pos? (+ (:error results) (:fail results)))
-    (System/exit 1)))"
-  local dr_exit=$?
-  # CI Gate: validate artifact registry
-  if [[ -f "scripts/ci_gate_validation.py" ]]; then
-    echo "Running CI gate validation..."
-    python3 scripts/ci_gate_validation.py || return $?
-  fi
-  
-  # CI Gate: coverage gates
-  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
-  
-  return $dr_exit
+  local suite="$1"
+  echo "Running scenario path suite: $suite"
+  clojure -M:run -- --invariants --suite "$suite"
+  return $?
+}
+
+run_yield_provider_scenarios() {
+  run_named_path_suite yield-provider-scenarios
+}
+
+run_sew_yield_scenarios() {
+  run_named_path_suite sew-yield-scenarios
 }
 
 run_yield_scenarios() {
-  require_clojure || return $?
-  echo "Running yield scenario path suite (JSON, normalized)..."
-  clojure -M:run -- --invariants --suite yield-scenarios
-  return $?
+  echo "yield-scenarios is a compatibility alias; running yield-provider-scenarios then sew-yield-scenarios."
+  run_yield_provider_scenarios || return $?
+  run_sew_yield_scenarios
 }
 
 run_generators() {
@@ -485,47 +429,6 @@ run_contracts() {
   return $?
 }
 
-run_contracts() {
-  echo "Running cross-layer contract checks (proto/service/wire compatibility)..."
-
-  # Proto service + RPC contract
-  grep -q 'package sew.simulation;' proto/simulation.proto
-  grep -q 'service SimulationEngine' proto/simulation.proto
-  grep -q 'rpc StartSession' proto/simulation.proto
-  grep -q 'rpc Step' proto/simulation.proto
-  grep -q 'rpc DestroySession' proto/simulation.proto
-
-  # Python client must target same service/methods
-  grep -q '_SERVICE = "sew.simulation.SimulationEngine"' python/sim_api/grpc_client.py
-  grep -q 'StartSession' python/sim_api/grpc_client.py
-  grep -q 'DestroySession' python/sim_api/grpc_client.py
-
-  # Clojure server must expose same RPC names and snake_case↔kebab-case bridge
-  grep -q 'SimulationEngine' src/resolver_sim/server/grpc.clj
-  grep -q 'make-method "StartSession"' src/resolver_sim/server/grpc.clj
-  grep -q 'make-method "Step"' src/resolver_sim/server/grpc.clj
-  grep -q 'make-method "DestroySession"' src/resolver_sim/server/grpc.clj
-  grep -q 'snake_case' src/resolver_sim/server/grpc.clj
-
-  # Scenario naming convention sanity checks (supports legacy + canonical ids)
-  python scripts/validate_scenario_naming.py
-
-  # P1: Fixture/claim alignment checks for collusion assertions
-  python scripts/validate_collusion_alignment.py
-
-  # Artifact registry integrity + compatibility checks
-  python scripts/validate_artifact_registry.py
-
-  # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
-  if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
-    python scripts/validate_claim_registry.py --strict-theory-claims
-  else
-    python scripts/validate_claim_registry.py
-  fi
-
-  return $?
-}
-
 run_triage() {
   require_clojure || return $?
   echo "Running failure triage (purpose/threat-tag grouping)..."
@@ -550,31 +453,6 @@ run_suites() {
       (doseq [r (:results result)]
         (when (not= :pass (:outcome r))
           (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
-  (when any-fail (System/exit 1)))"
-   # Extract suite failures into risk digest format for test-summary.json visibility
-   python3 scripts/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
-   # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
-   touch -m "notebooks/report.clj" 2>/dev/null || true
-   return $?
-}
-
-run_suites() {
-   require_clojure || return $?
-   echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
-   local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
-
-   clojure -M:test -e "
-(require '[resolver-sim.sim.fixtures :as f])
-(let [suites $suite_filter
-      results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
-      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
-  (doseq [[suite-id result] results]
-    (f/emit-suite-result suite-id result)
-    (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
-    (when-not (:ok? result)
-      (doseq [r (:results result)]
-        (when (not= :pass (:outcome r))
-          (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
   (when any-fail (System/exit 1)))"
    # Extract suite failures into risk digest format for test-summary.json visibility
    python3 scripts/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
@@ -614,15 +492,6 @@ run_routed_suites() {
         (when (not= :pass (:outcome r))
           (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
   (when any-fail (System/exit 1)))"
-  return $?
-}
-
-run_reference_validation() {
-  require_clojure || return $?
-  echo "Running reference validation suite v1..."
-  make clean-reference-validation-v1 >/dev/null
-  make reference-validation-v1
-  make verify-reference-validation-v1
   return $?
 }
 
@@ -712,45 +581,9 @@ run_equivalence_new() {
   return $?
 }
 
-run_equivalence_new() {
-  require_clojure || return $?
-  echo "Running new equivalence comparison suites (auth/race/escalation/accounting + money-path)..."
-  clojure -M:test -e "
-(require '[resolver-sim.sim.fixtures :as f])
-(let [suites [:suites/equivalence-auth-paths
-              :suites/equivalence-race-pairs
-              :suites/equivalence-escalation-boundaries
-              :suites/equivalence-accounting-min
-              :suites/equivalence-money-path-integrity]
-      results (map (fn [id] [id (f/run-suite id)]) suites)
-      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
-  (doseq [[suite-id result] results]
-    (f/emit-suite-result suite-id result)
-    (println (str suite-id \" → \" (if (:ok? result) \"PASS\" \"FAIL\")))
-    (when-not (:ok? result)
-      (doseq [r (:results result)]
-        (when (not= :pass (:outcome r))
-          (println (str \"  FAIL: \" (:trace-id r) \" [\" (:outcome r) \"]\"))))))
-  (when any-fail (System/exit 1)))"
-
-  _eq_out=$(python3 -c "from evidence_config import EvidenceConfig; c=EvidenceConfig(); print(c.artifact_path('equivalence-summary'))")
-  python3 python/equivalence_pair_diff.py \
-    --traces-dir data/fixtures/traces \
-    --out "$_eq_out" \
-    --replay-dir "$ARTIFACT_DIR/equivalence-pairs" || true
-
-  return $?
-}
-
 run_layering_lint() {
   echo "Running namespace layering lint..."
   clojure -M:layering-lint
-}
-
-run_comparison_lint() {
-  echo "Running comparison metadata lint..."
-  python scripts/validate_comparison_metadata.py
-  return $?
 }
 
 run_comparison_lint() {
@@ -766,12 +599,6 @@ run_coverage_gates() {
   _cov_out=$(python3 -c "from evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_path('coverage'))" 2>/dev/null) || _cov_out="$ARTIFACT_DIR/coverage.json"
   clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$_cov_out" || return $?
   python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS"
-  return $?
-}
-
-run_adversarial_sweep() {
-  echo "Running adversarial profitability sweep..."
-  python3 python/adversarial_profitability_sweep.py --top-n 10
   return $?
 }
 
@@ -885,64 +712,6 @@ run_monte_carlo() {
   return $mc_fail
 }
 
-run_monte_carlo() {
-  # ──────────────────────────────────────────────────────────────────────────
-  # HOW THE TWO SIMULATION ENGINES RELATE
-  #
-  # Engine 1 — Monte Carlo (stochastic + sim/economic|adversarial|governance/)
-  # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
-  #
-  # This sweep runs representative phases for expected-value/regime checks.
-  #
-  # The CI gate runs 5 phases (O, P, AA, AD, F).  All are :analytic (closed-form
-  # algebraic checks, not protocol-kernel evidence).  See
-  # src/resolver_sim/core/phases.clj phase-evidence-tiers for the full registry.
-  #
-  # Phases NOT CI-gated but still :analytic: AB, AC, AE, AF, AG, AH, AI,
-  # T, Y, Z, market-exit, phase-c-dr, phase-e-dr, phase-m-dr.
-  # Phases :exploratory (not CI-gated): Q, R, U, V, W, X.
-  # ──────────────────────────────────────────────────────────────────────────
-
-  echo "Running Monte Carlo representative sweep (4 domains)..."
-  echo ""
-  echo "  Phase O  — Economic:    market exit cascade (honest vs malice profitability)"
-  echo "  Phase P  — Adversarial: appeals falsification (difficulty/evidence/herding)"
-  echo "  Phase AA — Governance:  governance-as-adversary (selective enforcement gaming)"
-  echo "  Phase AD — Governance:  bandwidth floor safeguard (AA remediation)"
-  echo "  Phase F  — Adversarial: collusion ring deterrence (waterfall slashing)"
-  echo ""
-
-  local mc_fail=0
-
-  echo "── Phase O: Market Exit Cascade ──────────────────────────────────────────"
-  clojure -M:run -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase P Lite: Appeals Falsification ───────────────────────────────────"
-  clojure -M:run -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase AA: Governance as Adversary ─────────────────────────────────────"
-  clojure -M:run -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase AD: Governance Bandwidth Floor (AA safeguard) ───────────────────"
-  clojure -M:run -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase F: Collusion Ring Deterrence ────────────────────────────────────"
-  clojure -M:run -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  if [ "$mc_fail" -eq 0 ]; then
-    echo "Monte Carlo sweep: all 5 phases PASSED"
-  else
-    echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
-  fi
-
-  return $mc_fail
-}
-
 emit_claimable_classification() {
   require_clojure || return 0
   echo "Emitting claimable-classification v2..."
@@ -953,52 +722,6 @@ emit_claimable_classification() {
     clojure -M -m resolver-sim.io.claimable-classification-emitter \
       "$CLAIMABLE_CLASSIFICATION_FILE" aggregated "$RUN_ID"
   fi
-}
-
-run_outcome_classification_report() {
-  echo ""
-  echo "Outcome classification report"
-  echo "============================="
-  python - <<PY
-import json
-from pathlib import Path
-
-artifact = Path("$ARTIFACT_FILE")
-if not artifact.exists():
-    print("No test summary found; skipping classification report.")
-    raise SystemExit(0)
-
-data = json.loads(artifact.read_text())
-targets = data.get("targets", [])
-
-hard_fail_targets = [t for t in targets if t.get("status") == "fail"]
-print("1) Gate/Test status")
-if hard_fail_targets:
-    print(f"   FAIL: {len(hard_fail_targets)} failing target(s)")
-    for t in hard_fail_targets:
-        print(f"   - {t.get('target')} (exit={t.get('exit_code')})")
-else:
-    print("   PASS: all executed targets passed")
-
-mc = next((t for t in targets if t.get("target") == "monte-carlo"), None)
-print("\n2) Model findings (non-gating diagnostics)")
-if not mc:
-    print("   Monte Carlo target not run in this mode.")
-    raise SystemExit(0)
-
-log_path = Path(mc.get("log_file", ""))
-if not log_path.exists():
-    print("   Monte Carlo log missing; cannot summarize findings.")
-    raise SystemExit(0)
-
-txt = log_path.read_text(errors="ignore")
-claim_fails = txt.count("❌")
-claim_pass = txt.count("✅")
-
-print(f"   Indicators in Monte Carlo output: ✅={claim_pass}, ❌={claim_fails}")
-print("   Note: these are model/theory outcome signals, not unit-test assertion failures.")
-PY
-  return $?
 }
 
 run_outcome_classification_report() {
@@ -1126,6 +849,12 @@ case "$MODE" in
   dispute-resolution)
     run_dispute_resolution || FAILURES=$((FAILURES + 1))
     ;;
+  yield-provider-scenarios)
+    run_yield_provider_scenarios || FAILURES=$((FAILURES + 1))
+    ;;
+  sew-yield-scenarios)
+    run_sew_yield_scenarios || FAILURES=$((FAILURES + 1))
+    ;;
   yield-scenarios)
     run_yield_scenarios || FAILURES=$((FAILURES + 1))
     ;;
@@ -1205,7 +934,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac
@@ -1223,108 +952,3 @@ if [ -f scripts/generate_test_summary.py ]; then
 fi
 
 exit $FAILURES
-
-
-case "$MODE" in
-  unit)
-    run_unit || FAILURES=$((FAILURES + 1))
-    ;;
-  framework)
-    run_framework || FAILURES=$((FAILURES + 1))
-    ;;
-  sew)
-    run_sew || FAILURES=$((FAILURES + 1))
-    ;;
-  invariants)
-    run_invariants || FAILURES=$((FAILURES + 1))
-    ;;
-  dispute-resolution)
-    run_dispute_resolution || FAILURES=$((FAILURES + 1))
-    ;;
-  yield-scenarios)
-    run_yield_scenarios || FAILURES=$((FAILURES + 1))
-    ;;
-  yield)
-    run_yield || FAILURES=$((FAILURES + 1))
-    ;;
-  generators)
-    run_generators || FAILURES=$((FAILURES + 1))
-    ;;
-  contracts)
-    run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
-    ;;
-  triage)
-    run_target triage run_triage || FAILURES=$((FAILURES + 1))
-    ;;
-  suites)
-    run_target suites run_suites || FAILURES=$((FAILURES + 1))
-    ;;
-  routed-suites)
-    run_target routed-suites run_routed_suites || FAILURES=$((FAILURES + 1))
-    ;;
-  reference-validation)
-    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
-    ;;
-  dr3-coverage)
-    run_target dr3-coverage run_dr3_coverage || FAILURES=$((FAILURES + 1))
-    ;;
-  equivalence-new)
-    run_target equivalence-new run_equivalence_new || FAILURES=$((FAILURES + 1))
-    ;;
-  comparison-lint)
-    run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
-    ;;
-  layering-lint)
-    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
-    ;;
-  coverage)
-    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
-    ;;
-  adversarial-sweep)
-    run_target adversarial-sweep run_adversarial_sweep || FAILURES=$((FAILURES + 1))
-    ;;
-  adversarial-gates)
-    run_target adversarial-gates run_adversarial_gates || FAILURES=$((FAILURES + 1))
-    ;;
-  monte-carlo)
-    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
-    ;;
-  long-horizon)
-    run_target long-horizon run_long_horizon || FAILURES=$((FAILURES + 1))
-    ;;
-  all)
-    : > "$ARTIFACT_DIR/.targets-${RUN_ID}.csv"
-    run_target unit run_unit || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target generators run_generators || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target contracts run_contracts || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target suites run_suites || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target triage run_triage || FAILURES=$((FAILURES + 1))
-    echo ""
-    run_target monte-carlo run_monte_carlo || FAILURES=$((FAILURES + 1))
-    run_outcome_classification_report || true
-    
-    # CI Gate: coverage gates validation for all mode
-    python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
-    ;;
-  *)
-    echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
-    exit 1
-    ;;
-esac
-
-python3 write_test_summary.py
-
-exit $FAILURES:

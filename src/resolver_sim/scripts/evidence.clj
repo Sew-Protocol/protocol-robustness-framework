@@ -48,7 +48,7 @@
 
       "bundle"
       (do (when-not manifest
-            (println "ERROR: no manifest found. Run bb scenario:run first.")
+            (println "ERROR: no manifest found. Run bb run:scenario first.")
             (System/exit 1))
           (let [res (bundle/export-bundle! manifest registry out-dir)]
             (if (:error res)

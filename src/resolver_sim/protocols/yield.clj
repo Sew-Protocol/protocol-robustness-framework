@@ -208,7 +208,8 @@
                :yield-evidence (yield-evi/get-evidence world)
                :yield-indices (:yield/indices world)
                :yield-held (:yield/held-balances world)
-               :yield/positions (:yield/positions world)}
+               :yield/positions (:yield/positions world)
+               :yield-positions (:yield/positions world)}
         (:yield/risk world) (assoc :yield/risk (:yield/risk world))
         (:yield/schedules world) (assoc :yield/schedules (:yield/schedules world))
         (:yield/module-aliases world) (assoc :yield/module-aliases (:yield/module-aliases world))

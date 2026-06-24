@@ -421,7 +421,7 @@
             "current-value": "1000",
             "entry-index": "1\/1",
             "shortfall": {
-              "kind": "liquidity-shortfall",
+              "kind": "liquidity-only",
               "basis": "1000",
               "fulfilled": "0",
               "deferred": "1000",
@@ -476,7 +476,7 @@
             "entry-index": "1\/1",
             "id": "aave-v3",
             "shortfall": {
-              "reason": "liquidity-shortfall",
+              "reason": "liquidity-only",
               "basis-amount": "1000",
               "available-ratio": "0",
               "fulfilled-amount": "0",
@@ -583,7 +583,7 @@
         "entry-index": "1\/1",
         "id": "aave-v3",
         "shortfall": {
-          "reason": "liquidity-shortfall",
+          "reason": "liquidity-only",
           "basis-amount": "1000",
           "available-ratio": "0",
           "fulfilled-amount": "0",
@@ -768,7 +768,7 @@
     "block-time": "1200000",
     "events": [
       {
-        "shortfall-kind": "liquidity-shortfall",
+        "shortfall-kind": "liquidity-only",
         "time": "1200000",
         "basis-amount": "1000",
         "haircut-amount": "0",
@@ -776,7 +776,8 @@
         "fulfilled-amount": "0",
         "available-ratio": "0",
         "deferred-amount": "1000",
-        "type": "deferred-created"
+        "type": "deferred-created",
+        "hash": "sha256:bf9ee6cc31b4abd0887eda3bc1fa3840e819155f7d139a0d07c4aefe0c3d1d68"
       }
     ],
     "total-held": {

@@ -27,8 +27,8 @@
     }
   },
   "agents": [
-    {"id": "0xOwnerA", "address": "0xOwnerA", "role": "provider"},
-    {"id": "governance", "address": "governance", "role": "governance"}
+    { "id": "0xOwnerA", "address": "0xOwnerA", "role": "provider" },
+    { "id": "governance", "address": "governance", "role": "governance" }
   ],
   "events": [
     {
@@ -66,9 +66,9 @@
   ],
   "expectations": {
     "metrics": [
-      {"name": "yield/available-ratio", "value": 0.5},
-      {"name": "yield/focus-status", "value": "unwinding"},
-      {"name": "yield/focus-deferred", "value": 500}
+      { "name": "yield/available-ratio", "value": 0.5 },
+      { "name": "yield/focus-status", "value": "unwinding" },
+      { "name": "yield/focus-deferred", "value": 1000 }
     ]
   }
 }

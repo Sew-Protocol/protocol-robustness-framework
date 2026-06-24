@@ -23,13 +23,25 @@
 
 (defn- replay-fn-for-protocol
   [protocol-id]
-  (let [protocol (preg/get-protocol (or protocol-id preg/default-protocol-id))]
+  (let [protocol-id (or protocol-id preg/default-protocol-id)
+        protocol    (preg/get-protocol protocol-id)]
+    (when-not protocol
+      (throw (ex-info "Unknown scenario protocol"
+                      {:protocol protocol-id
+                       :known-protocols (vec (preg/known-protocol-ids))})))
     (if (= "yield-v1" protocol-id)
       #(replay/replay-yield-scenario protocol %)
       (fn [scenario]
         (if (= "sew-v1" protocol-id)
           (sew/replay-with-sew-protocol scenario)
           (replay/replay-with-protocol protocol scenario))))))
+
+(defn- scenario-file-details
+  [scenario-path default-protocol-id]
+  (let [scenario (-> scenario-path io-sc/load-scenario-file normalize/normalize-scenario)
+        protocol-id (or (:protocol scenario) default-protocol-id)]
+    {:scenario scenario
+     :protocol protocol-id}))
 
 (defn- sew-replay-fn []
   (replay-fn-for-protocol "sew-v1"))
@@ -60,22 +72,25 @@
 
    opts may include `:protocol` (registry id, default sew-v1)."
   [paths opts]
-  (let [protocol-id (or (:protocol opts) preg/default-protocol-id)
-        replay-fn   (replay-fn-for-protocol protocol-id)
+  (let [default-protocol-id (or (:protocol opts) preg/default-protocol-id)
         entries (mapv (fn [path]
-                        (let [raw      (io-sc/load-scenario-file path)
-                              scenario (normalize/normalize-scenario raw)
-                              scenario* (if (= "yield-v1" protocol-id)
+                        (let [{:keys [scenario protocol]} (scenario-file-details path default-protocol-id)
+                              scenario* (if (= "yield-v1" protocol)
                                           (yield-inv-cat/enrich-expectations scenario)
                                           scenario)
-                              name     (or (:scenario-id scenario*) path)]
+                              name      (or (:scenario-id scenario*) path)]
                           {:name     (str name "  [" path "]")
                            :scenario scenario*
-                           :source   :file}))
+                           :source   :file
+                           :protocol protocol}))
                       paths)]
+    (doseq [{:keys [name protocol]} entries]
+      (println (format "[run:scenario] %s -> protocol %s" name protocol)))
     (runner/run-collection
      {:entries   entries
-      :replay-fn replay-fn}
+      :replay-fn (fn [scenario]
+                   ((replay-fn-for-protocol (or (:protocol scenario) default-protocol-id))
+                    scenario))}
      (merge {:normalize? false :suite-id (:suite-id opts)} opts))))
 
 (defn run-scenario-file
@@ -176,28 +191,40 @@
      :protocol       — protocol id (default sew-v1)
      opts are forwarded to report/runner."
   [dispatch opts]
-  (ev-node/with-execution-node
-    {:execution-id :execution/replay
-     :inputs {:dispatch dispatch
-              :opts {:protocol (:protocol opts)
-                     :report-format (:report-format opts)
-                     :suite-id (:suite-id opts)}}
-     :status-fn #(if (zero? %) :pass :fail)
-     :outputs-fn (fn [exit-code]
-                   {:exit-code exit-code
-                    :dispatch dispatch})
-     :failure-details-fn (fn [exit-code]
-                           (if (zero? exit-code)
-                             []
-                             [{:failure-type :replay-failed
-                               :class :unexpected
-                               :message (str "Replay exited with code " exit-code)
-                               :expected? false}]))}
-    (fn []
-      (let [protocol-id (or (:protocol dispatch) preg/default-protocol-id)
-            dispatch*   (if (and (:suite dispatch) (not (:protocol dispatch)))
-                          (assoc dispatch :protocol (suites/suite-protocol-id (:suite dispatch)))
-                          dispatch)]
+  (let [default-protocol-id (or (:protocol dispatch) preg/default-protocol-id)
+        inferred-protocol-id (when (:scenario dispatch)
+                               (:protocol (scenario-file-details (:scenario dispatch)
+                                                                 default-protocol-id)))
+        suite-protocol-id (when (:suite dispatch)
+                            (suites/suite-protocol-id (:suite dispatch)))
+        protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
+        dispatch*   (cond
+                      (:suite dispatch)
+                      (assoc dispatch :protocol protocol-id)
+
+                      (:scenario dispatch)
+                      (assoc dispatch :protocol protocol-id)
+
+                      :else
+                      dispatch)]
+    (ev-node/with-execution-node
+      {:execution-id :execution/replay
+       :inputs {:dispatch dispatch*
+                :opts {:protocol protocol-id
+                       :report-format (:report-format opts)
+                       :suite-id (:suite-id opts)}}
+       :status-fn #(if (zero? %) :pass :fail)
+       :outputs-fn (fn [exit-code]
+                     {:exit-code exit-code
+                      :dispatch dispatch*})
+       :failure-details-fn (fn [exit-code]
+                             (if (zero? exit-code)
+                               []
+                               [{:failure-type :replay-failed
+                                 :class :unexpected
+                                 :message (str "Replay exited with code " exit-code)
+                                 :expected? false}]))}
+      (fn []
         (cond
           (:fixture-suite dispatch*)
           (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)

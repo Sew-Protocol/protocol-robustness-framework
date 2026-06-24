@@ -213,8 +213,8 @@ Concrete commands present in `bb.edn`:
 - Deterministic invariant tests: `bb test:invariants`
 - Fixture suites / scenario replay suites: `bb test:suites`
 - Full canonical gate: `bb test`
-- Single scenario replay: `bb scenario:run <alias|scenario-path>`
-- Scenario family replay: `bb scenario:run:family <selector>`
+- Single scenario replay: `bb run:scenario <alias|scenario-path>`
+- Scenario family replay: `bb run:scenario:family <selector>`
 - Artifact registry validation:
   `bb validation:artifact-registry [path/to/test-artifacts.json]`
 - Evidence registry build: `bb evidence:registry [--dir <run-dir>]`
@@ -299,7 +299,7 @@ bb test:suites
 For scenario replay work:
 
 ```bash
-bb scenario:run <alias|scenario-path>
+bb run:scenario <alias|scenario-path>
 bb validation:artifact-registry
 ```
 

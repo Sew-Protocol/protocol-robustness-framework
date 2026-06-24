@@ -35,19 +35,19 @@
  [:div.workbench-container
   [:style "
     /* Global Layout Overrides for Full-Width Immersive Experience */
-    .clerk-view, .viewer-notebook, .prose, .max-w-prose, .max-w-5xl, .mx-auto { 
-      max-width: none !important; 
-      width: 100% !important; 
-      margin-left: 0 !important; 
-      margin-right: 0 !important; 
+    .clerk-view, .viewer-notebook, .prose, .max-w-prose, .max-w-5xl, .mx-auto {
+      max-width: none !important;
+      width: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
     }
-    .workbench-container { 
+    .workbench-container {
       font-family: 'JetBrains Mono', 'Inter', sans-serif;
-      background: #020617; 
-      color: #7ADDDC; 
+      background: #020617;
+      color: #7ADDDC;
       padding: 40px;
     }
-    
+
     /* Mission Control Panel Styles */
     .hero-strip {
       display: grid;
@@ -61,7 +61,7 @@
       padding: 20px;
       border-radius: 4px;
     }
-    
+
     /* Layout Primitives */
     .grid-layout {
       display: grid;
@@ -108,7 +108,7 @@
       [:div.metric-panel [:div.label "Validation Run"] [:div.value run-id]]
       [:div.metric-panel [:div.label "Invariant Status"] [:div.value (str/upper-case (or (:overall_status summary) "FAIL"))]]
       [:div.metric-panel [:div.label "Determinism"] [:div.value "100.0%"]]
-       [:div.metric-panel [:div.label "Evidence Hash"] [:div.value {:style {:fontSize "1.2rem"}} (safe-prefix evidence-hash 8 "unknown")]]]
+      [:div.metric-panel [:div.label "Evidence Hash"] [:div.value {:style {:fontSize "1.2rem"}} (safe-prefix evidence-hash 8 "unknown")]]]
 
      ;; 2. Observable Sections
      [:div.grid-layout
@@ -124,7 +124,7 @@
                                     vec)]
          [:div
           [:div {:style {:fontSize "12px" :marginBottom "10px" :color "#cbd5e1"}}
-           "Use `bb scenario:run:forking` to run the full dispute-forking family. This panel shows those scenarios from the latest loaded artifacts."]
+           "Use `bb run:scenario:family forking-strategist` to run the full dispute-forking family. This panel shows those scenarios from the latest loaded artifacts."]
           (if (seq forking-scenarios)
             [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "12px"}}
              [:thead
@@ -190,7 +190,7 @@
              [:li [:code (:id s)] " — " (or (:title s) "(untitled)")])]
           [:div {:style {:fontSize "12px" :marginTop "14px" :color "#fbbf24"}}
            "Open assumptions: cross-chain finality modeling, dynamic liquidity, resolver bond market dynamics."]])]
-      
+
       ;; 3. Clerk-safe drilldown (no React event handlers)
       [:div.card {:style {:grid-column "span 12" :marginTop "30px"}}
        [:div.card-title "Evidence Explorer"]
@@ -208,5 +208,5 @@
                [:div {:style {:display "flex" :gap "20px" :fontSize "11px" :padding "3px 0" :borderBottom "1px solid #020617" :color "#cbd5e1"}}
                 [:span {:style {:color "#004D59" :minWidth "80px"}} (str (:time e) "ms")]
                 [:span {:style {:color "#FF9800" :minWidth "150px"}} (str/upper-case (:action e))]
-                [:span (pr-str (walk/stringify-keys (:params e))) ]])
+                [:span (pr-str (walk/stringify-keys (:params e)))]])
              [:div "Trace not found for scenario: " id])]])]]])])

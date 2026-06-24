@@ -184,10 +184,10 @@
                           :result evidence-result
                           :dependencies transition-dependencies
                           :attribution attribution})]
-     {:evidence (assoc evidence-record
+    {:evidence (assoc evidence-record
                       :evidence/hash (hc/hash-with-intent {:hash/intent :evidence-record}
                                                           (dissoc evidence-record :evidence/hash :evidence-hash)))
-      :artifact result-artifact}))
+     :artifact result-artifact}))
 
 (defn write-allocation-result-artifact!
   "Persist a pro-rata allocation result artifact to disk and register it in the

@@ -331,7 +331,7 @@ bb validation:artifact-registry results/runs/<run-id>/test-artifacts.json
 Run a scenario with non-blocking artifact validation:
 
 ```bash
-bb scenario:run S01_baseline-happy-path.json
+bb run:scenario S01_baseline-happy-path.json
 ```
 
 ### Validation design constraints
@@ -441,7 +441,7 @@ Run all dispute-resolution phases:
 Run individual phases using Babashka:
 
 ```bash
-bb scenario:run-family <phase-name>
+bb run:scenario:family <phase-name>
 ```
 
 ## Dispute-resolution validation phases

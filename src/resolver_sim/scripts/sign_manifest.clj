@@ -30,7 +30,7 @@
         run      (loader/load-focused)
         manifest (:manifest run)]
     (when-not manifest
-      (println "ERROR: No manifest found. Run bb scenario:run <scenario> first.")
+      (println "ERROR: No manifest found. Run bb run:scenario <scenario> first.")
       (System/exit 1))
     (println (str "Signing manifest: " (or (:run_id manifest) "unknown run-id")))
     (println (str "Key:              " key-path))

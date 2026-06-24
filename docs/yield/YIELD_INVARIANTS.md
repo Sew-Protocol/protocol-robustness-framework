@@ -47,7 +47,7 @@ Implementation: `src/resolver_sim/yield/invariants_transition.clj` (via `protoco
 
 ## Scenario expectations
 
-`:yield-provider-scenarios` JSON files get default `:expectations :invariants` merged at load time (`yield.invariant-catalog/enrich-expectations`). Runtime invariants are re-checked on the trace end world; transition invariants are enforced per step via `:metrics :invariant-results` (`scenario.expectations/evaluate-invariants`).
+`:yield-provider-scenarios` JSON files get default `:expectations :invariants` merged at load time (`yield.invariant-catalog/enrich-expectations`). Runtime invariants are re-checked on the trace end world; transition invariants are enforced per step via `:metrics :invariant-results` (`scenario.expectations/evaluate-invariants`). The canonical gate currently uses the top-level `scenarios/Y01..Y05` provider scenarios; the older `scenarios/yield/Y*` files remain as legacy compatibility fixtures.
 
 ## Scenario map
 
@@ -63,7 +63,7 @@ Implementation: `src/resolver_sim/yield/invariants_transition.clj` (via `protoco
 
 | Suite keyword | Protocol | Paths |
 |---------------|----------|-------|
-| `:yield-provider-scenarios` | `yield-v1` | `scenarios/yield/Y*` |
+| `:yield-provider-scenarios` | `yield-v1` | `scenarios/Y01..Y05` |
 | `:sew-yield-scenarios` | `sew-v1` | `scenarios/S*` yield integration |
 | `:yield-scenarios` | (alias) | same as `:sew-yield-scenarios` |
 

@@ -561,7 +561,7 @@ contract, `:pass?` semantics, and reporting boundaries.
 
 ```bash
 clojure -M:run -- --invariants
-clojure -M:run -- --invariants --suite yield-provider-scenarios
+clojure -M:run -- --invariants --suite yield-provider-scenarios  # canonical provider gate (scenarios/Y01..Y05)
 clojure -M:run -- --invariants --suite sew-yield-scenarios
 # legacy alias: --suite yield-scenarios → sew-yield-scenarios
 clojure -M:run -- --invariants --fixture-suite suites/all-invariants

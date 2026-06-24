@@ -152,7 +152,7 @@
       (count all-runs) " run(s) on disk in results/runs/"]
      (if (empty? all-runs)
        [:div {:style {:color "#f59e0b" :padding "12px" :border "1px solid #f59e0b" :borderRadius "4px"}}
-        "⚠ No runs found in results/runs/ — run bb scenario:run <scenario> first"]
+        "⚠ No runs found in results/runs/ — run bb run:scenario <scenario> first"]
        [:table.run-table
         [:thead
          [:tr
@@ -298,7 +298,7 @@
                             :overflow-y    "auto"
                             :border-radius "0 4px 4px 4px"
                             :margin        "0"}}
-              (or (get data active) "(not found \u2014 run bb scenario:run first)")]
+              (or (get data active) "(not found — run bb run:scenario first)")
              [:div {:style {:font-size "10px" :color "#64748b" :margin-top "12px"}}
               "SHA-256: " (or (:hash data) "\u2014")]]))))}
   artifact-explorer-data)
@@ -429,7 +429,7 @@
        (cond
          (< (count runs) 2)
          [:div {:style {:color "#f59e0b" :padding "12px" :border "1px solid #f59e0b" :borderRadius "4px"}}
-          "⚠ Fewer than 2 runs available — run bb scenario:run at least twice to compare"]
+          "⚠ Fewer than 2 runs available — run bb run:scenario at least twice to compare"]
 
          (nil? diff-res)
          [:div {:style {:color "#ef4444"}} "Could not load run data for diff"]
