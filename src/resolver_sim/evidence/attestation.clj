@@ -17,8 +17,8 @@
                                 :public-key-id \"key-001\"
                                 :signature-bytes \"hex...\"})})"
   (:require [clojure.set :as set]
-            [resolver-sim.definitions.passive-registries :as registries])
-  (:import [java.util UUID]))
+            [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.definitions.passive-registries :as registries]))
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 
@@ -26,38 +26,87 @@
 
 ;; ── Attestation Builder ──────────────────────────────────────────────────────
 
-(defn- generate-attestation-id
-  []
-  (str (UUID/randomUUID)))
-
 (defn- default-timestamp
   []
   (str (java.time.Instant/now)))
 
+(defn signing-payload
+  "Reconstruct the canonical signing payload from an attestation record.
+
+   The signing payload is the exact data structure that was signed:
+     {:intent :attestation-record
+      :artifact {:schema-version \"...\"
+                 :attestation/subject-hash \"...\"
+                 :attestation/subject-kind :evidence-node|:claim
+                 :attestation/claim-id ...
+                 :attestation/claim-result :verified|:reproduced|...
+                 :attestation/attestor-id ...
+                 :attestation/signing-key-id ...
+                 :attestation/signed-at \"...\"
+                 :attestation/provenance ...}}
+
+   Self-identifiers (:attestation/id, :attestation/hash), signature,
+   and metadata are excluded — they are not part of the attested content.
+   The projection function project-attestation-record is the identity
+   lens for what constitutes 'attestation content' for hashing and signing."
+  [attestation]
+  (hc/project-attestation-record attestation :attestation-record))
+
 (defn build-attestation
-  "Build a spec-compliant ATTESTATION_SPEC_V1 attestation map.
+  "Build a content-addressed attestation record with deterministic identity.
 
    Arguments:
      attestor  — map {:type ... :id ...}
      subject   — map {:type :evidence-node|:claim :hash ...|:claim-id ...}
-     claim     — keyword, one of :verified :reproduced :certified :approved :rejected
+     claim     — keyword claim-result, one of :verified :reproduced :certified
+                 :approved :rejected
      opts      — optional map with keys:
-                 :id         — override attestation-id (default: UUID)
-                 :timestamp  — ISO-8601 UTC string (default: now)
-                 :signing-fn — (fn [data]) returning {:algorithm :public-key-id :signature-bytes}
-                 :metadata   — optional metadata map
+                  :signed-at      — ISO-8601 UTC string (default: now)
+                  :signing-key-id — string identifying the signing key
+                  :signing-fn     — (fn [canonical-signing-payload]) returning
+                                    {:algorithm :ed25519
+                                     :public-key-id \"...\"
+                                     :signature-bytes \"...\"}
+                  :claim-id       — registered claim definition id (default: nil)
+                  :provenance     — map with run-id, scenario-id, etc.
+                  :metadata       — optional metadata map (excluded from hash)
 
-   Returns a map conforming to ATTESTATION_SPEC_V1 §3."
-  [attestor subject claim & [{:keys [id timestamp signing-fn metadata]}]]
-  (let [attestation {:attestation-id (or id (generate-attestation-id))
-                     :attestor attestor
-                     :subject subject
-                     :claim claim
-                     :timestamp (or timestamp (default-timestamp))}
-        with-meta (if metadata (assoc attestation :metadata metadata) attestation)
-        to-sign (dissoc with-meta :signature :metadata)]
+   Returns a content-addressed attestation record:
+     :schema-version \"attestation.v1\"
+     :attestation/id           (= :attestation/hash, content-derived)
+     :attestation/hash         sha256 of canonical projection
+     :attestation/subject-hash from subject :hash
+     :attestation/subject-kind from subject :type
+     :attestation/claim-id     registered claim id (if provided)
+     :attestation/claim-result :verified|:reproduced|...
+     :attestation/attestor-id  from attestor :id
+     :attestation/signing-key-id key identifier (if provided)
+     :attestation/signed-at    ISO-8601 instant
+     :attestation/provenance   context map (if provided)
+     :attestation/signature    present if signing-fn provided
+     :attestation/metadata     present if metadata provided
+
+   The signing-fn receives the canonical signing payload as returned
+   by signing-payload — this is the same data structure that was hashed.
+   Use signing-payload to reconstruct what was signed for verification."
+  [attestor subject claim & [{:keys [signed-at signing-key-id signing-fn claim-id provenance metadata]}]]
+  (let [body (cond-> {:schema-version "attestation.v1"
+                       :attestation/subject-hash (or (:hash subject) (:claim-id subject))
+                       :attestation/subject-kind (:type subject)
+                       :attestation/claim-id claim-id
+                       :attestation/claim-result claim
+                       :attestation/attestor-id (:id attestor)
+                       :attestation/signed-at (or signed-at (default-timestamp))
+                       :attestation/provenance provenance}
+              signing-key-id (assoc :attestation/signing-key-id signing-key-id))
+        projected (signing-payload body)
+        body-hash (hc/hash-with-intent {:hash/intent :attestation-record} body)
+        artifact (assoc body
+                        :attestation/id body-hash
+                        :attestation/hash body-hash)
+        with-meta (if metadata (assoc artifact :attestation/metadata metadata) artifact)]
     (if signing-fn
-      (assoc with-meta :signature (signing-fn to-sign))
+      (assoc with-meta :attestation/signature (signing-fn projected))
       with-meta)))
 
 ;; ── Shape Validation ─────────────────────────────────────────────────────────
@@ -173,9 +222,13 @@
   (get-in attestation [:signature :public-key-id]))
 
 (defn- data-to-verify
-  "Reconstruct the data that was signed: the attestation minus :signature and :metadata."
+  "Reconstruct the data that was signed for an old-shape attestation.
+   Old shape: the attestation minus :signature and :metadata.
+   New shape: use signing-payload for the canonical projection."
   [attestation]
-  (dissoc attestation :signature :metadata))
+  (if (:attestation/subject-kind attestation)
+    (signing-payload attestation)
+    (dissoc attestation :signature :metadata)))
 
 (defn- check-attestor-exists
   "Check that the attestor is registered."
@@ -399,5 +452,46 @@
                            :signature-verified :signature-mismatch
                            :subject-exists :subject-unknown}
             failures (filterv (fn [c] (false? (:pass? c))) checks)]
-        (or (some (fn [c] (get fail->summary (:check c))) failures)
-            :verification-failed)))))
+         (or (some (fn [c] (get fail->summary (:check c))) failures)
+             :verification-failed)))))
+
+;; ── Claim Integration ────────────────────────────────────────────────────────
+
+(defn build-claim-result-attestation
+  "Build an attestation for a claim result.
+
+   The attestation references the claim result hash as its subject, linking
+   the attestor's verification to the specific claim evaluation outcome.
+   The claim-id is passed through for cross-referencing via the registry.
+
+   Arguments:
+     attestor     — map {:type ... :id ...}
+     claim-result — claim result map with at least :claim-id and
+                    :claim-result-hash keys (as produced by
+                    claim-result-entry in slashing.clj)
+     opts         — optional map with keys:
+                     :claim       — claim result for this attestation
+                                   (default: :verified)
+                     :signed-at, :signing-key-id, :signing-fn
+                     :provenance, :metadata
+
+   Returns a content-addressed attestation record with:
+     :attestation/subject-kind :claim
+     :attestation/subject-hash <claim-result-hash>
+     :attestation/claim-id    <claim-id>
+     :attestation/claim-result :verified (or as specified)"
+  [attestor claim-result & [{:keys [claim signed-at signing-key-id signing-fn
+                                    provenance metadata]
+                             :or {claim :verified}}]]
+  (build-attestation
+   attestor
+   {:type :claim :hash (:claim-result-hash claim-result)}
+   claim
+   (cond-> {:claim-id (:claim-id claim-result)}
+     signed-at (assoc :signed-at signed-at)
+     signing-key-id (assoc :signing-key-id signing-key-id)
+     signing-fn (assoc :signing-fn signing-fn)
+     provenance (assoc :provenance provenance)
+     metadata (assoc :metadata metadata))))
+
+

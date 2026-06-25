@@ -71,7 +71,8 @@
    :invariant-failure "INVARIANT_FAILURE_V1"
    :startup-validation "STARTUP_VALIDATION_V1"
    :claim-result       "CLAIM_RESULT_V1"
-   :attestation        "ATTESTATION_V1"
+    :attestation        "ATTESTATION_V1"
+    :attestation-record "ATTESTATION_RECORD_V1"
    :execution-definition "EXECUTION_DEFINITION_V1"
    :action             "ACTION_V1"
    :action-at          "ACTION_AT_V1"
@@ -679,6 +680,23 @@
     {:intent intent
      :artifact artifact}))
 
+(defn project-attestation-record
+  "Canonical projection for ATTESTATION_RECORD_V1 attestation records.
+   Includes the fields that define attestation identity:
+     schema-version, subject-hash, subject-kind, claim-id, claim-result,
+     attestor-id, signing-key-id, signed-at, provenance
+   Excludes self-hash/id/signature/metadata (volatile or derived)."
+  [value intent]
+  (let [keep-keys [:schema-version
+                   :attestation/subject-hash :attestation/subject-kind
+                   :attestation/claim-id :attestation/claim-result
+                   :attestation/attestor-id :attestation/signing-key-id
+                   :attestation/signed-at :attestation/provenance]
+        artifact (select-keys value keep-keys)
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
 (defn project-execution-definition
   "Canonical projection for EXECUTION_REGISTRY_SPEC_V1 execution definition entries.
    Includes only the fields that define execution identity:
@@ -1034,6 +1052,20 @@
     :intent/includes    #{:attestation-id :attestor :subject :claim :timestamp}
     :intent/excludes    #{:signature :metadata :canonical-hash}
     :intent/projection-fn project-attestation
+    :intent/version     1}
+
+   :attestation-record
+   {:intent/name        :attestation-record
+    :intent/domain-tag  "ATTESTATION_RECORD_V1"
+    :intent/description "Canonical identity of a content-addressed attestation record, excluding self-hash and signature"
+    :intent/includes    #{:schema-version
+                          :attestation/subject-hash :attestation/subject-kind
+                          :attestation/claim-id :attestation/claim-result
+                          :attestation/attestor-id :attestation/signing-key-id
+                          :attestation/signed-at :attestation/provenance}
+    :intent/excludes    #{:attestation/id :attestation/hash :attestation/signature
+                          :attestation/metadata :registry/indexed-at}
+    :intent/projection-fn project-attestation-record
     :intent/version     1}
 
    :execution-definition

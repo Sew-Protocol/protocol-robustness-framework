@@ -76,15 +76,15 @@
                        {:type :ci-runner :id :ci-validation}
                        {:type :evidence-node :hash "sha256:abc"}
                        :verified)
-          original-id (:attestation-id attestation)
-          original-attestor (:attestor attestation)
+          original-id (:attestation/id attestation)
+          original-attestor (:attestation/attestor-id attestation)
           r (rev/build-revocation original-id :key-compromised)]
       (rev/register-revocation! r)
       ;; The original attestation must be untouched
-      (is (= original-id (:attestation-id attestation)))
-      (is (= original-attestor (:attestor attestation)))
-      (is (= :verified (:claim attestation)))
-      (is (some? (:timestamp attestation))))))
+      (is (= original-id (:attestation/id attestation)))
+      (is (= original-attestor (:attestation/attestor-id attestation)))
+      (is (= :verified (:attestation/claim-result attestation)))
+      (is (some? (:attestation/signed-at attestation))))))
 
 ;; ── all-revocations ─────────────────────────────────────────────────────────
 
@@ -126,19 +126,41 @@
 
 ;; ── Integration with verify-attestation ────────────────────────────────────
 
+(defn- attestation->old-shape
+  "Map new attestation shape to old shape for verify-attestation compat."
+  [a]
+  (let [subject-kind (:attestation/subject-kind a)]
+    (-> a
+        (assoc :attestation-id (:attestation/id a))
+        (assoc :attestor {:type :ci-runner :id (:attestation/attestor-id a)})
+        (assoc :subject (if (= :claim subject-kind)
+                          {:type :claim :claim-id (:attestation/subject-hash a)}
+                          {:type subject-kind :hash (:attestation/subject-hash a)}))
+        (assoc :claim (:attestation/claim-result a))
+        (assoc :timestamp (:attestation/signed-at a))
+        (assoc :signature (:attestation/signature a))
+        (dissoc :schema-version
+                :attestation/id :attestation/hash
+                :attestation/subject-hash :attestation/subject-kind
+                :attestation/claim-id :attestation/claim-result
+                :attestation/attestor-id :attestation/signing-key-id
+                :attestation/signed-at :attestation/provenance
+                :attestation/signature :attestation/metadata))))
+
 (deftest verify-attestation-with-revocation-resolver
   (rev/with-fresh-registry
-    (let [attestation (att/build-attestation
-                       {:type :ci-runner :id :ci-validation}
-                       {:type :evidence-node :hash "sha256:abc"}
-                       :verified)
+    (let [attestation (attestation->old-shape
+                       (att/build-attestation
+                        {:type :ci-runner :id :ci-validation}
+                        {:type :evidence-node :hash "sha256:abc"}
+                        :verified))
           rev-id (:attestation-id attestation)]
       ;; Register a revocation
       (rev/register-revocation!
        (rev/build-revocation rev-id :key-compromised))
       ;; Verify with revocation-resolver wired to the revocation registry
       (let [{:keys [valid? checks]} (att/verify-attestation attestation
-                                                            {:revocation-resolver rev/attestation-revoked?})
+                                                             {:revocation-resolver rev/attestation-revoked?})
             rev-check (first (filter #(= :revocation-status (:check %)) checks))]
         (is valid? "Revocation is informational — verification still passes")
         (is (true? (:pass? rev-check)) "Revocation check reports revoked")
@@ -146,10 +168,11 @@
 
 (deftest verify-attestation-revocation-does-not-block-other-checks
   (rev/with-fresh-registry
-    (let [attestation (att/build-attestation
-                       {:type :ci-runner :id :ci-validation}
-                       {:type :evidence-node :hash "sha256:abc"}
-                       :verified)
+    (let [attestation (attestation->old-shape
+                       (att/build-attestation
+                        {:type :ci-runner :id :ci-validation}
+                        {:type :evidence-node :hash "sha256:abc"}
+                        :verified))
           rev-id (:attestation-id attestation)]
       (rev/register-revocation!
        (rev/build-revocation rev-id :key-compromised))
