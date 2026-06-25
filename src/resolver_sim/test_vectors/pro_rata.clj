@@ -6,21 +6,20 @@
    integer-safe JSON artifacts without changing allocation semantics."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [resolver-sim.protocols.sew.economics :as sew-economics]
+            [resolver-sim.protocols.sew.test-vectors.slash-allocation :as sew-slash]
             [resolver-sim.yield.partial-fill :as partial-fill]))
 
 (def liquidity-schema-version "liquidity-fulfillment-vector.v1")
-(def slash-schema-version "slash-allocation-vector.v1")
 
 (def default-generated-at "1970-01-01T00:00:00Z")
 
 (def ^:private settlement-critical? true)
 
-(defn- amount-string
+(defn amount-string
   [x]
   (str (bigint (or x 0))))
 
-(defn- keyword-name
+(defn keyword-name
   [x]
   (cond
     (keyword? x) (name x)
@@ -62,7 +61,7 @@
   [x]
   (sha256-hex (canonical-json x)))
 
-(defn- attach-hashes
+(defn attach-hashes
   [v]
   (let [with-subtree-hashes (assoc v
                                    :canonical-input-hash (canonical-hash (:input v))
@@ -70,7 +69,7 @@
     (assoc with-subtree-hashes
            :full-vector-hash (canonical-hash with-subtree-hashes))))
 
-(defn- source-metadata
+(defn source-metadata
   [{:keys [source-function generator-function generated-at source-commit implementation-version]}]
   (cond-> {:source-function source-function
            :generator-function generator-function
@@ -78,7 +77,7 @@
            :source-commit (or source-commit "unknown")}
     implementation-version (assoc :implementation-version implementation-version)))
 
-(defn- units-metadata
+(defn units-metadata
   [{:keys [amount-unit weight-unit token-decimals integer-precision]}]
   {:amount-unit (or amount-unit "base-units")
    :weight-unit (or weight-unit "integer-weight")
@@ -86,7 +85,7 @@
    :integer-precision (or integer-precision "arbitrary-precision-integer")
    :json-numeric-representation "amount-like and weight-like fields are decimal strings; no floats"})
 
-(defn- trust-boundary-metadata
+(defn trust-boundary-metadata
   [{:keys [trust-boundary settlement-critical]}]
   {:classification (or trust-boundary :solidity-parity)
    :settlement-critical (if (some? settlement-critical)
@@ -145,18 +144,6 @@
    {:id :liquidity/deterministic-ordering
     :expression "bucket result order follows input claim bucket order"}])
 
-(def slash-invariants
-  [{:id :slash/conservation
-    :expression "total_obligation == total_debited + total_unmet + remainder"}
-   {:id :slash/caps-respected
-    :expression "forall party: debited <= cap when cap is present"}
-   {:id :slash/non-negative-debit
-    :expression "forall party: debited >= 0 and unmet >= 0"}
-   {:id :slash/zero-weight-handling
-    :expression "zero-weight parties receive zero liability under current Sew policy"}
-   {:id :slash/deterministic-ordering
-    :expression "party result order follows input liable party order"}])
-
 (defn emit-liquidity-fulfillment-vector
   "Emit a canonical liquidity fulfillment vector by calling
    `calculate-fulfillment-pro-rata` and normalizing the result."
@@ -193,89 +180,7 @@
          :notes (or notes [])}
         attach-hashes)))
 
-(defn- normalize-slash-input
-  [slash-obligation liable-parties basis cap-field slash-policy snapshot]
-  {:slash-obligation (amount-string slash-obligation)
-   :liable-parties (mapv (fn [party]
-                           {:party-id (keyword-name (:id party))
-                            :weight (amount-string (or (basis party) 0))
-                            :weight-key (keyword-name basis)
-                            :cap (when (some? (cap-field party))
-                                   (amount-string (cap-field party)))})
-                         liable-parties)
-   :weight-key (keyword-name basis)
-   :cap-key (keyword-name cap-field)
-   :policy-name (keyword-name (or slash-policy :sew-slash-allocation))
-   :snapshot snapshot})
 
-(defn- normalize-slash-output
-  [slash-obligation liable-parties basis cap-field result]
-  (let [alloc-by-id (into {} (map (juxt :id identity) (:allocations result)))
-        total-debited (long (or (:recovered-total result) 0))
-        total-unmet (long (or (:unmet-total result) 0))]
-    {:status (some-> (:status result) keyword-name)
-     :liability-per-party (mapv (fn [party]
-                                  (let [id (:id party)
-                                        alloc (get alloc-by-id id)
-                                        debited (long (or (:paid alloc) 0))
-                                        unmet (long (or (:unmet alloc) 0))
-                                        owed (long (or (:owed alloc) (+ debited unmet)))]
-                                    {:party-id (keyword-name id)
-                                     :weight (amount-string (or (basis party) 0))
-                                     :cap (when (some? (cap-field party))
-                                            (amount-string (cap-field party)))
-                                     :owed (amount-string owed)
-                                     :debited (amount-string debited)
-                                     :unmet (amount-string unmet)}))
-                                liable-parties)
-     :total-obligation (amount-string slash-obligation)
-     :total-debited (amount-string total-debited)
-     :total-unmet (amount-string total-unmet)
-     :remainder (amount-string (- (long slash-obligation) total-debited total-unmet))
-     :reference-output result}))
-
-(defn emit-slash-allocation-vector
-  "Emit a canonical Sew slash allocation vector by calling
-   `calculate-sew-slash-allocation` and normalizing the result."
-  [{:keys [vector-id description slash-obligation slash-amount liable-parties basis cap-field
-           slash-policy notes tags snapshot]
-    :or {basis :slashable-stake
-         cap-field :available-slashable}
-    :as opts}]
-  (let [amount (or slash-obligation slash-amount 0)
-        liable-parties (vec (or liable-parties []))
-        result (sew-economics/calculate-sew-slash-allocation
-                {:slash-obligation amount
-                 :liable-parties liable-parties
-                 :basis basis
-                 :cap-field cap-field
-                 :slash-policy slash-policy})
-        input (normalize-slash-input amount liable-parties basis cap-field slash-policy snapshot)
-        expected-output (normalize-slash-output amount liable-parties basis cap-field result)]
-    (-> {:schema-version slash-schema-version
-         :vector-id vector-id
-         :domain "slash-allocation"
-         :description description
-         :input input
-         :expected-output expected-output
-         :invariants slash-invariants
-         :source-function "resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation"
-         :source-metadata (source-metadata (assoc opts
-                                                  :source-function "resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation"
-                                                  :generator-function "resolver-sim.test-vectors.pro-rata/emit-slash-allocation-vector"))
-         :policy-metadata {:policy-id (keyword-name (or slash-policy :sew-slash-allocation))
-                           :policy-version "v1"
-                           :weighting-key (keyword-name basis)
-                           :rounding-policy "floor-with-largest-remainder"
-                           :remainder-policy "unallocated-recorded-as-unmet"
-                           :canonical-ordering-policy "input-order"
-                           :cap-policy (str "cap by " (keyword-name cap-field))}
-         :units (units-metadata opts)
-         :snapshot-metadata (or snapshot {:snapshot-boundary "pre-slash-execution"})
-         :trust-boundary (trust-boundary-metadata opts)
-         :edge-case-tags (mapv keyword-name tags)
-         :notes (or notes [])}
-        attach-hashes)))
 
 (def liquidity-golden-specs
   [{:vector-id "liquidity-exact-match"
@@ -337,11 +242,6 @@
     :liable-parties []
     :tags [:no-liable-parties]}])
 
-(defn golden-vectors
-  []
-  (vec (concat (map emit-liquidity-fulfillment-vector liquidity-golden-specs)
-               (map emit-slash-allocation-vector slash-golden-specs))))
-
 (defn vector-filename
   [v]
   (case (:domain v)
@@ -360,12 +260,14 @@
   ([dir]
    (mapv #(write-vector! dir (emit-liquidity-fulfillment-vector %)) liquidity-golden-specs)))
 
-(defn write-slash-allocation-vectors!
-  ([] (write-slash-allocation-vectors! "results/test-vectors/pro-rata"))
-  ([dir]
-   (mapv #(write-vector! dir (emit-slash-allocation-vector %)) slash-golden-specs)))
+(defn golden-vectors
+  []
+  (vec (concat (map emit-liquidity-fulfillment-vector liquidity-golden-specs)
+               (map sew-slash/emit-slash-allocation-vector sew-slash/slash-golden-specs))))
 
 (defn write-golden-vectors!
   ([] (write-golden-vectors! "resources/test-vectors/pro-rata"))
   ([dir]
-   (mapv #(write-vector! dir %) (golden-vectors))))
+   (mapv #(write-vector! dir %) (concat
+                                  (map emit-liquidity-fulfillment-vector liquidity-golden-specs)
+                                  (map sew-slash/emit-slash-allocation-vector sew-slash/slash-golden-specs)))))

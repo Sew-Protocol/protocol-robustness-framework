@@ -1,4 +1,4 @@
-(ns resolver-sim.evidence.slashing
+(ns resolver-sim.protocols.sew.evidence.slashing
   "Domain-specific constructors for slashing evidence.
 
    Claims are now produced through resolver-sim.claims.engine/evaluate-claims

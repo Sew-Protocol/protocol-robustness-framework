@@ -23,7 +23,7 @@
             [resolver-sim.evidence.capture             :as cap]
             [resolver-sim.evidence.chain              :as chain]
             [resolver-sim.hash.canonical              :as hc]
-            [resolver-sim.evidence.slashing           :as slashing-ev]
+            [resolver-sim.protocols.sew.evidence.slashing :as slashing-ev]
             [resolver-sim.logging                     :as log]))
 
 (declare finalize handle-reversal-slashing handle-fraud-slashing update-unavailability cleanup-orphaned-slashes)

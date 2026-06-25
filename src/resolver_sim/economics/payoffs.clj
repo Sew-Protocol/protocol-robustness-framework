@@ -428,14 +428,14 @@
 ;; Demo Rendering: Pro-Rata Result Tables and Proof Panels
 ;; ──────────────────────────────────────────────────────────────────────────────
 
-(defn- sew-shaped?
+(defn- basis-amount-shaped?
   [allocations]
   (some :basis-amount (take 1 allocations)))
 
 (defn format-pro-rata-result-table
   "Render a pro-rata allocation result as a formatted text table.
 
-   Handles both SEW-shaped allocations (with :basis-amount :share :owed :paid)
+   Handles both basis-amount-shaped allocations (with :basis-amount :share :owed :paid)
    and generic allocations (with :weight :cap :allocated :unmet :remainder).
 
    Input can be:
@@ -448,9 +448,9 @@
         result (if (:allocation-result artifact-or-result)
                  (:allocation-result artifact-or-result)
                  artifact-or-result)
-        sew? (sew-shaped? allocations)
+        basis-amount? (basis-amount-shaped? allocations)
         sb (StringBuilder.)]
-    (if sew?
+    (if basis-amount?
       (do
         (.append sb (format "%-20s %8s %8s %8s %8s%n"
                             "Participant" "Basis" "Owed" "Paid" "Unmet"))

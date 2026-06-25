@@ -7,7 +7,7 @@
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.protocols.sew.registry   :as reg]
             [resolver-sim.protocols.sew.economics  :as sew-econ]
-            [resolver-sim.evidence.slashing :as slashing-ev]
+            [resolver-sim.protocols.sew.evidence.slashing :as slashing-ev]
             [resolver-sim.protocols.sew.reversal-fixtures :as rev-fx]
             [resolver-sim.time.context :as time-ctx]))
 

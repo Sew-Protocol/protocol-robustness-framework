@@ -92,7 +92,7 @@
   (let [alloc (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation)
         proj (requiring-resolve 'resolver-sim.protocols.sew.economics/build-sew-slash-projection-artifact)
         from-proj (requiring-resolve 'resolver-sim.protocols.sew.economics/calculate-sew-slash-allocation-from-projection)
-        build-node (requiring-resolve 'resolver-sim.evidence.slashing/build-claim-evaluation-node)
+        build-node (requiring-resolve 'resolver-sim.protocols.sew.evidence.slashing/build-claim-evaluation-node)
         direct-result (alloc sew-slash-input)
         projection-artifact (proj sew-slash-input)
         projection-artifact-again (proj sew-slash-input)
@@ -122,7 +122,7 @@
    world — full Sew world state passed through to agg/build-evidence-aggregate.
    The remaining args match build-prorata-slash-evidence."
   [& args]
-  (let [f (requiring-resolve 'resolver-sim.evidence.slashing/build-prorata-slash-evidence)
+  (let [f (requiring-resolve 'resolver-sim.protocols.sew.evidence.slashing/build-prorata-slash-evidence)
         {:keys [evidence]} (apply f args)]
     (tap> {:type :pro-rata/evidence :result evidence})
     evidence))
@@ -137,7 +137,7 @@
      ctx             — optional map of {:slash-id :workflow-id :epoch :trigger :transition-dependencies :attribution}"
   [sew-slash-input world & [ctx]]
   (let [build-evid (requiring-resolve
-                    'resolver-sim.evidence.slashing/build-prorata-slash-evidence)
+                    'resolver-sim.protocols.sew.evidence.slashing/build-prorata-slash-evidence)
         {:keys [slash-id workflow-id epoch trigger
                 transition-dependencies attribution]}
         (or ctx {})

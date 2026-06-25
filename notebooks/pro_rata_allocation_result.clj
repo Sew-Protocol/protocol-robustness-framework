@@ -5,7 +5,7 @@
             [resolver-sim.protocols.sew.economics :as sew-econ]
             [resolver-sim.protocols.sew.types :as types]
             [resolver-sim.economics.payoffs :as payoffs]
-            [resolver-sim.evidence.slashing :as slashing]))
+            [resolver-sim.protocols.sew.evidence.slashing :as slashing]))
 
 ;; # Pro-Rata Allocation Result Artifact
 ;; ## Demo: live artifact trail from slashing through verification

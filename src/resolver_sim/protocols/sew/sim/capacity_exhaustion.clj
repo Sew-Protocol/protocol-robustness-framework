@@ -1,4 +1,4 @@
-(ns resolver-sim.sim.capacity-exhaustion
+(ns resolver-sim.protocols.sew.sim.capacity-exhaustion
   "Capacity exhaustion simulation.
 
    Runs six scenarios that exercise per-resolver maxConcurrentDisputes:

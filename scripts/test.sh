@@ -242,6 +242,7 @@ run_sew() {
 (require '[resolver-sim.definitions.registry-test])
 (require '[resolver-sim.evidence.registry-test])
 (require '[resolver-sim.evidence.qol-test])
+(require '[resolver-sim.protocols.sew.evidence.slashing-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocols.sew.replay-test
@@ -249,6 +250,7 @@ run_sew() {
                 'resolver-sim.scenario.expectations-test
                 'resolver-sim.scenario.equilibrium-test
                 'resolver-sim.protocols.sew.slashing-test
+                'resolver-sim.protocols.sew.evidence.slashing-test
                 'resolver-sim.protocols.sew.phase-k-test
                 'resolver-sim.protocols.sew.phase-m-test
                 'resolver-sim.contract-model.replay-batch-sew-test

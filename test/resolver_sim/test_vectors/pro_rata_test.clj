@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.protocols.sew.economics :as sew-economics]
+            [resolver-sim.protocols.sew.test-vectors.slash-allocation :as sew-slash]
             [resolver-sim.test-vectors.pro-rata :as sut]
             [resolver-sim.yield.partial-fill :as partial-fill]))
 
@@ -81,7 +82,7 @@
                      :liable-parties (:liable-parties spec)
                      :basis :slashable-stake
                      :cap-field :available-slashable})
-          emitted (sut/emit-slash-allocation-vector spec)]
+          emitted (sew-slash/emit-slash-allocation-vector spec)]
       (is (= expected (get-in emitted [:expected-output :reference-output]))))))
 
 (deftest emitted-vectors-have-schema-and-satisfy-invariants
@@ -98,7 +99,7 @@
             (assert-liquidity-invariants v))
 
         (slash-vector? v)
-        (do (is (= sut/slash-schema-version (:schema-version v)))
+        (do (is (= sew-slash/slash-schema-version (:schema-version v)))
             (assert-slash-invariants v))
 
         :else

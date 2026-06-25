@@ -11,10 +11,10 @@
 
    The first evidence node's :result must contain:
      :claims/input-context  — liable parties, total-basis, slash-obligation
-     :claims/direct-result  — allocation output from calculate-sew-slash-allocation
-     :claims/projection-artifact     — artifact from build-sew-slash-projection-artifact
-     :claims/projection-artifact-again — second build for determinism check
-     :claims/projection-result       — output from calculate-sew-slash-allocation-from-projection
+      :claims/direct-result  — allocation result (e.g. from calculate-sew-slash-allocation)
+      :claims/projection-artifact     — projection artifact (e.g. from build-sew-slash-projection-artifact)
+      :claims/projection-artifact-again — second build for determinism check
+      :claims/projection-result       — projection-derived allocation result
 
    Returns {:holds? bool :violations [...]}."
   (:require [clojure.set :as set]))

@@ -1,10 +1,10 @@
-(ns resolver-sim.evidence.slashing-test
+(ns resolver-sim.protocols.sew.evidence.slashing-test
   "Integration tests for the migrated pro-rata slash evidence claims path.
    Claims are now produced through claims.engine/evaluate-claims with explicit
    evidence-node references, not through raw allocation-input tunneling."
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.claims.engine :as claims-engine]
-            [resolver-sim.evidence.slashing :as slashing]
+            [resolver-sim.protocols.sew.evidence.slashing :as slashing]
             [resolver-sim.protocols.sew.economics :as sew-economics]
             [resolver-sim.protocols.sew.types :as sew-types]
             [resolver-sim.yield.pro-rata-claims :as pro-rata-claims]))
