@@ -49,7 +49,7 @@
       (is (= :superseded (:state (:old-state result))))
       (is (= "new" (:superseded-by (:old-state result))))
       (is (= :active (:state (:new-state result))))
-      (is (= ["old"] (:supersedes (:new-state result)))))))   
+      (is (= ["old"] (:supersedes (:new-state result)))))))
 
 (deftest supersede-works-without-prior-activation
   (alc/with-fresh-registry

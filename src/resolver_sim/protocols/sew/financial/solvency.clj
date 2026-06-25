@@ -1,17 +1,13 @@
-(ns resolver-sim.financial.solvency
-  "Cryptographic solvency classification.
+(ns resolver-sim.protocols.sew.financial.solvency
+  "SEW-specific cryptographic solvency classification.
 
    Cryptographic solvency is stronger than accounting solvency. It asks:
    can the protocol prove, from verifiable state commitments, that
    assets are sufficient to meet obligations?
 
-   Tiers (low to high assurance):
-
-     :solvent            — formal solvency holds from state alone
-     :insolvent          — formal solvency fails (liabilities > assets)
-     :unproven           — accounting says solvent, no cryptographic proof
-     :proof-invalid      — cryptographic proof exists but fails validation
-     :proof-state-mismatch  — proof exists but references different state
+   Tiers (lowest to highest assurance):
+     :insolvent, :proof-invalid, :proof-state-mismatch, :unproven, :solvent
+   See resolver-sim.financial.taxonomies/solvency-tiers for the full taxonomy.
 
    Proof mechanism (live since June 2026):
 
@@ -28,11 +24,20 @@
 
      The commitment chain proves the states are connected and unbroken.
      The accounting check proves each state was solvent when committed.
-     Both are required for :solvent."
+     Both are required for :solvent.
+
+   See also:
+     resolver-sim.financial.taxonomies — general taxonomy definitions
+     (solvency tiers, ordinals) used by this namespace.
+
+   This is a SEW reference implementation. Protocols with different
+   world state shapes should implement their own classifiers using
+   the same taxonomy vocabulary."
   (:require [clojure.string :as str]
+            [resolver-sim.financial.taxonomies :as tax]
             [resolver-sim.protocols.sew.invariants.solvency :as solvency-inv]
             [resolver-sim.protocols.sew.invariants :as invariants]
-            [resolver-sim.financial.finality :as finality]
+            [resolver-sim.protocols.sew.financial.finality :as finality]
             [resolver-sim.time.context :as time-ctx]))
 
 ;; ── SHA-256 state commitment ──────────────────────────────────────────────────

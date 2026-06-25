@@ -97,7 +97,7 @@
                           attestations)
         claim-entries (mapv (fn [c]
                               (let [h (or (:claim-result-hash c)
-                                         (compute-object-hash c))]
+                                          (compute-object-hash c))]
                                 {:object/kind :claim-result
                                  :object/hash h
                                  :object/path (object-path bundle-dir "claims" h)
@@ -113,7 +113,7 @@
         entrypoints (mapv (fn [a]
                             {:attestation/hash (:attestation/id a)
                              :attestation/path (object-path bundle-dir "attestations"
-                                                           (:attestation/id a))})
+                                                            (:attestation/id a))})
                           attestations)
 
         ;; Convert sets to vectors for canonical encoding
@@ -204,24 +204,24 @@
                         (let [obj-path (:object/path obj)
                               recorded-hash (:object/hash obj)]
                           (cond (nil? obj-path)
-                            {:object/hash recorded-hash
-                             :check/status :warning
-                             :reason :hash-only}
-                            (not (.exists (io/file obj-path)))
-                            {:object/hash recorded-hash
-                             :check/status :warning
-                             :reason (str "File not found: " obj-path)}
-                            :else
-                            (try
-                              (let [content (edn/read-string (slurp obj-path))
-                                    computed (compute-object-hash content)]
-                                (if (= computed recorded-hash)
-                                  {:object/hash recorded-hash :check/status :pass}
-                                  {:object/hash recorded-hash :check/status :fail
-                                   :reason (str "Hash mismatch for " obj-path)}))
-                              (catch Exception e
-                                {:object/hash recorded-hash :check/status :error
-                                 :reason (.getMessage e)})))))
+                                {:object/hash recorded-hash
+                                 :check/status :warning
+                                 :reason :hash-only}
+                                (not (.exists (io/file obj-path)))
+                                {:object/hash recorded-hash
+                                 :check/status :warning
+                                 :reason (str "File not found: " obj-path)}
+                                :else
+                                (try
+                                  (let [content (edn/read-string (slurp obj-path))
+                                        computed (compute-object-hash content)]
+                                    (if (= computed recorded-hash)
+                                      {:object/hash recorded-hash :check/status :pass}
+                                      {:object/hash recorded-hash :check/status :fail
+                                       :reason (str "Hash mismatch for " obj-path)}))
+                                  (catch Exception e
+                                    {:object/hash recorded-hash :check/status :error
+                                     :reason (.getMessage e)})))))
                       objects)
         all-pass? (every? #(= :pass (:check/status %)) results)]
     {:check/id :object-integrity-valid

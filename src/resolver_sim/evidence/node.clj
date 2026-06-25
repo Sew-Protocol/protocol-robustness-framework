@@ -509,17 +509,19 @@
    - :inputs           canonicalizable input summary
    - :parent-hashes    parent node hashes
    - :bootstrap-roots  explicit parent hashes allowed without local nodes
+   - :runner           runner keyword (default nil — resolved from execution registry)
    - :status-fn        maps successful return value -> :pass | :fail | :error
    - :outputs-fn       maps successful return value -> canonicalizable output summary
    - :failure-details-fn maps successful return value -> failure vector
    - :extensions-fn    maps successful return value -> unhashed extension metadata
 
    On exceptions, emits :error and rethrows."
-  [{:keys [execution-id policy-id inputs parent-hashes bootstrap-roots
+  [{:keys [execution-id policy-id inputs parent-hashes bootstrap-roots runner
            status-fn outputs-fn failure-details-fn extensions-fn]
     :or {policy-id default-policy-id
          parent-hashes []
          bootstrap-roots []
+         runner nil
          status-fn (constantly :pass)
          outputs-fn identity
          failure-details-fn (constantly [])
@@ -532,6 +534,7 @@
         (emit-execution-node!
          {:execution-id execution-id
           :policy-id policy-id
+          :runner runner
           :timestamp timestamp
           :parent-hashes parent-hashes
           :bootstrap-roots bootstrap-roots
@@ -546,6 +549,7 @@
           (emit-execution-node!
            {:execution-id execution-id
             :policy-id policy-id
+            :runner runner
             :timestamp timestamp
             :parent-hashes parent-hashes
             :bootstrap-roots bootstrap-roots

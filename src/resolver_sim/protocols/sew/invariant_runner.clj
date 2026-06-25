@@ -36,7 +36,12 @@
                                opts))))
 
 (defn run-and-report
-  "Shell UX: run invariant registry, print report, return exit code.
+  "Shell UX: run the full invariant registry suite (S01–S100), print report,
+   return exit code.
+
+   This function ALWAYS runs the full registry suite regardless of opts.
+   For per-suite or per-scenario dispatch, use
+   `resolver-sim.io.scenario-runner/run-and-report` directly.
 
    Prefer `resolver-sim.io.scenario-runner/run-registry-suite-and-report` for CLI wiring."
   ([] (run-and-report {}))

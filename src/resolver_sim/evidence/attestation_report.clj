@@ -166,11 +166,11 @@
      :attestation-count (count atts)
      :summary (attestation-summary atts)
      :by-attestor (reduce-kv (fn [m k v] (assoc m k {:count (count v)
-                                                      :claim-results (->> v (map :attestation/claim-result) frequencies)
-                                                      :signed-count (count (filter #(some? (:attestation/signature %)) v))}))
+                                                     :claim-results (->> v (map :attestation/claim-result) frequencies)
+                                                     :signed-count (count (filter #(some? (:attestation/signature %)) v))}))
                              {}
                              by-attestor)
      :by-claim-result (reduce-kv (fn [m k v] (assoc m k {:count (count v)
-                                                          :attestors (->> v (map :attestation/attestor-id) frequencies)}))
+                                                         :attestors (->> v (map :attestation/attestor-id) frequencies)}))
                                  {}
                                  by-claim-result)}))

@@ -160,7 +160,7 @@
        (rev/build-revocation rev-id :key-compromised))
       ;; Verify with revocation-resolver wired to the revocation registry
       (let [{:keys [valid? checks]} (att/verify-attestation attestation
-                                                             {:revocation-resolver rev/attestation-revoked?})
+                                                            {:revocation-resolver rev/attestation-revoked?})
             rev-check (first (filter #(= :revocation-status (:check %)) checks))]
         (is valid? "Revocation is informational — verification still passes")
         (is (true? (:pass? rev-check)) "Revocation check reports revoked")

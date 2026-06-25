@@ -175,18 +175,18 @@
                      (update-in [:resolver-slash-total resolver-addr] (fnil + 0) actual)
                      (cond-> sub-held? (acct/sub-held token actual)))]
       ;; Phase 6: Capture Slashing Evidence — returns evidence map with :evidence/hash
-      (let [stake-evidence
-            (attr/with-attribution
-              {:subject/type :resolver
-               :subject/id   resolver-addr
-               :action/type  :slash
-               :evidence/reason :slashing}
-              (cap/capture-event-evidence! :slashing
-                                           {:resolver-stake current}
-                                           {:resolver-stake (get-stake world' resolver-addr)}
-                                           {:requested-amount amount :actual-amount actual}
-                                           nil
-                                           {:world-before world
-                                            :world-after world'}))]
-        (assoc (t/ok world') :slashed-from-stake actual
-               :stake-evidence-hash (:evidence/hash stake-evidence))))))
+     (let [stake-evidence
+           (attr/with-attribution
+             {:subject/type :resolver
+              :subject/id   resolver-addr
+              :action/type  :slash
+              :evidence/reason :slashing}
+             (cap/capture-event-evidence! :slashing
+                                          {:resolver-stake current}
+                                          {:resolver-stake (get-stake world' resolver-addr)}
+                                          {:requested-amount amount :actual-amount actual}
+                                          nil
+                                          {:world-before world
+                                           :world-after world'}))]
+       (assoc (t/ok world') :slashed-from-stake actual
+              :stake-evidence-hash (:evidence/hash stake-evidence))))))

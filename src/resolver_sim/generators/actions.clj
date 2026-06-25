@@ -3,12 +3,16 @@
 
    This namespace is protocol-agnostic orchestration.
 
-   Current provider status:
-   - Uses protocol-scoped candidate-template providers.
-   - Sew is the currently wired default provider.
+   Provider status (2026-06):
+   ┌──────────────────────┬─────────────────────────────┬──────────────────┐
+   │ Function             │ Dispatch model               │ Wired provider   │
+   ├──────────────────────┼─────────────────────────────┼──────────────────┤
+   │ candidate-events     │ case on proto/protocol-id    │ sew-v1 only      │
+   │ valid-next-actions   │ protocol dispatch validation │ protocol-agnostic│
+   └──────────────────────┴─────────────────────────────┴──────────────────┘
 
    Protocol-specific candidate templates live in protocol-scoped generator
-   namespaces."
+   namespaces. To add a new protocol, add a case branch in `candidate-events`."
   (:require [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.generators.sew.actions :as sew-actions]))
 
@@ -16,6 +20,8 @@
   "Build candidate events for the current world.
    Candidates are validated by protocol dispatch before use."
   [protocol world seq time]
+  ;; Protocol dispatch: add a case branch for each supported protocol.
+  ;; Non-wired protocols return [] (no candidates).
   (case (proto/protocol-id protocol)
     "sew-v1" (sew-actions/candidate-events world seq time)
     []))

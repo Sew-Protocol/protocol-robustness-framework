@@ -196,25 +196,25 @@
         (is (= 2 (:compliant-count result)))
         (is (= 0 (:non-compliant-count result)))))
 
-(deftest check-registry-detects-non-compliant
-  (apol/with-fresh-registry
-    (apol/register-policy! (default-policy))
-    (ar/with-fresh-registry
-      (ar/register-attestation! (build-a :signed-at "2025-01-01T00:00:00Z"))
-      (ar/register-attestation! (build-a :signed-at "2025-01-02T00:00:00Z" :attestor-id :unauthorized))
-      (let [result (apol/check-registry :default)]
-        (is (= 2 (:total-checked result)))
-        (is (= 1 (:compliant-count result)))
-        (is (= 1 (:non-compliant-count result))))))))
+    (deftest check-registry-detects-non-compliant
+      (apol/with-fresh-registry
+        (apol/register-policy! (default-policy))
+        (ar/with-fresh-registry
+          (ar/register-attestation! (build-a :signed-at "2025-01-01T00:00:00Z"))
+          (ar/register-attestation! (build-a :signed-at "2025-01-02T00:00:00Z" :attestor-id :unauthorized))
+          (let [result (apol/check-registry :default)]
+            (is (= 2 (:total-checked result)))
+            (is (= 1 (:compliant-count result)))
+            (is (= 1 (:non-compliant-count result))))))))
 
-(deftest check-registry-empty
-  (apol/with-fresh-registry
-    (apol/register-policy! (default-policy))
-    (ar/with-fresh-registry
-      (let [result (apol/check-registry :default)]
-        (is (= 0 (:total-checked result)))
-        (is (= 0 (:compliant-count result)))
-        (is (= 0 (:non-compliant-count result))))))))
+  (deftest check-registry-empty
+    (apol/with-fresh-registry
+      (apol/register-policy! (default-policy))
+      (ar/with-fresh-registry
+        (let [result (apol/check-registry :default)]
+          (is (= 0 (:total-checked result)))
+          (is (= 0 (:compliant-count result)))
+          (is (= 0 (:non-compliant-count result))))))))
 
 ;; ── with-fresh-registry ─────────────────────────────────────────────────────
 

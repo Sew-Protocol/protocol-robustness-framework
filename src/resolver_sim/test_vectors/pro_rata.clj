@@ -180,8 +180,6 @@
          :notes (or notes [])}
         attach-hashes)))
 
-
-
 (def liquidity-golden-specs
   [{:vector-id "liquidity-exact-match"
     :description "Available liquidity exactly matches total requested claims."
@@ -269,5 +267,5 @@
   ([] (write-golden-vectors! "resources/test-vectors/pro-rata"))
   ([dir]
    (mapv #(write-vector! dir %) (concat
-                                  (map emit-liquidity-fulfillment-vector liquidity-golden-specs)
-                                  (map sew-slash/emit-slash-allocation-vector sew-slash/slash-golden-specs)))))
+                                 (map emit-liquidity-fulfillment-vector liquidity-golden-specs)
+                                 (map sew-slash/emit-slash-allocation-vector sew-slash/slash-golden-specs)))))

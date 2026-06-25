@@ -521,18 +521,18 @@
   (let [result (att/validate-attestation-shape
                 (attestation->old-shape
                  (att/build-attestation (valid-attestor) (valid-subject) :verified
-                                       {:signing-key-id "key-001"
-                                        :signing-fn (fn [_] "not-a-map")})))]
+                                        {:signing-key-id "key-001"
+                                         :signing-fn (fn [_] "not-a-map")})))]
     (is (false? (:valid? result)))
     (is (some #(= :attestation/malformed-signature (:type %)) (:errors result)))))
 
 (deftest validate-detects-signature-without-algorithm
   (let [a (attestation->old-shape
            (att/build-attestation (valid-attestor) (valid-subject) :verified
-                                 {:signing-key-id "key-001"
-                                  :signing-fn (fn [_]
-                                                {:public-key-id "key-001"
-                                                 :signature-bytes "abc"})}))]
+                                  {:signing-key-id "key-001"
+                                   :signing-fn (fn [_]
+                                                 {:public-key-id "key-001"
+                                                  :signature-bytes "abc"})}))]
     (is (false? (:valid? (att/validate-attestation-shape
                           (update a :signature dissoc :algorithm)))))))
 
@@ -633,7 +633,7 @@
                                                            :signature-bytes "deadbeef"})})
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:verify-fn (fn [_data _sig] true)})
+                                                 {:verify-fn (fn [_data _sig] true)})
         sig-check (first (filter #(= :signature-verified (:check %)) checks))]
     (is (true? (:pass? sig-check)))))
 
@@ -646,7 +646,7 @@
                                                            :signature-bytes "deadbeef"})})
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:verify-fn (fn [_data _sig] false)})
+                                                 {:verify-fn (fn [_data _sig] false)})
         sig-check (first (filter #(= :signature-verified (:check %)) checks))]
     (is (false? (:pass? sig-check)))))
 
@@ -668,7 +668,7 @@
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:subject-resolver (fn [_] true)})
+                                                 {:subject-resolver (fn [_] true)})
         subj-check (first (filter #(= :subject-exists (:check %)) checks))]
     (is (true? (:pass? subj-check)))))
 
@@ -676,7 +676,7 @@
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:subject-resolver (fn [_] false)})
+                                                 {:subject-resolver (fn [_] false)})
         subj-check (first (filter #(= :subject-exists (:check %)) checks))]
     (is (false? (:pass? subj-check)))))
 
@@ -700,7 +700,7 @@
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:revocation-resolver (fn [_] true)})
+                                                 {:revocation-resolver (fn [_] true)})
         rev-check (first (filter #(= :revocation-status (:check %)) checks))]
     (is (true? (:pass? rev-check)))
     (is (true? (get-in rev-check [:detail :revoked?])))))
@@ -709,7 +709,7 @@
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         attestation (attestation->old-shape attestation)
         {:keys [checks]} (att/verify-attestation attestation
-                                                  {:revocation-resolver (fn [_] false)})
+                                                 {:revocation-resolver (fn [_] false)})
         rev-check (first (filter #(= :revocation-status (:check %)) checks))]
     (is (false? (:pass? rev-check)))
     (is (false? (get-in rev-check [:detail :revoked?])))))
@@ -718,7 +718,7 @@
   (let [attestation (att/build-attestation (registry-attestor) (valid-subject) :verified)
         attestation (attestation->old-shape attestation)
         {:keys [valid?]} (att/verify-attestation attestation
-                                                  {:revocation-resolver (fn [_] true)})]
+                                                 {:revocation-resolver (fn [_] true)})]
     (is valid?
         "Revocation is informational — it must not make verification fail")))
 
@@ -758,4 +758,4 @@
   (let [a (att/build-attestation (registry-attestor) (valid-subject) :verified)
         a (attestation->old-shape a)]
     (is (= :subject-unknown (att/verify-attestation-summary a
-                                                             {:subject-resolver (fn [_] false)})))))
+                                                            {:subject-resolver (fn [_] false)})))))

@@ -1,5 +1,5 @@
-(ns resolver-sim.financial.finality
-  "Pure classification of chain finality and financial finality.
+(ns resolver-sim.protocols.sew.financial.finality
+  "SEW-specific classification of chain finality and financial finality.
 
    Chain finality = state permanence (blockchain consensus).
    Financial finality = obligation permanence (economic outcome stability).
@@ -9,17 +9,23 @@
    awaiting solvency proof.
 
    The classifier reads existing world/protocol-params/result data —
-   it never modifies state. All functions are pure and side-effect-free."
+   it never modifies state. All functions are pure and side-effect-free.
+
+   See also:
+     resolver-sim.financial.taxonomies — general taxonomy definitions
+     (chain phases, financial phases, ordinals) used by this namespace.
+
+   This is a SEW reference implementation. Protocols with different
+   world state shapes should implement their own classifiers using
+   the same taxonomy vocabulary."
   (:require [clojure.string :as str]
+            [resolver-sim.financial.taxonomies :as tax]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.resolution :as res]
             [resolver-sim.time.context :as time-ctx]))
 
 ;; ── Chain finality ───────────────────────────────────────────────────────────
-
-(def chain-phases
-  "Ordered phases of blockchain consensus finality."
-  [:pending :confirmed :safe :final])
+;; Taxonomy: resolver-sim.financial.taxonomies/chain-phases
 
 (defn classify-chain-finality
   "Classify chain finality from world state.
@@ -41,31 +47,7 @@
    :chain-final? true})
 
 ;; ── Financial finality ───────────────────────────────────────────────────────
-
-(def financial-phases
-  "Ordered phases of financial finality.
-
-   Phase definitions:
-   :provisional        — outcome not yet determined (escrow open)
-   :challengeable      — resolution recorded but appeal/challenge window open
-   :recoverable        — settlement executed but positions still recoverable
-                         (yield shortfall recovery, slashing appeal)
-   :finalizing         — all gates closing, last claimable amounts settling
-   :financially-final  — all economic outcome gates closed
-
-   Note: :provisional precedes :challengeable — they are the same ordering
-   when no resolution has been recorded (e.g., an escrow in :pending state)."
-  [:provisional :challengeable :recoverable :finalizing :financially-final])
-
-(defn- phase-ordinal
-  "Numeric ordinal for comparing financial phases."
-  [phase]
-  (case phase
-    :provisional 0
-    :challengeable 1
-    :recoverable 2
-    :finalizing 3
-    :financially-final 4))
+;; Taxonomy: resolver-sim.financial.taxonomies/financial-phases
 
 (defn index-pending-slashes
   [world]

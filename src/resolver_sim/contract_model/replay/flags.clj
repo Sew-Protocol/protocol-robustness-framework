@@ -6,7 +6,8 @@
    for other library-style scenarios.")
 
 (def default-replay-flags
-  "Full replay: invariants on, expectations on, strict validation, temporal from scenario."
+  "Full replay: invariants on, expectations on, strict validation, temporal from scenario.
+  Default :metrics-profile is :sew-integrated; pass :metrics-profile for other protocols."
   {:check-invariants?        true
    :evaluate-expectations?    true
    :evaluate-theory?         nil

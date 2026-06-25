@@ -433,7 +433,9 @@
      :scenario       — file path
      :output-file    — JSON path when running a single scenario
      :protocol       — protocol id (default sew-v1)
-     opts are forwarded to report/runner."
+     opts are forwarded to report/runner.
+
+   Returns exit code: 0 on full pass, 1 on any failure."
   [dispatch opts]
   (let [default-protocol-id (or (:protocol dispatch) preg/default-protocol-id)
         inferred-protocol-id (when (:scenario dispatch)
@@ -443,44 +445,48 @@
         suite-protocol-id (when (:suite dispatch)
                             (suites/suite-protocol-id (:suite dispatch)))
         protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
-        dispatch*   (cond
-                      (:suite dispatch)
-                      (assoc dispatch :protocol protocol-id)
-
-                      (:scenario dispatch)
-                      (assoc dispatch :protocol protocol-id)
-
-                      :else
-                      dispatch)]
-    (ev-node/with-execution-node
-      {:execution-id :execution/replay
-       :inputs {:dispatch dispatch*
+        result (ev-node/with-execution-node
+                 {:execution-id :execution/replay
+       :runner :scenario-runner
+       :inputs {:dispatch dispatch
                 :opts {:protocol protocol-id
                        :report-format (:report-format opts)
                        :suite-id (:suite-id opts)}}
-       :status-fn #(if (zero? %) :pass :fail)
-       :outputs-fn (fn [exit-code]
+       :status-fn (fn [{:keys [exit-code]}]
+                    (cond (zero? exit-code) :pass
+                          (integer? exit-code) :fail
+                          :else :error))
+       :outputs-fn (fn [{:keys [exit-code dispatch-key]}]
                      {:exit-code exit-code
-                      :dispatch dispatch*})
-       :failure-details-fn (fn [exit-code]
+                      :dispatch dispatch
+                      :dispatch-key dispatch-key})
+       :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
                              (if (zero? exit-code)
                                []
                                [{:failure-type :replay-failed
                                  :class :unexpected
-                                 :message (str "Replay exited with code " exit-code)
+                                 :message (str "Replay exited with code " exit-code
+                                               " (" (name dispatch-key) ")")
                                  :expected? false}]))}
       (fn []
-        (cond
-          (:fixture-suite dispatch*)
-          (run-fixture-suite-and-report (:fixture-suite dispatch*) nil opts)
+        (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
+                                 (:suite dispatch) :suite
+                                 (:scenario dispatch) :scenario
+                                 :else :registry)
+              exit-code (cond
+                          (:fixture-suite dispatch)
+                          (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
 
-          (:suite dispatch*)
-          (run-named-suite-and-report (:suite dispatch*) opts)
+                          (:suite dispatch)
+                          (run-named-suite-and-report (:suite dispatch) opts)
 
-          (:scenario dispatch*)
-          (run-scenario-file-and-report (:scenario dispatch*)
-                                        (:output-file dispatch*)
-                                        (assoc opts :protocol protocol-id))
+                          (:scenario dispatch)
+                          (run-scenario-file-and-report (:scenario dispatch)
+                                                        (:output-file dispatch)
+                                                        (assoc opts :protocol protocol-id))
 
-          :else
-          (run-registry-suite-and-report opts))))))
+                          :else
+                          (run-registry-suite-and-report opts))]
+          {:exit-code exit-code
+           :dispatch-key dispatch-key})))]
+    (:exit-code result)))

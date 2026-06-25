@@ -1,8 +1,8 @@
-(ns resolver-sim.financial.finality-test
+(ns resolver-sim.protocols.sew.financial.finality-test
   (:require [clojure.test :refer :all]
-            [resolver-sim.financial.finality :as fin]
-            [resolver-sim.financial.loss :as loss]
-            [resolver-sim.financial.solvency :as solv]
+            [resolver-sim.protocols.sew.financial.finality :as fin]
+            [resolver-sim.protocols.sew.financial.loss :as loss]
+            [resolver-sim.protocols.sew.financial.solvency :as solv]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.snapshot-fixtures :as snap-fix]
             [resolver-sim.protocols.sew.lifecycle :as lc]

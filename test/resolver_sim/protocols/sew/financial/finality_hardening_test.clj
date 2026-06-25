@@ -1,6 +1,6 @@
-(ns resolver-sim.financial.finality-hardening-test
+(ns resolver-sim.protocols.sew.financial.finality-hardening-test
   (:require [clojure.test :refer :all]
-            [resolver-sim.financial.finality :as fin]
+            [resolver-sim.protocols.sew.financial.finality :as fin]
             [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.resolution :as res]

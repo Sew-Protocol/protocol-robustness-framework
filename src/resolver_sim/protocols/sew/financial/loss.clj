@@ -1,5 +1,5 @@
-(ns resolver-sim.financial.loss
-  "Pure classification of financial loss modes.
+(ns resolver-sim.protocols.sew.financial.loss
+  "SEW-specific classification of financial loss modes.
 
    A financial loss mode exists when a protocol, escrow, module, vault, or
    settlement path can no longer satisfy, or may no longer be able to
@@ -13,26 +13,19 @@
    :loss-pending-finality, not :loss-realized. Loss is only realized when
    financial finality has occurred and the shortfall has not been cured.
 
-   Loss lifecycle:
-     :normal              → no obligations at risk
-     :loss-risk           → active risk, no obligations yet impaired
-     :loss-pending-finality → obligations impaired, finality not yet reached
-     :loss-realized       → obligations impaired, financial finality reached
-     :loss-irrecoverable  → obligations permanently unmet, no recovery path"
-  (:require [resolver-sim.financial.finality :as finality]
+   See also:
+     resolver-sim.financial.taxonomies — general taxonomy definitions
+     (loss statuses, ordinals) used by this namespace.
+
+   This is a SEW reference implementation. Protocols with different
+   world state shapes should implement their own classifiers using
+   the same taxonomy vocabulary."
+  (:require [resolver-sim.financial.taxonomies :as tax]
+            [resolver-sim.protocols.sew.financial.finality :as finality]
             [resolver-sim.protocols.sew.types :as t]))
 
 ;; ── Loss status lifecycle ───────────────────────────────────────────────────
-
-(def loss-statuses
-  "Ordered lifecycle states for financial loss classification."
-  [:normal :loss-risk :loss-pending-finality :loss-realized :loss-irrecoverable])
-
-(defn- loss-ordinal
-  [status]
-  (case status
-    :normal 0 :loss-risk 1 :loss-pending-finality 2
-    :loss-realized 3 :loss-irrecoverable 4))
+;; Taxonomy: resolver-sim.financial.taxonomies/loss-statuses
 
 ;; ── Shortfall quantification ─────────────────────────────────────────────────
 

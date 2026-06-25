@@ -28,11 +28,11 @@
   [& body]
   `(let [old-atom# *attestation-registry*
          fresh-atom# (atom {})]
-    (try
-      (alter-var-root #'*attestation-registry* (constantly fresh-atom#))
-      ~@body
-      (finally
-        (alter-var-root #'*attestation-registry* (constantly old-atom#))))))
+     (try
+       (alter-var-root #'*attestation-registry* (constantly fresh-atom#))
+       ~@body
+       (finally
+         (alter-var-root #'*attestation-registry* (constantly old-atom#))))))
 
 (defn clear-attestations!
   "Reset the registry to empty.

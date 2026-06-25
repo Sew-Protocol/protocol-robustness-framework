@@ -1187,12 +1187,12 @@
                  block-time      (time-ctx/block-ts world)
                  freeze-until    (+ block-time freeze-duration)
                  wf-for-token    (or (:workflow-id pending) workflow-id)
-                  slashing-result (-> world
-                                      (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
-                                      (reg/slash-resolver-stake resolver amount nil 0 wf-for-token))
-                  world-slashed   (:world slashing-result)
-                  stake-evidence-hash (:stake-evidence-hash slashing-result)
-                  world'          (-> world-slashed
+                 slashing-result (-> world
+                                     (assoc-in [:pending-fraud-slashes slash-id :status] :executed)
+                                     (reg/slash-resolver-stake resolver amount nil 0 wf-for-token))
+                 world-slashed   (:world slashing-result)
+                 stake-evidence-hash (:stake-evidence-hash slashing-result)
+                 world'          (-> world-slashed
                                      (assoc-in [:resolver-frozen-until resolver] freeze-until)
                                      (assoc-in [:resolver-epoch-slashed resolver :amount] total-epoch)
                                      (update-unavailability resolver true)
@@ -1202,19 +1202,19 @@
                   ;; The cap-field (:available-slashable) would only differ from weight
                   ;; in multi-party allocation where one party's share may exceed
                   ;; their available stake.
-                  allocation-input {:slash-obligation amount
-                                    :ended-at freeze-until
-                                    :slash-policy {:type :fraud-slash
-                                                   :single-resolver true
-                                                   :per-offense-cap-bps (get-in world
+                 allocation-input {:slash-obligation amount
+                                   :ended-at freeze-until
+                                   :slash-policy {:type :fraud-slash
+                                                  :single-resolver true
+                                                  :per-offense-cap-bps (get-in world
                                                                                [:params :max-slash-per-offense-bps]
                                                                                5000)}
-                                    :basis :slashable-stake
-                                    :cap-field :available-slashable
-                                    :liable-parties [{:id resolver
-                                                      :ended-at freeze-until
-                                                      :slashable-stake current-stake
-                                                      :available-slashable current-stake}]}
+                                   :basis :slashable-stake
+                                   :cap-field :available-slashable
+                                   :liable-parties [{:id resolver
+                                                     :ended-at freeze-until
+                                                     :slashable-stake current-stake
+                                                     :available-slashable current-stake}]}
                  world-before-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
                  action-map      {:action/type :slash/execute
                                   :slash-id slash-id
@@ -1223,7 +1223,7 @@
                                   :amount amount
                                   :reason :fraud-slash}
                  action-hash     (hc/hash-with-intent {:hash/intent :action} action-map)
-                  step            (:ctx/event-index (attr/current-attribution) 0)
+                 step            (:ctx/event-index (attr/current-attribution) 0)
                  action-hash-at  (hc/hash-with-intent {:hash/intent :action-at}
                                                       {:action-hash action-hash
                                                        :step step
@@ -1233,35 +1233,35 @@
                                          :world-before-hash world-before-hash
                                          :action-hash-at action-hash-at))
                  allocation      (sew-econ/calculate-sew-slash-allocation-from-projection projection)]
-              (let [slash-attribution {:subject/type :slash
-                                       :subject/id slash-id
-                                       :action/type :slash/execute
-                                       :evidence/reason :fraud-slash-executed}]
-                (attr/with-attribution
-                  slash-attribution
-                  (let [{:keys [evidence artifact]}
-                         (slashing-ev/build-prorata-slash-evidence
-                          {:world world-slashed
-                           :slash-id slash-id
-                           :workflow-id workflow-id
-                           :resolver resolver
-                           :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
-                           :trigger :fraud-slash
-                           :allocation-input allocation-input
-                           :projection-artifact projection
-                           :allocation-result allocation
-                            :transition-dependencies (filterv some?
-                                                              [(:proposal-evidence-hash pending)
-                                                               stake-evidence-hash])
-                           :world-before-hash world-before-hash
-                           :action-hash action-hash
-                           :action-hash-at action-hash-at
-                           :attribution (attr/current-attribution)})
-                        evidence (assoc evidence
-                                        :world/before-full-hash world-before-hash
-                                        :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]
-                    (cap/capture-event-evidence! evidence)
-                    (slashing-ev/write-allocation-result-artifact! artifact))))
+             (let [slash-attribution {:subject/type :slash
+                                      :subject/id slash-id
+                                      :action/type :slash/execute
+                                      :evidence/reason :fraud-slash-executed}]
+               (attr/with-attribution
+                 slash-attribution
+                 (let [{:keys [evidence artifact]}
+                       (slashing-ev/build-prorata-slash-evidence
+                        {:world world-slashed
+                         :slash-id slash-id
+                         :workflow-id workflow-id
+                         :resolver resolver
+                         :epoch (get-in world-slashed [:resolver-epoch-slashed resolver :epoch-start] 0)
+                         :trigger :fraud-slash
+                         :allocation-input allocation-input
+                         :projection-artifact projection
+                         :allocation-result allocation
+                         :transition-dependencies (filterv some?
+                                                           [(:proposal-evidence-hash pending)
+                                                            stake-evidence-hash])
+                         :world-before-hash world-before-hash
+                         :action-hash action-hash
+                         :action-hash-at action-hash-at
+                         :attribution (attr/current-attribution)})
+                       evidence (assoc evidence
+                                       :world/before-full-hash world-before-hash
+                                       :world/after-full-hash (hc/hash-with-intent {:hash/intent :world-structure} world-slashed))]
+                   (cap/capture-event-evidence! evidence)
+                   (slashing-ev/write-allocation-result-artifact! artifact))))
              (t/ok world'))))))))
 
 (defn compute-prorata-slash-allocation

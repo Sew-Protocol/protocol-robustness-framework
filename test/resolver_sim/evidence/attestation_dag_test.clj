@@ -1,5 +1,5 @@
 (ns resolver-sim.evidence.attestation-dag-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [resolver-sim.evidence.attestation :as att]
             [resolver-sim.evidence.attestation-dag :as adag]
             [resolver-sim.evidence.node :as node]
@@ -81,11 +81,9 @@
 
 ;; ── emit-attestation-dag-node! ───────────────────────────────────────────────
 
-(deftest emit-returns-result-map
-  (let [spec (#'adag/build-attestation-dag-node-spec (build-a))]
-    (is (map? spec))
-    (is (= :execution/attestation (:execution-id spec)))
-    (is (= :pass (:status spec)))))
+(deftest dag-node-has-attestation-runner
+  (let [node (adag/build-attestation-dag-node (build-a))]
+    (is (= :attestation-emitter (get-in node [:execution :runner])))))
 
 ;; ── chain-attestation-dag-nodes ──────────────────────────────────────────────
 

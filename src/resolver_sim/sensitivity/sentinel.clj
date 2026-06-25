@@ -46,7 +46,7 @@
   [level]
   (get level-order level (count levels)))
 
-(defn level>= 
+(defn level>=
   "True if a is at least as sensitive as b (or higher)."
   [a b]
   (>= (level-index a) (level-index b)))
@@ -210,7 +210,7 @@
     :sensitivity/embargoed [:contains-unpublished-evidence :contains-attestation
                             :contains-timing-metadata]
     :sensitivity/critical-private [:contains-unpublished-evidence :contains-attestation
-                                    :contains-reproducible-exploit-path]
+                                   :contains-reproducible-exploit-path]
     [:contains-unpublished-evidence]))
 
 (defn sentinel-report

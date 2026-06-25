@@ -324,18 +324,18 @@
        :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
        :metadata                   — additional metadata"
   [{:keys [projection-artifact
-            allocation-result
-            world-before-hash
-            world-after-hash
-            action-hash
-            action-hash-at
-            shortfall-outcome
-            claims
-            invariant-links
-            evidence-record-hash
-            evidence-group-id
-            attribution
-            metadata]}]
+           allocation-result
+           world-before-hash
+           world-after-hash
+           action-hash
+           action-hash-at
+           shortfall-outcome
+           claims
+           invariant-links
+           evidence-record-hash
+           evidence-group-id
+           attribution
+           metadata]}]
   (let [projection-artifact-hash (:projection-hash projection-artifact)
         projection-definition-id (:projection-definition-id projection-artifact)
         projection-definition-hash (:projection-definition-hash projection-artifact)

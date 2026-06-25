@@ -688,3 +688,107 @@
 (deftest cross-registry-works-with-real-registries
   (testing "validate-passive-registries includes cross-registry alignment and passes for real data"
     (is (:valid? (registries/validate-passive-registries)))))
+
+;; ── Structural Stability: Registry Entry Shapes ─────────────────────────
+;; These tests assert that the frozen entry schemas of each passive registry
+;; have not changed. When a schema change is intentional, update the
+;; expected shape hash.
+
+(def registry-entry-shapes
+  "Defines the frozen entry shape for each of the 8 passive registries."
+  {:intent-registry
+   {:entries-key :intents
+    :required-entry-fields #{:id :version :intent/type :intent/purpose
+                             :scope :inputs :constraints :output
+                             :description :canonical-hash}
+    :required-registry-fields #{:registry-version :intents :registry-hash}}
+
+   :projection-definition-registry
+   {:entries-key :projection-definitions
+    :required-entry-fields #{:id :version :projection-type :intent-types
+                             :intent-purposes :source :output :claims
+                             :canonical-hash}
+    :required-registry-fields #{:registry-version :projection-definitions :registry-hash}}
+
+   :claim-definition-registry
+   {:entries-key :claim-definitions
+    :required-entry-fields #{:id :version :category :description
+                             :inputs :evaluation :outputs :canonical-hash}
+    :required-registry-fields #{:registry-version :claim-definitions}}
+
+   :attestor-registry
+   {:entries-key :attestors
+    :required-entry-fields #{:id :type :display-name :status
+                             :verification :attestor-hash}
+    :required-registry-fields #{:registry-version :attestors}}
+
+   :execution-registry
+   {:entries-key :executions
+    :required-entry-fields #{:id :version :kind :runner :entry
+                             :execution/type :execution/mode
+                             :description :claims}
+    :required-registry-fields #{:registry-version :executions}}
+
+   :evidence-policy-registry
+   {:entries-key :evidence-policies
+    :required-entry-fields #{:id :version :evidence-policy/type
+                             :evidence-policy/source :description :constraints}
+    :required-registry-fields #{:registry-version :evidence-policies}}
+
+   :hash-projection-registry
+   {:entries-key :projections
+    :required-entry-fields #{:id :version :intent/name :intent/domain-tag
+                             :intent/description :intent/includes :intent/excludes
+                             :intent/projection-fn}
+    :required-registry-fields #{:registry-version :projections}}
+
+   :domain-tag-registry
+   {:entries-key :domain-tags
+    :required-entry-fields #{:tag/id :tag/domain-string :version}
+    :required-registry-fields #{:registry-version :domain-tags}}})
+
+(defn- registry-structural-paths
+  "Extract flattened structural paths from registry entry shapes.
+   Produces paths like \"intent-registry.ent.id\" for each registry's
+   required entry and registry fields."
+  [shapes]
+  (sort (mapcat (fn [[reg-name spec]]
+                  (let [prefix (name reg-name)]
+                    (concat
+                     (map (fn [f] (str prefix ".reg." (name f)))
+                          (sort (:required-registry-fields spec)))
+                     (map (fn [f] (str prefix ".ent." (name f)))
+                          (sort (:required-entry-fields spec))))))
+                shapes)))
+
+(def expected-entry-shapes-hash
+  "Expected stable hash of registry entry shape structural paths.
+   Update when intentionally changing a registry's entry schema."
+  "1e9c2754ede8e22a5f517582aed68025862e1a50eeeb3da2b15942cf3d5b8fd8")
+
+(deftest registry-entry-shapes-structural-stability
+  (let [paths (into [] (registry-structural-paths registry-entry-shapes))
+        actual-hash (hc/hash-with-intent {:hash/intent :state-diff} {:paths paths})]
+    (is (= expected-entry-shapes-hash actual-hash)
+        (str "Passive registry entry shapes changed.\n"
+             "If intentional, update expected-entry-shapes-hash to: " actual-hash))))
+
+(deftest registry-entry-shapes-match-actual-registries
+  (testing "each registry's entries include all required fields"
+    (doseq [[reg-kw spec] registry-entry-shapes
+            :let [entries-key (:entries-key spec)
+                  registry (case reg-kw
+                             :intent-registry registries/intent-registry
+                             :projection-definition-registry registries/projection-definition-registry
+                             :claim-definition-registry registries/claim-definition-registry
+                             :attestor-registry registries/attestor-registry
+                             :execution-registry registries/execution-registry
+                             :evidence-policy-registry registries/evidence-policy-registry
+                             :hash-projection-registry registries/hash-projection-registry
+                             :domain-tag-registry registries/domain-tag-registry)
+                  entries (get registry entries-key [])
+                  actual-entry-fields (set (mapcat keys entries))
+                  expected-entry-fields (:required-entry-fields spec)]]
+      (testing (str reg-kw)
+        (is (empty? (clojure.set/difference expected-entry-fields actual-entry-fields))
+            (str "Missing required fields in " reg-kw))))))

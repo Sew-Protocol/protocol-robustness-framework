@@ -45,22 +45,32 @@
 ;; ---------------------------------------------------------------------------
 
 (defn build-context
-  "Bridge to proto/build-execution-context using SewProtocol."
-  [agents params]
-  (proto/build-execution-context (preg/get-protocol "sew-v1") agents params))
+  "Build an execution context for a protocol.
+
+   Protocols must implement DisputeProtocol (build-execution-context).
+
+   One-arg and two-arg arities default to SEW for backward compatibility.
+   Prefer the three-arg arity: (build-context protocol agents params)."
+  ([agents params]
+   (build-context (preg/get-protocol "sew-v1") agents params))
+  ([protocol agents params]
+   (proto/build-execution-context protocol agents params)))
 
 (defn sew-dispatch-action
-  "Bridge to proto/dispatch-action using SewProtocol."
+  "Deprecated: call proto/dispatch-action with a protocol instance directly.
+   Bridge to proto/dispatch-action using SewProtocol."
   [context world event]
   (proto/dispatch-action (preg/get-protocol "sew-v1") context world event))
 
 (defn sew-check-invariants-single
-  "Bridge to proto/check-invariants-single using SewProtocol."
+  "Deprecated: call proto/check-invariants-single with a protocol instance directly.
+   Bridge to proto/check-invariants-single using SewProtocol."
   [world]
   (proto/check-invariants-single (preg/get-protocol "sew-v1") world))
 
 (defn sew-check-invariants-transition
-  "Bridge to proto/check-invariants-transition using SewProtocol."
+  "Deprecated: call proto/check-invariants-transition with a protocol instance directly.
+   Bridge to proto/check-invariants-transition using SewProtocol."
   [world-before world-after]
   (proto/check-invariants-transition (preg/get-protocol "sew-v1") world-before world-after))
 

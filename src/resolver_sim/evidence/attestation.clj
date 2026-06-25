@@ -91,14 +91,14 @@
    Use signing-payload to reconstruct what was signed for verification."
   [attestor subject claim & [{:keys [signed-at signing-key-id signing-fn claim-id provenance metadata]}]]
   (let [body (cond-> {:schema-version "attestation.v1"
-                       :attestation/subject-hash (or (:hash subject) (:claim-id subject))
-                       :attestation/subject-kind (:type subject)
-                       :attestation/claim-id claim-id
-                       :attestation/claim-result claim
-                       :attestation/attestor-id (:id attestor)
-                       :attestation/signed-at (or signed-at (default-timestamp))
-                       :attestation/provenance provenance}
-              signing-key-id (assoc :attestation/signing-key-id signing-key-id))
+                      :attestation/subject-hash (or (:hash subject) (:claim-id subject))
+                      :attestation/subject-kind (:type subject)
+                      :attestation/claim-id claim-id
+                      :attestation/claim-result claim
+                      :attestation/attestor-id (:id attestor)
+                      :attestation/signed-at (or signed-at (default-timestamp))
+                      :attestation/provenance provenance}
+               signing-key-id (assoc :attestation/signing-key-id signing-key-id))
         projected (signing-payload body)
         body-hash (hc/hash-with-intent {:hash/intent :attestation-record} body)
         artifact (assoc body
@@ -527,8 +527,8 @@
                            :signature-verified :signature-mismatch
                            :subject-exists :subject-unknown}
             failures (filterv (fn [c] (false? (:pass? c))) checks)]
-         (or (some (fn [c] (get fail->summary (:check c))) failures)
-             :verification-failed)))))
+        (or (some (fn [c] (get fail->summary (:check c))) failures)
+            :verification-failed)))))
 
 ;; ── Claim Integration ────────────────────────────────────────────────────────
 

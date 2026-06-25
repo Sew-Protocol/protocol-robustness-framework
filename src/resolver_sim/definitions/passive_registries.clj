@@ -53,7 +53,11 @@
    These describe semantic intents used by hash projections and additive
    projection-based pro-rata artifacts."
   (mapv (partial attach-hash :intent-registry-entry :canonical-hash)
-        [{:id :identity/intent-dsl
+        [;; ══════════════════════════════════════════════════════════════════
+         ;; Framework-general intent definitions (protocol-agnostic)
+         ;; These are ready for any protocol to reference.
+         ;; ══════════════════════════════════════════════════════════════════
+         {:id :identity/intent-dsl
           :version 1
           :intent/type :identity/hash-projection
           :intent/purpose :intent-dsl-identity
@@ -127,6 +131,10 @@
           :output {:type :canonical-hash
                    :hash/intent :attestor}
           :description "Canonical identity for one attestor registry entry."}
+          ;; ──────────────────────────────────────────────────────────────────
+          ;; Protocol-specific intent definitions
+          ;; Each entry is scoped to a specific protocol.
+          ;; ──────────────────────────────────────────────────────────────────
          {:id :pro-rata/slash-obligation-allocation
           :version 1
           :intent/type :pro-rata/allocation
@@ -155,7 +163,11 @@
 (def projection-definitions
   "Passive PROJECTION_DEFINITION_REGISTRY_SPEC_V1 entries."
   (mapv (partial attach-hash :projection-definition :canonical-hash)
-        [{:id :projection/world-structure
+        [;; ══════════════════════════════════════════════════════════════════
+         ;; Framework-general projection definitions (protocol-agnostic)
+         ;; These are ready for any protocol to reference.
+         ;; ══════════════════════════════════════════════════════════════════
+         {:id :projection/world-structure
           :version 1
           :projection-type :world-structure
           :intent-types #{:identity/hash-projection}
@@ -198,6 +210,10 @@
                     :required? true}
                    {:claim-id :projection-canonical-safe
                     :required? true}]}
+          ;; ──────────────────────────────────────────────────────────────────
+          ;; Protocol-specific projection definitions
+          ;; Each entry is scoped to a specific protocol.
+          ;; ──────────────────────────────────────────────────────────────────
          {:id :projection/pro-rata-slash-obligation
           :version 1
           :projection-type :pro-rata-allocation
@@ -406,15 +422,15 @@
     :depends-on [:execution/replay]
     :description "Trace diff between two simulation runs."
     :claims #{:trace-fidelity}}
-    {:id :execution/validation
-     :version 1
-     :kind :validation
-     :runner :registry-validator
-     :entry 'resolver-sim.definitions.passive-registries/validate-all-registries!
-     :execution/type :validation
-     :execution/mode :static
-     :description "Static validation of registries, fixtures, or scenarios."
-     :claims #{}}
+   {:id :execution/validation
+    :version 1
+    :kind :validation
+    :runner :registry-validator
+    :entry 'resolver-sim.definitions.passive-registries/validate-all-registries!
+    :execution/type :validation
+    :execution/mode :static
+    :description "Static validation of registries, fixtures, or scenarios."
+    :claims #{}}
    {:id :execution/attestation
     :version 1
     :kind :attestation
@@ -934,7 +950,7 @@
   #{:ed25519 :secp256k1})
 
 (def ^:private known-attestor-statuses
-  #{:active :revoked :retired})
+  #{:active :revoked :retired :candidate :suspended :slashed})
 
 (defn- validate-attestor-verification
   "Validate an attestor's :verification map.

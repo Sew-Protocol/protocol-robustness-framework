@@ -209,8 +209,8 @@
       :claim :reproduced
       :signing-key-id "key-001"
       :signing-fn (fn [_] {:algorithm :ed25519
-                            :public-key-id "key-001"
-                            :signature-bytes "flow-sig"})})
+                           :public-key-id "key-001"
+                           :signature-bytes "flow-sig"})})
     (let [by-claim (ar/find-attestations-by-claim-id :conservation)
           by-subject (ar/find-attestations-by-subject "sha256:flow-test")
           by-attestor (ar/find-attestations-by-attestor :ci-validation)]

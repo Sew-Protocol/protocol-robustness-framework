@@ -51,7 +51,7 @@
 
 (deftest build-node-captures-claim
   (let [a (build-attestation :signed-at "2025-01-01T00:00:00Z" :claim :reproduced
-                              :claim-id :claim/reproduced)
+                             :claim-id :claim/reproduced)
         node (an/build-attestation-node a)]
     (is (= :reproduced (get-in node [:result :attestation-node/claim-result])))
     (is (= :claim/reproduced (get-in node [:result :attestation-node/claim-id])))))
@@ -59,7 +59,7 @@
 (deftest build-node-detects-signed-status
   (let [unsigned (build-attestation :signed-at "2025-01-01T00:00:00Z")
         signed (build-attestation :signed-at "2025-01-01T00:00:00Z"
-                                   :signing-key-id "key-001")
+                                  :signing-key-id "key-001")
         node-unsigned (an/build-attestation-node unsigned)
         node-signed (an/build-attestation-node signed)]
     (is (false? (get-in node-unsigned [:result :attestation-node/signed?])))

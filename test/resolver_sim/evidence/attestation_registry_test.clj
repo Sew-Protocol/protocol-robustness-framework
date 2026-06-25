@@ -112,7 +112,7 @@
 (deftest find-by-subject-claim-type
   (ar/with-fresh-registry
     (let [a (build-a :subject (claim-subject) :claim :verified
-                      :signed-at "2025-01-01T00:00:00Z")]
+                     :signed-at "2025-01-01T00:00:00Z")]
       (ar/register-attestation! a)
       (let [found (ar/find-attestations-by-subject :accounting-consistency)]
         (is (= 1 (count found)))
@@ -197,7 +197,7 @@
   (ar/with-fresh-registry
     (ar/register-attestation! (build-a :claim :verified :signed-at "2025-01-01T00:00:00Z"))
     (ar/register-attestation! (build-a :claim :approved :signed-at "2025-02-01T00:00:00Z"
-                                        :attestor {:type :ci-runner :id :other-attestor}))
+                                       :attestor {:type :ci-runner :id :other-attestor}))
     (let [s (ar/registry-status)]
       (is (= 2 (:count s)))
       (is (false? (:empty? s)))

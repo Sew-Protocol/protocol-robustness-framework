@@ -45,7 +45,7 @@
    [nil "--phase-e-dr" "Run Phase E DR: Evidence integrity sweep"]
    [nil "--phase-m-dr" "Run Phase M DR: Fairness analysis sweep"]
    ["-S" "--serve" "Start gRPC simulation server (Phase 2 live mode)"]
-   [nil "--invariants" "Run S01-S100 deterministic invariant scenarios (in-process, no gRPC)"]
+   [nil "--invariants" "Run deterministic invariant scenarios (in-process, no gRPC)"]
    [nil "--suite SUITE" "Run a named scenario path suite (e.g. yield-provider-scenarios, sew-yield-scenarios; use with --invariants)"]
    [nil "--fixture-suite SUITE" "Run a composed EDN fixture suite (e.g. suites/all-invariants; use with --invariants)"]
    [nil "--scenario PATH" "Path to a single executable scenario file to run (requires --invariants; EDN preferred, JSON deprecated)"]

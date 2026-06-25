@@ -6,7 +6,7 @@
      sim_trial_results — one row per simulation trial
        Columns: _id, batch_id, protocol_id, outcome, invariants_ok, divergence,
                 params_edn, metrics_edn, violations_edn, _valid_from
-       protocol_id discriminates between protocol implementations (e.g. \"sew-v1\").
+       protocol_id discriminates between protocol implementations (e.g. \"<protocol-id>\").
        metrics_edn is a protocol-specific EDN blob of all per-trial metrics.
 
      sim_entity_events — one row per entity state-transition event within a trial

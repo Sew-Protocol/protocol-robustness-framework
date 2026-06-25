@@ -21,8 +21,8 @@
             [resolver-sim.yield.evidence :as ye]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.yield.risk :as yrisk]
-            [resolver-sim.financial.finality :as ff]
-            [resolver-sim.financial.loss :as fl]
+            [resolver-sim.protocols.sew.financial.finality :as ff]
+            [resolver-sim.protocols.sew.financial.loss :as fl]
             [resolver-sim.time.context :as time-ctx]))
 
 ;; ---------------------------------------------------------------------------

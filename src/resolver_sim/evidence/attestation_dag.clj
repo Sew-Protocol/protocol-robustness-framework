@@ -23,8 +23,7 @@
 
      ;; Chain multiple attestations
      (adag/build-attestation-dag-node a2 {:parent-hashes [(:node-hash node1)]})"
-  (:require [resolver-sim.evidence.node :as node]
-            [resolver-sim.hash.canonical :as hc]))
+  (:require [resolver-sim.evidence.node :as node]))
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 
@@ -95,39 +94,6 @@
 
 ;; ── Full Pipeline ────────────────────────────────────────────────────────────
 
-(defn- build-attestation-dag-node-spec
-  "Build the node spec map for build-execution-node from an attestation."
-  [attestation & [{:keys [parent-hashes bootstrap-roots policy-id timestamp extensions]
-                   :or {policy-id default-policy-id}}]]
-  {:execution-id attestation-execution-id
-   :policy-id policy-id
-   :parent-hashes (vec (or parent-hashes []))
-   :bootstrap-roots (vec (or bootstrap-roots []))
-   :timestamp (or timestamp (str (java.time.Instant/now)))
-   :status :pass
-   :inputs (attestation-inputs attestation)
-   :outputs (attestation-outputs attestation)
-   :attestations [(:attestation/id attestation)]
-   :extensions (merge {:attestation/type :attestation-dag}
-                      (or extensions {}))
-   :execution-kind :attestation
-   :runner :attestation-emitter})
-
-(defn build-attestation-dag-node
-  "Build a full DAG evidence node from an attestation record.
-
-   Uses build-execution-node to create a registry-validated evidence node
-   with proper DAG linking support.
-
-   Arguments:
-     attestation — attestation record
-     opts        — same opts as build-attestation-dag-node-spec
-
-   Returns the full evidence node map as built by build-execution-node."
-  [attestation & opts]
-  (let [spec (apply build-attestation-dag-node-spec attestation opts)]
-    (node/build-execution-node spec)))
-
 (defn emit-attestation-dag-node!
   "Build, persist, and register an attestation DAG evidence node in one call.
 
@@ -142,9 +108,22 @@
      opts        — same opts as build-attestation-dag-node
 
    Returns the node result from emit-execution-node!"
-  [attestation & opts]
-  (let [spec (apply build-attestation-dag-node-spec attestation opts)]
-    (node/emit-execution-node! spec)))
+  [attestation & [{:keys [parent-hashes bootstrap-roots policy-id timestamp extensions]
+                   :or {policy-id default-policy-id}}]]
+  (node/emit-execution-node!
+   {:execution-id attestation-execution-id
+    :policy-id policy-id
+    :parent-hashes (vec (or parent-hashes []))
+    :bootstrap-roots (vec (or bootstrap-roots []))
+    :timestamp (or timestamp (str (java.time.Instant/now)))
+    :status :pass
+    :inputs (attestation-inputs attestation)
+    :outputs (attestation-outputs attestation)
+    :attestations [(:attestation/id attestation)]
+    :extensions (merge {:attestation/type :attestation-dag}
+                       (or extensions {}))
+    :execution-kind :attestation
+    :runner :attestation-emitter}))
 
 ;; ── Convenience: DAG chain builders ─────────────────────────────────────────
 

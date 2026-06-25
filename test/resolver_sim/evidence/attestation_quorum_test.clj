@@ -180,7 +180,7 @@
 (deftest group-by-scope
   (let [a1 (build-a :attestor-a :verified :signed-at "2025-01-01T00:00:00Z")
         a2 (build-a :attestor-b :verified :signed-at "2025-01-02T00:00:00Z"
-                     :claim-id :claim/consistency)
+                    :claim-id :claim/consistency)
         a3 (build-a :attestor-c :verified :signed-at "2025-01-03T00:00:00Z")
         grouped (aq/group-attestations-by-quorum-scope [a1 a2 a3])]
     (is (= 2 (count grouped)))  ;; two distinct scopes (with/without claim-id)

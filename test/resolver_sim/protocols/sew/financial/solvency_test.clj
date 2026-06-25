@@ -1,4 +1,4 @@
-(ns resolver-sim.financial.solvency-test
+(ns resolver-sim.protocols.sew.financial.solvency-test
   "Tests for cryptographic solvency classification.
    Covers all five solvency statuses: :solvent, :insolvent, :unproven,
    :proof-invalid, :proof-state-mismatch.
@@ -7,7 +7,7 @@
    with-commitment, and the :valid proof-status path that verifies the
    stored commitment against a re-computed hash)."
   (:require [clojure.test :refer :all]
-            [resolver-sim.financial.solvency :as solv]
+            [resolver-sim.protocols.sew.financial.solvency :as solv]
             [resolver-sim.protocols.sew.types :as t]))
 
 ;; ── Classification defaults ──────────────────────────────────────────────────

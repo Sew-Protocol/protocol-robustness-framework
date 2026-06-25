@@ -1,9 +1,9 @@
-(ns resolver-sim.financial.loss-test
+(ns resolver-sim.protocols.sew.financial.loss-test
   "Tests for financial loss lifecycle classification.
    Covers all five lifecycle states: :normal, :loss-pending-finality,
    :loss-realized, :loss-irrecoverable, and the haircut path."
   (:require [clojure.test :refer :all]
-            [resolver-sim.financial.loss :as loss]
+            [resolver-sim.protocols.sew.financial.loss :as loss]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.protocols.sew.types :as t]))
 
