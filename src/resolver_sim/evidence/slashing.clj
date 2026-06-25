@@ -107,19 +107,46 @@
 
 (defn- pro-rata-summary
   [allocation-result]
-  (select-keys allocation-result
-               [:total-requested :total-allocated :total-unmet :remainder :policy]))
+  (let [allocations (:allocations allocation-result [])
+        capped-count (count (filter #(pos? (:unmet % 0)) allocations))]
+    (assoc (select-keys allocation-result
+                        [:total-requested :total-allocated :total-unmet :remainder :policy])
+           :capped-party-count capped-count)))
 
 ;; ── Main evidence constructor ──────────────────────────────────────────
 
 (defn build-prorata-slash-evidence
   "Build pro-rata slash evidence with embedded allocation result artifact.
+
+   Two-phase: builds artifact without evidence-record-hash first, finalizes
+   evidence hash, then rebuilds artifact with the evidence hash in
+   :external-refs (excluded from canonical hash — no hash identity impact).
+
+   Evidence linking model (fraud slash chain):
+     proposal evidence ───────────────────→ allocation evidence
+       (:fraud-slash-proposed)               (:evidence/dependencies)
+                                             
+     stake evidence ──────────────────────→ allocation evidence
+       (:slashing,                           (:evidence/dependencies)
+        slash-resolver-stake)
+                                             
+                                             allocation evidence ──→ result artifact
+                                               (:pro-rata              (:external-refs
+                                                :allocation-            :evidence-record-hash,
+                                                result-hash             :evidence-group-id)
+     
+     All evidence in the same replay event shares :evidence/group-id
+     (set via attribution context), discoverable via linked-evidence-group.
+     The chain cursor (chain-seq/chain-prev-hash) provides total temporal
+     ordering across all targeted protocol evidence.
+
    Returns {:evidence <evidence-map> :artifact <pro-rata-allocation-result-artifact>}."
   [{:keys [world
            slash-id
            workflow-id
            epoch
            trigger
+           resolver
            allocation-input
            projection-artifact
            allocation-result
@@ -151,17 +178,21 @@
                               (claim-result-entry (:claim-id cr) cr))
                             claim-results)
         world-after-hash (hc/hash-with-intent {:hash/intent :world-structure} world)
-        result-artifact (payoffs/build-pro-rata-allocation-result-artifact
-                          {:projection-artifact projection-artifact
-                           :allocation-result allocation-result
-                           :world-before-hash world-before-hash
-                           :world-after-hash world-after-hash
-                           :action-hash action-hash
-                           :action-hash-at action-hash-at
-                           :claims shaped-claims
-                           :invariant-links []
-                           :attribution attribution})
-        allocation-result-hash (:allocation-result-hash result-artifact)
+        artifact-base-opts {:projection-artifact projection-artifact
+                            :allocation-result allocation-result
+                            :world-before-hash world-before-hash
+                            :world-after-hash world-after-hash
+                            :action-hash action-hash
+                            :action-hash-at action-hash-at
+                            :claims shaped-claims
+                            :invariant-links []
+                            :attribution attribution
+                            :metadata (when-let [sp (:slash-policy allocation-input)]
+                                        {:slash-policy sp})}
+        ;; Phase 1: build artifact without evidence-record-hash
+        result-artifact-v1 (payoffs/build-pro-rata-allocation-result-artifact
+                            artifact-base-opts)
+        allocation-result-hash (:allocation-result-hash result-artifact-v1)
         allocation-hash (hc/hash-with-intent {:hash/intent :evidence-record} allocation-result)
         evidence-result {:projection (projection-summary projection-artifact)
                          :pro-rata {:intent {:id :pro-rata/slash-obligation-allocation
@@ -180,6 +211,7 @@
                           :frame (agg/extract-decision-frame world)
                           :subject {:slash-id slash-id
                                     :workflow-id workflow-id
+                                    :resolver resolver
                                     :epoch epoch
                                     :trigger trigger}
                           :inputs {:allocation allocation-input
@@ -187,10 +219,16 @@
                                    :slash/context (extract-slash-context slash-id workflow-id epoch trigger)}
                           :result evidence-result
                           :dependencies transition-dependencies
-                          :attribution attribution})]
-    {:evidence (assoc evidence-record
-                      :evidence/hash (hc/hash-with-intent {:hash/intent :evidence-record}
-                                                          (dissoc evidence-record :evidence/hash :evidence-hash)))
+                          :attribution attribution})
+        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-record}
+                                           (dissoc evidence-record :evidence/hash :evidence-hash))
+        evidence (assoc evidence-record :evidence/hash evidence-hash)
+        ;; Phase 2: rebuild artifact with evidence-record-hash and evidence-group-id in :external-refs
+        result-artifact (payoffs/build-pro-rata-allocation-result-artifact
+                         (assoc artifact-base-opts
+                                :evidence-record-hash evidence-hash
+                                :evidence-group-id (:ctx/evidence-group-id attribution)))]
+    {:evidence evidence
      :artifact result-artifact}))
 
 (defn write-allocation-result-artifact!

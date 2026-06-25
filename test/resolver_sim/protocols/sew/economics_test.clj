@@ -45,7 +45,8 @@
       (is (= 400 (:total-basis result)))
       (is (= [75 25] (mapv :paid (:allocations result))))
       (is (= [300 100] (mapv :basis-amount (:allocations result))))
-      (is (= [3/4 1/4] (mapv :share (:allocations result)))))))
+      (is (= [3/4 1/4] (mapv :share (:allocations result))))
+      (is (= [300 100] (mapv :cap (:allocations result)))))))
 
 (deftest sew-slash-allocation-preserves-caps-and-legacy-shape
   (testing "SEW adapter applies available-slashable caps and returns historical keys"
@@ -62,7 +63,8 @@
       (is (= 95 (:recovered-total result)))
       (is (= 5 (:unmet-total result)))
       (is (= [70 25] (mapv :paid (:allocations result))))
-      (is (= [5 0] (mapv :unmet (:allocations result)))))))
+      (is (= [5 0] (mapv :unmet (:allocations result))))
+      (is (= [70 100] (mapv :cap (:allocations result)))))))
 
 (deftest sew-slash-projection-artifact-uses-current-allocation-input
   (testing "SEW sidecar projection artifact comes from the same parties, basis, caps, and amount"

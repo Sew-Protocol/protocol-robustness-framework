@@ -124,10 +124,24 @@
    :detail detail})
 
 (defn- validate-required-fields
+  "Validate required fields for both old and new shape.
+   Old shape requires: :attestation-id, :attestor, :subject, :claim, :timestamp.
+   New shape requires: :attestation/id, :attestation/attestor-id,
+     :attestation/subject-kind, :attestation/subject-hash,
+     :attestation/claim-result, :attestation/signed-at."
   [attestation]
-  (let [required #{:attestation-id :attestor :subject :claim :timestamp}
-        missing (clojure.set/difference required (set (keys attestation)))]
-    (mapv missing-field-error missing)))
+  (if (:attestation/subject-kind attestation)
+    ;; New shape validation
+    (let [required #{:schema-version :attestation/id :attestation/hash
+                     :attestation/subject-hash :attestation/subject-kind
+                     :attestation/claim-result :attestation/attestor-id
+                     :attestation/signed-at}
+          missing (clojure.set/difference required (set (keys attestation)))]
+      (mapv missing-field-error missing))
+    ;; Old shape validation
+    (let [required #{:attestation-id :attestor :subject :claim :timestamp}
+          missing (clojure.set/difference required (set (keys attestation)))]
+      (mapv missing-field-error missing))))
 
 (defn- validate-subject
   [subject]
@@ -178,28 +192,73 @@
       (and (map? signature) (not (:signature-bytes signature)))
       (conj (malformed-signature-error "Missing :signature-bytes")))))
 
+(defn- validate-new-shape-attestor
+  [attestation]
+  (let [id (:attestation/attestor-id attestation)]
+    (cond-> []
+      (nil? id)
+      (conj {:type :attestation/invalid-attestor
+             :message "Attestor-id is missing"
+             :attestation attestation}))))
+
+(defn- validate-new-shape-subject
+  [attestation]
+  (let [kind (:attestation/subject-kind attestation)
+        hash (:attestation/subject-hash attestation)]
+    (cond-> []
+      (nil? kind)
+      (conj {:type :attestation/invalid-subject
+             :message "Subject kind is missing"
+             :attestation attestation})
+      (not (#{:evidence-node :claim} kind))
+      (conj {:type :attestation/invalid-subject-type
+             :message (str "Subject :type must be :evidence-node or :claim, got " (pr-str kind))
+             :attestation attestation})
+      (nil? hash)
+      (conj {:type :attestation/invalid-subject
+             :message "Subject hash is missing"
+             :attestation attestation}))))
+
 (defn validate-attestation-shape
   "Validate that an attestation map conforms to ATTESTATION_SPEC_V1 §9.
    Returns {:valid? true} or {:valid? false :errors [...]}.
 
-   Checks:
+   Checks (old shape):
    - Required fields present (:attestation-id, :attestor, :subject, :claim, :timestamp)
    - Attestor has :type and :id
    - Subject has valid :type and matching id field (:hash or :claim-id)
+   - Signature is correctly structured (if present)
+
+   Checks (new shape):
+   - Required fields present (:schema-version, :attestation/id, :attestation/hash,
+     :attestation/subject-hash, :attestation/subject-kind, :attestation/claim-result,
+     :attestation/attestor-id, :attestation/signed-at)
+   - Subject kind is valid (:evidence-node or :claim)
    - Signature is correctly structured (if present)"
   [attestation]
-  (let [required-errors (validate-required-fields attestation)
-        attestor-errors (if-let [a (:attestor attestation)]
-                          (validate-attestor a)
-                          [])
-        subject-errors (if-let [s (:subject attestation)]
-                         (validate-subject s)
-                         [])
-        signature-errors (validate-signature (:signature attestation))
-        all-errors (vec (concat required-errors attestor-errors subject-errors signature-errors))]
-    (if (seq all-errors)
-      {:valid? false :errors all-errors}
-      {:valid? true})))
+  (if (:attestation/subject-kind attestation)
+    ;; New shape
+    (let [required-errors (validate-required-fields attestation)
+          attestor-errors (validate-new-shape-attestor attestation)
+          subject-errors (validate-new-shape-subject attestation)
+          signature-errors (validate-signature (:attestation/signature attestation))
+          all-errors (vec (concat required-errors attestor-errors subject-errors signature-errors))]
+      (if (seq all-errors)
+        {:valid? false :errors all-errors}
+        {:valid? true}))
+    ;; Old shape
+    (let [required-errors (validate-required-fields attestation)
+          attestor-errors (if-let [a (:attestor attestation)]
+                            (validate-attestor a)
+                            [])
+          subject-errors (if-let [s (:subject attestation)]
+                           (validate-subject s)
+                           [])
+          signature-errors (validate-signature (:signature attestation))
+          all-errors (vec (concat required-errors attestor-errors subject-errors signature-errors))]
+      (if (seq all-errors)
+        {:valid? false :errors all-errors}
+        {:valid? true}))))
 
 ;; ── Attestation Verification (Two Layers) ─────────────────────────────────────
 ;; ATTESTATION_SPEC_V1 §9 and ATTESTOR_REGISTRY_SPEC_V1 §11.
@@ -211,15 +270,21 @@
 ;; per-check results; a caller can decide which layer matters for their use case.
 
 (defn- attestor-id
-  "Extract attestor identifier string from an attestation's :attestor field."
+  "Extract attestor identifier from an attestation.
+   Handles both old shape (:attestor map) and new shape
+   (:attestation/attestor-id keyword)."
   [attestation]
-  (:id (:attestor attestation)))
+  (or (:attestation/attestor-id attestation)
+      (:id (:attestor attestation))))
 
 (defn- signing-key-id
-  "Extract the signing key identifier from the attestation's :signature.
+  "Extract the signing key identifier from the attestation's signature.
+   Handles both old shape (:signature) and new shape
+   (:attestation/signature).
    Returns nil if no signature or no public-key-id in signature."
   [attestation]
-  (get-in attestation [:signature :public-key-id]))
+  (or (get-in attestation [:attestation/signature :public-key-id])
+      (get-in attestation [:signature :public-key-id])))
 
 (defn- data-to-verify
   "Reconstruct the data that was signed for an old-shape attestation.
@@ -268,7 +333,7 @@
       {:check :key-authorized
        :pass? false
        :detail {:attestor-id id :reason :attestor-not-found}}
-      (nil? (:signature attestation))
+      (nil? (or (:attestation/signature attestation) (:signature attestation)))
       {:check :key-authorized
        :pass? :unsigned
        :detail {:reason :no-signature}}
@@ -294,7 +359,7 @@
    check key authorization. Authorization is handled by check-key-authorized
    via the attestor registry. Without verify-fn, reports :unavailable."
   [attestation verify-fn]
-  (let [signature (:signature attestation)]
+  (let [signature (or (:attestation/signature attestation) (:signature attestation))]
     (cond
       (nil? signature)
       {:check :signature-verified
@@ -319,9 +384,17 @@
 
 (defn- check-subject-exists
   "Check that the subject references a known evidence node or claim.
-   Requires a subject-resolver function in opts."
+   Requires a subject-resolver function in opts.
+   Handles both old shape (:subject map) and new shape
+   (:attestation/subject-kind, :attestation/subject-hash)."
   [attestation subject-resolver]
-  (let [subject (:subject attestation)]
+  (let [subject (or (when (:attestation/subject-kind attestation)
+                      (let [sk (:attestation/subject-kind attestation)
+                            sh (:attestation/subject-hash attestation)]
+                        (if (= :claim sk)
+                          {:type :claim :claim-id sh}
+                          {:type sk :hash sh})))
+                    (:subject attestation))]
     (cond
       (nil? subject)
       {:check :subject-exists
@@ -359,9 +432,11 @@
    Requires a revocation-resolver fn in opts.
    Per ATTESTATION_SPEC_V1 §7 and ATTESTOR_REGISTRY_SPEC_V1 §8,
    revocation does not invalidate the cryptographic attestation —
-   this check is informational."
+   this check is informational.
+   Handles both old shape (:attestation-id) and new shape
+   (:attestation/id)."
   [attestation revocation-resolver]
-  (let [id (:attestation-id attestation)]
+  (let [id (or (:attestation/id attestation) (:attestation-id attestation))]
     (cond
       (nil? id)
       {:check :revocation-status

@@ -972,7 +972,7 @@
                           :projection-definition-hash :source :provenance
                           :allocation-result :shortfall-outcome :claims
                           :invariant-links}
-    :intent/excludes    #{:allocation-result-hash :metadata :runtime-values}
+    :intent/excludes    #{:allocation-result-hash :metadata :external-refs :runtime-values}
     :intent/projection-fn project-pro-rata-allocation-result
     :intent/version     1}
 

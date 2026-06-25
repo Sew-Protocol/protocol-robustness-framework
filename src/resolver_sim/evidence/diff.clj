@@ -52,11 +52,11 @@
 
 (defn stable-diff-hash
   "Compute a stable content hash of a diff's changes vector.
-   Strips before/after values so structural identity is
+   Strips value-dependent keys so structural identity is
    independent of the actual values at the changed paths."
   [changes]
   (let [stripped (vec (for [c changes]
-                        (assoc c :before nil :after nil)))]
+                        (dissoc c :before :after :delta)))]
     (hc/hash-with-intent {:hash/intent :state-diff} {:changes stripped})))
 
 ;; ?? Diff Artifact Builder ????????????????????????????????????????????????????

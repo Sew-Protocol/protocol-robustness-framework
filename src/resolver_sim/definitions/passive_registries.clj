@@ -406,14 +406,23 @@
     :depends-on [:execution/replay]
     :description "Trace diff between two simulation runs."
     :claims #{:trace-fidelity}}
-   {:id :execution/validation
+    {:id :execution/validation
+     :version 1
+     :kind :validation
+     :runner :registry-validator
+     :entry 'resolver-sim.definitions.passive-registries/validate-all-registries!
+     :execution/type :validation
+     :execution/mode :static
+     :description "Static validation of registries, fixtures, or scenarios."
+     :claims #{}}
+   {:id :execution/attestation
     :version 1
-    :kind :validation
-    :runner :registry-validator
-    :entry 'resolver-sim.definitions.passive-registries/validate-all-registries!
-    :execution/type :validation
-    :execution/mode :static
-    :description "Static validation of registries, fixtures, or scenarios."
+    :kind :attestation
+    :runner :attestation-emitter
+    :entry 'resolver-sim.evidence.node/build-execution-node
+    :execution/type :attestation
+    :execution/mode :inline
+    :description "Attestation creation evidence node — records an attestation event as a DAG-verifiable evidence node."
     :claims #{}}])
 
 (def execution-registry
@@ -599,7 +608,8 @@
    :scenario-runner {:description "Scenario/invariant runner in resolver-sim.io.scenario-runner"}
    :grpc-server {:description "Interactive gRPC server entry point"}
    :differential-runner {:description "Trace diff execution runner"}
-   :registry-validator {:description "Registry validation entry point"}})
+   :registry-validator {:description "Registry validation entry point"}
+   :attestation-emitter {:description "Attestation evidence node emitter for DAG integration"}})
 
 (defn- namespace-resource-path
   [ns-sym]

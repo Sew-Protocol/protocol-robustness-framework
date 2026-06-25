@@ -41,16 +41,17 @@
            attribution sample-attribution}}]
   (let [allocation-result (sew-economics/calculate-sew-slash-allocation allocation-input)]
     (:evidence
-     (slashing/build-prorata-slash-evidence
-      {:world world
-       :slash-id "test-slash"
-       :workflow-id 0
-       :epoch 0
-       :trigger :test
-       :allocation-input allocation-input
-       :allocation-result allocation-result
-       :transition-dependencies []
-       :attribution attribution}))))
+      (slashing/build-prorata-slash-evidence
+       {:world world
+        :slash-id "test-slash"
+        :workflow-id 0
+        :resolver :test-resolver
+        :epoch 0
+        :trigger :test
+        :allocation-input allocation-input
+        :allocation-result allocation-result
+        :transition-dependencies []
+        :attribution attribution}))))
 
 ;; ── Integration tests ──────────────────────────────────────────────────
 

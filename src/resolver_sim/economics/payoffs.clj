@@ -316,12 +316,13 @@
      :action-hash-at             — hash of the action at execution time
 
    Optional inputs:
-      :shortfall-outcome          — shortfall breakdown from evidence layer
-      :claims                     — claim result links
-      :invariant-links            — invariant result links
-      :evidence-record-hash       — evidence envelope hash
-      :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
-      :metadata                   — additional metadata"
+       :shortfall-outcome          — shortfall breakdown from evidence layer
+       :claims                     — claim result links
+       :invariant-links            — invariant result links
+       :evidence-record-hash       — evidence envelope hash (stored in :external-refs, excluded from canonical hash)
+       :evidence-group-id          — group-id for cross-layer linking to surrounding evidence
+       :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
+       :metadata                   — additional metadata"
   [{:keys [projection-artifact
             allocation-result
             world-before-hash
@@ -332,6 +333,7 @@
             claims
             invariant-links
             evidence-record-hash
+            evidence-group-id
             attribution
             metadata]}]
   (let [projection-artifact-hash (:projection-hash projection-artifact)
@@ -341,8 +343,7 @@
                     {:world-before-hash world-before-hash
                      :world-after-hash world-after-hash
                      :action-hash action-hash
-                     :action-hash-at action-hash-at
-                     :evidence-record-hash evidence-record-hash}
+                     :action-hash-at action-hash-at}
                     (when attribution
                       {:scenario-id (:ctx/scenario-id attribution)
                        :run-id (:ctx/run-id attribution)
@@ -354,6 +355,10 @@
                                           :allocation-result (dissoc allocation-result :policy)
                                           :provenance provenance
                                           :shortfall-outcome shortfall-outcome})
+        external-refs (merge (when evidence-record-hash
+                               {:evidence-record-hash evidence-record-hash})
+                             (when evidence-group-id
+                               {:evidence-group-id evidence-group-id}))
         artifact-base {:schema-version 1
                        :artifact-kind default-pro-rata-allocation-result-artifact-kind
                        :allocation-result-id (str "allocation-pro-rata-"
@@ -369,7 +374,8 @@
                        :shortfall-outcome shortfall-outcome
                        :claims (or claims [])
                        :invariant-links (or invariant-links [])
-                       :metadata (or metadata {})}
+                       :metadata (or metadata {})
+                       :external-refs (when (seq external-refs) external-refs)}
         allocation-result-hash (hc/hash-with-intent {:hash/intent :pro-rata-allocation-result}
                                                     artifact-base)
         artifact (assoc artifact-base :allocation-result-hash allocation-result-hash)]

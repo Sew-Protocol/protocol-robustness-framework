@@ -144,7 +144,9 @@
                       :remainder-policy :unallocated
                       :ordering-policy :input-order})
             allocations (mapv (fn [party allocation]
-                                (let [basis-amount (max 0 (long (or (basis party) 0)))]
+                                (let [basis-amount (max 0 (long (or (basis party) 0)))
+                                      cap-raw (cap-field party)
+                                      cap (when (some? cap-raw) (max 0 (long cap-raw)))]
                                   {:id (:id party)
                                    :basis-amount basis-amount
                                    :share (if (pos? total-basis)
@@ -152,7 +154,9 @@
                                             0)
                                    :owed (+ (:allocated allocation) (:unmet allocation))
                                    :paid (:allocated allocation)
-                                   :unmet (:unmet allocation)}))
+                                   :unmet (:unmet allocation)
+                                   :cap cap
+                                   :ended-at (:ended-at party)}))
                               liable-parties (:allocations generic))]
         {:basis basis
          :cap-field cap-field
@@ -170,12 +174,13 @@
 
    Optional world-state provenance keys (:world-before-hash, :action-hash-at)
    are included in the source when provided."
-  [{:keys [slash-amount slash-obligation liable-parties slash-policy
-           basis cap-field unmet-policy world-before-hash action-hash-at
-           source metadata]
-    :or {basis :slashable-stake
-         cap-field :available-slashable
-         unmet-policy :record-only}}]
+   [{:keys [slash-amount slash-obligation liable-parties slash-policy
+            basis cap-field unmet-policy ended-at
+            world-before-hash action-hash-at
+            source metadata]
+     :or {basis :slashable-stake
+          cap-field :available-slashable
+          unmet-policy :record-only}}]
   (let [amount (or slash-amount slash-obligation 0)]
     (payoffs/build-projection-artifact
      {:amount amount
@@ -191,6 +196,8 @@
                       :cap-field cap-field
                       :unmet-policy unmet-policy
                       :slash-policy slash-policy}
+                     (when ended-at
+                       {:ended-at ended-at})
                      (when world-before-hash
                        {:world-before-hash world-before-hash})
                      (when action-hash-at
@@ -209,7 +216,8 @@
         basis (get-in artifact [:source :basis] :slashable-stake)
         cap-field (get-in artifact [:source :cap-field] :available-slashable)
         unmet-policy (get-in artifact [:source :unmet-policy] :record-only)
-        slash-policy (get-in artifact [:source :slash-policy])]
+        slash-policy (get-in artifact [:source :slash-policy])
+        ended-at (get-in artifact [:source :ended-at])]
     (if (zero? total-basis)
       {:status :no-liable-basis
        :basis basis
@@ -229,14 +237,16 @@
        :total-basis total-basis
        :recovered-total (:total-allocated generic)
        :unmet-total (:total-unmet generic)
-       :allocations (mapv (fn [{:keys [id weight allocated unmet]}]
-                            {:id id
-                             :basis-amount weight
-                             :share (if (pos? total-basis)
-                                      (/ weight total-basis)
-                                      0)
-                             :owed (+ allocated unmet)
-                             :paid allocated
-                             :unmet unmet})
-                          (:allocations generic))})))
+        :allocations (mapv (fn [{:keys [id weight allocated unmet cap]}]
+                             {:id id
+                              :basis-amount weight
+                              :share (if (pos? total-basis)
+                                       (/ weight total-basis)
+                                       0)
+                              :owed (+ allocated unmet)
+                              :paid allocated
+                              :unmet unmet
+                              :cap cap
+                              :ended-at ended-at})
+                           (:allocations generic))})))
 
