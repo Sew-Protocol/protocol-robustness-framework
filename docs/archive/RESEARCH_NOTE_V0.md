@@ -3,7 +3,7 @@
 **Authors:** Sew Protocol Research
 **Version:** v0 (pre-peer-review)
 **Date:** 2026-05
-**Repository:** https://github.com/Sew-Protocol/sew-simulation
+**Repository:** https://github.com/Sew-Protocol/protocol-robustness-framework
 **Reproducibility:** all results reproducible in ≤15 minutes from a single clone
 
 ---
@@ -147,8 +147,8 @@ This means the threat model for this protocol class cannot be "find a bug." It m
 
 **Exact reproduction command:**
 ```bash
-git clone https://github.com/Sew-Protocol/sew-simulation
-cd sew-simulation
+git clone https://github.com/Sew-Protocol/protocol-robustness-framework
+cd protocol-robustness-framework
 nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 sleep 10
 cd python

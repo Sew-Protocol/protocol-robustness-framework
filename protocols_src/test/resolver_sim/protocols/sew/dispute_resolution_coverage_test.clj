@@ -21,7 +21,8 @@
             [resolver-sim.scenario.dispute-coverage :as dc]
             [resolver-sim.evidence.summary :as ev-sum]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.evidence.chain :as chain])
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.io.event-evidence :as ee])
   (:import [java.util.regex Pattern]))
 
 ;; ---------------------------------------------------------------------------
@@ -358,15 +359,31 @@
                         (keywordize-keys-for-json (build-financial-outcome))))
 
 (defn build-invariant-results
-  "Produce an invariant-results.json stub.
-   Full invariant checking requires per-scenario world state."
+  "Produce an invariant-results.json from accumulated evidence and chain registry.
+   Counts evidence records by type and reports chain integrity status."
   []
-  {:invariant-checks {:solvency "pass" :conservation-of-funds "pass"
-                      :challenge-bond-proportional "pass"
-                      :resolver-stake-proportional "pass"
-                      :evidence-on-state-change "pass"
-                      :finality-blocked-during-appeal "pass"}
-   :note "Full per-scenario invariant results require replay context. Run check-all on world state."})
+  (let [dir (str (evcfg/artifact-dir) "/event-evidence")
+        dir-f (io/file dir)]
+    (if-not (.isDirectory dir-f)
+      {:evidence-count 0 :note "no event-evidence directory" :chain-status "empty"}
+      (let [records (keep read-evidence-file
+                          (sort (filter #(.endsWith (.getName %) ".json")
+                                        (map #(io/file dir %) (.list dir-f)))))
+            registry (try (chain/build-registry) (catch Exception _ nil))
+            chain-valid? (when registry
+                           (:chain-intact (chain/evidence-chain-integrity registry)))]
+        {:evidence-count (count records)
+         :resolution-events (count (filter #(cstr/includes?
+                                             (or (get % "evidence/type") (get % "type") "")
+                                             "resolution") records))
+         :slash-events (count (filter #(cstr/includes?
+                                        (or (get % "evidence/type") (get % "type") "")
+                                        "slash") records))
+         :settlement-events (count (filter #(cstr/includes?
+                                             (or (get % "evidence/type") (get % "type") "")
+                                             "settlement") records))
+         :chain-intact? chain-valid?
+         :registry-present? (some? registry)}))))
 
 (defn write-invariant-results-summary! []
   (write-json-artifact! "invariant-results.json"
@@ -415,10 +432,29 @@
   (write-financial-outcome!)
   (write-invariant-results-summary!)
   (write-dispute-summary!)
+  ;; Build and persist evidence links index (produced after all evidence is captured)
+  (try (ee/write-evidence-links-index-v1!)
+       (catch Exception e
+         (println (str "WARN: evidence links index failed: " (.getMessage e)))))
   ;; Finalize the evidence chain: persist registry and cursor
   (try (chain/finalize-and-write!)
        (catch Exception e
          (println (str "WARN: chain finalize failed: " (.getMessage e)))))
+  ;; Read the persisted registry and verify integrity
+  ;; (scenarios use with-fresh-registry so in-memory atom only holds index entries)
+  (try (let [reg-file (io/file (str (evcfg/artifact-dir)) "evidence-registry.json")]
+         (when (.exists reg-file)
+           (let [reg (json/read-str (slurp reg-file) :key-fn keyword)
+                 artifacts (:artifacts reg)
+                 transition-entries (filter #(= :transition-evidence (:kind %)) artifacts)]
+             (println (str "Evidence registry: " (count artifacts) " total entries, "
+                           (count transition-entries) " transition-evidence records"))
+             (when (seq transition-entries)
+               (let [integrity (chain/evidence-chain-integrity reg)]
+                 (println (str "  registry-hash-valid=" (:registry-hash-valid integrity)
+                               " chain-intact=" (:chain-intact integrity))))))))
+       (catch Exception e
+         (println (str "WARN: registry verification failed: " (.getMessage e)))))
   (try (chain/write-chain-cursor-final!)
        (catch Exception e
          (println (str "WARN: chain cursor write failed: " (.getMessage e))))))
@@ -631,3 +667,33 @@
         (println (str "  UNCLASSIFIED: :" c)))
       (is (empty? unclassified)
           (str (count unclassified) " t/fail code(s) not in known-error-codes")))))
+
+;; ── Slash-Obligation Allocation Result Artifact ──────────────────────────
+
+(deftest test-slash-obligation-allocation-artifact
+  (testing "Slash-obligation pro-rata allocation result artifacts are produced and registered"
+    (let [dir (str (evcfg/artifact-dir))
+          _ (println "Checking artifacts in:" dir)
+          artifact-files (sort (filter #(.contains (.getName %) "allocation-result-")
+                                       (.listFiles (io/file dir))))
+          artifact-count (count artifact-files)]
+      (println (str "Found " artifact-count " allocation result artifact(s)"))
+      (doseq [f artifact-files]
+        (println (str "  " (.getName f) " (" (.length f) " bytes)")))
+      (is (pos? artifact-count)
+          (str "At least one allocation result artifact must be produced during DR scenarios "
+               "(found " artifact-count ")"))
+      ;; Verify each artifact is valid JSON with expected fields
+      (doseq [f artifact-files]
+        (let [content (json/read-str (slurp f) :key-fn keyword)
+              result-id (:allocation-result-id content)
+              provenance (:provenance content)]
+          (is (string? result-id) (str "File " (.getName f) " must have :allocation-result-id"))
+          (is (map? provenance) (str "File " (.getName f) " must have :provenance"))
+          (when (map? provenance)
+            (let [scenario-id (:scenario-id provenance)
+                  run-id (:run-id provenance)]
+              (is (or (nil? scenario-id) (string? scenario-id))
+                  (str "File " (.getName f) " :scenario-id must be string or nil"))
+              (is (or (nil? run-id) (string? run-id))
+                  (str "File " (.getName f) " :run-id must be string or nil")))))))))

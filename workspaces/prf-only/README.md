@@ -1,12 +1,11 @@
-# PRF-Only Workspace
+# PRF-Only View
 
-This workspace loads only the protocol-agnostic framework core (`src/`).
-SEW protocol implementation files are on disk under `protocols_src/` but
-not on the classpath.
+This view is now the default — work from the project root.
+The root `deps.edn` includes only `src/` (framework core).
 
-To load:   clojure -M
-To test:   clojure -M:test ...
-To lint:   clojure -M:lint --lint src
+For the full stack (framework + Sew protocol), use `:with-sew` alias:
+  clojure -M:with-sew
+  clojure -M:test:with-sew
+  clojure -M:dev/base:with-sew
 
-Protocol implementations live outside this view.
-Switch to `workspaces/with-sew/` for the full picture.
+Or switch to `workspaces/with-sew/`.

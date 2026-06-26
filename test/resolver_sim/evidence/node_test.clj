@@ -269,3 +269,104 @@
 
 (deftest evidence-node-intent-registry-validates
   (is (nil? (hc/validate-registry!))))
+
+;; ── validate-node-detailed ───────────────────────────────────────────────────
+
+(deftest validate-node-detailed-passes-for-valid-node
+  (let [node (node/build-execution-node (base-node-spec))
+        result (node/validate-node-detailed node)]
+    (is (:valid? result))
+    (is (every? #(= :pass (:check/status %)) (:checks result)))
+    (is (= 4 (:detailed-checks-total (:summary result))))
+    (is (= 0 (:detailed-checks-failed (:summary result))))))
+
+(deftest validate-node-detailed-detects-node-id-mismatch
+  (let [node (assoc (node/build-execution-node (base-node-spec))
+                    :node-id "tampered-id")
+        result (node/validate-node-detailed node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node-id-equals-hash (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-node-detailed-detects-missing-inputs
+  (let [node (-> (node/build-execution-node (base-node-spec))
+                 (assoc-in [:evidence :inputs-hash] ""))
+        result (node/validate-node-detailed node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node-inputs-present (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-node-detailed-detects-missing-outputs
+  (let [node (-> (node/build-execution-node (base-node-spec))
+                 (assoc-in [:evidence :outputs-hash] ""))
+        result (node/validate-node-detailed node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node-inputs-present (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-node-detailed-rejects-non-vector-attestations
+  (let [node (assoc (node/build-execution-node (base-node-spec))
+                    :attestations :not-a-vector)
+        result (node/validate-node-detailed node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node-attestations-present (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-node-detailed-detects-unresolvable-parents
+  (let [node (node/build-execution-node
+              (base-node-spec {:parent-hashes ["nonexistent-parent"]}))
+        result (node/validate-node-detailed node)]
+    (is (not (:valid? result)))
+    (is (some #(= :node-parents-resolvable (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-node-detailed-accepts-bootstrap-roots-as-parents
+  (let [bootstrap "bootstrap-root"
+        node (node/build-execution-node
+              (base-node-spec {:parent-hashes [bootstrap]
+                               :bootstrap-roots [bootstrap]}))
+        result (node/validate-node-detailed node)]
+    (is (:valid? result))))
+
+;; ── validate-dag-detailed ────────────────────────────────────────────────────
+
+(deftest validate-dag-detailed-passes-for-valid-chain
+  (let [p1 (node/build-execution-node (base-node-spec))
+        p2 (node/build-execution-node
+            (base-node-spec {:parent-hashes [(:node-hash p1)]
+                             :execution-id :execution/replay}))
+        result (node/validate-dag-detailed [p1 p2])]
+    (is (:valid? result))
+    (is (= 3 (:detailed-checks-total (:summary result))))
+    (is (= 0 (:detailed-checks-failed (:summary result))))))
+
+(deftest validate-dag-detailed-detects-duplicate-hashes
+  (let [node (node/build-execution-node (base-node-spec))
+        duplicate (assoc node :parent-hashes [(:node-hash node)])
+        result (node/validate-dag-detailed [node duplicate])]
+    (is (not (:valid? result)))
+    (is (some #(= :dag-no-duplicate-hashes (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-dag-detailed-detects-multiple-roots
+  (let [p1 (node/build-execution-node (base-node-spec))
+        p2 (node/build-execution-node (base-node-spec))
+        result (node/validate-dag-detailed [p1 p2])]
+    (is (not (:valid? result)))
+    (is (some #(= :dag-single-root (:check/id %))
+              (filter #(= :fail (:check/status %)) (:checks result))))))
+
+(deftest validate-dag-detailed-rejects-cycle
+  (let [a {:schema-version 1
+           :node-id "a" :node-hash "a"
+           :parent-hashes ["b"] :bootstrap-roots []
+           :execution {:execution-id :execution/diff :execution-kind :differential
+                       :runner :differential-runner :registry-hash "r"
+                       :policy-id :evidence-policy/computed :policy-hash "p"}
+           :result {:status :pass :summary {}}
+           :evidence {:inputs-hash "i" :outputs-hash "o"}
+           :attestations [] :extensions {}}
+        b (assoc a :node-id "b" :node-hash "b" :parent-hashes ["a"])
+        result (node/validate-dag-detailed [a b])]
+    (is (not (:valid? result)))
+    (is (some #(= :node/cycle (:error %)) (:errors result)))))

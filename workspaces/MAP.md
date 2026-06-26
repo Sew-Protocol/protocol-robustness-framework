@@ -2,20 +2,22 @@
 
 ```
 resolver-sim/
-├── src/              ← Protocol-agnostic framework core
+├── src/              ← Protocol-agnostic framework core (default view)
 ├── protocols_src/    ← Protocol implementations (SEW, etc.)
-├── deps.edn          ← Canonical: src + protocols_src (the full view)
+├── deps.edn          ← PRF-only by default; add :with-sew for full stack
 └── workspaces/
-    └── prf-only/     ← Framework-only view (excludes protocols_src)
+    ├── prf-only/     ← Now the default — work from project root
+    └── with-sew/     ← Full-stack view (src + protocols_src)
 ```
 
 ## Which view to use
 
 | Goal | What to use |
 |---|---|
-| Browse framework core without protocol noise | `workspaces/prf-only/` |
-| Run tests, REPL, or any production task | Project root (`deps.edn` includes both roots) |
-| Add a new protocol implementation | Browse `workspaces/prf-only/` to see dispatch points |
+| Browse framework core without protocol noise | Project root (`deps.edn` includes only `src/`) |
+| Run full test suite (framework + Sew) | `clojure -M:test:with-sew` or `workspaces/with-sew/` |
+| Run framework-only tests | `bb test:framework` or `clojure -M:test` |
+| REPL with full stack | `clojure -M:dev/base:with-sew` |
 | Understand the protocol abstraction | `src/resolver_sim/protocols/` |
 
 ## The two source roots

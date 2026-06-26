@@ -470,7 +470,7 @@ echo "Generating report..."
 # Report automatically created in results/*/COMPREHENSIVE_REPORT.md
 
 # Optional: upload results
-# aws s3 cp results/ s3://bucket/sew-simulation/
+# aws s3 cp results/ s3://bucket/protocol-robustness-framework/
 ```
 
 ---

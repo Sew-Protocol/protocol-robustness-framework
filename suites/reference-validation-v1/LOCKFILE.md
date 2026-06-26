@@ -8,7 +8,7 @@
 
 ## Repository state
 
-- sew-simulation commit: current HEAD (refresh with `clojure -M:reference-validation --refresh-expected`)
+- protocol-robustness-framework commit: current HEAD (refresh with `clojure -M:reference-validation --refresh-expected`)
 - generated at: 2026-06-11 (suite refactored to v1.3.0)
 
 ## Runtime

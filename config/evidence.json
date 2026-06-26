@@ -7,7 +7,7 @@
   "strict_mode": true,
   "rounding_policy": "floor-to-asset-decimals.v1",
   "framework": {
-    "name": "sew-simulation-test-runner",
+    "name": "protocol-robustness-framework-test-runner",
     "version": "0.1.0"
   },
   "schemas": {

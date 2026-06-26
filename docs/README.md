@@ -28,8 +28,7 @@ Primary project framing and status live in the root `../README.md`.
 - **Companion**: practical or narrowed companion to a canonical doc.
 - **Archived**: historical context only; do not use for current implementation decisions.
 
-## System and architecture
-
+- `ATTRIBUTION_GUIDE.md` — **canonical** attribution system: `with-attribution` usage patterns, context tracking, observability best practices
 - `SYSTEM_OVERVIEW.md` — **canonical** narrative: two engines, current findings, roadmap, technical architecture
 - `ROBUSTNESS_FRAMEWORK.md` — **canonical** adversarial validation, deterministic replay, simulation architecture
 - `architecture/ARCHITECTURE.md` — **canonical** layering rules, namespace map, generalisation matrix

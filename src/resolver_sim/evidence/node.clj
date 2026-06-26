@@ -493,12 +493,171 @@
                             (when cycle
                               [{:error :node/cycle
                                 :cycle cycle}])))]
-    {:valid? (empty? errors)
-     :errors errors
-     :node-count (count nodes)
-     :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
-              :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
-              :cycle-free? (nil? cycle)}}))
+  {:valid? (empty? errors)
+      :errors errors
+      :node-count (count nodes)
+      :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
+               :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
+               :cycle-free? (nil? cycle)}}))
+
+;; ── Detailed validation ──────────────────────────────────────────────────────
+
+(defn- check-node-id-equals-hash
+  "Identity check: :node-id must equal :node-hash."
+  [node]
+  (let [node-id (:node-id node)
+        node-hash (:node-hash node)]
+    (if (= node-id node-hash)
+      {:check/id :node-id-equals-hash :check/status :pass}
+      {:check/id :node-id-equals-hash :check/status :fail
+       :reason (str "node-id " node-id " does not match node-hash " node-hash)})))
+
+(defn- check-node-inputs-present
+  "Link check: :evidence :inputs-hash and :outputs-hash must be present and non-empty."
+  [node]
+  (let [inputs-hash (get-in node [:evidence :inputs-hash])
+        outputs-hash (get-in node [:evidence :outputs-hash])
+        missing (cond-> []
+                  (not (and (string? inputs-hash) (pos? (count inputs-hash))))
+                  (conj :inputs-hash)
+                  (not (and (string? outputs-hash) (pos? (count outputs-hash))))
+                  (conj :outputs-hash))]
+    (if (seq missing)
+      {:check/id :node-inputs-present :check/status :fail
+       :missing missing}
+      {:check/id :node-inputs-present :check/status :pass})))
+
+(defn- check-node-attestations-present
+  "Link check: :attestations must be a vector (may be empty)."
+  [node]
+  (let [attestations (:attestations node)]
+    (if (vector? attestations)
+      {:check/id :node-attestations-present :check/status :pass}
+      {:check/id :node-attestations-present :check/status :fail
+       :reason (str "Expected vector for :attestations, got " (type attestations))})))
+
+(defn- check-node-parents-resolvable
+  "Link check: all :parent-hashes must be resolvable from bootstrap-roots
+   or from known-parent-hashes (passed via opts)."
+  [node known-parent-hashes]
+  (let [parent-hashes (set (:parent-hashes node))
+        bootstrap-roots (set (:bootstrap-roots node))
+        missing (vec (remove #(or (contains? known-parent-hashes %)
+                                  (contains? bootstrap-roots %))
+                             parent-hashes))]
+    (if (seq missing)
+      {:check/id :node-parents-resolvable :check/status :fail
+       :missing missing}
+      {:check/id :node-parents-resolvable :check/status :pass})))
+
+(defn validate-node-detailed
+  "Validate one node with extended checks including identity, links,
+   and input/output presence.
+
+   In addition to all checks from validate-node, runs:
+   - node-id equals node-hash
+   - inputs-hash and outputs-hash present
+   - attestations is a vector
+   - parent hashes are resolvable
+
+   Returns {:valid? ... :errors [...] :checks [...] :summary {...}}."
+  [node & {:keys [known-parent-hashes]
+           :or {known-parent-hashes #{}}}]
+  (let [detailed-checks [(check-node-attestations-present node)]
+        pre-failures (filter #(= :fail (:check/status %)) detailed-checks)]
+    (if (seq pre-failures)
+      {:valid? false
+       :errors (mapv (fn [c] {:check/id (:check/id c) :reason (:reason c)}) pre-failures)
+       :checks detailed-checks
+       :summary {:base-valid? false
+                 :detailed-checks-total (count detailed-checks)
+                 :detailed-checks-passed (- (count detailed-checks) (count pre-failures))
+                 :detailed-checks-failed (count pre-failures)}}
+      (let [base (validate-node node :known-parent-hashes known-parent-hashes)
+            deeper-checks [(check-node-id-equals-hash node)
+                           (check-node-inputs-present node)
+                           (check-node-parents-resolvable node known-parent-hashes)]
+            all-checks (vec (concat detailed-checks deeper-checks))
+            failures (filter #(= :fail (:check/status %)) all-checks)
+            all-errors (vec (concat (:errors base)
+                                    (mapv (fn [f] {:check/id (:check/id f) :reason (:reason f)})
+                                          failures)))
+            all-pass? (and (:valid? base) (empty? failures))]
+        {:valid? all-pass?
+         :errors all-errors
+         :checks all-checks
+         :summary {:base-valid? (:valid? base)
+                   :detailed-checks-total (count all-checks)
+                   :detailed-checks-passed (- (count all-checks) (count failures))
+                   :detailed-checks-failed (count failures)}}))))
+
+;; ── Detailed DAG validation ──────────────────────────────────────────────────
+
+(defn- check-dag-single-root
+  "Acyclicity check: the DAG must have exactly one root node
+   (a node with no :parent-hashes that are not bootstrap-roots)."
+  [nodes]
+  (let [all-parents (set (mapcat :parent-hashes nodes))
+        all-bootstrap (set (mapcat :bootstrap-roots nodes))
+        effective-parents (apply disj all-parents all-bootstrap)
+        roots (remove #(contains? effective-parents (:node-hash %)) nodes)
+        root-count (count roots)]
+    (if (= 1 root-count)
+      {:check/id :dag-single-root :check/status :pass}
+      {:check/id :dag-single-root :check/status :fail
+       :reason (str "Expected 1 root node, found " root-count)
+       :root-count root-count})))
+
+(defn- check-dag-no-duplicate-hashes
+  "Completeness check: no two nodes may share the same :node-hash."
+  [nodes]
+  (let [hashes (map :node-hash nodes)
+        duplicates (vec (keys (filter (fn [[_ v]] (> v 1)) (frequencies hashes))))]
+    (if (seq duplicates)
+      {:check/id :dag-no-duplicate-hashes :check/status :fail
+       :duplicates duplicates}
+      {:check/id :dag-no-duplicate-hashes :check/status :pass})))
+
+(defn- check-dag-all-nodes-valid
+  "Aggregate check: every node in the DAG passes validate-node-detailed."
+  [nodes known-parent-hashes]
+  (let [results (mapv #(validate-node-detailed % :known-parent-hashes known-parent-hashes) nodes)
+        failures (filter #(not (:valid? %)) results)]
+    (if (seq failures)
+      {:check/id :dag-all-nodes-valid :check/status :fail
+       :failed-count (count failures)
+       :node-count (count nodes)}
+      {:check/id :dag-all-nodes-valid :check/status :pass
+       :node-count (count nodes)})))
+
+(defn validate-dag-detailed
+  "Validate a node collection as a DAG with extended checks.
+
+   In addition to all checks from validate-node-dag, runs:
+   - single root node
+   - no duplicate node hashes
+   - per-node detailed validation (identity, links, inputs)
+
+   Returns {:valid? ... :errors [...] :checks [...] :summary {...}}."
+  [nodes & {:keys [strict-dag?]
+            :or {strict-dag? true}}]
+  (let [known-hashes (set (map :node-hash nodes))
+        base (validate-node-dag nodes :strict-dag? strict-dag?)
+        detailed-checks [(check-dag-single-root nodes)
+                         (check-dag-no-duplicate-hashes nodes)
+                         (check-dag-all-nodes-valid nodes known-hashes)]
+        failures (filter #(= :fail (:check/status %)) detailed-checks)
+        all-errors (vec (concat (:errors base)
+                                (mapv (fn [f] {:check/id (:check/id f) :reason (:reason f)})
+                                      failures)))
+        all-pass? (and (:valid? base) (empty? failures))]
+    {:valid? all-pass?
+     :errors all-errors
+     :checks (concat (:checks base) detailed-checks)
+     :summary {:base-valid? (:valid? base)
+               :detailed-checks-total (count detailed-checks)
+               :detailed-checks-passed (- (count detailed-checks) (count failures))
+               :detailed-checks-failed (count failures)}}))
 
 (defn with-execution-node
   "Run thunk, emit an execution node for pass/fail/error, and return thunk's value.

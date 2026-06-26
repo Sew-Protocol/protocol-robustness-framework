@@ -250,7 +250,7 @@ Phase I validates **Section 3 (Adversarial Scenarios)** and **Section 4 (Incenti
 
 ### Immediate (Production)
 
-1. ✅ Deploy Phase I code to sew-simulation
+1. ✅ Deploy Phase I code to Protocol Robustness Framework
 2. 🔲 Enable fraud slashing in contracts (setSlashPercentage FRAUD 5000)
 3. 🔲 Enable reversal slashing in contracts (setSlashPercentage REVERSAL 2500)
 4. 🔲 Brief governance on new self-healing capabilities

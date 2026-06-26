@@ -35,5 +35,13 @@
         wa-bad-finality {:block-time 1001 :escrow-transfers {0 {:escrow-state :disputed}}}]
     (is (:holds? (tinv/non-decreasing-time? wb wa-good)))
     (is (not (:holds? (tinv/non-decreasing-time? wb wa-bad-time))))
-    (is (:holds? (tinv/no-action-after-finality? wb wa-good)))
-    (is (not (:holds? (tinv/no-action-after-finality? wb wa-bad-finality))))))
+    (is (:holds? (tinv/no-action-after-finality? wb wa-good
+                                                 :entities-before-fn (fn [w] (:escrow-transfers w {}))
+                                                 :state-after-fn     (fn [w entity-id]
+                                                                       (get-in w [:escrow-transfers entity-id :escrow-state]))
+                                                 :terminal-states    #{:released :refunded})))
+    (is (not (:holds? (tinv/no-action-after-finality? wb wa-bad-finality
+                                                      :entities-before-fn (fn [w] (:escrow-transfers w {}))
+                                                      :state-after-fn     (fn [w entity-id]
+                                                                            (get-in w [:escrow-transfers entity-id :escrow-state]))
+                                                      :terminal-states    #{:released :refunded}))))))

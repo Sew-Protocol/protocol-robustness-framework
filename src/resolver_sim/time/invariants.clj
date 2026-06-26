@@ -1,7 +1,12 @@
 (ns resolver-sim.time.invariants
-  "Cross-cutting temporal invariants for simulation traces/world transitions."
-  (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.time.context :as time-ctx]))
+  "Cross-cutting temporal invariants for simulation traces/world transitions.
+   Protocol-specific defaults are loaded lazily so this namespace loads cleanly
+   in prf-only mode (without protocols_src on the classpath)."
+  (:require [resolver-sim.time.context :as time-ctx]))
+
+(def ^:private sew-terminal-states
+  (delay (try @(requiring-resolve 'resolver-sim.protocols.sew.types/terminal-states)
+              (catch java.io.FileNotFoundException _ nil))))
 
 (defn non-decreasing-time?
   "Transition invariant: block-time must be monotonic non-decreasing."
@@ -33,13 +38,13 @@
                                :or   {entities-before-fn (fn [w] (:escrow-transfers w {}))
                                       state-after-fn     (fn [w entity-id]
                                                            (get-in w [:escrow-transfers entity-id :escrow-state]))
-                                      terminal-states    t/terminal-states}}]
+                                      terminal-states    @sew-terminal-states}}]
   (let [terminals terminal-states
         violations
         (for [[entity-id entity-before] (entities-before-fn world-before)
               :let [sb (:escrow-state entity-before)
                     sa (state-after-fn world-after entity-id)]
-              :when (and (contains? terminals sb) (not= sb sa))]
+              :when (and terminals (contains? terminals sb) (not= sb sa))]
           {:entity-id entity-id :before sb :after sa :violation :action-after-finality})]
     {:holds? (empty? violations)
      :violations (vec violations)}))

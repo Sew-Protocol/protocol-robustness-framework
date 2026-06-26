@@ -31,7 +31,7 @@ non_goals:
   - Claim full simulator-backed validation coverage in v1.
 
 repository:
-  name: sew-simulation
+  name: protocol-robustness-framework
   expected_root: suites/reference-validation-v1
 
 pinned_inputs:

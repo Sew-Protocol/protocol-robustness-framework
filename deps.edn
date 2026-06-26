@@ -1,4 +1,4 @@
-{:paths ["." "src" "protocols_src"]
+{:paths ["." "src"]
 
  :mvn/repos {"central" {:url "https://repo1.maven.org/maven2/"}
              "clojars" {:url "https://repo.clojars.org/"}}
@@ -25,8 +25,11 @@
 
  :aliases
   {:test
-   {:extra-paths ["test" "protocols_src/test"]
+   {:extra-paths ["test"]
     :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}}
+
+   :with-sew
+   {:extra-paths ["protocols_src" "protocols_src/test"]}
 
   :dev/base
   {:extra-paths ["dev" "test" "notebooks"]

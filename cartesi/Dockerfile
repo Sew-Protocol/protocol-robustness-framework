@@ -4,13 +4,13 @@
 FROM clojure:temurin-17-bookworm AS build-stage
 
 WORKDIR /opt/cartesi/dapp
-# Build context should be the sew-simulation repository root.
+# Build context should be the Protocol Robustness Framework repository root.
 # Example:
 #   docker build -f cartesi/Dockerfile .
-COPY . /opt/cartesi/dapp/sew-simulation
+COPY . /opt/cartesi/dapp/protocol-robustness-framework
 
-WORKDIR /opt/cartesi/dapp/sew-simulation
-RUN clojure -X:build-uberjar :jar sew-simulation.jar
+WORKDIR /opt/cartesi/dapp/protocol-robustness-framework
+RUN clojure -X:build-uberjar :jar prf.jar
 
 # Runtime stage
 FROM --platform=linux/riscv64 cartesi/node:20.16.0-jammy-slim
@@ -39,9 +39,9 @@ EOF
 ENV PATH="/opt/cartesi/bin:${PATH}"
 
 WORKDIR /opt/cartesi/dapp
-COPY --from=build-stage /opt/cartesi/dapp/sew-simulation/sew-simulation.jar .
+COPY --from=build-stage /opt/cartesi/dapp/protocol-robustness-framework/prf.jar .
 
 ENV ROLLUP_HTTP_SERVER_URL="http://127.0.0.1:5004"
 
 ENTRYPOINT ["rollup-init"]
-CMD ["java", "-jar", "sew-simulation.jar"]
+CMD ["java", "-jar", "prf.jar"]

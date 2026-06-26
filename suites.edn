@@ -1,6 +1,0 @@
-
-|                    :suite-key | :protocol-id |            :kind |     :ci-tier | :path-count |                          :title |
-|-------------------------------+--------------+------------------+--------------+-------------+---------------------------------|
-| :dispute-resolution-scenarios |       sew-v1 | :json-path-suite |    :coverage |          44 |    Dispute-resolution scenarios |
-|          :sew-yield-scenarios |       sew-v1 | :json-path-suite | :integration |          15 | Sew yield integration scenarios |
-|     :yield-provider-scenarios |     yield-v1 | :json-path-suite |    :provider |           5 |        Yield provider scenarios |

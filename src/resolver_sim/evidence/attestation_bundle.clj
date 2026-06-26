@@ -45,18 +45,6 @@
 
 ;; ── Bundle Builder ───────────────────────────────────────────────────────────
 
-(defn- sha256-hex
-  [data]
-  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (pr-str data) "UTF-8"))
-    (apply str (map (partial format "%02x") (.digest digest)))))
-
-(defn- file-sha256
-  [path]
-  (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (slurp path) "UTF-8"))
-    (apply str (map (partial format "%02x") (.digest digest)))))
-
 (defn- compute-object-hash
   [obj]
   (hc/hash-with-intent {:hash/intent :evidence-record} obj))
@@ -173,7 +161,7 @@
 
         ;; Canonical root hash (excludes self-referential fields)
         root-input (dissoc base-manifest :bundle/root-hash)
-        root-hash (hc/hash-with-intent {:hash/intent :evidence-record} root-input)]
+        root-hash (hc/hash-with-intent {:hash/intent :manifest} root-input)]
 
     (assoc base-manifest :bundle/root-hash root-hash)))
 
@@ -191,7 +179,7 @@
   [bundle]
   (let [recorded (:bundle/root-hash bundle)
         base (dissoc bundle :bundle/root-hash)
-        computed (hc/hash-with-intent {:hash/intent :evidence-record} base)]
+        computed (hc/hash-with-intent {:hash/intent :manifest} base)]
     (if (= recorded computed)
       {:check/id :bundle-root-hash-valid :check/status :pass}
       {:check/id :bundle-root-hash-valid :check/status :fail

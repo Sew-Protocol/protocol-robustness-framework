@@ -25,6 +25,12 @@
        x))
    data))
 
+(defn hash-with-intent
+  "Strip volatiles and hash with the given intent keyword.
+   Like canonical-hash but lets the caller specify the intent (e.g. :registry, :provenance)."
+  [intent data]
+  (->> data strip-volatile (hc/hash-with-intent {:hash/intent intent})))
+
 (defn canonical-hash
   "Compute a stable SHA-256 over the manifest content, excluding volatile fields.
    Uses domain-separated typed binary encoding via resolver-sim.hash.canonical."

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Canonical test runner for sew-simulation.
+# Canonical test runner for Protocol Robustness Framework.
 #
 # Usage:
 #   ./scripts/test.sh            # run all suites (unit + invariants + fixtures + triage)
@@ -94,7 +94,7 @@ run_target() {
 run_unit() {
   require_clojure || return $?
   echo "Running unit tests (all — framework + Sew)..."
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
 (require '[resolver-sim.protocol-alignment-test])
@@ -118,6 +118,9 @@ run_unit() {
 (require '[resolver-sim.financial.pro-rata-characterization-test])
 (require '[resolver-sim.scenario.suites-test])
 (require '[resolver-sim.validation.scenario-registry-test])
+(require '[resolver-sim.run.overview-test])
+(require '[resolver-sim.evidence.node-test])
+(require '[resolver-sim.evidence.attestation-dag-test])
 (let [results (t/run-tests
     'resolver-sim.core-tests
     'resolver-sim.protocol-alignment-test
@@ -140,7 +143,10 @@ run_unit() {
     'resolver-sim.protocols.sew.dispute-resolution-coverage-test
     'resolver-sim.financial.pro-rata-characterization-test
     'resolver-sim.scenario.suites-test
-    'resolver-sim.validation.scenario-registry-test)]
+    'resolver-sim.validation.scenario-registry-test
+    'resolver-sim.run.overview-test
+    'resolver-sim.evidence.node-test
+    'resolver-sim.evidence.attestation-dag-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -155,27 +161,17 @@ run_framework() {
 (require '[resolver-sim.protocol-alignment-test])
 (require '[resolver-sim.time.context-test])
 (require '[resolver-sim.time.model-test])
-(require '[resolver-sim.sim.multi-epoch-test])
 (require '[resolver-sim.sim.defection-test])
 (require '[resolver-sim.sim.strategy-adaptation-test])
 (require '[resolver-sim.sim.waterfall-test])
-(require '[resolver-sim.io.scenario-fixture-parity-test])
-(require '[resolver-sim.contract-model.replay-batch-test])
-(require '[resolver-sim.financial.pro-rata-characterization-test])
-(require '[resolver-sim.validation.scenario-registry-test])
 (let [results (t/run-tests
                 'resolver-sim.core-tests
                 'resolver-sim.protocol-alignment-test
                 'resolver-sim.time.context-test
                 'resolver-sim.time.model-test
-                'resolver-sim.sim.multi-epoch-test
                 'resolver-sim.sim.defection-test
                 'resolver-sim.sim.strategy-adaptation-test
-                'resolver-sim.sim.waterfall-test
-                'resolver-sim.io.scenario-fixture-parity-test
-                'resolver-sim.contract-model.replay-batch-test
-                'resolver-sim.financial.pro-rata-characterization-test
-                'resolver-sim.validation.scenario-registry-test)]
+                'resolver-sim.sim.waterfall-test)]
   (when (pos? (+ (:error results) (:fail results)))
     (System/exit 1)))"
   return $?
@@ -184,7 +180,7 @@ run_framework() {
 run_sew() {
   require_clojure || return $?
   echo "Running Sew protocol unit tests..."
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.core-tests])
 (require '[resolver-sim.protocols.sew.replay-test])
@@ -309,7 +305,7 @@ run_sew() {
 run_yield() {
   require_clojure || return $?
   echo "Running yield protocol unit tests..."
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.protocols.sew.yield-reorg-race-test])
 (require '[resolver-sim.protocols.sew.yield-solvency-test])
@@ -336,14 +332,14 @@ run_yield() {
 run_invariants() {
   require_clojure || return $?
   echo "Running deterministic invariant scenarios (S01–S100)..."
-  clojure -M:run -- --invariants
+  clojure -M:run:with-sew:with-sew -- --invariants
   return $?
 }
 
 run_dispute_resolution() {
   require_clojure || return $?
   echo "Running dispute resolution coverage scenarios (S-DR-* via test namespace)..."
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[clojure.test :as t])
 (require '[resolver-sim.protocols.sew.dispute-resolution-coverage-test])
 (let [results (t/run-tests 'resolver-sim.protocols.sew.dispute-resolution-coverage-test)]
@@ -366,7 +362,7 @@ run_named_path_suite() {
   require_clojure || return $?
   local suite="$1"
   echo "Running registry-backed scenario path suite: $suite"
-  clojure -M:run -- --invariants --suite "$suite"
+  clojure -M:run:with-sew:with-sew -- --invariants --suite "$suite"
   return $?
 }
 
@@ -387,7 +383,7 @@ run_yield_scenarios() {
 run_scenario_registry() {
   require_clojure || return $?
   echo "Validating canonical scenario registries..."
-  clojure -M -m resolver-sim.validation.scenario-registry
+  clojure -M:with-sew -m resolver-sim.validation.scenario-registry
   return $?
 }
 
@@ -461,7 +457,7 @@ run_suites() {
    echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
    local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
 
-   clojure -M:test -e "
+   clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites $suite_filter
       results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
@@ -498,7 +494,7 @@ run_routed_suites() {
     suite_filter="[$(echo $routed | sed 's/,/ /g')]"
   fi
 
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites $suite_filter
       verify-opts {:golden-verify-mode :replay-and-theory}
@@ -529,7 +525,7 @@ run_dr3_coverage() {
   echo "Running DR3 critical suite + release-mapping drift checks..."
 
   # 1) Run the dedicated DR3-critical suite.
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [r (f/run-suite :suites/dr3-critical)]
   (f/emit-suite-result :suites/dr3-critical r)
@@ -541,7 +537,7 @@ run_dr3_coverage() {
   (when-not (:ok? r) (System/exit 1)))" || return $?
 
   # 2) Verify DR3 release mapping file references valid traces and suite IDs.
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[clojure.edn :as edn]
          '[clojure.java.io :as io])
 
@@ -574,7 +570,7 @@ run_dr3_coverage() {
 run_equivalence_new() {
   require_clojure || return $?
   echo "Running new equivalence comparison suites (auth/race/escalation/accounting + money-path)..."
-  clojure -M:test -e "
+  clojure -M:test:with-sew -e "
 (require '[resolver-sim.sim.fixtures :as f])
 (let [suites [:suites/equivalence-auth-paths
           :suites/equivalence-race-pairs
@@ -704,23 +700,23 @@ run_monte_carlo() {
   local mc_fail=0
 
   echo "── Phase O: Market Exit Cascade ──────────────────────────────────────────"
-  clojure -M:run -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
+  clojure -M:run:with-sew -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
   echo "── Phase P Lite: Appeals Falsification ───────────────────────────────────"
-  clojure -M:run -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
+  clojure -M:run:with-sew -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
   echo "── Phase AA: Governance as Adversary ─────────────────────────────────────"
-  clojure -M:run -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
+  clojure -M:run:with-sew -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
   echo "── Phase AD: Governance Bandwidth Floor (AA safeguard) ───────────────────"
-  clojure -M:run -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
+  clojure -M:run:with-sew -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
   echo "── Phase F: Collusion Ring Deterrence ────────────────────────────────────"
-  clojure -M:run -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
+  clojure -M:run:with-sew -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
   echo ""
 
   if [ "$mc_fail" -eq 0 ]; then
@@ -736,10 +732,10 @@ emit_claimable_classification() {
   require_clojure || return 0
   echo "Emitting claimable-classification v2..."
   if [ "${CLAIMABLE_CLASSIFICATION_TAXONOMY_ONLY:-0}" = "1" ]; then
-    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+    clojure -M:with-sew -m resolver-sim.io.claimable-classification-emitter \
       "$CLAIMABLE_CLASSIFICATION_FILE" taxonomy-only
   else
-    clojure -M -m resolver-sim.io.claimable-classification-emitter \
+    clojure -M:with-sew -m resolver-sim.io.claimable-classification-emitter \
       "$CLAIMABLE_CLASSIFICATION_FILE" aggregated "$RUN_ID"
   fi
 }
@@ -801,17 +797,17 @@ run_long_horizon() {
   : > "$lh_meta_file"
 
   echo "── Phase T: Governance capture (100 epochs) ───────────────────────────────"
-  clojure -M:run -- -H -p data/params/phase-t-governance-capture.edn || lh_fail=$((lh_fail + 1))
+  clojure -M:run:with-sew -- -H -p data/params/phase-t-governance-capture.edn || lh_fail=$((lh_fail + 1))
   echo ""
 
   echo "── Phase AH: Trajectory sweep (100/500/1000 epochs, runtime-safe profile) ─"
-  clojure -M:run -- -U -p data/params/phase-ah-trajectory-sweep-long-horizon.edn || lh_fail=$((lh_fail + 1))
+  clojure -M:run:with-sew -- -U -p data/params/phase-ah-trajectory-sweep-long-horizon.edn || lh_fail=$((lh_fail + 1))
   echo ""
 
   echo "── Phase AI: Escalation trap (200 epochs) ─────────────────────────────────"
   local ai_log
   ai_log="$(mktemp)"
-  clojure -M:run -- -V -p data/params/phase-ai-escalation-trap.edn >"$ai_log" 2>&1 || lh_fail=$((lh_fail + 1))
+  clojure -M:run:with-sew -- -V -p data/params/phase-ai-escalation-trap.edn >"$ai_log" 2>&1 || lh_fail=$((lh_fail + 1))
   cat "$ai_log"
   if grep -Eq "Status: ❌ FAIL|✗ FAIL" "$ai_log"; then
     echo "HARD GATE: Phase AI reported critical failure; marking long-horizon as failed."
@@ -826,7 +822,7 @@ run_long_horizon() {
   echo "── Phase Z: Legitimacy loop (100 epochs) ──────────────────────────────────"
   local z_log
   z_log="$(mktemp)"
-  clojure -M:run -- -Z -p data/params/phase-z-legitimacy.edn >"$z_log" 2>&1 || lh_fail=$((lh_fail + 1))
+  clojure -M:run:with-sew -- -Z -p data/params/phase-z-legitimacy.edn >"$z_log" 2>&1 || lh_fail=$((lh_fail + 1))
   cat "$z_log"
   if grep -Eq "Hypothesis holds\? ❌ NO|UNEXPECTED DEATH SPIRAL" "$z_log"; then
     echo "HARD GATE: Phase Z reported legitimacy instability; marking long-horizon as failed."
@@ -839,7 +835,7 @@ run_long_horizon() {
   echo ""
 
   echo "── Phase J: Baseline stable (100 epochs) ──────────────────────────────────"
-  clojure -M:run -- -m -p data/params/phase-j-baseline-stable.edn || lh_fail=$((lh_fail + 1))
+  clojure -M:run:with-sew -- -m -p data/params/phase-j-baseline-stable.edn || lh_fail=$((lh_fail + 1))
   echo ""
 
   if [ "$lh_fail" -eq 0 ]; then

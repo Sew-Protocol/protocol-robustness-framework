@@ -8,17 +8,17 @@ Remove duplicated verification/scenario artifacts, establish a single source of 
 
 - Duplicate verification suite directories exist:
   - `sew-onchain/verification-suite/` (scripts + scenarios + outputs)
-  - `sew-onchain/sew-simulation/verification-suite/` (scenarios + outputs)
+  - `sew-onchain/protocol-robustness-framework/verification-suite/` (scenarios + outputs)
 - Duplicate scenario directories exist:
   - `sew-onchain/verification-suite/scenarios/` (41 scenarios)
-  - `sew-onchain/sew-simulation/verification-suite/scenarios/` (42 scenarios; includes `S42_resolver-buyer-bribery-loop.json`)
-  - `sew-onchain/sew-simulation/scenarios/` (41 scenarios, filenames with double-space style, e.g. `S01  baseline-happy-path.json`)
+  - `sew-onchain/protocol-robustness-framework/verification-suite/scenarios/` (42 scenarios; includes `S42_resolver-buyer-bribery-loop.json`)
+  - `sew-onchain/protocol-robustness-framework/scenarios/` (41 scenarios, filenames with double-space style, e.g. `S01  baseline-happy-path.json`)
 
 ## Recommended Canonical Ownership
 
 ### 1) Simulation-owned source of truth
 
-Use `sew-onchain/sew-simulation/scenarios/` as the authoritative location for scenario definitions.
+Use `sew-onchain/protocol-robustness-framework/scenarios/` as the authoritative location for scenario definitions.
 
 Reasoning:
 - Scenarios are part of protocol simulation/validation domain logic.
@@ -62,7 +62,7 @@ cartesi-app/sew-onchain/
     fetch_results.py
     INSTRUCTIONS.md
     outputs/                   # generated artifacts only
-  sew-simulation/
+  protocol-robustness-framework/
     scenarios/                 # canonical scenario source (authoritative)
 ```
 
@@ -70,18 +70,18 @@ cartesi-app/sew-onchain/
 
 1. **Normalize naming convention** in canonical scenario source
    - Choose one style (`S01_baseline-happy-path.json` recommended).
-   - Rename files in `sew-simulation/scenarios/` from double-space style.
+   - Rename files in `protocol-robustness-framework/scenarios/` from double-space style.
 
 2. **Add Cartesi-side sync/resolve mechanism**
-   - Option A (preferred): update `run_all.py` to read directly from `../sew-simulation/scenarios`.
+   - Option A (preferred): update `run_all.py` to read directly from `../protocol-robustness-framework/scenarios`.
    - Option B: add `sync_scenarios.py` to copy canonical files into local `verification-suite/scenarios/` before submission.
 
 3. **Backfill S42 into canonical source**
-   - Move `S42_resolver-buyer-bribery-loop.json` into canonical `sew-simulation/scenarios/`.
+   - Move `S42_resolver-buyer-bribery-loop.json` into canonical `protocol-robustness-framework/scenarios/`.
    - Ensure both simulation and Cartesi harness can run it.
 
 4. **Deprecate duplicate directory**
-   - Remove `sew-simulation/verification-suite/scenarios/` after Step 2 is stable.
+   - Remove `protocol-robustness-framework/verification-suite/scenarios/` after Step 2 is stable.
    - Keep only one persistent scenario source.
 
 5. **Treat outputs as generated artifacts**

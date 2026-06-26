@@ -14,7 +14,7 @@ The content below is preserved for historical context only. It documents the DR1
 
 ```bash
 # Clone
-cd ~/Code/sew-simulation
+cd ~/Code/protocol-robustness-framework
 
 # Run tests
 ./scripts/test.sh

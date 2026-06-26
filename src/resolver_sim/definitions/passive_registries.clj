@@ -627,6 +627,34 @@
    :registry-validator {:description "Registry validation entry point"}
    :attestation-emitter {:description "Attestation evidence node emitter for DAG integration"}})
 
+(def orchestration-runner-definitions
+  "ORCHESTRATION_RUNNER_SPEC_V1 entries: registered suite-level orchestration runners.
+   These are the runners that execute run-and-report, not the per-node execution runners."
+  [{:id :runner/local-bb
+    :version 1
+    :kind :local-bb
+    :capabilities #{:clojure :bb :filesystem :evidence-dag}
+    :deterministic? true
+    :trust-level :local
+    :description "Local Babashka runner for canonical suite execution."
+    :entry 'resolver-sim.io.scenario-runner/run-and-report}
+   {:id :runner/local-clojure
+    :version 1
+    :kind :local-clojure
+    :capabilities #{:clojure :jvm :filesystem :evidence-dag :full-classpath}
+    :deterministic? true
+    :trust-level :local
+    :description "Local Clojure JVM runner for canonical suite execution."
+    :entry 'resolver-sim.io.scenario-runner/run-and-report}])
+
+(def orchestration-runner-registry
+  {:registry-version 1
+   :runners orchestration-runner-definitions})
+
+(def known-orchestration-runners
+  "Validation whitelist: valid orchestration runner ids."
+  (set (map :id orchestration-runner-definitions)))
+
 (defn- namespace-resource-path
   [ns-sym]
   (str (-> (name ns-sym)

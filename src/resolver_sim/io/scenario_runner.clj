@@ -200,6 +200,12 @@
      :scenario-path     path
      :scenario-metadata (scenario-metadata scenario-with-path)}))
 
+(def ^:private default-runner-selection
+  "Default pinned runner selection for canonical suite runs."
+  {:mode :pinned
+   :runner-id :runner/local-bb
+   :description "Default pinned local Babashka runner"})
+
 (defn resolve-path-run-request
   "Prepare a normalized request envelope for one or more file-backed scenarios.
 
@@ -210,9 +216,11 @@
    comparison-oriented entrypoints."
   [paths opts]
   (let [default-protocol-id (or (:protocol opts) preg/default-protocol-id)
+        runner-selection (or (:runner-selection opts) default-runner-selection)
         entries (mapv #(scenario-entry-for-path % default-protocol-id) paths)]
     {:scenario-run/request
      {:runner/backend :local-current
+      :runner-selection runner-selection
       :suite/key (:suite-id opts)
       :protocol/default-id default-protocol-id
       :evidence/profile (or (:evidence-profile opts)
@@ -247,27 +255,37 @@
             (fn [results]
               (mapv (fn [result]
                       (if-let [entry (get entry-by-id (:scenario-id result))]
-                        (assoc result
-                               :scenario-path (:scenario-path entry)
-                               :dispatcher-id (:dispatcher-id entry)
-                               :scenario-metadata (:scenario-metadata entry)
-                               :runner {:backend (:runner/backend request)
-                                        :protocol-id (:protocol entry)
-                                        :dispatcher-id (:dispatcher-id entry)})
-                        result))
+                          (assoc result
+                                 :scenario-path (:scenario-path entry)
+                                 :dispatcher-id (:dispatcher-id entry)
+                                 :scenario-metadata (:scenario-metadata entry)
+                                 :runner {:backend (:runner/backend request)
+                                          :protocol-id (:protocol entry)
+                                          :dispatcher-id (:dispatcher-id entry)
+                                          :runner-selection (:runner-selection request)}
+                                 :execution/raw (:replay-result result))
+                         result))
                     results)))))
 
 (defn normalize-run-result
   [request summary]
-  (let [summary* (enrich-summary-results summary request)]
+  (let [summary* (enrich-summary-results summary request)
+        results (:results summary*)
+        totals {:passed (count (filter :pass? results))
+                :failed (count (remove :pass? results))
+                :total (count results)}]
     {:scenario-run/request request
      :scenario-run/result
      {:status (if (:ok? summary*) :pass :fail)
       :suite/key (:suite-id summary*)
       :evidence/profile (:evidence/profile request)
       :output/profile (:output/profile request)
+      :runner-selection (:runner-selection request)
+      :totals totals
+      :results results
       :summary summary*
-      :results (:results summary*)}}))
+      :diagnostics {:elapsed-ms (:elapsed-ms summary* 0)
+                    :suite-id (:suite-id summary*)}}}))
 
 (defn- sew-replay-fn []
   (replay-fn-for-protocol "sew-v1"))
@@ -279,18 +297,40 @@
                                (println header)
                                (doseq [line lines] (println line))
                                (println footer)
-                               (println separator)))}
-         opts))
+                                (println separator)))}
+          opts))
+
+
+(declare run-paths)
+
+(def ^:private registry-suite-runners
+  "Protocol ID → (fn [opts] → summary-map).
+   sew-v1:   in-process invariant registry (protocols_src/.../invariant_scenarios.clj)
+   yield-v1: file-backed suite (scenarios/Y*.json via :yield-provider-scenarios)"
+  {"sew-v1"   (fn [{:keys [suite-id] :as opts}]
+                (runner/run-collection
+                 {:entries     inv-sc/all-scenarios
+                  :replay-fn   (sew-replay-fn)
+                  :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
+                 (merge {:suite-id (or suite-id :sew-invariants)} opts)))
+   "yield-v1" (fn [opts]
+                (run-paths (suites/suite-paths :yield-provider-scenarios)
+                           (assoc opts :protocol "yield-v1")))})
 
 (defn run-registry-suite
-  "Run the Sew in-process invariant registry (S01–S100). Returns summary map."
+  "Run the protocol registry suite. Returns summary map.
+   Protocol is read from :protocol in opts (default sew-v1).
+   sew-v1:   in-process invariant registry (S01–S107+)
+   yield-v1: file-backed yield provider suite (Y01–Y05)"
   ([] (run-registry-suite {}))
   ([opts]
-   (runner/run-collection
-    {:entries     inv-sc/all-scenarios
-     :replay-fn   (sew-replay-fn)
-     :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
-    (merge {:suite-id :sew-invariants} opts))))
+   (let [protocol-id (or (:protocol opts) preg/default-protocol-id)
+         runner (get registry-suite-runners protocol-id)]
+     (if runner
+       (runner opts)
+       (throw (ex-info "No registry suite runner for protocol"
+                       {:protocol protocol-id
+                        :known (keys registry-suite-runners)}))))))
 
 (defn run-paths
   "Run file-backed scenarios from `paths`. Each path becomes one entry.
@@ -310,6 +350,22 @@
   [scenario-path opts]
   (run-paths [scenario-path] opts))
 
+(defn run-registry-scenario
+  "Run a single scenario from the in-process invariant registry.
+
+   Takes a scenario map (as found in e.g. inv-sc/all-scenarios) and runs it
+   through the same replay pipeline used by run-registry-suite.  Returns the
+   entry result map from scenario.runner/build-entry-result.
+
+   This is the public entry point for dev REPL helpers that need to run one
+   in-process scenario without going through file-backed dispatch."
+  [scenario replay-fn]
+  (let [summary (runner/run-collection
+                 {:entries [(if (map? scenario) scenario {:pair scenario})]
+                  :replay-fn replay-fn}
+                 {:normalize? false})]
+    (first (:results summary))))
+
 (defn write-result-json
   [output-path result]
   (when (and output-path (not= output-path "-"))
@@ -318,12 +374,22 @@
                                                         {:pretty? true}))))
 
 (defn run-registry-suite-and-report
-  "Run invariant registry, print report, return exit code."
+  "Run protocol registry suite, print report, return exit code.
+   Protocol is read from :protocol in opts (default sew-v1)."
   ([] (run-registry-suite-and-report {}))
   ([opts]
-   (let [summary (run-registry-suite opts)
-         title   "Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)"
-         code    (report/print-report (assoc summary :suite-id nil)
+   (let [protocol-id (or (:protocol opts) preg/default-protocol-id)
+         suite-id (case protocol-id
+                    "sew-v1"   :sew-invariants
+                    "yield-v1" :yield-provider-scenarios
+                    nil)
+         title (case protocol-id
+                 "sew-v1"   "Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)"
+                 "yield-v1" "Yield Provider Suite — File-backed scenarios (Y01–Y05)"
+                 (str "Invariant suite for protocol: " protocol-id))
+         summary (run-registry-suite opts)
+         code    (report/print-report (cond-> summary
+                                        suite-id (assoc :suite-id suite-id))
                                       (default-report-opts
                                        (assoc opts :title title)))]
      code)))
@@ -372,7 +438,11 @@
   "Extract scenario metadata from a scenario path using the same normalization
    and protocol-resolution path used for execution.
 
-   Returns {:scenario/id string :scenario/path string :scenario/protocol keyword}."
+   Returns {:scenario/id string :scenario/path string :scenario/protocol keyword}.
+
+   NOTE: Transitional display-only helper.  Loads every file to extract metadata.
+   Call sparingly — prefer suite-level protocol-id from suites/suite-definition
+   for display purposes."
   [path]
   (let [{request :scenario-run/request}
         (resolve-path-run-request [path] {})
@@ -384,17 +454,29 @@
      :scenario/dispatcher-id (:dispatcher-id entry)}))
 
 (defn known-suite-summaries
-  "Return registry-backed metadata for all named scenario suites.
-   Returns structured map suitable for EDN/JSON output."
+  "Return suite-level metadata for all named scenario suites.
+   Per-scenario details use filename-derived IDs and suite-level protocol.
+   Avoids loading individual scenario files.
+
+   NOTE: Display-only metadata.  For authoritative per-scenario metadata
+   use suite-scenario-details (transitional, loads files)."
   []
   (mapv (fn [suite-key]
           (let [{:keys [title description kind ci-tier protocol-id paths]}
-                (suites/suite-definition suite-key)]
+                (suites/suite-definition suite-key)
+                scenario-path->id (fn [path]
+                                    (-> (java.io.File. path)
+                                        (.getName)
+                                        (clojure.string/replace #"\.(json|edn)$" "")))]
             {:suite/key           suite-key
              :suite/type          kind
              :suite/protocols     #{protocol-id}
              :suite/scenario-count (count paths)
-             :suite/scenarios     (mapv suite-scenario-details paths)
+             :suite/scenarios     (mapv (fn [path]
+                                          {:scenario/id (scenario-path->id path)
+                                           :scenario/path path
+                                           :scenario/protocol (keyword protocol-id)})
+                                        paths)
              :suite/title         title
              :suite/description   description
              :suite/ci-tier       ci-tier}))
@@ -445,48 +527,64 @@
         suite-protocol-id (when (:suite dispatch)
                             (suites/suite-protocol-id (:suite dispatch)))
         protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
-        result (ev-node/with-execution-node
+        canonical? (and (nil? (:scenario dispatch))
+                        (nil? (:fixture-suite dispatch))
+                        (not= :dev (:mode dispatch)))
+        non-canonical-reason (cond
+                               (:scenario dispatch) :single-scenario-selected
+                               (:fixture-suite dispatch) :fixture-suite-selected
+                               :else nil)]
+    (when (and (not canonical?) non-canonical-reason)
+      (log/warn! :non-canonical-run
+                 {:reason non-canonical-reason
+                  :message "Run is non-canonical; bundle will be marked accordingly"}))
+    (let [result (ev-node/with-execution-node
                  {:execution-id :execution/replay
-       :runner :scenario-runner
-       :inputs {:dispatch dispatch
-                :opts {:protocol protocol-id
-                       :report-format (:report-format opts)
-                       :suite-id (:suite-id opts)}}
-       :status-fn (fn [{:keys [exit-code]}]
-                    (cond (zero? exit-code) :pass
-                          (integer? exit-code) :fail
-                          :else :error))
-       :outputs-fn (fn [{:keys [exit-code dispatch-key]}]
-                     {:exit-code exit-code
-                      :dispatch dispatch
-                      :dispatch-key dispatch-key})
-       :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
-                             (if (zero? exit-code)
-                               []
-                               [{:failure-type :replay-failed
-                                 :class :unexpected
-                                 :message (str "Replay exited with code " exit-code
-                                               " (" (name dispatch-key) ")")
-                                 :expected? false}]))}
-      (fn []
-        (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
-                                 (:suite dispatch) :suite
-                                 (:scenario dispatch) :scenario
-                                 :else :registry)
-              exit-code (cond
-                          (:fixture-suite dispatch)
-                          (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
+                  :runner :scenario-runner
+                   :inputs {:dispatch dispatch
+                            :canonical? canonical?
+                            :non-canonical-reason non-canonical-reason
+                            :opts {:protocol protocol-id
+                                  :report-format (:report-format opts)
+                                  :suite-id (:suite-id opts)}}
+                  :status-fn (fn [{:keys [exit-code]}]
+                               (cond (zero? exit-code) :pass
+                                     (integer? exit-code) :fail
+                                     :else :error))
+                  :outputs-fn (fn [{:keys [exit-code dispatch-key canonical?]}]
+                                {:exit-code exit-code
+                                 :dispatch dispatch
+                                 :dispatch-key dispatch-key
+                                 :canonical? canonical?
+                                 :non-canonical-reason non-canonical-reason})
+                  :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
+                                        (if (zero? exit-code)
+                                          []
+                                          [{:failure-type :replay-failed
+                                            :class :unexpected
+                                            :message (str "Replay exited with code " exit-code
+                                                          " (" (name dispatch-key) ")")
+                                            :expected? false}]))}
+                 (fn []
+                   (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
+                                            (:suite dispatch) :suite
+                                            (:scenario dispatch) :scenario
+                                            :else :registry)
+                         exit-code (cond
+                                     (:fixture-suite dispatch)
+                                     (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
 
-                          (:suite dispatch)
-                          (run-named-suite-and-report (:suite dispatch) opts)
+                                     (:suite dispatch)
+                                     (run-named-suite-and-report (:suite dispatch) opts)
 
-                          (:scenario dispatch)
-                          (run-scenario-file-and-report (:scenario dispatch)
-                                                        (:output-file dispatch)
-                                                        (assoc opts :protocol protocol-id))
+                                     (:scenario dispatch)
+                                     (run-scenario-file-and-report (:scenario dispatch)
+                                                                   (:output-file dispatch)
+                                                                   (assoc opts :protocol protocol-id))
 
-                          :else
-                          (run-registry-suite-and-report opts))]
-          {:exit-code exit-code
-           :dispatch-key dispatch-key})))]
-    (:exit-code result)))
+                                     :else
+                                     (run-registry-suite-and-report (assoc opts :protocol protocol-id)))]
+                      {:exit-code exit-code
+                       :dispatch-key dispatch-key
+                       :canonical? canonical?})))]
+    (:exit-code result))))

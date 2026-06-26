@@ -22,6 +22,11 @@ results/
 !data/fixtures/thresholds/*.edn
 !data/fixtures/suites/*.edn
 
+# Generated verification outputs
+cartesi/verification-suite/outputs/
+demos/yield-shortfall-partial-fill/generated/
+verification-suite/outputs/
+
 # Python/notebook artifacts
 __pycache__/
 *.pyc
@@ -75,7 +80,7 @@ test_output.txt
 test_output.log
 
 # jar
-sew-simulation.jar
+prf.jar
 
 results/.notebook-focus
 .rebel_readline_history
@@ -96,4 +101,3 @@ AGENTS.md
 .kilo
 archived
 docs/technical-summary-for-franz.md
-

@@ -56,8 +56,9 @@
    :evm-projection   "EVM_PROJECTION_V1"
    :invariant-attestation "INVARIANT_ATTESTATION_V1"
    :projection-evidence "PROJECTION_EVIDENCE_V1"
-   :checkpoint-evidence "CHECKPOINT_EVIDENCE_V1"
-   :benchmark-certification "BENCHMARK_CERTIFICATION_V1"
+    :checkpoint-evidence "CHECKPOINT_EVIDENCE_V1"
+    :run-overview     "RUN_OVERVIEW_V1"
+    :benchmark-certification "BENCHMARK_CERTIFICATION_V1"
    :intent-dsl       "INTENT_DSL_V1"
    :intent-registry-entry "INTENT_REGISTRY_ENTRY_V1"
    :intent-registry "INTENT_REGISTRY_V1"
@@ -882,16 +883,25 @@
     :intent/projection-fn project-identity
     :intent/version     1}
 
-   :checkpoint-evidence
-   {:intent/name        :checkpoint-evidence
-    :intent/domain-tag  "CHECKPOINT_EVIDENCE_V1"
-    :intent/description "Attestable checkpoint with world hash and chain position"
-    :intent/includes    #{:checkpoint-id :event-seq :world-hash :chain-head}
-    :intent/excludes    #{:full-world-state :trace-detail}
+    :checkpoint-evidence
+    {:intent/name        :checkpoint-evidence
+     :intent/domain-tag  "CHECKPOINT_EVIDENCE_V1"
+     :intent/description "Attestable checkpoint with world hash and chain position"
+     :intent/includes    #{:checkpoint-id :event-seq :world-hash :chain-head}
+     :intent/excludes    #{:full-world-state :trace-detail}
+     :intent/projection-fn project-identity
+     :intent/version     1}
+
+   :run-overview
+   {:intent/name        :run-overview
+    :intent/domain-tag  "RUN_OVERVIEW_V1"
+    :intent/description "Normalized run overview for runner comparison and consensus"
+    :intent/includes    #{:overview-metadata :scenario-results :totals :suite-info}
+    :intent/excludes    #{:execution/raw :diagnostics :timestamps :absolute-paths :host-info}
     :intent/projection-fn project-identity
     :intent/version     1}
 
-   :benchmark-certification
+    :benchmark-certification
    {:intent/name        :benchmark-certification
     :intent/domain-tag  "BENCHMARK_CERTIFICATION_V1"
     :intent/description "Benchmark run certification with invariant summary"

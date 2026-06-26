@@ -392,7 +392,7 @@ evidence pack is in `docs/evidence/`.
 
 > Merged from `docs/overview/SIMULATION_OVERVIEW.md`.
 
-`sew-simulation` is an adapter-oriented robustness framework with a **framework substrate**
+The Protocol Robustness Framework is an adapter-oriented robustness framework with a **framework substrate**
 and a **protocol adapter layer**. The repository currently includes the Sew protocol model
 as the primary validation target.
 

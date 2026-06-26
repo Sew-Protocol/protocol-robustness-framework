@@ -1,4 +1,8 @@
-(ns dev.scenarios)
+(ns dev.scenarios
+  "REPL dev helpers for running single in-process registry scenarios.
+   Routes through resolver-sim.io.scenario-runner (public path).
+   For file-backed scenarios use io.scenario-runner/run-scenario-file directly."
+  (:require [resolver-sim.io.scenario-runner :as sr]))
 
 (defn- find-scenario
   "Look up a scenario map by keyword id (e.g. :S18) from the S01–S107 registry."
@@ -18,14 +22,12 @@
   (requiring-resolve 'resolver-sim.protocols.sew/replay-with-sew-protocol))
 
 (defn run-scenario
+  "Run a single in-process registry scenario by keyword id (e.g. :S18).
+   Routes through io.scenario-runner/run-registry-scenario."
   [scenario-id]
   (let [scenario (or (find-scenario scenario-id)
                      (throw (ex-info "Unknown scenario" {:scenario-id scenario-id})))
-        result   ((requiring-resolve 'resolver-sim.scenario.runner/run-scenario)
-                  scenario
-                  {:replay-fn (sew-replay-fn)
-                   :normalize? false
-                   :name (str scenario-id)})]
+        result   (sr/run-registry-scenario scenario (sew-replay-fn))]
     (tap> {:type :scenario/result
            :scenario-id scenario-id
            :result result})

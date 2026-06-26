@@ -337,7 +337,7 @@ Integration tests in `test/resolver_sim/db/` require a live XTDB instance on loc
 
 ## Cross-project coupling (eval-engine)
 
-`sew-simulation` depends on `eval-engine` as a local dep:
+The Protocol Robustness Framework depends on `eval-engine` as a local dep:
 ```clojure
 og/eval-engine {:local/root "../og/eval-engine"}
 ```

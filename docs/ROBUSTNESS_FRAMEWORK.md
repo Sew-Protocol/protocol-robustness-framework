@@ -649,6 +649,6 @@ clojure -M:run -- -p data/params/phase-h-2d-realistic.edn -s
 | | |
 |---|---|
 | **Contracts** | `sew-protocol` @ `8785826` |
-| **Simulation** | `sew-simulation` @ `9fbb4ba` (branch: `further-refactoring`) |
+| **Framework** | `protocol-robustness-framework` @ `9fbb4ba` (branch: `further-refactoring`) |
 | **Generated/reviewed** | 2026-05-21 |
 | **Verification status** | Invariant IDs and counts verified against `protocols/sew/invariants.clj` `canonical-ids`. Scenario IDs verified against `protocols/sew/invariant_scenarios.clj`. Suite list verified against `data/fixtures/suites/manifest.edn`. Statistical module list verified against `src/resolver_sim/sim/`. Phase configs verified against `data/params/`. |

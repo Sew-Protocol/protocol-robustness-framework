@@ -2,10 +2,15 @@
 
 A framework for adversarial multi-actor scenario testing, specializing in robustness analysis for escrow, dispute-resolution, and state-machine protocols.
 
-**New to the codebase?** Start with the `workspaces/prf-only/` view — it
-shows the protocol-agnostic framework without protocol implementation files.
-The full codebase (framework + Sew protocol) is the default when you work
-from the project root.
+**New to the codebase?** The project root shows only the protocol-agnostic
+framework by default (`:paths ["." "src"]`).  Protocol implementations live
+under `protocols_src/` and are added via the `:with-sew` alias:
+
+    clojure -M:with-sew            # full-stack REPL
+    clojure -M:test:with-sew       # run all tests (framework + Sew)
+
+The `workspaces/with-sew/` directory provides the same full-stack view
+without the alias.  See `workspaces/MAP.md` for details.
 
 ## What this is
 

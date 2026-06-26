@@ -1,6 +1,6 @@
 # Sew Dispute Protocol — "Break This Mechanism" Benchmark Challenge
 
-**Repository:** [Sew-Protocol/sew-simulation](https://github.com/Sew-Protocol/sew-simulation)
+**Repository:** [Sew-Protocol/protocol-robustness-framework](https://github.com/Sew-Protocol/protocol-robustness-framework)
 **Protocol version:** Sew v0.1 (ethereum branch)
 **Challenge status:** Open
 
@@ -175,8 +175,8 @@ We will:
 
 ```bash
 # 1. Clone
-git clone https://github.com/Sew-Protocol/sew-simulation
-cd sew-simulation
+git clone https://github.com/Sew-Protocol/protocol-robustness-framework
+cd protocol-robustness-framework
 
 # 2. Start the Clojure gRPC server (Tasks A and B via Python)
 nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &

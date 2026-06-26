@@ -5,6 +5,7 @@
   "
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.notebooks.manifest.hash :as mhash]))
 
 (defn export-bundle!
@@ -21,9 +22,9 @@
   (try
     (let [d    (io/file out-dir)
           _    (.mkdirs d)
-          ;; canonical hashes
-          manifest-h (mhash/canonical-hash manifest)
-          registry-h  (when registry (mhash/canonical-hash registry))
+          ;; canonical hashes with domain-appropriate intents
+          manifest-h (mhash/hash-with-intent :manifest manifest)
+          registry-h  (when registry (mhash/hash-with-intent :registry registry))
           prov {:schema_version  "provenance.v1"
                 :run_id          (:run_id manifest)
                 :canonical_hash  manifest-h
@@ -31,12 +32,12 @@
                 :suite           (:suite manifest)
                 :artifact_count  (count (get registry :artifacts []))
                 :generated_at    (str (java.time.Instant/now))}
-          prov-h (mhash/canonical-hash prov)
+          prov-h (mhash/hash-with-intent :provenance prov)
           ;; bundle root commits to canonical manifest-h, registry-h and prov-h
           bundle-root {:manifest_hash   manifest-h
                        :registry_hash   registry-h
                        :provenance_hash prov-h}
-          bundle-h (mhash/canonical-hash bundle-root)
+          bundle-h (hc/hash-with-intent {:hash/intent :bundle-root} bundle-root)
           files [(io/file out-dir "manifest.json")
                  (io/file out-dir "registry.json")
                  (io/file out-dir "provenance.json")

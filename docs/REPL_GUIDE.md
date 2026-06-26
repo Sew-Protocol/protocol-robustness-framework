@@ -1,6 +1,6 @@
 # REPL Guide
 
-This document outlines standard procedures for interacting with the `sew-simulation` project via REPL.
+This document outlines standard procedures for interacting with the Protocol Robustness Framework project via REPL.
 
 ## Prerequisites
 Ensure your environment is set up with `clojure` and the project dependencies.
