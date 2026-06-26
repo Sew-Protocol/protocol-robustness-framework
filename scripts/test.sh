@@ -9,10 +9,6 @@
 #   ./scripts/test.sh yield-provider-scenarios # Standalone yield-v1 file-backed scenarios
 #   ./scripts/test.sh sew-yield-scenarios      # Sew escrow + yield integration file-backed scenarios
 #   ./scripts/test.sh yield-scenarios          # Compatibility alias: runs both yield path suites (deprecated)
-#   ./scripts/test.sh yield-provider-scenarios # Recommended: standalone yield-v1 file-backed scenarios
-#   ./scripts/test.sh sew-yield-scenarios      # Recommended: Sew escrow + yield integration file-backed scenarios
-#   ./scripts/test.sh scenario-registry        # Validate the canonical scenario registries (invariant + file-backed)
-#   ./scripts/test.sh scenario-registry:strict # Strict validation (fails on JSON scenario deprecation warnings)
 #   ./scripts/test.sh lint:cleanup          # Clean up lint warnings (interactive)
 #   ./scripts/test.sh contracts  # Cross-layer contract checks (proto/service/wire compatibility)
 #   ./scripts/test.sh suites     # fixture suite runner (all-invariants + equilibrium-validation + spe-validation + spe-regression)
@@ -34,6 +30,7 @@
 # Exit code: 0 = all passed, 1 = any failure.
 
 cd "$(dirname "$0")/.."
+source "$(dirname "$0")/monte_carlo.sh"
 
 MODE="${1:-all}"
 FAILURES=0
@@ -347,13 +344,13 @@ run_dispute_resolution() {
     (System/exit 1)))"
   local dr_exit=$?
   # CI Gate: validate artifact registry
-  if [[ -f "scripts/ci_gate_validation.py" ]]; then
+  if [[ -f "scripts/validate/ci_gate_validation.py" ]]; then
     echo "Running CI gate validation..."
-    python3 scripts/ci_gate_validation.py || return $?
+    python3 scripts/validate/ci_gate_validation.py || return $?
   fi
 
   # CI Gate: coverage gates
-  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
+  python3 scripts/validate/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || return $?
 
   return $dr_exit
 }
@@ -367,24 +364,20 @@ run_named_path_suite() {
 }
 
 run_yield_provider_scenarios() {
+  echo "WARN: test.sh yield-provider-scenarios is deprecated. Use bb test:yield-provider-scenarios instead." >&2
   run_named_path_suite yield-provider-scenarios
 }
 
 run_sew_yield_scenarios() {
+  echo "WARN: test.sh sew-yield-scenarios is deprecated. Use bb test:sew-yield-scenarios instead." >&2
   run_named_path_suite sew-yield-scenarios
 }
 
 run_yield_scenarios() {
+  echo "WARN: test.sh yield-scenarios is deprecated. Use bb test:yield-scenarios instead." >&2
   echo "yield-scenarios is a compatibility alias; running yield-provider-scenarios then sew-yield-scenarios."
   run_yield_provider_scenarios || return $?
   run_sew_yield_scenarios
-}
-
-run_scenario_registry() {
-  require_clojure || return $?
-  echo "Validating canonical scenario registries..."
-  clojure -M:with-sew -m resolver-sim.validation.scenario-registry
-  return $?
 }
 
 run_generators() {
@@ -427,19 +420,19 @@ run_contracts() {
   grep -q 'snake_case' src/resolver_sim/server/grpc.clj
 
   # Scenario naming convention sanity checks (supports legacy + canonical ids)
-  python scripts/validate_scenario_naming.py
+  python scripts/validate/validate_scenario_naming.py
 
   # P1: Fixture/claim alignment checks for collusion assertions
-  python scripts/validate_collusion_alignment.py
+  python scripts/validate/validate_collusion_alignment.py
 
   # Artifact registry integrity + compatibility checks
-  python scripts/validate_artifact_registry.py
+  python scripts/validate/validate_artifact_registry.py
 
   # Claim registry integrity checks (claim ids ↔ scenarios ↔ invariants)
   if [ "$STRICT_CLAIM_REGISTRY" = "1" ]; then
-    python scripts/validate_claim_registry.py --strict-theory-claims
+    python scripts/validate/validate_claim_registry.py --strict-theory-claims
   else
-    python scripts/validate_claim_registry.py
+    python scripts/validate/validate_claim_registry.py
   fi
 
   return $?
@@ -471,7 +464,7 @@ run_suites() {
           (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
   (when any-fail (System/exit 1)))"
    # Extract suite failures into risk digest format for test-summary.json visibility
-   python3 scripts/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
+   python3 scripts/evidence/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
    # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
    touch -m "notebooks/report.clj" 2>/dev/null || true
    return $?
@@ -479,7 +472,7 @@ run_suites() {
 
 run_routed_suites() {
   require_clojure || return $?
-  local routed=$(python3 scripts/route_suites.py)
+  local routed=$(python3 scripts/validate/route_suites.py)
   if [ "$routed" = "none" ]; then
     echo "No suites impacted by changes. Skipping."
     return 0
@@ -604,7 +597,7 @@ run_layering_lint() {
 
 run_comparison_lint() {
   echo "Running comparison metadata lint..."
-  python scripts/validate_comparison_metadata.py
+  python scripts/validate/validate_comparison_metadata.py
   return $?
 }
 
@@ -614,7 +607,7 @@ run_coverage_gates() {
   mkdir -p "$ARTIFACT_DIR"
   _cov_out=$(python3 -c "from evidence_config import EvidenceConfig; print(EvidenceConfig().artifact_path('coverage'))" 2>/dev/null) || _cov_out="$ARTIFACT_DIR/coverage.json"
   clojure -M -m resolver-sim.scenario.coverage -- data/fixtures/traces "$_cov_out" || return $?
-  python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS"
+  python3 scripts/validate/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS"
   return $?
 }
 
@@ -631,101 +624,8 @@ run_adversarial_gates() {
     echo "No profitability surface output found. Run adversarial-sweep first."
     return 1
   fi
-  python - <<PY
-import json, sys
-from pathlib import Path
-latest = Path("$latest_dir")
-regions = latest / "regions.json"
-promos = latest / "promotions.json"
-if not regions.exists() or not promos.exists():
-    print("Missing regions.json or promotions.json in", latest)
-    sys.exit(1)
-
-regions_data = json.loads(regions.read_text())
-promos_data = json.loads(promos.read_text())
-
-families = regions_data.get("families", {})
-if not families:
-    print("No family data found in regions.json")
-    sys.exit(1)
-
-top = promos_data.get("top", [])
-if len(top) < 3:
-    print("Gate failed: expected at least 3 promoted candidates, got", len(top))
-    sys.exit(1)
-
-# Placeholder bounded-growth gate: enforce per-family unsafe ratio <= 100%
-# (real baseline delta comparison can be layered in CI with persisted baseline snapshots).
-for fam, vals in families.items():
-    safe = vals.get("safe", 0)
-    unsafe = vals.get("unsafe", 0)
-    total = max(1, safe + unsafe + vals.get("borderline", 0))
-    ratio = unsafe / total
-    if ratio > 1.0:
-        print("Gate failed: invalid unsafe ratio for", fam)
-        sys.exit(1)
-
-print("Adversarial gates passed for", latest)
-PY
+  python3 scripts/validate/adversarial_gates.py "$latest_dir"
   return $?
-}
-
-run_monte_carlo() {
-  # ──────────────────────────────────────────────────────────────────────────
-  # HOW THE TWO SIMULATION ENGINES RELATE
-  #
-  # Engine 1 — Monte Carlo (stochastic + sim/economic|adversarial|governance/)
-  # Engine 2 — Replay / Invariant (contract_model/ + protocols/sew/)
-  #
-  # This sweep runs representative phases for expected-value/regime checks.
-  #
-  # The CI gate runs 5 phases (O, P, AA, AD, F).  All are :analytic (closed-form
-  # algebraic checks, not protocol-kernel evidence).  See
-  # src/resolver_sim/core/phases.clj phase-evidence-tiers for the full registry.
-  #
-  # Phases NOT CI-gated but still :analytic: AB, AC, AE, AF, AG, AH, AI,
-  # T, Y, Z, market-exit, phase-c-dr, phase-e-dr, phase-m-dr.
-  # Phases :exploratory (not CI-gated): Q, R, U, V, W, X.
-  # ──────────────────────────────────────────────────────────────────────────
-
-  echo "Running Monte Carlo representative sweep (4 domains)..."
-  echo ""
-  echo "  Phase O  — Economic:    market exit cascade (honest vs malice profitability)"
-  echo "  Phase P  — Adversarial: appeals falsification (difficulty/evidence/herding)"
-  echo "  Phase AA — Governance:  governance-as-adversary (selective enforcement gaming)"
-  echo "  Phase AD — Governance:  bandwidth floor safeguard (AA remediation)"
-  echo "  Phase F  — Adversarial: collusion ring deterrence (waterfall slashing)"
-  echo ""
-
-  local mc_fail=0
-
-  echo "── Phase O: Market Exit Cascade ──────────────────────────────────────────"
-  clojure -M:run:with-sew -- -O -p data/params/phase-o-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase P Lite: Appeals Falsification ───────────────────────────────────"
-  clojure -M:run:with-sew -- -P -p data/params/phase-p-lite-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase AA: Governance as Adversary ─────────────────────────────────────"
-  clojure -M:run:with-sew -- -A -p data/params/phase-aa-governance.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase AD: Governance Bandwidth Floor (AA safeguard) ───────────────────"
-  clojure -M:run:with-sew -- -D -p data/params/phase-ad-governance-floor.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  echo "── Phase F: Collusion Ring Deterrence ────────────────────────────────────"
-  clojure -M:run:with-sew -- -W -p data/params/phase-f-baseline.edn || mc_fail=$((mc_fail + 1))
-  echo ""
-
-  if [ "$mc_fail" -eq 0 ]; then
-    echo "Monte Carlo sweep: all 5 phases PASSED"
-  else
-    echo "Monte Carlo sweep: $mc_fail phase(s) FAILED"
-  fi
-
-  return $mc_fail
 }
 
 emit_claimable_classification() {
@@ -744,109 +644,8 @@ run_outcome_classification_report() {
   echo ""
   echo "Outcome classification report"
   echo "============================="
-  python - <<PY
-import json
-from pathlib import Path
-
-artifact = Path("$ARTIFACT_FILE")
-if not artifact.exists():
-    print("No test summary found; skipping classification report.")
-    raise SystemExit(0)
-
-data = json.loads(artifact.read_text())
-targets = data.get("targets", [])
-
-hard_fail_targets = [t for t in targets if t.get("status") == "fail"]
-print("1) Gate/Test status")
-if hard_fail_targets:
-    print(f"   FAIL: {len(hard_fail_targets)} failing target(s)")
-    for t in hard_fail_targets:
-        print(f"   - {t.get('target')} (exit={t.get('exit_code')})")
-else:
-    print("   PASS: all executed targets passed")
-
-mc = next((t for t in targets if t.get("target") == "monte-carlo"), None)
-print("\n2) Model findings (non-gating diagnostics)")
-if not mc:
-    print("   Monte Carlo target not run in this mode.")
-    raise SystemExit(0)
-
-log_path = Path(mc.get("log_file", ""))
-if not log_path.exists():
-    print("   Monte Carlo log missing; cannot summarize findings.")
-    raise SystemExit(0)
-
-txt = log_path.read_text(errors="ignore")
-claim_fails = txt.count("❌")
-claim_pass = txt.count("✅")
-
-print(f"   Indicators in Monte Carlo output: ✅={claim_pass}, ❌={claim_fails}")
-print("   Note: these are model/theory outcome signals, not unit-test assertion failures.")
-PY
+  python3 scripts/evidence/outcome_classification_report.py "$ARTIFACT_FILE"
   return $?
-}
-
-run_long_horizon() {
-  require_clojure || return $?
-  echo "Running long-horizon coverage suite (extended epoch scenarios)..."
-
-  local lh_fail=0
-  local lh_risk_lines="$ARTIFACT_DIR/.risk-${RUN_ID}.lines"
-  local lh_meta_file="$ARTIFACT_DIR/.long-horizon-${RUN_ID}.meta"
-  : > "$lh_risk_lines"
-  : > "$lh_meta_file"
-
-  echo "── Phase T: Governance capture (100 epochs) ───────────────────────────────"
-  clojure -M:run:with-sew -- -H -p data/params/phase-t-governance-capture.edn || lh_fail=$((lh_fail + 1))
-  echo ""
-
-  echo "── Phase AH: Trajectory sweep (100/500/1000 epochs, runtime-safe profile) ─"
-  clojure -M:run:with-sew -- -U -p data/params/phase-ah-trajectory-sweep-long-horizon.edn || lh_fail=$((lh_fail + 1))
-  echo ""
-
-  echo "── Phase AI: Escalation trap (200 epochs) ─────────────────────────────────"
-  local ai_log
-  ai_log="$(mktemp)"
-  clojure -M:run:with-sew -- -V -p data/params/phase-ai-escalation-trap.edn >"$ai_log" 2>&1 || lh_fail=$((lh_fail + 1))
-  cat "$ai_log"
-  if grep -Eq "Status: ❌ FAIL|✗ FAIL" "$ai_log"; then
-    echo "HARD GATE: Phase AI reported critical failure; marking long-horizon as failed."
-    echo "critical|phase-ai|AI_CRITICAL_FAILURE|Phase AI escalation trap indicates critical vulnerability" >> "$lh_risk_lines"
-    lh_fail=$((lh_fail + 1))
-  else
-    echo "info|phase-ai|AI_PASS|Phase AI did not report critical failure markers" >> "$lh_risk_lines"
-  fi
-  rm -f "$ai_log"
-  echo ""
-
-  echo "── Phase Z: Legitimacy loop (100 epochs) ──────────────────────────────────"
-  local z_log
-  z_log="$(mktemp)"
-  clojure -M:run:with-sew -- -Z -p data/params/phase-z-legitimacy.edn >"$z_log" 2>&1 || lh_fail=$((lh_fail + 1))
-  cat "$z_log"
-  if grep -Eq "Hypothesis holds\? ❌ NO|UNEXPECTED DEATH SPIRAL" "$z_log"; then
-    echo "HARD GATE: Phase Z reported legitimacy instability; marking long-horizon as failed."
-    echo "critical|phase-z|Z_LEGITIMACY_FAILURE|Phase Z reports legitimacy instability or death spiral" >> "$lh_risk_lines"
-    lh_fail=$((lh_fail + 1))
-  else
-    echo "info|phase-z|Z_PASS|Phase Z did not report legitimacy failure markers" >> "$lh_risk_lines"
-  fi
-  rm -f "$z_log"
-  echo ""
-
-  echo "── Phase J: Baseline stable (100 epochs) ──────────────────────────────────"
-  clojure -M:run:with-sew -- -m -p data/params/phase-j-baseline-stable.edn || lh_fail=$((lh_fail + 1))
-  echo ""
-
-  if [ "$lh_fail" -eq 0 ]; then
-    echo "Long-horizon suite: all extended-horizon scenarios PASSED"
-  else
-    echo "Long-horizon suite: $lh_fail scenario(s) FAILED"
-  fi
-
-  echo "internal_failures=$lh_fail" > "$lh_meta_file"
-
-  return $lh_fail
 }
 
 case "$MODE" in
@@ -873,9 +672,6 @@ case "$MODE" in
     ;;
   yield-scenarios)
     run_yield_scenarios || FAILURES=$((FAILURES + 1))
-    ;;
-  scenario-registry)
-    run_scenario_registry || FAILURES=$((FAILURES + 1))
     ;;
   yield)
     run_yield || FAILURES=$((FAILURES + 1))
@@ -935,8 +731,6 @@ case "$MODE" in
     echo ""
     run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
     echo ""
-    run_target scenario-registry run_scenario_registry || FAILURES=$((FAILURES + 1))
-    echo ""
     run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
     echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
@@ -951,17 +745,17 @@ case "$MODE" in
     run_outcome_classification_report || true
 
     # CI Gate: coverage gates validation for all mode
-    python3 scripts/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
+    python3 scripts/validate/coverage_gates.py --artifact-dir "$ARTIFACT_DIR" --max-unhit-transitions "$MAX_UNHIT_TRANSITIONS" || FAILURES=$((FAILURES + 1))
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|scenario-registry|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac
 
-if [ -f scripts/generate_test_summary.py ]; then
-  python3 scripts/generate_test_summary.py \
+if [ -f scripts/evidence/generate_test_summary.py ]; then
+  python3 scripts/evidence/generate_test_summary.py \
     "$ARTIFACT_DIR" \
     "$RUN_ID" \
     "$FAILURES" \

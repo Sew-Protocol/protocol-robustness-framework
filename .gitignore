@@ -33,6 +33,7 @@ __pycache__/
 .jupyter
 .venv
 venv/
+scripts/__pycache__
 
 # IDE
 .nrepl*

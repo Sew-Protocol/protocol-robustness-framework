@@ -29,7 +29,7 @@
                            (or (:exit (ex-data e)) 1)))
                   dur  (- (System/currentTimeMillis) t0)]
                 ;; 1. Write the run manifest stubs (creates run-specific directory)
-              (shell "python3" "scripts/write_scenario_run_manifest.py"
+              (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
                      "--scenario-id"    scenario-id
                      "--status"      (if (zero? exit) "pass" "fail")
                      "--duration-ms" (str dur))
@@ -47,7 +47,7 @@
                                   vec))
                       latest-run (last dirs)]
                   (when (and latest-run (.exists (java.io.File. output-tmp)))
-                    (shell "python3" "scripts/extract_scenario_artifacts.py"
+                    (shell "python3" "scripts/evidence/extract_scenario_artifacts.py"
                            "--replay" output-tmp
                            "--run-dir" (str (.getPath latest-run)))))
                 (catch Exception e
@@ -138,7 +138,7 @@
                    dur     (- (System/currentTimeMillis) t0)
                    failed  (filterv (fn [r] (not (zero? (:exit r)))) results)
                    status  (if (empty? failed) "pass" "fail")]
-               (shell "python3" "scripts/write_scenario_run_manifest.py"
+               (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
                       "--suite"           "scenario-family"
                       "--scenario"        selector
                       "--scenario-count"  (str (count scenarios))
@@ -181,7 +181,7 @@
          The golden reports are the pinned per-scenario replay outcomes that the report notebook loads.
          Run this after fixing a failing scenario to update its golden artifact.
          Touches notebooks/report.clj afterward so a running Clerk server re-evaluates the report notebook.
-         See also: scripts/regenerate_goldens.clj, deps.edn :regenerate-goldens alias."
+         See also: scripts/scenarios/regenerate_goldens.clj, deps.edn :regenerate-goldens alias."
    :task (shell "clojure" "-M:regenerate-goldens")}
 
   evidence:build
@@ -218,7 +218,7 @@
                         (catch clojure.lang.ExceptionInfo e
                           (or (:exit (ex-data e)) 1)))
                  dur  (- (System/currentTimeMillis) t0)]
-             (shell "python3" "scripts/write_scenario_run_manifest.py"
+             (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
                     "--suite"        "evidence"
                     "--scenario"     scenario
                     "--output-file"  output-file
@@ -370,7 +370,7 @@
                              "--scenario-a" s1 "--scenario-b" s2 "--out-dir" od))}
 
   sim:diff {:doc "Compare scenario replay at baseline git commit vs HEAD. Usage: bb sim:diff --baseline <sha> --scenario <path>"
-            :task (apply shell "./scripts/sim_diff.sh" *command-line-args*)}
+            :task (apply shell "./scripts/scenarios/sim_diff.sh" *command-line-args*)}
 
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
@@ -559,7 +559,7 @@
                     "-M" "-m" "resolver-sim.scripts.evidence" "registry" (or dir "")))}
 
   evidence:snapshot {:doc "Generate high-resolution social card for a scenario. Usage: bb evidence:snapshot <scenario-id>"
-                     :task (shell "python3 scripts/snapshot_evidence.py" (first *command-line-args*))}
+                     :task (shell "python3 scripts/evidence/snapshot_evidence.py" (first *command-line-args*))}
 
   clerk-build {:doc "Build static Clerk notebooks"
                :task (clojure "-M:build-clerk")}
@@ -586,7 +586,7 @@
   {:doc "Flag inline terminal-state set literals that should reference t/terminal-states instead.
          Scans src/ (not test/) for #{:released :refunded :resolved} patterns that are not
          the authoritative definition in types.clj or the structural transition graph."
-   :task (shell "bash" "scripts/lint-terminal-states.sh")}
+   :task (shell "bash" "scripts/validate/lint-terminal-states.sh")}
 
   check {:doc "check"
          :task (do

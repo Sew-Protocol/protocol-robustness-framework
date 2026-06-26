@@ -46,7 +46,7 @@
   (testing "trace.json contract fields match invariant scenario maps"
     (let [drifts (sync/collect-trace-contract-drifts)]
       (is (empty? drifts)
-          (str "Re-run scripts/sync_invariant_trace_fixtures.clj — drifts: "
+          (str "Re-run scripts/scenarios/sync_invariant_trace_fixtures.clj — drifts: "
                (pr-str drifts))))))
 
 (defn- scenarios-with-strict-expected-errors []

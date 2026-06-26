@@ -15,7 +15,7 @@
   (let [artifact-dir (evcfg/artifact-dir)
         ;; Pass diagnostic files if they exist (mimicking test.sh logic)
         risk-file (first (filter #(.exists %) [(io/file artifact-dir "risk-invariants.lines")]))
-        cmd ["python3" "scripts/write_scenario_run_manifest.py"
+        cmd ["python3" "scripts/evidence/write_scenario_run_manifest.py"
              "--scenario" (str "suite-" suite)
              "--suite" suite
              "--status" status

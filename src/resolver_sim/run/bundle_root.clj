@@ -73,7 +73,7 @@
      :dispatcher-registry-hash (when protocols (registry-hash protocols))
      :execution-registry-hash (when exec-reg (registry-hash exec-reg))
      :evidence-policy-hash (when ep-reg (registry-hash ep-reg))
-      :claim-definition-registry-hash (when cd-reg (registry-hash cd-reg))}))
+     :claim-definition-registry-hash (when cd-reg (registry-hash cd-reg))}))
 
 ;; ── Environment helpers ───────────────────────────────────────────────────────
 

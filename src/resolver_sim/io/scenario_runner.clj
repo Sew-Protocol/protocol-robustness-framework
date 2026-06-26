@@ -15,6 +15,7 @@
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.protocols.sew.invariant-scenarios :as inv-sc]
             [resolver-sim.protocols.sew.narrative :as narrative]
+            [resolver-sim.run.bundle-root :as br]
             [resolver-sim.scenario.normalize :as normalize]
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
@@ -255,16 +256,16 @@
             (fn [results]
               (mapv (fn [result]
                       (if-let [entry (get entry-by-id (:scenario-id result))]
-                          (assoc result
-                                 :scenario-path (:scenario-path entry)
-                                 :dispatcher-id (:dispatcher-id entry)
-                                 :scenario-metadata (:scenario-metadata entry)
-                                 :runner {:backend (:runner/backend request)
-                                          :protocol-id (:protocol entry)
-                                          :dispatcher-id (:dispatcher-id entry)
-                                          :runner-selection (:runner-selection request)}
-                                 :execution/raw (:replay-result result))
-                         result))
+                        (assoc result
+                               :scenario-path (:scenario-path entry)
+                               :dispatcher-id (:dispatcher-id entry)
+                               :scenario-metadata (:scenario-metadata entry)
+                               :runner {:backend (:runner/backend request)
+                                        :protocol-id (:protocol entry)
+                                        :dispatcher-id (:dispatcher-id entry)
+                                        :runner-selection (:runner-selection request)}
+                               :execution/raw (:replay-result result))
+                        result))
                     results)))))
 
 (defn normalize-run-result
@@ -297,9 +298,8 @@
                                (println header)
                                (doseq [line lines] (println line))
                                (println footer)
-                                (println separator)))}
-          opts))
-
+                               (println separator)))}
+         opts))
 
 (declare run-paths)
 
@@ -527,6 +527,7 @@
         suite-protocol-id (when (:suite dispatch)
                             (suites/suite-protocol-id (:suite dispatch)))
         protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
+        runner-selection (or (:runner-selection dispatch) default-runner-selection)
         canonical? (and (nil? (:scenario dispatch))
                         (nil? (:fixture-suite dispatch))
                         (not= :dev (:mode dispatch)))
@@ -539,52 +540,70 @@
                  {:reason non-canonical-reason
                   :message "Run is non-canonical; bundle will be marked accordingly"}))
     (let [result (ev-node/with-execution-node
-                 {:execution-id :execution/replay
-                  :runner :scenario-runner
-                   :inputs {:dispatch dispatch
-                            :canonical? canonical?
-                            :non-canonical-reason non-canonical-reason
-                            :opts {:protocol protocol-id
-                                  :report-format (:report-format opts)
-                                  :suite-id (:suite-id opts)}}
-                  :status-fn (fn [{:keys [exit-code]}]
-                               (cond (zero? exit-code) :pass
-                                     (integer? exit-code) :fail
-                                     :else :error))
-                  :outputs-fn (fn [{:keys [exit-code dispatch-key canonical?]}]
-                                {:exit-code exit-code
-                                 :dispatch dispatch
-                                 :dispatch-key dispatch-key
-                                 :canonical? canonical?
-                                 :non-canonical-reason non-canonical-reason})
-                  :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
-                                        (if (zero? exit-code)
-                                          []
-                                          [{:failure-type :replay-failed
-                                            :class :unexpected
-                                            :message (str "Replay exited with code " exit-code
-                                                          " (" (name dispatch-key) ")")
-                                            :expected? false}]))}
-                 (fn []
-                   (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
-                                            (:suite dispatch) :suite
-                                            (:scenario dispatch) :scenario
-                                            :else :registry)
-                         exit-code (cond
-                                     (:fixture-suite dispatch)
-                                     (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
+                   {:execution-id :execution/replay
+                    :runner :scenario-runner
+                    :inputs {:dispatch dispatch
+                             :runner-selection runner-selection
+                             :canonical? canonical?
+                             :non-canonical-reason non-canonical-reason
+                             :opts {:protocol protocol-id
+                                    :report-format (:report-format opts)
+                                    :suite-id (:suite-id opts)}}
+                    :status-fn (fn [{:keys [exit-code]}]
+                                 (cond (zero? exit-code) :pass
+                                       (integer? exit-code) :fail
+                                       :else :error))
+                    :outputs-fn (fn [{:keys [exit-code dispatch-key canonical? bundle-root]}]
+                                  {:exit-code exit-code
+                                   :dispatch dispatch
+                                   :dispatch-key dispatch-key
+                                   :canonical? canonical?
+                                   :non-canonical-reason non-canonical-reason
+                                   :bundle/root bundle-root
+                                   :bundle/root-hash (some-> bundle-root :bundle/hash)})
+                    :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
+                                          (if (zero? exit-code)
+                                            []
+                                            [{:failure-type :replay-failed
+                                              :class :unexpected
+                                              :message (str "Replay exited with code " exit-code
+                                                            " (" (name dispatch-key) ")")
+                                              :expected? false}]))}
+                   (fn []
+                     (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
+                                              (:suite dispatch) :suite
+                                              (:scenario dispatch) :scenario
+                                              :else :registry)
+                           exit-code (cond
+                                       (:fixture-suite dispatch)
+                                       (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
 
-                                     (:suite dispatch)
-                                     (run-named-suite-and-report (:suite dispatch) opts)
+                                       (:suite dispatch)
+                                       (run-named-suite-and-report (:suite dispatch) opts)
 
-                                     (:scenario dispatch)
-                                     (run-scenario-file-and-report (:scenario dispatch)
-                                                                   (:output-file dispatch)
-                                                                   (assoc opts :protocol protocol-id))
+                                       (:scenario dispatch)
+                                       (run-scenario-file-and-report (:scenario dispatch)
+                                                                     (:output-file dispatch)
+                                                                     (assoc opts :protocol protocol-id))
 
-                                     :else
-                                     (run-registry-suite-and-report (assoc opts :protocol protocol-id)))]
-                      {:exit-code exit-code
-                       :dispatch-key dispatch-key
-                       :canonical? canonical?})))]
-    (:exit-code result))))
+                                       :else
+                                       (run-registry-suite-and-report (assoc opts :protocol protocol-id)))
+                           run-request {:runner/backend :local-current
+                                        :runner-selection runner-selection
+                                        :suite/key (:suite dispatch)
+                                        :protocol/default-id protocol-id
+                                        :evidence/profile (:evidence-profile opts)
+                                        :output/profile (:output-profile opts)}
+                           run-result {:status (if (zero? exit-code) :pass :fail)
+                                       :suite/key (:suite dispatch)
+                                       :totals {:total 0
+                                                :passed (if (zero? exit-code) 0 0)
+                                                :failed (if (zero? exit-code) 0 1)}
+                                       :results []}
+                           bundle-root (br/build-bundle-root run-request run-result)]
+                       {:exit-code exit-code
+                        :dispatch-key dispatch-key
+                        :canonical? canonical?
+                        :bundle-root bundle-root})))]
+      {:exit-code (:exit-code result)
+       :bundle-root (:bundle-root result)})))

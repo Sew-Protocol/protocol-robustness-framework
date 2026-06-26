@@ -62,7 +62,7 @@
       (seq (set/difference runner-selection-fields (set (keys sel))))
       (conj {:code :missing-runner-selection-fields
              :missing (vec (set/difference runner-selection-fields
-                                          (set (keys sel))))})
+                                           (set (keys sel))))})
 
       (not (contains? valid-selection-modes (:mode sel)))
       (conj {:code :unknown-selection-mode
@@ -90,8 +90,8 @@
                                       (set (keys request))))
                  (conj {:code :missing-request-fields
                         :missing (vec (set/difference
-                                      required-run-request-fields
-                                      (set (keys request))))})
+                                       required-run-request-fields
+                                       (set (keys request))))})
 
                  (not (contains? request :runner-selection))
                  (conj {:code :missing-runner-selection})
@@ -145,22 +145,22 @@
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
-                                     :registry-hash)))
+                                      :registry-hash)))
                  (conj {:code :missing-registry-hash})
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
-                                     :scenario-suite-hash)))
+                                      :scenario-suite-hash)))
                  (conj {:code :missing-scenario-suite-hash})
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
-                                     :dispatcher-registry-hash)))
+                                      :dispatcher-registry-hash)))
                  (conj {:code :missing-dispatcher-registry-hash})
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
-                                     :evidence-policy-hash)))
+                                      :evidence-policy-hash)))
                  (conj {:code :missing-evidence-policy-hash}))]
     (if (seq errors)
       {:runnable? false :errors errors}

@@ -493,12 +493,12 @@
                             (when cycle
                               [{:error :node/cycle
                                 :cycle cycle}])))]
-  {:valid? (empty? errors)
-      :errors errors
-      :node-count (count nodes)
-      :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
-               :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
-               :cycle-free? (nil? cycle)}}))
+    {:valid? (empty? errors)
+     :errors errors
+     :node-count (count nodes)
+     :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
+              :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
+              :cycle-free? (nil? cycle)}}))
 
 ;; ── Detailed validation ──────────────────────────────────────────────────────
 

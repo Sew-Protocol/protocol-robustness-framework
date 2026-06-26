@@ -321,8 +321,9 @@
        :invariant-links            — invariant result links
        :evidence-record-hash       — evidence envelope hash (stored in :external-refs, excluded from canonical hash)
        :evidence-group-id          — group-id for cross-layer linking to surrounding evidence
-       :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
-       :metadata                   — additional metadata"
+        :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
+        :allocation-input           — raw input map (slash-obligation, liable-parties, basis, cap-field, etc.)
+        :metadata                   — additional metadata"
   [{:keys [projection-artifact
            allocation-result
            world-before-hash
@@ -330,6 +331,7 @@
            action-hash
            action-hash-at
            shortfall-outcome
+           allocation-input
            claims
            invariant-links
            evidence-record-hash
@@ -370,6 +372,7 @@
                        :projection-definition-hash projection-definition-hash
                        :source source
                        :provenance provenance
+                       :allocation-input allocation-input
                        :allocation-result allocation-result
                        :shortfall-outcome shortfall-outcome
                        :claims (or claims [])

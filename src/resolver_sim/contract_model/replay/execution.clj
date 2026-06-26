@@ -81,8 +81,10 @@
 
 (defn emit-invariant-attestation!
   "Build and chain an invariant attestation evidence record.
-   Best-effort — failures are logged but do not halt execution."
-  [step inv-single inv-trans check-inv?]
+   Best-effort — failures are logged but do not halt execution.
+   Optional evidence-hash links back to the transition evidence this
+   attestation covers."
+  [step inv-single inv-trans check-inv? & [evidence-hash]]
   (when-let [attestation (build-invariant-attestation step inv-single inv-trans check-inv?)]
     (try
       (let [safe-map {:step step
@@ -95,7 +97,10 @@
                       :evidence-hash h
                       :attestation/step step
                       :attestation/passed (:passed attestation)
-                      :attestation/failed (:failed attestation)}]
+                      :attestation/failed (:failed attestation)}
+            evidence (if evidence-hash
+                       (assoc evidence :attestation/evidence-hash evidence-hash)
+                       evidence)]
         (chain/register-evidence! evidence))
       (catch Exception e
         (log/error! :invariant-attestation-failed
@@ -299,8 +304,10 @@
                                     (when-not (:ok? inv-trans)  (:violations inv-trans))))]
 
         ;; Emit invariant attestation evidence (best-effort)
-        (emit-invariant-attestation! (:seq event) inv-single inv-trans
-                                     (and ok? check-inv?))
+        ;; Links back to the transition evidence from apply-action-with-evidence
+        (let [tx-evidence-hash (:evidence-hash (:evidence result))]
+          (emit-invariant-attestation! (:seq event) inv-single inv-trans
+                                       (and ok? check-inv?) tx-evidence-hash))
 
         (let [result-kw    (cond violated? :invariant-violated ok? :ok :else :rejected)
               error-kw     (when-not ok? (:error result))

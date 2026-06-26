@@ -48,46 +48,46 @@
                 (System/exit 1))
 
             :else
-            (System/exit
-             ((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report)
-              {:protocol       protocol-id
-               :suite          suite-kw
-               :fixture-suite  fixture-kw
-               :scenario       scenario
-               :output-file    output}
-              {}))))
+            (let [result ((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report)
+                          {:protocol       protocol-id
+                           :suite          suite-kw
+                           :fixture-suite  fixture-kw
+                           :scenario       scenario
+                           :output-file    output}
+                          {})]
+              (System/exit (:exit-code result))))
 
-        (:serve options)
-        (try
-          (let [port (:port options)]
-            (.addShutdownHook (Runtime/getRuntime) (Thread. ^Runnable grpc/stop!))
-            (grpc/start! port)
-            (log/info! "grpc/server-started" {:port port})
-            (println "[grpc] Press Ctrl+C to stop.")
-            (grpc/await-termination)
-            (System/exit 0))
-          (catch Throwable e
-            (log/error! "grpc/server-error" {:error (.getMessage e)})
-            (println "Error in server:" (.getMessage e))
-            (.printStackTrace e)
-            (System/exit 1)))
+          (:serve options)
+          (try
+            (let [port (:port options)]
+              (.addShutdownHook (Runtime/getRuntime) (Thread. ^Runnable grpc/stop!))
+              (grpc/start! port)
+              (log/info! "grpc/server-started" {:port port})
+              (println "[grpc] Press Ctrl+C to stop.")
+              (grpc/await-termination)
+              (System/exit 0))
+            (catch Throwable e
+              (log/error! "grpc/server-error" {:error (.getMessage e)})
+              (println "Error in server:" (.getMessage e))
+              (.printStackTrace e)
+              (System/exit 1)))
 
-        :else
-        (try
-          (log/info! "simulation/params-loading" {:path (:params options)})
-          (println "Loading params from:" (:params options))
-          (let [p         (params/validate-and-merge (:params options))
-                output    (:output options)
-                phase-key (some #(when (get options %) %) (keys phases/phase-runners))
-                [label run-fn] (get phases/phase-runners phase-key)]
-            (cond
-              (:ring-spec p) (phases/run-ring-simulation p output)
-              phase-key      (do (when label (println label))
-                                 (run-fn p output))
-              :else          (phases/run-simulation p output))
-            (System/exit 0))
-          (catch Exception e
-            (log/error! "simulation/run-error" {:error (.getMessage e)})
-            (println "Error:" (.getMessage e))
-            (.printStackTrace e)
-            (System/exit 1)))))))
+          :else
+          (try
+            (log/info! "simulation/params-loading" {:path (:params options)})
+            (println "Loading params from:" (:params options))
+            (let [p         (params/validate-and-merge (:params options))
+                  output    (:output options)
+                  phase-key (some #(when (get options %) %) (keys phases/phase-runners))
+                  [label run-fn] (get phases/phase-runners phase-key)]
+              (cond
+                (:ring-spec p) (phases/run-ring-simulation p output)
+                phase-key      (do (when label (println label))
+                                   (run-fn p output))
+                :else          (phases/run-simulation p output))
+              (System/exit 0))
+            (catch Exception e
+              (log/error! "simulation/run-error" {:error (.getMessage e)})
+              (println "Error:" (.getMessage e))
+              (.printStackTrace e)
+              (System/exit 1))))))))

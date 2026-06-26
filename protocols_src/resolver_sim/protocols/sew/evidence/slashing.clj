@@ -184,6 +184,7 @@
                             :world-after-hash world-after-hash
                             :action-hash action-hash
                             :action-hash-at action-hash-at
+                            :allocation-input allocation-input
                             :claims shaped-claims
                             :invariant-links []
                             :attribution attribution
