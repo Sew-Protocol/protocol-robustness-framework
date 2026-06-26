@@ -61,18 +61,23 @@
 (def ^:private action-alternatives
   {"raise_dispute" ["settle_now" "wait"]
    "escalate_dispute" ["settle_now" "wait"]
-   "execute_resolution" ["defer_verdict" "alternate_verdict"]})
+   "execute_resolution" ["defer_verdict" "alternate_verdict"]
+   "sender_cancel" ["raise_dispute" "wait"]
+   "recipient_cancel" ["raise_dispute" "wait"]})
 
 (def ^:private node-type-alternatives
   {:challenge-timing ["challenge_now" "challenge_later" "no_challenge"]
    :escalation-timing ["escalate_now" "escalate_later" "no_escalation"]
-   :resolver-verdict ["verdict_for_buyer" "verdict_for_seller" "defer_verdict"]})
+   :resolver-verdict ["verdict_for_buyer" "verdict_for_seller" "defer_verdict"]
+   :cancel-timing ["raise_dispute" "wait"]})
 
 (def ^:private node-type-by-action
   {"create_escrow" :escrow-creation
    "raise_dispute" :challenge-timing
    "escalate_dispute" :escalation-timing
-   "execute_resolution" :resolver-verdict})
+   "execute_resolution" :resolver-verdict
+   "sender_cancel" :cancel-timing
+   "recipient_cancel" :cancel-timing})
 
 ;; ---------------------------------------------------------------------------
 ;; Phase F — Subgame boundary classification

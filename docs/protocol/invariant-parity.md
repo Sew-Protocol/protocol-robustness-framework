@@ -9,7 +9,7 @@ For Reference Validation v1 **evidence** invariant IDs (claim layer), see
 | :--- | :--- | :--- |
 | `:solvency` | `test_SolvencyMaintainsEscrowBalance` | Validated |
 | `:conservation-of-funds` | `test_ConservationOfFunds` | Validated |
-| `:cancellation-mutex` | `test_CancellationMutex` | Pending |
+| `:cancellation-mutex` | `test_cancellation_mutex_terminal_states` | Validated |
 | `:persisted-escrow-state-valid` | — | Pending |
 | `:escrow-state-in-graph` | — | Pending |
 | `:escrow-dispute-metadata-consistent` | — | Pending |

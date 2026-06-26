@@ -102,3 +102,18 @@ AGENTS.md
 .kilo
 archived
 docs/technical-summary-for-franz.md
+
+# Forensic run archives (safety — actual location is ~/prf-runs/ outside repo)
+prf-runs/
+prf-private/
+
+# Forensic runner temporary files
+workspaces/forensic-runner/tmp/
+
+# Private discovery workspace safety
+workspaces/private-discovery-template/sealed-log/
+workspaces/private-discovery-template/encrypted-*/
+workspaces/private-discovery-template/local-runs/
+workspaces/private-discovery-template/disclosure-candidates/
+workspaces/private-discovery-template/export/
+**/disclosure-candidates/

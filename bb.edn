@@ -312,9 +312,9 @@
    :task (let [suite-key (first *command-line-args*)]
            (when-not (seq suite-key)
              (throw (ex-info "Missing suite key. Usage: bb run:scenario:suite <suite-key>" {})))
-           (apply clojure {:dir "." :extra-deps {}}
-                  "-M:run" "--" "--invariants" "--suite" suite-key
-                  (rest *command-line-args*)))}
+            (apply clojure {:dir "." :extra-deps {}}
+                   "-M:run:with-sew" "--" "--invariants" "--suite" suite-key
+                   (rest *command-line-args*)))}
 
   run:scenario:suites
   {:doc "List registered scenario path suites. Usage: bb run:scenario:suites [--format edn|json]"
@@ -701,16 +701,17 @@
                 "-M" "-m" "resolver-sim.demo.export" *command-line-args*)}
 
   repl
-  {:doc "Start fully loaded dev nREPL"
-   :task (shell "clojure -M:dev/full")}
+  {:doc "Start fully loaded dev nREPL (framework + protocols)"
+   :override-builtin true
+   :task (shell "clojure -M:dev/full:with-sew")}
 
   repl:light
-  {:doc "Start light dev REPL"
-   :task (shell "clojure -M:dev/base")}
+  {:doc "Start light dev REPL (framework + protocols)"
+   :task (shell "clojure -M:dev/base:with-sew")}
 
   repl:check
   {:doc "Check that dev REPL namespaces compile"
-   :task (shell "clojure -M:dev/base -e \"(require 'user) (user/ready)\"")}
+   :task (shell "clojure -M:dev/base:with-sew -e \"(require 'user) (user/ready)\"")}
 
   repl:test
   {:doc "Run tests via dev test helper"
@@ -725,4 +726,72 @@
              (println "Usage: bb demo:build <id>")
              (do
                (shell "clojure" "-M" "-m" "resolver-sim.demo.recorder" id)
-               (shell "clojure" "-M" "-m" "resolver-sim.demo.export" id))))}}}
+                (shell "clojure" "-M" "-m" "resolver-sim.demo.export" id))))}
+
+  workspace:list
+  {:doc "List available workspaces with descriptions."
+   :task (let [ws-dir (java.io.File. "workspaces")]
+           (if-not (.exists ws-dir)
+             (println "No workspaces directory found.")
+             (let [entries (sort (filter (fn [x] (.isDirectory x)) (.listFiles ws-dir)))]
+               (println "Available workspaces:")
+               (println "---------------------")
+               (doseq [f entries]
+                 (let [readme (java.io.File. f "README.md")
+                       deps   (java.io.File. f "deps.edn")
+                       desc   (when (.exists readme)
+                                (try (let [lines (clojure.string/split-lines (slurp readme))]
+                                       (first (remove empty? lines)))
+                                     (catch Exception _ "")))
+                       has-deps (when (.exists deps) " deps.edn ✓")]
+                   (println (str "  " (.getName f))
+                            (str "  " (or has-deps ""))
+                            (str "  " (or desc "")))))
+               (println)
+               (println "External archives:")
+               (println "  ~/prf-runs/<run-id>/     Forensic run output")
+               (println "  ~/prf-private/<id>/      Private discovery workspace"))))}
+
+  workspace:doctor
+  {:doc "Validate workspace structure. Checks README, deps.edn, and path resolution."
+   :task (let [ws-dir (java.io.File. "workspaces")]
+           (if-not (.exists ws-dir)
+             (println "No workspaces directory found.")
+             (let [entries (sort (filter (fn [x] (.isDirectory x)) (.listFiles ws-dir)))]
+               (doseq [ws entries]
+                 (let [name (.getName ws)
+                       readme (java.io.File. ws "README.md")
+                       deps-file (java.io.File. ws "deps.edn")]
+                   (println (str "▶ " name))
+                   (let [readme-ok (and (.exists readme) (> (.length readme) 0))
+                         msg (if readme-ok "README.md ✓" "README.md MISSING or empty")]
+                     (println (str "  " msg)))
+                   (if (.exists deps-file)
+                     (try
+                       (let [deps (slurp deps-file)]
+                         (println "  deps.edn ✓")
+                         (let [path-pattern (re-pattern "\"\\.\\./\\.\\./[^\"]+\"")]
+                           (doseq [line (clojure.string/split-lines deps)]
+                             (when-let [m (re-find path-pattern line)]
+                               (let [path (subs m 1 (dec (count m)))
+                                     abs (java.io.File. (.getParent deps-file) path)]
+                                 (if (.exists abs)
+                                   (println (str "    path " path " ✓"))
+                                   (println (str "    path " path " NOT FOUND"))))))))
+                       (catch Exception e
+                         (println (str "  deps.edn ERROR: " (.getMessage e)))))
+                     (println "  no deps.edn"))
+                   (println)))
+                (println "Doctor complete."))))}
+
+  forensic:preflight
+  {:doc "Run forensic preflight checks. Usage: bb forensic:preflight --run-request <path> [options]"
+   :task (apply shell "python3" "scripts/forensic/preflight.py" *command-line-args*)}
+
+  forensic:run
+  {:doc "Run a forensic execution. Usage: bb forensic:run --run-request <path> [--label <label>] [--dry-run]"
+   :task (apply shell "python3" "scripts/forensic/run.py" *command-line-args*)}
+
+  forensic:verify
+  {:doc "Verify a forensic run bundle. Usage: bb forensic:verify <run-dir>"
+   :task (apply shell "python3" "scripts/forensic/verify.py" *command-line-args*)}}}

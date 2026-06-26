@@ -1236,7 +1236,7 @@
     ;; This shows deterrence is active under conservative and strong assumptions; only purely
     ;; reputationless actors (none) are indifferent.
     (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
-                       (assoc :spe-config {:regret-threshold 0}))
+                        (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj
                                                   [:reputation/none
                                                    :reputation/conservative
@@ -1245,4 +1245,45 @@
           "only :reputation/none passes (no penalty → regret=0)")
       (is (= [:reputation/conservative :reputation/baseline] (:fail-profiles matrix))
           "conservative and baseline both fail (any reputation penalty deters)"))))
+
+;; ---------------------------------------------------------------------------
+;; Cancellation-dominance equilibrium concept tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-cancellation-dominance-pass
+  (testing ":cancellation-dominance passes when cancel node has zero regret"
+    (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 200
+                                   :agent "buyer" :action "sender_cancel"})
+          result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
+                     sew-eq/equilibrium-concept-validators)
+                     :cancellation-dominance)]
+      (is (= :pass (:status result))
+          "cancel with chosen-wealth >= pre-wealth should pass")
+      (is (= :hard (:severity result)))
+      (is (pos? (get-in result [:observed :cancel-nodes-checked]))
+          "should report at least one cancel node checked"))))
+
+(deftest test-cancellation-dominance-fail
+  (testing ":cancellation-dominance fails when cancel node has positive regret"
+    (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 0
+                                   :agent "buyer" :action "sender_cancel"
+                                   :regret-threshold 0})
+          result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
+                     sew-eq/equilibrium-concept-validators)
+                     :cancellation-dominance)]
+      (is (= :fail (:status result))
+          "cancel with chosen-wealth < pre-wealth should fail")
+      (is (seq (:offending result))
+          "should report offending nodes with positive regret"))))
+
+(deftest test-cancellation-dominance-inconclusive-no-cancel-nodes
+  (testing ":cancellation-dominance is :inconclusive when no cancel decision nodes present"
+    (let [proj (sb/spe-projection {:agent "resolver" :action "execute_resolution"})
+          result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
+                     sew-eq/equilibrium-concept-validators)
+                     :cancellation-dominance)]
+      (is (= :inconclusive (:status result))
+          "non-cancel node should produce inconclusive result")
+      (is (= :soft (:severity result))
+          "inconclusive has soft severity"))))
 

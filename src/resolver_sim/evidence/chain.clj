@@ -26,6 +26,8 @@
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]))
 
+(declare cursor-snapshot)
+
 ;; ── Registry Atom ─────────────────────────────────────────────────────────
 
 (def ^:dynamic ^:private evidence-registry-atom
@@ -55,7 +57,68 @@
                        :run-id nil
                        :run-label nil})]
      (binding [evidence-registry-atom fresh#]
-       ~@body)))
+               ~@body)))
+
+(defn registry-snapshot
+  "Return a snapshot of the current bound evidence registry atom.
+   Useful for capturing scenario-local registry state inside
+   with-fresh-registry blocks before the binding exits."
+  []
+  @evidence-registry-atom)
+
+;; ── Run-Level Scenario Evidence Accumulator ──────────────────────────────
+;; Collects scenario-local registry/cursor snapshots from with-fresh-registry
+;; blocks so they can be aggregated into the top-level run registry.
+
+(def ^:dynamic ^:private scenario-evidence-atom
+  "Accumulator for scenario-local evidence registry/cursor snapshots.
+   Each entry is {:registry <snapshot> :cursor <snapshot>} from a scenario run."
+  (atom []))
+
+(defn reset-scenario-evidence!
+  "Clear the scenario evidence accumulator for a new run."
+  []
+  (reset! scenario-evidence-atom [])
+  nil)
+
+(defn register-scenario-snapshot!
+  "Register a scenario-local registry and cursor snapshot.
+   Call inside with-fresh-registry / with-fresh-chain-cursor bindings
+   to capture the per-scenario evidence state before bindings exit."
+  ([]
+   (register-scenario-snapshot! (registry-snapshot) (cursor-snapshot)))
+  ([registry-snapshot cursor-snapshot]
+   (when (and registry-snapshot (seq (:artifacts registry-snapshot)))
+     (swap! scenario-evidence-atom conj
+            {:registry registry-snapshot
+             :cursor cursor-snapshot}))
+   nil))
+
+(defn scenario-evidence-snapshots
+  "Return the accumulated scenario evidence snapshots."
+  []
+  @scenario-evidence-atom)
+
+(defn accumulate-scenario-evidence!
+  "Merge all scenario-local registry snapshots into the top-level
+   evidence registry atom. Skips duplicate and nil evidence hashes.
+   Returns the total transition-evidence count after aggregation."
+  []
+  (doseq [snap @scenario-evidence-atom]
+      (let [reg (:registry snap)]
+        (doseq [artifact (:artifacts reg)
+                :when (:evidence-hash artifact)]
+          (swap! evidence-registry-atom
+                 (fn [r]
+                   (let [existing (some #(when-let [eh (:evidence-hash %)]
+                                          (hc/intent-hash= eh (:evidence-hash artifact)))
+                                        (:artifacts r))]
+                     (if existing
+                       r
+                        (-> r
+                            (update :artifacts conj artifact)
+                            (update :evidence-hashes conj (:evidence-hash artifact))))))))))
+  (count (filter :evidence-hash (:artifacts @evidence-registry-atom))))
 
 ;; ── Chain Cursor ──────────────────────────────────────────────────────────
 
@@ -375,7 +438,94 @@
      :all-hashes-well-formed all-well-formed
      :all-hashes-registered (and all-non-nil all-well-formed)
      :all-with-component-hashes all-with-component-hashes
-     :chain-intact (and reg-valid all-non-nil all-well-formed)}))
+      :chain-intact (and reg-valid all-non-nil all-well-formed)}))
+
+;; ── Evidence Reconciliation ────────────────────────────────────────────
+;; Validates that evidence files on disk match the registry and cursor.
+;; Detects unregistered evidence and stale cursors.
+
+(defn reconcile-evidence!
+  "Reconcile evidence on disk against the registry and chain cursor.
+   Fails (throws) if unregistered evidence files exist or the cursor
+   is behind disk evidence.
+
+   Reads evidence files from event-evidence/ and compares counts and
+   chain-seq values against evidence-registry.json and
+   chain-cursor-final.json.
+
+   Options:
+     :artifact-dir  — artifact directory (default: evcfg/artifact-dir)
+     :throw-on-error — when true, throws on mismatch (default: true)"
+  [& {:keys [artifact-dir throw-on-error]
+      :or {artifact-dir (str (evcfg/artifact-dir))
+           throw-on-error true}}]
+  (let [ev-dir (io/file artifact-dir "event-evidence")
+        disk-files (when (.isDirectory ev-dir)
+                     (sort (filter #(.endsWith (.getName %) ".json")
+                                   (.listFiles ev-dir))))
+        disk-count (count disk-files)
+        registry-file (io/file artifact-dir "evidence-registry.json")
+        registry (when (.exists registry-file)
+                   (json/read-str (slurp registry-file) :key-fn keyword))
+        registry-count (get registry :evidence-count 0)
+        cursor-file (io/file artifact-dir "chain-cursor-final.json")
+        cursor (when (.exists cursor-file)
+                 (json/read-str (slurp cursor-file) :key-fn keyword))
+        cursor-seq (get cursor :cursor/final-seq 0)
+        max-disk-seq (when (seq disk-files)
+                       (apply max (map (fn [f]
+                                         (try (let [data (json/read-str (slurp f) :key-fn keyword)]
+                                                (get data :evidence/chain-seq 0))
+                                              (catch Exception _ 0)))
+                                       disk-files)))
+        errors (cond-> []
+                 (pos? (- disk-count registry-count))
+                 (conj (str "Unregistered evidence: " disk-count " files on disk, "
+                            registry-count " in registry"))
+                 (and (pos? max-disk-seq) (< cursor-seq max-disk-seq))
+                 (conj (str "Cursor behind disk: cursor seq " cursor-seq
+                            " but disk evidence has seq up to " max-disk-seq)))]
+    (doseq [e errors]
+      (println (str "EVIDENCE RECONCILIATION ERROR: " e)))
+    (when (and throw-on-error (seq errors))
+      (throw (ex-info "Evidence reconciliation failed"
+                      {:errors errors
+                       :disk-count disk-count
+                       :registry-count registry-count
+                       :cursor-seq cursor-seq
+                       :max-disk-seq max-disk-seq})))
+    {:reconciled? (empty? errors)
+     :disk-count disk-count
+     :registry-count registry-count
+     :cursor-seq cursor-seq
+     :max-disk-seq max-disk-seq
+     :errors errors}))
+
+;; ── Aggregate Cursor ───────────────────────────────────────────────────
+;; A run-level aggregate cursor that commits to all scenario chain heads.
+
+(defn build-aggregate-cursor
+  "Build an aggregate cursor that commits to all scenario chain heads.
+   Takes the accumulated scenario evidence snapshots and produces a
+   cursor referencing every scenario chain, total evidence count,
+   and registry root hash.
+
+   Returns a cursor data map or nil if no scenarios ran."
+  [scenario-snapshots registry-root-hash]
+  (when (seq scenario-snapshots)
+    (let [scenario-heads (keep (fn [s]
+                                 (when-let [c (:cursor s)]
+                                   {:scenario/seq (:cursor/final-seq c)
+                                    :scenario/last-hash (:cursor/final-self-hash c)
+                                    :scenario/total-captured (:cursor/total-captured c)}))
+                               scenario-snapshots)
+          total-evidence (reduce + (map :cursor/total-captured scenario-heads))]
+      {:cursor/scope :aggregate-run
+       :cursor/scenario-count (count scenario-heads)
+       :cursor/scenario-heads scenario-heads
+       :cursor/total-evidence total-evidence
+       :cursor/registry-root-hash registry-root-hash
+       :cursor/reconciled? true})))
 
 ;; ── Forensic-Grade Acceptance Criteria ───────────────────────────────────────
 ;;

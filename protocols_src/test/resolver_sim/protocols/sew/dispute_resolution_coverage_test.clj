@@ -53,7 +53,13 @@
   (f)
   (prepare-evidence-summary!))
 
-(use-fixtures :once evidence-lifecycle-fixture)
+(declare prepare-all-artifacts!)
+
+;; Register the full evidence pipeline: clean → tests → full artifacts + reconciliation
+(use-fixtures :once (fn [f]
+                      (clean-evidence-dir!)
+                      (f)
+                      (prepare-all-artifacts!)))
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario file paths
@@ -436,28 +442,36 @@
   (try (ee/write-evidence-links-index-v1!)
        (catch Exception e
          (println (str "WARN: evidence links index failed: " (.getMessage e)))))
-  ;; Finalize the evidence chain: persist registry and cursor
+  ;; Phase 3: Aggregate scenario-local evidence into the top-level registry
+  (let [aggregated-count (chain/accumulate-scenario-evidence!)]
+    (println (str "Aggregated " aggregated-count " scenario-local evidence entries")))
+  ;; Finalize the evidence chain: persist registry with aggregated evidence
   (try (chain/finalize-and-write!)
        (catch Exception e
          (println (str "WARN: chain finalize failed: " (.getMessage e)))))
-  ;; Read the persisted registry and verify integrity
-  ;; (scenarios use with-fresh-registry so in-memory atom only holds index entries)
-  (try (let [reg-file (io/file (str (evcfg/artifact-dir)) "evidence-registry.json")]
-         (when (.exists reg-file)
-           (let [reg (json/read-str (slurp reg-file) :key-fn keyword)
-                 artifacts (:artifacts reg)
-                 transition-entries (filter #(= :transition-evidence (:kind %)) artifacts)]
-             (println (str "Evidence registry: " (count artifacts) " total entries, "
-                           (count transition-entries) " transition-evidence records"))
-             (when (seq transition-entries)
-               (let [integrity (chain/evidence-chain-integrity reg)]
-                 (println (str "  registry-hash-valid=" (:registry-hash-valid integrity)
-                               " chain-intact=" (:chain-intact integrity))))))))
+  ;; Phase 1: Reconcile evidence files on disk against the registry and cursor
+  (try (let [result (chain/reconcile-evidence! :throw-on-error false)]
+         (println (str "Evidence reconciliation: " (if (:reconciled? result) "PASS" "ISSUES FOUND")
+                       " disk=" (:disk-count result)
+                       " registry=" (:registry-count result)
+                       " cursor-seq=" (:cursor-seq result)
+                       " max-disk-seq=" (:max-disk-seq result)))
+         (doseq [e (:errors result)]
+           (println (str "  RECONCILIATION ISSUE: " e))))
        (catch Exception e
-         (println (str "WARN: registry verification failed: " (.getMessage e)))))
-  (try (chain/write-chain-cursor-final!)
+         (println (str "WARN: evidence reconciliation failed: " (.getMessage e)))))
+  ;; Phase 4: Write aggregate cursor referencing all scenario chain heads
+  (try (let [snapshots (chain/scenario-evidence-snapshots)
+             registry (chain/build-registry)
+             agg-cursor (chain/build-aggregate-cursor snapshots (:registry-hash registry))]
+         (when agg-cursor
+           (let [cursor-file (io/file (str (evcfg/artifact-dir)) "aggregate-cursor.json")]
+             (spit cursor-file (json/write-str agg-cursor {:indent true}))
+             (println (str "Wrote aggregate-cursor.json: "
+                           (:cursor/scenario-count agg-cursor) " scenarios, "
+                           (:cursor/total-evidence agg-cursor) " total evidence")))))
        (catch Exception e
-         (println (str "WARN: chain cursor write failed: " (.getMessage e))))))
+         (println (str "WARN: aggregate cursor write failed: " (.getMessage e))))))
 
 ;; Use :once fixture to clean evidence before and emit summary after
 (defn evidence-fixture

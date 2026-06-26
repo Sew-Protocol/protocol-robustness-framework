@@ -93,7 +93,8 @@
 (def strategic-actions
   "Actions that represent strategic decision nodes in replay traces.
    Used by subgame counterfactual analysis and projection replay."
-  #{"create-escrow" "raise-dispute" "escalate-dispute" "execute-resolution"})
+  #{"create-escrow" "raise-dispute" "escalate-dispute" "execute-resolution"
+    "sender-cancel" "recipient-cancel"})
 
 (def transition-types
   "Semantic categories for protocol state transitions."

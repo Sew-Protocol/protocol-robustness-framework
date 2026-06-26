@@ -397,7 +397,6 @@ tests without a live XTDB instance.
 | `resolver-sim.db.*` | Framework Substrate | Persistence shell and run/event storage infrastructure. |
 | `resolver-sim.io.scenarios` | Framework Substrate | Scenario loading/validation substrate. |
 | `resolver-sim.io.trace-score` | Framework Substrate | Generic scoring façade (delegates to protocol-specific providers). |
-| `resolver-sim.io.sew.trace-score` | Sew Protocol Model | Sew-specific scoring semantics. |
 | `resolver-sim.server.*` | Framework Substrate | Session/server infrastructure with protocol pluggability. |
 | `resolver-sim.generators.actions` | Framework Substrate | Generic generation orchestration façade. |
 | `resolver-sim.generators.adversarial` | Framework Substrate | Generic adversarial generation façade. |

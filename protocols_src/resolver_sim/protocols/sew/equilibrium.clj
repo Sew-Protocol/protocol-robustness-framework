@@ -601,6 +601,91 @@
             "pending lifecycle counts are consistent"))))
 
 ;; ---------------------------------------------------------------------------
+;; Cancellation-specific mechanism property and equilibrium validators
+;; ---------------------------------------------------------------------------
+
+(def ^:private cancel-actions
+  "Actions considered cancellation decision nodes for cancellation-dominance analysis."
+  #{"sender_cancel" "recipient_cancel"})
+
+(defn- cancel-decision-node?
+  "True when a regret-table entry corresponds to a cancellation decision."
+  [entry]
+  (contains? cancel-actions (str (:chosen-action entry))))
+
+(defn- check-cancellation-dominance
+  "Cancellation-specific equilibrium concept: no alternative action yields strictly
+   higher utility than the chosen cancel action at any cancel decision node.
+
+   Evidence-strength labeling:
+   - :multi-trace-deviation-tested — projection has deviation bundles meeting minimums
+   - :single-trace-cancel-proxy    — single trace, no deviation bundles
+
+   Delegates to subgame-counterfactual (same infrastructure as SPE) but filters
+   the regret table to cancellation-specific decision nodes only.
+
+   :pass when no cancel node has positive regret (chosen action >= all alternatives).
+   :fail when any cancel node has positive regret.
+   :inconclusive when no cancel decisions were present in the trace (no data)."
+  [projection]
+  (let [{:keys [status basis regret-table max-regret threshold checked-nodes requires
+                spe-result strategy-profile proper-subgames-checked
+                information-set-nodes-checked not-checkable-nodes
+                counterexamples epsilon-abs epsilon-rel
+                class-counts exceed-epsilon-count memoization regret-distribution
+                max-deviation-depth mean-regret]}
+        (subgame-cf/evaluate-subgame-counterfactual projection)
+        eq-concept :cancellation-dominance
+        ;; Evidence-strength: deviation-bundle present → multi-trace, else single-trace proxy
+        dev-bundle-min? (true? (get-in projection [:deviation-bundle :meets-minimum?]))
+        evidence-basis (if dev-bundle-min?
+                         :multi-trace-deviation-tested
+                         :single-trace-cancel-proxy)
+        cancel-rows  (filter cancel-decision-node? regret-table)
+        cancel-count (count cancel-rows)
+        cancel-max-regret (reduce max 0 (map :local-regret cancel-rows))
+        cancel-fails (filter (fn [r] (pos? (long (or (:local-regret r) 0)))) cancel-rows)
+        cancel-fail-count (count cancel-fails)]
+    (cond
+      (zero? cancel-count)
+      (inconclusive eq-concept :absent-evidence
+                    (str "no cancel decision nodes found (cancel-count=0); "
+                         "cancellation-dominance cannot be evaluated"))
+
+      (pos? cancel-fail-count)
+      (fail eq-concept evidence-basis
+            {:cancel-nodes-checked cancel-count
+             :cancel-max-regret cancel-max-regret
+             :cancel-fails (mapv #(select-keys % [:seq :agent :action-taken :chosen-utility
+                                                   :max-alt-utility :local-regret])
+                                 cancel-fails)
+             :cancel-fail-count cancel-fail-count
+             :all-nodes-checked checked-nodes
+             :strategy-profile strategy-profile
+             :evidence-basis evidence-basis}
+            {:cancel-fail-count 0
+             :cancel-max-regret (str "<= " threshold)}
+            (mapv (fn [r] {:node/seq (:seq r)
+                           :agent (:agent r)
+                           :action (:chosen-action r)
+                           :regret (:local-regret r)
+                           :chosen-utility (:chosen-utility r)
+                           :max-alt-utility (:max-alt-utility r)})
+                  cancel-fails))
+
+      :else
+      (pass eq-concept evidence-basis
+            {:cancel-nodes-checked cancel-count
+             :cancel-max-regret cancel-max-regret
+             :all-nodes-checked checked-nodes
+             :strategy-profile strategy-profile
+             :proper-subgames-checked proper-subgames-checked
+             :information-set-nodes-checked information-set-nodes-checked
+             :evidence-basis evidence-basis}
+            {:cancel-fail-count 0
+             :cancel-max-regret (str "<= " threshold)}))))
+
+;; ---------------------------------------------------------------------------
 ;; Public validator registries
 ;; ---------------------------------------------------------------------------
 
@@ -624,4 +709,5 @@
    :bounded-public-state-epsilon-spe        check-bounded-public-state-epsilon-spe
    :bounded-backward-induction-spe          check-bounded-backward-induction-spe
    :resolver-reputation-spe                 check-resolver-reputation-spe
-   :resolver-reputation-profile-matrix      check-resolver-reputation-profile-matrix})
+   :resolver-reputation-profile-matrix      check-resolver-reputation-profile-matrix
+   :cancellation-dominance                  check-cancellation-dominance})

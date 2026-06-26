@@ -148,10 +148,10 @@
    Scenario `:options {:minimal true}` or `:options {:flags {...}}` merge the same way."
   ([protocol scenario] (replay-with-protocol protocol scenario {}))
   ([protocol scenario replay-opts]
-   (chain/with-fresh-registry
-     (chain/with-fresh-chain-cursor
-       (risk/with-fresh-risk-context
-         (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
+    (chain/with-fresh-registry
+      (chain/with-fresh-chain-cursor
+        (risk/with-fresh-risk-context
+          (let [flags              (replay-flags/resolve-replay-flags scenario replay-opts)
                vocab              (if (satisfies? proto/EconomicModel protocol)
                                     (proto/metric-vocabulary protocol)
                                     #{})
@@ -218,7 +218,8 @@
                     :private-key-path signing-key
                     :password signing-pw))
 
-                 (assoc result :risk-events (risk/events)))))))))))
+                  (chain/register-scenario-snapshot!)
+                  (assoc result :risk-events (risk/events)))))))))))
 
 (defn replay-yield-scenario
   "Thin sequential replay for `yield-v1` (see `replay.yield`)."

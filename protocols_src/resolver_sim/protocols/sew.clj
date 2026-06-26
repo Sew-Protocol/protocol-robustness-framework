@@ -958,6 +958,10 @@
         (and accepted? (= action "raise_dispute"))           (conj :dispute-raised)
         (and accepted? (= action "execute_resolution"))      (conj :dispute-resolved)
         (and accepted? (= action "execute_pending_settlement")) (conj :settlement-executed)
+        ;; Cancellation action classification
+        (and accepted? (= action "sender_cancel"))           (conj :cancellation-sender)
+        (and accepted? (= action "recipient_cancel"))        (conj :cancellation-recipient)
+        (and accepted? (= action "auto_cancel_disputed"))    (conj :cancellation-auto-dispute)
         (and (= result-kw :rejected)
              (contains? sew-state-error-codes error-kw))       (conj :invalid-state-transition)
         (and (= result-kw :rejected)
@@ -976,7 +980,11 @@
       :unexpected-reverts
       :negative-payoff-count
       :coalition-net-profit
-      :funds-lost})
+      :funds-lost
+      ;; Cancellation-specific metrics
+      :cancellations-sender
+      :cancellations-recipient
+      :cancellations-auto-dispute})
 
   (accum-protocol-metrics [_ metrics event-tags event accepted? attack? world-before world-after]
     (let [double-settle? (and accepted?
@@ -1001,6 +1009,15 @@
 
         (contains? event-tags :settlement-executed)
         (update :pending-settlements-executed inc)
+
+        (contains? event-tags :cancellation-sender)
+        (update :cancellations-sender inc)
+
+        (contains? event-tags :cancellation-recipient)
+        (update :cancellations-recipient inc)
+
+        (contains? event-tags :cancellation-auto-dispute)
+        (update :cancellations-auto-dispute inc)
 
         double-settle?
         (update :double-settlements inc)
