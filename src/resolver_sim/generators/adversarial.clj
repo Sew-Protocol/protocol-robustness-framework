@@ -8,23 +8,31 @@
    ┌──────────────────────┬─────────────────────────────┬──────────────────────┐
    │ Function             │ Dispatch model               │ Wired provider       │
    ├──────────────────────┼─────────────────────────────┼──────────────────────┤
-   │ profile-priority     │ unconditional Sew delegate   │ sew-v1 only          │
+   │ profile-priority     │ conditional Sew delegate     │ sew-v1 only          │
    │ valid-next-actions   │ case on proto/protocol-id    │ sew-v1 only          │
-   │ next-time            │ unconditional Sew delegate   │ sew-v1 only          │
+   │ next-time            │ conditional Sew delegate     │ sew-v1 only          │
    └──────────────────────┴─────────────────────────────┴──────────────────────┘
 
-   profile-priority and next-time delegate unconditionally — non-Sew protocols
-   receive Sew semantics. This is safe only because no second protocol currently
-   exercises this path with a different profile model. To add a new protocol,
-   add a case dispatch and a protocol-scoped implementation."
-  (:require [resolver-sim.protocols.protocol :as proto]
-            [resolver-sim.generators.sew.adversarial :as sew-adv]))
+   Providers are loaded lazily via `requiring-resolve` so the dispatch layer
+   loads cleanly in prf-only workspace mode. When the provider is absent,
+   profile-priority returns 999 and next-time increments by 1 — both safe
+   defaults. To add a new protocol, add a case branch and a protocol-scoped
+   implementation."
+  (:require [resolver-sim.protocols.protocol :as proto]))
+
+(def ^:private sew-profile-priority
+  (delay (try (requiring-resolve 'resolver-sim.generators.sew.adversarial/profile-priority)
+              (catch java.io.FileNotFoundException _ nil))))
 
 (defn profile-priority
-  ;; NOTE: unconditional Sew delegate — no protocol dispatch.
-  ;; Non-Sew protocols receive Sew priority semantics.
   [profile action]
-  (sew-adv/profile-priority profile action))
+  (if-let [f @sew-profile-priority]
+    (f profile action)
+    999))
+
+(def ^:private sew-valid-next-actions
+  (delay (try (requiring-resolve 'resolver-sim.generators.sew.adversarial/valid-next-actions)
+              (catch java.io.FileNotFoundException _ nil))))
 
 (defn valid-next-actions
   "Delegates to canonical action validity and applies adversarial profile sort bias."
@@ -32,8 +40,14 @@
   ;; Protocol dispatch: add a case branch for each supported protocol.
   ;; Non-wired protocols return [] (no valid actions).
   (case (proto/protocol-id protocol)
-    "sew-v1" (sew-adv/valid-next-actions profile protocol context world seq time)
+    "sew-v1" (if-let [f @sew-valid-next-actions]
+               (f profile protocol context world seq time)
+               [])
     []))
+
+(def ^:private sew-next-time
+  (delay (try (requiring-resolve 'resolver-sim.generators.sew.adversarial/next-time)
+              (catch java.io.FileNotFoundException _ nil))))
 
 (defn next-time
   "Return next event timestamp according to profile semantics.
@@ -41,8 +55,9 @@
    - :timeout-boundary targets pending-settlement deadline at t-1/t/t+1 when known.
    - default increments by 1.
 
-   Compatibility adapter: currently delegates to Sew semantics."
-  ;; NOTE: unconditional Sew delegate — no protocol dispatch.
-  ;; Non-Sew protocols receive Sew time-shaping semantics.
+   Compatibility adapter: currently delegates to Sew semantics
+   when the provider namespace is on the classpath."
   [profile world prev-time step-idx]
-  (sew-adv/next-time profile world prev-time step-idx))
+  (if-let [f @sew-next-time]
+    (f profile world prev-time step-idx)
+    (inc prev-time)))

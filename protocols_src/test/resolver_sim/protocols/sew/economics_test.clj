@@ -135,6 +135,6 @@
 
 (deftest sew-resolution-call-site-uses-sew-economics-adapter
   (testing "resolution query path does not call the deprecated payoffs slash wrapper directly"
-    (let [source (slurp "src/resolver_sim/protocols/sew/resolution.clj")]
+    (let [source (slurp "protocols_src/resolver_sim/protocols/sew/resolution.clj")]
       (is (str/includes? source "sew-econ/calculate-sew-slash-allocation"))
       (is (not (str/includes? source "payoffs/calculate-prorata-slash-allocation"))))))

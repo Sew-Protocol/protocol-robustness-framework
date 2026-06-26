@@ -6,10 +6,10 @@
    transitions.
    
    Usage:
-     (check-evidence-coverage \"src/resolver_sim/protocols/sew/resolution.clj\")
-     (check-evidence-coverage \"src/resolver_sim/protocols/sew/registry.clj\"
+     (check-evidence-coverage \"protocols_src/resolver_sim/protocols/sew/resolution.clj\")
+     (check-evidence-coverage \"protocols_src/resolver_sim/protocols/sew/registry.clj\"
                               :allowed-missing #{'get-stake 'can-handle-escrow?})
-     (check-evidence-coverage \"src/resolver_sim/protocols/sew/\"
+     (check-evidence-coverage \"protocols_src/resolver_sim/protocols/sew/\"
                               :evidence-helpers #{'distribute-slashed-funds})"
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]

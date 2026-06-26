@@ -1,4 +1,4 @@
-{:paths ["." "src"]
+{:paths ["." "src" "protocols_src"]
 
  :mvn/repos {"central" {:url "https://repo1.maven.org/maven2/"}
              "clojars" {:url "https://repo.clojars.org/"}}
@@ -24,9 +24,9 @@
         metosin/malli                     {:mvn/version "0.17.0"}}
 
  :aliases
- {:test
-  {:extra-paths ["test"]
-   :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}}
+  {:test
+   {:extra-paths ["test" "protocols_src/test"]
+    :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}}
 
   :dev/base
   {:extra-paths ["dev" "test" "notebooks"]

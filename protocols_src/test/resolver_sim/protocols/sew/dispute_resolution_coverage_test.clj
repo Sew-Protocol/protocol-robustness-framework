@@ -503,7 +503,7 @@
 
 (deftest test-governance-dispatch-audit
   (testing "Governance-sensitive actions must use with-governance-actor"
-    (let [source (slurp "src/resolver_sim/protocols/sew.clj")
+    (let [source (slurp "protocols_src/resolver_sim/protocols/sew.clj")
           ;; Actions that MUST have governance gates (by protocol design)
           must-be-gated #{:rotate-dispute-resolver
                           :set-paused

@@ -2,6 +2,11 @@
 
 A framework for adversarial multi-actor scenario testing, specializing in robustness analysis for escrow, dispute-resolution, and state-machine protocols.
 
+**New to the codebase?** Start with the `workspaces/prf-only/` view — it
+shows the protocol-agnostic framework without protocol implementation files.
+The full codebase (framework + Sew protocol) is the default when you work
+from the project root.
+
 ## What this is
 
 The Protocol Robustness Framework enables adversarial simulation, invariant checking, and deterministic replay for complex protocol systems.
@@ -48,7 +53,7 @@ Sew is both:
 The Sew adapter lives under:
 
 ```text
-src/resolver_sim/protocols/sew/
+protocols_src/resolver_sim/protocols/sew/
 ```
 
 When adapting the framework to another protocol, Sew should be treated as the reference implementation pattern.

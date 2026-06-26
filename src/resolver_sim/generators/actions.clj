@@ -12,9 +12,16 @@
    └──────────────────────┴─────────────────────────────┴──────────────────┘
 
    Protocol-specific candidate templates live in protocol-scoped generator
-   namespaces. To add a new protocol, add a case branch in `candidate-events`."
-  (:require [resolver-sim.protocols.protocol :as proto]
-            [resolver-sim.generators.sew.actions :as sew-actions]))
+   namespaces. To add a new protocol, add a case branch in `candidate-events`.
+
+   Protocol provider namespaces are loaded lazily via `requiring-resolve` so
+   this namespace loads cleanly even when a provider is not on the classpath
+   (e.g. in prf-only workspace mode)."
+  (:require [resolver-sim.protocols.protocol :as proto]))
+
+(def ^:private sew-candidate-events
+  (delay (try (requiring-resolve 'resolver-sim.generators.sew.actions/candidate-events)
+              (catch java.io.FileNotFoundException _ nil))))
 
 (defn- candidate-events
   "Build candidate events for the current world.
@@ -23,7 +30,9 @@
   ;; Protocol dispatch: add a case branch for each supported protocol.
   ;; Non-wired protocols return [] (no candidates).
   (case (proto/protocol-id protocol)
-    "sew-v1" (sew-actions/candidate-events world seq time)
+    "sew-v1" (if-let [f @sew-candidate-events]
+               (f world seq time)
+               [])
     []))
 
 (defn valid-next-actions
