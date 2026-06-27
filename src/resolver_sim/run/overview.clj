@@ -45,7 +45,8 @@
    comparison and hashing.  Volatile fields (timestamps, paths, timing,
    raw execution data) are excluded.
 
-   Returns a map conforming to run-overview.v1 schema."
+   Returns a map conforming to run-overview.v1 schema with a self-referential
+   :overview/hash computed from all other fields."
   [{:keys [results runner-selection] :as run-result}]
   (let [suite-key (:suite/key run-result)
         stable-results (mapv stable-scenario-entry results)
@@ -54,19 +55,22 @@
         failed (- total passed)
         expected-failed (count (filter :expected-fail? stable-results))
         unexpected-failed (count (filter (fn [r] (and (not (:pass? r)) (not (:expected-fail? r))))
-                                         stable-results))]
-    {:overview/schema-version schema-version
-     :suite {:suite/key suite-key
-             :scenario-count (count results)
-             :runner-selection (select-keys runner-selection [:mode :runner-id])}
-     :results stable-results
-     :totals {:passed passed
-              :failed failed
-              :total total
-              :expected-failed expected-failed
-              :unexpected-failed unexpected-failed}
-     :consensus {:eligible? true
-                 :basis :normalized-result-hash}}))
+                                         stable-results))
+        base {:overview/schema-version schema-version
+              :suite {:suite/key suite-key
+                      :scenario-count (count results)
+                      :runner-selection (select-keys runner-selection [:mode :runner-id])}
+              :results stable-results
+              :totals {:passed passed
+                       :failed failed
+                       :total total
+                       :expected-failed expected-failed
+                       :unexpected-failed unexpected-failed}
+              :consensus {:eligible? true
+                          :basis :normalized-result-hash}}
+        ;; Self-referential hash: compute hash over canonical fields (excl. :overview/hash)
+        overview-h (hc/hash-with-intent {:hash/intent :run-overview} base)]
+    (assoc base :overview/hash overview-h)))
 
 (defn overview-hash
   "Compute a stable hash of a normalized overview.

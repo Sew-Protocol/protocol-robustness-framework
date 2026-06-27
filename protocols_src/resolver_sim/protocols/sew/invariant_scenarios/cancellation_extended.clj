@@ -49,8 +49,11 @@
 (def s-same-timestamp-cancel-vs-dispute
   "Boundary test: sender_cancel and raise_dispute at the same timestamp.
    Verifies deterministic ordering when cancel and dispute actions collide.
-   Cancel-first ordering: sender calls cancel (succeeds), then dispute is
-   raised (rejected because escrow is no longer PENDING — expected revert)."
+   Cancel-first ordering: sender calls cancel (succeeds, sets senderStatus),
+   then dispute is raised at the same timestamp.  Dispute ALSO succeeds
+   because senderCancel does not change escrowState (stays PENDING).
+   The dispute overrides the cancel status — senderStatus cleared by
+   transitionToDisputed.  Dispute wins at same timestamp."
   {:scenario-id     "s-same-timestamp-cancel-vs-dispute"
    :schema-version  "1.0"
    :scenario-author "@research"
@@ -60,14 +63,15 @@
    :protocol-params {:resolver-fee-bps 150
                      :appeal-window-duration 0
                      :max-dispute-duration 2592000}
-   :expected-failures {:reverts #{2}}
+   :allow-open-disputes? true
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 1500}}
-    ;; Cancel succeeds at t=1060 (set senderStatus = AGREE_TO_CANCEL)
+    ;; Cancel succeeds at t=1060 (set senderStatus = AGREE_TO_CANCEL, state stays PENDING)
     {:seq 1 :time 1060 :agent "buyer" :action "sender_cancel"
      :params {:workflow-id 0}}
-    ;; Dispute at same timestamp — expected revert (state is no longer PENDING)
+    ;; Dispute at same timestamp — ALSO SUCCEEDS because state is still PENDING.
+    ;; Dispute transitions PENDING → DISPUTED and clears senderStatus to NONE.
     {:seq 2 :time 1060 :agent "seller" :action "raise_dispute"
      :params {:workflow-id 0}}]})
 
@@ -84,7 +88,8 @@
    :protocol-params {:resolver-fee-bps 150
                      :appeal-window-duration 0
                      :max-dispute-duration 2592000}
-   :expected-failures {:reverts #{2}}
+   :allow-open-disputes? true
+   :expected-errors [{:seq 2 :action "sender_cancel" :error :transfer-not-pending}]
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 1500}}

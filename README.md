@@ -531,7 +531,7 @@ Run all dispute-resolution phases:
 Run individual phases using Babashka:
 
 ```bash
-bb run:scenario:family <phase-name>
+bb run:scenario:search <text>
 ```
 
 ## Dispute-resolution validation phases

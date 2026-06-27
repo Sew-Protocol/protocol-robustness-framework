@@ -214,7 +214,7 @@ Concrete commands present in `bb.edn`:
 - Fixture suites / scenario replay suites: `bb test:suites`
 - Full canonical gate: `bb test`
 - Single scenario replay: `bb run:scenario <alias|scenario-path>`
-- Scenario family replay: `bb run:scenario:family <selector>`
+- Scenario text search: `bb run:scenario:search <text>`
 - Artifact registry validation:
   `bb validation:artifact-registry [path/to/test-artifacts.json]`
 - Evidence registry build: `bb evidence:registry [--dir <run-dir>]`

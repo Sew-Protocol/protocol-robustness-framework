@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Write lightweight run-manifest artifacts for a bb scenario:run,
-scenario:run:family, or evidence:build invocation.
+run:scenario:search, or evidence:build invocation.
 
 Reads canonical evidence chain configuration from config/evidence.json.
 

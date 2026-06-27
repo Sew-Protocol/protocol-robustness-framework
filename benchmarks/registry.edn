@@ -18,6 +18,7 @@
    :pack/description "Sew protocol benchmark pack"
    :pack/registry "packs/sew/registry.edn"}
 
-  {:pack/id :pack/stablecoin-safety
-   :pack/description "Stablecoin safety benchmark pack"
-   :pack/registry "packs/stablecoin-safety/registry.edn"}]}
+  ;; {:pack/id :pack/stablecoin-safety
+  ;;  :pack/description "Stablecoin safety benchmark pack (not yet materialized)"
+  ;;  :pack/registry "packs/stablecoin-safety/registry.edn"}
+  ]}

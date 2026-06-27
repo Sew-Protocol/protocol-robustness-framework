@@ -124,7 +124,7 @@
                                     vec)]
          [:div
           [:div {:style {:fontSize "12px" :marginBottom "10px" :color "#cbd5e1"}}
-           "Use `bb run:scenario:family forking-strategist` to run the full dispute-forking family. This panel shows those scenarios from the latest loaded artifacts."]
+           "Search with `bb run:scenario:search forking-strategist` to find related scenarios. This panel shows those scenarios from the latest loaded artifacts."]
           (if (seq forking-scenarios)
             [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "12px"}}
              [:thead

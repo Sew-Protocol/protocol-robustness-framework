@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed (2026-06-27)
+
+- **Solidity shadow registry:** Expanded from 15 to 29 entries across 11 contracts — added entries for all Session 10–15 bug fixes (auto-cancel-on-disputed griefing protection, state management guards, dispute timestamp cleanup, yield unwind cleanup, F3 governance sandwich, SEL_FINALIZE_DISPUTE selector, `BothAutoTimesSet` guard, `acceptSplit` cleanup, `transitionToDisputed` guard, cross-module terminal path invariants, CEI fix, escrowData encoding alignment, `OperationFailure` event emissions).
+- **EscrowData encoding mismatch documented:** `DisputeOps` now uses 5-element `EscrowEncodingLibrary.encodeEscrowTransferData` matching `CreateOps` — resolution modules receive consistent data format across all call sites.
+
 ### Added (2026-06-27)
 
 - **Solidity Shadow Registry:** Created `src/resolver_sim/definitions/solidity_shadow_registry.clj` — a machine-readable registry tracking which simulation code shadows which Solidity contract, with documented known differences. 15 entries across 9 contracts (BaseEscrow.sol, EscrowStateMachine.sol, ResolverSlashingModuleV1.sol, SettlementOps.sol, DefaultCancellationStrategy.sol, StateInvariants.t.sol, ResolverInvariants.t.sol, IdentityGuard.sol-proposed, StorageMigration.sol-proposed). Query API: `lookup-by-simulation`, `lookup-by-solidity`, `all-differences`, `check-shadow-coverage`, `format-shadow-report`. Added `bb shadow:check` and `bb shadow:report` tasks. Added `test/resolver_sim/definitions/solidity_shadow_registry_test.clj` (8 tests, 45 assertions).
@@ -48,6 +53,9 @@
 - **`bb forensic:export` and `bb forensic:import`:** Export a forensic run bundle as tar.gz with `export-manifest.json` for portable distribution. Import extracts to `~/prf-runs/`. Supports `--output` override.
 - **`bb forensic:reproduce`:** Reproduce a forensic run from its bundle — re-executes the same run request, compares the Clojure-side overview hash (stable, no timestamps). Reports `✅ REPRODUCED` or `❌ DIVERGED`.
 - **`PRODUCTION_GAPS.md` updated:** Refreshed to reflect current implementation status across all categories.
+- **Execution hash split: `execution/content-hash` vs `execution/record-hash`:** `build-execution-node` now produces `:content-hash` (deterministic, excludes wall-clock timestamp) alongside `:node-hash` (same deterministic value). A new `:record-hash` field binds the content hash to the capture timestamp via SHA-256(content-hash + "|" + timestamp). The Clojure bundle root (`clojure-bundle-root.json`) includes all three: `execution/content-hash` for reproduce/quorum, `execution/node-hash` for backward compat, `execution/record-hash` for audit trail. Self-test excludes `execution/record-hash` from stable comparison with documented reason.
+- **`bb forensic:quorum` — local repeated-execution quorum:** New command runs the same suite N times (default 3), compares all stable fields (bundle hash, overview hash, registry snapshot hashes), reports per-field agreement with threshold (default 2-of-3). Status values: `confirmed`, `non-deterministic`, `failed`, `inconclusive`. Two-axis separation: execution success and field agreement are independent. Volatile fields (`execution/node-hash`, `execution/record-hash`) excluded. Limitations documented: "local repeatability, not independent remote verification."
+- **Self-test identity metadata:** `self-test-report.json` now includes `identity` block (suite-key, request-path, scenario-count, source/tree-hash, bundle/hash, overview/hash, runner-id) and `comparison-profile` (fields-compared, volatile-fields-excluded).
 
 ### Fixed (2026-06-27)
 - **`cursor-snapshot` forward-reference compilation error in `resolver-sim.evidence.chain`:** Added `(declare cursor-snapshot)` — `cursor-snapshot` was used at line 87 but defined at line 323.

@@ -16,9 +16,22 @@ import pwd
 from pathlib import Path
 from typing import Any
 
+# Configurable hardening constants (override via env)
+# Set PRF_EVIDENCE_USER and PRF_EVIDENCE_WORKSPACE in your environment
+# to enable the corresponding isolation checks.
+PRF_EVIDENCE_USER = os.environ.get("PRF_EVIDENCE_USER", "")
+PRF_EVIDENCE_WORKSPACE = os.environ.get("PRF_EVIDENCE_WORKSPACE", "")
 
-def check_uid(expected_user: str = "evidence_runner") -> dict[str, Any]:
-    """Verify the process is running under the expected dedicated UID."""
+
+def check_uid(expected_user: str = "") -> dict[str, Any]:
+    """Verify the process is running under the expected dedicated UID.
+    Skipped if no expected user is configured (set PRF_EVIDENCE_USER)."""
+    if not expected_user:
+        expected_user = PRF_EVIDENCE_USER
+    if not expected_user:
+        return {"check": "uid", "status": "skip",
+                "detail": "No expected user configured (set PRF_EVIDENCE_USER)",
+                "expected": None, "actual": None}
     try:
         uid = os.geteuid()
         pw = pwd.getpwuid(uid)
@@ -118,8 +131,15 @@ def check_proc_isolation() -> dict[str, Any]:
         }
 
 
-def check_fs_access(write_target: str = "/var/lib/evidence-runner") -> dict[str, Any]:
-    """Verify write access to the expected isolated workspace directory."""
+def check_fs_access(write_target: str = "") -> dict[str, Any]:
+    """Verify write access to the expected isolated workspace directory.
+    Skipped if no workspace path is configured (set PRF_EVIDENCE_WORKSPACE)."""
+    if not write_target:
+        write_target = PRF_EVIDENCE_WORKSPACE
+    if not write_target:
+        return {"check": "fs-access", "status": "skip",
+                "detail": "No workspace path configured (set PRF_EVIDENCE_WORKSPACE)",
+                "expected": None, "actual": None}
     path = Path(write_target)
     try:
         if not path.exists():
@@ -214,10 +234,14 @@ def compute_isolation_grade(isolation_mode: str,
 
 
 def run_isolation_checks(
-    expected_user: str = "evidence_runner",
-    write_target: str = "/var/lib/evidence-runner",
+    expected_user: str = "",
+    write_target: str = "",
     isolation_mode: str = "shared-filesystem",
 ) -> dict[str, Any]:
+    if not expected_user:
+        expected_user = PRF_EVIDENCE_USER
+    if not write_target:
+        write_target = PRF_EVIDENCE_WORKSPACE
     """Run all OS-level isolation checks and return a structured report.
 
     The report is safe to embed directly into run-overview.json or

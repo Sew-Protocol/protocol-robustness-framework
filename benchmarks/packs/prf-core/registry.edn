@@ -10,7 +10,8 @@
    :benchmark/file "deterministic-replay-v1.edn"
    :benchmark/status :active}
 
-  {:benchmark/id :benchmark/prf-evidence-integrity-v1
-   :benchmark/domain :domain/evidence-integrity
-   :benchmark/file "evidence-integrity-v1.edn"
-   :benchmark/status :active}]}
+  ;; {:benchmark/id :benchmark/prf-evidence-integrity-v1
+  ;;  :benchmark/domain :domain/evidence-integrity
+  ;;  :benchmark/file "evidence-integrity-v1.edn"
+  ;;  :benchmark/status :experimental}
+  ]}

@@ -1,6 +1,42 @@
 (ns resolver-sim.scenario.suites
   "Named deterministic scenario collections (path lists) for run-collection.
 
+   THREE GROUPING CONCEPTS exist in this codebase.
+   They differ in registration, execution model, and purpose:
+
+   ─────────────────────────────────────────────────────────────────
+   SUITE  (run:scenario:suite)
+     Registered, curated path list in `suites` (this file).
+     Executes in a single Clojure process via run-collection.
+     Used by: CI gates, golden report refresh, coverage tiers.
+     Examples: :dispute-resolution-scenarios, :sew-yield-scenarios
+     Keyword namespace: bare keywords (no prefix).
+
+   BENCHMARK PACK SUITE  (bb benchmark:run)
+     Same registry as suites but kept in `pack-suites` to avoid
+     duplicate scenario-id validation errors.  Referenced by
+     benchmark pack manifests via :benchmark/scenario-suite.
+     Executes inside a benchmark evidence bundle.
+     Keyword namespace: :suite/ prefix (e.g. :suite/sew-dispute-safety-v1).
+     NOTE: pack suites currently share the exact same path lists
+     as functional suites — they are aliases, not distinct sets.
+
+   SEARCH  (run:scenario:search)
+     NOT a registered grouping.  Ad-hoc text search across all scenario
+     file paths and contents (case-insensitive substring).  Executes
+     each match in a separate subprocess.  Results are not suitable
+     for canonical CI, benchmark definitions, or published evidence.
+     No file in this namespace implements search logic;
+     the selector runs entirely in bb.edn.
+
+   ─────────────────────────────────────────────────────────────────
+   OVERLAP WARNING:
+   The 44 dispute-resolution files (S-DR-001..S-DR-085) appear in
+   THREE groupings — one suite + two pack suites.  This is by design
+   (pack suites reuse the same path lists), but means the same
+   scenarios execute under different names depending on the entry
+   point.  See `pack-suites` docstring for details.
+
    Suite naming:
      :yield-provider-scenarios — standalone `yield-v1` provider scenarios (scenarios/Y01..Y05)
      :sew-yield-scenarios       — Sew escrow + yield integration (scenarios/S*)
@@ -80,7 +116,11 @@
   "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}.
 
    The registry is the source of truth for named file-backed scenario suites. Keep the
-   metadata here aligned with task/docs entrypoints and protocol inference."
+   metadata here aligned with task/docs entrypoints and protocol inference.
+
+   Protocol pack suites (prefixed with :suite/) are used by benchmark pack manifests
+   under benchmarks/packs/. They reference the same scenario file lists as the
+   functional suite keywords for execution purposes."
   {:dispute-resolution-scenarios {:paths        dispute-resolution-scenario-paths
                                   :protocol-id  "sew-v1"
                                   :title        "Dispute-resolution scenarios"
@@ -100,25 +140,67 @@
                                   :kind         :file-path-suite
                                   :ci-tier      :provider}})
 
-(defn resolve-suite-key
-  "Resolve suite keyword (identity — no remaining deprecated aliases)."
+(def pack-suites
+  "Benchmark pack suite keywords — used by benchmarks/packs/*/ manifests.
+
+   NOTE — OVERLAP WITH FUNCTIONAL SUITES:
+   Pack suites currently reference the EXACT SAME path lists as functional
+   suites.  They are semantic aliases, not distinct scenario sets.
+
+     :suite/sew-dispute-safety-v1  ≡ :dispute-resolution-scenarios  (44 S-DR files)
+     :suite/sew-yield-safety-v1    ≡ :sew-yield-scenarios           (15 S files)
+     :suite/prf-replay-v1          ≡ :dispute-resolution-scenarios  (44 S-DR files)
+
+   This means `bb benchmark:run escrow-dispute-v1.edn` and
+   `bb run:scenario:suite dispute-resolution-scenarios` execute the
+   same 44 scenarios through different entry points.
+
+   Kept separate from `suites` to avoid duplicate scenario-id
+   errors in file-backed suite registry validation.  When new
+   protocol-specific scenarios are added for a benchmark pack,
+   its pack suite should define its own path list here."
+  {:suite/sew-dispute-safety-v1  {:paths        dispute-resolution-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "Sew dispute-safety benchmark suite"
+                                  :description  "Sew escrow dispute, slashing, and liveness scenarios for benchmark execution."
+                                  :kind         :file-path-suite
+                                  :ci-tier      :coverage}
+   :suite/sew-yield-safety-v1    {:paths        yield-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "Sew yield-safety benchmark suite"
+                                  :description  "Sew escrow + yield integration scenarios for benchmark execution."
+                                  :kind         :file-path-suite
+                                  :ci-tier      :coverage}
+   :suite/prf-replay-v1          {:paths        dispute-resolution-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "PRF deterministic replay benchmark suite"
+                                  :description  "Core deterministic replay scenarios for benchmark execution.
+                                   NOTE: currently points to Sew dispute-resolution scenarios because
+                                   PRF-specific replay scenarios do not yet exist.  A genuine PRF replay
+                                   suite would contain protocol-agnostic replay/evidence scenarios."
+                                  :kind         :file-path-suite
+                                  :ci-tier      :coverage}})
+
+(defn- resolve-suite-registry
+  "Return the registry map for a suite keyword — checks `suites` first,
+   then `pack-suites` for benchmark pack references."
   [suite-key]
-  suite-key)
+  (or (get suites suite-key) (get pack-suites suite-key)))
 
 (defn suite-protocol-id
   "Protocol registry id for a named path suite (default sew-v1)."
   [suite-key]
-  (or (get-in suites [(resolve-suite-key suite-key) :protocol-id]) "sew-v1"))
+  (or (:protocol-id (resolve-suite-registry suite-key)) "sew-v1"))
 
 (defn suite-paths
   "Return scenario file paths for a registered suite keyword, or nil if unknown."
   [suite-key]
-  (get-in suites [(resolve-suite-key suite-key) :paths]))
+  (:paths (resolve-suite-registry suite-key)))
 
 (defn suite-definition
   "Return the registry entry for a named suite keyword, or nil if unknown."
   [suite-key]
-  (get suites (resolve-suite-key suite-key)))
+  (resolve-suite-registry suite-key))
 
 (defn suite-metadata
   "Return suite metadata without the path list."

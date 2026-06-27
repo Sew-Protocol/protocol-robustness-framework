@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PRF_RUNS="${HOME}/prf-runs"
+PRF_RUNS="${PRF_RUNS_ROOT:-${HOME}/prf-runs}"
 PRIVATE_TMPFS=false
 PYTHON_ARGS=()
 

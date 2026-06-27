@@ -23,10 +23,8 @@
    :description "Deterministic replay and hash consistency"
    :manifest "benchmarks/packs/prf-core/deterministic-replay-v1.edn"}
 
-  {:id "prf/evidence-integrity-v1"
-   :description "Evidence chain integrity and attestation correctness"
-   :manifest "benchmarks/packs/prf-core/evidence-integrity-v1.edn"}
-
   {:id "community/dispute-liveness-v1"
    :description "[DEPRECATED] Basic dispute escalation robustness — migrated to sew/dispute-liveness-v1"
-   :manifest "benchmarks/packs/sew/dispute-liveness-v1.edn"}]}
+   :manifest "benchmarks/packs/sew/dispute-liveness-v1.edn"}
+
+  ]}

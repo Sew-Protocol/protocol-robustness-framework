@@ -381,6 +381,66 @@
            :differences         ["Simulation guards via :from #{:pending} in allowed-transitions graph"]
            :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
            :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          ;; ══════════════════════════════════════════════════════════════════
+          ;; Cross-module tests — DRv3CrossModuleInvariants (Priority 2)
+          ;; ══════════════════════════════════════════════════════════════════
+
+          {:shadow/id           :cross-module-terminal-paths
+           :simulation/ns       "resolver-sim.protocols.sew.resolution"
+           :simulation/role     :integration
+           :solidity/contract   "BaseEscrow.sol, DecentralizedResolutionModule.sol"
+           :solidity/function   "_finalizeDisputeInModule, automateTimedActions, resolveDisputeByTimeout, executePendingSettlement"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "All terminal dispute paths converge to terminal state (REFUNDED/RELEASED)"
+           :differences         []
+           :test/link           "test/foundry/decentralized-resolution-module/DRv3CrossModuleInvariants.t.sol"
+            :trace-equivalence   "cdrs-v0.2"
+            :last-reviewed       "2026-06-27"}
+
+          ;; ══════════════════════════════════════════════════════════════════
+          ;; Priority 3 fixes — CEI, encoding, events
+          ;; ══════════════════════════════════════════════════════════════════
+
+          {:shadow/id           :escrowable-erc20-cei
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :fix
+           :solidity/contract   "EscrowableERC20.sol"
+           :solidity/function   "withdrawFees"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "totalFees zeroed before _transfer (CEI pattern fix)"
+           :differences         []
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :escrow-data-encoding-alignment
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :fix
+           :solidity/contract   "DisputeOps.sol"
+           :solidity/function   "computeDisputeOpening, computeEscalation"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "DisputeOps now uses 5-element EscrowEncodingLibrary encoding (matching CreateOps)"
+           :differences         []
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :finalize-dispute-event-emission
+           :simulation/ns       "resolver-sim.protocols.sew.resolution"
+           :simulation/role     :fix
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_finalizeDisputeInModule"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "OperationFailure event emitted when finalizeDispute or decrementResolverActiveDisputes calls fail"
+           :differences         ["Simulation does not model low-level call failures — all failures are structured returns"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
            :last-reviewed       "2026-06-27"}])
 
 ;; ──────────────────────────────────────────────────────────────────────────

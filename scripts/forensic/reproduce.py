@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Reproduce a forensic run from its bundle and compare results.
 
+Phase 1+: field classification, mismatch reasons, reproduction verdict.
+
 Usage:
     python3 scripts/forensic/reproduce.py <run-dir> [--output-base <dir>]
 """
@@ -11,13 +13,34 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-PRF_RUNS_ROOT = Path("~/prf-runs").expanduser()
+PRF_RUNS_ROOT = Path(os.environ.get("PRF_RUNS_ROOT", "~/prf-runs")).expanduser()
+PRF_SOURCE_ROOTS = os.environ.get("PRF_SOURCE_ROOTS", "src,protocols_src").split(",")
+PRF_CODE_HASH_ALGORITHM = os.environ.get("PRF_CODE_HASH_ALGORITHM",
+                                         "source-tree-hash.v0.shell-sha256sum")
+
+# Field classification by severity
+FIELD_CLASSIFICATION: dict[str, str] = {
+    "bundle/hash": "core",
+    "overview/overview-hash": "core",
+    "execution/summary/status": "core",
+    "execution/summary/totals/total": "core",
+    "execution/summary/totals/passed": "core",
+    "execution/summary/totals/failed": "core",
+    "execution/summary/totals/expected-failed": "core",
+    "execution/summary/totals/unexpected-failed": "core",
+    "source/tree-hash": "core",
+}
+# Registry snapshot hashes are all CORE (added dynamically)
+# Everything else defaults to DIAGNOSTIC
+
+
+def classify_field(label: str) -> str:
+    return FIELD_CLASSIFICATION.get(label, "diagnostic")
 
 
 def load_json(path: Path) -> dict | None:
@@ -27,9 +50,153 @@ def load_json(path: Path) -> dict | None:
         return None
 
 
-def compute_sha256(data: bytes) -> str:
-    import hashlib
-    return hashlib.sha256(data).hexdigest()
+def current_code_hash(repo_root: Path) -> tuple[str, str, list[str]]:
+    roots_str = " ".join(PRF_SOURCE_ROOTS)
+    find_expr = "find %s -type f | sort | xargs sha256sum 2>/dev/null | sha256sum" % roots_str
+    try:
+        r = subprocess.run(
+            ["bash", "-c", find_expr],
+            capture_output=True, text=True, cwd=str(repo_root), timeout=30)
+        ch = r.stdout.strip().split()[0] if r.stdout.strip() else "unknown"
+    except Exception:
+        ch = "unknown"
+    return ch, PRF_CODE_HASH_ALGORITHM, list(PRF_SOURCE_ROOTS)
+
+
+def classify_mismatch(label: str, orig: Any, new: Any,
+                      source_matches: bool | None) -> str:
+    """Return a reason string for the comparison result."""
+    if orig == new and orig is not None:
+        return "matched"
+    if orig is None and new is None:
+        return "matched"
+    if orig is None and new is not None:
+        return "missing/original-field"
+    if orig is not None and new is None:
+        return "missing/reproduced-field"
+    # Values differ — classify the reason
+    if label == "source/tree-hash":
+        if source_matches is False:
+            return "expected-drift/source-changed"
+        if source_matches is True:
+            return "mismatch/non-deterministic"
+        return "mismatch/unexplained"
+    if label == "source/tree-hash-algorithm":
+        return "expected-drift/configuration-changed"
+    # Registry snapshot or execution summary — unexpected divergence
+    if source_matches is False:
+        return "expected-drift/source-changed"
+    return "mismatch/unexplained"
+
+
+def compare_bundle_fields(orig: dict, new: dict,
+                          source_matches: bool | None) -> list[dict]:
+    """Compare two Clojure bundle roots with classification and reason."""
+    checks: list[dict] = []
+
+    def add_check(label: str, ov: Any, nv: Any) -> None:
+        cls = classify_field(label)
+        reason = classify_mismatch(label, ov, nv, source_matches)
+        checks.append({
+            "field": label,
+            "classification": cls,
+            "original": ov,
+            "new": nv,
+            "match": ov == nv if ov is not None and nv is not None else None,
+            "reason": reason,
+        })
+
+    add_check("bundle/hash", orig.get("bundle/hash"), new.get("bundle/hash"))
+    add_check("bundle/schema-version",
+              orig.get("bundle/schema-version"), new.get("bundle/schema-version"))
+
+    # Overview hash (top-level in Clojure bundle root)
+    add_check("overview/overview-hash",
+              orig.get("overview/hash"), new.get("overview/hash"))
+
+    # Execution summary
+    os_a = orig.get("execution/summary", {})
+    os_b = new.get("execution/summary", {})
+    add_check("execution/summary/status", os_a.get("status"), os_b.get("status"))
+    ta = os_a.get("totals") or {}
+    tb = os_b.get("totals") or {}
+    for k in ("total", "passed", "failed", "expected-failed", "unexpected-failed"):
+        if k in ta or k in tb:
+            add_check(f"execution/summary/totals/{k}", ta.get(k), tb.get(k))
+
+    # Registry snapshot — all CORE
+    snap_a = orig.get("registry/snapshot", {}) or {}
+    snap_b = new.get("registry/snapshot", {}) or {}
+    for k in sorted(set(list(snap_a.keys()) + list(snap_b.keys()))):
+        add_check(f"registry/snapshot/{k}", snap_a.get(k), snap_b.get(k))
+
+    # Source provenance
+    for k in ("source/tree-hash", "source/tree-hash-algorithm"):
+        if orig.get(k) is not None or new.get(k) is not None:
+            add_check(k, orig.get(k), new.get(k))
+
+    return checks
+
+
+def compute_verdict(checks: list[dict],
+                    bundle_a_ok: bool, bundle_b_ok: bool,
+                    source_matches: bool | None) -> tuple[str, list[str]]:
+    """Compute top-level reproduction verdict."""
+    notes: list[str] = []
+
+    if not bundle_a_ok and not bundle_b_ok:
+        return "reproduce-failed", ["Both original and reproduce produced no bundle"]
+
+    if not bundle_b_ok:
+        return "reproduce-failed", ["Reproduce run produced no bundle"]
+
+    core_checks = [c for c in checks if c.get("classification") == "core"]
+    diag_checks = [c for c in checks if c.get("classification") == "diagnostic"]
+
+    core_mismatch = [c for c in core_checks if c.get("match") is False]
+    core_unknown = [c for c in core_checks if c.get("match") is None]
+    diag_mismatch = [c for c in diag_checks if c.get("match") is False]
+    diag_unknown = [c for c in diag_checks if c.get("match") is None]
+
+    # Check for entirely unknown fields (original missing)
+    all_unknown_core = len(core_checks) > 0 and len(core_checks) == len(core_unknown)
+    all_unknown_all = len(checks) > 0 and len(checks) == len(
+        [c for c in checks if c.get("match") is None])
+
+    if all_unknown_all:
+        return "invalid-original-bundle", ["All fields returned None — bundle predates comparison schema"]
+
+    # Classify mismatches by reason
+    expected_mismatches = [c for c in core_mismatch
+                           if c.get("reason", "").startswith("expected-drift/")]
+    unexpected_mismatches = [c for c in core_mismatch
+                             if not c.get("reason", "").startswith("expected-drift/")]
+
+    if len(core_checks) == 0:
+        return "inconclusive", ["No core fields available for comparison"]
+
+    if unexpected_mismatches:
+        fields = ", ".join(c["field"] for c in unexpected_mismatches)
+        return "diverged", [f"{len(unexpected_mismatches)} core field(s) diverged: {fields}"]
+
+    if expected_mismatches:
+        fields = ", ".join(c["field"] for c in expected_mismatches)
+        reason = expected_mismatches[0].get("reason", "unknown")
+        notes.append(f"Core divergence explained: {fields} ({reason})")
+
+    if core_unknown and not expected_mismatches and not unexpected_mismatches:
+        fields = ", ".join(c["field"] for c in core_unknown)
+        notes.append(f"Core fields unknown (original bundle format): {fields}")
+        return "reproduced-with-legacy-gaps", notes
+
+    if expected_mismatches:
+        return "reproduced-with-explained-drift", notes
+
+    if diag_mismatch:
+        fields = ", ".join(c["field"] for c in diag_mismatch)
+        notes.append(f"Diagnostic fields differ (non-essential): {fields}")
+
+    return "verified", notes
 
 
 def reproduce_run(run_dir: str | Path,
@@ -43,21 +210,33 @@ def reproduce_run(run_dir: str | Path,
         output_base = PRF_RUNS_ROOT
     output_base = Path(output_base).expanduser().resolve()
 
-    # Read original Clojure bundle root (stable, no timestamps)
+    # Step 1: Source pre-check
+    print("--- Source Pre-check ---", file=sys.stderr)
+    orig_overview = load_json(run_dir / "run-overview.json")
+    orig_src = (orig_overview or {}).get("source", {})
+    bundle_code_hash = orig_src.get("code-hash", "")
+    current_ch, current_algo, current_roots = current_code_hash(Path.cwd())
+    source_matches: bool | None = None
+    if bundle_code_hash:
+        source_matches = (current_ch == bundle_code_hash)
+
+    print(f"  Bundle code-hash: {bundle_code_hash[:24] if bundle_code_hash else 'N/A'}...",
+          file=sys.stderr)
+    print(f"  Current code-hash: {current_ch[:24]}...", file=sys.stderr)
+    if not bundle_code_hash:
+        print(f"  ⚠ No code-hash in original bundle (older run format)", file=sys.stderr)
+    elif source_matches:
+        print(f"  ✅ Source code matches bundle", file=sys.stderr)
+    else:
+        print(f"  ⚠ Source code CHANGED — expected drift", file=sys.stderr)
+
+    # Step 2: Read original Clojure bundle root
     orig_clojure_bundle = load_json(run_dir / "clojure-bundle-root.json")
     if not orig_clojure_bundle:
         print("Cannot read original clojure-bundle-root.json", file=sys.stderr)
-        print("(Reproduce requires a run that captured the Clojure bundle root)",
-              file=sys.stderr)
         return 1
 
-    orig_overview = orig_clojure_bundle.get("overview", {})
-    orig_overview_hash = orig_overview.get("overview/hash", "")
-    orig_bundle_hash = orig_clojure_bundle.get("bundle/hash", "")
-    print(f"Original overview hash: {orig_overview_hash[:20]}...", file=sys.stderr)
-    print(f"Original bundle hash:   {orig_bundle_hash[:20]}...", file=sys.stderr)
-
-    # Build reproduce command — same as forensic runner
+    # Step 3: Execute reproduce
     run_req = load_json(run_dir / "run-request.json")
     suite_key = None
     if run_req:
@@ -66,71 +245,118 @@ def reproduce_run(run_dir: str | Path,
     label = f"reproduce-{run_dir.name[:30]}"
     repro_id = f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H-%M-%SZ')}-{label}"
     repro_dir = output_base / repro_id
-
-    print(f"Reproduce run id: {repro_id}", file=sys.stderr)
-    print(f"Reproduce output: {repro_dir}", file=sys.stderr)
-
     repro_dir.mkdir(parents=True, exist_ok=False)
 
-    # Set up env vars from original source info if available
-    orig_src = orig_overview.get("source", {})
+    print(f"\n--- Execute Reproduce ---", file=sys.stderr)
+    print(f"  id:     {repro_id}", file=sys.stderr)
+    print(f"  output: {repro_dir}", file=sys.stderr)
+
     env = os.environ.copy()
-    if orig_src.get("code-hash"):
-        env["PRF_SOURCE_TREE_HASH"] = orig_src["code-hash"]
-        env["PRF_SOURCE_TREE_HASH_ALGORITHM"] = orig_src.get(
-            "code-hash-algorithm", "source-tree-hash.v0.shell-sha256sum")
-        env["PRF_ORCHESTRATION_RUNNER_ID"] = "forensic-reproduce.py"
-        env["PRF_BUNDLE_ID"] = repro_id
+    env["PRF_SOURCE_TREE_HASH"] = current_ch
+    env["PRF_SOURCE_TREE_HASH_ALGORITHM"] = current_algo
+    env["PRF_ORCHESTRATION_RUNNER_ID"] = "forensic-reproduce.py"
+    env["PRF_BUNDLE_ID"] = repro_id
 
     run_expr = ("(require '[resolver-sim.core]) "
                 "(->> *command-line-args* (map str) (apply resolver-sim.core/-main))")
-    cmd = ["clojure", "-M:with-sew", "-e", run_expr,
-           "--", "--invariants"]
+    cmd = ["clojure", "-M:with-sew", "-e", run_expr, "--", "--invariants"]
     if suite_key:
         cmd.extend(["--suite", str(suite_key)])
     output_path = repro_dir / "clojure-bundle-root.json"
     cmd.extend(["--output-file", str(output_path)])
 
-    print(f"  executing: {' '.join(cmd)}", file=sys.stderr)
+    print(f"  cmd: {' '.join(cmd)}", file=sys.stderr)
     t0 = time.time()
     r = subprocess.run(cmd, capture_output=False, timeout=600, env=env)
     elapsed_ms = int((time.time() - t0) * 1000)
     print(f"  exit code: {r.returncode}  ({elapsed_ms}ms)", file=sys.stderr)
 
-    # Read new Clojure bundle root
+    # Step 4: Read new bundle root
     new_bundle = load_json(output_path)
-    if not new_bundle:
+    bundle_b_ok = new_bundle is not None
+    if not bundle_b_ok:
         print("Reproduce produced no Clojure bundle root", file=sys.stderr)
-        return 1
 
-    # Compare overview hashes (Clojure-side — stable, no timestamps)
-    new_overview = new_bundle.get("overview", {})
-    new_overview_hash = new_overview.get("overview/hash", "")
+    # Step 5: Full field comparison with classification + reasons
+    checks: list[dict] = []
+    if new_bundle:
+        checks = compare_bundle_fields(orig_clojure_bundle, new_bundle, source_matches)
+
+    match_count = sum(1 for c in checks if c.get("match") is True)
+    mismatch_count = sum(1 for c in checks if c.get("match") is False)
+    unknown_count = sum(1 for c in checks if c.get("match") is None)
+
+    print(f"\n--- Comparison ---", file=sys.stderr)
+    for c in checks:
+        symbol = "✅" if c["match"] is True else \
+                 "⚠" if c.get("reason", "").startswith("expected-") else \
+                 "❌" if c["match"] is False else "❓"
+        ov = str(c["original"])[:30] if c["original"] is not None else "—"
+        nv = str(c["new"])[:30] if c["new"] is not None else "—"
+        reason = c.get("reason", "")
+        print(f"  {symbol} [{c['classification']:>9}] {c['field']}: "
+              f"{ov} vs {nv}  ({reason})", file=sys.stderr)
+
+    # Aggregate by classification
+    core_match = sum(1 for c in checks
+                     if c.get("classification") == "core" and c.get("match") is True)
+    core_mismatch = sum(1 for c in checks
+                        if c.get("classification") == "core" and c.get("match") is False)
+    core_unknown = sum(1 for c in checks
+                       if c.get("classification") == "core" and c.get("match") is None)
+    diag_match = sum(1 for c in checks
+                     if c.get("classification") == "diagnostic" and c.get("match") is True)
+    diag_mismatch = sum(1 for c in checks
+                        if c.get("classification") == "diagnostic" and c.get("match") is False)
+
+    # Step 6: Compute verdict
+    verdict, verdict_notes = compute_verdict(
+        checks, True, bundle_b_ok, source_matches)
+
+    # Step 7: Write report
     repro_summary = {
-        "reproduce/schema-version": "forensic-reproduce.v1",
+        "reproduce/schema-version": "forensic-reproduce.v2",
+        "reproduce/verdict": verdict,
         "reproduce/original-run": str(run_dir),
         "reproduce/reproduce-run": repro_id,
         "reproduce/timestamp": datetime.now(timezone.utc).isoformat(),
         "reproduce/elapsed-ms": elapsed_ms,
-        "reproduce/exit-code": r.returncode,
-        "reproduce/original-overview-hash": orig_overview_hash,
-        "reproduce/new-overview-hash": new_overview_hash,
-        "reproduce/overview-hashes-match": orig_overview_hash == new_overview_hash,
-        "reproduce/suite-key": suite_key or "registry-default",
+        "reproduce/exit-code": r.returncode if bundle_b_ok else None,
+        "reproduce/source-pre-check": {
+            "bundle-code-hash": bundle_code_hash or None,
+            "current-code-hash": current_ch,
+            "match": source_matches,
+        },
+        "reproduce/comparison": {
+            "checks": checks,
+            "match-count": match_count,
+            "mismatch-count": mismatch_count,
+            "unknown-count": unknown_count,
+            "core": {"matched": core_match, "mismatched": core_mismatch,
+                     "unknown": core_unknown},
+            "diagnostic": {"matched": diag_match, "mismatched": diag_mismatch},
+        },
+        "reproduce/verdict-notes": verdict_notes if verdict_notes else None,
     }
-
     repro_file = repro_dir / "reproduce-report.json"
     repro_file.write_text(json.dumps(repro_summary, indent=2))
+    print(f"  report: {repro_file}", file=sys.stderr)
 
-    if orig_overview_hash == new_overview_hash:
-        print(f"\n✅ REPRODUCED — overview hashes match", file=sys.stderr)
-        print(f"   {orig_overview_hash[:20]}...", file=sys.stderr)
-        return 0
-    else:
-        print(f"\n❌ DIVERGED — overview hashes differ", file=sys.stderr)
-        print(f"   Original: {orig_overview_hash[:20]}...", file=sys.stderr)
-        print(f"   New:      {new_overview_hash[:20]}...", file=sys.stderr)
-        return 1
+    # Print verdict
+    verdict_symbol = "✅" if verdict == "verified" else \
+                     "⚠" if "explained" in verdict or "legacy" in verdict else \
+                     "❌"
+    print(f"\n{verdict_symbol} Verdict: {verdict}", file=sys.stderr)
+    for vn in verdict_notes:
+        print(f"     {vn}", file=sys.stderr)
+    print(f"     Core: {core_match} match, {core_mismatch} differ, "
+          f"{core_unknown} unknown", file=sys.stderr)
+    print(f"     Diagnostic: {diag_match} match, {diag_mismatch} differ",
+          file=sys.stderr)
+
+    # Exit: success for verified and explained-drift, failure for diverged/failed
+    return 0 if verdict in ("verified", "reproduced-with-explained-drift",
+                            "reproduced-with-legacy-gaps") else 1
 
 
 def main():

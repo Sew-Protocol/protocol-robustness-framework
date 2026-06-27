@@ -43,7 +43,7 @@
     ;; We need to make sure we use the same manifest. 
     ;; Manifest might have changed, so ideally we'd use the one in evidence.
     ;; But for now let's use manifest-path if available.
-    (let [new-evidence (runner/run-benchmark (or manifest-path "benchmarks/dispute-liveness.edn"))
+    (let [new-evidence (runner/run-benchmark (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))
           new-hash (:evidence/hash new-evidence)
           old-hash (:evidence/hash evidence)]
       (println "Recomputed Hash: " new-hash)

@@ -35,7 +35,13 @@ SIGN_EXCLUDE_KEYS = frozenset({"bundle/id", "bundle/hash",
                                 "bundle/signature", "bundle/signing-key-id"})
 
 SCHEMA_VERSION = "forensic-run.v1"
-PRF_RUNS_ROOT = Path("~/prf-runs").expanduser()
+PRF_RUNS_ROOT = Path(os.environ.get("PRF_RUNS_ROOT", "~/prf-runs")).expanduser()
+
+# Configurable hardening constants (override via env)
+PRF_SOURCE_ROOTS = os.environ.get("PRF_SOURCE_ROOTS", "src,protocols_src").split(",")
+PRF_CODE_HASH_ALGORITHM = os.environ.get("PRF_CODE_HASH_ALGORITHM",
+                                         "source-tree-hash.v0.shell-sha256sum")
+PRF_ARTIFACT_DIR = os.environ.get("PRF_ARTIFACT_DIR", "results/test-artifacts")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -71,9 +77,10 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
     info["repo_root"] = str(repo_root.resolve())
 
     # Source byte size (total source code footprint)
+    roots_str = " ".join(PRF_SOURCE_ROOTS)
     try:
         r = subprocess.run(
-            ["du", "-sb", "src", "protocols_src"],
+            ["du", "-sb"] + PRF_SOURCE_ROOTS,
             capture_output=True, text=True, cwd=str(repo_root), timeout=10)
         total = 0
         for line in r.stdout.strip().split("\n"):
@@ -85,15 +92,15 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
         info["byte-size"] = 0
 
     # Code hash: deterministic hash over all source files
+    find_expr = "find %s -type f | sort | xargs sha256sum 2>/dev/null | sha256sum" % roots_str
     try:
         r = subprocess.run(
-            ["bash", "-c",
-             "find src protocols_src -type f | sort | xargs sha256sum 2>/dev/null | sha256sum"],
+            ["bash", "-c", find_expr],
             capture_output=True, text=True, cwd=str(repo_root), timeout=30)
         ch = r.stdout.strip().split()[0] if r.stdout.strip() else "unknown"
         info["code-hash"] = ch
-        info["code-hash-algorithm"] = "source-tree-hash.v0.shell-sha256sum"
-        info["included-roots"] = ["src", "protocols_src"]
+        info["code-hash-algorithm"] = PRF_CODE_HASH_ALGORITHM
+        info["included-roots"] = list(PRF_SOURCE_ROOTS)
     except Exception:
         info["code-hash"] = "unknown"
         info["code-hash-algorithm"] = "unknown"
@@ -249,8 +256,8 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
         "dag/file-hashes": file_hashes,
     }
     # Registry consistency check
-    registry_path = repo_root / "results" / "test-artifacts" / "test-artifacts.json"
-    cursor_path = repo_root / "results" / "test-artifacts" / "chain-cursor-final.json"
+    registry_path = repo_root / PRF_ARTIFACT_DIR / "test-artifacts.json"
+    cursor_path = repo_root / PRF_ARTIFACT_DIR / "chain-cursor-final.json"
     reg_check: dict[str, Any] = {"files-on-disk": total}
     try:
         if registry_path.exists():
@@ -485,7 +492,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     write_sealed_json(run_dir / "results-summary.json", results_summary)
 
     # Step 6d: Copy evidence nodes from Clojure pipeline output
-    evidence_node_dir = repo_root / "results" / "test-artifacts" / "evidence-nodes"
+    evidence_node_dir = repo_root / PRF_ARTIFACT_DIR / "evidence-nodes"
     dag_dir = run_dir / "evidence-dag"
     node_files = []
     if evidence_node_dir.exists():

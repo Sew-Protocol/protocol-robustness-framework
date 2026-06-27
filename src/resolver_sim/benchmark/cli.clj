@@ -1,6 +1,5 @@
 (ns resolver-sim.benchmark.cli
-  (:require [resolver-sim.benchmark.runner :as runner]
-            [resolver-sim.benchmark.sharing :as sharing]
+  (:require [resolver-sim.benchmark.sharing :as sharing]
             [resolver-sim.benchmark.registry :as registry]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.evidence.chain :as chain]
@@ -8,10 +7,62 @@
             [resolver-sim.evidence.timestamping :as ts]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.tools.cli :refer [parse-opts]]))
+            [clojure.string :as str]
+            [clojure.tools.cli :refer [parse-opts]]
+            ;; runner is required lazily in -main to avoid loading
+            ;; Sew protocol namespaces for commands like --list
+            ))
 
-(defn- load-index []
-  (clojure.edn/read-string (slurp "BENCHMARKS.edn")))
+(defn- load-benchmark-description
+  "Read a benchmark definition file and extract its :benchmark/description.
+   Falls back to a human-readable name derived from the benchmark keyword."
+  [path]
+  (try (:benchmark/description (edn/read-string (slurp path)))
+       (catch Exception _ nil)))
+
+(defn- keyword->display-name
+  "Convert :benchmark/sew-escrow-dispute-v1 to 'sew escrow dispute v1'."
+  [kw]
+  (-> (name kw)
+      (str/replace "-" " ")
+      (str/replace #"\bv(\d+)" (fn [[_ n]] (str "v" n)))))
+
+(defn- load-pack-benchmarks
+  "Load all benchmark entries from a single pack registry file.
+   Returns a vector of {:id, :description, :manifest} maps."
+  [pack-id pack-reg-path]
+  (let [pack-file (io/file pack-reg-path)]
+    (if-not (.exists pack-file)
+      (do (println "Pack registry not found:" pack-reg-path) [])
+      (let [pack-reg (edn/read-string (slurp pack-file))
+            pack-dir (.getParent pack-file)
+            pack-name (name pack-id)]
+        (mapv (fn [b]
+                (let [bench-path (.getPath (io/file pack-dir (:benchmark/file b)))
+                      desc (or (load-benchmark-description bench-path)
+                               (keyword->display-name (:benchmark/id b)))
+                      bm-id (str pack-name "/" (name (:benchmark/id b)))]
+                  {:id bm-id :description desc :manifest bench-path}))
+              (:benchmarks pack-reg))))))
+
+(defn- load-index
+  "Read benchmarks/registry.edn, walk the pack hierarchy, and return
+   a flat list of benchmark entries in the same format as the legacy
+   BENCHMARKS.edn (each with :id, :description, :manifest).
+
+   Falls back to BENCHMARKS.edn if the canonical registry is missing."
+  []
+  (let [registry-file (io/file "benchmarks/registry.edn")]
+    (if-not (.exists registry-file)
+      (do (println "benchmarks/registry.edn not found, falling back to BENCHMARKS.edn")
+          (edn/read-string (slurp "BENCHMARKS.edn")))
+      (let [registry (edn/read-string (slurp registry-file))]
+        {:benchmarks
+         (mapcat (fn [pack]
+                   (load-pack-benchmarks (:pack/id pack)
+                                         (str "benchmarks/" (:pack/registry pack))))
+                 (:packs registry))}))))
+
 
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
@@ -20,7 +71,7 @@
    ["-p" "--password PASS" "Password for private key"]
    ["-v" "--verify" "Verify evidence bundle integrity and signature"]
    ["-H" "--hash-only" "Compute and print hash of an evidence bundle"]
-   ["-l" "--list" "List available benchmarks in BENCHMARKS.edn"]
+    ["-l" "--list" "List available benchmarks from benchmarks/registry.edn"]
    [nil "--reproduce PATH" "Reproduce a benchmark run from evidence bundle"]
    [nil "--share-summary PATH" "Generate share summary for an evidence bundle"]
    [nil "--export PATH" "Export portable bundle (tar.gz) from evidence bundle"]
@@ -156,9 +207,10 @@
               manifest-path (cond
                               benchmark-from-index (:manifest benchmark-from-index)
                               (and arg (.endsWith arg ".edn")) arg
-                              :else "benchmarks/dispute-liveness.edn")
+                              :else "benchmarks/packs/sew/escrow-dispute-v1.edn")
               _ (println "Running benchmark:" manifest-path)
-              evidence (runner/run-benchmark manifest-path)
+              evidence ((requiring-resolve 'resolver-sim.benchmark.runner/run-benchmark)
+                        manifest-path)
               output-path (:output options)
               final-evidence (if-let [key-path (:key options)]
                                (let [sig (signing/sign-hash (:evidence/hash evidence) key-path (:password options))
@@ -169,7 +221,8 @@
                                         :evidence/public-key-path (if pub-exists? pub-path key-path)))
                                evidence)
               passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
-          (runner/write-evidence final-evidence output-path)
+          ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
+           final-evidence output-path)
           (registry/record-entry final-evidence)
           (when passed?
             (interactive-ux final-evidence output-path options))

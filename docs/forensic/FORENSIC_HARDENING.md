@@ -244,7 +244,7 @@ Supports PKCS#8 PEM and OpenSSH formats (via Clojure buddy-core).
 Without `--public-key`, verification reports the bundle is signed but
 skips cryptographic verification.
 
-## 11. Post-Run Output Hardening
+## 11. Post-Run Output Hardening (--no-harden)
 
 After verification, the output tree is hardened:
 
@@ -255,7 +255,23 @@ chattr -R +i <run-dir>       # immutable flag (best-effort)
 
 Suppress with `--no-harden`.
 
-## 12. Script Reference
+## 12. Execution Hash Fields
+
+Execution evidence nodes in the Clojure pipeline carry three hash fields
+with distinct semantics:
+
+| Field | Stability | Purpose |
+|---|---|---|
+| `execution/node-hash` | Stable | Node identity. Deterministic content hash (excludes wall-clock `:timestamp`, `:policy-output`, self-referential fields via `project-evidence-node`). Used for node persistence, registry validation. |
+| `execution/content-hash` | Stable | Same value as `node-hash`. Explicitly named for reproduce, self-test, and quorum comparison. This is the hash you should compare across runs. |
+| `execution/record-hash` | Volatile | Includes wall-clock capture timestamp. Computed as SHA-256(content-hash + "\|" + timestamp). Different every run even with identical execution. Used for audit trail and chronology only. Excluded from self-test and reproduce comparison. |
+
+The `execution/content-hash` is what `bb forensic:reproduce` and
+`bb forensic:self-test` should use for deterministic comparison.
+`execution/record-hash` is for linking evidence records to their
+capture time without polluting the stable execution identity.
+
+## 13. Achieving "Full" Grade
 
 To produce `isolation/grade: full` forensic runs:
 
@@ -268,7 +284,38 @@ To produce `isolation/grade: full` forensic runs:
 | Non-root | Do not use `sudo` or root UID to run forensic jobs |
 | /proc functioning | Default Linux behavior |
 
-## 11. Script Reference
+## 14. Script Reference
+
+All hardening constants can be overridden via environment variables.
+This makes the forensic runner portable across different environments
+without code changes.
+
+| Variable | Default | Controls |
+|---|---|---|
+| `PRF_SOURCE_ROOTS` | `src,protocols_src` | Comma-separated source directories for `code-hash` and `byte-size` |
+| `PRF_CODE_HASH_ALGORITHM` | `source-tree-hash.v0.shell-sha256sum` | Algorithm name recorded in bundle metadata |
+| `PRF_RUNS_ROOT` | `~/prf-runs` | Base output directory for forensic runs |
+| `PRF_ARTIFACT_DIR` | `results/test-artifacts` | Clojure pipeline artifact directory (relative to repo root) |
+| `PRF_EVIDENCE_USER` | `evidence_runner` | Expected user for UID check |
+| `PRF_EVIDENCE_WORKSPACE` | `/var/lib/evidence-runner` | Expected workspace for fs-access check |
+| `PRF_ORCHESTRATION_RUNNER_ID` | *per-script* | Runner identity recorded in metadata |
+| `PRF_SOURCE_TREE_HASH` | *(set by runner)* | Source hash passed to Clojure attribution bridge |
+| `PRF_SOURCE_TREE_HASH_ALGORITHM` | *(set by runner)* | Source hash algorithm passed to Clojure |
+| `PRF_SOURCE_COMMIT` | *(set by runner)* | Git commit passed to Clojure attribution bridge |
+| `PRF_SOURCE_DIRTY` | *(set by runner)* | Dirty-state flag passed to Clojure |
+| `PRF_BUNDLE_ID` | *(set by runner)* | Run identifier passed to Clojure |
+
+Example:
+
+```bash
+PRF_SOURCE_ROOTS="src,protocols_src,resources" \\
+PRF_RUNS_ROOT=/mnt/evidence-archive \\
+PRF_EVIDENCE_USER=dedicated-runner \\
+PRF_EVIDENCE_WORKSPACE=/mnt/evidence-workspace \\
+bb forensic:run --run-request my-run.edn
+```
+
+## 15. Environment Variable Configuration
 
 | File | Purpose |
 |---|---|

@@ -5,6 +5,7 @@
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.scenario.suites :as suites]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))
@@ -26,13 +27,23 @@
                 [])))
           suites))
 
+(defn- resolve-suite-scenarios
+  "Resolve a :suite/ keyword from the suite registry to a list of
+   java.io.File objects for benchmark execution.
+   Returns empty vector if the suite is unknown or has no scenarios."
+  [suite-kw]
+  (let [paths (suites/suite-paths suite-kw)]
+    (mapv io/file paths)))
+
 (defn- load-scenario [path]
   (io-sc/load-scenario-file path))
 
 (defrecord SewAdapter []
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
-    (find-scenarios-in-suites (:scenario-suites benchmark)))
+    (if-let [suite-kw (:benchmark/scenario-suite benchmark)]
+      (resolve-suite-scenarios suite-kw)
+      (find-scenarios-in-suites (:scenario-suites benchmark))))
 
   (execute-benchmark [_ _benchmark scenarios]
     (mapv (fn [scenario-file]
@@ -93,7 +104,7 @@
                                     :java-version (System/getProperty "java.version")}
                    :results        results
                    :metrics        metrics
-                   :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/dispute-liveness.edn"))}
+                   :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))}
                    :invariant-summary {:per-invariant  inv-summary
                                        :total-checks   total-inv-checks
                                        :passed-checks  passed-inv-checks

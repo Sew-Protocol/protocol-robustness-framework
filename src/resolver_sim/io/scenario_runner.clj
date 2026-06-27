@@ -628,7 +628,9 @@
             enriched-root (merge bundle-root
                                  (prov/source-provenance)
                                  (when execution-node
-                                   {:execution/node-hash (:node-hash execution-node)}))]
+                                   {:execution/node-hash (:node-hash execution-node)
+                                    :execution/content-hash (:content-hash execution-node)
+                                    :execution/record-hash (:record-hash execution-node)}))]
         (when-let [output-path (:output-file dispatch)]
           (write-result-json output-path enriched-root))
         {:exit-code (:exit-code thunk-result)

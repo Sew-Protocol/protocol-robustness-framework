@@ -8,11 +8,12 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tarfile
 from pathlib import Path
 
-PRF_RUNS_ROOT = Path("~/prf-runs").expanduser()
+PRF_RUNS_ROOT = Path(os.environ.get("PRF_RUNS_ROOT", "~/prf-runs")).expanduser()
 
 
 def import_bundle(archive_path: str | Path,

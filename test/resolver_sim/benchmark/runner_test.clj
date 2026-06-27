@@ -1,10 +1,12 @@
 (ns resolver-sim.benchmark.runner-test
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.benchmark.runner :as runner]
+            [resolver-sim.benchmark.adapter :as adapter]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.benchmark.sharing :as sharing]
+            [resolver-sim.scenario.suites :as suites]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.string :as str]
@@ -25,6 +27,38 @@
           h2 (hc/hash-with-intent {:hash/intent :evidence-record} data2)]
       (is (= h1 h2)))))
 
+(deftest test-suite-resolution
+  (testing "Pack suite keywords resolve to scenario paths"
+    (is (= 44 (count (suites/suite-paths :suite/sew-dispute-safety-v1)))
+        ":suite/sew-dispute-safety-v1 should resolve to 44 dispute-resolution scenarios")
+    (is (= 15 (count (suites/suite-paths :suite/sew-yield-safety-v1)))
+        ":suite/sew-yield-safety-v1 should resolve to 15 yield scenarios")
+    (is (= 44 (count (suites/suite-paths :suite/prf-replay-v1)))
+        ":suite/prf-replay-v1 should resolve to 44 core replay scenarios")
+    (is (nil? (suites/suite-paths :suite/non-existent))
+        "Unknown suite keyword should return nil")))
+
+(deftest test-pack-manifest-loading
+  (testing "Canonical pack manifests load and reference registered suites"
+    (doseq [[path expected-suite expected-count]
+            [["benchmarks/packs/sew/escrow-dispute-v1.edn"
+              :suite/sew-dispute-safety-v1 44]
+             ["benchmarks/packs/sew/dispute-liveness-v1.edn"
+              :suite/sew-dispute-safety-v1 44]
+             ["benchmarks/packs/sew/yield-shortfall-v1.edn"
+              :suite/sew-yield-safety-v1 15]
+             ["benchmarks/packs/sew/resolver-slashing-v1.edn"
+              :suite/sew-dispute-safety-v1 44]
+             ["benchmarks/packs/prf-core/deterministic-replay-v1.edn"
+              :suite/prf-replay-v1 44]]]
+      (let [manifest (edn/read-string (slurp path))
+            suite-kw (:benchmark/scenario-suite manifest)
+            paths (suites/suite-paths suite-kw)]
+        (is (= expected-suite suite-kw)
+            (str (:benchmark/id manifest) " references " expected-suite))
+        (is (= expected-count (count paths))
+            (str (:benchmark/id manifest) " resolves to " expected-count " scenarios"))))))
+
 (deftest test-hash-stability
   (testing "Hashing is stable across different instances of same data"
     (let [data {:repo {:commit "abc"}}
@@ -40,13 +74,75 @@
       (is (boolean? (get-in meta [:repo :dirty?]))))))
 
 (deftest test-benchmark-run-basic
-  (testing "Can run a benchmark and generate evidence"
+  (testing "Can run a benchmark (old format) and generate evidence"
     (let [manifest-path "benchmarks/dispute-liveness.edn"
           evidence (runner/run-benchmark manifest-path)]
       (is (contains? evidence :benchmark))
       (is (contains? evidence :repo))
       (is (contains? evidence :evidence/hash))
       (is (vector? (:results evidence))))))
+
+(deftest test-benchmark-run-new-format
+  (testing "Can run a benchmark (new pack format) and generate evidence"
+    (let [manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"
+          evidence (runner/run-benchmark manifest-path)]
+      (is (contains? evidence :benchmark) "Evidence should contain :benchmark")
+      (is (contains? evidence :repo) "Evidence should contain :repo")
+      (is (contains? evidence :evidence/hash) "Evidence should contain :evidence/hash")
+      (is (contains? evidence :benchmark-certification) "Evidence should contain :benchmark-certification")
+      (is (vector? (:results evidence)) "Results should be a vector")
+      (is (contains? evidence :metrics) "Evidence should contain :metrics")
+      ;; Verify the evidence shape matches BENCHMARK_RESULT_SPEC_V1
+      (is (string? (:evidence/hash evidence)) "Hash should be a string")
+      (is (pos? (count (:evidence/hash evidence))) "Hash should be non-empty")
+      ;; :repo should contain git metadata
+      (is (contains? (:repo evidence) :repo) ":repo should contain nested :repo metadata"))))
+
+(deftest test-suite-resolution-in-adapter
+  (testing "SewAdapter resolves :benchmark/scenario-suite keyword"
+    (let [manifest (edn/read-string (slurp "benchmarks/packs/sew/escrow-dispute-v1.edn"))
+          adapter runner/default-adapter
+          scenarios (adapter/load-scenarios adapter manifest)]
+      (is (= 44 (count scenarios))
+          "Adapter should resolve :suite/sew-dispute-safety-v1 to 44 scenarios")
+      (is (every? #(instance? java.io.File %) scenarios)
+          "All scenarios should be java.io.File objects")))
+
+  (testing "SewAdapter falls back to :scenario-suites (old format)"
+    (let [old-manifest {:scenario-suites ["scenarios"]}
+          adapter runner/default-adapter
+          scenarios (adapter/load-scenarios adapter old-manifest)]
+      (is (pos? (count scenarios))
+          "Old format should still resolve scenarios via directory walking"))))
+
+(deftest test-evidence-shape
+  (testing "Evidence bundle matches BENCHMARK_RESULT_SPEC_V1 shape"
+    (let [evidence (runner/run-benchmark "benchmarks/packs/sew/escrow-dispute-v1.edn")]
+      ;; Core shape
+      (is (contains? evidence :benchmark) ":benchmark key present")
+      (is (contains? evidence :repo) ":repo key present")
+      (is (contains? evidence :environment) ":environment key present")
+      (is (contains? evidence :results) ":results key present")
+      (is (contains? evidence :metrics) ":metrics key present")
+      (is (contains? evidence :evidence/hash) ":evidence/hash key present")
+      (is (contains? evidence :benchmark-certification) ":benchmark-certification key present")
+
+      ;; Environment shape
+      (is (contains? (:environment evidence) :os-name) ":environment :os-name")
+      (is (contains? (:environment evidence) :java-version) ":environment :java-version")
+
+      ;; Metrics shape
+      (is (contains? (:metrics evidence) :total) ":metrics :total")
+      (is (contains? (:metrics evidence) :passed) ":metrics :passed")
+
+      ;; Benchmark shape
+      (is (map? (:benchmark evidence)) ":benchmark is a map")
+
+      ;; Results vector
+      (is (every? #(contains? % :file) (:results evidence))
+          "Each result should have :file")
+      (is (every? #(contains? % :outcome) (:results evidence))
+          "Each result should have :outcome"))))
 
 (deftest test-malformed-manifest
   (testing "Throws on missing manifest"

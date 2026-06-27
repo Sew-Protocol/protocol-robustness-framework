@@ -103,11 +103,17 @@
                   (println "[artifact-registry-validation] Skipped (operational):" (.getMessage e))))
               (when-not (zero? exit) (System/exit exit))))}
 
-  run:scenario:family
-  {:doc "Exploratory: run scenarios by dynamic selector (no test-artifacts refresh). Usage: bb run:scenario:family <selector>. Matches file path/id/title/purpose/threat-tags (e.g. forking-strategist, escalation-abuse, adversarial-robustness)"
-   :task (let [selector (first *command-line-args*)]
+  run:scenario:search
+  {:doc "Ad-hoc: run scenarios by text search (not a registered grouping, not for CI).
+         Usage: bb run:scenario:search <text>
+         Performs case-insensitive substring match on scenario file path, id, title,
+         purpose, and threat-tags.  Each match runs in a separate subprocess.
+         Results should not be used for canonical CI, benchmark definitions, or
+         published evidence.  Use `bb run:scenario:suite` for registered collections.
+         Examples: bb run:scenario:search forking-strategist"
+    :task (let [selector (first *command-line-args*)]
            (when-not (seq selector)
-             (throw (ex-info "Missing selector. Usage: bb run:scenario:family <selector>" {})))
+             (throw (ex-info "Missing selector. Usage: bb run:scenario:search <text>" {})))
            (let [selector-lc (clojure.string/lower-case selector)
                  scenarios (->> (file-seq (clojure.java.io/file "scenarios"))
                                 (filter (fn [f] (.isFile f)))
@@ -135,10 +141,10 @@
                                            alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
                                            alias-val (when alias-idx (get alias-map (nth args alias-idx)))
                                            chosen (or level-val alias-val)
-                                           cli-args (cond-> ["-M:run:with-sew" "--" "--invariants" "--scenario" scenario]
+cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                                                       chosen (conj "--result-display-level" chosen))]
-                                       (try
-                                         (apply clojure {:dir "." :extra-deps {}} cli-args)
+                                        (try
+                                          (apply clojure {:dir "." :extra-deps {}} cli-args)
                                          {:scenario scenario :exit 0}
                                          (catch clojure.lang.ExceptionInfo e
                                            {:scenario scenario :exit (or (:exit (ex-data e)) 1)})))
@@ -223,7 +229,7 @@
            (let [t0   (System/currentTimeMillis)
                  exit (try
                         (clojure {:dir "." :extra-deps {}}
-                                 "-M:run:with-sew" "--" "--invariants" "--scenario" scenario "--output-file" output-file)
+                                 "-M:run:with-sew" "--invariants" "--scenario" scenario "--output-file" output-file)
                         0
                         (catch clojure.lang.ExceptionInfo e
                           (or (:exit (ex-data e)) 1)))
@@ -344,7 +350,7 @@
            (when-not (seq suite-key)
              (throw (ex-info "Missing suite key. Usage: bb run:scenario:suite <suite-key>" {})))
             (apply clojure {:dir "." :extra-deps {}}
-                   "-M:run:with-sew" "--" "--invariants" "--suite" suite-key
+                   "-M:run:with-sew" "--invariants" "--suite" suite-key
                    (rest *command-line-args*)))}
 
   run:scenario:suites
@@ -430,9 +436,13 @@
   {:doc "Compatibility alias for `run:scenario`."
    :task (apply shell "bb" "run:scenario" *command-line-args*)}
 
+  scenario:run:search
+  {:doc "Ad-hoc: run scenarios by text search.  Replaces `scenario:run:family`."
+   :task (apply shell "bb" "run:scenario:search" *command-line-args*)}
+
   scenario:run:family
-  {:doc "Compatibility alias for `run:scenario:family`."
-   :task (apply shell "bb" "run:scenario:family" *command-line-args*)}
+  {:doc "DEPRECATED — use `run:scenario:search`."
+   :task (apply shell "bb" "run:scenario:search" *command-line-args*)}
 
   validation:artifact-registry
   {:doc "Validate an artifact registry (test-artifacts.json) and write a
@@ -519,7 +529,7 @@
                       (println "")
                       (println "3) Run a specific scenario:")
                       (println "   bb run:scenario S01_baseline-happy-path.json")
-                      (println "   bb run:scenario:family escalation-abuse")
+                      (println "   bb run:scenario:search escalation-abuse")
                       (println "")
                       (println "4) Reference validation suite:")
                       (println "   make reference-validation-v1")
@@ -570,8 +580,8 @@
   benchmark:history {:doc "Display local evidence run history"
                      :task (clojure "-M" "-m" "resolver-sim.benchmark.cli" "--history")}
 
-  benchmark:list {:doc "List available benchmarks in BENCHMARKS.edn"
-                  :task (clojure "-M" "-m" "resolver-sim.benchmark.cli" "--list")}
+  benchmark:list {:doc "List available benchmarks from benchmarks/registry.edn"
+                  :task (clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--list")}
 
   benchmark:verify {:doc "Verify evidence bundle integrity and signature. Usage: bb benchmark:verify [bundle-path]"
                     :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
@@ -825,7 +835,10 @@
    :task (apply shell "python3" "scripts/forensic/preflight.py" *command-line-args*)}
 
   forensic:run
-  {:doc "Run a forensic execution. Usage: bb forensic:run [--run-request <path>] [--label <label>] [--private-tmpfs] [--dry-run]"
+  {:doc "Run a forensic execution.
+Usage: bb forensic:run [--run-request <path>] [--label <label>] [--private-tmpfs] [--dry-run]
+Env:   PRF_SOURCE_ROOTS, PRF_RUNS_ROOT, PRF_ARTIFACT_DIR, PRF_CODE_HASH_ALGORITHM,
+       PRF_EVIDENCE_USER, PRF_EVIDENCE_WORKSPACE — see docs/forensic/FORENSIC_HARDENING.md"
    :task (apply shell "bash" "scripts/forensic/run.sh" *command-line-args*)}
 
   forensic:verify
@@ -842,4 +855,13 @@
 
   forensic:reproduce
   {:doc "Reproduce a forensic run from its bundle and compare results. Usage: bb forensic:reproduce <run-dir>"
-   :task (apply shell "python3" "scripts/forensic/reproduce.py" *command-line-args*)}}}
+   :task (apply shell "python3" "scripts/forensic/reproduce.py" *command-line-args*)}
+
+  forensic:self-test
+  {:doc "Run forensic pipeline twice and compare — validates determinism. Usage: bb forensic:self-test"
+   :task (apply shell "python3" "scripts/forensic/self_test.py" *command-line-args*)}
+
+  forensic:quorum
+  {:doc "Local repeated-execution quorum: run N times, compare, report agreement.
+Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2]"
+   :task (apply shell "python3" "scripts/forensic/quorum.py" *command-line-args*)}}}
