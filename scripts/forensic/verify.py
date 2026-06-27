@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from dataclasses import dataclass, field
@@ -108,6 +109,67 @@ def check_dir_exists(run_dir: Path, rel_path: str) -> VerifyCheck:
     return VerifyCheck(key=key, status="fail",
                        message=f"Directory {rel_path}/ not found at {full}",
                        severity="required")
+
+
+def _load_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def _canonical_json_bytes(data: dict, exclude_keys: list[str]) -> bytes:
+    return json.dumps(
+        {k: v for k, v in data.items() if k not in exclude_keys},
+        indent=2, default=str, sort_keys=True).encode("utf-8")
+
+
+def check_bundle_root_hash(run_dir: Path) -> VerifyCheck:
+    """Recompute bundle root self-referential hash from canonical fields."""
+    path = run_dir / "run-bundle-root.json"
+    data = _load_json(path)
+    if not data:
+        return VerifyCheck(key="bundle-root-hash", status="skip",
+                           message="Cannot verify hash: bundle root not parseable",
+                           severity="warning")
+    recorded = data.get("bundle/hash") or data.get("bundle/id")
+    if not recorded:
+        return VerifyCheck(key="bundle-root-hash", status="fail",
+                           message="Bundle root has no bundle/hash or bundle/id",
+                           severity="warning")
+    expected = hashlib.sha256(
+        _canonical_json_bytes(data, ["bundle/id", "bundle/hash"])).hexdigest()
+    if recorded == expected:
+        return VerifyCheck(key="bundle-root-hash", status="pass",
+                           message=f"Bundle root hash matches ({recorded[:16]}...)",
+                           severity="warning")
+    return VerifyCheck(key="bundle-root-hash", status="fail",
+                       message=f"Bundle root hash MISMATCH: recorded={recorded[:16]}... expected={expected[:16]}...",
+                       severity="warning")
+
+
+def check_overview_hash(run_dir: Path) -> VerifyCheck:
+    """Recompute overview self-referential hash from canonical fields."""
+    path = run_dir / "run-overview.json"
+    data = _load_json(path)
+    if not data:
+        return VerifyCheck(key="overview-hash", status="skip",
+                           message="Cannot verify hash: overview not parseable",
+                           severity="warning")
+    recorded = data.get("overview/hash")
+    if not recorded:
+        return VerifyCheck(key="overview-hash", status="fail",
+                           message="Run overview has no overview/hash field",
+                           severity="warning")
+    expected = hashlib.sha256(
+        _canonical_json_bytes(data, ["overview/hash"])).hexdigest()
+    if recorded == expected:
+        return VerifyCheck(key="overview-hash", status="pass",
+                           message=f"Overview hash matches ({recorded[:16]}...)",
+                           severity="warning")
+    return VerifyCheck(key="overview-hash", status="fail",
+                       message=f"Overview hash MISMATCH: recorded={recorded[:16]}... expected={expected[:16]}...",
+                       severity="warning")
 
 
 def check_bundle_root_valid(run_dir: Path) -> VerifyCheck:
@@ -248,6 +310,10 @@ def verify_run(run_dir: str | Path) -> VerifyReport:
     results.append(check_preflight_valid(run_dir))
     results.append(check_evidence_dag(run_dir))
     results.append(check_no_extra_dirs(run_dir))
+
+    # Sealing integrity checks (warning severity)
+    results.append(check_bundle_root_hash(run_dir))
+    results.append(check_overview_hash(run_dir))
 
     # Aggregate
     check_dicts = [r.to_dict() for r in results]

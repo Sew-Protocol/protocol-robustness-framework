@@ -12,10 +12,12 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -92,6 +94,41 @@ def parse_edn_or_json(text: str, path_hint: str | None = None) -> dict | None:
             pass
 
     return None
+
+
+def compute_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def write_sealed_json(path: Path, data: Any) -> tuple[str, str]:
+    """Atomically write JSON with sealing.
+
+    Pattern: serialize → hash → temp → fsync → rename.
+    Returns (hex_hash, file_path) or raises on failure.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    json_bytes = json.dumps(data, indent=2, default=str, sort_keys=True).encode("utf-8")
+    content_hash = compute_sha256(json_bytes)
+
+    fd, tmp_path_str = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(json_bytes)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path_str, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path_str)
+        except Exception:
+            pass
+        raise
+
+    print(f"  sealed {path.name}  sha256={content_hash[:16]}...", file=sys.stderr)
+    return content_hash, str(path)
 
 
 def get_git_commit(repo_root: str | Path) -> str | None:

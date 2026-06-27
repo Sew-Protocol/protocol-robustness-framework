@@ -25,7 +25,9 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from scripts.forensic.preflight import run_preflight, parse_edn_or_json, _get_key
+from scripts.forensic.preflight import (run_preflight, parse_edn_or_json,
+                                        _get_key, write_sealed_json,
+                                        compute_sha256)
 
 SCHEMA_VERSION = "forensic-run.v1"
 PRF_RUNS_ROOT = Path("~/prf-runs").expanduser()
@@ -75,10 +77,7 @@ def snapshot_environment() -> dict:
     }
 
 
-def write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, default=str))
-    print(f"  wrote {path}", file=sys.stderr)
+# write_json replaced by write_sealed_json from preflight module
 
 
 def run_invoke_scenario_pipeline(run_request_path: str,
@@ -159,7 +158,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         if not dry_run:
             tmp_dir = Path("/tmp") / f"forensic-preflight-{run_id}"
             tmp_dir.mkdir(parents=True, exist_ok=True)
-            write_json(tmp_dir / "preflight-report.json", report.to_dict())
+            write_sealed_json(tmp_dir / "preflight-report.json", report.to_dict())
             print(f"  Preflight report: {tmp_dir / 'preflight-report.json'}",
                   file=sys.stderr)
         return 1
@@ -179,14 +178,14 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     (run_dir / "anchors").mkdir()
 
     # Write preflight report to output
-    write_json(run_dir / "preflight-report.json", report.to_dict())
+    write_sealed_json(run_dir / "preflight-report.json", report.to_dict())
 
     # Step 3: Snapshot source and environment
     print(f"\n--- Snapshots ---", file=sys.stderr)
     source_info = snapshot_source(repo_root, run_dir)
     env_info = snapshot_environment()
-    write_json(run_dir / "source-snapshot.json", source_info)
-    write_json(run_dir / "environment.json", env_info)
+    write_sealed_json(run_dir / "source-snapshot.json", source_info)
+    write_sealed_json(run_dir / "environment.json", env_info)
 
     # Step 4: Copy inputs to output
     print(f"\n--- Inputs ---", file=sys.stderr)
@@ -210,7 +209,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "environment": env_info,
         "run-timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    write_json(run_dir / "input-manifest.json", input_manifest)
+    write_sealed_json(run_dir / "input-manifest.json", input_manifest)
 
     # Step 6: Execute scenarios
     print(f"\n--- Execution ---", file=sys.stderr)
@@ -220,9 +219,10 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     elapsed_ms = int((time.time() - t0) * 1000)
     print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
 
-    # Step 7: Write run overview
+    # Step 7: Write run overview (self-referential SHA-256)
     run_overview = {
         "overview/schema-version": "run-overview.v1",
+        "overview/hash": None,   # filled in step below
         "run-id": run_id,
         "run-timestamp": datetime.now(timezone.utc).isoformat(),
         "exit-code": exit_code,
@@ -230,12 +230,21 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "status": "pass" if exit_code == 0 else "fail",
         "source": source_info,
     }
-    write_json(run_dir / "run-overview.json", run_overview)
+    # Build canonical dict (without hash), serialize, hash, set hash, seal
+    overview_canonical = {k: v for k, v in run_overview.items()
+                          if k not in ("overview/hash",)}
+    can_bytes = json.dumps(overview_canonical, indent=2, default=str,
+                           sort_keys=True).encode("utf-8")
+    overview_hash = compute_sha256(can_bytes)
+    run_overview["overview/hash"] = overview_hash
+    write_sealed_json(run_dir / "run-overview.json", run_overview)
+    print(f"  overview hash: {overview_hash[:16]}...", file=sys.stderr)
 
-    # Step 8: Write bundle root
+    # Step 8: Write bundle root (self-referential SHA-256)
     bundle_root = {
         "bundle/schema-version": "bundle-root.v1",
-        "bundle/id": run_id,
+        "bundle/id": None,        # filled after hash
+        "bundle/hash": None,      # self-referential hash
         "bundle/timestamp": datetime.now(timezone.utc).isoformat(),
         "run/request-path": str(run_request_path),
         "run/overview": run_overview,
@@ -246,7 +255,15 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
             "summary": report.summary,
         },
     }
-    write_json(run_dir / "run-bundle-root.json", bundle_root)
+    bundle_canonical = {k: v for k, v in bundle_root.items()
+                        if k not in ("bundle/id", "bundle/hash")}
+    can_bytes = json.dumps(bundle_canonical, indent=2, default=str,
+                           sort_keys=True).encode("utf-8")
+    bundle_hash = compute_sha256(can_bytes)
+    bundle_root["bundle/id"] = bundle_hash
+    bundle_root["bundle/hash"] = bundle_hash
+    write_sealed_json(run_dir / "run-bundle-root.json", bundle_root)
+    print(f"  bundle root hash: {bundle_hash[:16]}...", file=sys.stderr)
 
     # Step 9: Write anchor cursor (mock)
     anchor_cursor = {
@@ -256,7 +273,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "anchor/timestamp": datetime.now(timezone.utc).isoformat(),
         "anchor/note": "Mock anchor — no external anchoring in this phase",
     }
-    write_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
+    write_sealed_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
 
     print(f"\n=== Run Complete ===", file=sys.stderr)
     print(f"  Output: {run_dir}", file=sys.stderr)
