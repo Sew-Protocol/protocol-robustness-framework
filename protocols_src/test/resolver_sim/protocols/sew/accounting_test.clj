@@ -430,11 +430,19 @@
     (is (= 0 (get-in (:world r) [:claimable-v2 0 :settlement/principal bob] 0))
         "claimable cleared after withdrawal")))
 
-(deftest withdraw-claimable-not-finalized
-  (let [w (base-world)   ; state = :pending
+(deftest withdraw-claimable-pending-no-claimable
+  (let [w (base-world)   ; state = :pending, no claimable balance
         r (ac/withdraw-escrow w 0 bob)]
     (is (false? (:ok r)))
-    (is (= :transfer-not-finalized (:error r)))))
+    (is (= :no-claimable-balance (:error r)))))
+
+(deftest withdraw-claimable-pending-with-claimable
+  (let [w (-> (base-world)
+              (assoc-in [:claimable 0 bob] 500))
+        r (ac/withdraw-escrow w 0 bob)]
+    (is (true? (:ok r)))
+    (is (= 500 (:amount r)))
+    (is (= 0 (get-in (:world r) [:claimable 0 bob] 0)))))
 
 (deftest withdraw-claimable-nothing-to-claim
   (let [w (assoc-in (base-world) [:escrow-transfers 0 :escrow-state] :released)

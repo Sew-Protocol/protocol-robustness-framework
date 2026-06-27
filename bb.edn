@@ -261,7 +261,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
          Run this after fixing a failing scenario to update its golden artifact.
          Touches notebooks/report.clj afterward so a running Clerk server re-evaluates the report notebook.
          See also: scripts/scenarios/regenerate_goldens.clj, deps.edn :regenerate-goldens alias."
-   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:regenerate-goldens")}
+    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:regenerate-goldens:with-sew")}
 
   evidence:build
   {:doc "Run a single scenario with invariants and emit evidence artifacts.

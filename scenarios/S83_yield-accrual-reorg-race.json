@@ -18,7 +18,8 @@
     },
     "partial-fill-policy": {
       "unrealized-yield-treatment": "not-claimable"
-    }
+    },
+    "resolver-bond-bps": 0
   },
   "schema-version": "1.0",
   "threat-tags": [

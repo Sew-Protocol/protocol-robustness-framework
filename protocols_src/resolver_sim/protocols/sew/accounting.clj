@@ -769,12 +769,13 @@
       legacy-world)))
 
 (defn withdraw-escrow
-  "Claim claimable balance for addr on workflow-id.
-   Mirrors: BaseEscrow.withdrawEscrow.
+   "Claim claimable balance for addr on workflow-id.
+    Mirrors: BaseEscrow.withdrawEscrow.
 
-   Guard: escrow must be in terminal state (:released/:refunded/:resolved).
-   Guard: claimable balance must be > 0.
-   Guard: token must not be in a liquidity-crunch."
+    Guard: escrow must be in terminal state (:released/:refunded/:resolved)
+           or :pending (for partial release claimables).
+    Guard: claimable balance must be > 0.
+    Guard: token must not be in a liquidity-crunch."
   [world workflow-id addr]
   (if (nil? workflow-id)
     (t/fail :invalid-workflow-id)
@@ -783,7 +784,8 @@
         (not (t/valid-workflow-id? world wf-id))
         (t/fail :invalid-workflow-id)
 
-        (not (t/terminal-state? world wf-id))
+        (let [state (t/escrow-state world wf-id)]
+          (not (or (t/terminal-state? world wf-id) (= :pending state))))
         (t/fail :transfer-not-finalized)
 
          :else

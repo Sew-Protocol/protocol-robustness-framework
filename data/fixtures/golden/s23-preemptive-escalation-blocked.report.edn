@@ -2,7 +2,7 @@
  :suite-id :suites/dr3-critical,
  :trace-id "s23-preemptive-escalation-blocked",
  :final-state-hash
- "4ca6953c731f6605f6ecba39a0c3653260074f2688d5fe4745f43f83f8587b73",
+ "85b253fc6b7fbf9e71d01edb7bf19b7f1ca92d5d294effb0e65f01aadbac5d9b",
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,

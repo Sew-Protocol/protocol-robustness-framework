@@ -33,7 +33,8 @@
     },
     "partial-fill-policy": {
       "unrealized-yield-treatment": "not-claimable"
-    }
+    },
+    "resolver-bond-bps": 0
   },
   "events": [
     {

@@ -15,6 +15,7 @@
       :module-snapshots    {workflow-id  ModuleSnapshot-map}
       :dispute-timestamps  {workflow-id  nat-int}   ; block.timestamp of raiseDispute
       :claimable           {workflow-id {addr nat-int}}
+      :amount-released     {workflow-id nat-int}   ; cumulative partial release amounts
       :resolver-bonds      {addr {:stable nat-int :sew nat-int}} ; DR3 80/20 mix
       :senior-bonds        {addr {:coverage-max nat-int :reserved-coverage nat-int}}
       :resolver-frozen-until {addr nat-int}          ; freeze expiry (0 = not frozen)
@@ -249,8 +250,9 @@
      :module-snapshots    {}
      :dispute-timestamps  {}
      :dispute-levels      {}   ; {workflow-id nat-int} — current escalation round (0–2)
-     :claimable           {}
-     :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
+      :claimable           {}
+      :amount-released     {}   ; {workflow-id nat-int} — cumulative partial release amounts
+      :resolver-stakes     {}   ; {addr nat-int} — for Tiered Authority (Phase K)
      :resolver-slash-total {}  ; {addr nat-int} — cumulative stake slashed (distinguishes slash from withdrawal)
      :pending-fraud-slashes {} ; {slash-id {:resolver :amount :status :appeal-deadline
                                ;            :appeal-bond-held :contest-deadline :proposed-at
