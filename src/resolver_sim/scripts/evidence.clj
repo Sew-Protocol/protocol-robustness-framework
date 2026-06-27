@@ -17,9 +17,9 @@
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.registry-validation :as rv]
-            [resolver-sim.notebooks.manifest.loader :as loader]
-            [resolver-sim.notebooks.manifest.bundle :as bundle]
-            [resolver-sim.notebooks.manifest.publication :as pub]))
+            [resolver-sim.notebook-support.manifest.loader :as loader]
+            [resolver-sim.notebook-support.manifest.bundle :as bundle]
+            [resolver-sim.notebook-support.manifest.publication :as pub]))
 
 (defn- write-file! [dir name content]
   (let [f (io/file dir name)]

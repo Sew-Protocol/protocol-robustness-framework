@@ -1,0 +1,10 @@
+{:benchmark/id              :benchmark/stablecoin-redemption-disruption-v0
+ :benchmark/domain          :domain/stablecoin-safety
+ :benchmark/protocol        :protocol/stablecoin
+ :benchmark/scenario-suite  :suite/stablecoin-redemption-v0
+ :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+ :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+ :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+ :benchmark/claims          [:claim/redemption-completes-within-window
+                             :claim/no-value-destruction-on-redemption
+                             :claim/redemption-queue-fairness]}

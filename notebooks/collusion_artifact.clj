@@ -1,7 +1,7 @@
 (ns notebooks.collusion-artifact
   (:require [nextjournal.clerk :as clerk]
-            [resolver_sim.notebooks.speds.data :as data]
-            [resolver_sim.notebooks.speds.story :as story]))
+            [resolver-sim.notebook-support.speds.data :as data]
+            [resolver-sim.notebook-support.speds.story :as story]))
 
 ;; # Sew Protocol — Technical Validation Story
 ;; ## Scenario: Collusive Seller-Resolver Exploit Detection

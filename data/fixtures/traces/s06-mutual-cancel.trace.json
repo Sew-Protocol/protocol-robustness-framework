@@ -57,7 +57,7 @@
   "purpose": "equilibrium-validation",
   "theory": {
     "claim-id": "claims/cancellation-mutual-cancel-dominance",
-    "claim": "Mutual cancel path does not create profitable deviations for buyer or seller. Choosing cancel over dispute yields the same or better payoff.",
+    "claim": "Mutual cancel path does not create profitable deviations for buyer or seller.",
     "equilibrium-concept": [
       "cancellation-dominance"
     ],
@@ -65,10 +65,7 @@
       "budget-balance",
       "incentive-compatibility"
     ],
-    "falsifies-if": [],
-    "assumptions": [
-      "Both parties act rationally",
-      "No unilateral cancellation strategy configured"
-    ]
+    "assumptions": [],
+    "falsifies-if": []
   }
 }

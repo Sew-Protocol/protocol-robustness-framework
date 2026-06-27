@@ -1,8 +1,8 @@
 (ns scripts.speds-consistency-check
-  (:require [resolver_sim.notebooks.speds.data :as data]
-            [resolver_sim.notebooks.speds.findings :as findings]
-            [resolver_sim.notebooks.speds.issues :as issues]
-            [resolver_sim.notebooks.speds.validation :as validation]))
+  (:require [resolver-sim.notebook-support.speds.data :as data]
+            [resolver-sim.notebook-support.speds.findings :as findings]
+            [resolver-sim.notebook-support.speds.issues :as issues]
+            [resolver-sim.notebook-support.speds.validation :as validation]))
 
 (defn run-check!
   []

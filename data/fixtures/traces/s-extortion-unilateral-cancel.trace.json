@@ -1,0 +1,65 @@
+{
+  "schema-version": "1.1",
+  "scenario-id": "s-extortion-unilateral-cancel",
+  "id": "scenarios/s-extortion-unilateral-cancel",
+  "title": "s-extortion-unilateral-cancel",
+  "scenario-author": "@research",
+  "purpose": "equilibrium-validation",
+  "initial-block-time": 1000,
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    }
+  ],
+  "protocol-params": {
+    "resolver-fee-bps": 150,
+    "appeal-window-duration": 0,
+    "max-dispute-duration": 2592000,
+    "cancellation-strategy": {
+      "can-cancel?": true,
+      "unilateral-cancel?": true
+    }
+  },
+  "events": [
+    {
+      "seq": 0,
+      "time": 1000,
+      "agent": "buyer",
+      "action": "create_escrow",
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 1500
+      }
+    },
+    {
+      "seq": 1,
+      "time": 1060,
+      "agent": "buyer",
+      "action": "sender_cancel",
+      "params": {
+        "workflow-id": 0
+      }
+    }
+  ],
+  "theory": {
+    "claim-id": "claims/cancellation-extortion-no-profit",
+    "claim": "Unilateral cancellation does not create profitable extortion: buyer receives A-F (same as mutual cancel or dispute refund) and cannot extract more.",
+    "equilibrium-concept": [
+      "cancellation-dominance"
+    ],
+    "mechanism-properties": [
+      "budget-balance",
+      "individual-rationality"
+    ],
+    "assumptions": [],
+    "falsifies-if": []
+  }
+}

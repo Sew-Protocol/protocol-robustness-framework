@@ -41,12 +41,12 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.string :as str]
-            [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebook.views :as views]
-            [resolver-sim.notebook.checks :as checks]
-            [resolver_sim.notebooks.speds.data :as speds-data]
-            [resolver-sim.notebooks.theme :refer [notebook-theme
+            [resolver-sim.notebook-support.ui :as ui]
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.views :as views]
+            [resolver-sim.notebook-support.checks :as checks]
+            [resolver-sim.notebook-support.speds.data :as speds-data]
+            [resolver-sim.notebook-support.theme :refer [notebook-theme
                                                    tone-style section-style
                                                    table-style table-compact-style
                                                    table-small-style table-tight-style

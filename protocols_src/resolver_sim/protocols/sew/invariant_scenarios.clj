@@ -18,6 +18,7 @@
             [resolver-sim.protocols.sew.invariant-scenarios.extended :as extended]
             [resolver-sim.protocols.sew.invariant-scenarios.gaps :as gaps]
             [resolver-sim.protocols.sew.invariant-scenarios.reversal :as reversal]
+            [resolver-sim.protocols.sew.invariant-scenarios.cancellation-extended :as cancellation-ext]
             [resolver-sim.validation.scenario-id :as sid]))
 
 ;; ---------------------------------------------------------------------------
@@ -143,7 +144,16 @@
    ["S106 reversal-track2-evidence-appeal"             reversal/s106]
    ["S107 reversal-track2-appeal-rejected-executes"    reversal/s107]
    ["S66  cooldown-boundary-reorg"                      adversarial/s66]
-   ["S67  reentrancy-callback"                          adversarial/s67]])
+   ["S67  reentrancy-callback"                          adversarial/s67]
+   ["EXT-unilateral-cancel"                             cancellation-ext/s-extortion-unilateral-cancel]
+   ["EXT-unilateral-cancel-dual"                        cancellation-ext/s-extortion-unilateral-cancel-dual]
+   ["EXT-same-timestamp-cancel-vs-dispute"               cancellation-ext/s-same-timestamp-cancel-vs-dispute]
+    ["EXT-same-timestamp-dispute-vs-cancel"               cancellation-ext/s-same-timestamp-dispute-vs-cancel]
+    ["EXT-auto-cancel-time-via-keeper"                     cancellation-ext/s-auto-cancel-time-via-keeper]
+    ["EXT-auto-cancel-time-boundary"                       cancellation-ext/s-auto-cancel-time-boundary]
+     ["EXT-auto-cancel-time-orphaned-by-dispute"             cancellation-ext/s-auto-cancel-time-orphaned-by-dispute]
+     ["EXT-same-timestamp-auto-cancel-vs-dispute"            cancellation-ext/s-same-timestamp-auto-cancel-vs-dispute]
+     ["EXT-same-timestamp-dispute-vs-auto-cancel"            cancellation-ext/s-same-timestamp-dispute-vs-auto-cancel]])
 
     ;; ---------------------------------------------------------------------------
 
@@ -553,7 +563,47 @@
 
    "s100-deny-then-resolver-releases"
    {:scenario/type :settlement-variants
-    :tests #{:recipient-deny :denial-override :release-override}}})
+    :tests #{:recipient-deny :denial-override :release-override}}
+
+   ;; ── Cancellation extended scenarios (H3, boundary) ──────────────────────
+   "s-extortion-unilateral-cancel"
+   {:scenario/type :cancellation
+    :tests #{:unilateral-cancel :extortion :h3}}
+
+   "s-extortion-unilateral-cancel-dual"
+   {:scenario/type :cancellation
+    :tests #{:unilateral-cancel :dual-cancel :h3}}
+
+   "s-same-timestamp-cancel-vs-dispute"
+   {:scenario/type :timing-boundary
+    :tests #{:same-timestamp :cancel-dispute-ordering}}
+
+   "s-same-timestamp-dispute-vs-cancel"
+   {:scenario/type :timing-boundary
+    :tests #{:same-timestamp :dispute-cancel-ordering}}
+
+   ;; ── Cancellation time gap fills (S9) ─────────────────────────────
+   "s-auto-cancel-time-via-keeper"
+   {:scenario/type :timing-integration
+    :tests #{:auto-cancel-time :automate-timed-actions :keeper-auto-cancel}}
+
+   "s-auto-cancel-time-boundary"
+   {:scenario/type :timing-boundary
+    :tests #{:auto-cancel-time :deadline-boundary :t-minus-1 :t-exact}}
+
+   "s-auto-cancel-time-orphaned-by-dispute"
+   {:scenario/type :griefing-protection
+    :tests #{:auto-cancel-time :dispute-auto-cancel-on-disputed :griefing-closed :not-in-solidity}}
+
+   ;; ── Cancellation time same-timestamp gap fills (S11) ──────────────
+   "s-same-timestamp-auto-cancel-vs-dispute"
+   {:scenario/type :timing-boundary
+    :tests #{:same-timestamp :auto-cancel-time :automate-timed-actions :dispute-ordering}}
+
+   "s-same-timestamp-dispute-vs-auto-cancel"
+   {:scenario/type :timing-boundary
+    :tests #{:same-timestamp :auto-cancel-time :automate-timed-actions :dispute-ordering
+             :griefing-closed}}})
 
 (defn- scenario-registry-entries []
   (mapcat (fn [[display-name entry]]

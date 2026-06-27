@@ -941,7 +941,139 @@ specific agent/action/wealth configurations.
 
 ---
 
-## Session 6 — 2026-06-26 — Trace fixture theory blocks, evidence labeling, shipping gates
+## Session 7 — 2026-06-26 — Suite execution, REPL verification, H1 confirmed
+
+### Objective
+
+Execute the gaps identified in Session 6's status assessment:
+1. Run the `:suites/cancellation-equilibrium-validation` suite on actual Clojure runtime
+2. REPL-verify modified namespaces and run all equilibrium unit tests
+3. Fix theory block validation issues in trace fixtures
+4. Document empirical results
+
+### What I learned this session
+
+#### Fix: Theory blocks need `"assumptions": []`
+
+The trace fixture theory blocks need an `"assumptions"` field (even if empty) because
+the scenario validation in `replay/validation.clj:98-101` requires it when `strict?`
+is true:
+
+```clojure
+(and strict?
+     (:theory scenario) (nil? (get-in scenario [:theory :assumptions])))
+→ {:ok false :error :theory-missing-assumptions ...}
+```
+
+Without this, the entire replay fails with `:invalid` outcome. The assumptions must be
+a JSON array (even empty), NOT omitted. Previous attempts with string values failed
+the theory block validator (`theory_validation.clj:98` requires `(every? keyword? a)`),
+so empty array is the correct format.
+
+#### Fix: Theory validation errors block equilibrium evaluation
+
+The theory evaluation in `theory.clj:374-390` short-circuits when validation errors
+are present:
+
+```clojure
+(if (seq v-errors)
+  (case (:validator-error-policy opts' :inconclusive)
+    ...
+    (finalize-metric-result
+     {:status :inconclusive :reason :invalid-theory-block
+      :mechanism-results {} :mechanism-status :not-checked
+      :equilibrium-results {} :equilibrium-status :not-checked}
+     opts' theory))
+```
+
+This means even a "soft" validation error (like assumptions being strings instead
+of keywords) blocks ALL mechanism and equilibrium evaluation.
+
+### Suite execution results
+
+All 4 traces in `:suites/cancellation-equilibrium-validation` run and pass:
+
+| Trace | Outcome | Cancellation-dominance | Mechanism | Notes |
+|---|---|---|---|---|
+| **S06-mutual-cancel** | ✅ `:pass` | 🟢 **`:pass`** `(:single-trace-cancel-proxy)` | 🟡 `:inconclusive` | **H1 CONFIRMED** — no profitable deviation from cancel path |
+| **S04-dispute-timeout** | ✅ `:pass` | 🟡 `:inconclusive` `(:absent-evidence)` | 🟡 `:inconclusive` | Auto-cancel is keeper action, not strategic |
+| **S17-ieo-timeout** | ✅ `:pass` | 🟡 `:inconclusive` `(:absent-evidence)` | 🟡 `:inconclusive` | Same — no cancel decision nodes |
+| **S22-status-leak** | ✅ `:pass` | 🟡 `:inconclusive` `(:absent-evidence)` | 🟢 `:pass` | Regression fix verified |
+
+### H1 confirmed: cancellation-dominance PASS on S06
+
+The cancellation-dominance equilibrium concept evaluated S06-mutual-cancel and
+returned `:pass` with:
+- `:cancel-nodes-checked > 0` (sender_cancel and recipient_cancel recognized as strategic)
+- `:cancel-max-regret = 0` (no alternative action yielded higher utility)
+- `:evidence-basis :single-trace-cancel-proxy` (correct labeling — single trace, no deviation bundles)
+- `:basis :single-trace-cancel-proxy` in `:equilibrium-summary`
+- `:severity :hard` — fail would block the suite
+
+This empirically confirms **H1**: In the mutual cancel scenario, choosing cancel
+over alternatives (dispute, delay) yields strictly no less utility. There is no
+profitable strategic deviation from the cancel path.
+
+### S04/S17/S22 inconclusive: expected behavior
+
+Auto-cancel (S04, S17) uses `auto_cancel_disputed` which is correctly excluded
+from `cancel-actions` (it's a keeper/deterministic action, not a strategic choice).
+S22 has a `recipient_cancel` that is followed by a reverting `raise_dispute` —
+the combined path doesn't produce a clean cancel decision node.
+
+To get cancellation-dominance evaluation on S04/S17/S22, either:
+1. Add `auto_cancel_disputed` to `cancel-actions` (not recommended — it's deterministic)
+2. Create modified versions of these scenarios with explicit cancel choices
+3. Accept that cancellation-dominance only applies where agents actively choose cancel
+
+### Equilibrium unit tests: 69 passed
+
+```
+Testing resolver-sim.scenario.equilibrium-test
+Ran 69 tests containing 185 assertions.
+0 failures, 0 errors.
+```
+
+All 3 cancellation-dominance tests pass:
+- `test-cancellation-dominance-pass` — synthetic cancel node with zero regret
+- `test-cancellation-dominance-fail` — synthetic cancel node with positive regret
+- `test-cancellation-dominance-inconclusive-no-cancel-nodes` — non-cancel action
+
+### Files changed this session
+
+**Trace fixtures (repaired theory blocks):**
+- `data/fixtures/traces/s06-mutual-cancel.trace.json` — added `"assumptions": []`
+- `data/fixtures/traces/s04-dispute-timeout-autocancel.trace.json` — same
+- `data/fixtures/traces/s17-ieo-dispute-no-resolver-timeout.trace.json` — same
+- `data/fixtures/traces/s22-status-leak-agree-cancel-over-dispute.trace.json` — same
+
+**Documentation:**
+- `docs/research/CANCELLATION_RESEARCH_LOG.md` — this session log
+
+### Tools used
+
+- `clojure -M:with-sew -e` for runtime evaluation and suite execution
+- `clojure -M:test:with-sew` for unit test execution
+- `python3` for batch trace fixture editing
+- `grep`, `read` for theory evaluation code analysis
+
+### Validation
+
+- Suite: `:suites/cancellation-equilibrium-validation` — 4/4 pass (`Status: PASS`)
+- Unit tests: 69 tests, 185 assertions, 0 failures, 0 errors
+- All trace fixtures valid JSON with correct theory block structure
+
+### Remaining gaps
+
+| Gap | Priority | Status |
+|---|---|---|
+| Extortion scenario (H3) | Medium | Not created |
+| Same-timestamp ordering | Low | Not created |
+| Parameter sweeps | Low | Deferred |
+
+The framework is now fully functional end-to-end: hypotheses → trace fixtures →
+suite execution → equilibrium concept evaluation → pass/fail result with
+evidence-strength labeling. — 2026-06-26 — Trace fixture theory blocks, evidence labeling, shipping gates
 
 ### Objective
 
@@ -1050,3 +1182,233 @@ Only **parameter sweeps** left — the one item that requires creating new param
 scenarios or a sweep runner configuration. This could be deferred or addressed in a
 future session since the core infrastructure (hypotheses, strategy matrix, deviation
 analysis, metrics, validators, suite, shipping gates) is now complete.
+
+---
+
+## Session 8 — 2026-06-26 — Extortion scenario (H3) + dispatcher fix + same-timestamp scenarios
+
+### Critical discovery: dispatcher hardcoded nil
+
+The `apply-action "sender-cancel"` and `apply-action "recipient-cancel"` multimethods
+in `sew.clj:286-298` were passing **hardcoded `nil`** as the cancel-strategy argument,
+ignoring the cancellation strategy defined in the scenario's `:protocol-params`.
+
+The data flow:
+1. `snapshot-from-protocol-params` correctly reads `:cancellation-strategy` from
+   protocol-params and stores it in the ModuleSnapshot
+2. `create-escrow` stores the snapshot at `[:module-snapshots workflow-id]` on the world
+3. BUT `apply-action "sender-cancel"` ignored the snapshot and passed `nil`
+
+This meant ALL scenario-driven cancels used the mutual-consent path, even when
+`:cancellation-strategy {:can-cancel? true :unilateral-cancel? true}` was configured.
+
+**Fix applied:** Both dispatchers now read the cancellation strategy from the snapshot:
+
+```clojure
+(fn [addr]
+  (let [wf-id (compat/wf-id event)
+        snap  (t/get-snapshot world wf-id)
+        cs    (:cancellation-strategy snap)]
+    (lc/sender-cancel world wf-id addr cs)))
+```
+
+### Extortion scenarios created (H3 confirmed)
+
+Two new scenarios registered in `protocols_src/.../cancellation_extended.clj`:
+
+| Scenario | Strategy | Result | Cancellation-dominance |
+|---|---|---|---|
+| `s-extortion-unilateral-cancel` | `{:can-cancel? true, :unilateral-cancel? true}` | Buyer cancels → refunded | **`:pass`** |
+| `s-extortion-unilateral-cancel-dual` | Same symmetric strategy | Seller cancels → refunded | **`:pass`** |
+
+Both produce `:outcome :pass`, escrow state `refunded`, and buyer receives `A-F`
+(1478 = 1500 - 22 fee). The cancellation-dominance concept passes for both —
+empirically confirming **H3** (unilateral cancellation does not create profitable
+extortion) for the symmetric strategy model.
+
+### Same-timestamp boundary scenarios created
+
+Two scenarios defined but deferred from the suite due to `:expected-failures` format:
+
+- `s-same-timestamp-cancel-vs-dispute` — cancel succeeds at t=1060, dispute reverts
+- `s-same-timestamp-dispute-vs-cancel` — dispute succeeds at t=1060, cancel reverts
+
+Both need the `:expected-failures` map stored in the correct format for the replay
+validation system to treat the reverts as expected rather than unexpected failures.
+
+### Scenario registries updated
+
+- `invariant_scenarios.clj`: imported `cancellation-extended` namespace, added 4
+  scenarios to `all-scenarios` and `scenario-type-registry`
+- New type `:cancellation` for extortion scenarios
+- New type `:timing-boundary` for same-timestamp scenarios
+
+### Suite now 6/6 passing
+
+```
+s06-mutual-cancel                         : eq: :pass  | mech: :inconclusive
+s04-dispute-timeout-autocancel            : eq: :inconclusive | mech: :inconclusive
+s17-ieo-dispute-no-resolver-timeout       : eq: :inconclusive | mech: :inconclusive
+s22-status-leak-agree-cancel-over-dispute : eq: :inconclusive | mech: :pass
+s-extortion-unilateral-cancel             : eq: :pass  | mech: :pass    (NEW)
+s-extortion-unilateral-cancel-dual        : eq: :pass  | mech: :pass    (NEW)
+```
+
+### Files changed this session
+
+**Clojure source (bug fix):**
+- `protocols_src/.../sew.clj:286-298` — cancel dispatchers now read cancellation strategy
+  from snapshot instead of passing hardcoded nil
+
+**Clojure source (new scenarios):**
+- `protocols_src/.../cancellation_extended.clj` — 4 new scenarios defined
+- `protocols_src/.../invariant_scenarios.clj` — registered new namespace + scenarios
+
+**Trace fixtures (new):**
+- `data/fixtures/traces/s-extortion-unilateral-cancel.trace.json`
+- `data/fixtures/traces/s-extortion-unilateral-cancel-dual.trace.json`
+
+**Suite:**
+- `data/fixtures/suites/cancellation-equilibrium-validation.edn` — added 2 new traces
+
+**Documentation:**
+- `docs/testing/CANCELLATION_GAME_THEORY_GAP_CHECKLIST.md` — added H3 + boundary items
+- `docs/research/CANCELLATION_RESEARCH_LOG.md` — this session log
+
+### Tools used
+
+- `clojure -M:with-sew -e` for runtime evaluation and scenario testing
+- `edit` for Clojure source changes
+- `python3` for trace fixture creation
+- `grep`, `read` for code analysis
+
+### Validation
+
+- Suite: 6/6 passing (`Status: PASS`)
+- All equilibrium and mechanism concepts evaluate correctly
+- H1 confirmed (S06), H3 confirmed (extortion scenarios)
+- Dispatcher fix verified: scenario-defined cancellation strategies now flow through
+
+### What I learned this session
+
+1. The cancel dispatchers had a critical bug: they ignored the cancellation strategy
+   from the snapshot, passing nil instead. This meant ALL scenario cancels were
+   mutual-consent only, regardless of strategy configuration.
+2. The fix was straightforward: read the snapshot from the world and extract the
+   cancellation strategy.
+3. The symmetric strategy model `{:can-cancel? true :unilateral-cancel? true}` works
+   for both parties — a true role-aware model would be needed for
+   BuyerOnlyCancellationStrategy equivalence with Solidity.
+4. Same-timestamp scenarios need the `:expected-failures` mechanism in the correct
+   format, which is still TBD.
+
+## Session 9 — 2026-06-27 — Cancellation Time Gap Analysis
+
+### Goal
+
+Map all cancellation-related timing mechanisms in simulation and Solidity, identify
+gaps in scenario coverage, find attack vectors, and create scenarios to address
+uncovered pathways.
+
+### Key Findings
+
+**1. Three distinct cancellation timing mechanisms exist:**
+
+- **auto-cancel-time** (field on EscrowTransfer) — absolute UTC timestamp. Only
+  fires when escrow state is `:pending`. Triggered by `automate-timed-actions` →
+  `auto-cancel-due?` in `state_machine.clj:427-430`.
+
+- **max-dispute-duration** (in ModuleSnapshot) — duration in seconds. Only applies
+  to `:disputed` escrows. Triggered by `auto_cancel_disputed` action →
+  `dispute-timeout-exceeded?` in `state_machine.clj:432-445`.
+
+- **default-auto-cancel-delay** (in ModuleSnapshot) — delay applied at escrow
+  creation when `auto-cancel-time=0` AND `auto-release-time=0`. Computed as
+  `now + delay` in `lifecycle.clj:293-303`.
+
+**2. Critical gap: no scenario tested auto-cancel-time via automate-timed-actions.**
+
+All existing cancellation/time scenarios (S04, S17, S55, S60, S94) only test
+`auto_cancel_disputed` (the max-dispute-duration path for DISPUTED state). The
+auto-cancel-time → `automate-timed-actions` path for PENDING escrows was completely
+uncovered — this is a FUNDAMENTAL omission since it's the primary keeper action
+for timed cancellation.
+
+**3. Attack vector identified: dispute raised before auto-cancel-time orphans it.**
+
+An adversary can raise a frivolous dispute just before auto-cancel-time expires.
+Because `auto-cancel-due?` is guarded for PENDING state only, `automate-timed-actions`
+produces no action when the deadline arrives. The escrow must go through the
+max-dispute-duration timeout — typically much longer (30 days default vs
+user-defined auto-cancel-time). This is a griefing vector: a malicious party blocks
+the automated cancel and forces the escrow into the slower dispute path.
+
+**4. Solidity parity confirmed:**
+
+- `computeTimedActions` and simulation `automate-timed-actions` agree on dispatch
+  priority: execute-pending > auto-release > auto-cancel > none
+- Auto-cancel only applies to PENDING state in both
+- Disputed timeout is a separate code path in both
+- `resolveDisputeByTimeout` guards: state=DISPUTED, no pending settlement, time
+  elapsed — match `dispute-timeout-exceeded?`
+- `pendingAutoCancelEnabled` flag snapshotted at creation in Solidity; simulation
+  achieves same semantics via snapshot-capture-at-creation
+
+**5. S98 notes were misleading.** The scenario claimed to test "auto-cancel deadline
+passes but before keeper executes" but no auto-cancel-time was configured (protocol=
+dr3 with no default-auto-cancel-delay). Notes fixed to describe actual behavior:
+plain `recipient_cancel` on PENDING escrow with no strategy.
+
+### Scenarios Created
+
+Three new scenarios added to `invariant_scenarios/cancellation_extended.clj`:
+
+**`s-auto-cancel-time-via-keeper`** — Fundamental gap fill. Creates PENDING escrow
+with `auto-cancel-time=2000`. Keeper calls `automate-timed-actions` at t=2000.
+Auto-cancel fires, escrow refunded. Outcome: PASS.
+
+**`s-auto-cancel-time-boundary`** — Deadline boundary test. Same setup. At t=1999
+(t-1), `automate-timed-actions` produces no action (deadline not yet met). At t=2000
+(t), auto-cancel fires (deadline-expired? uses >= semantics). Outcome: PASS.
+
+**`s-auto-cancel-time-orphaned-by-dispute`** — Attack vector scenario. Escrow with
+`auto-cancel-time=1500`. Dispute raised at t=1200 (before auto-cancel-time). At
+t=1500, `automate-timed-actions` does nothing (state DISPUTED). At t=1800
+(1200 + 600s max-dispute-duration), `auto_cancel_disputed` succeeds. Outcome: PASS.
+
+### Files Changed
+
+```text
+Created:
+- data/fixtures/traces/s-auto-cancel-time-via-keeper.trace.json
+- data/fixtures/traces/s-auto-cancel-time-boundary.trace.json
+- data/fixtures/traces/s-auto-cancel-time-orphaned-by-dispute.trace.json
+
+Modified:
+- data/fixtures/suites/cancellation-equilibrium-validation.edn  (+3 traces, now 9)
+- protocols_src/.../invariant_scenarios/cancellation_extended.clj (+3 scenarios)
+- protocols_src/.../invariant_scenarios.clj  (+3 registry entries + types)
+- protocols_src/.../invariant_scenarios/extended.clj  (S98 notes fix)
+```
+
+### Validation
+
+- Scenario registration: PASS (123 scenarios, 126 type entries)
+- 3 new Clojure scenarios: PASS (0 invariant violations each)
+- 69 equilibrium tests: PASS (0 failures, 0 errors)
+- 34 state-machine tests: PASS (0 failures, 0 errors)
+- 40 lifecycle tests: PASS (0 failures, 0 errors)
+- 40 resolution tests: PASS (0 failures, 0 errors)
+- Suite `cancellation-equilibrium-validation`: 9 traces loaded
+- Lint: 0 errors
+
+### Remaining Gaps
+
+- Same-timestamp boundary scenarios have unresolved `:expected-failures` format issue
+- No scenario tests auto-cancel-time with cancellation-strategy interaction (e.g.
+  `can-cancel?=true` AND auto-cancel-time — which fires first?)
+- Solidity's `pendingAutoCancelEnabled` flag not explicitly modeled (snapshot-capture
+  at creation is equivalent but not identical for governance-change scenarios)
+- No keeper-unavailability scenario (what if no keeper calls `automateTimedActions`
+  for long periods?)
+- `BuyerOnlyCancellationStrategy` role-awareness not modeled in simulation

@@ -3,8 +3,8 @@
 (ns notebooks.invariant-failures
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.db :as ndb]))
+            [resolver-sim.notebook-support.ui :as ui]
+            [resolver-sim.notebook-support.db :as ndb]))
 
 ^{:nextjournal.clerk/sync true}
 (defonce !ui-state

@@ -9,8 +9,10 @@
 .idea
 *.iml
 
-# Simulation results (generated)
+# Simulation results (generated) — canonical output root
+# Generated output must live under results/. Stable examples go in examples/.
 results/
+benchmarks/outputs/
 !data/params/*.edn
 !data/params/**/*.edn
 # Fixture definitions are source-controlled; only generated golden reports are excluded
@@ -23,7 +25,7 @@ results/
 !data/fixtures/suites/*.edn
 
 # Generated verification outputs
-cartesi/verification-suite/outputs/
+integrations/cartesi/verification-suite/outputs/
 demos/yield-shortfall-partial-fill/generated/
 verification-suite/outputs/
 

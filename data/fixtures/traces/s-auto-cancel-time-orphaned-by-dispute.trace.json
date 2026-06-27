@@ -1,0 +1,76 @@
+{
+  "schema-version": "1.1",
+  "scenario-id": "s-auto-cancel-time-orphaned-by-dispute",
+  "id": "scenarios/s-auto-cancel-time-orphaned-by-dispute",
+  "title": "s-auto-cancel-time-orphaned-by-dispute",
+  "scenario-author": "@research",
+  "purpose": "equilibrium-validation",
+  "initial-block-time": 1000,
+  "agents": [
+    {
+      "id": "buyer",
+      "address": "0xbuyer",
+      "type": "honest"
+    },
+    {
+      "id": "seller",
+      "address": "0xseller",
+      "type": "honest"
+    },
+    {
+      "id": "keeper",
+      "address": "0xkeeper",
+      "type": "keeper"
+    }
+  ],
+  "protocol-params": {
+    "resolver-fee-bps": 150,
+    "appeal-window-duration": 0,
+    "max-dispute-duration": 600
+  },
+  "events": [
+    {
+      "seq": 0,
+      "time": 1000,
+      "agent": "buyer",
+      "action": "create_escrow",
+      "params": {
+        "token": "USDC",
+        "to": "0xseller",
+        "amount": 2000,
+        "auto-cancel-time": 1500
+      }
+    },
+    {
+      "seq": 1,
+      "time": 1200,
+      "agent": "buyer",
+      "action": "raise_dispute",
+      "params": {
+        "workflow-id": 0
+      }
+    },
+    {
+      "seq": 2,
+      "time": 1500,
+      "agent": "keeper",
+      "action": "automate_timed_actions",
+      "params": {
+        "workflow-id": 0
+      }
+    }
+  ],
+  "theory": {
+    "claim-id": "claims/cancellation-auto-time-orphaned-by-dispute",
+    "claim": "[FIXED] A dispute raised before auto-cancel-time no longer orphans the deadline. When auto-cancel-time arrives (t=1500) on a DISPUTED escrow, automate-timed-actions now fires auto-cancel-on-disputed (NOT IN SOLIDITY). The buyer is refunded immediately at t=1500 without waiting for max-dispute-duration (1200+600=1800). This closes the griefing vector where a frivolous dispute blocked automated cancel.",
+    "equilibrium-concept": [
+      "cancellation-dominance"
+    ],
+    "mechanism-properties": [
+      "budget-balance",
+      "individual-rationality"
+    ],
+    "assumptions": [],
+    "falsifies-if": []
+  }
+}

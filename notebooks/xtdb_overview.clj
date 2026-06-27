@@ -2,8 +2,8 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.xtdb-overview
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.db :as ndb]))
+            [resolver-sim.notebook-support.ui :as ui]
+            [resolver-sim.notebook-support.db :as ndb]))
 
 (defn count* [ds table]
   (let [r (ndb/query-on ds [(str "SELECT COUNT(*) AS count FROM " table)])]

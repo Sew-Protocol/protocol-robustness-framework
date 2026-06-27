@@ -1,0 +1,11 @@
+{:benchmark/id              :benchmark/sew-resolver-slashing-v1
+ :benchmark/domain          :domain/escrow-dispute-resolution
+ :benchmark/protocol        :protocol/sew
+ :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
+ :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+ :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+ :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+ :benchmark/claims          [:claim/slashing-conservation
+                             :claim/waterfall-coverage-correct
+                             :claim/no-over-slashing
+                             :claim/appeal-bond-adequacy]}

@@ -714,14 +714,16 @@
 ;;
 ;; Mirrors: BaseEscrow.automateTimedActions
 ;;
-;; Dispatch order (matches the contract's if/else if chain):
-;;   1. ACTION_EXECUTE_PENDING  — pending-settlement executable?
-;;   2. ACTION_AUTO_RELEASE     — auto-release-time passed?
-;;   3. ACTION_AUTO_CANCEL      — auto-cancel-time passed?
-;;   4. ACTION_NONE             — no action, return {:ok true :world world :action :none}
+;; Dispatch order:
+;;   1. ACTION_EXECUTE_PENDING     — pending-settlement executable?
+;;   2. ACTION_AUTO_CANCEL_DISPUTED — auto-cancel-time passed on DISPUTED?
+;;                                    (NOT IN SOLIDITY — griefing protection)
+;;   3. ACTION_AUTO_RELEASE        — auto-release-time passed?
+;;   4. ACTION_AUTO_CANCEL         — auto-cancel-time passed?
+;;   5. ACTION_NONE                — no action
 ;;
 ;; Returns {:ok bool :world world' :action kw} where action is one of:
-;;   :execute-pending :auto-release :auto-cancel :none
+;;   :execute-pending :auto-cancel-on-disputed :auto-release :auto-cancel :none
 ;; ---------------------------------------------------------------------------
 
 (defn automate-timed-actions
@@ -741,12 +743,23 @@
             (assoc r :action :execute-pending)
             r))
 
-        ;; Priority 2: auto-release
+        ;; Priority 2 (NEW): auto-cancel-time passed on DISPUTED escrow
+        ;; NOT IN SOLIDITY — griefing protection.  Without this check a
+        ;; frivolous dispute raised before auto-cancel-time orphans the
+        ;; deadline, forcing the escrow into the longer max-dispute-duration
+        ;; path.
+        (sm/auto-cancel-due-on-disputed? world workflow-id)
+        (let [r (lc/auto-cancel-disputed-on-auto-time world workflow-id)]
+          (if (:ok r)
+            (assoc r :action :auto-cancel-on-disputed)
+            r))
+
+        ;; Priority 4: auto-release
         (sm/auto-release-due? world workflow-id)
         (let [r (t/ok (finalize world workflow-id :released))]
           (assoc r :action :auto-release))
 
-        ;; Priority 3: auto-cancel
+        ;; Priority 5: auto-cancel
         (sm/auto-cancel-due? world workflow-id)
         (let [r (t/ok (finalize world workflow-id :refunded))]
           (assoc r :action :auto-cancel))

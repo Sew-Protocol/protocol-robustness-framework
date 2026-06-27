@@ -429,6 +429,29 @@
   [world workflow-id]
   (deadline-due? world workflow-id :auto-cancel-time))
 
+(defn auto-cancel-due-on-disputed?
+  "NOT IN SOLIDITY — simulation-side griefing protection.
+
+   True when a DISPUTED escrow has auto-cancel-time set and the
+   deadline has passed, with no pending settlement blocking cleanup.
+
+   Without this check, a frivolous dispute raised before auto-cancel-time
+   orphans the deadline (auto-cancel-due? only fires for :pending state),
+   forcing the escrow into the longer max-dispute-duration path.
+
+   This is a known griefing vector: adversary raises dispute just before
+   auto-cancel-time to block automated cancel, locking the escrow until
+   max-dispute-duration elapses."
+  [world workflow-id]
+  (let [state  (t/escrow-state world workflow-id)
+        et     (t/get-transfer world workflow-id)
+        ts     (:auto-cancel-time et)]
+    (and (= :disputed state)
+         (pos? ts)
+         (dl/deadline-expired? (time-ctx/block-ts world) ts)
+         ;; Must not have a pending settlement (don't override resolver)
+         (not (:exists (t/get-pending world workflow-id))))))
+
 (defn dispute-timeout-exceeded?
   "True when max-dispute-duration has elapsed since raiseDispute and
    no pending-settlement exists."

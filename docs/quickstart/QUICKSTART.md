@@ -54,7 +54,7 @@ sleep 8
 
 # Run all adversarial scenarios (Python)
 pip install -e python/
-cd python && python invariant_suite.py
+cd integration/python && python invariant_suite.py
 ```
 
 This runs 33 adversarial scenarios where Python agents interact with the live

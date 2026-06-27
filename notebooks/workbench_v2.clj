@@ -2,10 +2,10 @@
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [clojure.walk :as walk]
-            [resolver-sim.notebooks.common :as common]
-            [resolver_sim.notebooks.speds.data :as speds-data]
-            [resolver_sim.notebooks.speds.config :as config]
-            [resolver_sim.notebooks.speds.story :as story]))
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.speds.data :as speds-data]
+            [resolver-sim.notebook-support.speds.config :as config]
+            [resolver-sim.notebook-support.speds.story :as story]))
 
 ;; # Sew Protocol — Production Evidence Workbench
 ;; ## High-Assurance Protocol Robustness & Adversarial Telemetry

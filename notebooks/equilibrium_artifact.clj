@@ -1,7 +1,7 @@
 (ns notebooks.equilibrium-artifact
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebook-support.common :as common]))
 
 ;; # Sew Protocol — Technical Validation Story
 ;; ## Equilibrium Failure Observatory: Multi-Epoch Reputation Dynamics

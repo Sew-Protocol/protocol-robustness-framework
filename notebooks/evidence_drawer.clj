@@ -1,7 +1,7 @@
 (ns notebooks.evidence-drawer
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebook-support.common :as common]))
 
 ;; # Evidence Drawer — Technical Exploration Surface
 ;; ## Deep-Dive Trace Explorer for S26/S74/S42

@@ -25,9 +25,9 @@
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.nav :as nav]
-            [resolver-sim.notebooks.security :as sec]))
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.nav :as nav]
+            [resolver-sim.notebook-support.security :as sec]))
 
 ;; ---------------------------------------------------------------------------
 ;; Notebook header
@@ -60,7 +60,7 @@
 ;; ---------------------------------------------------------------------------
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(require '[resolver-sim.notebooks.manifest.loader :as loader])
+(require '[resolver-sim.notebook-support.manifest.loader :as loader])
 
 ^{:nextjournal.clerk/no-cache true
   :nextjournal.clerk/visibility {:code :hide :result :hide}}

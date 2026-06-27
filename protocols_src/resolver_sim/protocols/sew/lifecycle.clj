@@ -594,6 +594,26 @@
 ;;   3. dispute-raised-timestamp set + max-dispute-duration elapsed
 ;; ---------------------------------------------------------------------------
 
+(defn- cancel-disputed-escrow-now
+  "Internal: execute disputed-escrow refund + resolver slash unconditionally.
+   Caller is responsible for time/state validation."
+  [world workflow-id]
+  (let [et             (t/get-transfer world workflow-id)
+        resolver        (:dispute-resolver et)
+        slash-amt       (:amount-after-fee et)
+        token           (:token et)
+        has-resolver?   (and resolver
+                             (not= resolver t/zero-address))
+        world-finalized (finalize world workflow-id :refunded)
+        world-slashed   (if has-resolver?
+                          (:world (reg/slash-resolver-stake world-finalized resolver slash-amt
+                                                            nil 0 workflow-id))
+                          world-finalized)
+        world-result    (-> world-slashed
+                            (t/decrement-resolver-capacity resolver)
+                            (update :dispute-timestamps dissoc workflow-id))]
+    (t/ok world-result)))
+
 (defn auto-cancel-disputed-escrow
   "Cancel a :disputed escrow after max-dispute-duration has elapsed.
    Performs full accounting reconciliation: slashes the resolver (as a timeout)
@@ -613,24 +633,36 @@
     (t/fail :dispute-timeout-not-exceeded)
 
     :else
-    (let [et             (t/get-transfer world workflow-id)
-          resolver        (:dispute-resolver et)
-          slash-amt       (:amount-after-fee et)
-          token           (:token et)
-          has-resolver?   (and resolver
-                               (not= resolver t/zero-address))
+    (cancel-disputed-escrow-now world workflow-id)))
 
-          ;; Ensure finalize, slash, and distribution are handled
-          ;; as a single, atomic state transition to satisfy invariants.
-          world-finalized (finalize world workflow-id :refunded)
-          world-slashed   (if has-resolver?
-                            (:world (reg/slash-resolver-stake world-finalized resolver slash-amt
-                                                              nil 0 workflow-id))
-                            world-finalized)
-          world-result    (-> world-slashed
-                              (t/decrement-resolver-capacity resolver)
-                              (update :dispute-timestamps dissoc workflow-id))]
-      (t/ok world-result))))
+(defn auto-cancel-disputed-on-auto-time
+  "NOT IN SOLIDITY — extra protection against griefing where a frivolous
+   dispute raised before auto-cancel-time orphans the deadline.
+
+   Cancel a DISPUTED escrow whose auto-cancel-time has passed, bypassing
+   max-dispute-duration check.  Mirrors auto-cancel-disputed-escrow but
+   triggers on auto-cancel-time instead of dispute-timeout.
+
+   Guards:
+     1. state must be :disputed
+     2. no pending-settlement exists
+     3. auto-cancel-time set and passed (check via state-machine predicate)"
+  [world workflow-id]
+  (cond
+    (not (t/valid-workflow-id? world workflow-id))
+    (t/fail :invalid-workflow-id)
+
+    (not= :disputed (t/escrow-state world workflow-id))
+    (t/fail :transfer-not-in-dispute)
+
+    (:exists (t/get-pending world workflow-id))
+    (t/fail :has-pending-settlement)
+
+    (not (sm/auto-cancel-due-on-disputed? world workflow-id))
+    (t/fail :auto-cancel-time-not-passed)
+
+    :else
+    (cancel-disputed-escrow-now world workflow-id)))
 
 ;; ── Monadic Transitions ──────────────────────────────────────────────────────
 
@@ -666,6 +698,11 @@
   "Monadic version of auto-cancel-disputed-escrow."
   [workflow-id]
   (am/update-with-result auto-cancel-disputed-escrow workflow-id))
+
+(defn auto-cancel-disputed-on-auto-time-m
+  "Monadic version of auto-cancel-disputed-on-auto-time (NOT IN SOLIDITY)."
+  [workflow-id]
+  (am/update-with-result auto-cancel-disputed-on-auto-time workflow-id))
 
 (defn init-resolver-yield-accrual-time-m
   "Monadic version of init-resolver-yield-accrual-time."

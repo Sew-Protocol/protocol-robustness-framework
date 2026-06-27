@@ -1,0 +1,16 @@
+{:registry/spec :spec/pack-registry-v1
+ :registry/version 1
+ :pack/id :pack/prf-core
+ :pack/description "Core PRF benchmark infrastructure pack"
+ :pack/domain :domain/prf-core
+
+ :benchmarks
+ [{:benchmark/id :benchmark/prf-deterministic-replay-v1
+   :benchmark/domain :domain/evidence-integrity
+   :benchmark/file "deterministic-replay-v1.edn"
+   :benchmark/status :active}
+
+  {:benchmark/id :benchmark/prf-evidence-integrity-v1
+   :benchmark/domain :domain/evidence-integrity
+   :benchmark/file "evidence-integrity-v1.edn"
+   :benchmark/status :active}]}

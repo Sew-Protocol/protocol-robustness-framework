@@ -1,10 +1,10 @@
 (ns notebooks.workbench-production
   (:require [nextjournal.clerk :as clerk]
-            [resolver_sim.notebooks.speds.core :as speds]
-            [resolver_sim.notebooks.speds.data :as data]
-            [resolver_sim.notebooks.speds.story :as story]
-            [resolver_sim.notebooks.speds.tokens :as tokens]
-            [resolver_sim.notebooks.speds.config :as config]
+            [resolver-sim.notebook-support.speds.core :as speds]
+            [resolver-sim.notebook-support.speds.data :as data]
+            [resolver-sim.notebook-support.speds.story :as story]
+            [resolver-sim.notebook-support.speds.tokens :as tokens]
+            [resolver-sim.notebook-support.speds.config :as config]
             [clojure.string :as str]))
 
 ;; # Sew Protocol — Production Evidence Workbench

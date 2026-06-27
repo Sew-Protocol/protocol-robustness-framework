@@ -1,44 +1,60 @@
-# Benchmarks & Evidence Generation
+# Benchmarks
 
-This layer provides deterministic benchmark execution and evidence generation for protocol robustness validation.
+Canonical benchmark root. Protocol-agnostic benchmark infrastructure
+lives here; protocol-specific packs appear under `packs/<protocol>/`.
 
-## Architecture
+## Directory Layout
 
-- **Manifests:** Defined in `benchmarks/*.edn`. They specify scenario suites, invariants, and metrics.
-- **Runner:** Executes suites via a `RepositoryAdapter` and collects results.
-- **Evidence Bundles:** Portable EDN artifacts containing repo metadata, environment info, and execution traces.
-- **Determinism:** Evidence bundles are hashed using canonical EDN serialization and SHA-256. Identical inputs (repo state + benchmark) produce identical hashes.
-- **Signing:** Users can sign evidence hashes locally using Ed25519 (optional).
+```
+benchmarks/
+  README.md
+  BENCHMARK_PACK_SPEC_V1.md
+  BENCHMARK_RESULT_SPEC_V1.md
 
-## Usage
+  registry.edn                  Global pack + domain index
 
-### Run a benchmark
-```bash
-bb benchmark:run benchmarks/dispute-liveness.edn
+  packs/                        Protocol/domain benchmark packs
+    prf-core/                   Core PRF infrastructure benchmarks
+    sew/                        Sew protocol benchmarks
+    stablecoin-safety/          Stablecoin safety benchmarks
+
+  scoring/                      Scoring rule definitions
+    severity_weighted_v1.edn
+    binary_claims_v1.edn
+
+  runners/                      Runner policy configurations
+    local.edn
+    with-sew.edn
+    quorum-local-v0.edn
+
+  scenarios/                    Scenario suite references
+
+  outputs/                      Generated benchmark output (gitignored)
+
+  archived/                     Legacy/experimental material
 ```
 
-### Run and sign
-```bash
-bb benchmark:run benchmarks/dispute-liveness.edn -k ~/.ssh/id_ed25519
-```
+## Benchmark as Contract
 
-### Verify evidence bundle
-```bash
-bb benchmark:verify evidence/latest.edn
-```
+Each benchmark is a registered evaluation contract — a bundle of
+references that specifies:
 
-### View evidence hash
-```bash
-bb benchmark:hash evidence/latest.edn
-```
+| Field                     | Reference                      |
+|---------------------------|--------------------------------|
+| domain                    | Problem domain under test       |
+| protocol                  | Protocol being benchmarked      |
+| scenario suite            | Set of scenarios to execute     |
+| runner policy             | Execution parameters             |
+| evidence policy           | Evidence collection + hashing   |
+| scoring rule              | Pass/fail/mixed classification  |
+| claims                    | Atomic properties under test    |
 
-## Repository Adapter
+## Key Boundaries
 
-The `RepositoryAdapter` protocol allows the runner to be protocol-agnostic. The default `SewAdapter` handles SEW-v1 scenarios (JSON/EDN).
+**PRF** owns the benchmark infrastructure: registry, scenario selection,
+runner selection, canonical result format, evidence policy, scoring
+rules, artifact emission, runner attestations, and consensus.
 
-```clojure
-(defprotocol RepositoryAdapter
-  (load-scenarios [this benchmark])
-  (execute-benchmark [this benchmark scenarios])
-  (collect-metrics [this results]))
-```
+**Sew** (and other protocols) are benchmark subjects — they provide
+the protocol-specific scenarios, claims, and adapters that PRF runs
+through its infrastructure.

@@ -71,6 +71,12 @@ profitable strategic deviations (within configured parameter ranges).
   - 5 gates defined: deviation pass rate, invariant violations, extortion equilibrium, Solidity parity, multi-trace evidence
   - 2 gates currently Validated, 2 Pending, 1 N/A
 
+- [x] Extortion scenario (H3) + same-timestamp boundary scenarios
+  - Extortion scenario `s-extortion-unilateral-cancel`: buyer with unilateral cancel power → `:cancellation-dominance :pass`
+  - Extortion scenario `s-extortion-unilateral-cancel-dual`: both parties with unilateral cancel → `:cancellation-dominance :pass`
+  - Boundary scenarios `s-same-timestamp-cancel-vs-dispute` and `s-same-timestamp-dispute-vs-cancel` created but deferred (expected-revert format pending)
+  - **H3 confirmed empirically**: no profitable extortion deviation with unilateral cancellation
+
 - [ ] Add cancellation-specific parameter sweeps
   - Sweep timeout/appeal windows, fee levels, and cancellation strategy toggles.
   - Output regions where strategic preference flips.

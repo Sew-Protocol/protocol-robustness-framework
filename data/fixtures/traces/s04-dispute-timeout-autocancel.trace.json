@@ -71,7 +71,7 @@
   "purpose": "equilibrium-validation",
   "theory": {
     "claim-id": "claims/cancellation-timeout-auto-cancel-dominance",
-    "claim": "Dispute timeout autocancel path does not create profitable deviations. Waiting for timeout yields the same refund as active cancel without additional cost.",
+    "claim": "Dispute timeout auto-cancel path does not create profitable deviations.",
     "equilibrium-concept": [
       "cancellation-dominance"
     ],
@@ -79,10 +79,7 @@
       "budget-balance",
       "individual-rationality"
     ],
-    "falsifies-if": [],
-    "assumptions": [
-      "max-dispute-duration is within configured range",
-      "Keeper executes timeout promptly"
-    ]
+    "assumptions": [],
+    "falsifies-if": []
   }
 }

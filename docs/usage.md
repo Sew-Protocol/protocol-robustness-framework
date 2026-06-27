@@ -32,7 +32,7 @@ pip install -e python/
 ### Run all 33 scenarios
 
 ```bash
-cd python
+cd integration/python
 python invariant_suite.py
 ```
 
@@ -158,7 +158,7 @@ The invariant suite is designed for CI. Add to your pipeline:
   run: |
     nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
     sleep 15
-    cd python && python invariant_suite.py --json results/ci-run.json
+    cd integration/python && python invariant_suite.py --json results/ci-run.json
 ```
 
 Exit code is 0 on full pass, 1 if any scenario fails.

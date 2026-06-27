@@ -45,7 +45,7 @@ This repository maintains two scenario suites:
 clojure -M:run -- --invariants
 
 # Adversarial gRPC suite (all 33 scenarios)
-cd python && python invariant_suite.py
+cd integration/python && python invariant_suite.py
 
 # Adversarial gRPC suite (one F-class)
 python invariant_suite.py --scenario F3

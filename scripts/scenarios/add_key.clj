@@ -21,7 +21,7 @@
       (println "Usage: bb keys:add <researcher_id> <path-to-pubkey> --name <name> --email <email>")
       (System/exit 1))
 
-    (let [owners-file (io/file "keys/owners.json")
+    (let [owners-file (io/file "fixtures/keys/owners.json")
           owners-data (json/read-str (slurp owners-file) :key-fn keyword)
           fingerprint (get-fingerprint pub-key-path)
           new-owner {:display_name name
@@ -32,4 +32,4 @@
           updated-data (assoc-in owners-data [:owners (keyword researcher-id)] new-owner)]
       
       (spit owners-file (json/write-str updated-data {:indent true}))
-      (println (str "Successfully added " researcher-id " to keys/owners.json")))))
+      (println (str "Successfully added " researcher-id " to fixtures/keys/owners.json")))))

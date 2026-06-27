@@ -158,7 +158,7 @@
    :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
 
   :run
-  {:main-opts ["-e" "(require '[resolver-sim.core]) (->> *command-line-args* (map str) (apply resolver-sim.core/-main))"]}
+  {:main-opts ["-m" "resolver-sim.core"]}
 
   :diff-traces
   {:main-opts ["-m" "resolver-sim.io.diff-runner"]}

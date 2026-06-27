@@ -8,7 +8,7 @@
 
 (ns notebooks.index
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.nav :as nav]))
+            [resolver-sim.notebook-support.nav :as nav]))
 
 ;; ---
 

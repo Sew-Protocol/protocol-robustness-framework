@@ -1,7 +1,7 @@
 (ns notebooks.withdrawal-observatory
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebook-support.common :as common]))
 
 ;; # Withdrawal & Claimable Balance Observatory
 ;; ## High-Assurance Settlement Architecture: Push vs. Pull

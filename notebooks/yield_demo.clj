@@ -3,7 +3,7 @@
    Targeted at non-expert readers evaluating the Protocol Robustness Framework."
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.yield-scenarios :as ys]
+            [resolver-sim.notebook-support.yield-scenarios :as ys]
             [resolver-sim.protocols.yield :as yp]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.scenario.normalize :as normalize]))

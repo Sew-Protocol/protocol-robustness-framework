@@ -31,9 +31,9 @@
             [clojure.edn :as edn]
             [clojure.data.json :as json]
             [clojure.string :as str]
-            [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.common :as common]
-            [resolver_sim.notebooks.speds.data :as speds-data]
+            [resolver-sim.notebook-support.ui :as ui]
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.speds.data :as speds-data]
             [resolver-sim.protocols.sew.invariants :as invariants]
             [resolver-sim.protocols.sew.invariant-runner :as runner]
             [resolver-sim.protocols.sew.invariant-scenarios :as sc]
@@ -71,24 +71,24 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (do
-  (require '[resolver_sim.notebooks.speds.data :as speds-data])
+  (require '[resolver-sim.notebook-support.speds.data :as speds-data])
   (def test-summary (speds-data/load-summary)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (do
-  (require '[resolver_sim.notebooks.speds.data :as speds-data])
+  (require '[resolver-sim.notebook-support.speds.data :as speds-data])
   (def coverage-data (speds-data/load-coverage)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def golden-reports
   (do
-    (require '[resolver_sim.notebooks.speds.data :as speds-data])
+    (require '[resolver-sim.notebook-support.speds.data :as speds-data])
     (speds-data/load-all-golden-reports)))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
   (do
-    (require '[resolver_sim.notebooks.speds.data :as speds-data])
+    (require '[resolver-sim.notebook-support.speds.data :as speds-data])
     (map (fn [d]
            {:id          (or (:scenario-id d)
                              (str/replace (:_filename d) ".trace.json" ""))

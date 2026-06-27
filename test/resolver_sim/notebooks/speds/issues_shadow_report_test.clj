@@ -1,7 +1,7 @@
 (ns resolver_sim.notebooks.speds.issues-shadow-report-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [resolver_sim.notebooks.speds.issues :as issues]))
+            [resolver-sim.notebook-support.speds.issues :as issues]))
 
 (def ^:private sample-artifacts
   {:summary {:run-id "RUN-TEST"

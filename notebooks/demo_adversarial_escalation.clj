@@ -5,8 +5,8 @@
 (ns notebooks.demo-adversarial-escalation
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]
-            [resolver_sim.notebooks.speds.data :as data]))
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.speds.data :as data]))
 
 (def base-scenario "scenarios/S83_yield-accrual-reorg-race.json")
 (def cf-scenario "scenarios/S74_appeal-deadline-boundary.json")

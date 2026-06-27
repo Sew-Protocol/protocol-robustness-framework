@@ -5,7 +5,7 @@
   (:require [clojure.data.json :as json]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.notebooks.common :as common]
+            [resolver-sim.notebook-support.common :as common]
             [resolver-sim.scenario.outcome-semantics :as ose]))
 
 (def semantic-facts-path (evcfg/artifact-path :semantic-facts))

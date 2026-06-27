@@ -13,8 +13,8 @@
             [resolver-sim.sim.batch :as batch]
             [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.protocols.sew.economics :as sew-econ]
-            [resolver-sim.notebook.views :as views]
-            [resolver-sim.notebook.checks :as checks]))
+            [resolver-sim.notebook-support.views :as views]
+            [resolver-sim.notebook-support.checks :as checks]))
 
 ;; Force dark theme
 ^{::clerk/visibility {:code :hide :result :hide}}

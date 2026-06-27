@@ -1,0 +1,10 @@
+{:benchmark/id              :benchmark/prf-deterministic-replay-v1
+ :benchmark/domain          :domain/evidence-integrity
+ :benchmark/protocol        :protocol/prf
+ :benchmark/scenario-suite  :suite/prf-replay-v1
+ :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+ :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+ :benchmark/scoring-rule    :scoring/binary-claims-v1
+ :benchmark/claims          [:claim/replay-identical-results
+                             :claim/hash-consistency-across-runs
+                             :claim/no-nondeterminism]}

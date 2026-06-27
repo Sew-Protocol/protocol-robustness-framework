@@ -71,7 +71,7 @@
   "purpose": "equilibrium-validation",
   "theory": {
     "claim-id": "claims/cancellation-ieo-timeout-dominance",
-    "claim": "IEO dispute timeout path maintains equilibrium. No resolver assigned, timeout auto-cancel returns funds to buyer without profitable deviation.",
+    "claim": "IEO dispute timeout path maintains equilibrium.",
     "equilibrium-concept": [
       "cancellation-dominance"
     ],
@@ -79,10 +79,7 @@
       "budget-balance",
       "incentive-compatibility"
     ],
-    "falsifies-if": [],
-    "assumptions": [
-      "No resolver assigned is intentional",
-      "Timeout duration is within parameters"
-    ]
+    "assumptions": [],
+    "falsifies-if": []
   }
 }

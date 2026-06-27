@@ -1,0 +1,26 @@
+{:registry/spec :spec/pack-registry-v1
+ :registry/version 1
+ :pack/id :pack/sew
+ :pack/description "Sew protocol benchmark pack"
+ :pack/domain :protocol/sew
+
+ :benchmarks
+ [{:benchmark/id :benchmark/sew-escrow-dispute-v1
+   :benchmark/domain :domain/escrow-dispute-resolution
+   :benchmark/file "escrow-dispute-v1.edn"
+   :benchmark/status :active}
+
+  {:benchmark/id :benchmark/sew-dispute-liveness-v1
+   :benchmark/domain :domain/escrow-dispute-resolution
+   :benchmark/file "dispute-liveness-v1.edn"
+   :benchmark/status :active}
+
+  {:benchmark/id :benchmark/sew-yield-shortfall-v1
+   :benchmark/domain :domain/yield-shortfall
+   :benchmark/file "yield-shortfall-v1.edn"
+   :benchmark/status :active}
+
+  {:benchmark/id :benchmark/sew-resolver-slashing-v1
+   :benchmark/domain :domain/escrow-dispute-resolution
+   :benchmark/file "resolver-slashing-v1.edn"
+   :benchmark/status :active}]}

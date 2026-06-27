@@ -12,6 +12,28 @@ under `protocols_src/` and are added via the `:with-sew` alias:
 The `workspaces/with-sew/` directory provides the same full-stack view
 without the alias.  See `workspaces/MAP.md` for details.
 
+## Repository map
+
+This repository is split between the protocol-agnostic Protocol Robustness Framework
+(PRF) and protocol-specific implementations such as Sew.
+
+- `src/` — PRF framework core code. Should not depend on Sew.
+- `protocols_src/` — Protocol implementations. Sew lives here.
+- `test/` — Framework and protocol tests.
+- `scenarios/` — Canonical scenario definitions.
+- `suites/` — Runnable validation suites with expected/actual outputs.
+- `docs/` — Documentation, including specs under `docs/specs/`.
+- `resources/test-vectors/` — Canonical conformance vectors.
+- `results/` — Generated local run outputs (not source).
+- `workspaces/` — Curated developer views and templates.
+- `integrations/` — Integration-specific projections (e.g. Cartesi).
+- `fixtures/` — Reusable test and demo inputs.
+- `notebooks/` — User-facing Clerk notebooks.
+- `examples/` — Stable educational examples and expected artifacts.
+- `scripts/` — Build, validation, and tooling scripts.
+- `schemas/` — Machine-readable schema definitions.
+- `config/` — Configuration files.
+
 ## What this is
 
 The Protocol Robustness Framework enables adversarial simulation, invariant checking, and deterministic replay for complex protocol systems.

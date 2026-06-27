@@ -389,7 +389,7 @@
                                 (println (if ok "PASS" "FAIL"))
                                 ok))
                         lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint" "--lint" "src:test")))
-                        nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook.checks])) (require (quote [notebooks.report]))")))]
+                        nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))]
                     (if (and lint-ok nb-ok)
                       (println "VALIDATION PASSED")
                       (do (println "VALIDATION FAILED")

@@ -11,8 +11,8 @@
   Writes signature.json to:
     - the run's own results/runs/<slug>-<run-id>/signature.json
     - results/test-artifacts/signature.json (latest symlink dir)"
-  (:require [resolver-sim.notebooks.manifest.loader :as loader]
-            [resolver-sim.notebooks.manifest.publication :as pub]
+  (:require [resolver-sim.notebook-support.manifest.loader :as loader]
+            [resolver-sim.notebook-support.manifest.publication :as pub]
             [clojure.data.json :as json]
             [clojure.java.io :as io]
             [resolver-sim.evidence.config :as evcfg]))

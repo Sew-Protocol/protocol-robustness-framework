@@ -9,14 +9,14 @@
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
             [clojure.data.json :as json]
-            [resolver-sim.notebooks.common :as common]
-            [resolver-sim.notebooks.ui :as ui]
-            [resolver-sim.notebooks.manifest.loader :as loader]
-            [resolver-sim.notebooks.manifest.hash :as mhash]
-            [resolver-sim.notebooks.manifest.dag :as dag]
-            [resolver-sim.notebooks.manifest.claims :as claims]
-            [resolver-sim.notebooks.manifest.diff :as diff]
-            [resolver-sim.notebooks.manifest.publication :as pub]))
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.ui :as ui]
+            [resolver-sim.notebook-support.manifest.loader :as loader]
+            [resolver-sim.notebook-support.manifest.hash :as mhash]
+            [resolver-sim.notebook-support.manifest.dag :as dag]
+            [resolver-sim.notebook-support.manifest.claims :as claims]
+            [resolver-sim.notebook-support.manifest.diff :as diff]
+            [resolver-sim.notebook-support.manifest.publication :as pub]))
 
 ;; # Protocol Provenance
 ;; ## Manifest Management Cockpit

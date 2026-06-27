@@ -12,9 +12,9 @@
   :nextjournal.clerk/visibility {:code :fold}}
 (ns notebooks._template
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebook.views :as views]
-            [resolver-sim.notebook.checks :as checks]
-            [resolver-sim.notebooks.speds.data :as speds-data]))
+            [resolver-sim.notebook-support.views :as views]
+            [resolver-sim.notebook-support.checks :as checks]
+            [resolver-sim.notebook-support.speds.data :as speds-data]))
 
 ;; ## Scenario and temporal context
 ;;

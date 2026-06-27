@@ -57,7 +57,7 @@
                        :run-id nil
                        :run-label nil})]
      (binding [evidence-registry-atom fresh#]
-               ~@body)))
+       ~@body)))
 
 (defn registry-snapshot
   "Return a snapshot of the current bound evidence registry atom.
@@ -105,19 +105,19 @@
    Returns the total transition-evidence count after aggregation."
   []
   (doseq [snap @scenario-evidence-atom]
-      (let [reg (:registry snap)]
-        (doseq [artifact (:artifacts reg)
-                :when (:evidence-hash artifact)]
-          (swap! evidence-registry-atom
-                 (fn [r]
-                   (let [existing (some #(when-let [eh (:evidence-hash %)]
-                                          (hc/intent-hash= eh (:evidence-hash artifact)))
-                                        (:artifacts r))]
-                     (if existing
-                       r
-                        (-> r
-                            (update :artifacts conj artifact)
-                            (update :evidence-hashes conj (:evidence-hash artifact))))))))))
+    (let [reg (:registry snap)]
+      (doseq [artifact (:artifacts reg)
+              :when (:evidence-hash artifact)]
+        (swap! evidence-registry-atom
+               (fn [r]
+                 (let [existing (some #(when-let [eh (:evidence-hash %)]
+                                         (hc/intent-hash= eh (:evidence-hash artifact)))
+                                      (:artifacts r))]
+                   (if existing
+                     r
+                     (-> r
+                         (update :artifacts conj artifact)
+                         (update :evidence-hashes conj (:evidence-hash artifact))))))))))
   (count (filter :evidence-hash (:artifacts @evidence-registry-atom))))
 
 ;; ── Chain Cursor ──────────────────────────────────────────────────────────
@@ -438,7 +438,7 @@
      :all-hashes-well-formed all-well-formed
      :all-hashes-registered (and all-non-nil all-well-formed)
      :all-with-component-hashes all-with-component-hashes
-      :chain-intact (and reg-valid all-non-nil all-well-formed)}))
+     :chain-intact (and reg-valid all-non-nil all-well-formed)}))
 
 ;; ── Evidence Reconciliation ────────────────────────────────────────────
 ;; Validates that evidence files on disk match the registry and cursor.

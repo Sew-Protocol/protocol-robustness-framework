@@ -1,8 +1,8 @@
 (ns notebooks.challenge-drilldown
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]
-            [resolver_sim.notebooks.speds.data :as speds-data]))
+            [resolver-sim.notebook-support.common :as common]
+            [resolver-sim.notebook-support.speds.data :as speds-data]))
 
 ;; # Evidence Drilldown — Challenge Window Mechanics
 ;; ## Scenario S74: Deterministic Deadline Enforcement (t ± 1ms)

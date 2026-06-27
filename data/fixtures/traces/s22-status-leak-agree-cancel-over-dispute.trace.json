@@ -58,16 +58,14 @@
   "purpose": "equilibrium-validation",
   "theory": {
     "claim-id": "claims/cancellation-status-leak-regression",
-    "claim": "Agree-to-cancel status is properly cleared when dispute is raised after a cancel attempt. No stale status remains that could cause state inconsistency.",
+    "claim": "Agree-to-cancel status is properly cleared when dispute is raised after a cancel attempt.",
     "equilibrium-concept": [
       "cancellation-dominance"
     ],
     "mechanism-properties": [
       "force-refund-path-integrity"
     ],
-    "falsifies-if": [],
-    "assumptions": [
-      "Escrow state machine enforces status clearing on dispute raise"
-    ]
+    "assumptions": [],
+    "falsifies-if": []
   }
 }

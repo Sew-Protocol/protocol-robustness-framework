@@ -94,7 +94,7 @@ nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 sleep 8
 
 # Run scenario F7
-cd python
+cd integration/python
 python invariant_suite.py --scenario F7 --json ../results/evidence/f7-run.json
 ```
 

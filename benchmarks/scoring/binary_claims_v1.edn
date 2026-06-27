@@ -1,0 +1,12 @@
+{:scoring/id :scoring/binary-claims-v1
+ :scoring/version 1
+ :scoring/description
+ "Binary claims scoring. Every claim must pass for the benchmark to
+  pass. Any failure yields an overall :fail status. No mixed status."
+
+ :scoring/rules
+ {:classifier :pass-fail-binary
+  :pass       "All claims pass"
+  :fail       "Any claim fails"
+  :mixed      nil
+  :score-fn   "1.0 if all pass, 0.0 if any fail"}}

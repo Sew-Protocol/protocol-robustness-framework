@@ -83,7 +83,7 @@ clojure -M:run -- --invariants
 # Run against your own trace via the gRPC server
 nohup clojure -M:run -- -S --port 7070 > grpc-server.log 2>&1 &
 sleep 8
-cd python
+cd integration/python
 python invariant_suite.py --scenario YOUR_SCENARIO --json results/my-violation.json
 ```
 
@@ -187,7 +187,7 @@ clojure -M:run -- --invariants
 # Expected: 41/41 pass
 
 # 4. Verify — run a sample adversarial scenario
-cd python
+cd integration/python
 python invariant_suite.py --scenario F3
 # Expected: scenario passes, attack metrics logged
 ```

@@ -1,8 +1,8 @@
 (ns notebooks.yield-scenarios-workbench
   "Demo workbench for yield-provider JSON scenarios (workbench v2 visuals)."
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebooks.workbench-v2-styles :as wb]
-            [resolver-sim.notebooks.yield-scenarios :as ys]))
+            [resolver-sim.notebook-support.workbench-v2-styles :as wb]
+            [resolver-sim.notebook-support.yield-scenarios :as ys]))
 
 ;; # Yield Provider Scenarios — Demo Workbench
 ;;

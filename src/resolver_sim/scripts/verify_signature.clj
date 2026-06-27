@@ -6,8 +6,8 @@
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.notebooks.manifest.loader :as loader]
-            [resolver-sim.notebooks.manifest.publication :as pub]))
+            [resolver-sim.notebook-support.manifest.loader :as loader]
+            [resolver-sim.notebook-support.manifest.publication :as pub]))
 
 (defn -main [& args]
   (let [pubkey (first args)

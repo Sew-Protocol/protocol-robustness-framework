@@ -1,0 +1,16 @@
+{:registry/spec :spec/pack-registry-v1
+ :registry/version 1
+ :pack/id :pack/stablecoin-safety
+ :pack/description "Stablecoin safety benchmark pack"
+ :pack/domain :domain/stablecoin-safety
+
+ :benchmarks
+ [{:benchmark/id :benchmark/stablecoin-protected-transfer-v0
+   :benchmark/domain :domain/stablecoin-safety
+   :benchmark/file "protected-transfer-v0.edn"
+   :benchmark/status :experimental}
+
+  {:benchmark/id :benchmark/stablecoin-redemption-disruption-v0
+   :benchmark/domain :domain/stablecoin-safety
+   :benchmark/file "redemption-disruption-v0.edn"
+   :benchmark/status :experimental}]}

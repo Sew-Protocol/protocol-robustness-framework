@@ -1501,7 +1501,7 @@
                      {:id "resolver" :address "0xresolver" :role "resolver"}
                      {:id "keeper"   :address "0xkeeper"  :role "keeper"}]
    :protocol-params dr3
-   :notes "Auto-cancel deadline passes but before keeper executes. Receiver tries to cancel. Tests race condition."
+   :notes "Receiver (seller) calls recipient_cancel on a PENDING escrow with no cancellation strategy configured and no auto-cancel-time set. Tests mutual-consent cancel path (non-strategic). Note: the name is a misnomer — no auto-cancel deadline is involved; the scenario tests plain recipient_cancel without strategy."
    :events
    [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
      :params {:token "USDC" :to "0xseller" :amount 5000

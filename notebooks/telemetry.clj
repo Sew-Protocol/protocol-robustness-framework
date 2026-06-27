@@ -3,7 +3,7 @@
 (ns notebooks.telemetry
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.ui :as ui]))
+            [resolver-sim.notebook-support.ui :as ui]))
 
 ;; Deterministic synchronized workbench state.
 ^{:nextjournal.clerk/sync true}

@@ -1,7 +1,7 @@
 (ns notebooks.hardening-artifact
   (:require [nextjournal.clerk :as clerk]
             [clojure.string :as str]
-            [resolver-sim.notebooks.common :as common]))
+            [resolver-sim.notebook-support.common :as common]))
 
 ;; # Sew Protocol — Technical Validation Story
 ;; ## Governance Hardening: Dispute Flooding Resilience

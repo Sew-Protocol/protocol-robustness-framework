@@ -288,14 +288,20 @@
   (actx/with-resolved-actor-and-unpaused
     agent-index world event
     (fn [addr]
-      (lc/sender-cancel world (compat/wf-id event) addr nil))))
+      (let [wf-id (compat/wf-id event)
+            snap  (t/get-snapshot world wf-id)
+            cs    (:cancellation-strategy snap)]
+        (lc/sender-cancel world wf-id addr cs)))))
 
 (defmethod apply-action "recipient-cancel"
   [{:keys [agent-index]} world event]
   (actx/with-resolved-actor-and-unpaused
     agent-index world event
     (fn [addr]
-      (lc/recipient-cancel world (compat/wf-id event) addr nil))))
+      (let [wf-id (compat/wf-id event)
+            snap  (t/get-snapshot world wf-id)
+            cs    (:cancellation-strategy snap)]
+        (lc/recipient-cancel world wf-id addr cs)))))
 
 (defmethod apply-action "auto-cancel-disputed"
   [_ctx world event]

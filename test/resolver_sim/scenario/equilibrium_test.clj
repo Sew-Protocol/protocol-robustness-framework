@@ -1236,7 +1236,7 @@
     ;; This shows deterrence is active under conservative and strong assumptions; only purely
     ;; reputationless actors (none) are indifferent.
     (let [raw-proj (-> (sew-proj/trace-end-projection sew-protocol/protocol (reputation-gain-then-slash-result))
-                        (assoc :spe-config {:regret-threshold 0}))
+                       (assoc :spe-config {:regret-threshold 0}))
           matrix   (subgame-cf/run-profile-matrix raw-proj
                                                   [:reputation/none
                                                    :reputation/conservative
@@ -1255,7 +1255,7 @@
     (let [proj (sb/spe-projection {:pre-wealth 100 :chosen-wealth 200
                                    :agent "buyer" :action "sender_cancel"})
           result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
-                     sew-eq/equilibrium-concept-validators)
+                                                       sew-eq/equilibrium-concept-validators)
                      :cancellation-dominance)]
       (is (= :pass (:status result))
           "cancel with chosen-wealth >= pre-wealth should pass")
@@ -1269,7 +1269,7 @@
                                    :agent "buyer" :action "sender_cancel"
                                    :regret-threshold 0})
           result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
-                     sew-eq/equilibrium-concept-validators)
+                                                       sew-eq/equilibrium-concept-validators)
                      :cancellation-dominance)]
       (is (= :fail (:status result))
           "cancel with chosen-wealth < pre-wealth should fail")
@@ -1280,7 +1280,7 @@
   (testing ":cancellation-dominance is :inconclusive when no cancel decision nodes present"
     (let [proj (sb/spe-projection {:agent "resolver" :action "execute_resolution"})
           result (-> (eq/evaluate-equilibrium-concepts [:cancellation-dominance] proj
-                     sew-eq/equilibrium-concept-validators)
+                                                       sew-eq/equilibrium-concept-validators)
                      :cancellation-dominance)]
       (is (= :inconclusive (:status result))
           "non-cancel node should produce inconclusive result")
