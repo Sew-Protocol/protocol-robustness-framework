@@ -324,14 +324,21 @@
           :evaluation {:type :policy-check
                        :policy :floor-with-largest-remainder}
           :outputs [:passed? :violations]}
-         {:id :ordering-independent
-          :version 1
-          :category :invariant
-          :description "Allocation result is invariant under permutation of input items (multi-set equality)."
-          :inputs [:allocation-input :allocation-result]
-          :evaluation {:type :permutation-test
-                       :policy :multi-set-equality}
-          :outputs [:passed? :violations]}]))
+          {:id :ordering-independent
+           :version 1
+           :category :invariant
+           :description "Allocation result is invariant under permutation of input items (multi-set equality)."
+           :inputs [:allocation-input :allocation-result]
+           :evaluation {:type :permutation-test
+                        :policy :multi-set-equality}
+           :outputs [:passed? :violations]}
+           ;; Protocol-specific claim definitions are registered dynamically
+           ;; by protocol implementation namespaces via register-claim-definitions!.
+           ;; See protocols_src/resolver_sim/evidence/forensic_claims.clj for
+           ;; the Sew forensic-grade claims (registry-hash-verifies,
+           ;; registry-hash-signed, cursor-verifies, tsa-token-verified,
+           ;; evidence-chain-reconciled, forensic-grade).
+           ]))
 
 (def claim-definition-registry
   {:registry-version 1
@@ -737,10 +744,10 @@
                           entries))]
      (vec
       (concat
-       (mapcat (fn [{:keys [id evaluation depends-on]}]
-                 (let [evaluation-type (:type evaluation)
-                       evaluation-entry (:entry evaluation)
-                       errors (cond-> []
+        (mapcat (fn [{:keys [id evaluation depends-on]}]
+                  (let [evaluation-type (:type evaluation)
+                        evaluation-entry (:entry evaluation)
+                        errors (cond-> []
                                 (not (keyword? id))
                                 (conj (error :entry/invalid-id
                                              {:registry registry-name

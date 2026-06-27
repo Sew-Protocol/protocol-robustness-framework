@@ -1,0 +1,129 @@
+{:concept/id :spending-account/controlled-balance
+ :concept/name "Spending account — controlled balance"
+ :concept/summary
+ "A user maintains a balance that can be spent up to a limit, with
+  deposits, withdrawals, holds, and releases managed through protocol
+  escrow mechanics. The balance is controlled by rules about who can
+  move funds, when, and under what conditions."
+
+ :concept/stakeholder-question
+ "Can a user safely maintain a spendable balance where withdrawals are
+  correctly limited, holds prevent double-spending, and released funds
+  are available promptly?"
+
+ :concept/protocols #{:protocol/sew-v1}
+
+ :concept/roles
+ {:account-holder
+  {:description "User who owns the spending account."
+   :maps-to [:protocol.actor/sender :protocol.actor/recipient]}
+  :spending-authority
+  {:description "Party or module that authorises individual spends."
+   :maps-to [:protocol.actor/resolver]}
+  :depositor
+  {:description "Party adding funds to the account."
+   :maps-to [:protocol.actor/sender]}
+  :governance
+  {:description "Protocol governance that can adjust account rules or freeze."
+   :maps-to [:protocol.actor/governance]}}
+
+ :concept/entities
+ {:account
+  {:description "The balance abstraction tracking available funds."
+   :maps-to [:protocol.entity/escrow-aggregate]}
+  :hold
+  {:description "A pending charge against the balance."
+   :maps-to [:protocol.entity/dispute :protocol.entity/pending-release]}
+  :withdrawal
+  {:description "Funds moved out of the account to an external address."
+   :maps-to [:protocol.entity/funds]}
+  :deposit
+  {:description "Funds added to the account balance."
+   :maps-to [:protocol.entity/funds]}
+  :statement
+  {:description "Audit trail of account operations."
+   :maps-to [:protocol.entity/evidence]}}
+
+ :concept/actions
+ {:deposit-funds
+  {:description "Add funds to the account."
+   :maps-to ["create-escrow"]}
+  :place-hold
+  {:description "Reserve funds for a pending spend."
+   :maps-to ["dispute" "submit-evidence"]}
+  :release-hold
+  {:description "Remove a hold, making funds available again."
+   :maps-to ["resolve" "settle"]}
+  :withdraw
+  {:description "Move available funds out of the account."
+   :maps-to ["release"]}
+  :freeze-account
+  {:description "Governance suspends all account operations."
+   :maps-to ["governance-intervention"]}}
+
+ :concept/outcomes
+ {:withdrawal-completed
+  {:description "Funds successfully withdrawn from the account."
+   :maps-to [:protocol.outcome/released]}
+  :hold-enforced
+  {:description "Funds reserved and unavailable for other spends."
+   :maps-to [:protocol.outcome/pending]}
+  :double-spend-prevented
+  {:description "Attempted over-draw correctly rejected."
+   :maps-to [:protocol.outcome/rejected]}
+  :unauthorized-release
+  {:description "Funds released without proper authorisation."
+   :maps-to [:protocol.outcome/adversarial-resolution]}
+  :balance-lost
+  {:description "Account holder loses access to some or all balance."
+   :maps-to [:protocol.outcome/stuck :protocol.outcome/slashed]}}
+
+ :concept/failure-modes
+ [{:failure/id :over-draw
+   :failure/name "Over-draw beyond balance"
+   :failure/summary
+   "A withdrawal or hold exceeds the available balance and is not rejected."
+   :protocol-mechanisms [:balance-check :hold-accounting :settlement]
+   :stakeholder-impact "Account goes negative, affecting other users or protocol solvency."}
+
+  {:failure/id :hold-never-released
+   :failure/name "Hold never released"
+   :failure/summary
+   "A hold remains indefinitely, reducing available balance permanently."
+   :protocol-mechanisms [:hold-timeout :dispute-resolution :governance-override]
+   :stakeholder-impact "Account holder loses access to held funds without cause."}
+
+  {:failure/id :unauthorized-freeze
+   :failure/name "Unauthorised account freeze"
+   :failure/summary
+   "Governance or resolver freezes the account without proper authority."
+   :protocol-mechanisms [:governance-checks :resolver-scope :appeal]
+   :stakeholder-impact "Account holder cannot access funds."}]
+
+ :concept/metrics
+ {:account-balance
+  {:description "Current available balance."
+   :source :derived-from-trace}
+  :holds-active
+  {:description "Number of holds currently reserved."
+   :source :derived-from-trace}
+  :holds-resolved
+  {:description "Number of holds that reached terminal state."
+   :source :derived-from-trace}
+  :withdrawal-count
+  {:description "Number of successful withdrawals."
+   :source :derived-from-trace}
+  :double-spend-attempts
+  {:description "Number of rejected over-draw attempts."
+   :source :derived-from-protocol-metrics}}
+
+ :concept/assumptions
+ ["The balance is modelled as a derived view over escrow and dispute states."
+  "Holds map to unresolved disputes or pending releases."
+  "Concept labels do not change protocol validity."]
+
+ :concept/out-of-scope
+ ["Real-world banking or payment rails."
+  "Credit risk or overdraft lending."
+  "Multi-currency or forex conversion."
+  "Recurring or subscription billing."]}

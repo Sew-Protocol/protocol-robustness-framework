@@ -1,0 +1,29 @@
+{:concept-registry/version 1
+ :concept-registry/description
+ "Registry of supported stakeholder-facing concepts. Each concept
+  maps protocol-level mechanics to a real-world use-case vocabulary."
+
+ :concepts
+ [{:concept/id    :ecommerce/purchase
+   :concept/file  "data/concepts/ecommerce.edn"
+   :concept/name  "Ecommerce purchase"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :event/deposit
+   :concept/file  "data/concepts/event_deposits.edn"
+   :concept/name  "Event deposit"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :spending-account/controlled-balance
+   :concept/file  "data/concepts/spending_accounts.edn"
+   :concept/name  "Spending account — controlled balance"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1}}
+
+  {:concept/id    :verifiable-assurance/forensic-confidence
+   :concept/file  "data/concepts/verifiable_assurance.edn"
+   :concept/name  "Verifiable assurance — forensic confidence"
+   :concept/status :draft
+   :concept/protocols #{:protocol/prf :protocol/sew-v1}}]}

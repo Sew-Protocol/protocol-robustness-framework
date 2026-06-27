@@ -1,0 +1,118 @@
+{:concept/id :event/deposit
+ :concept/name "Event deposit"
+ :concept/summary
+ "A party deposits funds earmarked for a future conditional release.
+  The deposit is held until a predefined condition is met, a timeout
+  expires, or a dispute is resolved."
+
+ :concept/stakeholder-question
+ "Can deposited funds be reliably released only when the intended
+  condition is satisfied, even under strategic behaviour by the
+  depositor, recipient, or resolver?"
+
+ :concept/protocols #{:protocol/sew-v1}
+
+ :concept/roles
+ {:depositor
+  {:description "Party committing funds to the deposit."
+   :maps-to [:protocol.actor/sender]}
+  :beneficiary
+  {:description "Party entitled to claim the deposit when conditions are met."
+   :maps-to [:protocol.actor/recipient]}
+  :condition-authority
+  {:description "Party or oracle that attests whether conditions are satisfied."
+   :maps-to [:protocol.actor/resolver :protocol.actor/oracle]}
+  :governance
+  {:description "Protocol governance that can adjust rules or override conditions."
+   :maps-to [:protocol.actor/governance]}}
+
+ :concept/entities
+ {:deposit
+  {:description "Funds held pending condition evaluation."
+   :maps-to [:protocol.entity/escrow]}
+  :condition
+  {:description "The predicate that must be satisfied for release."
+   :maps-to [:protocol.entity/condition]}
+  :attestation
+  {:description "Evidence or report that a condition has been met."
+   :maps-to [:protocol.entity/evidence]}
+  :dispute
+  {:description "A challenge about whether conditions were correctly evaluated."
+   :maps-to [:protocol.entity/dispute]}}
+
+ :concept/actions
+ {:create-deposit
+  {:description "Depositor commits funds with a release condition."
+   :maps-to ["create-escrow" "attach-condition"]}
+  :fulfill-condition
+  {:description "Beneficiary submits evidence that conditions are met."
+   :maps-to ["submit-evidence"]}
+  :attest-condition-met
+  {:description "Condition authority confirms the condition is satisfied."
+   :maps-to ["resolve" "settle"]}
+  :claim-expiry
+  {:description "Depositor claims refund after timeout."
+   :maps-to ["cancel" "timeout-claim"]}
+  :dispute-condition
+  {:description "Beneficiary challenges a condition-failed determination."
+   :maps-to ["dispute"]}}
+
+ :concept/outcomes
+ {:deposit-released
+  {:description "Funds released to beneficiary upon condition satisfaction."
+   :maps-to [:protocol.outcome/released]}
+  :deposit-returned
+  {:description "Funds returned to depositor (condition not met or cancelled)."
+   :maps-to [:protocol.outcome/refunded]}
+  :deposit-stuck
+  {:description "Neither party can claim funds within expected time."
+   :maps-to [:protocol.outcome/stuck]}
+  :deposit-misattested
+  {:description "Condition attested falsely, leading to wrongful release or return."
+   :maps-to [:protocol.outcome/adversarial-resolution]}}
+
+ :concept/failure-modes
+ [{:failure/id :false-attestation
+   :failure/name "False condition attestation"
+   :failure/summary
+   "Condition authority attests a condition as met when it was not, or vice versa."
+   :protocol-mechanisms [:oracle-authority :evidence-verification :slashing]
+   :stakeholder-impact "Beneficiary loses entitlement or depositor loses funds."}
+
+  {:failure/id :condition-unverifiable
+   :failure/name "Condition unverifiable on-chain"
+   :failure/summary
+   "The release condition cannot be deterministically verified from on-chain evidence."
+   :protocol-mechanisms [:evidence-admissibility :oracle-consensus]
+   :stakeholder-impact "Funds remain locked indefinitely."}
+
+  {:failure/id :premature-timeout-claim
+   :failure/name "Premature timeout claim"
+   :failure/summary
+   "Depositor claims expiry before a legitimate condition evaluation completes."
+   :protocol-mechanisms [:timeout-duration :appeal :governance-override]
+   :stakeholder-impact "Beneficiary loses funds despite meeting conditions."}]
+
+ :concept/metrics
+ {:deposits-created
+  {:description "Number of deposits created."
+   :source :derived-from-trace}
+  :deposits-released
+  {:description "Number of deposits released to beneficiary."
+   :source :derived-from-trace}
+  :deposits-disputed
+  {:description "Number of deposits entering dispute."
+   :source :derived-from-trace}
+  :condition-evaluation-time
+  {:description "Time from deposit creation to condition satisfaction or expiry."
+   :source :derived-from-trace}}
+
+ :concept/assumptions
+ ["Conditions are modelled as boolean predicates with deterministic evaluation."
+  "Oracle or authority roles are represented as protocol actors."
+  "Concept labels do not change protocol validity."]
+
+ :concept/out-of-scope
+ ["Real-world legal contracts."
+  "Off-chain oracles or data feeds."
+  "Arbitrary computation as condition."]}

@@ -1,6 +1,6 @@
 {:tasks
- {sim:run {:doc "Run a simulation with EDN params"
-           :task (apply clojure {:dir "." :extra-deps {}} "-M:run" *command-line-args*)}
+{sim:run {:doc "Run a simulation with EDN params"
+            :task (apply clojure {:dir "." :extra-deps {}} "-M:run:with-sew" *command-line-args*)}
 
   run:scenario
 {:doc "Run a scenario through the registry-driven execution path. Usage: bb run:scenario <scenario-id> [--result-display-level <summary|failures|standard|verbose|audit> | -v | -f | -s | -a] [--save-output <dir>]"
@@ -13,24 +13,34 @@
             (let [t0        (System/currentTimeMillis)
                   output-tmp (str (java.io.File/createTempFile "replay-" ".json"))
                   exit (try
-                         (let [;; alias parsing: -v => verbose, -f => failures, -s => summary, -a => audit
+                         (let [;; Display level mapping
                                alias-map {"-v" "verbose" "-f" "failures" "-s" "summary" "-a" "audit"}
                                level-idx (.indexOf args "--result-display-level")
                                level-val (when (<= 0 level-idx) (nth args (inc level-idx) nil))
                                alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
                                alias-val (when alias-idx (get alias-map (nth args alias-idx)))
                                chosen (or level-val alias-val)
-                               cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario-id" scenario-id]
-                                          chosen (conj "--result-display-level" chosen))]
-                           (apply clojure {:dir "." :extra-deps {}}
-                                  (conj cli-args "--output-file" output-tmp)))
+                               fmt-opt (if chosen (str " :report-format \"" chosen "\"") "")
+                               ;; Direct call to scenario-runner, bypassing -main dispatch.
+                               ;; The -main cond dispatch has a persistent issue where scenario
+                               ;; branches don't execute.  Call run-and-report directly instead.
+                               run-expr (str "(require 'resolver-sim.io.scenario-runner) "
+                                             "(System/exit (:exit-code "
+                                             "((requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report) "
+                                             "{:scenario \"" scenario-id "\""
+                                             " :output-file \"" output-tmp "\"}"
+                                             "{"
+                                             fmt-opt
+                                             "}))))")]
+                           (clojure {:dir "." :extra-deps {}}
+                                    "-M:with-sew" "-e" run-expr))
                          0
                          (catch clojure.lang.ExceptionInfo e
                            (or (:exit (ex-data e)) 1)))
                   dur  (- (System/currentTimeMillis) t0)]
                 ;; 1. Write the run manifest stubs (creates run-specific directory)
               (shell "python3" "scripts/evidence/write_scenario_run_manifest.py"
-                     "--scenario-id"    scenario-id
+                     "--scenario"    scenario-id
                      "--status"      (if (zero? exit) "pass" "fail")
                      "--duration-ms" (str dur))
                 ;; 2. Extract scenario-scoped artifacts from the replay output
@@ -125,7 +135,7 @@
                                            alias-idx (some (fn [i] (when (contains? alias-map (nth args i)) i)) (range 0 (count args)))
                                            alias-val (when alias-idx (get alias-map (nth args alias-idx)))
                                            chosen (or level-val alias-val)
-                                           cli-args (cond-> ["-M:run" "--" "--invariants" "--scenario" scenario]
+                                           cli-args (cond-> ["-M:run:with-sew" "--" "--invariants" "--scenario" scenario]
                                                       chosen (conj "--result-display-level" chosen))]
                                        (try
                                          (apply clojure {:dir "." :extra-deps {}} cli-args)
@@ -213,7 +223,7 @@
            (let [t0   (System/currentTimeMillis)
                  exit (try
                         (clojure {:dir "." :extra-deps {}}
-                                 "-M:run" "--" "--invariants" "--scenario" scenario "--output-file" output-file)
+                                 "-M:run:with-sew" "--" "--invariants" "--scenario" scenario "--output-file" output-file)
                         0
                         (catch clojure.lang.ExceptionInfo e
                           (or (:exit (ex-data e)) 1)))

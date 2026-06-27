@@ -1,0 +1,133 @@
+{:concept/id :ecommerce/purchase
+ :concept/name "Ecommerce purchase"
+ :concept/summary
+ "A buyer pays a merchant through escrow. Funds are released, refunded,
+  disputed, or locked depending on delivery, evidence, and resolver decisions."
+
+ :concept/stakeholder-question
+ "Can a marketplace payment flow remain fair when buyers, merchants,
+  resolvers, or governance behave strategically?"
+
+ :concept/protocols #{:protocol/sew-v1}
+
+ :concept/roles
+ {:buyer
+  {:description "Party paying for goods or services."
+   :maps-to [:protocol.actor/sender]}
+  :merchant
+  {:description "Party expected to fulfill the order."
+   :maps-to [:protocol.actor/recipient]}
+  :resolver
+  {:description "Party or module deciding disputes."
+   :maps-to [:protocol.actor/resolver]}
+  :governance
+  {:description "Protocol governance that can adjust rules, rotate resolvers, or intervene."
+   :maps-to [:protocol.actor/governance]}}
+
+ :concept/entities
+ {:order
+  {:description "The commercial transaction being protected."
+   :maps-to [:protocol.entity/escrow]}
+  :payment
+  {:description "Funds held pending release, refund, or dispute."
+   :maps-to [:protocol.entity/funds]}
+  :dispute
+  {:description "A disagreement about fulfillment."
+   :maps-to [:protocol.entity/dispute]}
+  :evidence
+  {:description "Facts submitted to support a dispute claim."
+   :maps-to [:protocol.entity/evidence]}}
+
+ :concept/actions
+ {:place-order
+  {:description "Buyer commits funds for the purchase."
+   :maps-to ["create-escrow"]}
+  :confirm-delivery
+  {:description "Buyer confirms receipt; funds are released to merchant."
+   :maps-to ["release"]}
+  :request-refund
+  {:description "Buyer requests cancellation before release."
+   :maps-to ["cancel"]}
+  :claim-non-delivery
+  {:description "Buyer disputes fulfillment."
+   :maps-to ["dispute" "submit-evidence"]}
+  :resolve-claim
+  {:description "Resolver determines who receives funds."
+   :maps-to ["resolve" "settle"]}
+  :appeal-resolution
+  {:description "Party challenges a resolver decision."
+   :maps-to ["appeal" "escalate"]}}
+
+ :concept/outcomes
+ {:merchant-paid
+  {:description "Merchant receives payment."
+   :maps-to [:protocol.outcome/released]}
+  :buyer-refunded
+  {:description "Buyer receives funds back."
+   :maps-to [:protocol.outcome/refunded]}
+  :funds-locked
+  {:description "Neither party receives funds in expected time."
+   :maps-to [:protocol.outcome/stuck]}
+  :manipulated-resolution
+  {:description "Authorized resolver path produces stakeholder-unfair outcome."
+   :maps-to [:protocol.outcome/adversarial-resolution]}
+  :slash-penalty-applied
+  {:description "A party loses bond or escrow share due to rule violation."
+   :maps-to [:protocol.outcome/slashed]}}
+
+ :concept/failure-modes
+ [{:failure/id :merchant-controlled-resolver
+   :failure/name "Merchant-controlled resolver"
+   :failure/summary
+   "Merchant or aligned party controls dispute resolution and rules in its own favor."
+   :protocol-mechanisms [:resolver-authority :governance-rotation :settlement]
+   :stakeholder-impact "Buyer can lose funds despite a disputed or unfulfilled order."}
+
+  {:failure/id :buyer-griefing
+   :failure/name "Buyer griefing"
+   :failure/summary
+   "Buyer opens repeated or low-merit disputes to delay merchant payout."
+   :protocol-mechanisms [:dispute :timeout :bonding]
+   :stakeholder-impact "Merchant liquidity is delayed or operational costs increase."}
+
+  {:failure/id :fund-lock
+   :failure/name "Funds locked after unresolved dispute"
+   :failure/summary
+   "A dispute has no viable resolution path before timeout."
+   :protocol-mechanisms [:resolver-availability :timeout :settlement]
+   :stakeholder-impact "Buyer and merchant cannot access funds."}
+
+  {:failure/id :collusive-fraud
+   :failure/name "Collusive buyer-merchant fraud"
+   :failure/summary
+   "Buyer and merchant collude to extract value from the escrow system."
+   :protocol-mechanisms [:bonding :slashing :evidence-requirements]
+   :stakeholder-impact "Protocol reserves or resolver bonds are drained."}]
+
+ :concept/metrics
+ {:orders-placed
+  {:description "Number of escrows created."
+   :source :derived-from-trace}
+  :orders-disputed
+  {:description "Number of purchase flows entering dispute."
+   :source :derived-from-trace}
+  :orders-resolved
+  {:description "Number of disputed purchase flows with terminal outcome."
+   :source :derived-from-trace}
+  :customer-funds-locked
+  {:description "Funds still unavailable at terminal state."
+   :source :derived-from-protocol-metrics}
+  :merchant-payout-time
+  {:description "Time from order placement to merchant payment."
+   :source :derived-from-trace}}
+
+ :concept/assumptions
+ ["The simulator models protocol-level escrow/dispute mechanics, not physical shipping."
+  "Fulfillment facts are represented through scenario events and evidence assumptions."
+  "Concept labels do not change protocol validity."]
+
+ :concept/out-of-scope
+ ["Real-world logistics."
+  "Payment processor chargeback rules."
+  "Consumer protection law."
+  "Off-chain identity or fraud detection."]}
