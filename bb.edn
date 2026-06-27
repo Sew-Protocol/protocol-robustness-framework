@@ -830,4 +830,16 @@
 
   forensic:verify
   {:doc "Verify a forensic run bundle. Usage: bb forensic:verify <run-dir>"
-   :task (apply shell "python3" "scripts/forensic/verify.py" *command-line-args*)}}}
+   :task (apply shell "python3" "scripts/forensic/verify.py" *command-line-args*)}
+
+  forensic:export
+  {:doc "Export a forensic run bundle as tar.gz. Usage: bb forensic:export <run-dir> [--output <path>]"
+   :task (apply shell "python3" "scripts/forensic/export.py" *command-line-args*)}
+
+  forensic:import
+  {:doc "Import a forensic run bundle from tar.gz. Usage: bb forensic:import <archive> [--output <dir>]"
+   :task (apply shell "python3" "scripts/forensic/import_archive.py" *command-line-args*)}
+
+  forensic:reproduce
+  {:doc "Reproduce a forensic run from its bundle and compare results. Usage: bb forensic:reproduce <run-dir>"
+   :task (apply shell "python3" "scripts/forensic/reproduce.py" *command-line-args*)}}}

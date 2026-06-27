@@ -235,18 +235,152 @@
           :trace-equivalence   "N/A"
           :last-reviewed       "2026-06-27"}
 
-         {:shadow/id           :storage-migration-v2
-          :simulation/ns       "resolver-sim.contract-model.idempotency"
-          :simulation/role     :projection
-          :solidity/contract   "StorageMigration.sol"
-          :solidity/function   "N/A — proposed"
-          :solidity/status     :solidity/not-implemented
-          :protocol/status     :protocol/proposed
-          :description         "V1→V2 storage layout migration from uint256 monotonic to bytes32 semantic IDs"
-          :differences         ["Entirely simulation-only — Solidity contract does not exist yet"
-                                "Simulation models the migration algebra without actual storage layout"]
-          :test/link           "N/A"
-          :trace-equivalence   "N/A"
+          {:shadow/id           :storage-migration-v2
+           :simulation/ns       "resolver-sim.contract-model.idempotency"
+           :simulation/role     :projection
+           :solidity/contract   "StorageMigration.sol"
+           :solidity/function   "N/A — proposed"
+           :solidity/status     :solidity/not-implemented
+           :protocol/status     :protocol/proposed
+           :description         "V1→V2 storage layout migration from uint256 monotonic to bytes32 semantic IDs"
+           :differences         ["Entirely simulation-only — Solidity contract does not exist yet"
+                                 "Simulation models the migration algebra without actual storage layout"]
+           :test/link           "N/A"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          ;; ══════════════════════════════════════════════════════════════════
+          ;; Bug fixes applied in sessions 10–14
+          ;; ══════════════════════════════════════════════════════════════════
+
+          {:shadow/id           :auto-cancel-disputed-griefing
+           :simulation/ns       "resolver-sim.protocols.sew.state-machine"
+           :simulation/role     :predicate
+           :solidity/contract   "SettlementOps.sol"
+           :solidity/function   "computeTimedActions"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "auto-cancel-time fires on DISPUTED escrows (griefing protection)"
+           :differences         ["Simulation was added first (auto-cancel-due-on-disputed?), then ported to Solidity as ACTION_AUTO_CANCEL_DISPUTED (Session 10)"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :state-management-terminal-guards
+           :simulation/ns       "resolver-sim.protocols.sew.state-machine"
+           :simulation/role     :guard
+           :solidity/contract   "StateManagementLibrary.sol"
+           :solidity/function   "transitionToReleased, transitionToRefunded, transitionToResolved"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "Terminal state transition guards prevent silent state corruption"
+           :differences         ["Simulation uses ex-info (programming error) — Solidity uses revert AlreadyTerminal"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :dispute-timestamp-cleanup
+           :simulation/ns       "resolver-sim.protocols.sew.lifecycle"
+           :simulation/role     :cleanup
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_cancelAndRefund, _releaseEscrowTransfer"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "disputeRaisedTimestamp cleaned up on ALL terminal paths"
+           :differences         ["Simulation cleans up in finalize (lifecycle.clj) — Solidity cleans up in _cancelAndRefund and _releaseEscrowTransfer"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :yield-unwind-state-cleanup
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :cleanup
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_handleYieldModuleUnwind"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "Yield module state deleted after successful unwind; returns amount not yieldPrincipal on double-failure"
+           :differences         ["Simulation yield model uses yield-policy (different architecture) — no direct equivalent"]
+           :test/link           "test/foundry/core/BaseEscrowComprehensive.t.sol"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :finalize-dispute-in-module-coverage
+           :simulation/ns       "resolver-sim.protocols.sew.resolution"
+           :simulation/role     :cleanup
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_executeResolution, resolveDisputeByTimeout, automateTimedActions, _closeDisputeByMutualAgreement"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "_finalizeDisputeInModule called from all terminal dispute paths"
+           :differences         ["Simulation uses t/decrement-resolver-capacity directly in finalize wrapper"]
+           :test/link           "test/foundry/core/SimulationHardening.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :governance-sandwich-mitigation
+           :simulation/ns       "resolver-sim.protocols.sew.state-machine"
+           :simulation/role     :guard
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_isAuthorizedDisputeResolver"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "Resolver captured at raiseDispute is sole authority — prevents governance sandwich (F3)"
+           :differences         []
+           :test/link           "test/foundry/core/SimulationHardening.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :auto-time-mutual-exclusion
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :validation
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "_applyEscrowSettings"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "Independent mutual-exclusion check for autoReleaseTime and autoCancelTime"
+           :differences         ["Simulation delegates mutual-exclusion to shared protocol-params; Solidity now has BothAutoTimesSet guard"]
+           :test/link           "test/foundry/core/PerEscrowSettings.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :sel-finalize-dispute-selector
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :fix
+           :solidity/contract   "BaseEscrow.sol, EscrowManagementLibrary.sol"
+           :solidity/function   "SEL_FINALIZE_DISPUTE, EscrowManagementLibrary.finalizeDisputeInModule"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "Fixed incorrect selector (\"finalizeDispute(uint256)\" → \"finalizeDispute(uint256,address)\")"
+           :differences         ["Simulation does not use selectors — uses Clojure symbols directly"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :accept-split-dispute-cleanup
+           :simulation/ns       "N/A — Solidity only"
+           :simulation/role     :cleanup
+           :solidity/contract   "BaseEscrow.sol"
+           :solidity/function   "acceptSplit"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "acceptSplit now cleans up disputeRaisedTimestamp (missing before)"
+           :differences         ["Simulation does not model acceptSplit/proposeSplit — Solidity-only feature"]
+           :test/link           "test/foundry/core/BaseEscrowComprehensive.t.sol"
+           :trace-equivalence   "N/A"
+           :last-reviewed       "2026-06-27"}
+
+          {:shadow/id           :transition-to-disputed-guard
+           :simulation/ns       "resolver-sim.protocols.sew.state-machine"
+           :simulation/role     :guard
+           :solidity/contract   "StateManagementLibrary.sol"
+           :solidity/function   "transitionToDisputed"
+           :solidity/status     :solidity/implemented
+           :protocol/status     :protocol/current
+           :description         "transitionToDisputed now reverts AlreadyTerminal for non-PENDING states"
+           :differences         ["Simulation guards via :from #{:pending} in allowed-transitions graph"]
+           :test/link           "test/foundry/core/EscrowStateMachine.t.sol"
+           :trace-equivalence   "cdrs-v0.2"
            :last-reviewed       "2026-06-27"}])
 
 ;; ──────────────────────────────────────────────────────────────────────────

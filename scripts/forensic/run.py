@@ -80,9 +80,9 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
             parts = line.split("\t")
             if parts and parts[0].isdigit():
                 total += int(parts[0])
-        info["source-byte-size"] = total
+        info["byte-size"] = total
     except Exception:
-        info["source-byte-size"] = 0
+        info["byte-size"] = 0
 
     # Code hash: deterministic hash over all source files
     try:
@@ -92,8 +92,12 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
             capture_output=True, text=True, cwd=str(repo_root), timeout=30)
         ch = r.stdout.strip().split()[0] if r.stdout.strip() else "unknown"
         info["code-hash"] = ch
+        info["code-hash-algorithm"] = "source-tree-hash.v0.shell-sha256sum"
+        info["included-roots"] = ["src", "protocols_src"]
     except Exception:
         info["code-hash"] = "unknown"
+        info["code-hash-algorithm"] = "unknown"
+        info["included-roots"] = []
 
     return info
 
@@ -157,7 +161,9 @@ def make_output_immutable(run_dir: Path) -> None:
 
 
 def run_invoke_scenario_pipeline(run_request_path: str,
-                                 run_dir: Path) -> int:
+                                 run_dir: Path,
+                                 source_info: dict | None = None,
+                                 run_id: str = "") -> int:
     """Invoke the existing scenario run pipeline.
     Returns exit code. Output passes through to terminal (not captured)."""
     run_request = None
@@ -181,15 +187,103 @@ def run_invoke_scenario_pipeline(run_request_path: str,
     output_path = run_dir / "clojure-bundle-root.json"
     cmd.extend(["--output-file", str(output_path)])
 
+    # Set PRF_* environment variables for attribution bridge (Phase B)
+    env = os.environ.copy()
+    if source_info:
+        env["PRF_SOURCE_TREE_HASH"] = source_info.get("code-hash", "")
+        env["PRF_SOURCE_TREE_HASH_ALGORITHM"] = \
+            source_info.get("code-hash-algorithm", "")
+        env["PRF_SOURCE_COMMIT"] = source_info.get("git_commit", "") or ""
+        env["PRF_SOURCE_DIRTY"] = str(
+            bool(source_info.get("dirty", False))).lower()
+    env["PRF_ORCHESTRATION_RUNNER_ID"] = "forensic-runner.py"
+    env["PRF_BUNDLE_ID"] = run_id
+
     print(f"  executing: {' '.join(cmd)}", file=sys.stderr)
     # Run with capture_output=False so output passes through to terminal
     # (Clojure/JVM output goes through paths that require a TTY and cannot be
     #  reliably captured via PIPE. Exit code is the reliable signal.)
-    r = subprocess.run(cmd, capture_output=False, timeout=600)
+    r = subprocess.run(cmd, capture_output=False, timeout=600, env=env)
     if output_path.exists():
         print(f"  captured Clojure bundle root ({output_path.stat().st_size} bytes)",
               file=sys.stderr)
     return r.returncode
+
+
+def _write_dag_inventory(run_dir: Path, dag_dir: Path,
+                          node_file_srcs: list[Path],
+                          repo_root: Path) -> None:
+    """Produce evidence-dag-inventory.json — Phase A inventory only.
+    EDN files are counted and hashed but not semantically parsed."""
+    dag_dir.mkdir(exist_ok=True)
+    json_count = 0
+    edn_count = 0
+    total_bytes = 0
+    file_hashes: list[dict] = []
+    for f in dag_dir.iterdir():
+        if not f.is_file():
+            continue
+        ext = f.suffix.lower()
+        if ext not in (".json", ".edn"):
+            continue
+        if ext == ".json":
+            json_count += 1
+        else:
+            edn_count += 1
+        try:
+            fb = f.read_bytes()
+            fh = compute_sha256(fb)
+            total_bytes += len(fb)
+            file_hashes.append({"name": f.name, "sha256": fh, "bytes": len(fb)})
+        except Exception:
+            file_hashes.append({"name": f.name, "sha256": "unreadable", "bytes": 0})
+    total = json_count + edn_count
+    inventory = {
+        "dag/schema-version": "evidence-dag-inventory.v0",
+        "dag/phase": "A",
+        "dag/semantic-status": "inventory-only",
+        "dag/files": {"total": total, "json": json_count,
+                      "edn": edn_count, "unparsed": edn_count},
+        "dag/hashes": {"algorithm": "sha256-file-bytes"},
+        "dag/total-bytes": total_bytes,
+        "dag/file-hashes": file_hashes,
+    }
+    # Registry consistency check
+    registry_path = repo_root / "results" / "test-artifacts" / "test-artifacts.json"
+    cursor_path = repo_root / "results" / "test-artifacts" / "chain-cursor-final.json"
+    reg_check: dict[str, Any] = {"files-on-disk": total}
+    try:
+        if registry_path.exists():
+            reg_data = json.loads(registry_path.read_text())
+            entries = len(reg_data.get("artifacts", reg_data.get("entries", [])))
+            reg_check["registry-entries"] = entries
+        else:
+            reg_check["registry-entries"] = None
+    except Exception:
+        reg_check["registry-entries"] = None
+    try:
+        if cursor_path.exists():
+            cursor_data = json.loads(cursor_path.read_text())
+            reg_check["chain-cursor-seq"] = cursor_data.get("seq", cursor_data.get("chain-cursor/seq"))
+        else:
+            reg_check["chain-cursor-seq"] = None
+    except Exception:
+        reg_check["chain-cursor-seq"] = None
+    # Determine status
+    reg_check["consistency-status"] = "warning"
+    inventory["dag/registry-check"] = reg_check
+    # Warning for unparsed EDN
+    warnings = []
+    if edn_count > 0:
+        warnings.append({
+            "code": "edn-unparsed",
+            "message": (f"{edn_count} EDN evidence nodes were copied but not "
+                        f"semantically parsed in Phase A."),
+        })
+    inventory["dag/warnings"] = warnings
+    write_sealed_json(run_dir / "evidence-dag-inventory.json", inventory)
+    print(f"  wrote evidence-dag-inventory.json  ({total} files, {total_bytes} bytes)",
+          file=sys.stderr)
 
 
 def _bundle_scenario_files(run_dir: Path, suite_key: str) -> None:
@@ -357,7 +451,8 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     print(f"\n--- Execution ---", file=sys.stderr)
     t0 = time.time()
     exit_code = run_invoke_scenario_pipeline(
-        run_request_path, run_dir)
+        run_request_path, run_dir,
+        source_info=source_info, run_id=run_id)
     elapsed_ms = int((time.time() - t0) * 1000)
     print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
 
@@ -391,16 +486,17 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
 
     # Step 6d: Copy evidence nodes from Clojure pipeline output
     evidence_node_dir = repo_root / "results" / "test-artifacts" / "evidence-nodes"
+    dag_dir = run_dir / "evidence-dag"
+    node_files = []
     if evidence_node_dir.exists():
-        dag_dir = run_dir / "evidence-dag"
-        count = 0
         for f in evidence_node_dir.iterdir():
             if f.is_file() and f.suffix in (".json", ".edn"):
                 shutil.copy2(str(f), str(dag_dir / f.name))
-                count += 1
-        if count > 0:
-            print(f"  copied {count} evidence node(s) to evidence-dag/", file=sys.stderr)
+                node_files.append(f)
+        print(f"  copied {len(node_files)} evidence node(s) to evidence-dag/", file=sys.stderr)
 
+    # Step 6e: Evidence DAG inventory manifest (Phase A — inventory only, no EDN parsing)
+    _write_dag_inventory(run_dir, dag_dir, node_files, repo_root)
     # Step 7: Write run overview (self-referential SHA-256)
     run_overview = {
         "overview/schema-version": "run-overview.v1",

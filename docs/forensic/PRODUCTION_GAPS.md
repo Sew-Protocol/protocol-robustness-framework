@@ -16,11 +16,14 @@ runner that could produce externally-reliable output.
 |---|---|---|
 | Atomic file writes (temp → fsync → rename) | ✅ | `write_sealed_json` |
 | Readback verification after write | ✅ | SHA-256 recomputed from disk, compared to pre-write hash |
-| Self-referential bundle root hash | ✅ | `bundle/hash` excludes itself and `bundle/id` |
+| Self-referential bundle root hash | ✅ | `bundle/hash` excludes id/hash/signature/key-id |
 | Self-referential overview hash | ✅ | `overview/hash` excludes itself |
 | Temp file cleanup on failure | ✅ | `try/finally` across all writes |
-| Output directory immutability after run | ❌ | No post-run chmod/chattr to make tree read-only |
-| Cryptographic signing of bundle root | ❌ | No Ed25519 or other signature over bundle/hash |
+| Post-run output hardening (chmod a-w) | ✅ | `chmod -R a-w` after verification |
+| Immutable filesystem flag (chattr +i) | ✅ | Best-effort after chmod |
+| Ed25519 bundle signing | ✅ | `--sign <key>` via Clojure signing infrastructure |
+| Signature verification | ✅ | `bb forensic:verify --public-key <key>` |
+| Post-run full verification | ✅ | 22 checks including hash recomputation |
 | HMAC with per-run key | ❌ | No per-run signing key |
 | Signed chain of custody log | ❌ | No append-only log of runs with signatures |
 
@@ -35,10 +38,25 @@ runner that could produce externally-reliable output.
 | Filesystem workspace check | ✅ | Check 4 — `/var/lib/evidence-runner` |
 | Root privilege detection | ✅ | Check 5 — recorded in metadata |
 | Composite isolation grade | ✅ | `full` → `good` → `partial` → `basic` |
+| 5 isolation checks in metadata | ✅ | Per-check detail in `isolation/checks` |
 | Dedicated UID per job | ❌ | Single `evidence_runner` user, not per-job |
 | Seccomp filter | ❌ | No syscall filtering |
 | Capability dropping | ❌ | No `capsh` or similar |
 | Read-only root filesystem | ❌ | No `pivot_root` or overlayfs |
+
+## Source Provenance
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Git commit + dirty state | ✅ | `source-snapshot.json` |
+| Source byte size | ✅ | `byte-size` in `run-overview.json` |
+| Deterministic code hash | ✅ | `code-hash` (SHA-256 over all source files) |
+| Hash algorithm declared | ✅ | `code-hash-algorithm` field |
+| Included source roots declared | ✅ | `included-roots: ["src", "protocols_src"]` |
+| Clojure-side provenance bridge | ✅ | `PRF_*` env vars, `resolver-sim.forensic.provenance` |
+| Source provenance in execution node | ✅ | Merged into `:inputs` in `with-execution-node` |
+| Source/request/node hashes in bundle root | ❌ | Not yet in Clojure `build-bundle-root` output |
+| Dependency lock snapshot | ◐ | `deps.edn` copied into bundle |
 
 ## Time & Anchoring
 
@@ -55,14 +73,18 @@ runner that could produce externally-reliable output.
 
 | Requirement | Status | Notes |
 |---|---|---|
-| File existence checks | ✅ | 6 required files, 4 optional |
-| Directory existence checks | ✅ | 4 required directories |
+| File existence checks | ✅ | 6 required, 8 optional files |
+| Directory existence checks | ✅ | 4 required, 1 optional directory |
 | Bundle root structural validation | ✅ | Schema version, required keys |
 | Overview structural validation | ✅ | Required fields |
 | Preflight report validation | ✅ | Status check |
 | Self-referential hash recomputation | ✅ | Bundle root + overview |
-| Cryptographic signature verification | ❌ | No signature to verify |
-| Timestamp token verification | ❌ | No TSA token |
+| Ed25519 signature verification | ✅ | `--public-key` flag |
+| Results summary validation | ✅ | `results-summary.json` checked |
+| Evidence DAG inventory | ✅ | `evidence-dag-inventory.json` with per-file SHA-256 |
+| Registry consistency check | ◐ | File-to-registry comparison reported (warning) |
+| Clojure bundle root capture | ✅ | `clojure-bundle-root.json` in bundle |
+| Reproduce-from-bundle | ❌ | No `bb forensic:reproduce` |
 | Diff between two runs | ❌ | No comparison tool |
 | Multi-runner quorum comparison | ❌ | — |
 
@@ -70,12 +92,13 @@ runner that could produce externally-reliable output.
 
 | Requirement | Status | Notes |
 |---|---|---|
-| `evidence-dag/` directory created | ✅ | Empty — populated by Clojure chain |
-| `claims/` directory created | ✅ | Empty — populated by Clojure chain |
-| `attestations/` directory created | ✅ | Empty — populated by Clojure chain |
-| Scenario execution output captured | ◐ | `run-output.json` written by Clojure pipeline |
-| Structured failure summary | ❌ | Only exit code captured, no failure detail |
-| Evidence DAG linked to bundle root | ❌ | No hash links from bundle root to DAG entries |
+| `evidence-dag/` populated | ✅ | 145+ nodes copied from Clojure pipeline |
+| `claims/` directory created | ✅ | Empty (populated by Clojure) |
+| `attestations/` directory created | ✅ | Empty (populated by Clojure) |
+| Evidence DAG inventory manifest | ✅ | `evidence-dag-inventory.json` — Phase A (inventory only) |
+| EDN semantic parsing | ❌ | Deferred to Phase B (Clojure-side) |
+| Evidence DAG manifest hash in bundle root | ❌ | Not yet linked |
+| Execution root hash | ❌ | No semantic root identification yet |
 
 ## Run Request & Reproducibility
 
@@ -83,14 +106,16 @@ runner that could produce externally-reliable output.
 |---|---|---|
 | Run request validated preflight | ✅ | EDN/JSON parsing, required fields |
 | Registry snapshot captured | ✅ | Copied into output |
-| Source snapshot (git commit + dirty) | ✅ | `source-snapshot.json` |
-| Environment snapshot (OS, tools) | ✅ | `environment.json` |
-| Dependency lock snapshotted | ❌ | No deps.edn or classpath snapshot |
-| Input manifest recorded | ✅ | `input-manifest.json` |
-| Runner identity recorded | ✅ | From run request |
-| Policy versions recorded | ✅ | Evidence + execution policy refs |
-| Preflight report preserved | ✅ | `preflight-report.json` |
-| Output bundle verifiable from request + snapshot | ❌ | No tool to reproduce run from bundle alone |
+| Source snapshot | ✅ | `source-snapshot.json` with git_commit, dirty, byte-size, code-hash |
+| Environment snapshot | ✅ | `environment.json` with OS, Python, Clojure versions |
+| Input manifest | ✅ | `input-manifest.json` |
+| Runner identity | ✅ | From run request |
+| Policy versions | ✅ | Evidence + execution policy refs |
+| Preflight report | ✅ | `preflight-report.json` with 14 checks |
+| Clojure bundle root (live registry hashes) | ✅ | `clojure-bundle-root.json` with live registry snapshot |
+| Scenario files bundled | ✅ | When named suite is used |
+| deps.edn bundled | ✅ | Copied into bundle |
+| Reproduce-from-bundle | ❌ | No tool to re-execute and compare |
 
 ## Bundle Distribution
 
@@ -104,58 +129,25 @@ runner that could produce externally-reliable output.
 
 ## Summary by Severity
 
-### Critical gaps (block externally-reliable evidence)
+### Still missing — will be addressed now
 
-1. **Bundle signing** — `bundle/hash` must be signed with an Ed25519 key
-   whose public key is known to verifiers. Without this, anyone can produce
-   a bundle claiming any result.
+1. **Portable export/import** — tar.gz + manifest for external auditors.
+   `bb forensic:export <run-dir> [--output <path>]` and
+   `bb forensic:import <archive> [--output <dir>]`.
 
-2. **Timestamp anchoring** — An RFC 3161 timestamp token proves the bundle
-   existed at a point in time. Without it, a bundle can be backdated or
-   its creation window is unbounded.
+2. **Reproduce-from-bundle** — Given a bundle, re-execute the run request
+   and compare the overview hash. `bb forensic:reproduce <run-dir>`.
 
-3. **Post-run immutability** — After completion, the output directory
-   should be made read-only (`chmod -R a-w`) and optionally immutable
-   (`chattr +i`). Without this, a compromised process after the run can
-   still modify output before verification.
+3. **Structured failure detail** — Extract per-scenario results from the
+   Clojure bundle root and produce `results-summary.json` with scenario-level
+   pass/fail counts.
 
-4. **Evidence DAG linking** — The bundle root should contain hash links
-   to the evidence DAG entries produced by the Clojure pipeline. Without
-   this, the bundle root commits to the execution summary but not to the
-   detailed per-step evidence.
+### Remaining after this round
 
-### Moderate gaps (reduces trust but evidence is still usable)
-
-5. **Multi-runner comparison** — A single runner's output cannot be
-   cross-checked. A quorum of 3+ independent runners comparing overview
-   hashes would much stronger evidence.
-
-6. **Structured failure report** — Exit code alone doesn't say which
-   scenarios failed or why. A structured `failures.json` with per-scenario
-   outcome detail would make the bundle self-explanatory.
-
-7. **Reproduce-from-bundle** — Given a bundle, another runner should be
-   able to re-execute the same run request against the same registry
-   snapshot and confirm the same overview hash.
-
-### Enhancement gaps (important for adoption but not integrity-critical)
-
-8. **Portable export/import** — tar.gz + manifest for external auditors
-9. **Dependency snapshot** — pinned deps.edn or classpath listing
-10. **Read-only root filesystem** — overlayfs or pivot_root for stronger
-    filesystem isolation
-11. **Per-run UID** — separate Unix user per run for accountability
-12. **Seccomp + capability dropping** — reduce kernel attack surface
-
-## Recommended Next Phase
-
-| Priority | Item | Depends On | Effort |
-|---|---|---|---|
-| P0 | Sign bundle root with Ed25519 | — | Low (Python + cryptography library, or shell out to Clojure signing) |
-| P1 | Post-run chmod a-w + optional chattr +i | — | Trivial (2 lines in run.py after verification) |
-| P1 | RFC 3161 timestamp via TSA | — | Medium (HTTP client to TSA, DER encoding of token) |
-| P2 | Structured failure summary from run-output.json | — | Medium (parse Clojure output, extract per-scenario results) |
-| P2 | Evidence DAG hash links in bundle root | Evidence DAG population | Medium (hash DAG entries, include in bundle root) |
-| P3 | bb forensic:export / bb forensic:import | — | Low (tar.gz + manifest) |
-| P3 | bb forensic:diff | — | Medium (structural compare of two run dirs) |
-| P3 | Quorum comparison tool | Bundle format stable | High (multi-runner orchestration) |
+4. **RFC 3161 timestamp anchoring** — Requires TSA client integration.
+5. **IPFS/IPLD publication** — Requires IPFS node or pinning service.
+6. **Multi-runner quorum** — Requires multi-runner orchestration.
+7. **Signed chain-of-custody log** — Requires per-run signing key.
+8. **Execution DAG semantic parsing** — Phase B Clojure-side work.
+9. **Seccomp / capability dropping** — OS-level hardening.
+10. **Diff between runs** — Comparison tool.

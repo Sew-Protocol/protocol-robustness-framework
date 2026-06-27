@@ -410,10 +410,13 @@
                :artifacts-matched? artifact-matches?}})))
 
 (defn emit-execution-node!
+  "Build, persist, and register an execution node.
+   Returns the node map (including :node-hash)."
   [node-spec]
   (let [node (build-execution-node node-spec)]
     (persist-execution-node! node)
-    (register-node! node)))
+    (register-node! node)
+    node))
 
 (defn- cycle-path
   [graph node]
@@ -660,7 +663,7 @@
                :detailed-checks-failed (count failures)}}))
 
 (defn with-execution-node
-  "Run thunk, emit an execution node for pass/fail/error, and return thunk's value.
+  "Run thunk, emit an execution node for pass/fail/error, return thunk's value.
 
    Options:
    - :execution-id     required registry execution id
@@ -727,3 +730,61 @@
                         :error (.getMessage node-error)
                         :original-error (.getMessage t)})))
         (throw t)))))
+
+(defn with-execution-node+
+  "Like with-execution-node but returns {:result <thunk-value> :execution-node <node-map>}.
+   Callers that need the execution node hash use this instead."
+  [{:keys [execution-id policy-id inputs parent-hashes bootstrap-roots runner
+           status-fn outputs-fn failure-details-fn extensions-fn]
+    :or {policy-id default-policy-id
+         parent-hashes []
+         bootstrap-roots []
+         runner nil
+         status-fn (constantly :pass)
+         outputs-fn identity
+         failure-details-fn (constantly [])
+         extensions-fn (constantly {})}}
+   thunk]
+  (let [timestamp (now-iso)]
+    (try
+      (let [value (thunk)
+            status (status-fn value)
+            node (emit-execution-node!
+                  {:execution-id execution-id
+                   :policy-id policy-id
+                   :runner runner
+                   :timestamp timestamp
+                   :parent-hashes parent-hashes
+                   :bootstrap-roots bootstrap-roots
+                   :status status
+                   :inputs inputs
+                   :outputs (outputs-fn value)
+                   :failure-details (failure-details-fn value)
+                   :extensions (extensions-fn value)})]
+        {:result value :execution-node node})
+      (catch Throwable t
+        (try
+          (let [node (emit-execution-node!
+                      {:execution-id execution-id
+                       :policy-id policy-id
+                       :runner runner
+                       :timestamp timestamp
+                       :parent-hashes parent-hashes
+                       :bootstrap-roots bootstrap-roots
+                       :status :error
+                       :inputs inputs
+                       :outputs {:error (.getMessage t)
+                                 :exception (str (class t))}
+                       :failure-details [{:failure-type :exception
+                                          :class :exception
+                                          :message (.getMessage t)
+                                          :expected? false}]
+                       :extensions {:exception-class (str (class t))}})]
+            {:result nil :execution-node node :error t})
+          (catch Throwable node-error
+            (log/warn! :execution-node-emission-failed
+                       {:execution-id execution-id
+                        :error (.getMessage node-error)
+                        :original-error (.getMessage t)})
+            {:result nil :execution-node nil :error t
+             :node-error node-error}))))))

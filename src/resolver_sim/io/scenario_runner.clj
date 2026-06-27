@@ -9,6 +9,7 @@
             [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.forensic.provenance :as prov]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.io.serialization :as serialization]
             [resolver-sim.logging :as log]
@@ -551,16 +552,17 @@
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
                   :message "Run is non-canonical; bundle will be marked accordingly"}))
-    (let [result (ev-node/with-execution-node
+    (let [result (ev-node/with-execution-node+
                    {:execution-id :execution/replay
                     :runner :scenario-runner
-                    :inputs {:dispatch dispatch
-                             :runner-selection runner-selection
-                             :canonical? canonical?
-                             :non-canonical-reason non-canonical-reason
-                             :opts {:protocol protocol-id
-                                    :report-format (:report-format opts)
-                                    :suite-id (:suite-id opts)}}
+                     :inputs (merge {:dispatch dispatch
+                                    :runner-selection runner-selection
+                                    :canonical? canonical?
+                                    :non-canonical-reason non-canonical-reason
+                                    :opts {:protocol protocol-id
+                                           :report-format (:report-format opts)
+                                           :suite-id (:suite-id opts)}}
+                                   (prov/source-provenance))
                     :status-fn (fn [{:keys [exit-code]}]
                                  (cond (zero? exit-code) :pass
                                        (integer? exit-code) :fail
@@ -612,14 +614,23 @@
                                                 :passed (if (zero? exit-code) 0 0)
                                                 :failed (if (zero? exit-code) 0 1)}
                                        :results []}
-                           bundle-root (br/build-bundle-root run-request run-result)]
-                       {:exit-code exit-code
-                        :dispatch-key dispatch-key
-                        :canonical? canonical?
-                        :bundle-root bundle-root})))]
-      ;; Write bundle root to --output-file when requested (suite, registry, or fixture)
-      (when-let [output-path (:output-file dispatch)]
-        (when-let [bundle-root (:bundle-root result)]
-          (write-result-json output-path bundle-root)))
-      {:exit-code (:exit-code result)
-       :bundle-root (:bundle-root result)})))
+                            bundle-root (br/build-bundle-root run-request run-result)]
+                        {:exit-code exit-code
+                         :dispatch-key dispatch-key
+                         :canonical? canonical?
+                         :bundle-root bundle-root})))]
+
+      ;; Enrich bundle root with source provenance + execution node hash,
+      ;; then write to --output-file and return
+      (let [thunk-result (:result result)
+            execution-node (:execution-node result)
+            bundle-root (:bundle-root thunk-result)
+            enriched-root (merge bundle-root
+                                 (prov/source-provenance)
+                                 (when execution-node
+                                   {:execution/node-hash (:node-hash execution-node)}))]
+        (when-let [output-path (:output-file dispatch)]
+          (write-result-json output-path enriched-root))
+        {:exit-code (:exit-code thunk-result)
+         :bundle-root enriched-root
+         :execution-node execution-node}))))
