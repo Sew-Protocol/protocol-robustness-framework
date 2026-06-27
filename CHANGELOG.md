@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 ### Added (2026-06-27)
+
+- **Solidity Shadow Registry:** Created `src/resolver_sim/definitions/solidity_shadow_registry.clj` — a machine-readable registry tracking which simulation code shadows which Solidity contract, with documented known differences. 15 entries across 9 contracts (BaseEscrow.sol, EscrowStateMachine.sol, ResolverSlashingModuleV1.sol, SettlementOps.sol, DefaultCancellationStrategy.sol, StateInvariants.t.sol, ResolverInvariants.t.sol, IdentityGuard.sol-proposed, StorageMigration.sol-proposed). Query API: `lookup-by-simulation`, `lookup-by-solidity`, `all-differences`, `check-shadow-coverage`, `format-shadow-report`. Added `bb shadow:check` and `bb shadow:report` tasks. Added `test/resolver_sim/definitions/solidity_shadow_registry_test.clj` (8 tests, 45 assertions).
+
+- **Benchmark consolidation into canonical `benchmarks/` root:** Rewrote benchmark definitions as bundle-of-references pattern (`:benchmark/scenario-suite`, `:benchmark/runner-policy`, `:benchmark/evidence-policy`, `:benchmark/scoring-rule`, `:benchmark/claims`). Created `benchmarks/packs/{prf-core,sew,stablecoin-safety}/` with registries and benchmark EDN files. Created `benchmarks/scoring/`, `benchmarks/runners/`, `benchmarks/scenarios/`, `benchmarks/archived/`. Migrated existing `benchmarks/dispute-liveness.edn` to `packs/sew/`. Added `benchmarks/outputs/` to `.gitignore`. Updated `BENCHMARKS.edn` to point to canonical paths. (19 EDN files, all parse.)
+
+- **Concept layer (Phase 1):** Added `data/concepts/` with registry plus 4 concept definitions (`ecommerce/purchase`, `event/deposit`, `spending-account/controlled-balance`, `verifiable-assurance/forensic-confidence`). Added `docs/concepts/` with README, glossary, risk taxonomy, and scenario annotation guide. Added `src/resolver_sim/concepts/registry.clj` (load + validate concept metadata) and `src/resolver_sim/concepts/reporting.clj` (report enrichment shape stub).
+
+- **Stability tracking manifest:** Added `:stability/snapshot` intent to `resolver-sim.hash.canonical` (domain tag `STABILITY_SNAPSHOT_V1`, projection function, registry entry). Created `STABILITY_MANIFEST.edn` with 9 initial entries (canonical-hashing, scenario-schema, artifact-registry, evidence-chain, invariant-identifiers, attestor-registry, attestation-data-model, benchmark-runner, stability-manifest). Created `src/resolver_sim/tools/stability_checker.clj` — reads manifest, recomputes hashes via `hash-with-intent`, prints status table, exits 1 on mismatch. Added `bb stability:check` task. Updated `STABILITY.md` with manifest usage section.
+
+- **Stability tracking section in README:** Added "Stability Tracking" section between Registry Architecture and Validation State Root, documenting manifest format, `bb stability:check` CLI, and instructions for adding new surfaces.
+
+### Fixed (2026-06-27)
+
+- **`:run` alias switched from `-e` to `-m resolver-sim.core`:** The `-e` approach passed remaining CLI args incorrectly in Clojure CLI 1.12.5, causing `clojure.main` to load `--` as a script file (`FileNotFoundException`). Using `-m resolver-sim.core` correctly passes args to `-main`. (`deps.edn:161`)
+
+- **`bb run:scenario` now loads `protocols_src/`:** Added `:with-sew` to all 4 remaining `-M:run` invocations in `bb.edn` (`sim:run`, `run:scenario`, `run:scenario:family`, and a second `run:scenario:family` variant) — fixes `FileNotFoundException` for `resolver_sim.protocols.sew.research_models.resolver_ring`.
+
+- **`bb run:scenario` flag names corrected:** Changed `--scenario-id` to `--scenario` in both Clojure CLI args and Python `write_scenario_run_manifest.py` invocation. The CLI option is `--scenario`; `--scenario-id` was unrecognized.
+
+- **`bb run:scenario` dispatch bypass for broken `-main` cond:** Replaced the `-M:run:with-sew -- --invariants --scenario` path with a direct `-e` expression calling `resolver-sim.io.scenario-runner/run-and-report`, because `-main`'s `cond` dispatch does not execute scenario branches when called via `-m`. (Root cause not yet fixed — workaround in place.)
 - **Forensic workspace infrastructure:** Added `docs/forensic/FORENSIC_WORKSPACE_SPEC_V1.md` and `docs/forensic/FORENSIC_PREFLIGHT_SPEC_V1.md` — workspace class definitions (project-root, prf-only, protocol-dev, forensic-runner, private-discovery), boundary table, immutable run archive layout, and 20-category preflight check specification with required/warning/info severities.
 - **Forensic hardening and isolation model:** Added `docs/forensic/FORENSIC_HARDENING.md` documenting the isolation architecture, OS-level checks, grade computation, and sealing pipeline.
 - **Forensic runner workspace template:** Added `workspaces/forensic-runner/` with sample policies (`evidence-policy.edn`, `execution-policy.edn`, `output-policy.edn`), sample inputs (`run-request.edn`, `registry-snapshot.edn`), `outputs/` and `tmp/` directories.

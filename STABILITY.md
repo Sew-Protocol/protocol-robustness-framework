@@ -2,6 +2,32 @@
 
 This project is under active development. Not all code is stable.
 
+## Stability Manifest
+
+Source-level stability is tracked in `STABILITY_MANIFEST.edn`. Each
+entry records a canonical hash (via `hash-with-intent` with intent
+`:stability/snapshot`) of the source files that define a stability
+surface. Run `bb stability:check` to verify which surfaces have
+changed since their last recorded checkpoint.
+
+```
+$ bb stability:check
+
+Stability Check — 2026-06-27
+──────────────────────────────────────────────────────────────────────────────
+  Surface                                          Level        Started At     Status
+  ──────────────────────────────────────────────────────────────────────────────
+  :stability/canonical-hashing                     stable       2026-06-27     ✅
+  :stability/scenario-schema                       stable       2026-06-27     ✅
+  ...
+──────────────────────────────────────────────────────────────────────────────
+  9 unchanged, 0 changed, 0 missing — 9 total
+```
+
+Adding a new stability surface: add an entry to `STABILITY_MANIFEST.edn`
+with `:stability/id`, `:stability/files`, and `:stability/hash` (run
+`bb stability:check` once to populate the initial hash).
+
 ## Stable surfaces
 
 The following are stability-controlled:

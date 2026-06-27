@@ -4,7 +4,8 @@
    Does not judge pass/fail — delegates to `scenario.runner` and `sim.fixtures`.
    Table output via `scenario.report/print-report`; legacy fixture detail via
    `sim.reporter` when `:report-format :fixture`."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.evidence.node :as ev-node]
@@ -366,12 +367,23 @@
                  {:normalize? false})]
     (first (:results summary))))
 
+(defn- preserve-ns-key [k]
+  "JSON key function that preserves Clojure keyword namespaces.
+   :bundle/hash → \"bundle/hash\", not \"hash\"."
+  (if (keyword? k)
+    (if-let [ns (namespace k)]
+      (str ns "/" (name k))
+      (name k))
+    (str k)))
+
 (defn write-result-json
+  "Write result map as JSON, preserving keyword namespaces in keys.
+   Uses json/write-str directly (bundle roots and replay results are plain maps,
+   not records — no protocol dispatch needed)."
   [output-path result]
   (when (and output-path (not= output-path "-"))
     (io/make-parents output-path)
-    (spit output-path (serialization/serialize-artifact (dissoc result :protocol)
-                                                        {:pretty? true}))))
+    (spit output-path (json/write-str result :key-fn preserve-ns-key :indent true))))
 
 (defn run-registry-suite-and-report
   "Run protocol registry suite, print report, return exit code.
@@ -605,5 +617,9 @@
                         :dispatch-key dispatch-key
                         :canonical? canonical?
                         :bundle-root bundle-root})))]
+      ;; Write bundle root to --output-file when requested (suite, registry, or fixture)
+      (when-let [output-path (:output-file dispatch)]
+        (when-let [bundle-root (:bundle-root result)]
+          (write-result-json output-path bundle-root)))
       {:exit-code (:exit-code result)
        :bundle-root (:bundle-root result)})))

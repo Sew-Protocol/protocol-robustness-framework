@@ -69,6 +69,32 @@ def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
         info["dirty"] = True
 
     info["repo_root"] = str(repo_root.resolve())
+
+    # Source byte size (total source code footprint)
+    try:
+        r = subprocess.run(
+            ["du", "-sb", "src", "protocols_src"],
+            capture_output=True, text=True, cwd=str(repo_root), timeout=10)
+        total = 0
+        for line in r.stdout.strip().split("\n"):
+            parts = line.split("\t")
+            if parts and parts[0].isdigit():
+                total += int(parts[0])
+        info["source-byte-size"] = total
+    except Exception:
+        info["source-byte-size"] = 0
+
+    # Code hash: deterministic hash over all source files
+    try:
+        r = subprocess.run(
+            ["bash", "-c",
+             "find src protocols_src -type f | sort | xargs sha256sum 2>/dev/null | sha256sum"],
+            capture_output=True, text=True, cwd=str(repo_root), timeout=30)
+        ch = r.stdout.strip().split()[0] if r.stdout.strip() else "unknown"
+        info["code-hash"] = ch
+    except Exception:
+        info["code-hash"] = "unknown"
+
     return info
 
 
@@ -144,16 +170,25 @@ def run_invoke_scenario_pipeline(run_request_path: str,
 
     suite_key = _get_key(run_request, "suite/key", ":suite/key", "key") if run_request else None
 
+    # Build command using -e directly (the :run alias's :main-opts doesn't
+    # reliably pass --output-file through the Clojure CLI with -M).
+    run_expr = ("(require '[resolver-sim.core]) "
+                "(->> *command-line-args* (map str) (apply resolver-sim.core/-main))")
+    cmd = ["clojure", "-M:with-sew", "-e", run_expr,
+           "--", "--invariants"]
     if suite_key:
-        cmd = ["clojure", "-M:run:with-sew", "--", "--invariants", "--suite", str(suite_key)]
-    else:
-        cmd = ["clojure", "-M:run:with-sew", "--", "--invariants"]
+        cmd.extend(["--suite", str(suite_key)])
+    output_path = run_dir / "clojure-bundle-root.json"
+    cmd.extend(["--output-file", str(output_path)])
 
     print(f"  executing: {' '.join(cmd)}", file=sys.stderr)
     # Run with capture_output=False so output passes through to terminal
     # (Clojure/JVM output goes through paths that require a TTY and cannot be
     #  reliably captured via PIPE. Exit code is the reliable signal.)
     r = subprocess.run(cmd, capture_output=False, timeout=600)
+    if output_path.exists():
+        print(f"  captured Clojure bundle root ({output_path.stat().st_size} bytes)",
+              file=sys.stderr)
     return r.returncode
 
 
@@ -346,15 +381,25 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         except Exception as e:
             print(f"  warning: could not bundle deps.edn: {e}", file=sys.stderr)
 
-    # Step 6c: Write results summary based on exit code
+    # Step 6c: Write results summary (minimal — detailed results in overview)
     results_summary = {
         "results/schema-version": "results-summary.v1",
-        "results/exit-code": exit_code,
         "results/status": "pass" if exit_code == 0 else "fail",
         "results/suite-key": suite_key or "registry-default",
-        "results/elapsed-ms": elapsed_ms,
     }
     write_sealed_json(run_dir / "results-summary.json", results_summary)
+
+    # Step 6d: Copy evidence nodes from Clojure pipeline output
+    evidence_node_dir = repo_root / "results" / "test-artifacts" / "evidence-nodes"
+    if evidence_node_dir.exists():
+        dag_dir = run_dir / "evidence-dag"
+        count = 0
+        for f in evidence_node_dir.iterdir():
+            if f.is_file() and f.suffix in (".json", ".edn"):
+                shutil.copy2(str(f), str(dag_dir / f.name))
+                count += 1
+        if count > 0:
+            print(f"  copied {count} evidence node(s) to evidence-dag/", file=sys.stderr)
 
     # Step 7: Write run overview (self-referential SHA-256)
     run_overview = {
@@ -367,7 +412,6 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "status": "pass" if exit_code == 0 else "fail",
         "source": source_info,
     }
-    run_overview.update(isolation_report)
     # Build canonical dict (without hash), serialize, hash, set hash, seal
     overview_canonical = {k: v for k, v in run_overview.items()
                           if k not in ("overview/hash",)}
@@ -387,9 +431,9 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "bundle/signing-key-id": None,
         "bundle/timestamp": datetime.now(timezone.utc).isoformat(),
         "run/request-path": str(run_request_path),
-        "run/overview": run_overview,
         "run/exit-code": exit_code,
         "run/status": "pass" if exit_code == 0 else "fail",
+        "overview/hash": overview_hash,
         "preflight": {
             "status": preflight_status,
             "summary": report.summary,

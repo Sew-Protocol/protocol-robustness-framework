@@ -224,6 +224,64 @@ Each entry has the following fields:
 
 The two registries are cross-validated at startup: every passive intent definition whose `:output` references a `:hash/intent` must correspond to a known runtime hash intent in `hash-intents`.
 
+## Stability Tracking
+
+File: `STABILITY_MANIFEST.edn`
+
+The stability manifest records canonical hashes of source files that
+define stability-controlled surfaces. Each entry maps a named surface
+(scenario schema, evidence chain, attestor registry, etc.) to the
+files that define it, along with a content hash and a `started-at`
+timestamp.
+
+```clojure
+{:stability/id       :stability/canonical-hashing
+ :stability/surface  "Canonical hashing infrastructure"
+ :stability/level    :stable
+ :stability/started-at #inst "2026-06-27T00:00:00Z"
+ :stability/hash     "0fd471408f3425eb..."
+ :stability/files    ["src/resolver_sim/hash/canonical.clj"]}
+```
+
+The hash is computed via `hash-with-intent` with intent
+`:stability/snapshot` (registered in `canonical.clj`'s intent
+registry), producing a deterministic fingerprint of the listed
+source files. Any change to those files produces a different hash.
+
+### Checking stability
+
+```bash
+bb stability:check
+```
+
+Compares current source file hashes against the manifest.
+Output:
+
+```
+Stability Check — 2026-06-27
+────────────────────────────────────────────────────────────────────────
+  Surface                                        Level        Started At     Status
+  ──────────────────────────────────────────────────────────────────────
+  :stability/canonical-hashing                   stable       2026-06-27     ✅
+  :stability/evidence-chain                      stable       2026-06-27     ✅
+  :stability/scenario-schema                     stable       2026-06-27     ❌ (hash mismatch)
+  ...
+────────────────────────────────────────────────────────────────────────
+  8 unchanged, 1 changed, 0 missing — 9 total
+```
+
+A `❌` means the source files for that surface have changed since the
+recorded checkpoint. Review `STABILITY.md` to determine if the change
+is expected and whether the manifest should be updated.
+
+### Adding a new stability surface
+
+1. Add an entry to `STABILITY_MANIFEST.edn` with `:stability/id`,
+   `:stability/files`, and `:stability/level`.
+2. Run `bb stability:check` once to populate the initial hash.
+3. The surface is now tracked — any future changes to its files will
+   be reported as a mismatch.
+
 ## Validation State Root
 
 The framework includes an opt-in state monad and validation-root builder for structured result accumulation.

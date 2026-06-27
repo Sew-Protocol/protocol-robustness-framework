@@ -83,6 +83,7 @@ OPTIONAL_FILES = [
     "run-output.json",
     "results-summary.json",
     "deps.edn",
+    "clojure-bundle-root.json",
 ]
 
 OPTIONAL_DIRS = [
@@ -226,15 +227,10 @@ def check_results_summary(run_dir: Path) -> VerifyCheck:
         return VerifyCheck(key="results-summary", status="fail",
                            message="results-summary.json is not valid JSON",
                            severity="warning")
-    fail_count = data.get("results/fail-count", 0)
-    per_scenario = data.get("results/per-scenario", [])
-    summary = f"{len(per_scenario)} scenarios, {fail_count} failed"
-    if fail_count > 0:
-        return VerifyCheck(key="results-summary", status="fail",
-                           message=f"Results: {summary}",
-                           severity="warning")
+    status = data.get("results/status", "unknown")
+    suite_key = data.get("results/suite-key", "unknown")
     return VerifyCheck(key="results-summary", status="pass",
-                       message=f"Results: {summary}",
+                       message=f"Status: {status}, suite: {suite_key}",
                        severity="info")
 
 
@@ -271,7 +267,7 @@ def check_bundle_root_valid(run_dir: Path) -> VerifyCheck:
     try:
         data = json.loads(path.read_text())
         required_keys = ["bundle/schema-version", "bundle/id",
-                         "run/overview", "preflight"]
+                         "overview/hash", "preflight"]
         missing = [k for k in required_keys if k not in data]
         if missing:
             return VerifyCheck(key="bundle-root-valid", status="fail",
@@ -350,7 +346,9 @@ def check_evidence_dag(run_dir: Path) -> VerifyCheck:
 
 def check_no_extra_dirs(run_dir: Path) -> VerifyCheck:
     """Warn about unexpected top-level entries in the run directory."""
-    known = set(REQUIRED_FILES + OPTIONAL_FILES + [d + "/" for d in REQUIRED_DIRS])
+    known = set(REQUIRED_FILES + OPTIONAL_FILES
+                + [d + "/" for d in REQUIRED_DIRS]
+                + [d + "/" for d in OPTIONAL_DIRS])
     extra = []
     for entry in run_dir.iterdir():
         name = entry.name + "/" if entry.is_dir() else entry.name

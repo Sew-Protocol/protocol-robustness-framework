@@ -76,8 +76,9 @@
    :attestation-record "ATTESTATION_RECORD_V1"
    :execution-definition "EXECUTION_DEFINITION_V1"
    :action             "ACTION_V1"
-   :action-at          "ACTION_AT_V1"
-   :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"})
+    :action-at          "ACTION_AT_V1"
+    :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"
+    :stability-snapshot "STABILITY_SNAPSHOT_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -754,6 +755,16 @@
       {:intent intent
        :artifact artifact})))
 
+(defn project-stability-snapshot
+  "Project a stability snapshot for hash computation.
+   Takes {:files {\"path\" \"content\" ...}} and sorts by path
+   for deterministic hashing. Each value is canonicalized as a string."
+  [value intent]
+  (let [files (get value :files {})
+        sorted (into (sorted-map) (map (fn [[k v]] [(str k) (str v)]) files))]
+    {:intent intent
+     :stability/files sorted}))
+
 (def hash-intents
   "Map of hash intent keywords to their Intent Registry Contracts.
    Each contract explicitly declares the intent name, description,
@@ -1098,12 +1109,24 @@
     :intent/version     2}
 
    :action-at
-   {:intent/name        :action-at
-    :intent/domain-tag  "ACTION_AT_V1"
-    :intent/description "Canonical identity of an action occurrence at a specific execution point."
-    :intent/includes    #{:action-hash :step :block-time}
-    :intent/excludes    #{:action :metadata :world-before :world-after :runtime-values}
-    :intent/projection-fn project-action-at
+    {:intent/name        :action-at
+     :intent/domain-tag  "ACTION_AT_V1"
+     :intent/description "Canonical identity of an action occurrence at a specific execution point."
+     :intent/includes    #{:action-hash :step :block-time}
+     :intent/excludes    #{:action :metadata :world-before :world-after :runtime-values}
+     :intent/projection-fn project-action-at
+     :intent/version     1}
+
+   :stability/snapshot
+   {:intent/name        :stability/snapshot
+    :intent/domain-tag  "STABILITY_SNAPSHOT_V1"
+    :intent/description "Canonical snapshot of source file contents for stability tracking.
+                         Takes {:files {\"path\" \"content\" ...}} and produces a sorted,
+                         deterministic hash. Used by STABILITY_MANIFEST.edn and
+                         bb stability:check."
+    :intent/includes    #{:files :paths :contents}
+    :intent/excludes    #{:metadata :timestamps :runtime-state}
+    :intent/projection-fn project-stability-snapshot
     :intent/version     1}})
 
 (defn resolve-intent

@@ -313,9 +313,30 @@
                         :task (shell "./scripts/test.sh yield-scenarios")}
 
   scenario-registry:validate
-  {:doc "Validate the invariant scenario registry and file-backed scenario suite registry"
+   {:doc "Validate the invariant scenario registry and file-backed scenario suite registry"
+    :task (clojure {:dir "." :extra-deps {}}
+                   "-M" "-m" "resolver-sim.validation.scenario-registry")}
+
+  shadow:check
+  {:doc "Check simulation namespaces for Solidity shadow registry coverage. Flags unregistered namespaces."
    :task (clojure {:dir "." :extra-deps {}}
-                  "-M" "-m" "resolver-sim.validation.scenario-registry")}
+                  "-M:with-sew"
+                  "-e" "(require (quote resolver-sim.definitions.solidity-shadow-registry))
+                        (let [unregistered (resolver-sim.definitions.solidity-shadow-registry/check-shadow-coverage)]
+                          (if (seq unregistered)
+                            (do (println \"Unregistered namespaces:\")
+                                (doseq [m unregistered]
+                                  (println \"  \" (:namespace m)))
+                                (println (str (count unregistered) \" unregistered namespace(s)\"))
+                                (System/exit 1))
+                            (println \"All simulation namespaces have shadow entries.\")))")}
+
+  shadow:report
+  {:doc "Print a human-readable summary of the Solidity shadow registry."
+   :task (clojure {:dir "." :extra-deps {}}
+                  "-M:with-sew"
+                  "-e" "(require (quote resolver-sim.definitions.solidity-shadow-registry))
+                        (println (resolver-sim.definitions.solidity-shadow-registry/format-shadow-report))")}
 
   run:scenario:suite
   {:doc "Run a registered scenario path suite. Usage: bb run:scenario:suite <suite-key>"
@@ -556,7 +577,12 @@
                     :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
 
   benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
-                  :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+                   :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+
+  stability:check
+  {:doc "Check stability manifest: recompute hashes and report changes to stability surfaces.
+         Usage: bb stability:check"
+   :task (clojure "-M" "-m" "resolver-sim.tools.stability-checker")}
 
   evidence:registry
   {:doc "Build the evidence registry for a run directory.
