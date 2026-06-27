@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Added (2026-06-27)
+- **Forensic workspace infrastructure:** Added `docs/forensic/FORENSIC_WORKSPACE_SPEC_V1.md` and `docs/forensic/FORENSIC_PREFLIGHT_SPEC_V1.md` — workspace class definitions (project-root, prf-only, protocol-dev, forensic-runner, private-discovery), boundary table, immutable run archive layout, and 20-category preflight check specification with required/warning/info severities.
+- **Forensic hardening and isolation model:** Added `docs/forensic/FORENSIC_HARDENING.md` documenting the isolation architecture, OS-level checks, grade computation, and sealing pipeline.
+- **Forensic runner workspace template:** Added `workspaces/forensic-runner/` with sample policies (`evidence-policy.edn`, `execution-policy.edn`, `output-policy.edn`), sample inputs (`run-request.edn`, `registry-snapshot.edn`), `outputs/` and `tmp/` directories.
+- **Private discovery workspace template:** Added `workspaces/private-discovery-template/` with `sealed-log/`, `encrypted-inputs/`, `encrypted-notes/`, `scenario-drafts/`, `local-runs/`, `disclosure-candidates/`, `export/` directories and `.gitignore`.
+- **PRF-only workspace:** Added `workspaces/prf-only/deps.edn` with paths to `../../src`, `../../test`, `../../docs`; updated README as framework-only development view.
+- **`bb workspace:list` and `bb workspace:doctor`:** Workspace-aware commands that enumerate workspaces and validate README/deps.edn/path resolution.
+- **`bb forensic:run`:** Evidence-producing run orchestrator — preflight checks, isolated output to `~/prf-runs/<run-id>/`, source/environment snapshots, bundle creation, mock anchor cursor. Runs `clojure -M:run:with-sew` for full classpath.
+- **`bb forensic:preflight` and `bb forensic:verify`:** Standalone preflight check (14 checks, EDN/JSON parsing via Clojure fallback) and run-bundle verification (21 checks including self-referential hash recomputation).
+- **Self-referential SHA-256 sealing:** `run-bundle-root.json` and `run-overview.json` carry content-addressed hashes (`bundle/hash`, `overview/hash`) computed from canonical fields excluding the hash field. All writes use atomic seal (serialize → hash → temp → fsync → rename → readback → verify).
+- **Private tmpfs isolation:** Added `--private-tmpfs` flag to `bb forensic:run`. Wraps execution in a private mount namespace (`unshare --user --map-root-user -m`) with tmpfs workspace. Output written to ephemeral tmpfs, then copied to `~/prf-runs/`. Falls back to shared filesystem when unavailable.
+- **OS-level isolation checks:** Added 5 runtime checks (UID match, ptrace_scope ≥ 3, /proc accessibility, filesystem write access, non-root privilege). Results recorded in run metadata with composite grade (`full` → `good` → `partial` → `basic`).
+- **Ed25519 bundle signing:** Added `--sign <key-path>` and `--signing-key-id` to `bb forensic:run`. Bundle root hash signed via existing Clojure Ed25519 infrastructure. Signature and key identifier in `run-bundle-root.json`. Verification via `bb forensic:verify --public-key <path>`.
+- **Post-run output hardening:** Output tree made read-only (`chmod -R a-w`) with optional immutable flag (`chattr -R +i`) after verification. Suppress with `--no-harden`.
+- **Bundle portability improvements:** Forensic bundle now includes `deps.edn` snapshot, `results-summary.json` with exit code/status/suite-key/elapsed-ms, and `scenarios/` directory with source scenario files when a named suite is used. Verify.py validates `results-summary.json` presence and failure count.
+- **Verify.py expanded:** Added 4 new checks: optional file/directory discovery (6 + 1), `results-summary.json` validation, and `bundle-signature` verification with `--public-key`.
+- **`workspaces/MAP.md` updated:** Documents all workspace classes plus external archives.
+
+### Fixed (2026-06-27)
+- **`cursor-snapshot` forward-reference compilation error in `resolver-sim.evidence.chain`:** Added `(declare cursor-snapshot)` — `cursor-snapshot` was used at line 87 but defined at line 323.
+- **`bb repl`, `bb repl:light`, `bb repl:check` now load `protocols_src/`:** Added `:with-sew` alias to fix classpath errors when loading Sew protocol namespaces during REPL startup.
+- **`bb run:scenario:suite` now loads `protocols_src/`:** Changed `-M:run` to `-M:run:with-sew` — all registered suites (`dispute-resolution-scenarios`, `sew-yield-scenarios`, `yield-provider-scenarios`) require Sew protocol namespaces.
+
 ### Added (2026-06-26)
 - **Generic stake ledger:** Added `resolver-sim.stake.ledger` — entity-ID-generic stake ledger with bond, slash, release, top-up operations, `with-fresh-ledger` test isolation, evidence capture via `attr/with-attribution`, and batch `apply-stake-actions`. Reusable by both SEW protocol and attestor accountability system. 22 tests.
 - **Attestor Accountability V1 — Violation case management, decision engine, stake ledger integration:** Added `resolver-sim.evidence.attestor-accountability` implementing ATTESTOR_ACCOUNTABILITY_SPEC_V1. Three-layer model: 6 objective slashable violation definitions with required evidence/checks, violation case management (open, attach evidence, 5-state status machine), deterministic check pipeline (8 checks including attestation-integrity, registry-at-time, same-scope-conflict), decision engine with 5 outcomes (exonerate, suspend-only, suspend-and-slash, slash-only, finalize-retirement), and finalization that applies decisions to the stake ledger and attestor registry. 16 tests.

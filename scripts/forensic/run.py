@@ -28,6 +28,11 @@ if str(_project_root) not in sys.path:
 from scripts.forensic.preflight import (run_preflight, parse_edn_or_json,
                                         _get_key, write_sealed_json,
                                         compute_sha256)
+from scripts.forensic.verify import verify_run
+from scripts.forensic.isolation_checks import run_isolation_checks
+
+SIGN_EXCLUDE_KEYS = frozenset({"bundle/id", "bundle/hash",
+                                "bundle/signature", "bundle/signing-key-id"})
 
 SCHEMA_VERSION = "forensic-run.v1"
 PRF_RUNS_ROOT = Path("~/prf-runs").expanduser()
@@ -80,10 +85,55 @@ def snapshot_environment() -> dict:
 # write_json replaced by write_sealed_json from preflight module
 
 
+def sign_bundle_hash(bundle_hash: str, key_path: str,
+                     key_id: str | None = None) -> tuple[str, str]:
+    """Sign a bundle hash with an Ed25519 key using the Clojure signing
+    infrastructure. Returns (hex_signature, key_id)."""
+    if key_id is None:
+        key_id = Path(key_path).name
+    try:
+        clj_code = (
+            f"(require '[resolver-sim.benchmark.signing :as s]) "
+            f"(println (s/sign-hash \"{bundle_hash}\" \"{key_path}\" nil))")
+        r = subprocess.run(
+            ["clojure", "-M:with-sew", "-e", clj_code],
+            capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            raise RuntimeError(f"Clojure signing failed: {r.stderr.strip()}")
+        sig = r.stdout.strip()
+        if not sig:
+            raise RuntimeError("Clojure signing returned empty signature")
+        print(f"  signed bundle root with key {key_id}", file=sys.stderr)
+        return sig, key_id
+    except Exception as e:
+        raise RuntimeError(f"Bundle signing failed: {e}") from e
+
+
+def make_output_immutable(run_dir: Path) -> None:
+    """Make output directory read-only after run completes.
+    First removes write permission from all files and directories,
+    then tries to set the immutable filesystem attribute (best-effort)."""
+    try:
+        subprocess.run(["chmod", "-R", "a-w", str(run_dir)],
+                       check=True, capture_output=True, timeout=30)
+        print(f"  output tree set to read-only (chmod -R a-w)", file=sys.stderr)
+    except Exception as e:
+        print(f"  warning: could not set read-only: {e}", file=sys.stderr)
+        return
+
+    # Best-effort: try to set immutable filesystem attribute
+    try:
+        subprocess.run(["chattr", "-R", "+i", str(run_dir)],
+                       capture_output=True, timeout=30)
+        print(f"  immutable flag set (chattr +i)", file=sys.stderr)
+    except Exception:
+        pass  # chattr typically requires root or CAP_LINUX_IMMUTABLE
+
+
 def run_invoke_scenario_pipeline(run_request_path: str,
-                                 output_file: str) -> int:
-    """Invoke the existing scenario run pipeline. Returns exit code."""
-    # Load run request to determine suite or scenario
+                                 run_dir: Path) -> int:
+    """Invoke the existing scenario run pipeline.
+    Returns exit code. Output passes through to terminal (not captured)."""
     run_request = None
     try:
         p = Path(run_request_path).expanduser()
@@ -97,12 +147,55 @@ def run_invoke_scenario_pipeline(run_request_path: str,
     if suite_key:
         cmd = ["clojure", "-M:run:with-sew", "--", "--invariants", "--suite", str(suite_key)]
     else:
-        # Default: run all invariants with full classpath
         cmd = ["clojure", "-M:run:with-sew", "--", "--invariants"]
 
     print(f"  executing: {' '.join(cmd)}", file=sys.stderr)
+    # Run with capture_output=False so output passes through to terminal
+    # (Clojure/JVM output goes through paths that require a TTY and cannot be
+    #  reliably captured via PIPE. Exit code is the reliable signal.)
     r = subprocess.run(cmd, capture_output=False, timeout=600)
     return r.returncode
+
+
+def _bundle_scenario_files(run_dir: Path, suite_key: str) -> None:
+    """Look up scenario file paths for a named suite and copy them into the
+    bundle's scenarios/ directory for portability."""
+    try:
+        clj_code = (
+            f"(require '[resolver-sim.scenario.suites :as suites]) "
+            f"(println (pr-str (suites/suite-paths (keyword \"{suite_key}\"))))")
+        r = subprocess.run(
+            ["clojure", "-M:with-sew", "-e", clj_code],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            print(f"  warning: could not look up suite '{suite_key}': {r.stderr.strip()[:100]}",
+                  file=sys.stderr)
+            return
+        paths_str = r.stdout.strip()
+        import ast
+        try:
+            paths = ast.literal_eval(paths_str)
+        except Exception:
+            print(f"  warning: could not parse suite paths: {paths_str[:100]}",
+                  file=sys.stderr)
+            return
+        if not paths:
+            print(f"  warning: suite '{suite_key}' has no file paths (in-process scenarios)",
+                  file=sys.stderr)
+            return
+        scenario_dir = run_dir / "scenarios"
+        scenario_dir.mkdir(exist_ok=True)
+        count = 0
+        for rel_path in paths:
+            src = Path(rel_path)
+            if src.exists():
+                shutil.copy2(str(src), str(scenario_dir / src.name))
+                count += 1
+            else:
+                print(f"  warning: scenario file not found: {src}", file=sys.stderr)
+        print(f"  bundled {count} scenario file(s) to scenarios/", file=sys.stderr)
+    except Exception as e:
+        print(f"  warning: scenario bundling failed: {e}", file=sys.stderr)
 
 
 # ── Main run orchestrator ──────────────────────────────────────────────────
@@ -113,7 +206,10 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
                  evidence_policy_path: str = "workspaces/forensic-runner/policies/evidence-policy.edn",
                  output_base: str | Path | None = None,
                  repo_root: str | Path | None = None,
-                 dry_run: bool = False) -> int:
+                 dry_run: bool = False,
+                 isolation: str = "shared-filesystem",
+                 signing_key_path: str | None = None,
+                 signing_key_id: str | None = None) -> int:
     if repo_root is None:
         repo_root = Path.cwd()
     repo_root = Path(repo_root).resolve()
@@ -129,6 +225,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     print(f"=== Forensic Run ===", file=sys.stderr)
     print(f"  run-id:    {run_id}", file=sys.stderr)
     print(f"  output:    {run_dir}", file=sys.stderr)
+    print(f"  isolation: {isolation}", file=sys.stderr)
     print(f"  request:   {run_request_path}", file=sys.stderr)
     print(f"  repo:      {repo_root}", file=sys.stderr)
     if dry_run:
@@ -187,6 +284,16 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     write_sealed_json(run_dir / "source-snapshot.json", source_info)
     write_sealed_json(run_dir / "environment.json", env_info)
 
+    # Step 3b: OS-level isolation checks
+    print(f"\n--- Isolation Checks ---", file=sys.stderr)
+    isolation_report = run_isolation_checks(isolation_mode=isolation)
+    for c in isolation_report["isolation/checks"]:
+        status = c.get("status", "?")
+        label = c.get("check", "?")
+        detail = c.get("detail", "")
+        print(f"  [{status:>5}] {label}: {detail}", file=sys.stderr)
+    print(f"  grade: {isolation_report['isolation/grade']}", file=sys.stderr)
+
     # Step 4: Copy inputs to output
     print(f"\n--- Inputs ---", file=sys.stderr)
     if run_request_path:
@@ -215,9 +322,39 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     print(f"\n--- Execution ---", file=sys.stderr)
     t0 = time.time()
     exit_code = run_invoke_scenario_pipeline(
-        run_request_path, str(run_dir / "run-output.json"))
+        run_request_path, run_dir)
     elapsed_ms = int((time.time() - t0) * 1000)
     print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
+
+    # Step 6b: Bundle scenario files and deps.edn for portability
+    run_request_data = None
+    if run_request_path:
+        try:
+            run_request_data = parse_edn_or_json(
+                Path(run_request_path).expanduser().read_text(), run_request_path)
+        except Exception:
+            pass
+    suite_key = _get_key(run_request_data, "suite/key", ":suite/key", "key") if run_request_data else None
+    if suite_key:
+        _bundle_scenario_files(run_dir, suite_key)
+    # Snapshot deps.edn for dependency tracking
+    deps_path = Path("deps.edn")
+    if deps_path.exists():
+        try:
+            shutil.copy2(str(deps_path), str(run_dir / "deps.edn"))
+            print(f"  bundled deps.edn", file=sys.stderr)
+        except Exception as e:
+            print(f"  warning: could not bundle deps.edn: {e}", file=sys.stderr)
+
+    # Step 6c: Write results summary based on exit code
+    results_summary = {
+        "results/schema-version": "results-summary.v1",
+        "results/exit-code": exit_code,
+        "results/status": "pass" if exit_code == 0 else "fail",
+        "results/suite-key": suite_key or "registry-default",
+        "results/elapsed-ms": elapsed_ms,
+    }
+    write_sealed_json(run_dir / "results-summary.json", results_summary)
 
     # Step 7: Write run overview (self-referential SHA-256)
     run_overview = {
@@ -230,6 +367,7 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "status": "pass" if exit_code == 0 else "fail",
         "source": source_info,
     }
+    run_overview.update(isolation_report)
     # Build canonical dict (without hash), serialize, hash, set hash, seal
     overview_canonical = {k: v for k, v in run_overview.items()
                           if k not in ("overview/hash",)}
@@ -240,11 +378,13 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     write_sealed_json(run_dir / "run-overview.json", run_overview)
     print(f"  overview hash: {overview_hash[:16]}...", file=sys.stderr)
 
-    # Step 8: Write bundle root (self-referential SHA-256)
+    # Step 8: Write bundle root (self-referential SHA-256 + optional signing)
     bundle_root = {
         "bundle/schema-version": "bundle-root.v1",
         "bundle/id": None,        # filled after hash
         "bundle/hash": None,      # self-referential hash
+        "bundle/signature": None, # filled after signing
+        "bundle/signing-key-id": None,
         "bundle/timestamp": datetime.now(timezone.utc).isoformat(),
         "run/request-path": str(run_request_path),
         "run/overview": run_overview,
@@ -255,13 +395,21 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
             "summary": report.summary,
         },
     }
+    bundle_root.update(isolation_report)
     bundle_canonical = {k: v for k, v in bundle_root.items()
-                        if k not in ("bundle/id", "bundle/hash")}
+                        if k not in SIGN_EXCLUDE_KEYS}
     can_bytes = json.dumps(bundle_canonical, indent=2, default=str,
                            sort_keys=True).encode("utf-8")
     bundle_hash = compute_sha256(can_bytes)
     bundle_root["bundle/id"] = bundle_hash
     bundle_root["bundle/hash"] = bundle_hash
+
+    # Optional: sign the bundle hash with Ed25519
+    if signing_key_path:
+        sig, kid = sign_bundle_hash(bundle_hash, signing_key_path, signing_key_id)
+        bundle_root["bundle/signature"] = sig
+        bundle_root["bundle/signing-key-id"] = kid
+
     write_sealed_json(run_dir / "run-bundle-root.json", bundle_root)
     print(f"  bundle root hash: {bundle_hash[:16]}...", file=sys.stderr)
 
@@ -274,6 +422,26 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "anchor/note": "Mock anchor — no external anchoring in this phase",
     }
     write_sealed_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
+
+    # Step 10: Post-run full verification
+    print(f"\n--- Post-run Verification ---", file=sys.stderr)
+    try:
+        v_report = verify_run(str(run_dir))
+        v_summary = v_report.summary
+        if v_report.status == "fail":
+            print(f"  Verification FAILED: {v_summary['fail']} check(s) failed",
+                  file=sys.stderr)
+        else:
+            print(f"  Verification {v_report.status} "
+                  f"({v_summary['pass']} pass, {v_summary['fail']} fail, "
+                  f"{v_summary['warning']} warn)",
+                  file=sys.stderr)
+    except Exception as e:
+        print(f"  Verification error: {e}", file=sys.stderr)
+
+    # Step 11: Make output tree immutable
+    print(f"\n--- Output Hardening ---", file=sys.stderr)
+    make_output_immutable(run_dir)
 
     print(f"\n=== Run Complete ===", file=sys.stderr)
     print(f"  Output: {run_dir}", file=sys.stderr)
@@ -302,8 +470,20 @@ def main():
                         help="Base directory for run output (default: ~/prf-runs)")
     parser.add_argument("--repo-root", default=str(Path.cwd()),
                         help="Project repo root (default: cwd)")
+    parser.add_argument("--isolation",
+                        default="shared-filesystem",
+                        choices=["shared-filesystem", "private-tmpfs"],
+                        help="Filesystem isolation level (default: shared-filesystem)")
+    parser.add_argument("--sign", dest="signing_key_path",
+                        default=None,
+                        help="Path to Ed25519 private key for bundle signing")
+    parser.add_argument("--signing-key-id",
+                        default=None,
+                        help="Key identifier (defaults to key filename)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Run preflight only, no execution")
+    parser.add_argument("--no-harden", action="store_true",
+                        help="Skip post-run output hardening (chmod a-w)")
     args = parser.parse_args()
 
     exit_code = run_forensic(
@@ -314,6 +494,9 @@ def main():
         output_base=args.output_base,
         repo_root=args.repo_root,
         dry_run=args.dry_run,
+        isolation=args.isolation,
+        signing_key_path=args.signing_key_path,
+        signing_key_id=args.signing_key_id,
     )
     sys.exit(exit_code)
 

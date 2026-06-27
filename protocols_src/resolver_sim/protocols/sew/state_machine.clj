@@ -18,11 +18,10 @@
 
    ## Note on :resolved
 
-   transitionToResolved() is defined in StateManagementLibrary.sol but is
-   NEVER called by any BaseEscrow production code path (verified from source).
-   Disputes always terminate in :released or :refunded.  :resolved is retained
-   in the graph for enum completeness and Foundry/halmos compatibility, and is
-   reachable only after terminal-transfer-done? confirms accounting is settled."
+   transitionToResolved() is called by BaseEscrow.acceptSplit for
+   mutual-agreement split settlements.  The transition is available from
+   both :pending and :disputed states.  :resolved is also retained
+   in the graph for enum completeness and Foundry/halmos compatibility."
   (:require [resolver-sim.protocols.sew.types :as t]
             [resolver-sim.time.deadlines      :as dl]
             [resolver-sim.time.context        :as time-ctx]))

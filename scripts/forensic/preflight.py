@@ -101,10 +101,11 @@ def compute_sha256(data: bytes) -> str:
 
 
 def write_sealed_json(path: Path, data: Any) -> tuple[str, str]:
-    """Atomically write JSON with sealing.
+    """Atomically write JSON with sealing and readback verification.
 
-    Pattern: serialize → hash → temp → fsync → rename.
-    Returns (hex_hash, file_path) or raises on failure.
+    Pattern: serialize → hash → temp → fsync → rename → readback → verify.
+    Raises IOError on write failure or readback hash mismatch.
+    Returns (hex_hash, file_path).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     json_bytes = json.dumps(data, indent=2, default=str, sort_keys=True).encode("utf-8")
@@ -126,6 +127,17 @@ def write_sealed_json(path: Path, data: Any) -> tuple[str, str]:
         except Exception:
             pass
         raise
+
+    # Read back and verify integrity
+    try:
+        readback_hash = compute_sha256(path.read_bytes())
+    except Exception as e:
+        raise IOError(f"Readback verification FAILED for {path}: cannot read — {e}")
+
+    if readback_hash != content_hash:
+        raise IOError(
+            f"Seal verification FAILED for {path}: "
+            f"written hash {content_hash}, readback hash {readback_hash}")
 
     print(f"  sealed {path.name}  sha256={content_hash[:16]}...", file=sys.stderr)
     return content_hash, str(path)

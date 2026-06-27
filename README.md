@@ -26,7 +26,7 @@ This repository is split between the protocol-agnostic Protocol Robustness Frame
 - `resources/test-vectors/` — Canonical conformance vectors.
 - `results/` — Generated local run outputs (not source).
 - `workspaces/` — Curated developer views and templates.
-- `integrations/` — Integration-specific projections (e.g. Cartesi).
+- `integration/` — Integration-specific projections (e.g. Cartesi).
 - `fixtures/` — Reusable test and demo inputs.
 - `notebooks/` — User-facing Clerk notebooks.
 - `examples/` — Stable educational examples and expected artifacts.

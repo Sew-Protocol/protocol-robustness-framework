@@ -799,8 +799,8 @@
    :task (apply shell "python3" "scripts/forensic/preflight.py" *command-line-args*)}
 
   forensic:run
-  {:doc "Run a forensic execution. Usage: bb forensic:run --run-request <path> [--label <label>] [--dry-run]"
-   :task (apply shell "python3" "scripts/forensic/run.py" *command-line-args*)}
+  {:doc "Run a forensic execution. Usage: bb forensic:run [--run-request <path>] [--label <label>] [--private-tmpfs] [--dry-run]"
+   :task (apply shell "bash" "scripts/forensic/run.sh" *command-line-args*)}
 
   forensic:verify
   {:doc "Verify a forensic run bundle. Usage: bb forensic:verify <run-dir>"

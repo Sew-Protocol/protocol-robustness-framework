@@ -86,11 +86,12 @@
    Mirrors BaseEscrow.sol call sites and StateManagementLibrary.sol guards.
    States with #{} outgoing edges are terminal (absorbing).
 
-   :resolved — defined in enum and library; no production call site currently
-               reaches it.  Guards in transition-to-resolved enforce that
-               accounting is settled before it may be entered."
+   :resolved — reachable from :pending via acceptSplit (mutual split settlement)
+               and from :disputed via acceptSplit or resolution.  Guards in
+               transition-to-resolved enforce that accounting is settled before
+               it may be entered."
   {:none      #{:pending}
-   :pending   #{:disputed :released :refunded}
+   :pending   #{:disputed :released :refunded :resolved}
    :disputed  #{:released :refunded :resolved}
    :resolved  #{}
    :released  #{}

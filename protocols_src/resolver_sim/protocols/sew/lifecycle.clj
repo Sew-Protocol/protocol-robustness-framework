@@ -192,7 +192,9 @@
                    (update :pending-settlements dissoc workflow-id)
                    (sm/apply-transition! workflow-id direction)
                    ;; Reset dispute/cancel statuses
-                   (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none))
+                   (update-in [:escrow-transfers workflow-id] assoc :sender-status :none :recipient-status :none)
+                   ;; Clean up dispute timestamp on terminal state
+                   (update :dispute-timestamps dissoc workflow-id))
         evidence-reason (if (= direction :released) :escrow-released :escrow-refunded)]
     (attr/with-attribution {:subject/type :escrow
                             :subject/id workflow-id
