@@ -5,25 +5,89 @@
 
  :concepts
  [{:concept/id    :ecommerce/purchase
-   :concept/file  "data/concepts/ecommerce.edn"
+    :concept/type  :use-case
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/use-case/ecommerce.edn"
    :concept/name  "Ecommerce purchase"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1}}
 
-  {:concept/id    :event/deposit
-   :concept/file  "data/concepts/event_deposits.edn"
+   {:concept/id    :event/deposit
+    :concept/type  :use-case
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/use-case/event_deposits.edn"
    :concept/name  "Event deposit"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1}}
 
-  {:concept/id    :spending-account/controlled-balance
-   :concept/file  "data/concepts/spending_accounts.edn"
+   {:concept/id    :spending-account/controlled-balance
+    :concept/type  :use-case
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/use-case/spending_accounts.edn"
    :concept/name  "Spending account — controlled balance"
    :concept/status :draft
    :concept/protocols #{:protocol/sew-v1}}
 
-  {:concept/id    :verifiable-assurance/forensic-confidence
-   :concept/file  "data/concepts/verifiable_assurance.edn"
+    {:concept/id    :marketplace/fixed-price
+     :concept/type  :use-case
+     :concept/layer :stakeholder
+     :concept/file  "data/concepts/use-case/fixed_price.edn"
+    :concept/name  "Fixed-price listing"
+    :concept/status :draft
+    :concept/protocols #{:protocol/sew-v1}}
+
+    {:concept/id    :verifiable-assurance/forensic-confidence
+     :concept/type  :assurance
+     :concept/layer :framework-explanation
+    :concept/file  "data/concepts/assurance/verifiable_assurance.edn"
    :concept/name  "Verifiable assurance — forensic confidence"
    :concept/status :draft
-   :concept/protocols #{:protocol/prf :protocol/sew-v1}}]}
+   :concept/protocols #{:protocol/prf :protocol/sew-v1}}
+
+   {:concept/id    :consensus/authority
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/authority.edn"
+   :concept/name  "Consensus authority"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :consensus/evidence
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/evidence.edn"
+   :concept/name  "Consensus evidence"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :consensus/finality
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/finality.edn"
+   :concept/name  "Consensus finality"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :consensus/escalation
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/escalation.edn"
+   :concept/name  "Consensus escalation"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :consensus/liveness
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/liveness.edn"
+   :concept/name  "Consensus liveness"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :consensus/legitimacy
+    :concept/type  :decision-quality
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/decision-quality/legitimacy.edn"
+   :concept/name  "Consensus legitimacy"
+   :concept/status :draft
+   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}]}

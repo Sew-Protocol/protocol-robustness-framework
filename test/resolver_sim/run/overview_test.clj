@@ -22,11 +22,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? false
               :scenario-path nil
-               :scenario-hash "abc123def456hash"
-               :replay-result {:outcome :pass :world-hash "abc"}
-               :execution/raw {:outcome :pass :world-hash "abc"}
-               :runner {:backend :local-current :protocol-id "sew-v1"}
-               :scenario {:scenario-id "S01"}}
+              :scenario-hash "abc123def456hash"
+              :replay-result {:outcome :pass :world-hash "abc"}
+              :execution/raw {:outcome :pass :world-hash "abc"}
+              :runner {:backend :local-current :protocol-id "sew-v1"}
+              :scenario {:scenario-id "S01"}}
              {:scenario-id "S02"
               :name "S02 [inline]"
               :pass? true
@@ -37,11 +37,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? false
               :scenario-path nil
-               :scenario-hash "456ghi789jklhash"
-               :replay-result {:outcome :pass}
-               :execution/raw {:outcome :pass}
-               :runner {:backend :local-current :protocol-id "sew-v1"}
-               :scenario {:scenario-id "S02"}}
+              :scenario-hash "456ghi789jklhash"
+              :replay-result {:outcome :pass}
+              :execution/raw {:outcome :pass}
+              :runner {:backend :local-current :protocol-id "sew-v1"}
+              :scenario {:scenario-id "S02"}}
              {:scenario-id "S03"
               :name "S03 [inline]"
               :pass? false
@@ -52,11 +52,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? true
               :scenario-path nil
-               :scenario-hash "mno012pqr345hash"
-               :replay-result {:outcome :fail :halt-reason "theory violation"}
-               :execution/raw {:outcome :fail :halt-reason "theory violation"}
-               :runner {:backend :local-current :protocol-id "sew-v1"}
-               :scenario {:scenario-id "S03"}}]
+              :scenario-hash "mno012pqr345hash"
+              :replay-result {:outcome :fail :halt-reason "theory violation"}
+              :execution/raw {:outcome :fail :halt-reason "theory violation"}
+              :runner {:backend :local-current :protocol-id "sew-v1"}
+              :scenario {:scenario-id "S03"}}]
    :summary {:passed 3 :total 3 :elapsed-ms 150 :ok? true}
    :diagnostics {:elapsed-ms 150 :suite-id :sew-invariants}})
 

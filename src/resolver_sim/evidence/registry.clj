@@ -96,12 +96,12 @@
             all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
                               (concat ev-files diff-files))
             artifacts (vec (sort-by :evidence/chain-seq
-                                     (keep (fn [f]
-                                             (try (io-evidence/read-evidence-json f)
-                                                  (catch Exception e
-                                                    (log/warn! "Failed to read evidence file for registry" {:path (str f) :error (.getMessage e)})
-                                                    nil)))
-                                           all-files)))
+                                    (keep (fn [f]
+                                            (try (io-evidence/read-evidence-json f)
+                                                 (catch Exception e
+                                                   (log/warn! "Failed to read evidence file for registry" {:path (str f) :error (.getMessage e)})
+                                                   nil)))
+                                          all-files)))
             ;; Extract run/scenario from first available
             first-artifact (first artifacts)
             run-id (or (:run/id first-artifact)

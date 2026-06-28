@@ -78,3 +78,113 @@
       :branch  (branch)
       :dirty?  (dirty?)
       :remotes (remotes)}}))
+
+(defn dirs-hash
+  "Deterministic SHA-256 hash of specific file paths relative to repo root.
+
+   Uses git ls-tree when available (fast, VCS-grounded, content-addressed).
+   Falls back to walking files from repo root, sorting by relative path,
+   and building a Merkle-style hash.
+
+   (dirs-hash \"src/\" \"protocols_src/\")
+   (dirs-hash \"deps.edn\" \"bb.edn\")
+
+   Accepts file paths and directory paths. Directories are walked recursively.
+   Returns 64-char hex string, or nil if repo root is unknown."
+  [& paths]
+  (let [paths (vec paths)]
+    (or (try
+          (when-let [r (root)]
+            (let [args (into ["ls-tree" "-r" "HEAD" "--"] paths)
+                  {:keys [exit out]} (apply sh "git" (conj args :dir r))]
+              (when (zero? exit)
+                (-> (sh "sha256sum" :in (str/trim out))
+                    :out
+                    (str/split #"\s+")
+                    first))))
+          (catch Exception _ nil))
+        (try
+          (when-let [r (root)]
+            (let [all-files (->> paths
+                                 (mapcat (fn [p]
+                                           (let [f (java.io.File. (str r "/" p))]
+                                             (cond
+                                               (.isDirectory f)
+                                               (->> (file-seq f)
+                                                    (filter (fn [^java.io.File x]
+                                                              (and (.isFile x)
+                                                                   (not (.isHidden x)))))
+                                                    (map #(.getAbsolutePath %)))
+                                               (.isFile f)
+                                               [(.getAbsolutePath f)]
+                                               :else []))))
+                                 (sort-by #(subs % (inc (count r))))
+                                 doall)
+                  pairs (map (fn [path]
+                               (let [rel (subs path (inc (count r)))]
+                                 (str rel ":"
+                                      (-> (sh "sha256sum" path) :out
+                                          (str/split #"\s+") first))))
+                             all-files)]
+              (when (seq pairs)
+                (-> (sh "sha256sum" :in (str/join "\n" pairs))
+                    :out
+                    (str/split #"\s+")
+                    first))))
+          (catch Exception _ nil)))))
+
+(defn code-hash
+  "Hash of source code: src/ and protocols_src/."
+  []
+  (dirs-hash "src/" "protocols_src/"))
+
+(defn deps-hash
+  "Hash of dependency configuration: bb.edn, deps.edn."
+  []
+  (dirs-hash "bb.edn" "deps.edn"))
+
+(defn input-hash
+  "Hash of scenario inputs: scenarios/ and data/fixtures/."
+  []
+  (dirs-hash "scenarios/" "data/fixtures/"))
+
+(defn dirty-diff-hash
+  "SHA-256 hash of the git diff against HEAD for execution-relevant paths.
+   Returns nil if repo is clean or VCS unavailable.
+   Required when allowing dirty override — commits to what changed."
+  []
+  (when (dirty?)
+    (or (try
+          (when-let [r (root)]
+            (let [{:keys [exit out]} (sh "git" "diff" "HEAD"
+                                         "--" "src/" "protocols_src/"
+                                         "bb.edn" "deps.edn"
+                                         :dir r)]
+              (when (and (zero? exit) (seq (str/trim out)))
+                (-> (sh "sha256sum" :in out)
+                    :out (str/split #"\s+") first))))
+          (catch Exception _ nil))
+        (try
+          (when-let [r (root)]
+            (let [{:keys [exit out]} (sh "jj" "diff" "-r" "@" "--git" :dir r)]
+              (when (and (zero? exit) (seq (str/trim out)))
+                (-> (sh "sha256sum" :in out)
+                    :out (str/split #"\s+") first))))
+          (catch Exception _ nil)))))
+
+(defn source-provenance
+  "Multi-dimensional source provenance for chain cursor and forensic attestations.
+
+   Returns {:git-commit-sha <string or nil>
+            :code-hash      <string or nil>
+            :deps-hash      <string or nil>
+            :input-hash     <string or nil>
+            :dirty?         <boolean>}
+   or nil when VCS root is unavailable (unknown source state)."
+  []
+  (when (root)
+    {:git-commit-sha (commit-sha)
+     :code-hash      (code-hash)
+     :deps-hash      (deps-hash)
+     :input-hash     (input-hash)
+     :dirty?         (boolean (dirty?))}))

@@ -72,7 +72,7 @@
         ts (:time trace-entry)
         diff-sha256 (stable-diff-hash changes)]
     {:schema/version "diff-evidence.v1"
-     :evidence/id (str "diff-" (subs (str diff-sha256) 0 8))
+     :evidence/id (str "diff-" (let [s (str diff-sha256)] (subs s 0 (min 8 (count s)))))
      :evidence/type :state-diff
      :evidence/layer :diff
      :evidence/role :diagnostic

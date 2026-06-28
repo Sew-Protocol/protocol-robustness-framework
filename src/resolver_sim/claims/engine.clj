@@ -69,6 +69,15 @@
      :evidence-count (count evidence-nodes)
      :dependency-failures dependency-failures}))
 
+(defn- dep-ids
+  "Extract claim IDs from :depends-on, handling both legacy keyword vectors
+   and enriched map vectors ({:claim-id <kw> :concept-hash <hex> ...})."
+  [deps]
+  (when deps
+    (if (and (sequential? deps) (every? map? deps))
+      (mapv :claim-id deps)
+      (vec deps))))
+
 (defn- cycle-path
   [graph node]
   (letfn [(visit [n stack seen]
@@ -127,7 +136,7 @@
                                   evidence-references (vec (or evidence-references []))
                                   missing-evidence (vec (remove available-evidence evidence-references))
                                   empty-evidence? (empty? evidence-references)
-                                  dependency-source (vec (or depends-on (:depends-on definition) []))
+                                  dependency-source (dep-ids (or depends-on (:depends-on definition)))
                                   missing-dependencies (vec (remove #(contains? result-map %) dependency-source))]
                               (cond-> []
                                 (nil? definition)
@@ -195,7 +204,7 @@
                        definition (or (get definition-map claim-id)
                                       (throw (ex-info "Unknown claim definition"
                                                       {:claim-id claim-id})))
-                       deps (vec (or (:depends-on definition) []))]
+                       deps (dep-ids (:depends-on definition))]
                    (when (some #{claim-id} seen)
                      (throw (ex-info "Circular claim dependency during evaluation"
                                      {:claim-id claim-id

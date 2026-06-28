@@ -146,7 +146,7 @@
   {:token             token
    :to                to
    :from              from
-   :amount-after-fee  (long amount-after-fee)
+    :amount-after-fee  amount-after-fee
    :initial-fee       (or initial-fee 0)
    :dispute-resolver  dispute-resolver
    :auto-release-time (or auto-release-time 0)

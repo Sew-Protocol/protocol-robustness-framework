@@ -167,11 +167,13 @@
                           :suite/key :protocol/default-id
                           :evidence/profile :output/profile])
         runner-id (get-in request [:runner-selection :runner-id])
+        orch-id (lookup-orchestrator-id runner-id)
         base {:bundle/schema-version schema-version
               :run/request (assoc req
                                   :registry-key (or (:registry-key request) :default)
-                                  :workspace (or (:workspace request) :current))
-              :orchestrator/id (lookup-orchestrator-id runner-id)
+                                  :workspace (or (:workspace request) :current)
+                                  :orchestrator/id orch-id)
+              :orchestrator/id orch-id
               :registry/snapshot (registry-snapshot)
               :run/environment (environment)
               :execution/summary (select-keys result [:totals :status])

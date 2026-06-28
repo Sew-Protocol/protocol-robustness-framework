@@ -24,13 +24,27 @@
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.timestamping :as ts]
             [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.logging :as log]))
+            [resolver-sim.logging :as log]
+            [resolver-sim.vcs :as vcs]))
 
 (declare cursor-snapshot)
+
+(def ^:dynamic *allow-dirty*
+  "Dynamic var override for :allow-dirty? in write-chain-cursor-final!.
+   Bind to true in dev/test contexts to allow dirty working copies with
+   a warning and dirty-diff-hash recorded in cursor-data.
+   Defaults to nil — falls back to :allow-dirty? option from the caller.
+   When neither is set, dirty state causes a hard failure."
+  nil)
 
 ;; ── Registry Atom ─────────────────────────────────────────────────────────
 
 (def ^:dynamic ^:private evidence-registry-atom
+  "Thread-local evidence chain registry atom.  Bound via with-fresh-registry
+   to give each thread its own isolated registry.  All access goes through
+   swap!/reset! — atomically safe within a single thread binding.  Dynamic
+   binding does NOT auto-propagate to spawned futures/threads; callers must
+   wrap async boundaries in (binding [evidence-registry-atom ...] ...)."
   (atom {:artifacts []
          :evidence-hashes []
          :run-id nil
@@ -59,6 +73,16 @@
      (binding [evidence-registry-atom fresh#]
        ~@body)))
 
+(defn with-fresh-registry*
+  "Thunk-based version of with-fresh-registry for use in higher-order
+   contexts (parallel test runner, use-fixtures) where a macro won't
+   work.  Calls (f) inside a fresh binding of evidence-registry-atom."
+  [f]
+  (let [fresh (atom {:artifacts [] :evidence-hashes []
+                     :run-id nil :run-label nil})]
+    (binding [evidence-registry-atom fresh]
+      (f))))
+
 (defn registry-snapshot
   "Return a snapshot of the current bound evidence registry atom.
    Useful for capturing scenario-local registry state inside
@@ -71,8 +95,11 @@
 ;; blocks so they can be aggregated into the top-level run registry.
 
 (def ^:dynamic ^:private scenario-evidence-atom
-  "Accumulator for scenario-local evidence registry/cursor snapshots.
-   Each entry is {:registry <snapshot> :cursor <snapshot>} from a scenario run."
+  "Thread-local accumulator for scenario-local evidence snapshots.
+   Each entry is {:registry <snapshot> :cursor <snapshot>} from a scenario run.
+   Bound together with evidence-registry-atom under with-fresh-registry.
+   Thread-safe via swap! within a single binding; does NOT auto-propagate
+   to spawned futures/threads — wrap async boundaries explicitly."
   (atom []))
 
 (defn reset-scenario-evidence!
@@ -123,8 +150,11 @@
 ;; ── Chain Cursor ──────────────────────────────────────────────────────────
 
 (def ^:dynamic ^:private chain-cursor
-  "Run-scoped evidence chain cursor for targeted event evidence.
-   Tracks sequence number and previous hash for chain linking."
+  "Thread-local evidence chain cursor for targeted event evidence.
+   Tracks sequence number and previous hash for chain linking.
+   Bound via with-fresh-chain-cursor to isolate per-thread cursor state.
+   Thread-safe via swap!/reset! within a single binding; does NOT
+   auto-propagate to spawned futures/threads."
   (atom {:seq 0 :last-hash nil}))
 
 (defn reset-chain-cursor!
@@ -336,6 +366,33 @@
        :cursor/final-self-hash (:last-hash c)
        :cursor/total-captured (:seq c)})))
 
+(defn enrich-cursor-data
+  "Add source provenance to a cursor snapshot.
+
+   Takes a cursor snapshot map and optional source-provenance map
+   (from vcs/source-provenance) plus an optional dirty-diff-hash.
+
+   When source-provenance is provided, includes :cursor/source in
+   cursor-data. If dirty-diff-hash is provided, it is merged into
+   the :cursor/source map.
+
+   Returns cursor-data map suitable for hashing, signing, or persistence.
+   This function is pure — no side effects."
+  ([snapshot]
+   (enrich-cursor-data snapshot (vcs/source-provenance) nil))
+  ([snapshot source-provenance]
+   (enrich-cursor-data snapshot source-provenance nil))
+  ([snapshot source-provenance dirty-diff-hash]
+   (let [base {:cursor/scope (:cursor/scope snapshot)
+               :cursor/final-seq (:cursor/final-seq snapshot)
+               :cursor/final-self-hash (:cursor/final-self-hash snapshot)
+               :cursor/total-captured (:cursor/total-captured snapshot)}]
+     (if source-provenance
+       (assoc base :cursor/source
+              (cond-> source-provenance
+                dirty-diff-hash (assoc :dirty-diff-hash dirty-diff-hash)))
+       base))))
+
 (defn write-chain-cursor-final!
   "Snapshot the chain cursor at run finalization and persist as
    chain-cursor-final.json. Registers the artifact for test-artifacts.json.
@@ -344,37 +401,65 @@
    When private-key-path is provided, signs the cursor content (final-seq +
    final-self-hash) and includes the Ed25519 signature in the artifact.
 
+   Optional:
+     :allow-dirty?     — when true, allows dirty working copy and includes
+                         dirty-diff-hash in cursor-data (default false)
+     :run-config-hash  — hex hash of run configuration parameters, added to
+                         :cursor/source map under :run-config-hash
+
+   Dirty policy:
+     Development:      dirty allowed with warning, dirty? recorded
+     Override:         allow-dirty? true + dirty-diff-hash committed
+     Default (CI/prod/attestation): throws on dirty
+
    One-shot: call once when the run completes (no new captures after)."
-  [& {:keys [dir private-key-path password]
+  [& {:keys [dir private-key-path password allow-dirty? run-config-hash]
       :or {password nil}}]
-  (when-let [snapshot (cursor-snapshot)]
-    (let [out-dir (or dir (str (evcfg/artifact-dir)))
-          f (io/file out-dir "chain-cursor-final.json")
-          cursor-data {:cursor/scope :targeted-evidence
-                       :cursor/final-seq (:cursor/final-seq snapshot)
-                       :cursor/final-self-hash (:cursor/final-self-hash snapshot)
-                       :cursor/total-captured (:cursor/total-captured snapshot)}
-          signed (when (and private-key-path (:cursor/final-self-hash snapshot))
-                   (let [cursor-hash (hc/hash-with-intent {:hash/intent :evidence-chain} cursor-data)
-                         sig (signing/sign-hash cursor-hash private-key-path password)]
-                     {:cursor/hash cursor-hash
-                      :cursor/signature sig
-                      :cursor/signer private-key-path
-                      :cursor/signed-at (now-iso)}))
-          artifact (merge {:schema/version "chain-cursor-final.v1"
-                           :run/id (get-in @evidence-registry-atom [:run-id] "unknown")}
-                          cursor-data
-                          (when signed
-                            {:cursor/forensic (dissoc signed :cursor/hash)
-                             :cursor/signed-hash (:cursor/hash signed)}))]
-      (.mkdirs (io/file out-dir))
-      (spit f (json/write-str artifact {:indent true}))
-      (println (str "Wrote chain-cursor-final.json: seq " (:cursor/final-seq snapshot)
-                    (when signed " [signed]")))
-      (register-additional-artifact!
-       (index-artifact-entry :chain-cursor-final "chain-cursor-final.json"
-                             "chain-cursor-final.v1" "DIAGNOSTIC"))
-      (.getPath f))))
+  (let [allow-dirty? (or allow-dirty? *allow-dirty* false)]
+    (when-let [snapshot (cursor-snapshot)]
+      (let [out-dir (or dir (str (evcfg/artifact-dir)))
+            f (io/file out-dir "chain-cursor-final.json")
+            source (vcs/source-provenance)
+            is-dirty (get source :dirty?)
+            diff-hash (when (and is-dirty allow-dirty?) (vcs/dirty-diff-hash))
+            source (cond-> source
+                     run-config-hash (assoc :run-config-hash run-config-hash))
+            cursor-data (enrich-cursor-data snapshot source diff-hash)]
+
+      ;; Enforce dirty policy
+        (when is-dirty
+          (if allow-dirty?
+            (println "WARN: Dirty working copy — including dirty-diff-hash in cursor-data")
+            (throw (ex-info "Dirty working copy - use :allow-dirty? true to override"
+                            {:dirty? true
+                             :hint "Re-run with --allow-dirty to include dirty-diff-hash in cursor-data"}))))
+
+        (let [signed (when (and private-key-path (:cursor/final-self-hash snapshot))
+                       (let [cursor-hash (hc/hash-with-intent {:hash/intent :evidence-chain} cursor-data)
+                             sig (signing/sign-hash cursor-hash private-key-path password)]
+                         {:cursor/hash cursor-hash
+                          :cursor/signature sig
+                          :cursor/signer private-key-path
+                          :cursor/signed-at (now-iso)}))
+              artifact (merge {:schema/version "chain-cursor-final.v1"
+                               :run/id (get-in @evidence-registry-atom [:run-id] "unknown")}
+                              cursor-data
+                              (when source
+                                {:code-hash      (:code-hash source)
+                                 :deps-hash      (:deps-hash source)
+                                 :input-hash     (:input-hash source)
+                                 :run-config-hash (:run-config-hash source)})
+                              (when signed
+                                {:cursor/forensic (dissoc signed :cursor/hash)
+                                 :cursor/signed-hash (:cursor/hash signed)}))]
+          (.mkdirs (io/file out-dir))
+          (spit f (json/write-str artifact {:indent true}))
+          (println (str "Wrote chain-cursor-final.json: seq " (:cursor/final-seq snapshot)
+                        (when signed " [signed]")))
+          (register-additional-artifact!
+           (index-artifact-entry :chain-cursor-final "chain-cursor-final.json"
+                                 "chain-cursor-final.v1" "DIAGNOSTIC"))
+          (.getPath f))))))
 
 ;; ── Evidence Registration ─────────────────────────────────────────────────
 
@@ -740,7 +825,10 @@
     (let [cursor (json/read-str (slurp (str dir "/chain-cursor-final.json"))
                                 :key-fn keyword)]
       (:cursor/final-self-hash cursor))
-    (catch Exception _ nil)))
+    (catch Exception e
+      (log/warn! :evidence-root-hash-read-failed
+                 {:dir dir :error (.getMessage e)})
+      nil)))
 
 (defn finalize-and-attest!
   "Full forensic-grade evidence chain finalization in one step.
@@ -772,28 +860,32 @@
       :cursor-path    path to chain-cursor-final.json or nil
       :tsa            TSA result map or nil
       :forensic?      boolean: all configured forensic checks passed}"
-  [& {:keys [run-id private-key-path password tsa-url dir]
+  [& {:keys [run-id private-key-path password tsa-url dir
+             allow-dirty? run-config-hash]
       :or {run-id "unknown" password nil}}]
-  (let [registry (build-registry :run-id run-id)
-        reg-hash (:registry-hash registry)
-        reg-path (write-registry! registry dir)
-        sig-result (write-registry-signature! registry
-                                              :private-key-path private-key-path
-                                              :password password
-                                              :dir dir)
-        cursor-path (write-chain-cursor-final!
-                     :dir dir
-                     :private-key-path private-key-path
-                     :password password)
-        tsa-url (or tsa-url ts/*tsa-url*)
-        tsa-result (when (and tsa-url reg-hash)
-                     (ts/write-tsa-timestamp! reg-hash
-                                              :tsa-url tsa-url
-                                              :dir dir))]
-    {:registry registry
-     :registry-path reg-path
-     :signature sig-result
-     :cursor-path cursor-path
-     :tsa tsa-result
-     :forensic? (boolean (or sig-result
-                             (and tsa-result (not (:error tsa-result)))))}))
+  (let [allow-dirty? (or allow-dirty? *allow-dirty* false)]
+    (let [registry (build-registry :run-id run-id)
+          reg-hash (:registry-hash registry)
+          reg-path (write-registry! registry dir)
+          sig-result (write-registry-signature! registry
+                                                :private-key-path private-key-path
+                                                :password password
+                                                :dir dir)
+          cursor-path (write-chain-cursor-final!
+                       :dir dir
+                       :private-key-path private-key-path
+                       :password password
+                       :allow-dirty? allow-dirty?
+                       :run-config-hash run-config-hash)
+          tsa-url (or tsa-url ts/*tsa-url*)
+          tsa-result (when (and tsa-url reg-hash)
+                       (ts/write-tsa-timestamp! reg-hash
+                                                :tsa-url tsa-url
+                                                :dir dir))]
+      {:registry registry
+       :registry-path reg-path
+       :signature sig-result
+       :cursor-path cursor-path
+       :tsa tsa-result
+       :forensic? (boolean (or sig-result
+                               (and tsa-result (not (:error tsa-result)))))})))

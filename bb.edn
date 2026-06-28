@@ -419,6 +419,21 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                       "-M" "-e"
                       "(require '[clojure.pprint :as pp] '[resolver-sim.io.scenario-runner :as sr]) (pp/print-table [:suite/key :suite/type :suite/protocols :suite/scenario-count :suite/title] (sr/known-suite-summaries))")))}
 
+  test:evidence {:doc "Run evidence-chain unit tests (node, chain, registry, attestation, integrity, qol)"
+                 :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner"
+                             "resolver-sim.evidence.node-test"
+                             "resolver-sim.evidence.chain-test"
+                             "resolver-sim.evidence.registry-test"
+                             "resolver-sim.evidence.qol-test"
+                             "resolver-sim.evidence.integrity-test"
+                             "resolver-sim.evidence.attestation-dag-test"
+                             "resolver-sim.evidence.attestation-test"
+                             "resolver-sim.evidence.attestation-node-test"
+                             "resolver-sim.evidence.attestation-registry-test"
+                             "resolver-sim.evidence.attestation-policy-test"
+                             "resolver-sim.evidence.timestamping-test"
+                             "resolver-sim.evidence.revocation-test")}
+
   test:generators {:doc "Run canonical generator/property regression target"
                    :task (shell "./scripts/test.sh generators")}
 
@@ -431,8 +446,24 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   test:dispute-resolution {:doc "Run dispute resolution coverage scenarios (S-DR-*)"
                             :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "dispute-resolution")}
 
-  test:suites {:doc "Run canonical fixture suites target"
+  test:suites {:doc "Run canonical fixture suites target (serial)"
                :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
+
+  test:suites:parallel
+  {:doc "Run canonical fixture suites in parallel (default 4 workers, set PARALLEL_WORKERS to tune)"
+   :task (shell "env" "PARALLEL_WORKERS=4" "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
+
+  test:parallel:smoke
+  {:doc "Smoke test: verify parallel suite dispatch matches serial results (4 suites)"
+   :task (shell "bash" "scripts/test_parallel_suites.sh")}
+
+  test:parallel:evidence-chain
+  {:doc "Test evidence chain integrity under concurrent scenario execution"
+   :task (shell "clojure" "-M:test:with-sew" "-i" "scripts/test_parallel_evidence_chain.clj")}
+
+  test:parallel:isolation
+  {:doc "Verify per-namespace artifact isolation in parallel runs"
+   :task (shell "clojure" "-M:test:with-sew" "-i" "scripts/test_artifact_isolation.clj")}
 
    test:triage {:doc "Run failure triage grouped by purpose/threat-tag"
                 :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "triage")}
@@ -598,8 +629,8 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                       (println "")
                       (println "Docs: docs/README.md  |  docs/quickstart/QUICKSTART.md"))}
 
-  notebook {:doc "Start Clerk notebook server (or reuse existing) at http://localhost:7777/notebooks/report"
-            :task (shell "bash" "-lc" "if ss -ltn '( sport = :7777 )' | grep -q 7777; then echo 'Notebook server already running at http://localhost:7777/notebooks/report'; else clojure -M -m notebooks.serve; fi")}
+   notebook {:doc "Start Clerk notebook server (or reuse existing) at http://localhost:7777/notebooks/report"
+             :task (shell "bash" "-lc" "if ss -ltn '( sport = :7777 )' | grep -q 7777; then echo 'Notebook server already running at http://localhost:7777/notebooks/report'; else clojure -M:with-sew -m notebooks.serve; fi")}
 
   slash:calc {:doc "Calculate waterfall slash amount. Usage: bb slash:calc <bond-amount> <slash-rate-bps>"
               :task (let [bond (or (first *command-line-args*) "0")
@@ -791,6 +822,18 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
    :task (apply clojure {:dir "." :extra-deps {}}
                 "-M" "-m" "resolver-sim.demo.recorder" *command-line-args*)}
 
+   concepts:validate
+   {:doc "Validate concept data: EDN parsing, required fields, registry integrity."
+    :task (clojure "-M" "scripts/concepts_validate.clj")}
+
+   benchmarks:validate
+   {:doc "Validate benchmark pack: parsing, required fields, scenario/concept/scoring references."
+    :task (clojure "-M" "scripts/benchmarks_validate.clj")}
+
+   benchmark:report
+   {:doc "Open the protocol robustness benchmark report in Clerk (requires running server)."
+    :task (shell "bash" "-c" "xdg-open http://localhost:7777/notebooks/benchmark_protocol_robustness 2>/dev/null || open http://localhost:7777/notebooks/benchmark_protocol_robustness 2>/dev/null || echo 'Navigate to: http://localhost:7777/notebooks/benchmark_protocol_robustness'")}
+
   demo:validate
   {:doc "Validate a demo spec. Usage: bb demo:validate <id>"
    :task (apply clojure {:dir "." :extra-deps {}}
@@ -960,6 +1003,51 @@ Usage: bb forensic:mailbox:validate <dir> [--run-request-hash <hash>] [--identit
 Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
    :task (apply shell "python3" "scripts/forensic/mailbox.py" "keygen" *command-line-args*)}
 
+  ;; ── Forensic hash tasks ────────────────────────────────────────────────
+
+  hash:source
+  {:doc "Compute source tree hash (git or jj VCS detection).
+         bb hash:source"
+   :task (clojure "-M" "-e"
+          "(require 'resolver-sim.forensic.source-hash) (flush) (System/exit (resolver-sim.forensic.source-hash/hash-source))")}
+
+  hash:deps
+  {:doc "Compute dependency classpath hash (resolved JARs).
+         bb hash:deps"
+   :task (clojure "-M:runner/sew" "-e"
+          "(require 'resolver-sim.forensic.deps-hash) (flush) (System/exit (resolver-sim.forensic.deps-hash/hash-deps))")}
+
+  hash:corpus
+  {:doc "Compute scenario corpus hash for a suite keyword.
+         bb hash:corpus :sew-invariants"
+   :task (clojure "-M:with-sew" "-e"
+          "(require 'resolver-sim.forensic.corpus-hash) (flush) (System/exit (resolver-sim.forensic.corpus-hash/hash-corpus *command-line-args*))")}
+
+  test:parity
+  {:doc "Verify hash parity across source checkout, clojure -M:runner/sew, and java -jar.
+         bb test:parity [scenario-path]"
+   :task (apply shell "./scripts/hash-parity-test.sh" *command-line-args*)}
+
+  test:reference
+  {:doc "Run the sew-reference-v1 suite and verify all scenarios pass.
+         bb test:reference"
+   :task (clojure "-M:runner/sew" "-m" "resolver-sim.minimal-runner" "--suite" "sew-reference-v1")}
+
+  ;; ── Forensic evidence tasks ─────────────────────────────────────────────
+
+  evidence:pack
+  {:doc "Package a run directory into a portable evidence pack.
+         Usage:
+           bb evidence:pack <run-id-or-dir>            — basic pack to ./evidence-pack-<name>/
+           bb evidence:pack <run-id-or-dir <out>       — pack to specific directory
+           bb evidence:pack <run-id-or-dir <out> --tar — also create .tar.gz"
+   :task (apply clojure "-M:with-sew" "-m" "resolver-sim.scripts.evidence-pack" "pack" *command-line-args*)}
+
+  evidence:verify
+  {:doc "Verify an evidence pack's file integrity.
+         Usage: bb evidence:verify <pack-dir>"
+   :task (apply clojure "-M:with-sew" "-m" "resolver-sim.scripts.evidence-pack" "verify" *command-line-args*)}
+
   ;; ── Build ──────────────────────────────────────────────────────────────
 
   build:core
@@ -974,4 +1062,24 @@ Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
 
   build
   {:doc "Build both uberjars (core + sew)."
-   :depends [build:core build:sew]}}}
+   :depends [build:core build:sew]}
+
+  sign:core
+  {:doc "GPG-sign the core uberjar for distribution.
+         Requires GPG key.  Produces target/*.jar.asc."
+   :task (shell "gpg" "--detach-sign" "--armor"
+          "target/prf-runner-core-0.1.0-uber.jar")}
+
+  sign:sew
+  {:doc "GPG-sign the sew uberjar for distribution."
+   :task (shell "gpg" "--detach-sign" "--armor"
+          "target/prf-runner-sew-0.1.0-uber.jar")}
+
+  sign
+  {:doc "Sign both uberjars."
+   :depends [sign:core sign:sew]}
+  
+  monitor
+  {:doc "Start JMX monitoring system"
+   :task (shell "clojure -M:test -m resolver-sim.monitoring")}
+}}

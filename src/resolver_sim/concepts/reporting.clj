@@ -18,9 +18,7 @@
    loaded concept definitions, return the report with an added
    :concept/section key containing stakeholder-facing summaries.
 
-   Currently returns nil — shape is defined but not integrated.
-   When activated, this fn will be called by the report pipeline
-   after scenario execution completes."
+   Called by the benchmark runner after scenario execution completes."
   [report concepts]
   {:concept/section
    {:concept/summaries
@@ -33,21 +31,14 @@
              :concept/out-of-scope (:concept/out-of-scope c)})
           concepts)
     :risk-annotations
-    (when-let [failure-modes (some :concept/failure-modes concepts)]
-      (mapv (fn [fm]
-              {:concept/failure-id (:failure/id fm)
-               :concept/failure-name (:failure/name fm)
-               :concept/failure-summary (:failure/summary fm)
-               :concept/stakeholder-impact (:stakeholder-impact fm)})
-            (flatten failure-modes)))}
-   :enriched-report report})
-
-(defn report-has-concepts?
-  "Check whether a report map has concept enrichment."
-  [report]
-  (contains? report :concept/section))
-
-;; ── Report section shape specification ───────────────────────────────────────
+    (let [all-failure-modes (mapcat :concept/failure-modes concepts)]
+      (when (seq all-failure-modes)
+        (mapv (fn [fm]
+                {:concept/failure-id (:failure/id fm)
+                 :concept/failure-name (:failure/name fm)
+                 :concept/failure-summary (:failure/summary fm)
+                 :concept/stakeholder-impact (:stakeholder-impact fm)})
+              all-failure-modes)))}})
 
 (comment "Expected shape of a concept-enriched report section:
 
@@ -65,9 +56,4 @@
        :concept/failure-name <string>
        :concept/failure-summary <string>
        :concept/stakeholder-impact <string>}
-      ...]}
-    :enriched-report <original-report-map>}
-
-   Integration point: the runner or report pipeline should call
-   `enrich-report` after scenario execution and before writing output.
-   The enriched report can then be serialised alongside the raw results.")
+      ...]}}")

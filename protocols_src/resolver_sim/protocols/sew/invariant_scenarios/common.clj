@@ -45,17 +45,18 @@
    :escrow-amount 5000})
 
 (defn kleros-params
-  "Build Kleros protocol params from a shared resolver fixture.
-   Allows fee/window overrides while keeping module/resolver wiring centralized."
-  ([] (kleros-params {}))
-  ([{:keys [resolver-fee-bps appeal-window-duration max-dispute-duration]
-     :or {resolver-fee-bps (:resolver-fee-bps kleros-defaults)
-          appeal-window-duration 0
-          max-dispute-duration 2592000}}]
-   (merge {:resolver-fee-bps resolver-fee-bps
-           :appeal-window-duration appeal-window-duration
-           :max-dispute-duration max-dispute-duration}
-          kleros-resolver-fixture)))
+   "Build Kleros protocol params from a shared resolver fixture.
+    Allows fee/window overrides while keeping module/resolver wiring centralized."
+   ([] (kleros-params {}))
+   ([{:keys [resolver-fee-bps appeal-window-duration max-dispute-duration]
+      :or {resolver-fee-bps (:resolver-fee-bps kleros-defaults)
+           appeal-window-duration 0
+           max-dispute-duration 2592000}}]
+    (merge {:resolver-fee-bps resolver-fee-bps
+            :appeal-window-duration appeal-window-duration
+            :max-dispute-duration max-dispute-duration
+            :resolver-bond-bps 0}
+           kleros-resolver-fixture)))
 
 (def kleros (kleros-params))
 

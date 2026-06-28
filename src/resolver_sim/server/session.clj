@@ -29,7 +29,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defonce ^{:dynamic true :private true
-            :doc "Atom: {session-id → {:world :context :lock :step-count}}"}
+           :doc "Atom: {session-id → {:world :context :lock :step-count}}"}
   sessions
   (atom {}))
 

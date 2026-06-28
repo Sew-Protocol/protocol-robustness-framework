@@ -5,6 +5,15 @@
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
  :benchmark/scoring-rule    :scoring/binary-claims-v1
+ :benchmark/concepts        [:ecommerce/purchase
+                             :event/deposit
+                             :consensus/authority
+                             :consensus/evidence
+                             :consensus/finality
+                             :consensus/escalation
+                             :consensus/liveness
+                             :consensus/legitimacy]
  :benchmark/claims          [:claim/dispute-liveness
-                             :claim/bounded-resolution-time
-                             :claim/slashing-conservation]}
+                            :claim/bounded-resolution-time
+                            :claim/slashing-conservation]}
+

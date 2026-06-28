@@ -47,7 +47,22 @@ references that specifies:
 | runner policy             | Execution parameters             |
 | evidence policy           | Evidence collection + hashing   |
 | scoring rule              | Pass/fail/mixed classification  |
+| concepts                  | Stakeholder-facing explanations  |
 | claims                    | Atomic properties under test    |
+
+## Concepts Layer
+
+Benchmark-specific concept definitions live under `concepts/`. These
+map low-level scenario mechanics, claims, and evidence types to
+stakeholder-readable language. Unlike the reusable use-case and
+decision-quality concepts in `data/concepts/`, benchmark concepts
+are specific to what a given benchmark evaluates.
+
+Each concept entry includes:
+- `:concept/title` and `:concept/summary` — what the concept means
+- `:concept/stakeholder-language` — plain-language explanation
+- `:concept/maps-to` — references to scenarios, claims, invariants, evidence
+- `:concept/why-it-matters` — why this property matters to users
 
 ## Key Boundaries
 
@@ -58,3 +73,16 @@ rules, artifact emission, runner attestations, and consensus.
 **Sew** (and other protocols) are benchmark subjects — they provide
 the protocol-specific scenarios, claims, and adapters that PRF runs
 through its infrastructure.
+
+## Running a Benchmark
+
+```bash
+# List available benchmarks
+bb benchmark:list
+
+# Run a benchmark by ID
+bb benchmark:run :benchmark/prf-protocol-robustness-v0
+
+# Reproduce from an evidence bundle
+bb benchmark:reproduce <evidence-path>
+```

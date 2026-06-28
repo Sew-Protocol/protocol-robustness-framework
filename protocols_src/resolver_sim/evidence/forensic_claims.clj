@@ -73,12 +73,14 @@
   "Register forensic claim definitions into the passive claim-definition-registry.
    Must be called after the passive registries namespace has loaded.
    Idempotent — re-registration with matching hashes is a no-op.
+   After registration, recomputes concept-hashes across all claim definitions
+   (passive + forensic) in topological order.
    
    This uses alter-var-root for startup registration (called once at load time
    from the protocols_src path), not for test isolation. The
    claim-definitions var in passive_registries.clj is NOT declared ^:dynamic
    because it is a static registry, not a per-test context.
-   
+    
    If this var ever needs per-test isolation, declare it ^:dynamic and use
    the same binding[] pattern as the with-fresh-registry macros."
   []
@@ -89,7 +91,10 @@
                               (hc/hash-with-intent {:hash/intent :claim-definition} entry)))
                      new-claims)]
     (when (seq hashed)
-      (alter-var-root (requiring-resolve 'resolver-sim.definitions.passive-registries/claim-definitions)
-                      into hashed)
+      (let [enrich-fn (ns-resolve 'resolver-sim.definitions.passive-registries 'enrich-claim-definitions)]
+        (alter-var-root (requiring-resolve 'resolver-sim.definitions.passive-registries/claim-definitions)
+                        (fn [existing]
+                          (let [combined (into existing hashed)]
+                            (enrich-fn combined)))))
       (println (str "Registered " (count hashed) " forensic claim definitions")))
     (count hashed)))

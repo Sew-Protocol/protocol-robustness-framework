@@ -5,7 +5,16 @@
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
  :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+ :benchmark/concepts        [:ecommerce/purchase
+                             :event/deposit
+                             :consensus/authority
+                             :consensus/evidence
+                             :consensus/finality
+                             :consensus/escalation
+                             :consensus/liveness
+                             :consensus/legitimacy]
  :benchmark/claims          [:claim/slashing-conservation
-                             :claim/waterfall-coverage-correct
-                             :claim/no-over-slashing
-                             :claim/appeal-bond-adequacy]}
+                            :claim/waterfall-coverage-correct
+                            :claim/no-over-slashing
+                            :claim/appeal-bond-adequacy]}
+

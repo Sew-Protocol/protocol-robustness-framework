@@ -1,0 +1,31 @@
+{:benchmark/id              :benchmark/prf-protocol-robustness-v0
+ :benchmark/domain          :domain/escrow-dispute-resolution
+ :benchmark/protocol        :protocol/prf
+  :benchmark/scenario-suite  :suite/reference-validation-v1
+ :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+ :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
+ :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
+  :benchmark/purpose
+  "Evaluate protocol robustness across three scenario-tested dimensions
+   (resolver accountability, liveness under adversarial load, fund safety
+   through pull-first settlement) plus a cross-cutting evidence-integrity
+   concept. Each dimension maps to a representative scenario from the Sew
+   reference-validation suite."
+ :benchmark/concepts       [:robustness/resolver-accountability
+                            :robustness/liveness-under-load
+                            :robustness/escrow-fund-safety
+                            :robustness/evidence-integrity]
+ :benchmark/scenarios
+ [{:scenario/id "malicious-resolver-verdict-v1"
+   :dimension   :robustness/resolver-accountability
+   :claim       :malicious-verdict-economically-bounded}
+  {:scenario/id "dispute-flooding-v1"
+   :dimension   :robustness/liveness-under-load
+   :claim       :liveness-under-adversarial-load}
+  {:scenario/id "autopush-settlement-v1"
+   :dimension   :robustness/escrow-fund-safety
+   :claim       :pull-first-settlement-safety}]
+ :benchmark/claims
+ [:malicious-verdict-economically-bounded
+  :liveness-under-adversarial-load
+  :pull-first-settlement-safety]}

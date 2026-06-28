@@ -6,6 +6,7 @@
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,
+  :cancellations-recipient 1,
   :invariant-violations 0,
   :yield/unrealized 0,
   :yield/position-unrealized 0,
@@ -15,6 +16,7 @@
   :yield/escrow-realized 0,
   :attack-attempts 0,
   :recipient/claimable 0,
+  :cancellations-auto-dispute 0,
   :yield/available-ratio 1.0,
   :double-settlements 0,
   :buyer/claimable 0,
@@ -55,8 +57,41 @@
   :yield/position-realized 0,
   :yield/escrow-principal 0,
   :yield/position-principal 0,
+  :cancellations-sender 0,
   :expected-reverts 0,
   :negative-payoff-count 0,
   :escrow/live-state "pending",
   :batch-buckets 0},
- :outcome :pass}
+ :outcome :pass,
+ :theory
+ {:equilibrium-reasons {},
+  :diagnostics
+  {:claim-status :not-applicable,
+   :falsification-status :not-applicable,
+   :evidence-completeness :not-required,
+   :grounded? true,
+   :assumption-status :not-declared,
+   :declared-assumptions [],
+   :theory-eval-profile :regression},
+  :equilibrium-summary
+  {:cancellation-dominance
+   {:status :inconclusive,
+    :basis :absent-evidence,
+    :severity :soft,
+    :display-label "Proxy check inconclusive"}},
+  :claim-id :claims/cancellation-status-leak-regression,
+  :evaluator-version "theory-eval-v2",
+  :theory-result-schema-version "1.2",
+  :reason :no-metric-falsification-claim,
+  :mechanism-summary
+  {:force-refund-path-integrity
+   {:status :pass,
+    :basis :single-trace-terminal-proxy,
+    :severity :hard,
+    :display-label "Proxy check passed"}},
+  :status :not-falsified,
+  :falsified? false,
+  :equilibrium-status :inconclusive,
+  :mechanism-reasons {},
+  :mechanism-status :pass,
+  :display-label "Not falsified in this replay"}}

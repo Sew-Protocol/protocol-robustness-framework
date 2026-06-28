@@ -1,4 +1,6 @@
 {:concept/id :spending-account/controlled-balance
+ :concept/type :use-case
+ :concept/layer :stakeholder
  :concept/name "Spending account — controlled balance"
  :concept/summary
  "A user maintains a balance that can be spent up to a limit, with
@@ -15,9 +17,11 @@
 
  :concept/roles
  {:account-holder
-  {:description "User who owns the spending account."
-   :maps-to [:protocol.actor/sender :protocol.actor/recipient]}
-  :spending-authority
+   {:description "User who owns the spending account."
+    :maps-to [:protocol.actor/sender :protocol.actor/recipient]
+    :mapping/confidence :approximate
+    :mapping/note "Account holder acts as sender or recipient depending on operation"}
+   :spending-authority
   {:description "Party or module that authorises individual spends."
    :maps-to [:protocol.actor/resolver]}
   :depositor
@@ -32,9 +36,11 @@
   {:description "The balance abstraction tracking available funds."
    :maps-to [:protocol.entity/escrow-aggregate]}
   :hold
-  {:description "A pending charge against the balance."
-   :maps-to [:protocol.entity/dispute :protocol.entity/pending-release]}
-  :withdrawal
+   {:description "A pending charge against the balance."
+    :maps-to [:protocol.entity/dispute :protocol.entity/pending-release]
+    :mapping/confidence :approximate
+    :mapping/note "Hold maps to dispute when contested, pending-release when uncontested"}
+   :withdrawal
   {:description "Funds moved out of the account to an external address."
    :maps-to [:protocol.entity/funds]}
   :deposit
@@ -47,19 +53,19 @@
  :concept/actions
  {:deposit-funds
   {:description "Add funds to the account."
-   :maps-to ["create-escrow"]}
+   :maps-to [:protocol.action/create-escrow]}
   :place-hold
   {:description "Reserve funds for a pending spend."
-   :maps-to ["dispute" "submit-evidence"]}
+   :maps-to [:protocol.action/dispute :protocol.action/submit-evidence]}
   :release-hold
   {:description "Remove a hold, making funds available again."
-   :maps-to ["resolve" "settle"]}
+   :maps-to [:protocol.action/resolve :protocol.action/settle]}
   :withdraw
   {:description "Move available funds out of the account."
-   :maps-to ["release"]}
+   :maps-to [:protocol.action/release]}
   :freeze-account
   {:description "Governance suspends all account operations."
-   :maps-to ["governance-intervention"]}}
+   :maps-to [:protocol.action/governance-intervention]}}
 
  :concept/outcomes
  {:withdrawal-completed
@@ -75,8 +81,10 @@
   {:description "Funds released without proper authorisation."
    :maps-to [:protocol.outcome/adversarial-resolution]}
   :balance-lost
-  {:description "Account holder loses access to some or all balance."
-   :maps-to [:protocol.outcome/stuck :protocol.outcome/slashed]}}
+   {:description "Account holder loses access to some or all balance."
+    :maps-to [:protocol.outcome/stuck :protocol.outcome/slashed]
+    :mapping/confidence :approximate
+    :mapping/note "Balance may be stuck (locked) or slashed (penalized) depending on cause"}}
 
  :concept/failure-modes
  [{:failure/id :over-draw
@@ -99,23 +107,6 @@
    "Governance or resolver freezes the account without proper authority."
    :protocol-mechanisms [:governance-checks :resolver-scope :appeal]
    :stakeholder-impact "Account holder cannot access funds."}]
-
- :concept/metrics
- {:account-balance
-  {:description "Current available balance."
-   :source :derived-from-trace}
-  :holds-active
-  {:description "Number of holds currently reserved."
-   :source :derived-from-trace}
-  :holds-resolved
-  {:description "Number of holds that reached terminal state."
-   :source :derived-from-trace}
-  :withdrawal-count
-  {:description "Number of successful withdrawals."
-   :source :derived-from-trace}
-  :double-spend-attempts
-  {:description "Number of rejected over-draw attempts."
-   :source :derived-from-protocol-metrics}}
 
  :concept/assumptions
  ["The balance is modelled as a derived view over escrow and dispute states."

@@ -81,7 +81,7 @@
                    :fontSize "11px"
                    :fontWeight "800"
                    :color color}}
-      (if pass? "✔" "✘") " " (str/upper-case (str id)) ": " (if pass? "OK" "FAIL")]))
+     (if pass? "✔" "✘") " " (str/upper-case (str id)) ": " (if pass? "OK" "FAIL")]))
 
 ;; ---
 ;; P7: Protocol Response Marker (V-RES)

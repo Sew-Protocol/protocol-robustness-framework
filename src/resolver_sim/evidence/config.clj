@@ -20,6 +20,13 @@
   []
   @config)
 
+(def ^:dynamic *artifact-dir*
+  "Thread-local override for artifact directory.
+   When set via binding, artifact-dir returns this value instead of
+   consulting env var / config file. Used by parallel test runner to
+   give each namespace its own artifact directory."
+  nil)
+
 (defn schema
   "Resolve a schema key to its version string, e.g. (schema :test-summary) → \"test-summary.v2\""
   [k]
@@ -60,11 +67,13 @@
 
 (defn artifact-dir
   "Return the artifact directory path.
-   Checks PRF_ARTIFACT_DIR env var first (for per-run workspaces),
-   falls back to config/evidence.json's artifact_dir,
-   then to a default 'results/test-artifacts' for standalone operation."
+   Checks *artifact-dir* thread-local override first (for per-thread isolation),
+   then PRF_ARTIFACT_DIR env var (for per-run workspaces),
+   then config/evidence.json's artifact_dir,
+   then a default 'results/test-artifacts' for standalone operation."
   []
-  (or (System/getenv "PRF_ARTIFACT_DIR")
+  (or *artifact-dir*
+      (System/getenv "PRF_ARTIFACT_DIR")
       (get (get-config) :artifact_dir)
       "results/test-artifacts"))
 

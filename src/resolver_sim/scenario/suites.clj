@@ -95,6 +95,28 @@
    "scenarios/S-DR-084-evidence-after-settlement-rejected.json"
    "scenarios/S-DR-085-repeated-frivolous-disputes.json"])
 
+(def ^:private sew-reference-scenario-paths
+  "Curated reference scenarios for external verifier reproducibility.
+   All scenarios are cancellation/terminal-state traces that exercise
+   the core griefing-protection, same-timestamp, and auto-cancel paths.
+   Each file is a standalone .trace.json — no Clojure source needed."
+  ["data/fixtures/traces/s-auto-cancel-time-via-keeper.trace.json"
+   "data/fixtures/traces/s-auto-cancel-time-boundary.trace.json"
+   "data/fixtures/traces/s-auto-cancel-time-orphaned-by-dispute.trace.json"
+   "data/fixtures/traces/s-same-timestamp-auto-cancel-vs-dispute.trace.json"
+   "data/fixtures/traces/s-same-timestamp-dispute-vs-auto-cancel.trace.json"
+   "data/fixtures/traces/s-extortion-unilateral-cancel.trace.json"
+   "data/fixtures/traces/s-extortion-unilateral-cancel-dual.trace.json"])
+
+(def ^:private reference-validation-scenario-paths
+  "Reference validation v1 scenarios — simulator-backed scenarios
+   covering resolver accountability, dispute-flooding liveness, and
+   autopush settlement safety.  Used by the protocol-robustness-v0
+   benchmark pack."
+  ["scenarios/S25_profit-maximizer-slash-lifecycle.json"
+   "scenarios/S62_resolver-throughput-exhaustion.json"
+   "scenarios/S05_pending-settlement-execute.json"])
+
 (def ^:private yield-scenario-paths
   ["scenarios/S78_yield-aave-partial-liquidity-release.json"
    "scenarios/S78_yield-negative-yield-release-path.json"
@@ -138,7 +160,15 @@
                                   :title        "Yield provider scenarios"
                                   :description  "Standalone yield-v1 scenarios backed by canonical top-level scenarios/Y01..Y05 files."
                                   :kind         :file-path-suite
-                                  :ci-tier      :provider}})
+                                  :ci-tier      :provider}
+   :sew-reference-v1             {:paths        sew-reference-scenario-paths
+                                  :protocol-id  "sew-v1"
+                                  :title        "Sew reference v1 — external verifier suite"
+                                  :description  "Curated reference scenarios for external-verifier reproducibility.
+                                                  Tests cancellation griefing protection, auto-cancel-time, same-timestamp
+                                                  ordering, and extortion resistance.  All files are standalone .trace.json."
+                                  :kind         :file-path-suite
+                                  :ci-tier      :reference}})
 
 (def pack-suites
   "Benchmark pack suite keywords — used by benchmarks/packs/*/ manifests.
@@ -175,11 +205,20 @@
                                   :protocol-id  "sew-v1"
                                   :title        "PRF deterministic replay benchmark suite"
                                   :description  "Core deterministic replay scenarios for benchmark execution.
-                                   NOTE: currently points to Sew dispute-resolution scenarios because
-                                   PRF-specific replay scenarios do not yet exist.  A genuine PRF replay
-                                   suite would contain protocol-agnostic replay/evidence scenarios."
+                                    NOTE: currently points to Sew dispute-resolution scenarios because
+                                    PRF-specific replay scenarios do not yet exist.  A genuine PRF replay
+                                    suite would contain protocol-agnostic replay/evidence scenarios."
                                   :kind         :file-path-suite
-                                  :ci-tier      :coverage}})
+                                  :ci-tier      :coverage}
+
+   :suite/reference-validation-v1 {:paths        reference-validation-scenario-paths
+                                   :protocol-id  "sew-v1"
+                                   :title        "Reference validation v1 — protocol robustness scenarios"
+                                   :description  "Simulator-backed scenarios for resolver accountability,
+                                     liveness under adversarial load, and autopush settlement safety.
+                                     Used by the protocol-robustness-v0 benchmark pack."
+                                   :kind         :file-path-suite
+                                   :ci-tier      :coverage}})
 
 (defn- resolve-suite-registry
   "Return the registry map for a suite keyword — checks `suites` first,

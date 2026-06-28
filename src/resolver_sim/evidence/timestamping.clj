@@ -274,11 +274,11 @@
               imprint (.getMessageImprintDigest ts-info)
               expected (sha-256-digest (.getBytes registry-hash "UTF-8"))
               digest-match (java.util.Arrays/equals imprint expected)
-               envelope (when (.exists tsa-file)
-                          (try (json/read-str (slurp tsa-file) :key-fn keyword)
-                               (catch Exception e
-                                 (log/warn! "Failed to read TSA envelope" {:path (str tsa-file) :error (.getMessage e)})
-                                 nil)))]
+              envelope (when (.exists tsa-file)
+                         (try (json/read-str (slurp tsa-file) :key-fn keyword)
+                              (catch Exception e
+                                (log/warn! "Failed to read TSA envelope" {:path (str tsa-file) :error (.getMessage e)})
+                                nil)))]
           {:timestamp/verified? digest-match
            :timestamp/gen-time (str (.getGenTime ts-info))
            :timestamp/serial (str (.getSerialNumber ts-info))

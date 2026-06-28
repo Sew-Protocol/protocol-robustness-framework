@@ -48,7 +48,9 @@
     (is (= :pinned (get-in req [:runner-selection :mode])))
     (is (= :runner/local-bb (get-in req [:runner-selection :runner-id])))
     (is (= :sew-invariants (:suite/key req)))
-    (is (= "sew-v1" (:protocol/default-id req)))))
+    (is (= "sew-v1" (:protocol/default-id req)))
+    (is (= :orchestrator/run-and-report-v1 (:orchestrator/id req)))
+    (is (= :orchestrator/run-and-report-v1 (:orchestrator/id bundle)))))
 
 (deftest build-bundle-root-execution-summary
   (let [bundle (br/build-bundle-root sample-request sample-result)]

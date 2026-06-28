@@ -5,8 +5,17 @@
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
  :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+ :benchmark/concepts        [:ecommerce/purchase
+                             :event/deposit
+                             :consensus/authority
+                             :consensus/evidence
+                             :consensus/finality
+                             :consensus/escalation
+                             :consensus/liveness
+                             :consensus/legitimacy]
  :benchmark/claims          [:claim/no-unauthorized-release
-                             :claim/funds-conserved
-                             :claim/dispute-liveness
-                             :claim/slashing-conservation
-                             :claim/governance-non-interference]}
+                            :claim/funds-conserved
+                            :claim/dispute-liveness
+                            :claim/slashing-conservation
+                            :claim/governance-non-interference]}
+

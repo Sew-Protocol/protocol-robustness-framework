@@ -1,4 +1,6 @@
 {:concept/id :ecommerce/purchase
+ :concept/type :use-case
+ :concept/layer :stakeholder
  :concept/name "Ecommerce purchase"
  :concept/summary
  "A buyer pays a merchant through escrow. Funds are released, refunded,
@@ -41,22 +43,22 @@
  :concept/actions
  {:place-order
   {:description "Buyer commits funds for the purchase."
-   :maps-to ["create-escrow"]}
+   :maps-to [:protocol.action/create-escrow]}
   :confirm-delivery
   {:description "Buyer confirms receipt; funds are released to merchant."
-   :maps-to ["release"]}
+   :maps-to [:protocol.action/release]}
   :request-refund
   {:description "Buyer requests cancellation before release."
-   :maps-to ["cancel"]}
+   :maps-to [:protocol.action/cancel]}
   :claim-non-delivery
   {:description "Buyer disputes fulfillment."
-   :maps-to ["dispute" "submit-evidence"]}
+   :maps-to [:protocol.action/dispute :protocol.action/submit-evidence]}
   :resolve-claim
   {:description "Resolver determines who receives funds."
-   :maps-to ["resolve" "settle"]}
+   :maps-to [:protocol.action/resolve :protocol.action/settle]}
   :appeal-resolution
   {:description "Party challenges a resolver decision."
-   :maps-to ["appeal" "escalate"]}}
+   :maps-to [:protocol.action/appeal :protocol.action/escalate]}}
 
  :concept/outcomes
  {:merchant-paid
@@ -104,30 +106,12 @@
    :protocol-mechanisms [:bonding :slashing :evidence-requirements]
    :stakeholder-impact "Protocol reserves or resolver bonds are drained."}]
 
- :concept/metrics
- {:orders-placed
-  {:description "Number of escrows created."
-   :source :derived-from-trace}
-  :orders-disputed
-  {:description "Number of purchase flows entering dispute."
-   :source :derived-from-trace}
-  :orders-resolved
-  {:description "Number of disputed purchase flows with terminal outcome."
-   :source :derived-from-trace}
-  :customer-funds-locked
-  {:description "Funds still unavailable at terminal state."
-   :source :derived-from-protocol-metrics}
-  :merchant-payout-time
-  {:description "Time from order placement to merchant payment."
-   :source :derived-from-trace}}
-
  :concept/assumptions
- ["The simulator models protocol-level escrow/dispute mechanics, not physical shipping."
-  "Fulfillment facts are represented through scenario events and evidence assumptions."
+ ["A buyer and merchant are identifiable protocol actors."
+  "The escrow balance represents the payment amount."
   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
- ["Real-world logistics."
-  "Payment processor chargeback rules."
-  "Consumer protection law."
-  "Off-chain identity or fraud detection."]}
+ ["Real-world shipping, delivery logistics, or product quality."
+  "Chargebacks, fraud detection, or payment card networks."
+  "Dispute resolution outside the protocol (courts, arbitration)."]}

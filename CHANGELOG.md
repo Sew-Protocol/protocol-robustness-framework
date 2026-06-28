@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added (2026-06-29)
+
+- **Protocol robustness v0 benchmark pack:** Created `prf-core/protocol-robustness-v0.edn` — evaluates 4 robustness dimensions (resolver accountability, liveness under load, fund safety, evidence integrity) across 3 Sew reference-validation scenarios. Includes per-dimension scoring with pass conditions and benchmark-specific concept mappings. (`benchmarks/packs/prf-core/protocol-robustness-v0.edn`, `benchmarks/concepts/protocol-robustness-v0.edn`, `benchmarks/scoring/robustness-dimensions-v0.edn`)
+- **`bb benchmarks:validate` task:** Lightweight CLJ script that validates benchmark pack structure, concept files, scoring definitions, scenario references, and concept ID consistency. (`scripts/benchmarks_validate.clj`, `bb.edn`)
+- **Benchmark report backend:** `resolver-sim.benchmark.report` namespace — loads evidence bundles, merges scenario results with concept definitions and scoring rules, builds a dimension-indexed report data structure. (`src/resolver_sim/benchmark/report.clj`)
+- **Protocol robustness Clerk notebook:** `notebooks/benchmark_protocol_robustness.clj` — renders dimension results, scoring detail, invariant summary, evidence trail, and concept reference from a running Clerk server. (`notebooks/benchmark_protocol_robustness.clj`)
+- **`bb benchmark:report` task:** Opens the benchmark report notebook in the browser. (`bb.edn`)
+- **Suite registration for reference-validation-v1:** Added `:suite/reference-validation-v1` to `pack-suites` registry, mapping 3 simulator-backed scenarios for the protocol-robustness-v0 benchmark. (`src/resolver_sim/scenario/suites.clj`)
+
 ### Build (2026-06-28)
 
 - **Minimal uberjar runner spike:** Created `prf-runner-core-0.1.0-uber.jar` (5.6 MB, `resolver-sim.replay-core`) and `prf-runner-sew-0.1.0-uber.jar` (18 MB, `resolver-sim.minimal-runner`). Source-only build (no AOT), uses `clojure.main` as `Main-Class`. Works from `/tmp` with no source tree, no Clojure CLI. Added `build.clj` with `tools.build` tasks and `bb build:core`/`bb build:sew` commands. (`build.clj`, `bb.edn`, `deps.edn`)
@@ -19,7 +28,38 @@
 
 - **Stale `test:forensic-python` task path:** Referenced `tests/forensic/` which didn't exist; corrected to `tests/forensic_python/`. (`bb.edn:707`)
 
+- **`test:notebooks` timeout guard:** Added per-notebook timeout (120s) to `scripts/test_notebooks.clj` using `future` + `deref` with timeout value. Notebooks that hang during `require` (expensive top-level computations like scenario replay or trace loading) are now reported as timed-out failures instead of blocking the entire `bb validate` pipeline indefinitely. (`scripts/test_notebooks.clj`)
+
+- **`scenario-hash` fallback for nil `:scenario-id`:** `stable-scenario-entry` in `overview.clj` now falls back to hashing all available stable fields when `:scenario-id` is nil (instead of hashing only `:scenario-id` + `:dispatcher-id` which would produce a meaningless hash when both are nil). (`src/resolver_sim/run/overview.clj`)
+
+- **Silent exception swallowing in evidence-chain code:** Added `log/warn!` to `evidence-root-hash` catch block in `chain.clj` — previously discarded all exceptions silently. (`src/resolver_sim/evidence/chain.clj:743`)
+
+- **Unguarded `subs` calls in evidence code:** Added length guards to 6 `subs` call sites that would crash on short or nil hashes: `forensic_populate.clj` (3 sites), `attestation_node.clj`, `attestation_registry.clj`, `diff.clj`. All now use `(min N (count val))` pattern consistent with existing guarded sites. (`src/resolver_sim/evidence/forensic_populate.clj`, `src/resolver_sim/evidence/attestation_node.clj`, `src/resolver_sim/evidence/attestation_registry.clj`, `src/resolver_sim/evidence/diff.clj`)
+
+- **Broken `evidence_coverage.clj` compilation:** Removed extra unmatched `)` delimiter on line 14 that caused the `(:require ...)` form to be parsed outside the `ns` declaration, producing `ClassNotFoundException`. (`src/resolver_sim/scripts/evidence_coverage.clj:14`)
+
+### Fixed (2026-06-29)
+
+- **Dispatch execution now uses actual run summaries and single bundle output:** `run-and-report` now rejects ambiguous dispatch maps, executes dispatch branches without inner printing, derives bundle totals/results from the actual summary, prints reports after execution-node wrapping, and writes `:output-file` once as the enriched bundle root instead of emitting a raw inner replay result. (`src/resolver_sim/io/scenario_runner.clj`, `test/resolver_sim/scenario/runner_test.clj`)
+
 ### Added (2026-06-28)
+
+- **`bb test:evidence` task:** Added parallel evidence-chain test task covering 10 test namespaces (node, chain, registry, qol, integrity, attestation-dag, attestation-node, attestation-registry, attestation-policy, timestamping, revocation). Runs via `scripts/parallel-test-runner` with per-namespace artifact isolation. (`bb.edn`)
+
+- **Concurrency documentation for evidence chain dynamic vars:** Added explicit thread-safety contracts to `evidence-registry-atom`, `scenario-evidence-atom`, and `chain-cursor` docstrings — documents that dynamic binding does NOT auto-propagate to spawned futures/threads and must be wrapped explicitly. (`src/resolver_sim/evidence/chain.clj`)
+
+- **Fixture suite parallelization:** Created `scripts/run_suite.clj` — single-suite entry point (`-m scripts.run-suite :suites/<key>`). Refactored `test.sh run_suites` to dispatch all 16 fixture suites as concurrent background JVMs, throttled by `PARALLEL_WORKERS` (default 4). Added `bb test:suites:parallel` task. Each suite writes its result to a distinct `suite-<name>.json` file — no file conflicts. (`scripts/run_suite.clj`, `scripts/test.sh`, `bb.edn`)
+
+- **Parallel execution safety tests:** Created `scripts/test_parallel_suites.sh` — smoke test that runs 4 suites serially and in parallel, comparing outcomes (identical). Created `scripts/test_parallel_evidence_chain.clj` — tests evidence chain integrity under concurrent scenario execution (10, 50, 100 parallel scenarios, verifies all snapshots collected). Added `bb test:parallel:smoke` and `bb test:parallel:evidence-chain` tasks. (`scripts/test_parallel_suites.sh`, `scripts/test_parallel_evidence_chain.clj`, `bb.edn`)
+
+### Fixed (2026-06-29)
+
+- **Fixture suite expectation mismatches (7 suites, 16 traces):** Protocol presets activate resolver stake requirements via `resolver-bond-bps` (default 1000/1500/2000), but all failing trace files predated this requirement — they never registered resolver stakes, so `raise-dispute` failed silently and escrows stayed in `:pending`. Added `"protocol-params": {"resolver-bond-bps": 0}` to 16 trace files (`same-block-ordering`, `s19`, `s23`, `s49`, `governance-decay-exploit`, `eq-v*`, `s26-s33` forking-strategist). Matches pattern used by invariant scenarios. All 7 suites now pass. (`data/fixtures/traces/*.trace.json`)
+
+- **suites_test.clj not expecting `:sew-reference-v1`:** The `registry-exposes-canonical-suite-keys` test hardcoded exactly 3 expected suite keys but the `suites` map now includes `:sew-reference-v1` (added for external verifier reproducibility). Added to `expected-suite-keys`. (`test/resolver_sim/scenario/suites_test.clj:12-16`)
+
+### Known Issues (Fixed)
+- ~**7 fixture suites report expectation mismatches (pre-existing):**~ **Fixed.** Root cause: protocol activates resolver stake requirements via `resolver-bond-bps` in snapshot presets, but fixture trace files predated this requirement and never registered resolver stakes. Added `:protocol-params {:resolver-bond-bps 0}` to all 16 failing trace files (`same-block-ordering`, `s19`, `s23`, `s49`, `governance-decay-exploit`, `eq-v*`, `s26-s33` forking-strategist). This matches the pattern used by invariant scenarios (`common.clj:26-37`) which set `resolver-bond-bps 0` for traces that don't test staking behavior. All 7 suites now pass.
 
 - **Notebook load validation:** Created `scripts/test_notebooks.clj` — loads all 31 notebook namespaces via `require`, reports pass/fail exits non-zero on failure. Added `bb test:notebooks` task and all-notebooks-load check to `bb validate` pipeline. 31/31 notebooks pass. (`scripts/test_notebooks.clj`, `bb.edn`)
 
@@ -43,6 +83,8 @@
 
 - **5 weakest notebooks archived:** Moved `shortfall_fairness.clj`, `evidence_drawer.clj`, `evidence_explorer.clj`, `challenge_drilldown.clj`, `yield_shortfall_analysis.clj` to `notebooks/archive/`. Removed from registry and `serve.clj`. Restored `yield_demo.clj` from archive — 2 active notebooks depend on it. (`notebooks/archive/`, `data/notebooks.edn`, `src/notebooks/serve.clj`)
 
+- **Removed dead `:layering-lint` alias:** The `layering-lint` namespace referenced by `deps.edn` and `test.sh` never existed on disk. Removed the alias, the `run_layering_lint` function, its case handler, `all` target invocation, and usage string entry. (`deps.edn`, `scripts/test.sh`)
+
 - **Parallel test mailboxes use temp output dirs:** All 7 `consensus.run_consensus` calls in `test_mailbox.py` now pass `output_dir=tmp_path` — prevents parallel worker race on `consensus-results/`. (`tests/forensic_python/test_mailbox.py`)
 
 ### Notes
@@ -54,11 +96,9 @@
 - **Register `:scenario` intent in projection-definition-registry:** Currently in `canonical.clj` intents map + domain-tags, but no entry in `passive_registries.clj:projection-definitions`. Works for hashing, but projection-registry validation skips it.
 - **Wire `orchestrator/id` into run request:** Currently only in bundle root top-level. Could be embedded in run request for forward-provenance.
 - **`:scenario-filtering` never triggers:** The condition `(:scenario-filter dispatch)` exists in `scenario_runner.clj` but no dispatch path sets this key. Needs a CLI option or API.
-- **Pre-existing `canonical_test.clj` failures (3 fail, 2 error):** `:world-structure` golden hash mismatch, float projection precision, world-hash roundtrip encoding.
-- **Pre-existing `chain_test.clj` failures (18 errors):** `:action-at` projection requires non-nil `:step`/`:block-time` — test data feeds nil.
-- **`bb validate` timeout on `test:notebooks`:** Notebook scenarios run >3 minutes. Split notebook tests from validate or add timeout guard.
-- **`scenario-hash` fallback edge case:** Fallback in `stable-scenario-entry` uses `:scenario-id` + `:dispatcher-id`. If both are nil the hash is deterministic but meaningless.
-
+- **`test:evidence` parallel failures:** The `chain-test` and `attestation-registry-test` depend on global atom state that artifact directory binding doesn't fully isolate. 4 tests fail under parallel execution.
+- **Streaming chain reads for large chains:** `verify-persisted-node-artifacts!`, `build-evidence-registry`, `build-evidence-summary` all load full chains into memory.
+- **CI blocks evidence-chain validation failures:** No CI workflow files exist; evidence tests are embedded in broader tasks without a dedicated gate.
 
 ### Added (2026-06-27)
 
@@ -364,3 +404,7 @@
 
 ### Changed
 - **`replay.clj` modular decomposition:** Split 751-line monolithic file into 8 focused namespaces under `contract_model/replay/`: `execution`, `temporal`, `metrics`, `analysis`, `validation`, `flags`, `checkpoints`, and `yield`. `replay.clj` now serves as a 271-line forwarding layer with re-exports.
+- **Evidence pack CLI polish:** Rewrote `evidence_pack.clj:pack!` — fixed broken `REPRODUCE.md` (was reading wrong JSON key, `some->` chain was no-op), added `--tar` flag for `.tar.gz` output, now accepts both run-id (resolves under `results/runs/`) and absolute paths. Created `resolver-sim.scripts.evidence-pack` entry point for reliable arg forwarding. Removed `*command-line-args*` dependency in `bb.edn` tasks (broken with Clojure CLI `-e`). (`src/resolver_sim/forensic/evidence_pack.clj`, `src/resolver_sim/scripts/evidence_pack.clj`, `bb.edn`)
+
+### Added
+- **Concepts integrated into benchmarks (Phase 1+2):** Added `:benchmark/concepts` key to 4 of 5 benchmark manifests linking protocol-level claims to stakeholder-facing domain concepts. Activated `enrich-report` in `benchmark/runner.clj:run-benchmark` — benchmark evidence bundles now include `:concept/section` with stakeholder summaries and risk annotations. Validates concept IDs against the concept registry (warns on stale/unknown references). (`benchmarks/packs/sew/escrow-dispute-v1.edn`, `benchmarks/packs/sew/dispute-liveness-v1.edn`, `benchmarks/packs/sew/resolver-slashing-v1.edn`, `benchmarks/packs/prf-core/deterministic-replay-v1.edn`, `src/resolver_sim/benchmark/runner.clj`)

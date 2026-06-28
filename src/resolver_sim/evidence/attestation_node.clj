@@ -66,7 +66,7 @@
 
 (defn- attestation-node-short-id
   [node]
-  (subs (:node-hash node) 0 12))
+  (subs (:node-hash node) 0 (min 12 (count (:node-hash node)))))
 
 (defn- attestation-node-filename
   [node]

@@ -42,6 +42,73 @@
   [intent hash-key entry]
   (assoc entry hash-key (canonical-entry-hash intent entry)))
 
+(defn- sorted-topological
+  "Topological sort of claim definitions by :depends-on.
+   Returns node IDs in order with leaves (no deps) first.
+   Uses Kahn's algorithm. Throws on cycle detection."
+  [definitions]
+  (let [ids (set (keep :id definitions))
+        raw-deps (fn [id]
+                   (vec (or (:depends-on (some #(when (= id (:id %)) %) definitions)) [])))
+        graph (into {} (map (fn [{:keys [id]}] [id (raw-deps id)]) definitions))
+        in-degree (fn [g]
+                    (reduce-kv (fn [acc node deps]
+                                 (reduce #(update %1 %2 (fnil inc 0)) (assoc acc node 0) deps))
+                               {} g))
+        deps (in-degree graph)
+        queue (into (clojure.lang.PersistentQueue/EMPTY)
+                    (filter #(zero? (get deps %)) (keys graph)))]
+    (loop [q queue, deps deps, sorted []]
+      (if (empty? q)
+        (if (= (count sorted) (count definitions))
+          sorted
+          (throw (ex-info "Circular dependency in claim definitions"
+                          {:remaining (remove (set sorted) (keys graph))
+                           :sorted sorted})))
+        (let [node (peek q)
+              q (pop q)
+              neighbors (get graph node [])
+              {:keys [q deps]}
+              (reduce (fn [acc dep]
+                        (let [new-val (dec (get (:deps acc) dep 0))]
+                          (if (zero? new-val)
+                            (-> acc
+                                (update :q conj dep)
+                                (assoc-in [:deps dep] new-val))
+                            (assoc-in acc [:deps dep] new-val))))
+                      {:q q :deps deps}
+                      neighbors)]
+          (recur q deps (conj sorted node)))))))
+
+(defn enrich-claim-definitions
+  "Given a vector of claim definitions with :canonical-hash computed,
+   returns enriched definitions with :concept-hash and resolved :depends-on.
+   Processes claims in topological order (leaves first) so dependency
+   concept-hashes are always available when computing dependent hashes."
+  [definitions]
+  (if (empty? definitions)
+    definitions
+    (let [ids (set (keep :id definitions))
+          id->defn (into {} (map (fn [d] [(:id d) d]) definitions))
+          topo-order (sorted-topological definitions)
+          concept-hash-cache (atom {})
+          resolve-deps (fn [dep-ids]
+                         (when (seq dep-ids)
+                           (vec (for [dep-id dep-ids
+                                      :when (contains? ids dep-id)]
+                                  {:claim-id dep-id
+                                   :concept-hash (get @concept-hash-cache dep-id)}))))
+          process (fn [defn]
+                    (let [raw-deps (or (:depends-on defn) [])
+                          resolved (resolve-deps raw-deps)
+                          defn' (if (seq resolved)
+                                  (assoc defn :depends-on resolved)
+                                  (dissoc defn :depends-on))
+                          ch (hc/hash-with-intent {:hash/intent :claim-definition-conceptual} defn')]
+                      (swap! concept-hash-cache assoc (:id defn) ch)
+                      (assoc defn' :concept-hash ch)))]
+      (mapv process (mapv id->defn topo-order)))))
+
 (defn- attach-registry-hash
   [intent registry]
   (assoc registry :registry-hash (canonical-entry-hash intent registry)))
@@ -210,7 +277,22 @@
                     :required? true}
                    {:claim-id :projection-canonical-safe
                     :required? true}]}
-          ;; ──────────────────────────────────────────────────────────────────
+         {:id :projection/scenario-content
+          :version 1
+          :projection-type :scenario-content
+          :intent-types #{:identity/hash-projection}
+          :intent-purposes #{:scenario-content-identity}
+          :source {:type :scenario-definition}
+          :include-paths [[:scenario-id] [:scenario-path] [:protocol] [:dispatcher-id] [:normalized-scenario]]
+          :exclude-paths [[:runtime-metadata] [:host-info] [:timestamps]]
+          :transforms [:canonical-artifact-value]
+          :output {:type :scenario-content-hash
+                   :domain-tag "SCENARIO_V1"}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}]}
+           ;; ──────────────────────────────────────────────────────────────────
           ;; Protocol-specific projection definitions
           ;; Each entry is scoped to a specific protocol.
           ;; ──────────────────────────────────────────────────────────────────
@@ -265,80 +347,83 @@
     :projection-definitions projection-definitions}))
 
 (def claim-definitions
-  "Passive CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries."
-  (mapv (partial attach-hash :claim-definition :canonical-hash)
-        [{:id :projection-deterministic
-          :version 1
-          :category :invariant
-          :description "Projection output is deterministic for the same source input and definition."
-          :inputs [:projection-definition :source-input :projection-artifact]
-          :evaluation {:type :recompute-and-compare
-                       :expected :same-projection-hash}
-          :outputs [:passed? :expected-hash :actual-hash]}
-         {:id :projection-canonical-safe
-          :version 1
-          :category :safety
-          :description "Projection output contains only canonical hash-safe values."
-          :inputs [:projection-artifact]
-          :evaluation {:type :canonical-value-validation
-                       :validator :resolver-sim.hash.canonical/validate-canonical-value!}
-          :outputs [:passed? :violations]}
-         {:id :registry-entry-hash-valid
-          :version 1
-          :category :audit
-          :description "Registry entry self hash matches its registered canonical projection."
-          :inputs [:registry-entry]
-          :evaluation {:type :hash-recompute
-                       :expected :entry-self-hash}
-          :outputs [:passed? :expected-hash :actual-hash]}
-         {:id :allocation-complete
-          :version 1
-          :category :invariant
-          :description "Every eligible participant has a corresponding allocation row."
-          :inputs [:projection-artifact :allocation-result]
-          :evaluation {:type :set-coverage
-                       :expected :eligible-participants-covered}
-          :outputs [:passed? :missing-participants :extra-participants]}
-         {:id :non-negative
-          :version 1
-          :category :invariant
-          :description "Allocation, unmet, weight, and cap values are never negative."
-          :inputs [:allocation-result]
-          :evaluation {:type :numeric-predicate
-                       :predicate :all-values-non-negative}
-          :outputs [:passed? :violations]}
-         {:id :conservation
-          :version 1
-          :category :invariant
-          :description "Requested amount equals allocated plus unmet plus remainder."
-          :inputs [:allocation-result]
-          :evaluation {:type :arithmetic-equality
-                       :left :total-requested
-                       :right [:total-allocated :total-unmet :remainder]}
-          :outputs [:passed? :difference]}
-         {:id :rounding-bounded
-          :version 1
-          :category :invariant
-          :description "Rounding behavior is bounded by the registered allocation policy."
-          :inputs [:projection-artifact :allocation-result]
-          :evaluation {:type :policy-check
-                       :policy :floor-with-largest-remainder}
-          :outputs [:passed? :violations]}
-         {:id :ordering-independent
-          :version 1
-          :category :invariant
-          :description "Allocation result is invariant under permutation of input items (multi-set equality)."
-          :inputs [:allocation-input :allocation-result]
-          :evaluation {:type :permutation-test
-                       :policy :multi-set-equality}
-          :outputs [:passed? :violations]}
+  "Passive CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries.
+   Each entry has :canonical-hash (structural identity) and :concept-hash
+   (transitive concept identity including resolved dependency hashes)."
+  (enrich-claim-definitions
+   (mapv (partial attach-hash :claim-definition :canonical-hash)
+         [{:id :projection-deterministic
+           :version 1
+           :category :invariant
+           :description "Projection output is deterministic for the same source input and definition."
+           :inputs [:projection-definition :source-input :projection-artifact]
+           :evaluation {:type :recompute-and-compare
+                        :expected :same-projection-hash}
+           :outputs [:passed? :expected-hash :actual-hash]}
+          {:id :projection-canonical-safe
+           :version 1
+           :category :safety
+           :description "Projection output contains only canonical hash-safe values."
+           :inputs [:projection-artifact]
+           :evaluation {:type :canonical-value-validation
+                        :validator :resolver-sim.hash.canonical/validate-canonical-value!}
+           :outputs [:passed? :violations]}
+          {:id :registry-entry-hash-valid
+           :version 1
+           :category :audit
+           :description "Registry entry self hash matches its registered canonical projection."
+           :inputs [:registry-entry]
+           :evaluation {:type :hash-recompute
+                        :expected :entry-self-hash}
+           :outputs [:passed? :expected-hash :actual-hash]}
+          {:id :allocation-complete
+           :version 1
+           :category :invariant
+           :description "Every eligible participant has a corresponding allocation row."
+           :inputs [:projection-artifact :allocation-result]
+           :evaluation {:type :set-coverage
+                        :expected :eligible-participants-covered}
+           :outputs [:passed? :missing-participants :extra-participants]}
+          {:id :non-negative
+           :version 1
+           :category :invariant
+           :description "Allocation, unmet, weight, and cap values are never negative."
+           :inputs [:allocation-result]
+           :evaluation {:type :numeric-predicate
+                        :predicate :all-values-non-negative}
+           :outputs [:passed? :violations]}
+          {:id :conservation
+           :version 1
+           :category :invariant
+           :description "Requested amount equals allocated plus unmet plus remainder."
+           :inputs [:allocation-result]
+           :evaluation {:type :arithmetic-equality
+                        :left :total-requested
+                        :right [:total-allocated :total-unmet :remainder]}
+           :outputs [:passed? :difference]}
+          {:id :rounding-bounded
+           :version 1
+           :category :invariant
+           :description "Rounding behavior is bounded by the registered allocation policy."
+           :inputs [:projection-artifact :allocation-result]
+           :evaluation {:type :policy-check
+                        :policy :floor-with-largest-remainder}
+           :outputs [:passed? :violations]}
+          {:id :ordering-independent
+           :version 1
+           :category :invariant
+           :description "Allocation result is invariant under permutation of input items (multi-set equality)."
+           :inputs [:allocation-input :allocation-result]
+           :evaluation {:type :permutation-test
+                        :policy :multi-set-equality}
+           :outputs [:passed? :violations]}
            ;; Protocol-specific claim definitions are registered dynamically
            ;; by protocol implementation namespaces via register-claim-definitions!.
            ;; See protocols_src/resolver_sim/evidence/forensic_claims.clj for
-           ;; the Sew forensic-grade claims (registry-hash-verifies,
-           ;; registry-hash-signed, cursor-verifies, tsa-token-verified,
-           ;; evidence-chain-reconciled, forensic-grade).
-         ]))
+            ;; the Sew forensic-grade claims (registry-hash-verifies,
+            ;; registry-hash-signed, cursor-verifies, tsa-token-verified,
+            ;; evidence-chain-reconciled, forensic-grade).
+          ])))
 
 (def claim-definition-registry
   {:registry-version 1

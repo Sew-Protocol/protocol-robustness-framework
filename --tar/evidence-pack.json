@@ -1,0 +1,20 @@
+{
+  "schema-version": "evidence-pack.v1",
+  "run-id": "run-2026-06-28T22:41:16.803733951Z",
+  "generated-at": "2026-06-28T22:48:13.755677214Z",
+  "manifest": [
+    {
+      "source": "pre-run-commitment.json",
+      "target": "pre-run-commitment.json",
+      "size": 6280,
+      "sha256": "0209ba33ea78f0a10e73282417f9bd12c5e998ee536e81bcdb175c1045e3a61c"
+    },
+    {
+      "source": "execution-dag.json",
+      "target": "execution-dag.json",
+      "size": 2418,
+      "sha256": "aa99f3bada1613a7a012f74fe7bd855345601fcbc5f95a9220a7cea5bc5707e7"
+    }
+  ],
+  "root-hash": "62edab46c7b65a29b1878af75bf9698e56c5c4fca45d29012ecad537c75bf11e"
+}

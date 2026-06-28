@@ -77,7 +77,7 @@
              :known (vec (sort valid-selection-modes))})
 
       (and (= :pinned (:mode sel))
-            (not (contains? (valid-runner-ids) (:runner-id sel))))
+           (not (contains? (valid-runner-ids) (:runner-id sel))))
       (conj {:code :unknown-runner-id
              :runner-id (:runner-id sel)
              :known (vec (sort (valid-runner-ids)))}))))

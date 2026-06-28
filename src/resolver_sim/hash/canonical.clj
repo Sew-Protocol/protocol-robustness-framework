@@ -66,14 +66,15 @@
    :projection-definition-registry "PROJECTION_DEFINITION_REGISTRY_V1"
    :projection-artifact "PROJECTION_ARTIFACT_V1"
    :claim-definition "CLAIM_DEFINITION"
+   :claim-definition-conceptual "CONCEPT_CLAIM_DEFINITION_V1"
    :attestor         "ATTESTOR"
    :evidence-node    "EVIDENCE_NODE_V1"
    :decision-evidence "DECISION_EVIDENCE_V1"
    :invariant-failure "INVARIANT_FAILURE_V1"
-    :startup-validation "STARTUP_VALIDATION_V1"
-    :claim-result       "CLAIM_RESULT_V1"
-    :attestation        "ATTESTATION_V1"
-    :scenario           "SCENARIO_V1"
+   :startup-validation "STARTUP_VALIDATION_V1"
+   :claim-result       "CLAIM_RESULT_V1"
+   :attestation        "ATTESTATION_V1"
+   :scenario           "SCENARIO_V1"
    :attestation-record "ATTESTATION_RECORD_V1"
    :execution-definition "EXECUTION_DEFINITION_V1"
    :action             "ACTION_V1"
@@ -602,11 +603,36 @@
   [value intent]
   (project-canonical-artifact value intent))
 
+(defn- normalize-depends-on
+  "Normalize :depends-on to canonical-safe format.
+   - Enriched format (maps with :claim-id): extract sorted keyword IDs.
+   - Legacy format (keyword vector): pass through as-is.
+   - Mixed or empty: handled gracefully."
+  [deps]
+  (if (and (sequential? deps) (every? map? deps))
+    (mapv :claim-id (sort-by :claim-id deps))
+    deps))
+
+(defn- enrich-depends-on
+  "Normalize :depends-on to enriched format with concept-hash.
+   - Enriched format (maps with :claim-id): project claim-id + concept-hash sorted by claim-id.
+   - Legacy format (keyword vector): wrap with nil concept-hash, sorted.
+   - Returns nil if deps is nil or empty."
+  [deps]
+  (when (seq deps)
+    (if (and (sequential? deps) (every? map? deps))
+      (mapv (fn [d] {:claim-id (:claim-id d) :concept-hash (:concept-hash d)})
+            (sort-by :claim-id deps))
+      (mapv (fn [id] {:claim-id id :concept-hash nil})
+            (sort deps)))))
+
 (defn project-claim-definition
   "Canonical projection for CLAIM_DEFINITION_REGISTRY_SPEC_V1 entries.
    Includes only the fields that define claim identity:
      :id, :version, :category, :inputs, :evaluation, :outputs
    Optionally includes :depends-on if present in the source value.
+   When :depends-on uses enriched format ({:claim-id <kw> :concept-hash <hex> ...}),
+   normalizes to keyword IDs only for backward-compatible structural hashing.
    Excludes :canonical-hash, runtime state, cached values, and generated metadata.
    Non-canonical types (symbols, vars, fns) are projected to canonical-safe
    representations via project-canonical-artifact-value."
@@ -614,7 +640,24 @@
   (let [keep-keys [:id :version :category :inputs :evaluation :outputs]
         artifact (select-keys value keep-keys)
         artifact (if (contains? value :depends-on)
-                   (assoc artifact :depends-on (:depends-on value))
+                   (assoc artifact :depends-on (normalize-depends-on (:depends-on value)))
+                   artifact)
+        artifact (project-canonical-artifact-value artifact)]
+    {:intent intent
+     :artifact artifact}))
+
+(defn project-claim-definition-conceptual
+  "Canonical projection for CONCEPT_CLAIM_DEFINITION_V1 entries.
+   Projects :depends-on with resolved concept-hashes for transitive
+   concept-aware hashing. When :depends-on contains enriched maps
+   ({:claim-id <kw> :concept-hash <hex>}), projects the full maps sorted
+   by claim-id. Falls back to wrapping legacy keyword IDs with nil
+   concept-hash for backward compatibility."
+  [value intent]
+  (let [keep-keys [:id :version :category :inputs :evaluation :outputs]
+        artifact (select-keys value keep-keys)
+        artifact (if (contains? value :depends-on)
+                   (assoc artifact :depends-on (enrich-depends-on (:depends-on value)))
                    artifact)
         artifact (project-canonical-artifact-value artifact)]
     {:intent intent
@@ -1022,6 +1065,17 @@
     :intent/excludes    #{:canonical-hash :runtime-values :functions
                           :cached-values :generated-metadata :description}
     :intent/projection-fn project-claim-definition
+    :intent/version     1}
+
+   :claim-definition-conceptual
+   {:intent/name        :claim-definition-conceptual
+    :intent/domain-tag  "CONCEPT_CLAIM_DEFINITION_V1"
+    :intent/description "Self-aware concept hash transitively including resolved dependency hashes"
+    :intent/includes    #{:id :version :category :inputs
+                          :evaluation :outputs :depends-on}
+    :intent/excludes    #{:canonical-hash :concept-hash :runtime-values :functions
+                          :cached-values :generated-metadata :description}
+    :intent/projection-fn project-claim-definition-conceptual
     :intent/version     1}
 
    :attestor

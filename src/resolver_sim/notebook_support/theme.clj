@@ -85,7 +85,10 @@
 
    :jumpbar/bg "#ffffff"
    :jumpbar-border "#e2e8f0"
-   :repro-header-bg "#f3f4f6"})
+   :repro-header-bg "#f3f4f6"
+
+   :code/block-bg "#0f172a"
+   :code/block-text "#38bdf8"})
 
 (defn tone-style
   "Style map for the given section/row tone keyword.

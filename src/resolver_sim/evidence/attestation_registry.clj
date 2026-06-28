@@ -30,6 +30,15 @@
      (binding [*attestation-registry* fresh-atom#]
        ~@body)))
 
+(defn with-fresh-registry*
+  "Thunk-based version of with-fresh-registry for use in higher-order
+   contexts (parallel test runner, use-fixtures). Calls (f) inside a
+   fresh binding of *attestation-registry*."
+  [f]
+  (let [fresh (atom {})]
+    (binding [*attestation-registry* fresh]
+      (f))))
+
 (defn clear-attestations!
   "Reset the registry to empty.
    Useful in test fixtures that don't need isolation."
@@ -43,7 +52,7 @@
   "Build a chain-compatible artifact entry for an attestation record.
    Follows the pattern of node.clj's node-artifact-entry."
   [attestation]
-  {:id (str "attestation-" (subs (:attestation/id attestation) 0 12))
+  {:id (str "attestation-" (subs (:attestation/id attestation) 0 (min 12 (count (:attestation/id attestation)))))
    :kind :attestation
    :artifact/type :attestation
    :artifact/hash (:attestation/id attestation)

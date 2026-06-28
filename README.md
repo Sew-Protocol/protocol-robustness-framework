@@ -534,6 +534,41 @@ Run individual phases using Babashka:
 bb run:scenario:search <text>
 ```
 
+## Build
+
+Build standalone uberjars for portable scenario replay.  No Clojure CLI needed
+at runtime — just a JVM.
+
+```bash
+# Build both variants
+bb build:core             # → target/prf-runner-core-0.1.0-uber.jar  (5.6 MB)
+bb build:sew              # → target/prf-runner-sew-0.1.0-uber.jar  (18 MB)
+bb build                  # both sequentially
+
+# Run from any directory (no source tree, no Clojure CLI)
+java -jar target/prf-runner-core-0.1.0-uber.jar \
+  -m resolver-sim.replay-core --help
+
+java -jar target/prf-runner-sew-0.1.0-uber.jar \
+  -m resolver-sim.minimal-runner --fixtures ./data/fixtures/traces \
+  --scenario scenario.trace.json
+```
+
+### Variants
+
+| JAR | Size | Entry point | Use case |
+|-----|------|-------------|---------|
+| `prf-runner-core` | 5.6 MB | `resolver-sim.replay-core` | Bundle verify, canonical hash, no Sew |
+| `prf-runner-sew` | 18 MB | `resolver-sim.minimal-runner` | Full scenario replay with Sew protocol |
+
+### GPG signing
+
+```bash
+# Sign the uberjar for distribution
+bb sign:sew
+bb sign:core
+```
+
 ## Dispute-resolution validation phases
 
 The dispute-resolution suite currently includes 22 sub-phases across four major areas.

@@ -1,0 +1,304 @@
+;; # Protocol Robustness Framework — Benchmark Report
+;;
+;; **Audience:** Protocol reviewers, security researchers, contributors.
+;;
+;; **Purpose:** This PRF benchmark evaluates protocol robustness across
+;; resolver accountability, liveness under adversarial load, fund safety,
+;; and evidence integrity. It currently uses Sew scenarios as the reference
+;; protocol workload.
+;;
+;; PRF owns the benchmark framework, scoring rules, concept mappings,
+;; evidence hashing, reproducibility, attestations, registries, and the
+;; report layer. Sew is the current reference protocol workload — the same
+;; benchmark structure can evaluate other protocols that implement the
+;; same scenario interfaces.
+;;
+;; **Data contract:**
+;; - `results/benchmarks/protocol-robustness-v0.edn` — evidence bundle from `bb benchmark:run`
+;; - `benchmarks/concepts/protocol-robustness-v0.edn` — benchmark concept definitions
+;; - `benchmarks/scoring/robustness-dimensions-v0.edn` — scoring rules and pass conditions
+;;
+;; If the evidence bundle is absent the report shows amber (not run),
+;; not red. Missing data is not the same as a failing result.
+
+^{:nextjournal.clerk/toc true
+  :nextjournal.clerk/visibility {:code :fold}}
+(ns notebooks.benchmark-protocol-robustness
+  (:require [nextjournal.clerk :as clerk]
+            [clojure.string :as str]
+            [resolver-sim.benchmark.report :as rpt]
+            [resolver-sim.notebook-support.views :as views]
+            [resolver-sim.notebook-support.theme :refer [notebook-theme
+                                                         section-style
+                                                         table-style
+                                                         table-cell-style
+                                                         table-header-row-style
+                                                         table-header-cell-style]]))
+
+;; ── Local style helpers ───────────────────────────────────────────────────────
+
+(def heading-style
+  {:color "#e2e8f0" :marginBottom "12px"})
+
+(def code-block-style
+  {:background (:code/block-bg notebook-theme)
+   :padding "12px"
+   :borderRadius "4px"
+   :color (:code/block-text notebook-theme)
+   :fontSize "13px"})
+
+(def cell-mono-style
+  (merge table-cell-style
+         {:font-family "monospace" :fontSize "13px"}))
+
+(def cell-bold-style
+  (merge table-cell-style {:fontWeight 600}))
+
+;; Badge colors use bright variants for dark Clerk background.
+(def ^:private pass-badge "#22c55e")
+(def ^:private fail-badge "#ef4444")
+(def ^:private warn-badge "#f59e0b")
+
+;; ── Data loading ──────────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(def config
+  {:evidence-path "results/benchmarks/protocol-robustness-v0.edn"
+   :concepts-path "benchmarks/concepts/protocol-robustness-v0.edn"
+   :scoring-path  "benchmarks/scoring/robustness-dimensions-v0.edn"})
+
+^{::clerk/visibility {:code :hide :result :hide}}
+(def report
+  (try
+    (rpt/build-report (:evidence-path config)
+                       (:concepts-path config)
+                       (:scoring-path config))
+    (catch Exception e
+      (println "Warning: could not load benchmark evidence:" (.getMessage e))
+      nil)))
+
+;; ── Header ────────────────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(clerk/html
+ (let [rag (if report
+             (if (:all-pass? report) :green :red)
+             :amber)]
+   [:div {:style {:marginBottom "24px"}}
+    [:h1 {:style {:fontSize "1.5em" :fontWeight 700 :color "#e2e8f0"
+                  :marginBottom "8px"}}
+     "Protocol Robustness Benchmark"]
+    (when report
+      [:div {:style {:color "#94a3b8" :fontSize "14px"}}
+       (str (:benchmark/id report))
+       " · " (or (:purpose report) "")])
+    [:div {:style {:display "flex" :gap "16px" :marginTop "16px"
+                   :flexWrap "wrap"}}
+     (views/render-card
+      {:label "Status"
+       :rag rag
+        :value (if report
+                 (if (:all-pass? report)
+                   "Benchmark dimensions passed"
+                   "Some benchmark dimensions did not pass")
+                "Not run")
+       :note (if report
+               (str (:passed-scenarios report) "/" (:total-scenarios report)
+                    " scenarios passed")
+               "Run `bb benchmark:run` to generate evidence")})
+     (when report
+       (views/render-card
+        {:label "Evidence hash"
+         :rag :neutral
+          :value (let [h (or (:evidence/hash report) "—")]
+                   (str/upper-case (subs h 0 (min 16 (count h)))))
+          :note (str "Full: " (or (:evidence/hash report) "—"))}))]]))
+
+;; ── Scope notice ──────────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(views/notice-box
+ "Scope"
+ "This v0 benchmark checks selected robustness dimensions over representative"
+ "scenarios. It is evidence-backed and reproducible, but it is not a full audit,"
+ "formal verification result, or protocol safety certification.")
+
+;; ── Dimension results ─────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(if (nil? report)
+  (clerk/html
+   (views/notice-box
+    "Benchmark not yet run"
+    "Run the following to produce an evidence bundle:"
+    (clerk/row
+     [:pre {:style code-block-style}
+      "bb benchmark:run benchmarks/packs/prf-core/protocol-robustness-v0.edn \\"
+      "  -o results/benchmarks/protocol-robustness-v0.edn"])))
+  (clerk/html
+   [:div
+    [:h2 {:style heading-style} "Dimension results"]
+    [:table {:style (merge table-style {:marginBottom "24px"})}
+     [:thead {:style table-header-row-style}
+      [:tr
+       [:th {:style table-header-cell-style} "Dimension"]
+       [:th {:style table-header-cell-style} "Scenario"]
+       [:th {:style table-header-cell-style} "Outcome"]
+        [:th {:style table-header-cell-style} "Pass condition met?"]
+        [:th {:style table-header-cell-style} "Summary"]
+        [:th {:style table-header-cell-style} "Evidence ref"]]]
+     [:tbody
+      (for [d (:dimensions report)]
+        (let [ok? (:pass-condition-met? d)]
+          [:tr {:key (str (:dimension d))}
+           [:td {:style cell-bold-style} (:concept/title d)]
+           [:td {:style cell-mono-style} (:scenario/id d)]
+           [:td {:style table-cell-style}
+            (views/badge (name (:outcome d))
+                         (if (= :pass (:outcome d)) pass-badge fail-badge))]
+           [:td {:style table-cell-style}
+            (views/badge (if ok? "Pass" "Fail")
+                         (if ok? pass-badge fail-badge))]
+            [:td {:style table-cell-style}
+             (or (:concept/summary d) "")]
+            [:td {:style cell-mono-style}
+             (let [ref (:evidence/ref d)]
+               (if ref (str/upper-case (subs ref 0 (min 8 (count ref))))
+                   "—"))]]))]]]))
+
+;; ── Scoring detail ────────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(when report
+  (clerk/html
+   [:div
+    [:h2 {:style heading-style} "Scoring detail"]
+    (for [d (:dimensions report)]
+      (let [rag (if (:pass-condition-met? d) :green :red)]
+        [:div {:key (str (:dimension d))
+               :style (merge (section-style rag) {:fontSize "14px"})}
+         [:h3 {:style {:margin "0 0 8px 0" :fontSize "16px"}}
+          (views/status-emoji rag) " " (:concept/title d)]
+         [:div {:style {:marginBottom "8px"}}
+          [:strong "Stakeholder language: "]
+          (:concept/stakeholder-language d)]
+         [:div {:style {:marginBottom "6px" :opacity "0.85"}}
+          [:strong "Pass condition: "] (:pass-condition d)]
+         [:div {:style {:opacity "0.85"}}
+          [:strong "Why it matters: "] (:concept/why-it-matters d)]]))]))
+
+;; ── Invariant summary ─────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(when report
+  (let [inv (:invariant-summary report)]
+    (clerk/html
+     [:div
+      [:h2 {:style heading-style} "Invariant summary"]
+      (if (and inv (pos? (:total-checks inv)))
+        [:div
+         (views/render-card
+          {:label "Invariant pass rate"
+           :rag (if (:all-pass? inv) :green :red)
+           :value (str (:passed-checks inv) "/" (:total-checks inv))
+           :note (if (:all-pass? inv) "All invariants passed"
+                   "Some invariants failed")})
+         [:table {:style (merge table-style {:marginTop "16px"})}
+          [:thead {:style table-header-row-style}
+           [:tr
+            [:th {:style table-header-cell-style} "Invariant"]
+            [:th {:style table-header-cell-style} "Passed"]
+            [:th {:style table-header-cell-style} "Total"]
+            [:th {:style table-header-cell-style} "Rate"]]]
+          [:tbody
+           (for [[inv-id counts] (:per-invariant inv)]
+             (let [rate (if (pos? (:total counts))
+                          (float (/ (:passed counts) (:total counts)))
+                          0.0)
+                   color (cond (>= rate 1.0) pass-badge
+                               (>= rate 0.5) warn-badge
+                               :else fail-badge)]
+               [:tr {:key (str inv-id)}
+                [:td {:style cell-mono-style} (name inv-id)]
+                [:td {:style table-cell-style} (:passed counts)]
+                [:td {:style table-cell-style} (:total counts)]
+                [:td {:style table-cell-style}
+                 (views/badge (format "%.0f%%" (* 100 rate)) color)]]))]]]
+        (views/notice-box
+         "Invariant checks"
+         "The current scenario replay path records scenario outcomes but"
+         "does not run per-invariant checks. Future benchmark versions may"
+         "add invariant verification for individual robustness dimensions."))])))
+
+;; ── Evidence trail ────────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(when report
+  (clerk/html
+   [:div
+    [:h2 {:style heading-style} "Evidence trail"]
+    [:table {:style table-style}
+     [:tbody
+      [:tr [:td {:style cell-bold-style} "Evidence path"]
+       [:td {:style cell-mono-style} (:evidence/path report)]]
+      [:tr [:td {:style cell-bold-style} "Evidence hash"]
+       [:td {:style cell-mono-style} (or (:evidence/hash report) "—")]]
+      [:tr [:td {:style cell-bold-style} "Reproduce command"]
+       [:td {:style cell-mono-style}
+        (or (get-in report [:reproduce :command]) "—")]]
+      [:tr [:td {:style cell-bold-style} "Environment"]
+       [:td {:style table-cell-style}
+        (str (:os-name (:environment report)) " "
+             (:os-version (:environment report)))]]]]
+    (views/notice-box
+     "Verification"
+     (clerk/row
+      "Run "
+      [:code {:style {:color (:code/block-text notebook-theme)}}
+       "bb benchmark:reproduce " (or (:evidence/path report) "<evidence-bundle>")]
+      " with the same bundle to independently verify these results."))]))
+
+;; ── Concepts reference ────────────────────────────────────────────────────────
+
+^{::clerk/visibility {:code :hide :result :show}}
+(clerk/html
+ [:div
+  [:h2 {:style heading-style} "Concepts reference"]
+  (let [concepts (rpt/load-benchmark-concepts (:concepts-path config))]
+    (if (seq concepts)
+      [:div {:style {:overflowX "auto" :marginTop "12px"}}
+        [:table {:style (merge table-style {:background "#1e293b" :borderRadius "6px"})}
+         [:thead {:style {:background "#0f172a"}}
+          [:tr
+           [:th {:style (merge table-header-cell-style
+                               {:color "#f8fafc" :background "#0f172a"})}
+            "Concept"]
+           [:th {:style (merge table-header-cell-style
+                               {:color "#f8fafc" :background "#0f172a"})}
+            "Summary"]
+           [:th {:style (merge table-header-cell-style
+                               {:color "#f8fafc" :background "#0f172a"})}
+            "Why it matters"]]]]
+        [:tbody
+         (for [c concepts]
+           [:tr {:key (str (:concept/id c))
+                 :style {:borderBottom "1px solid #334155"}}
+            [:td {:style (merge cell-bold-style {:color "#e2e8f0"})}
+             (:concept/title c)]
+            [:td {:style (merge table-cell-style {:color "#cbd5e1"})}
+             (:concept/summary c)]
+            [:td {:style (merge table-cell-style {:color "#cbd5e1"})}
+             (:concept/why-it-matters c)]])]]
+      (views/notice-box
+       "Concepts file not found"
+       "Benchmark concepts file not found at " (:concepts-path config) ".")))])
+
+;; ── Reproduce ─────────────────────────────────────────────────────────────────
+
+;; ```shell
+;; bb benchmark:run benchmarks/packs/prf-core/protocol-robustness-v0.edn \
+;;   -o results/benchmarks/protocol-robustness-v0.edn
+;; ```
+;;
+;; After running, refresh this notebook to see per-dimension results,
+;; invariant summaries, and evidence chain data.

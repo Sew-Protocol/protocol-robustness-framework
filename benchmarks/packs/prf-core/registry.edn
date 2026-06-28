@@ -10,8 +10,12 @@
    :benchmark/file "deterministic-replay-v1.edn"
    :benchmark/status :active}
 
-  ;; {:benchmark/id :benchmark/prf-evidence-integrity-v1
-  ;;  :benchmark/domain :domain/evidence-integrity
-  ;;  :benchmark/file "evidence-integrity-v1.edn"
-  ;;  :benchmark/status :experimental}
-  ]}
+   {:benchmark/id :benchmark/prf-evidence-integrity-v1
+    :benchmark/domain :domain/evidence-integrity
+    :benchmark/file "evidence-integrity-v1.edn"
+    :benchmark/status :experimental}
+
+   {:benchmark/id :benchmark/prf-protocol-robustness-v0
+    :benchmark/domain :domain/escrow-dispute-resolution
+    :benchmark/file "protocol-robustness-v0.edn"
+    :benchmark/status :active}]}

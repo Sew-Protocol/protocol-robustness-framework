@@ -47,11 +47,11 @@
                      (try
                        (let [d (json/read-str (slurp f) {:key-fn keyword})]
                          (assoc d :_filename (.getName f)))
-                        (catch Exception e
-                          (log/warn! "Failed to parse trace file" {:file (.getName f) :error (.getMessage e)})
-                          nil))))
-              (sort-by :scenario-id))
-         []))
+                       (catch Exception e
+                         (log/warn! "Failed to parse trace file" {:file (.getName f) :error (.getMessage e)})
+                         nil))))
+             (sort-by :scenario-id))
+        []))
     (catch Exception e
       (log/warn! "Failed to load traces directory" {:path (:traces-dir config/artifact-paths) :error (.getMessage e)})
       [])))
@@ -68,11 +68,11 @@
                      (try
                        (let [d (common/read-edn (.getAbsolutePath f))]
                          [(str (:trace-id d)) d])
-                        (catch Exception e
-                          (log/warn! "Failed to parse golden report" {:file (.getName f) :error (.getMessage e)})
-                          nil))))
-              (into {}))
-         {}))
+                       (catch Exception e
+                         (log/warn! "Failed to parse golden report" {:file (.getName f) :error (.getMessage e)})
+                         nil))))
+             (into {}))
+        {}))
     (catch Exception e
       (log/warn! "Failed to load golden reports directory" {:path (:golden-dir config/artifact-paths) :error (.getMessage e)})
       {})))

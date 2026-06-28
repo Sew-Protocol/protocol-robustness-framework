@@ -11,6 +11,7 @@
         org.clojure/tools.cli             {:mvn/version "1.0.219"}
         org.clojure/data.json             {:mvn/version "2.4.0"}
         buddy/buddy-core                  {:mvn/version "1.12.0-430"}
+        org.clojure/core.async            {:mvn/version "1.9.865"}
         ;; gRPC transport + stub helpers (no protoc — JSON Marshaller only)
         io.grpc/grpc-netty-shaded         {:mvn/version "1.64.0"}
         io.grpc/grpc-stub                 {:mvn/version "1.64.0"}

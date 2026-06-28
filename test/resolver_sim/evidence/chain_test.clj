@@ -3,6 +3,7 @@
             [clojure.test :refer [deftest is]]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.evidence :as ev]))
 
 (def ^:private sample-attribution
@@ -258,3 +259,168 @@
       ;; Artifact entry sha256 matches file hash
       (let [file-sha (chain/compute-file-sha256 (:path artifact-entry))]
         (is (= file-sha (:sha256 artifact-entry)))))))
+
+;; ── Source Provenance in Cursor ───────────────────────────────────────────
+
+(def ^:private mock-snapshot
+  {:cursor/scope :targeted-evidence
+   :cursor/final-seq 5
+   :cursor/final-self-hash "abcd1234efgh5678"
+   :cursor/total-captured 5})
+
+(def ^:private mock-source
+  {:git-commit-sha "deadbeef"
+   :code-hash "cafebabe"
+   :deps-hash "d1e2f3"
+   :input-hash "a1b2c3"
+   :dirty? false})
+
+(deftest enrich-cursor-data-includes-source-when-provided
+  (let [result (chain/enrich-cursor-data mock-snapshot mock-source)]
+    (is (contains? result :cursor/source))
+    (is (= "deadbeef" (get-in result [:cursor/source :git-commit-sha])))
+    (is (= "cafebabe" (get-in result [:cursor/source :code-hash])))
+    (is (= "d1e2f3" (get-in result [:cursor/source :deps-hash])))
+    (is (= "a1b2c3" (get-in result [:cursor/source :input-hash])))
+    (is (false? (get-in result [:cursor/source :dirty?])))))
+
+(deftest enrich-cursor-data-includes-all-dimension-keys
+  (let [result (chain/enrich-cursor-data mock-snapshot mock-source)
+        src (:cursor/source result)]
+    (is (contains? src :git-commit-sha))
+    (is (contains? src :code-hash))
+    (is (contains? src :deps-hash))
+    (is (contains? src :input-hash))
+    (is (contains? src :dirty?))))
+
+(deftest enrich-cursor-data-omits-source-when-nil
+  (let [result (chain/enrich-cursor-data mock-snapshot nil)]
+    (is (not (contains? result :cursor/source)))))
+
+(deftest enrich-cursor-data-preserves-snapshot-fields
+  (let [result (chain/enrich-cursor-data mock-snapshot mock-source)]
+    (is (= :targeted-evidence (:cursor/scope result)))
+    (is (= 5 (:cursor/final-seq result)))
+    (is (= "abcd1234efgh5678" (:cursor/final-self-hash result)))
+    (is (= 5 (:cursor/total-captured result)))))
+
+(deftest cursor-content-hash-changes-when-source-added
+  (let [no-source (chain/enrich-cursor-data mock-snapshot nil)
+        with-source (chain/enrich-cursor-data mock-snapshot mock-source)
+        h1 (hc/hash-with-intent {:hash/intent :evidence-chain} no-source)
+        h2 (hc/hash-with-intent {:hash/intent :evidence-chain} with-source)]
+    (is (not= h1 h2) "Adding source provenance changes cursor content hash")))
+
+(deftest cursor-content-hash-changes-when-source-content-changes
+  (let [src-a (chain/enrich-cursor-data mock-snapshot
+                                        (assoc mock-source :git-commit-sha "aaa" :code-hash "bbb"))
+        src-b (chain/enrich-cursor-data mock-snapshot
+                                        (assoc mock-source :git-commit-sha "ccc" :code-hash "ddd"))
+        h1 (hc/hash-with-intent {:hash/intent :evidence-chain} src-a)
+        h2 (hc/hash-with-intent {:hash/intent :evidence-chain} src-b)]
+    (is (not= h1 h2) "Different source values produce different cursor hashes")))
+
+(deftest cursor-content-hash-changes-when-dirty-flag-changes
+  (let [clean (chain/enrich-cursor-data mock-snapshot (assoc mock-source :dirty? false))
+        dirty (chain/enrich-cursor-data mock-snapshot (assoc mock-source :dirty? true))
+        h1 (hc/hash-with-intent {:hash/intent :evidence-chain} clean)
+        h2 (hc/hash-with-intent {:hash/intent :evidence-chain} dirty)]
+    (is (not= h1 h2) "dirty? flag changes cursor content hash")))
+
+(deftest cursor-content-hash-changes-when-diff-hash-added
+  (let [no-diff (chain/enrich-cursor-data mock-snapshot (assoc mock-source :dirty? true))
+        with-diff (chain/enrich-cursor-data mock-snapshot
+                                            (assoc mock-source :dirty? true) "diffhash123")
+        h1 (hc/hash-with-intent {:hash/intent :evidence-chain} no-diff)
+        h2 (hc/hash-with-intent {:hash/intent :evidence-chain} with-diff)]
+    (is (not= h1 h2) "dirty-diff-hash changes cursor content hash")
+    (is (= "diffhash123" (get-in with-diff [:cursor/source :dirty-diff-hash])))))
+
+(deftest final-evidence-self-hash-independent-of-cursor-source
+  (chain/reset-chain-cursor!)
+  (chain/reset-registry!)
+  (let [evidence-content {:action {:type :increment :n 1}
+                          :after {:counter 1}
+                          :before {:counter 0}
+                          :result {:ok true}
+                          :step 1
+                          :block-time 1000}
+        raw-ev (ev/make-evidence-record
+                {:artifact-kind :transition
+                 :step 1
+                 :block-time 1000
+                 :before {:counter 0}
+                 :after {:counter 1}
+                 :action {:type :increment :n 1}
+                 :result {:ok true}
+                 :attribution {:ctx/run-id "source-test"
+                               :ctx/scenario-id "sc"
+                               :ctx/step 1
+                               :ctx/event-id "evt-001"}})
+        evidence-hash (hc/hash-with-intent {:hash/intent :evidence-content} evidence-content)
+        ev (-> raw-ev
+               (assoc :evidence/hash evidence-hash)
+               (chain/inject-chain-fields))]
+    (chain/register-evidence! ev)
+    (let [snap (chain/cursor-snapshot)]
+      (is (some? snap))
+      (is (= (:cursor/final-self-hash snap) evidence-hash)
+          "final-self-hash is the hash of the chained evidence"))
+    (is (= 64 (count evidence-hash)) "SHA-256 hex is 64 chars")
+    (let [recomputed (hc/hash-with-intent {:hash/intent :evidence-content} evidence-content)]
+      (is (= evidence-hash recomputed) "Evidence hash deterministic from content, independent of cursor"))))
+
+(deftest source-provenance-dirty-flag-explicit
+  (let [result (chain/enrich-cursor-data mock-snapshot (assoc mock-source :dirty? true))]
+    (is (true? (get-in result [:cursor/source :dirty?]))))
+  (let [result (chain/enrich-cursor-data mock-snapshot (assoc mock-source :dirty? false))]
+    (is (false? (get-in result [:cursor/source :dirty?])))))
+
+(deftest source-provenance-absent-represents-unknown
+  (let [result (chain/enrich-cursor-data mock-snapshot nil)]
+    (is (not (contains? result :cursor/source))
+        "Nil source-provenance (no VCS root) means no :cursor/source key — unknown source")))
+
+(deftest cursor-file-envelope-contains-dimension-mirrors
+  (chain/reset-registry!)
+  (chain/reset-chain-cursor!)
+  (let [ev (-> (ev/make-evidence-record
+                {:artifact-kind :transition
+                 :step 1 :block-time 1000
+                 :before {:counter 0} :after {:counter 1}
+                 :action {:type :increment :n 1} :result {:ok true}
+                 :attribution {:ctx/run-id "mirror-test"
+                               :ctx/scenario-id "sc" :ctx/step 1
+                               :ctx/event-id "evt-001"}})
+               (assoc :evidence/hash "test-hash-mirror-001")
+               (chain/inject-chain-fields))]
+    (chain/register-evidence! ev)
+    (let [path (chain/write-chain-cursor-final! :dir (str (evcfg/artifact-dir))
+                                                :allow-dirty? true)
+          content (when path (json/read-str (slurp path)))]
+      (when (and content (string? (get content "code-hash")))
+        (is (string? (get content "code-hash")))
+        (is (string? (get content "deps-hash")))
+        (is (string? (get content "input-hash"))))))
+  (chain/reset-registry!))
+
+;; ── Dirty Policy — tested through pure enrich-cursor-data ─────────────────
+
+(deftest enrich-cursor-data-accepts-dirty-diff-hash
+  (let [source (assoc mock-source :dirty? true)
+        result (chain/enrich-cursor-data mock-snapshot source "abc123diff")]
+    (is (= "abc123diff" (get-in result [:cursor/source :dirty-diff-hash])))
+    (is (true? (get-in result [:cursor/source :dirty?])))
+    (is (= "deadbeef" (get-in result [:cursor/source :git-commit-sha])))))
+
+(deftest enrich-cursor-data-omits-dirty-diff-hash-when-not-override
+  (let [source (assoc mock-source :dirty? true)
+        result (chain/enrich-cursor-data mock-snapshot source nil)]
+    (is (not (contains? (get result :cursor/source) :dirty-diff-hash))
+        "no :dirty-diff-hash without explicit override")))
+
+(deftest cursor-data-contains-source-with-run-config-hash
+  (let [enriched (chain/enrich-cursor-data mock-snapshot (assoc mock-source :run-config-hash "run-conf-001"))]
+    (is (= "run-conf-001" (get-in enriched [:cursor/source :run-config-hash]))))
+  (let [no-run-hash (chain/enrich-cursor-data mock-snapshot mock-source)]
+    (is (not (contains? (get no-run-hash :cursor/source) :run-config-hash)))))

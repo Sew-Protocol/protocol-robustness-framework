@@ -173,10 +173,10 @@
   [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "0.82em"
                    :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
    [:thead [:tr {:style {:backgroundColor "#0f172a"}}
-           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "#"]
-           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Action"]
-           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Agent"]
-           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Result"]]]
+            [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "#"]
+            [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Action"]
+            [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Agent"]
+            [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Result"]]]
    (into [:tbody]
          (map-indexed
           (fn [i entry]
@@ -185,8 +185,8 @@
              [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#7ADDDC"}} (str (:action entry))]
              [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str (:agent entry))]
              [:td {:style {:padding "6px 12px"}} (if (= :ok (:result entry))
-                                                  [:span {:style {:color "#22c55e"}} "OK"]
-                                                  [:span {:style {:color "#ef4444"}} (str (:result entry))])]])
+                                                   [:span {:style {:color "#22c55e"}} "OK"]
+                                                   [:span {:style {:color "#ef4444"}} (str (:result entry))])]])
           trace))])
 
 (defn notice-box

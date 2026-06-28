@@ -68,7 +68,7 @@
         can-bytes (json-bytes (dissoc base :result/hash))
         result-hash (sha256-hex can-bytes)
         result (assoc base :result/hash result-hash)
-        filename (str "claim-result-" (subs result-hash 0 16) ".json")
+        filename (str "claim-result-" (subs result-hash 0 (min 16 (count result-hash))) ".json")
         out-file (io/file claims-dir filename)]
     (spit out-file (json/write-str (sort-keys result) :key-fn (fn [k]
                                                                 (if (namespace k)
@@ -107,7 +107,7 @@
         can-bytes (json-bytes (dissoc base :attestation/id :attestation/hash :attestation/signature))
         att-hash (sha256-hex can-bytes)
         record (assoc base :attestation/id att-hash :attestation/hash att-hash)
-        filename (str "attestation-" (subs att-hash 0 16) ".json")
+        filename (str "attestation-" (subs att-hash 0 (min 16 (count att-hash))) ".json")
         out-file (io/file att-dir filename)]
     (spit out-file (json/write-str (sort-keys record) :key-fn (fn [k]
                                                                 (if (namespace k)
@@ -168,7 +168,7 @@
                                                        {:ref/kind "claim-result"
                                                         :ref/hash (:hash cr)
                                                         :ref/path (str "claims/claim-result-"
-                                                                       (subs (:hash cr) 0 16)
+                                                                       (subs (:hash cr) 0 (min 16 (count (:hash cr))))
                                                                        ".json")})
                                                      @claim-results))
                            :description "All forensic-grade acceptance criteria pass"

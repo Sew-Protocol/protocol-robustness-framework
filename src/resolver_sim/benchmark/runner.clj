@@ -1,6 +1,8 @@
 (ns resolver-sim.benchmark.runner
   (:require [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.adapter :as adapter]
+            [resolver-sim.concepts.registry :as concepts-registry]
+            [resolver-sim.concepts.reporting :as concepts-reporting]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
@@ -97,6 +99,24 @@
          passed-inv-checks (count (filter #(= :pass (:result %)) all-inv-results))
          all-invariants-pass? (= total-inv-checks passed-inv-checks)
 
+           ;; ── Concept enrichment ──────────────────────────────────────────
+         concept-ids (:benchmark/concepts manifest)
+         concept-section (when (seq concept-ids)
+                           (try
+                             (let [{:keys [concepts]} (concepts-registry/load-registry)
+                                   relevant (filter #(contains? (set concept-ids) (:concept/id %))
+                                                    concepts)
+                                   stale (remove (set (map :concept/id relevant)) concept-ids)]
+                               (when (seq stale)
+                                 (log/warn! "benchmark/unknown-concepts" {:stale stale}))
+                               (when (seq relevant)
+                                 (:concept/section
+                                  (concepts-reporting/enrich-report nil relevant))))
+                             (catch Exception e
+                               (log/warn! "benchmark/concept-enrichment-failed"
+                                          {:error (.getMessage e)})
+                               nil)))
+
          evidence {:benchmark      manifest
                    :repo           repo-meta
                    :environment    {:os-name (System/getProperty "os.name")
@@ -108,12 +128,13 @@
                    :invariant-summary {:per-invariant  inv-summary
                                        :total-checks   total-inv-checks
                                        :passed-checks  passed-inv-checks
-                                       :all-pass?      all-invariants-pass?}}
+                                       :all-pass?      all-invariants-pass?}
+                   :concept/section concept-section}
 
          hashable-evidence (dissoc evidence :timestamp)
          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)
 
-          ;; Certification artifact using :benchmark-certification intent
+           ;; Certification artifact using :benchmark-certification intent
          certification {:benchmark-id      (or (:id manifest) "unknown")
                         :scenario-count    (:total metrics)
                         :all-invariants-pass all-invariants-pass?

@@ -5,6 +5,7 @@
    Designed to be readable by a first-time researcher."
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.scenarios :as sc]))
 
 (def coverage-categories
@@ -93,18 +94,16 @@
   [scenario-id]
   (some #(= "status/todo-stub" %) (scenario-tags scenario-id)))
 
-(def ^:private artifact-dir "results/test-artifacts")
-
 (defn- artifact-exists?
   [filename]
-  (.exists (io/file artifact-dir filename)))
+  (.exists (io/file (evcfg/artifact-dir) filename)))
 
 (defn- artifact-ready?
   "Check whether a named artifact file exists on disk.
    Returns true/false. When the artifact dir doesn't exist at all,
    returns false (no evidence yet generated)."
   [filename]
-  (and (.exists (io/file artifact-dir))
+  (and (.exists (io/file (evcfg/artifact-dir)))
        (artifact-exists? filename)))
 
 (defn dispute-resolution-coverage-report

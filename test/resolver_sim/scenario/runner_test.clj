@@ -2,12 +2,15 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.forensic.provenance :as prov]
             [resolver-sim.io.scenario-runner :as scenario-runner]
             [resolver-sim.io.scenarios :as sc]
             [resolver-sim.protocols.sew :as sew]
             [resolver-sim.scenario.normalize :as norm]
             [resolver-sim.scenario.report :as report]
             [resolver-sim.scenario.runner :as runner]
+            [resolver-sim.scenario.suites :as suites]
             [resolver-sim.sim.fixtures :as fixtures]))
 
 (deftest scenario-pass-respects-fixture-checks
@@ -221,9 +224,118 @@
         (is (= {:backend :local-current
                 :protocol-id "yield-v1"
                 :dispatcher-id :protocol/yield-v1}
-               (:runner normalized-entry)))
+               (select-keys (:runner normalized-entry)
+                            [:backend :protocol-id :dispatcher-id])))
         (is (= ["claim.run.normalized"]
                (get-in normalized-entry [:scenario-metadata :scenario/claim-intents])))))))
+
+(deftest run-and-report-rejects-ambiguous-dispatch-maps
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Ambiguous dispatch map"
+       (scenario-runner/run-and-report
+        {:suite :yield-provider-scenarios
+         :scenario "scenarios/Y02_vault-shortfall-partial-withdraw.json"}
+        {}))))
+
+(deftest run-and-report-prints-after-execution-and-writes-bundle-once
+  (let [calls (atom [])
+        request {:runner/backend :local-current
+                 :runner-selection {:mode :pinned
+                                    :runner-id :runner/local-bb}
+                 :suite/key :yield-provider-scenarios
+                 :protocol/default-id "yield-v1"
+                 :entries [{:scenario-id "Y01"
+                            :scenario-path "scenarios/Y01.json"
+                            :protocol "yield-v1"
+                            :dispatcher-id :protocol/yield-v1}
+                           {:scenario-id "Y02"
+                            :scenario-path "scenarios/Y02.json"
+                            :protocol "yield-v1"
+                            :dispatcher-id :protocol/yield-v1}]
+                 :entry-count 2}
+        summary {:scenario-run/request request
+                 :suite-id :yield-provider-scenarios
+                 :ok? false
+                 :passed 1
+                 :total 2
+                 :elapsed-ms 12
+                 :results [{:name "Y01"
+                            :scenario-id "Y01"
+                            :pass? true
+                            :outcome :pass
+                            :steps 1
+                            :reverts 0}
+                           {:name "Y02"
+                            :scenario-id "Y02"
+                            :pass? false
+                            :outcome :fail
+                            :steps 1
+                            :reverts 0}]}
+        output-file (.getAbsolutePath (java.io.File/createTempFile "bundle-root-" ".json"))]
+    (try
+      (with-redefs [suites/suite-paths
+                    (fn [_] ["scenarios/Y01.json" "scenarios/Y02.json"])
+                    suites/suite-protocol-id
+                    (fn [_] "yield-v1")
+                    scenario-runner/run-paths
+                    (fn [_ _]
+                      (swap! calls conj :execute)
+                      summary)
+                    report/print-report
+                    (fn [report-summary _]
+                      (swap! calls conj [:report (:total report-summary)])
+                      1)
+                    scenario-runner/write-result-json
+                    (fn [_ payload]
+                      (swap! calls conj [:write payload])
+                      nil)
+                    scenario-runner/populate-forensic-claims!
+                    (fn []
+                      (swap! calls conj :forensics)
+                      nil)
+                    prov/source-provenance
+                    (fn []
+                      {})
+                    ev-node/with-execution-node+
+                    (fn [_ thunk]
+                      (swap! calls conj :execution-node-start)
+                      (let [value (thunk)]
+                        (swap! calls conj :execution-node-end)
+                        {:result value
+                         :execution-node {:node-hash "node-hash"
+                                          :content-hash "content-hash"
+                                          :record-hash "record-hash"}}))]
+        (let [result (scenario-runner/run-and-report
+                      {:suite :yield-provider-scenarios
+                       :output-file output-file}
+                      {})]
+          (is (= [:execution-node-start
+                  :execute
+                  :execution-node-end
+                  :report
+                  :forensics
+                  :write]
+                 (mapv #(if (vector? %) (first %) %)
+                       @calls))
+              "reporting must happen after the execution thunk returns")
+          (let [writes (filter #(and (vector? %)
+                                     (= :write (first %)))
+                               @calls)
+                payload (second (first writes))]
+            (is (= 1 (count writes)))
+            (is (= [:report 2]
+                   (some #(when (and (vector? %)
+                                     (= :report (first %)))
+                            %)
+                         @calls)))
+            (is (= "bundle-root.v1" (:bundle/schema-version payload)))
+            (is (= {:total 2 :passed 1 :failed 1}
+                   (get-in payload [:execution/summary :totals]))))
+          (is (= {:total 2 :passed 1 :failed 1}
+                 (get-in (:bundle-root result) [:execution/summary :totals])))))
+      (finally
+        (io/delete-file output-file true)))))
 
 (deftest report-surfaces-expectation-violations
   (let [lines (report/format-check-failures

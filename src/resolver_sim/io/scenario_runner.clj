@@ -423,14 +423,16 @@
     code))
 
 (defn run-scenario-file-and-report
-  "Run one scenario file; optional JSON output. Returns exit code."
+  "Run one scenario file and print the report. Returns exit code.
+
+   `output-path` is accepted for compatibility but writing is handled by the
+   outer `run-and-report` bundle path."
   [scenario-path output-path opts]
   (try
     (let [summary (run-scenario-file scenario-path opts)
-          entry   (first (:results summary))
           code    (report/print-report summary (default-report-opts opts))]
       (when output-path
-        (write-result-json output-path (:replay-result entry)))
+        nil)
       code)
     (catch Exception e
       (println (format "Error running scenario %s: %s" scenario-path (.getMessage e)))
@@ -522,6 +524,232 @@
                                    :title (format "Fixture suite: %s" (name suite-key)))))
       (if (:ok? summary) 0 1))))
 
+;; ── Protocol resolution ─────────────────────────────────────────────────────────
+
+(defn- resolve-protocol-id
+  "Resolve the effective protocol id from dispatch, with fallback to default."
+  [dispatch]
+  (let [default (or (:protocol dispatch) preg/default-protocol-id)
+        inferred (when (:scenario dispatch)
+                   (get-in (resolve-path-run-request [(:scenario dispatch)]
+                                                     {:protocol default})
+                           [:scenario-run/request :entries 0 :protocol]))
+        suite-pid (when (:suite dispatch)
+                    (suites/suite-protocol-id (:suite dispatch)))]
+    (or inferred suite-pid default)))
+
+;; ── Canonicality ────────────────────────────────────────────────────────────────
+
+(defn- determine-canonicality
+  "Determine whether a run is canonical and the non-canonical reason code."
+  [dispatch runner-selection]
+  (let [selection-mode (:mode runner-selection)
+        canonical? (and (nil? (:scenario dispatch))
+                        (nil? (:fixture-suite dispatch))
+                        (not= :dev (:mode dispatch))
+                        (= :pinned selection-mode))
+        non-canonical-reason (cond
+                               (:scenario dispatch) {:code :single-scenario-selected
+                                                     :details "Single scenario selected; not a full suite run"}
+                               (:fixture-suite dispatch) {:code :fixture-suite-selected
+                                                          :details "Fixture suite selected; not a registered suite run"}
+                               (= :dev (:mode dispatch)) {:code :dev-mode
+                                                          :details "Development mode; bundle not suitable for comparison"}
+                               (= :capability-match selection-mode) {:code :capability-match-runner
+                                                                     :details "Capability-matched runner; non-deterministic selection"}
+                               (:scenario-filter dispatch) {:code :scenario-filtering
+                                                            :details (str "Scenario filtering applied: " (:scenario-filter dispatch))}
+                               (= :quorum selection-mode) {:code :quorum-not-yet-canonical
+                                                           :details "Quorum mode selected; not yet canonical"}
+                               :else nil)]
+    {:canonical? canonical?
+     :non-canonical-reason non-canonical-reason
+     :selection-mode selection-mode}))
+
+;; ── Dispatch execution ──────────────────────────────────────────────────────────
+
+(defn- dispatch-keyword
+  "Determine the dispatch keyword from the dispatch map."
+  [dispatch]
+  (cond (:fixture-suite dispatch) :fixture-suite
+        (:suite dispatch) :suite
+        (:scenario dispatch) :scenario
+        :else :registry))
+
+(def ^:private dispatch-selector-keys
+  [:fixture-suite :suite :scenario])
+
+(defn- validate-dispatch!
+  "Reject dispatch maps that attempt more than one execution mode."
+  [dispatch]
+  (let [selected (->> dispatch-selector-keys
+                      (filter #(some? (get dispatch %)))
+                      vec)]
+    (when (> (count selected) 1)
+      (throw (ex-info "Ambiguous dispatch map"
+                      {:dispatch dispatch
+                       :selected selected}))))
+  dispatch)
+
+(defn- summary->run-result
+  [dispatch request summary]
+  (if request
+    (:scenario-run/result (normalize-run-result request summary))
+    (let [results (vec (:results summary))
+          passed (count (filter :pass? results))
+          total (or (:total summary) (count results))
+          failed (or (:failed summary) (- total passed))]
+      {:status (if (or (true? (:ok? summary))
+                       (= passed total))
+                 :pass
+                 :fail)
+       :suite/key (or (:suite-id summary)
+                      (:suite dispatch))
+       :evidence/profile (:evidence/profile request)
+       :output/profile (:output/profile request)
+       :runner-selection (:runner-selection request)
+       :totals {:total total
+                :passed passed
+                :failed failed}
+       :results results
+       :summary summary
+       :diagnostics {:elapsed-ms (:elapsed-ms summary 0)
+                     :suite-id (:suite-id summary)}})))
+
+(defn- dispatch-summary
+  [dispatch opts protocol-id]
+  (case (dispatch-keyword dispatch)
+    :fixture-suite (run-fixture-suite (:fixture-suite dispatch) nil opts)
+    :suite (if-let [paths (suites/suite-paths (:suite dispatch))]
+             (run-paths paths
+                        (assoc opts
+                               :suite-id (:suite dispatch)
+                               :protocol (or (:protocol opts)
+                                             (suites/suite-protocol-id (:suite dispatch)))))
+             (throw (ex-info "Unknown suite"
+                             {:suite (:suite dispatch)
+                              :known (vec (suites/known-suite-keys))})))
+    :scenario (run-scenario-file (:scenario dispatch)
+                                 (assoc opts :protocol protocol-id))
+    :registry (run-registry-suite (assoc opts :protocol protocol-id))))
+
+(defn- dispatch-report-exit-code
+  [dispatch-key summary opts protocol-id]
+  (case dispatch-key
+    :fixture-suite (if (= :table (or (:report-format opts) :table))
+                     (report/print-report summary
+                                          (default-report-opts
+                                           (assoc opts
+                                                  :title (format "Fixture suite: %s"
+                                                                 (name (:suite-id summary))))))
+                     (if (:ok? summary) 0 1))
+    :suite (let [suite-id (:suite-id summary)
+                 title (when suite-id (format "Scenario suite: %s" (name suite-id)))]
+             (report/print-report summary
+                                  (default-report-opts
+                                   (cond-> opts
+                                     title (assoc :title title)))))
+    :scenario (report/print-report summary (default-report-opts opts))
+    :registry (let [suite-id (case protocol-id
+                               "sew-v1" :sew-invariants
+                               "yield-v1" :yield-provider-scenarios
+                               (:suite-id summary))
+                    title (case protocol-id
+                            "sew-v1" "Sew Invariant Suite — Deterministic Scenarios (Clojure in-process)"
+                            "yield-v1" "Yield Provider Suite — File-backed scenarios (Y01–Y05)"
+                            (str "Invariant suite for protocol: " protocol-id))]
+                (report/print-report (cond-> summary
+                                       suite-id (assoc :suite-id suite-id))
+                                     (default-report-opts
+                                      (assoc opts :title title))))))
+
+(defn- execute-dispatch!
+  "Run the appropriate scenario/suite/fixture and return {:exit-code :dispatch-key
+   :run-request :run-result :bundle-root}."
+  [dispatch opts protocol-id runner-selection]
+  (let [dispatch-key (dispatch-keyword dispatch)
+        summary (dispatch-summary dispatch opts protocol-id)
+        run-request (merge {:runner/backend :local-current
+                            :runner-selection runner-selection
+                            :suite/key (or (:suite-id summary)
+                                           (:suite dispatch))
+                            :protocol/default-id protocol-id
+                            :evidence/profile (:evidence-profile opts)
+                            :output/profile (:output-profile opts)}
+                           (:scenario-run/request summary))
+        run-result (summary->run-result dispatch run-request summary)
+        exit-code (if (= :pass (:status run-result)) 0 1)
+        bundle-root (br/build-bundle-root run-request run-result)]
+    {:exit-code exit-code
+     :dispatch-key dispatch-key
+     :summary summary
+     :run-request run-request
+     :run-result run-result
+     :bundle-root bundle-root}))
+
+;; ── Execution node spec builder ─────────────────────────────────────────────────
+
+(defn- build-execution-node-spec
+  "Build the spec map for with-execution-node+ from resolved parameters."
+  [dispatch opts runner-selection canonical? non-canonical-reason protocol-id]
+  {:execution-id :execution/replay
+   :runner :scenario-runner
+   :inputs (merge {:dispatch dispatch
+                   :runner-selection runner-selection
+                   :canonical? canonical?
+                   :non-canonical-reason non-canonical-reason
+                   :opts {:protocol protocol-id
+                          :report-format (:report-format opts)
+                          :suite-id (:suite-id opts)}}
+                  (prov/source-provenance))
+   :status-fn (fn [{:keys [exit-code]}]
+                (cond (zero? exit-code) :pass
+                      (integer? exit-code) :fail
+                      :else :error))
+   :outputs-fn (fn [{:keys [exit-code dispatch-key bundle-root]}]
+                 {:exit-code exit-code
+                  :dispatch dispatch
+                  :dispatch-key dispatch-key
+                  :canonical? canonical?
+                  :non-canonical-reason non-canonical-reason
+                  :bundle/root bundle-root
+                  :bundle/root-hash (some-> bundle-root :bundle/hash)})
+   :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
+                         (if (zero? exit-code)
+                           []
+                           [{:failure-type :replay-failed
+                             :class :unexpected
+                             :message (str "Replay exited with code " exit-code
+                                           " (" (name dispatch-key) ")")
+                             :expected? false}]))})
+
+;; ── Post-execution ──────────────────────────────────────────────────────────────
+
+(defn- populate-forensic-claims!
+  "Run Phase 3 forensic claims/attestations population (best-effort)."
+  []
+  (.println *err* "\n--- Forensic Claims & Attestations ---")
+  (try
+    (let [rid (or (some-> (prov/provenance-map) :bundle/id) "unknown")
+          pop-result (fp/populate-claims-and-attestations! rid)]
+      (.println *err* (format "  claims: %d, attestations: %d, all-pass?: %s"
+                              (:claim-count pop-result)
+                              (:attestation-count pop-result)
+                              (:all-pass? pop-result))))
+    (catch Exception e
+      (.println *err* (str "  warning: forensic populate failed: " (.getMessage e))))))
+
+(defn- build-enriched-bundle-root
+  "Merge source provenance and execution node hashes into the bundle root."
+  [bundle-root execution-node]
+  (merge bundle-root
+         (prov/source-provenance)
+         (when execution-node
+           {:execution/node-hash (:node-hash execution-node)
+            :execution/content-hash (:content-hash execution-node)
+            :execution/record-hash (:record-hash execution-node)
+            :dag/root-node-hash (:node-hash execution-node)})))
+
 (defn run-and-report
   "CLI dispatcher: full invariant suite, named suite, or single file.
 
@@ -533,140 +761,78 @@
      :protocol       — protocol id (default sew-v1)
      opts are forwarded to report/runner.
 
-   Returns exit code: 0 on full pass, 1 on any failure."
+   Returns {:exit-code <int> :bundle-root <map> :execution-node <map>}."
   [dispatch opts]
-  (let [default-protocol-id (or (:protocol dispatch) preg/default-protocol-id)
-        inferred-protocol-id (when (:scenario dispatch)
-                               (get-in (resolve-path-run-request [(:scenario dispatch)]
-                                                                 {:protocol default-protocol-id})
-                                       [:scenario-run/request :entries 0 :protocol]))
-        suite-protocol-id (when (:suite dispatch)
-                            (suites/suite-protocol-id (:suite dispatch)))
-        protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
+  (validate-dispatch! dispatch)
+  (let [protocol-id (resolve-protocol-id dispatch)
         runner-selection (or (:runner-selection dispatch) default-runner-selection)
-        selection-mode (:mode runner-selection)
-        canonical? (and (nil? (:scenario dispatch))
-                        (nil? (:fixture-suite dispatch))
-                        (not= :dev (:mode dispatch))
-                        (= :pinned selection-mode))
-        non-canonical-reason (cond
-                               (:scenario dispatch) {:code :single-scenario-selected
-                                                      :details "Single scenario selected; not a full suite run"}
-                               (:fixture-suite dispatch) {:code :fixture-suite-selected
-                                                           :details "Fixture suite selected; not a registered suite run"}
-                               (= :dev (:mode dispatch)) {:code :dev-mode
-                                                           :details "Development mode; bundle not suitable for comparison"}
-                               (= :capability-match selection-mode) {:code :capability-match-runner
-                                                                      :details "Capability-matched runner; non-deterministic selection"}
-                                (:scenario-filter dispatch) {:code :scenario-filtering
-                                                              :details (str "Scenario filtering applied: " (:scenario-filter dispatch))}
-                                (= :quorum selection-mode) {:code :quorum-not-yet-canonical
-                                                             :details "Quorum mode selected; not yet canonical"}
-                                :else nil)]
+        {:keys [canonical? non-canonical-reason]}
+        (determine-canonicality dispatch runner-selection)
+        tsa-url (System/getenv "PRF_TSA_URL")]
     (when (and (not canonical?) non-canonical-reason)
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
                   :message "Run is non-canonical; bundle will be marked accordingly"}))
-    ;; Bind TSA URL from environment if set (for RFC 3161 timestamp anchoring)
-    (let [tsa-url (System/getenv "PRF_TSA_URL")]
-      (when tsa-url
-        (.println *err* (str "  TSA URL configured: " tsa-url))))
-    (binding [ts/*tsa-url* (or (System/getenv "PRF_TSA_URL") ts/*tsa-url*)]
-      (let [result (ev-node/with-execution-node+
-                   {:execution-id :execution/replay
-                    :runner :scenario-runner
-                    :inputs (merge {:dispatch dispatch
-                                    :runner-selection runner-selection
-                                    :canonical? canonical?
-                                    :non-canonical-reason non-canonical-reason
-                                    :opts {:protocol protocol-id
-                                           :report-format (:report-format opts)
-                                           :suite-id (:suite-id opts)}}
-                                   (prov/source-provenance))
-                    :status-fn (fn [{:keys [exit-code]}]
-                                 (cond (zero? exit-code) :pass
-                                       (integer? exit-code) :fail
-                                       :else :error))
-                    :outputs-fn (fn [{:keys [exit-code dispatch-key canonical? bundle-root]}]
-                                  {:exit-code exit-code
-                                   :dispatch dispatch
-                                   :dispatch-key dispatch-key
-                                   :canonical? canonical?
-                                   :non-canonical-reason non-canonical-reason
-                                   :bundle/root bundle-root
-                                   :bundle/root-hash (some-> bundle-root :bundle/hash)})
-                    :failure-details-fn (fn [{:keys [exit-code dispatch-key]}]
-                                          (if (zero? exit-code)
-                                            []
-                                            [{:failure-type :replay-failed
-                                              :class :unexpected
-                                              :message (str "Replay exited with code " exit-code
-                                                            " (" (name dispatch-key) ")")
-                                              :expected? false}]))}
-                   (fn []
-                     (let [dispatch-key (cond (:fixture-suite dispatch) :fixture-suite
-                                              (:suite dispatch) :suite
-                                              (:scenario dispatch) :scenario
-                                              :else :registry)
-                           exit-code (cond
-                                       (:fixture-suite dispatch)
-                                       (run-fixture-suite-and-report (:fixture-suite dispatch) nil opts)
+    (when tsa-url
+      (.println *err* (str "  TSA URL configured: " tsa-url)))
 
-                                       (:suite dispatch)
-                                       (run-named-suite-and-report (:suite dispatch) opts)
+    ;; Pre-run commitment (best-effort, lazy-loaded forensic namespaces)
+    (let [suite-key (:suite dispatch)
+          run-id (str "run-" (java.time.Instant/now))
+          _ (try
+              (let [prc (requiring-resolve 'resolver-sim.forensic.pre-run-commitment/build-commitment)
+                    pwrite (requiring-resolve 'resolver-sim.forensic.pre-run-commitment/write-commitment!)
+                    ctx {:suite-key suite-key :run-id run-id}
+                    commitment (prc ctx)
+                    written (pwrite commitment)]
+                (.println *err* (str "  Pre-run commitment: " (:hash written)))
+                ;; Sign if key available
+                (when (or (System/getenv "PRF_SIGNING_KEY")
+                          (.exists (java.io.File. "signing-key.pem")))
+                  (let [fsign (requiring-resolve 'resolver-sim.forensic.signing/sign-and-write!)]
+                    (fsign (:path written) commitment)
+                    (.println *err* (str "  Pre-run commitment signed")))))
+              (catch Exception e
+                (.println *err* (str "  WARN: pre-run commitment failed: " (.getMessage e)))))]
 
-                                       (:scenario dispatch)
-                                       (run-scenario-file-and-report (:scenario dispatch)
-                                                                     (:output-file dispatch)
-                                                                     (assoc opts :protocol protocol-id))
+      (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)]
+        (let [exec-spec (build-execution-node-spec
+                         dispatch opts runner-selection
+                         canonical? non-canonical-reason protocol-id)
+              result (ev-node/with-execution-node+
+                       exec-spec
+                       (fn []
+                         (execute-dispatch! dispatch opts protocol-id
+                                            runner-selection)))
+              thunk-result (:result result)
+              execution-node (:execution-node result)
+              _ (dispatch-report-exit-code (:dispatch-key thunk-result)
+                                           (:summary thunk-result)
+                                           opts
+                                           protocol-id)
+              enriched-root (build-enriched-bundle-root
+                             (:bundle-root thunk-result) execution-node)]
+          (populate-forensic-claims!)
 
-                                       :else
-                                       (run-registry-suite-and-report (assoc opts :protocol protocol-id)))
-                           run-request {:runner/backend :local-current
-                                        :runner-selection runner-selection
-                                        :suite/key (:suite dispatch)
-                                        :protocol/default-id protocol-id
-                                        :evidence/profile (:evidence-profile opts)
-                                        :output/profile (:output-profile opts)}
-                           run-result {:status (if (zero? exit-code) :pass :fail)
-                                       :suite/key (:suite dispatch)
-:totals {:total 1
-         :passed (if (zero? exit-code) 1 0)
-         :failed (if (zero? exit-code) 0 1)}
-                                       :results []}
-                           bundle-root (br/build-bundle-root run-request run-result)]
-                       {:exit-code exit-code
-                        :dispatch-key dispatch-key
-                        :canonical? canonical?
-                        :bundle-root bundle-root})))]
+        ;; Execution DAG (best-effort, lazy-loaded)
+          (try
+            (let [dag-build (requiring-resolve 'resolver-sim.forensic.execution-dag/build-dag)
+                  dag-write (requiring-resolve 'resolver-sim.forensic.execution-dag/write-dag!)
+                  dag-make-node (requiring-resolve 'resolver-sim.forensic.execution-dag/make-plan-node)
+                  paths (when suite-key (suites/suite-paths suite-key))
+                  nodes (mapv (fn [p] (dag-make-node
+                                       {:id (str "node:" (.getName (java.io.File. p)))
+                                        :type :scenario-run
+                                        :input-hashes {:scenario/path p}}))
+                              (or paths []))
+                  dag (dag-build nodes [])]
+              (dag-write dag run-id)
+              (.println *err* (str "  Execution DAG: " (:dag/node-count dag) " nodes")))
+            (catch Exception e
+              (.println *err* (str "  WARN: execution DAG write failed: " (.getMessage e)))))
 
-      ;; Phase 3 (opt-in): Populate claims/ and attestations/ from evidence chain.
-      ;; Independent of bundle — reads evidence root hash directly from the chain.
-      (.println *err* "\n--- Forensic Claims & Attestations ---")
-      (let [run-id (or (some-> (prov/provenance-map) :bundle/id) "unknown")]
-        (try
-          (let [pop-result (fp/populate-claims-and-attestations! run-id)]
-            (.println *err* (format "  claims: %d, attestations: %d, all-pass?: %s"
-                                    (:claim-count pop-result)
-                                    (:attestation-count pop-result)
-                                    (:all-pass? pop-result))))
-          (catch Exception e
-            (.println *err* (str "  warning: forensic populate failed: " (.getMessage e))))))
-
-      ;; Enrich bundle root with source provenance + execution node hash,
-      ;; then write to --output-file and return
-      (let [thunk-result (:result result)
-            execution-node (:execution-node result)
-            bundle-root (:bundle-root thunk-result)
-            enriched-root (merge bundle-root
-                                 (prov/source-provenance)
-                                 (when execution-node
-                                   {:execution/node-hash (:node-hash execution-node)
-                                    :execution/content-hash (:content-hash execution-node)
-                                    :execution/record-hash (:record-hash execution-node)
-                                    :dag/root-node-hash (:node-hash execution-node)}))]
-        (when-let [output-path (:output-file dispatch)]
-          (write-result-json output-path enriched-root))
-        {:exit-code (:exit-code thunk-result)
-         :bundle-root enriched-root
-         :execution-node execution-node})))))
+          (when-let [output-path (:output-file dispatch)]
+            (write-result-json output-path enriched-root))
+          {:exit-code (:exit-code thunk-result)
+           :bundle-root enriched-root
+           :execution-node execution-node})))))

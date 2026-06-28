@@ -447,27 +447,71 @@ run_triage() {
 
 run_suites() {
    require_clojure || return $?
-   echo "Running all canonical fixture suites (save goldens + emit test artifacts)..."
-   local suite_filter="[:suites/all-invariants :suites/baseline-safety :suites/equilibrium-validation :suites/spe-validation :suites/spe-regression :suites/equivalence-auth-paths :suites/equivalence-race-pairs :suites/equivalence-escalation-boundaries :suites/equivalence-accounting-min :suites/equivalence-money-path-integrity :suites/dr3-critical :suites/governance-decay :suites/same-block-ordering :suites/timelock-regression :suites/equivalence-economic-stress :suites/forking-strategist]"
+   local max_workers="${PARALLEL_WORKERS:-4}"
+   echo "Running all canonical fixture suites (parallel=${max_workers})..."
 
-   clojure -M:test:with-sew -e "
-(require '[resolver-sim.sim.fixtures :as f])
-(let [suites $suite_filter
-      results (map (fn [id] [id (f/run-suite id :save nil {})]) suites)
-      any-fail (some (fn [[_ r]] (not (:ok? r))) results)]
-  (doseq [[suite-id result] results]
-    (f/emit-suite-result suite-id result)
-    (println (str suite-id " → " (if (:ok? result) "PASS" "FAIL")))
-    (when-not (:ok? result)
-      (doseq [r (:results result)]
-        (when (not= :pass (:outcome r))
-          (println (str "  FAIL: " (:trace-id r) " [" (:outcome r) "]")))))))
-  (when any-fail (System/exit 1)))"
+   # Suite keyword list — must match :suites/* fixture file names
+   local suites=(
+     :suites/all-invariants
+     :suites/baseline-safety
+     :suites/equilibrium-validation
+     :suites/spe-validation
+     :suites/spe-regression
+     :suites/equivalence-auth-paths
+     :suites/equivalence-race-pairs
+     :suites/equivalence-escalation-boundaries
+     :suites/equivalence-accounting-min
+     :suites/equivalence-money-path-integrity
+     :suites/dr3-critical
+     :suites/governance-decay
+     :suites/same-block-ordering
+     :suites/timelock-regression
+     :suites/equivalence-economic-stress
+     :suites/forking-strategist
+   )
+
+   local pids=()
+   local suites_ran=0 suites_failed=0
+   for suite in "${suites[@]}"; do
+     clojure -M:test:with-sew -m scripts.run-suite "$suite" &
+     pids+=($!)
+     suites_ran=$((suites_ran + 1))
+     # Throttle: wait for one to finish if at max_workers
+     if [[ ${#pids[@]} -ge $max_workers ]]; then
+       wait -n
+       local rc=$?
+       if [[ $rc -ne 0 ]]; then
+         suites_failed=$((suites_failed + 1))
+       fi
+       # Remove completed PIDs (reap all finished)
+       local new_pids=()
+       for p in "${pids[@]}"; do
+         if kill -0 "$p" 2>/dev/null; then
+           new_pids+=("$p")
+         fi
+       done
+       pids=("${new_pids[@]}")
+     fi
+   done
+   # Wait for remaining
+   for p in "${pids[@]}"; do
+     wait "$p"
+     local rc=$?
+     if [[ $rc -ne 0 ]]; then
+       suites_failed=$((suites_failed + 1))
+     fi
+   done
+
+   echo ""
+   echo "=== Suite Run Complete ==="
+   echo "  suites: $suites_ran  failed: $suites_failed"
+
    # Extract suite failures into risk digest format for test-summary.json visibility
    python3 scripts/evidence/suite_failures_to_risk.py --artifact-dir "$ARTIFACT_DIR" --run-id "$RUN_ID"
    # Touch notebooks/report.clj so Clerk's file watcher triggers re-evaluation
    touch -m "notebooks/report.clj" 2>/dev/null || true
-   return $?
+
+   return $suites_failed
 }
 
 run_routed_suites() {

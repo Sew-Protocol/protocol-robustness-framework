@@ -32,8 +32,7 @@
     (show-notebook! "notebooks/hardening_artifact.clj")
     (show-notebook! "notebooks/protocol_provenance.clj")
     (show-notebook! "notebooks/security_validation.clj")
-    (show-notebook! "src/resolver_sim/notebooks/yield_provider_demo.clj")
-    (show-notebook! "src/resolver_sim/notebooks/subgame_counterfactual_workbench.clj")
+    (show-notebook! "notebooks/benchmark_protocol_robustness.clj")
 
     ;; Index is shown last — it becomes the default landing page.
     (show-notebook! "notebooks/index.clj")))

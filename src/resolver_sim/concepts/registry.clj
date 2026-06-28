@@ -60,21 +60,28 @@
 
 ;; ── Public API ───────────────────────────────────────────────────────────────
 
-(defn load-registry
+(def load-registry
   "Load the concept registry and all referenced concept definitions.
-   Returns {:registry <registry-map> :concepts <vec-of-concept-maps>}."
-  ([] (load-registry concept-registry-path))
-  ([registry-path]
-   (let [registry (load-edn registry-path)
-         concepts (mapv (fn [entry]
-                          (let [path (resolve-concept-file entry)
-                                concept (load-edn path)]
-                            (validate-concept concept)))
-                        (:concepts registry))]
-     (log/info! "concepts/loaded" {:count (count concepts)
-                                   :ids (mapv :concept/id concepts)})
-     {:registry registry
-      :concepts concepts})))
+   Returns {:registry <registry-map> :concepts <vec-of-concept-maps>}.
+   Cached after first load — disk is read once per process."
+  (let [cache (atom nil)]
+    (fn load-registry*
+      ([] (load-registry* concept-registry-path))
+      ([registry-path]
+       (if-let [cached @cache]
+         cached
+         (let [result (let [registry (load-edn registry-path)
+                            concepts (mapv (fn [entry]
+                                             (let [path (resolve-concept-file entry)
+                                                   concept (load-edn path)]
+                                               (validate-concept concept)))
+                                           (:concepts registry))]
+                        (log/info! "concepts/loaded" {:count (count concepts)
+                                                      :ids (mapv :concept/id concepts)})
+                        {:registry registry
+                         :concepts concepts})]
+           (reset! cache result)
+           result))))))
 
 (defn lookup-concept
   "Find a concept definition by qualified keyword."

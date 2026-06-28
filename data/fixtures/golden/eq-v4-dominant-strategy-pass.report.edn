@@ -6,6 +6,7 @@
  :metrics
  {:yield/escrow-unrealized 0,
   :yield/position-status nil,
+  :cancellations-recipient 0,
   :invariant-violations 0,
   :yield/unrealized 0,
   :yield/position-unrealized 0,
@@ -15,6 +16,7 @@
   :yield/escrow-realized 0,
   :attack-attempts 2,
   :recipient/claimable 3940,
+  :cancellations-auto-dispute 0,
   :yield/available-ratio 1.0,
   :double-settlements 0,
   :buyer/claimable 0,
@@ -55,6 +57,7 @@
   :yield/position-realized 0,
   :yield/escrow-principal 0,
   :yield/position-principal 0,
+  :cancellations-sender 0,
   :expected-reverts 0,
   :negative-payoff-count 0,
   :escrow/live-state "released",

@@ -1131,13 +1131,14 @@
 (def protocol (SewProtocol.))
 
 (defn replay-with-sew-protocol
-  [scenario]
-  (let [scenario*
-        (if-let [te (:temporal-evidence scenario)]
-          (if (and (:enabled? te) (not (:recorder te)))
-            (assoc scenario :temporal-evidence
-                   (assoc te :recorder temporal/record-from-replay!
-                          :protocol protocol))
-            scenario)
-          scenario)]
-    (replay/replay-with-protocol protocol scenario*)))
+  ([scenario] (replay-with-sew-protocol scenario {}))
+  ([scenario replay-opts]
+   (let [scenario*
+         (if-let [te (:temporal-evidence scenario)]
+           (if (and (:enabled? te) (not (:recorder te)))
+             (assoc scenario :temporal-evidence
+                    (assoc te :recorder temporal/record-from-replay!
+                           :protocol protocol))
+             scenario)
+           scenario)]
+     (replay/replay-with-protocol protocol scenario* replay-opts))))

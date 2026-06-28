@@ -36,14 +36,18 @@
 (defn- stable-scenario-entry
   "Extract stable fields from one scenario result entry.
    Computes a fallback scenario-hash from :scenario-id and :dispatcher-id
-   when the entry lacks a pre-computed :scenario-hash."
+   when the entry lacks a pre-computed :scenario-hash.  When :scenario-id
+   is nil, falls back to hashing all available stable fields."
   [entry]
   (let [base (select-keys entry scenario-stable-keys)]
     (if (:scenario-hash base)
       base
-      (assoc base :scenario-hash
-             (hc/hash-with-intent {:hash/intent :scenario}
-                                  (select-keys entry [:scenario-id :dispatcher-id]))))))
+      (let [fallback-keys (if (:scenario-id entry)
+                            [:scenario-id :dispatcher-id]
+                            (keys base))]
+        (assoc base :scenario-hash
+               (hc/hash-with-intent {:hash/intent :scenario}
+                                    (select-keys entry fallback-keys)))))))
 
 (defn build-overview
   "Build a normalized overview from a :scenario-run/result map.

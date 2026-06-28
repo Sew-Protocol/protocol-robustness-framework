@@ -12,7 +12,8 @@
 (def ^:private expected-suite-keys
   #{:yield-provider-scenarios
     :sew-yield-scenarios
-    :dispute-resolution-scenarios})
+    :dispute-resolution-scenarios
+    :sew-reference-v1})
 
 (def ^:private expected-metadata-keys
   #{:protocol-id :title :description :kind :ci-tier})

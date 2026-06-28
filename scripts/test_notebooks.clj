@@ -23,15 +23,30 @@
            (not (str/includes? (.getName f) "_template"))))
     (file-seq notebooks-dir))))
 
+(def ^:const notebook-timeout-ms
+  "Maximum milliseconds to wait for a single notebook to load.
+   JVM startup for the first notebook (~40s) plus require time for
+   notebooks with expensive top-level computations (scenario replay,
+   trace data loading).  Notebooks exceeding this should use delay
+   or lazy evaluation at top level."
+  120000)
+
 (defn load-notebook [ns-sym]
-  (try
-    (require ns-sym)
-    (println "  ✓" ns-sym)
-    true
-    (catch Exception e
-      (println "  ✗" ns-sym)
-      (println "    " (ex-message e))
-      false)))
+  (let [f (future
+            (try
+              (require ns-sym)
+              :loaded
+              (catch Exception e
+                (println "  ✗" ns-sym)
+                (println "    " (ex-message e))
+                :failed)))]
+    (let [result (deref f notebook-timeout-ms :timeout)]
+      (if (= :timeout result)
+        (do (future-cancel f)
+            (println "  ⏱" ns-sym "(timed out after" notebook-timeout-ms "ms)")
+            false)
+        (do (when (= :loaded result) (println "  ✓" ns-sym))
+            (= :loaded result))))))
 
 ;; ── entry point ────────────────────────────────────────────────────────────────
 

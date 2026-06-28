@@ -1,4 +1,6 @@
 {:concept/id :verifiable-assurance/forensic-confidence
+ :concept/type :assurance
+ :concept/layer :framework-explanation
  :concept/name "Verifiable assurance — forensic confidence"
  :concept/summary
  "A stakeholder examines the evidence trail left by a protocol
@@ -25,8 +27,10 @@
   {:description "Authority requiring verifiable assurance as a condition of approval."
    :maps-to [:protocol.role/verifier]}
   :participant
-  {:description "Party to the original interaction who wants independent confirmation."
-   :maps-to [:protocol.role/sender :protocol.role/recipient]}}
+   {:description "Party to the original interaction who wants independent confirmation."
+    :maps-to [:protocol.role/sender :protocol.role/recipient]
+    :mapping/confidence :approximate
+    :mapping/note "Participant role depends on their original role in the interaction"}}
 
  :concept/entities
  {:evidence-bundle
@@ -54,25 +58,25 @@
  :concept/actions
  {:request-trace
   {:description "Ask the protocol or runner for the full trace of an interaction."
-   :maps-to ["export-trace" "get-evidence"]}
+   :maps-to [:protocol.action/export-trace :protocol.action/get-evidence]}
   :verify-evidence-chain
   {:description "Walk the evidence chain and validate every hash link."
-   :maps-to ["verify-chain" "validate-links"]}
+   :maps-to [:protocol.action/verify-chain :protocol.action/validate-links]}
   :replay-scenario
   {:description "Re-run a scenario to confirm deterministic output matches the recorded result."
-   :maps-to ["replay" "reproduce"]}
+   :maps-to [:protocol.action/replay :protocol.action/reproduce]}
   :check-invariant
   {:description "Evaluate a specific invariant against a trace independently."
-   :maps-to ["check-invariant" "validate-invariant"]}
+   :maps-to [:protocol.action/check-invariant :protocol.action/validate-invariant]}
   :compute-hash
   {:description "Generate a canonical SHA-256 hash of a data structure."
-   :maps-to ["canonical-hash" "hash-bundle"]}
+   :maps-to [:protocol.action/canonical-hash :protocol.action/hash-bundle]}
   :verify-attestation
   {:description "Check that an attestation signature is valid for a given hash and identity."
-   :maps-to ["verify-signature" "validate-attestation"]}
+   :maps-to [:protocol.action/verify-signature :protocol.action/validate-attestation]}
   :compare-with-attestation
   {:description "Verify that an independently computed hash matches a claimed attestation."
-   :maps-to ["compare-hashes" "validate-claim"]}}
+   :maps-to [:protocol.action/compare-hashes :protocol.action/validate-claim]}}
 
  :concept/outcomes
  {:outcome-verified-correct
@@ -154,26 +158,6 @@
    :stakeholder-impact
    "Verifier cannot confirm that the bundle is self-contained and
     complete."}]
-
- :concept/metrics
- {:evidence-chain-depth
-  {:description "Number of linked evidence nodes in the chain."
-   :source :derived-from-trace}
-  :attestation-count
-  {:description "Number of independent attestations accompanying the bundle."
-   :source :derived-from-bundle}
-  :invariant-pass-rate
-  {:description "Fraction of invariants that passed verification."
-   :source :derived-from-invariant-results}
-  :replay-consistency
-  {:description "Whether replay produces bit-identical evidence (boolean)."
-   :source :derived-from-replay}
-  :evidence-completeness
-  {:description "Ratio of expected evidence items present to total expected."
-   :source :derived-from-bundle-manifest}
-  :hash-verification-rate
-  {:description "Fraction of computed hashes that match claimed hashes."
-   :source :derived-from-verification}}
 
  :concept/assumptions
  ["Evidence is collected and hashed using canonical EDN serialization (deterministic ordering)."

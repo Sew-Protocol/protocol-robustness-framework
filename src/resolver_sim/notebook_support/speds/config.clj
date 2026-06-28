@@ -10,9 +10,9 @@
    :equivalence  (evcfg/artifact-path :equivalence-summary)
    :findings     (evcfg/artifact-path :findings)
    :issues       (evcfg/artifact-path :issues)
-    :manifest     (str (evcfg/artifact-dir) "/evidence-manifest.json")
-    :traces-dir   "data/fixtures/traces"
-    :golden-dir   "data/fixtures/golden"})
+   :manifest     (str (evcfg/artifact-dir) "/evidence-manifest.json")
+   :traces-dir   "data/fixtures/traces"
+   :golden-dir   "data/fixtures/golden"})
 
 (def protocol-defaults
   {:id          "dispute-resolution-validation-v1"

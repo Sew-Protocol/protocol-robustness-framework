@@ -1,5 +1,5 @@
 (ns resolver-sim.sim.stress-propagation
-"Causal propagation engine for protocol failures.")
+  "Causal propagation engine for protocol failures.")
 
 (defrecord StressNode [id cause action])
 

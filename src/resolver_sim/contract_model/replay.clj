@@ -212,11 +212,13 @@
                  (let [signing-key (or (:signing-key replay-opts)
                                        chain/*signing-key*)
                        signing-pw (or (:signing-password replay-opts)
-                                      chain/*signing-password*)]
+                                      chain/*signing-password*)
+                       allow-dirty? (:allow-dirty? replay-opts)]
                    (chain/finalize-and-attest!
                     :run-id run-id
                     :private-key-path signing-key
-                    :password signing-pw))
+                    :password signing-pw
+                    :allow-dirty? allow-dirty?))
 
                  (chain/register-scenario-snapshot!)
                  (assoc result :risk-events (risk/events)))))))))))
