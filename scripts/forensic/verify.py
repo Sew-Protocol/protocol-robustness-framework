@@ -331,6 +331,149 @@ def check_preflight_valid(run_dir: Path) -> VerifyCheck:
                            severity="required")
 
 
+ALLOWED_CLAIM_STATUSES = frozenset({":pass", ":fail", ":inconclusive", ":not-evaluated",
+                                     "pass", "fail", "inconclusive", "not-evaluated"})
+ALLOWED_CLAIM_RESULTS = frozenset({":verified", ":reproduced", ":certified", ":approved", ":rejected",
+                                    "verified", "reproduced", "certified", "approved", "rejected"})
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _canonical_json(data: dict, exclude: list[str]) -> bytes:
+    return json.dumps(
+        {k: v for k, v in data.items() if k not in exclude},
+        indent=2, default=str, sort_keys=True).encode("utf-8")
+
+
+def check_dir_has_json(run_dir: Path, rel_dir: str) -> VerifyCheck:
+    """Check that a required directory exists and contains at least one .json file."""
+    d = run_dir / rel_dir
+    key = f"dir-has-files-{rel_dir.replace('/', '-')}"
+    if not d.exists() or not d.is_dir():
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Directory {rel_dir}/ not found",
+                           severity="required")
+    files = [f for f in d.iterdir() if f.is_file() and f.suffix == ".json"]
+    if not files:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Directory {rel_dir}/ exists but contains no .json files",
+                           severity="required")
+    return VerifyCheck(key=key, status="pass",
+                       message=f"Directory {rel_dir}/ contains {len(files)} .json file(s)",
+                       severity="required")
+
+
+def check_claim_file(run_dir: Path, fname: str) -> VerifyCheck:
+    """Validate a single claim result file: hash integrity, schema version, status."""
+    path = run_dir / "claims" / fname
+    key = f"claim-valid-{fname}"
+    data = _load_json(path)
+    if not data:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Claim {fname}: not valid JSON",
+                           severity="required")
+    # Schema version
+    sv = data.get("result/schema-version")
+    if sv != "forensic-claim-result.v1":
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Claim {fname}: expected schema-version forensic-claim-result.v1, got {sv}",
+                           severity="required")
+    # Self-referential hash
+    recorded = data.get("result/hash")
+    if not recorded:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Claim {fname}: missing result/hash",
+                           severity="required")
+    expected = _sha256_hex(_canonical_json(data, ["result/hash"]))
+    if recorded != expected:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Claim {fname}: hash MISMATCH (recorded={recorded[:16]}... expected={expected[:16]}...)",
+                           severity="required")
+    # Status
+    status = data.get("result/status")
+    if status not in ALLOWED_CLAIM_STATUSES:
+        return VerifyCheck(key=key, status="warning",
+                           message=f"Claim {fname}: unexpected status '{status}'",
+                           severity="warning")
+    return VerifyCheck(key=key, status="pass",
+                       message=f"Claim {fname}: valid (status={status}, hash={recorded[:16]}...)",
+                       severity="required")
+
+
+def check_claims_content(run_dir: Path) -> list[VerifyCheck]:
+    """Phase C: validate all claim result files in claims/."""
+    d = run_dir / "claims"
+    if not d.exists() or not d.is_dir():
+        return [VerifyCheck(key="claims-content", status="fail",
+                            message="claims/ directory not found",
+                            severity="required")]
+    results = []
+    files = sorted([f for f in d.iterdir() if f.is_file() and f.suffix == ".json"])
+    if not files:
+        return [VerifyCheck(key="claims-content", status="fail",
+                            message="claims/ contains no .json files",
+                            severity="required")]
+    for f in files:
+        results.append(check_claim_file(run_dir, f.name))
+    return results
+
+
+def check_attestation_file(run_dir: Path, fname: str) -> VerifyCheck:
+    """Validate a single attestation file: hash integrity, schema version, claim-result."""
+    path = run_dir / "attestations" / fname
+    key = f"attestation-valid-{fname}"
+    data = _load_json(path)
+    if not data:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Attestation {fname}: not valid JSON",
+                           severity="required")
+    sv = data.get("attestation/schema-version")
+    if sv != "forensic-attestation.v1":
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Attestation {fname}: expected schema-version forensic-attestation.v1, got {sv}",
+                           severity="required")
+    cr = data.get("attestation/claim-result")
+    if cr not in ALLOWED_CLAIM_RESULTS:
+        return VerifyCheck(key=key, status="warning",
+                           message=f"Attestation {fname}: unexpected claim-result '{cr}'",
+                           severity="warning")
+    # Self-referential hash (exclude id, hash, signature)
+    recorded = data.get("attestation/hash")
+    if not recorded:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Attestation {fname}: missing attestation/hash",
+                           severity="required")
+    expected = _sha256_hex(_canonical_json(data, ["attestation/id", "attestation/hash",
+                                                   "attestation/signature"]))
+    if recorded != expected:
+        return VerifyCheck(key=key, status="fail",
+                           message=f"Attestation {fname}: hash MISMATCH (recorded={recorded[:16]}... expected={expected[:16]}...)",
+                           severity="required")
+    return VerifyCheck(key=key, status="pass",
+                       message=f"Attestation {fname}: valid (result={cr}, hash={recorded[:16]}...)",
+                       severity="required")
+
+
+def check_attestations_content(run_dir: Path) -> list[VerifyCheck]:
+    """Phase C: validate all attestation files in attestations/."""
+    d = run_dir / "attestations"
+    if not d.exists() or not d.is_dir():
+        return [VerifyCheck(key="attestations-content", status="fail",
+                            message="attestations/ directory not found",
+                            severity="required")]
+    results = []
+    files = sorted([f for f in d.iterdir() if f.is_file() and f.suffix == ".json"])
+    if not files:
+        return [VerifyCheck(key="attestations-content", status="fail",
+                            message="attestations/ contains no .json files",
+                            severity="required")]
+    for f in files:
+        results.append(check_attestation_file(run_dir, f.name))
+    return results
+
+
 def check_evidence_dag(run_dir: Path) -> VerifyCheck:
     dag_dir = run_dir / "evidence-dag"
     if not dag_dir.exists():
@@ -342,6 +485,53 @@ def check_evidence_dag(run_dir: Path) -> VerifyCheck:
     return VerifyCheck(key="evidence-dag-present", status="info",
                        message=f"evidence-dag/ contains {len(files)} file(s)",
                        severity="info")
+
+
+def check_anchor_content(run_dir: Path) -> VerifyCheck:
+    """Validate anchor-cursor.json and associated TSA artifacts."""
+    path = run_dir / "anchors" / "anchor-cursor.json"
+    key = "anchor-valid"
+    if not path.exists():
+        return VerifyCheck(key=key, status="info",
+                           message="No anchor-cursor.json (pre-Phase C bundles)",
+                           severity="info")
+    data = _load_json(path)
+    if not data:
+        return VerifyCheck(key=key, status="fail",
+                           message="anchor-cursor.json is not valid JSON",
+                           severity="warning")
+    atype = data.get("anchor/type", "?")
+    sv = data.get("anchor/schema-version")
+    if sv != "anchor-cursor.v1":
+        return VerifyCheck(key=key, status="warning",
+                           message=f"anchor-cursor.json: unexpected schema-version {sv}",
+                           severity="warning")
+    if atype == "rfc3161":
+        tsr_path = run_dir / "anchors" / (data.get("anchor/tsa-token-path", "registry.tsr"))
+        tsa_json_path = run_dir / "anchors" / "registry.tsa.json"
+        if not tsr_path.exists():
+            return VerifyCheck(key=key, status="fail",
+                               message=f"anchor type=rfc3161 but TSA token not found at {tsr_path.name}",
+                               severity="required")
+        if not tsa_json_path.exists():
+            return VerifyCheck(key=key, status="pass",
+                               message="anchor type=rfc3161 (TSA token present, no metadata file)",
+                               severity="info")
+        return VerifyCheck(key=key, status="pass",
+                           message=f"anchor type=rfc3161, TSA URL: {data.get('anchor/tsa-url', '?')}",
+                           severity="info")
+    elif atype == "local-proof":
+        return VerifyCheck(key=key, status="pass",
+                           message="anchor type=local-proof (no external TSA)",
+                           severity="info")
+    elif atype == "mock":
+        return VerifyCheck(key=key, status="info",
+                           message="anchor type=mock (placeholder, no timestamp anchoring)",
+                           severity="info")
+    else:
+        return VerifyCheck(key=key, status="info",
+                           message=f"anchor type={atype}",
+                           severity="info")
 
 
 def check_no_extra_dirs(run_dir: Path) -> VerifyCheck:
@@ -409,6 +599,13 @@ def verify_run(run_dir: str | Path,
     results.append(check_overview_hash(run_dir))
     results.append(check_bundle_signature(run_dir, public_key_path))
     results.append(check_results_summary(run_dir))
+
+    # Phase C: claims and attestations content validation
+    results.extend(check_claims_content(run_dir))
+    results.extend(check_attestations_content(run_dir))
+
+    # Anchor content validation
+    results.append(check_anchor_content(run_dir))
 
     # Aggregate
     check_dicts = [r.to_dict() for r in results]

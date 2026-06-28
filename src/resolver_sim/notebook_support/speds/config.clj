@@ -105,6 +105,6 @@
   (get profiles (selected-profile-key) sample-generic-profile))
 
 (def profile
-  "Active profile map used by SPEDS modules.
-   Override via `SPEDS_PROFILE=sew` (or `generic`)."
-  (active-profile))
+  ;; Active profile map used by SPEDS modules.
+  ;; Resolved lazily on first deref. Override via SPEDS_PROFILE=sew (or generic).
+  (delay (active-profile)))

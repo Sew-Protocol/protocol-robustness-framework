@@ -4,6 +4,7 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [resolver-sim.logging :as log]
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.speds.config :as config]))
 
@@ -30,7 +31,9 @@
   []
   (try
     (common/read-json (:test-run config/artifact-paths))
-    (catch Exception _ nil)))
+    (catch Exception e
+      (log/warn! "Failed to load test-run artifact" {:path (:test-run config/artifact-paths) :error (.getMessage e)})
+      nil)))
 
 (defn load-all-traces
   "Loads all scenario traces from the configured directory."
@@ -44,10 +47,14 @@
                      (try
                        (let [d (json/read-str (slurp f) {:key-fn keyword})]
                          (assoc d :_filename (.getName f)))
-                       (catch Exception _ nil))))
-             (sort-by :scenario-id))
-        []))
-    (catch Exception _ [])))
+                        (catch Exception e
+                          (log/warn! "Failed to parse trace file" {:file (.getName f) :error (.getMessage e)})
+                          nil))))
+              (sort-by :scenario-id))
+         []))
+    (catch Exception e
+      (log/warn! "Failed to load traces directory" {:path (:traces-dir config/artifact-paths) :error (.getMessage e)})
+      [])))
 
 (defn load-all-golden-reports
   "Loads all golden replay reports from the configured directory."
@@ -61,10 +68,14 @@
                      (try
                        (let [d (common/read-edn (.getAbsolutePath f))]
                          [(str (:trace-id d)) d])
-                       (catch Exception _ nil))))
-             (into {}))
-        {}))
-    (catch Exception _ {})))
+                        (catch Exception e
+                          (log/warn! "Failed to parse golden report" {:file (.getName f) :error (.getMessage e)})
+                          nil))))
+              (into {}))
+         {}))
+    (catch Exception e
+      (log/warn! "Failed to load golden reports directory" {:path (:golden-dir config/artifact-paths) :error (.getMessage e)})
+      {})))
 
 (defn scenario-golden-key
   "Normalize a coverage/trace scenario id to a golden report trace-id key."
@@ -102,7 +113,10 @@
         test-run (load-test-run)
         coverage (load-coverage)
         equivalence (load-equivalence)
-        manifest (try (common/read-json (:manifest config/artifact-paths)) (catch Exception _ nil))]
+        manifest (try (common/read-json (:manifest config/artifact-paths))
+                      (catch Exception e
+                        (log/warn! "Failed to load manifest" {:path (:manifest config/artifact-paths) :error (.getMessage e)})
+                        nil))]
     {:summary  summary
      :test-run test-run
      :summary-canonical (canonical-summary summary)
@@ -143,11 +157,12 @@
 (defn project-actor-type
   "Maps a simulation agent ID to a SPEDS actor type."
   [agent-id]
-  (cond
-    (str/includes? (str/lower-case agent-id) "malice") :adversarial
-    (str/includes? (str/lower-case agent-id) "attacker") :adversarial
-    (str/includes? (str/lower-case agent-id) "kleros") :backstop
-    :else :honest))
+  (let [id (str/lower-case (str agent-id))]
+    (cond
+      (str/includes? id "malice") :adversarial
+      (str/includes? id "attacker") :adversarial
+      (str/includes? id "kleros") :backstop
+      :else :honest)))
 
 (defn project-event-to-flow
   "Maps a simulation event to a SPEDS flow type."

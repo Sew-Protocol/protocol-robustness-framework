@@ -3,6 +3,9 @@
    Converts trial artifacts into deterministic issue bundles used by story rendering."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [malli.core :as m]
+            [malli.error :as me]
+            [resolver-sim.logging :as log]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebook-support.common :as common]
@@ -139,11 +142,37 @@
       :issues issues
       :policy policy})))
 
+;; ──────────────────────────────────────────────────────────────────────────
+;; Schema validation
+;; ──────────────────────────────────────────────────────────────────────────
+
+(def issues-bundle-schema
+  "Malli schema for speds-issues-v1 bundle."
+  (m/schema
+   [:map {:closed true}
+    [:schema/version [:enum "speds-issues-v1"]]
+    [:run/id [:maybe :string]]
+    [:definitions/hash :string]
+    [:comparator_config :map]
+    [:generated-at :string]
+    [:issue-count :int]
+    [:issues [:vector :map]]
+    [:policy :map]]))
+
+(defn- validate-issues-bundle!
+  "Validate issues bundle against schema. Logs and returns bundle."
+  [bundle]
+  (if-let [errors (m/explain issues-bundle-schema bundle)]
+    (let [msg (str "Issues bundle schema validation failed: " (me/humanize errors))]
+      (log/warn! msg {:errors errors})
+      bundle)
+    bundle))
+
 (defn save-issues!
   "Writes issues bundle to results/test-artifacts/issues.json"
   ([] (save-issues! (data/load-run-artifacts)))
   ([artifacts]
-   (let [bundle (generate-issues-bundle artifacts)]
+   (let [bundle (-> artifacts generate-issues-bundle validate-issues-bundle!)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
      (with-open [w (clojure.java.io/writer issues-path)]
        (json/write bundle w :indent true))

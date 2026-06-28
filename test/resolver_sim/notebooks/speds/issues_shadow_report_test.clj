@@ -1,4 +1,4 @@
-(ns resolver_sim.notebooks.speds.issues-shadow-report-test
+(ns resolver-sim.notebooks.speds.issues-shadow-report-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [resolver-sim.notebook-support.speds.issues :as issues]))

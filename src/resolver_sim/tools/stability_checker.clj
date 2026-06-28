@@ -74,7 +74,7 @@
          :stability/status (if (= computed recorded) :unchanged :changed)
          :stability/matched (= computed recorded)
          :stability/recorded-hash recorded
-         :stability/computed-hash computed}))) )
+         :stability/computed-hash computed}))))
 
 ;; ── Reporting ────────────────────────────────────────────────────────────────
 

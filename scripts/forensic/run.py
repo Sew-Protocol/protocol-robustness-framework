@@ -10,6 +10,7 @@ Usage:
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
@@ -42,7 +43,9 @@ PRF_SOURCE_ROOTS = os.environ.get("PRF_SOURCE_ROOTS", "src,protocols_src").split
 PRF_CODE_HASH_ALGORITHM = os.environ.get("PRF_CODE_HASH_ALGORITHM",
                                          "source-tree-hash.v0.shell-sha256sum")
 PRF_ARTIFACT_DIR = os.environ.get("PRF_ARTIFACT_DIR", "results/test-artifacts")
-
+PRF_MAX_RUNS = int(os.environ.get("PRF_MAX_RUNS", "0"))  # 0 = unlimited
+PRF_TSA_URL = os.environ.get("PRF_TSA_URL") or None  # RFC 3161 TSA URL
+_LOCK_PATH = Path("results/.forensic-run.lock").resolve()
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -53,6 +56,49 @@ def make_run_id(label: str | None = None) -> str:
         safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in label)
         return f"{ts}-{safe}"
     return ts
+
+
+def _acquire_lock() -> Any:
+    """Acquire an exclusive file lock on the shared artifact directory.
+    Blocks until the lock is available.  Auto-releases when the process dies.
+    Returns the lock file handle (must be kept alive while locked)."""
+    _LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lf = open(_LOCK_PATH, "w")
+    try:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+    except Exception:
+        lf.close()
+        raise
+    print(f"  acquired lock {_LOCK_PATH}", file=sys.stderr)
+    return lf
+
+
+def _release_lock(lf: Any) -> None:
+    """Release the file lock."""
+    try:
+        fcntl.flock(lf, fcntl.LOCK_UN)
+        lf.close()
+    except Exception:
+        pass
+    print(f"  released lock {_LOCK_PATH}", file=sys.stderr)
+
+
+def _enforce_retention(output_base: Path, max_runs: int) -> None:
+    """Remove oldest run directories beyond max_runs."""
+    if max_runs <= 0:
+        return
+    if not output_base.exists():
+        return
+    dirs = sorted([d for d in output_base.iterdir() if d.is_dir()])
+    if len(dirs) <= max_runs:
+        return
+    to_remove = dirs[:len(dirs) - max_runs]
+    for d in to_remove:
+        try:
+            shutil.rmtree(str(d), ignore_errors=True)
+            print(f"  removed old run: {d.name}", file=sys.stderr)
+        except Exception as e:
+            print(f"  warning: could not remove {d.name}: {e}", file=sys.stderr)
 
 
 def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
@@ -170,7 +216,9 @@ def make_output_immutable(run_dir: Path) -> None:
 def run_invoke_scenario_pipeline(run_request_path: str,
                                  run_dir: Path,
                                  source_info: dict | None = None,
-                                 run_id: str = "") -> int:
+                                 run_id: str = "",
+                                 workspace_dir: Path | None = None,
+                                 tsa_url: str | None = None) -> int:
     """Invoke the existing scenario run pipeline.
     Returns exit code. Output passes through to terminal (not captured)."""
     run_request = None
@@ -205,6 +253,13 @@ def run_invoke_scenario_pipeline(run_request_path: str,
             bool(source_info.get("dirty", False))).lower()
     env["PRF_ORCHESTRATION_RUNNER_ID"] = "forensic-runner.py"
     env["PRF_BUNDLE_ID"] = run_id
+    if tsa_url:
+        env["PRF_TSA_URL"] = tsa_url
+
+    # Per-run workspace: redirect Clojure artifact output to private workspace dir
+    if workspace_dir:
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        env["PRF_ARTIFACT_DIR"] = str(workspace_dir)
 
     print(f"  executing: {' '.join(cmd)}", file=sys.stderr)
     # Run with capture_output=False so output passes through to terminal
@@ -217,16 +272,97 @@ def run_invoke_scenario_pipeline(run_request_path: str,
     return r.returncode
 
 
+def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict]]:
+    """Parse EDN evidence node files semantically using Clojure reader.
+    Returns (parsed_nodes, edge_list).
+    parsed_nodes is a list of dicts with node-hash, execution-id, etc.
+    edge_list is a list of {parent, child} dicts for DAG structure.
+    Returns ([], []) on failure or if no EDN files present."""
+    edn_files = sorted([f for f in dag_dir.iterdir()
+                        if f.is_file() and f.suffix == ".edn"])
+    if not edn_files:
+        return [], []
+    try:
+        import tempfile
+        # Write Clojure code to a temp file to avoid shell escaping issues
+        # Use %-formatting for the path vector to avoid f-string brace conflicts
+        path_vec = "[" + " ".join('"%s"' % p for p in edn_files) + "]"
+        clj_template = """\
+(require '[clojure.edn :as edn] '[clojure.data.json :as json])
+
+(defn parse-node [path]
+  (try
+    (let [node (edn/read-string (slurp path))]
+      {:node-hash (:node-hash node)
+       :execution-id (str (:execution-id (:execution node)))
+       :execution-kind (str (:execution-kind (:execution node)))
+       :runner (str (:runner (:execution node)))
+       :result-status (str (:status (:result node)))
+       :parent-hashes (vec (map str (:parent-hashes node)))
+       :record-hash (:record-hash node)
+       :file (.getName (java.io.File. path))})
+    (catch Exception e
+      {:file (.getName (java.io.File. path))
+       :parse-error (.getMessage e)})))
+
+(defn build-edges [nodes]
+  (mapcat
+    (fn [node]
+      (let [ch (:node-hash node)]
+        (map (fn [ph] {:parent ph :child ch})
+             (:parent-hashes node))))
+    nodes))
+
+(let [paths %s
+      nodes (doall (map parse-node paths))
+      edges (build-edges nodes)]
+  (println (json/write-str {:nodes nodes :edges edges})))
+""" % path_vec
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".clj",
+                                         delete=False) as tmp:
+            tmp_path = tmp.name
+            tmp.write(clj_template)
+        r = subprocess.run(
+            ["clojure", "-M:with-sew", tmp_path],
+            capture_output=True, text=True, timeout=120)
+        os.unlink(tmp_path)
+        if r.returncode != 0:
+            print(f"  warning: EDN semantic parse failed: {r.stderr.strip()[:300]}",
+                  file=sys.stderr)
+            return [], []
+        import json as _json
+        out = r.stdout.strip()
+        if not out:
+            print("  warning: EDN semantic parse returned empty output",
+                  file=sys.stderr)
+            return [], []
+        result = _json.loads(out)
+        nodes = result.get("nodes", [])
+        edges = result.get("edges", [])
+        print(f"  parsed {len(nodes)} EDN node(s) semantically ({len(edges)} DAG edge(s))",
+              file=sys.stderr)
+        return nodes, edges
+    except Exception as e:
+        print(f"  warning: EDN semantic parse error: {e}", file=sys.stderr)
+        return [], []
+
+
 def _write_dag_inventory(run_dir: Path, dag_dir: Path,
                           node_file_srcs: list[Path],
-                          repo_root: Path) -> None:
-    """Produce evidence-dag-inventory.json — Phase A inventory only.
-    EDN files are counted and hashed but not semantically parsed."""
+                          repo_root: Path,
+                          workspace_dir: Path | None = None) -> str:
+    """Produce evidence-dag-inventory.json — Phase B (semantic EDN parsing).
+    EDN files are parsed to extract node-hash, execution-id, result-status,
+    parent-hashes, and DAG edge structure.
+    Returns the SHA-256 hash of the written inventory file.
+    Uses workspace_dir for registry/cursor reads (per-run protected workspace)."""
     dag_dir.mkdir(exist_ok=True)
     json_count = 0
     edn_count = 0
     total_bytes = 0
     file_hashes: list[dict] = []
+    edn_nodes: list[dict] = []
+    dag_edges: list[dict] = []
     for f in dag_dir.iterdir():
         if not f.is_file():
             continue
@@ -245,19 +381,25 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
         except Exception:
             file_hashes.append({"name": f.name, "sha256": "unreadable", "bytes": 0})
     total = json_count + edn_count
+    # Phase B: semantic EDN parsing
+    if edn_count > 0:
+        edn_nodes, dag_edges = _parse_edn_nodes_semantic(dag_dir)
     inventory = {
         "dag/schema-version": "evidence-dag-inventory.v0",
-        "dag/phase": "A",
-        "dag/semantic-status": "inventory-only",
+        "dag/phase": "B" if edn_nodes else "A",
+        "dag/semantic-status": "parsed" if edn_nodes else "inventory-only",
         "dag/files": {"total": total, "json": json_count,
-                      "edn": edn_count, "unparsed": edn_count},
+                      "edn": edn_count, "unparsed": edn_count - len(edn_nodes)},
         "dag/hashes": {"algorithm": "sha256-file-bytes"},
         "dag/total-bytes": total_bytes,
         "dag/file-hashes": file_hashes,
+        "dag/nodes": edn_nodes,
+        "dag/edges": dag_edges,
     }
-    # Registry consistency check
-    registry_path = repo_root / PRF_ARTIFACT_DIR / "test-artifacts.json"
-    cursor_path = repo_root / PRF_ARTIFACT_DIR / "chain-cursor-final.json"
+    # Registry consistency check: read from per-run workspace (not shared dir)
+    artifact_root = workspace_dir if workspace_dir else (repo_root / PRF_ARTIFACT_DIR)
+    registry_path = artifact_root / "test-artifacts.json"
+    cursor_path = artifact_root / "chain-cursor-final.json"
     reg_check: dict[str, Any] = {"files-on-disk": total}
     try:
         if registry_path.exists():
@@ -279,18 +421,23 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
     # Determine status
     reg_check["consistency-status"] = "warning"
     inventory["dag/registry-check"] = reg_check
-    # Warning for unparsed EDN
-    warnings = []
-    if edn_count > 0:
+    # Warnings
+    warnings: list[dict] = []
+    unparsed = edn_count - len(edn_nodes)
+    if unparsed > 0:
         warnings.append({
-            "code": "edn-unparsed",
-            "message": (f"{edn_count} EDN evidence nodes were copied but not "
-                        f"semantically parsed in Phase A."),
+            "code": "edn-unparseable",
+            "message": (f"{unparsed} EDN evidence nodes could not be "
+                        f"semantically parsed."),
         })
     inventory["dag/warnings"] = warnings
     write_sealed_json(run_dir / "evidence-dag-inventory.json", inventory)
-    print(f"  wrote evidence-dag-inventory.json  ({total} files, {total_bytes} bytes)",
+    dag_inv_hash = compute_sha256(
+        (run_dir / "evidence-dag-inventory.json").read_bytes())
+    print(f"  wrote evidence-dag-inventory.json  ({total} files, {total_bytes} bytes, "
+          f"phase={'B' if edn_nodes else 'A'}, hash={dag_inv_hash[:16]}...)",
           file=sys.stderr)
+    return dag_inv_hash
 
 
 def _bundle_scenario_files(run_dir: Path, suite_key: str) -> None:
@@ -344,8 +491,10 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
                  repo_root: str | Path | None = None,
                  dry_run: bool = False,
                  isolation: str = "shared-filesystem",
-                 signing_key_path: str | None = None,
-                 signing_key_id: str | None = None) -> int:
+                  signing_key_path: str | None = None,
+                  signing_key_id: str | None = None,
+                  no_harden: bool = False,
+                  tsa_url: str | None = None) -> int:
     if repo_root is None:
         repo_root = Path.cwd()
     repo_root = Path(repo_root).resolve()
@@ -361,7 +510,10 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     print(f"=== Forensic Run ===", file=sys.stderr)
     print(f"  run-id:    {run_id}", file=sys.stderr)
     print(f"  output:    {run_dir}", file=sys.stderr)
+    print(f"  workspace: {run_dir / 'workspace'}", file=sys.stderr)
     print(f"  isolation: {isolation}", file=sys.stderr)
+    tsa_url = tsa_url or PRF_TSA_URL
+    print(f"  tsa-url:   {tsa_url or '(none)'}", file=sys.stderr)
     print(f"  request:   {run_request_path}", file=sys.stderr)
     print(f"  repo:      {repo_root}", file=sys.stderr)
     if dry_run:
@@ -402,13 +554,30 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
               file=sys.stderr)
         return 0
 
-    # Step 2: Create output directory
+    # Step 1b: Disk space check (warning only)
+    import shutil as _su
+    try:
+        usage = _su.disk_usage(str(output_base))
+        free_gb = usage.free / (1024**3)
+        if free_gb < 1.0:
+            print(f"  ⚠ Low disk space: {free_gb:.1f} GB free on {output_base}",
+                  file=sys.stderr)
+    except Exception:
+        pass  # non-critical check, skip on error
+
+    # Step 1c: Acquire exclusive lock on artifact directory
+    lock_file = _acquire_lock()
+    lock_held = True
+
+    # Step 2: Create output directory and per-run protected workspace
     print(f"\n--- Output Setup ---", file=sys.stderr)
     run_dir.mkdir(parents=True, exist_ok=False)
     (run_dir / "evidence-dag").mkdir()
     (run_dir / "claims").mkdir()
     (run_dir / "attestations").mkdir()
     (run_dir / "anchors").mkdir()
+    workspace_dir = run_dir / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=False)
 
     # Write preflight report to output
     write_sealed_json(run_dir / "preflight-report.json", report.to_dict())
@@ -457,9 +626,13 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     # Step 6: Execute scenarios
     print(f"\n--- Execution ---", file=sys.stderr)
     t0 = time.time()
+    # Resolve TSA URL: CLI arg > PRF_TSA_URL env var > None
+    tsa_url = tsa_url or PRF_TSA_URL
     exit_code = run_invoke_scenario_pipeline(
         run_request_path, run_dir,
-        source_info=source_info, run_id=run_id)
+        source_info=source_info, run_id=run_id,
+        workspace_dir=workspace_dir,
+        tsa_url=tsa_url)
     elapsed_ms = int((time.time() - t0) * 1000)
     print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
 
@@ -491,19 +664,67 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     }
     write_sealed_json(run_dir / "results-summary.json", results_summary)
 
-    # Step 6d: Copy evidence nodes from Clojure pipeline output
-    evidence_node_dir = repo_root / PRF_ARTIFACT_DIR / "evidence-nodes"
+    # Step 6d: Copy evidence nodes from per-run workspace (private, not shared dir)
     dag_dir = run_dir / "evidence-dag"
+    workspace_evidence_dir = workspace_dir / "evidence-nodes" if workspace_dir else \
+        (repo_root / PRF_ARTIFACT_DIR / "evidence-nodes")
     node_files = []
-    if evidence_node_dir.exists():
-        for f in evidence_node_dir.iterdir():
+    if workspace_evidence_dir.exists():
+        for f in workspace_evidence_dir.iterdir():
             if f.is_file() and f.suffix in (".json", ".edn"):
                 shutil.copy2(str(f), str(dag_dir / f.name))
                 node_files.append(f)
         print(f"  copied {len(node_files)} evidence node(s) to evidence-dag/", file=sys.stderr)
 
-    # Step 6e: Evidence DAG inventory manifest (Phase A — inventory only, no EDN parsing)
-    _write_dag_inventory(run_dir, dag_dir, node_files, repo_root)
+    # Step 6e: Populate claims/ and attestations/ from per-run workspace
+    for src_subdir, dst_dir_name in [("claims", "claims"), ("attestations", "attestations")]:
+        src_dir = workspace_dir / src_subdir
+        dst_dir = run_dir / dst_dir_name
+        if src_dir.exists():
+            count = 0
+            for f in src_dir.iterdir():
+                if f.is_file() and f.suffix == ".json":
+                    shutil.copy2(str(f), str(dst_dir / f.name))
+                    count += 1
+            print(f"  copied {count} file(s) to {dst_dir_name}/", file=sys.stderr)
+
+    # Step 6f: Evidence DAG inventory manifest (Phase B — semantic EDN parsing)
+    dag_inv_hash = _write_dag_inventory(run_dir, dag_dir, node_files, repo_root, workspace_dir=workspace_dir)
+
+    # Step 6g: Read execution node hash from Clojure bundle root for bridge
+    execution_node_hash = None
+    clj_bundle_path = run_dir / "clojure-bundle-root.json"
+    if clj_bundle_path.exists():
+        try:
+            clj_data = json.loads(clj_bundle_path.read_text())
+            execution_node_hash = clj_data.get("execution/node-hash")
+        except Exception:
+            pass
+
+    # Step 6h: Populate anchors/ from TSA artifacts or produce local proof
+    tsa_anchor_type = "mock"
+    anchor_tsa_url = None
+    anchor_tsa_token = None
+    if workspace_dir:
+        for ext, name in [(".tsr", "registry.tsr"), (".tsq", "registry.tsq"),
+                          (".json", "registry.tsa.json")]:
+            src = workspace_dir / name
+            if src.exists():
+                shutil.copy2(str(src), str(run_dir / "anchors" / name))
+        if (workspace_dir / "registry.tsa.json").exists():
+            tsa_anchor_type = "rfc3161"
+            try:
+                tsa_meta = json.loads((workspace_dir / "registry.tsa.json").read_text())
+                anchor_tsa_url = tsa_meta.get("timestamp/provider-url")
+            except Exception:
+                pass
+            anchor_tsa_token = "registry.tsr"
+        elif tsa_url:
+            tsa_anchor_type = "tsa-requested-no-response"
+        else:
+            tsa_anchor_type = "local-proof"
+    print(f"  anchor type: {tsa_anchor_type}", file=sys.stderr)
+
     # Step 7: Write run overview (self-referential SHA-256)
     run_overview = {
         "overview/schema-version": "run-overview.v1",
@@ -537,6 +758,8 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
         "run/exit-code": exit_code,
         "run/status": "pass" if exit_code == 0 else "fail",
         "overview/hash": overview_hash,
+        "evidence-dag/hash": dag_inv_hash,
+        "execution/node-hash": execution_node_hash,
         "preflight": {
             "status": preflight_status,
             "summary": report.summary,
@@ -560,14 +783,23 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     write_sealed_json(run_dir / "run-bundle-root.json", bundle_root)
     print(f"  bundle root hash: {bundle_hash[:16]}...", file=sys.stderr)
 
-    # Step 9: Write anchor cursor (mock)
+    # Step 9: Write anchor cursor (TSA-aware)
     anchor_cursor = {
         "anchor/schema-version": "anchor-cursor.v1",
-        "anchor/type": "mock",
+        "anchor/type": tsa_anchor_type,
         "anchor/target": f"file://{run_dir}",
         "anchor/timestamp": datetime.now(timezone.utc).isoformat(),
-        "anchor/note": "Mock anchor — no external anchoring in this phase",
     }
+    if anchor_tsa_url:
+        anchor_cursor["anchor/tsa-url"] = anchor_tsa_url
+    if anchor_tsa_token:
+        anchor_cursor["anchor/tsa-token-path"] = anchor_tsa_token
+    if tsa_anchor_type == "rfc3161":
+        anchor_cursor["anchor/note"] = "RFC 3161 timestamp from configured TSA"
+    elif tsa_anchor_type == "tsa-requested-no-response":
+        anchor_cursor["anchor/note"] = "TSA was configured but returned no response"
+    else:
+        anchor_cursor["anchor/note"] = "Local timestamp — no external TSA configured"
     write_sealed_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
 
     # Step 10: Post-run full verification
@@ -586,9 +818,23 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     except Exception as e:
         print(f"  Verification error: {e}", file=sys.stderr)
 
-    # Step 11: Make output tree immutable
-    print(f"\n--- Output Hardening ---", file=sys.stderr)
-    make_output_immutable(run_dir)
+    # Step 11: Make output tree immutable (skip on failure — enables cleanup)
+    if no_harden:
+        print(f"  output hardening skipped (--no-harden)", file=sys.stderr)
+    elif exit_code != 0:
+        print(f"  output hardening skipped (exit code {exit_code} — partial bundle may need cleanup)",
+              file=sys.stderr)
+    else:
+        print(f"\n--- Output Hardening ---", file=sys.stderr)
+        # Hardens entire run tree including per-run workspace (chmod -R a-w)
+        make_output_immutable(run_dir)
+
+    # Step 12: Release lock
+    if lock_held:
+        _release_lock(lock_file)
+
+    # Step 13: Enforce retention policy
+    _enforce_retention(output_base, PRF_MAX_RUNS)
 
     print(f"\n=== Run Complete ===", file=sys.stderr)
     print(f"  Output: {run_dir}", file=sys.stderr)
@@ -631,6 +877,8 @@ def main():
                         help="Run preflight only, no execution")
     parser.add_argument("--no-harden", action="store_true",
                         help="Skip post-run output hardening (chmod a-w)")
+    parser.add_argument("--tsa-url", default=None,
+                        help="RFC 3161 Time-Stamp Authority URL (e.g. https://freetsa.org/tsr)")
     args = parser.parse_args()
 
     exit_code = run_forensic(
@@ -644,6 +892,8 @@ def main():
         isolation=args.isolation,
         signing_key_path=args.signing_key_path,
         signing_key_id=args.signing_key_id,
+        no_harden=args.no_harden,
+        tsa_url=args.tsa_url,
     )
     sys.exit(exit_code)
 

@@ -54,8 +54,13 @@
 (defn framework []
   (get (get-config) "framework"))
 
-(defn artifact-dir []
-  (get (get-config) "artifact_dir"))
+(defn artifact-dir
+  "Return the artifact directory path.
+   Checks PRF_ARTIFACT_DIR env var first (for per-run workspaces),
+   falls back to config/evidence.json's artifact_dir."
+  []
+  (or (System/getenv "PRF_ARTIFACT_DIR")
+      (get (get-config) "artifact_dir")))
 
 (defn runs-root []
   (get (get-config) "runs_root"))

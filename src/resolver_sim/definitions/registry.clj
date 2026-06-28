@@ -1,5 +1,7 @@
 (ns resolver-sim.definitions.registry
-  "Canonical semantic definitions registry used by replay/report/evidence/Clerk.")
+  "Canonical semantic definitions registry used by replay/report/evidence/Clerk."
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]))
 
 (def purposes
   {:regression {:label "Regression" :default-story-family :scenario-deep-dive}
@@ -42,30 +44,19 @@
    :medium {:score 0.6}
    :low {:score 0.3}})
 
+(def ^:private speds-definitions
+  "SPEDS semantic definitions loaded from data/speds/definitions.edn."
+  (delay
+    (-> "data/speds/definitions.edn"
+        io/file
+        slurp
+        edn/read-string)))
+
 (def speds-purpose-kind
-  {:theory-falsification "expected_negative"
-   :adversarial-robustness "liveness_risk"
-   :regression "regression"
-   :default "inconclusive_result"})
+  (get @speds-definitions :speds-purpose-kind))
 
 (def speds-purpose-classification
-  {:theory-falsification
-   {:label "research_finding"
-    :status "assumption_falsified"
-    :confidence "high"
-    :rationale "Scenario is explicitly tagged theory-falsification; negative outcomes are expected evidence, not regressions."}
-
-   :regression
-   {:label "regression"
-    :status "unexpected_behavior"
-    :confidence "high"
-    :rationale "Scenario is explicitly tagged regression and should be treated as engineering defect signal."}
-
-   :default
-   {:label "operational_signal"
-    :status "requires_triage"
-    :confidence "medium"
-    :rationale "Scenario does not explicitly declare falsification/regression semantics; manual triage recommended."}})
+  (get @speds-definitions :speds-purpose-classification))
 
 (def status->story-family
   {:falsified :theory-falsification

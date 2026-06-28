@@ -4,6 +4,9 @@
   (:require [clojure.data.json :as json]
             [clojure.set :as set]
             [clojure.string :as str]
+            [malli.core :as m]
+            [malli.error :as me]
+            [resolver-sim.logging :as log]
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.notebook-support.speds.data :as data]
@@ -262,7 +265,7 @@
 (defn- severity [scenario]
   (let [tags (set (map #(-> % name str/lower-case) (or (:threat-tags scenario) [])))
         {:keys [invariant-severity-order tag-severity-map default-severity]}
-        (or (:severity-rules config/profile) {})
+        (or (:severity-rules @config/profile) {})
         invariant-severities (->> (or (:invariant-results scenario) {})
                                   (keep (fn [[inv status]]
                                           (when (= status :fail)
@@ -309,7 +312,7 @@
     {:finding_id (finding-id (or (:run-id canon) (:run-id config/protocol-defaults)) sid)
      :scenario_id sid
      :kind (purpose->kind (:purpose scenario))
-     :category (:finding-category config/profile)
+     :category (:finding-category @config/profile)
      :severity sev
      :status_kind st-kind
      :one_line_description (one-line-description scenario)
@@ -361,7 +364,7 @@
       :run {:run_id (:run-id canon)
             :generated_at (str (java.time.Instant/now))
             :git_sha (:git-sha canon)
-            :suite_id (:suite-id config/profile)
+            :suite_id (:suite-id @config/profile)
             :artifact_root "results/test-artifacts"}
       :overall_status {:status (if (= "pass" (:overall-status canon)) "passed" "warning")
                        :status_kind (if (empty? findings) "no_findings_detected" "validated_with_gaps")
@@ -384,10 +387,45 @@
                    :definitions_hash (defs/definitions-hash)
                    :claim_map_path "results/test-artifacts/claim-map.json"}})))
 
+;; ──────────────────────────────────────────────────────────────────────────
+;; Schema validation
+;; ──────────────────────────────────────────────────────────────────────────
+
+(def findings-bundle-schema
+  "Malli schema for speds.findings.v1 bundle."
+  (m/schema
+   [:map {:closed true}
+    [:schema_version [:enum "speds.findings.v1"]]
+    [:comparator_config :map]
+    [:run [:map {:closed true}
+           [:run_id :string]
+           [:generated_at :string]
+           [:git_sha :string]
+           [:suite_id :string]
+           [:artifact_root :string]]]
+    [:overall_status [:map {:closed true}
+                      [:status [:enum "passed" "warning"]]
+                      [:status_kind :string]
+                      [:confidence :string]
+                      [:summary :string]
+                      [:counts :map]]]
+    [:findings [:vector :map]]
+    [:story_candidates [:vector :map]]
+    [:provenance :map]]))
+
+(defn- validate-findings-bundle!
+  "Validate findings bundle against schema. Logs and returns bundle."
+  [bundle]
+  (if-let [errors (m/explain findings-bundle-schema bundle)]
+    (let [msg (str "Findings bundle schema validation failed: " (me/humanize errors))]
+      (log/warn! msg {:errors errors})
+      bundle)
+    bundle))
+
 (defn save-findings!
   ([] (save-findings! (data/load-run-artifacts)))
   ([artifacts]
-   (let [bundle (generate-findings-bundle artifacts)]
+   (let [bundle (-> artifacts generate-findings-bundle validate-findings-bundle!)]
      (.mkdirs (java.io.File. "results/test-artifacts"))
      (with-open [w (clojure.java.io/writer findings-path)]
        (json/write bundle w :indent true))

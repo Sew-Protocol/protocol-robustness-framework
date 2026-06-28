@@ -251,42 +251,42 @@
          attestations []
          extensions {}}}]
   (let [execution-entry' (or (execution-entry execution-id)
-                              (throw (ex-info "Unknown execution id" {:execution-id execution-id})))
-         policy-entry' (or (evidence-policy-entry policy-id)
-                           (throw (ex-info "Unknown evidence policy id"
-                                           {:policy-id policy-id
-                                            :execution-id execution-id})))
-         {:keys [summary visible-output excluded-classes]} (apply-evidence-policy
-                                                            policy-entry'
-                                                            {:status status
-                                                             :outputs outputs
-                                                             :failure-details failure-details})
-         base {:schema-version schema-version
-               :parent-hashes (vec parent-hashes)
-               :bootstrap-roots (vec bootstrap-roots)
-               :timestamp timestamp
-               :execution {:execution-id execution-id
-                           :execution-kind (or execution-kind (:kind execution-entry'))
-                           :runner (or runner (:runner execution-entry'))
-                           :registry-hash (execution-registry-hash)
-                           :policy-id policy-id
-                           :policy-hash (evidence-policy-hash policy-id)}
-               :result {:status status
-                        :summary summary}
-               :evidence {:inputs-hash (hash-content inputs)
-                          :outputs-hash (hash-content outputs)}
-               :attestations (vec attestations)
-               :extensions extensions
-               :policy-output {:visible visible-output
-                               :excluded-classes excluded-classes}}
+                             (throw (ex-info "Unknown execution id" {:execution-id execution-id})))
+        policy-entry' (or (evidence-policy-entry policy-id)
+                          (throw (ex-info "Unknown evidence policy id"
+                                          {:policy-id policy-id
+                                           :execution-id execution-id})))
+        {:keys [summary visible-output excluded-classes]} (apply-evidence-policy
+                                                           policy-entry'
+                                                           {:status status
+                                                            :outputs outputs
+                                                            :failure-details failure-details})
+        base {:schema-version schema-version
+              :parent-hashes (vec parent-hashes)
+              :bootstrap-roots (vec bootstrap-roots)
+              :timestamp timestamp
+              :execution {:execution-id execution-id
+                          :execution-kind (or execution-kind (:kind execution-entry'))
+                          :runner (or runner (:runner execution-entry'))
+                          :registry-hash (execution-registry-hash)
+                          :policy-id policy-id
+                          :policy-hash (evidence-policy-hash policy-id)}
+              :result {:status status
+                       :summary summary}
+              :evidence {:inputs-hash (hash-content inputs)
+                         :outputs-hash (hash-content outputs)}
+              :attestations (vec attestations)
+              :extensions extensions
+              :policy-output {:visible visible-output
+                              :excluded-classes excluded-classes}}
          ;; Deterministic node identity hash (excludes timestamp, policy-output, self-refs)
          ;; Used for node-id, reproduce, self-test, quorum. The projection
          ;; function project-evidence-node strips :node-id, :node-hash, :timestamp.
-         node-hash (compute-node-hash base)
+        node-hash (compute-node-hash base)
          ;; Full record hash (includes wall-clock timestamp — for audit trail only)
-         record-hash (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-                       (.update digest (.getBytes (str node-hash "|" timestamp) "UTF-8"))
-                       (format "%064x" (java.math.BigInteger. 1 (.digest digest))))]
+        record-hash (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
+                      (.update digest (.getBytes (str node-hash "|" timestamp) "UTF-8"))
+                      (format "%064x" (java.math.BigInteger. 1 (.digest digest))))]
     (assoc base
            :node-id node-hash
            :node-hash node-hash

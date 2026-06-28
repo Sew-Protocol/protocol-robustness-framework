@@ -360,7 +360,7 @@
    :tags           ["security" "audit" "invariants" "claims" "falsifiable" "adversarial" "conservation"]}
 
   {:id             :component-gallery
-    :path           "notebooks/component_gallery.clj"
+    :path           "examples/speds/component_gallery.clj"
     :title          "SPEDS v1.1 — Component Gallery"
     :summary        "Visual gallery of all SPEDS v1.1 UI components used across notebooks. Developer reference."
     :categories     [:tooling]

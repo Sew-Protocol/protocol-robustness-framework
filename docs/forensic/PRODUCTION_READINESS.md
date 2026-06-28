@@ -109,9 +109,9 @@ but have no real implementation.
 
 | Feature | Location | Status | Action |
 |---|---|---|---|
-| `claims/` directory | `run.py` line 409 | 🟡 Always empty | Remove or implement content population |
-| `attestations/` directory | `run.py` line 410 | 🟡 Always empty | Remove or implement content population |
-| `anchors/anchor-cursor.json` | `run.py` line 564 | 🟡 Mock placeholder | Replace with real timestamp anchoring |
+| `claims/` directory | `forensic_populate.clj` | ✅ Populated with 3 claim results (registry-hash-verifies, cursor-verifies, forensic-grade composite) | Verify enforces hash integrity and schema version |
+| `attestations/` directory | `forensic_populate.clj` | ✅ Populated with 3 self-attestations | Verify enforces hash integrity and schema version |
+| `anchors/anchor-cursor.json` | `run.py` + `verify.py` | ✅ RFC 3161 or local-proof; validated by verify.py | Fully implemented — `--tsa-url` flag, TSA token copied to `anchors/`, verify checks content |
 | `evidence-dag-inventory.json` (Phase B) | `scripts/forensic/run.py` | 🟡 Inventory-only, no semantic DAG | Implement DAG parsing or mark as permanent limitation |
 | `evidence-dag-manifest.json` | Never created | 🟡 Referenced in design docs but not implemented | Create or remove from spec |
 | `--no-harden` flag | `run.py` CLI | ◐ Works but should be default-on-failure | Skip hardening when pipeline fails exit code != 0 |
@@ -165,7 +165,7 @@ but have no real implementation.
 
 | # | Issue | Effort |
 |---|---|---|
-| 8 | Claims/attestations directories are dead stubs | Low — remove or implement |
+| 8 | Claims/attestations directories are dead stubs | ✅ Resolved — populated by Clojure pipeline, verified by verify.py |
 | 9 | Evidence DAG manifest is inventory-only | Medium — Phase B Clojure-side work |
 | 10 | evidence-dag-inventory.json not verified | Low — add to verify.py optional file list |
 
@@ -178,6 +178,6 @@ but have no real implementation.
 | P0 | Skip output hardening on non-zero exit | Trivial | Enables post-crash cleanup |
 | P1 | Add `clojure-bundle-root.json` validation to verify.py | Low | Closes content validation gap |
 | P1 | Add `evidence-dag-inventory.json` to verify.py optional files | Trivial | Makes inventory visible to verification |
-| P1 | Remove stubbed `claims/` and `attestations/` directories | Trivial | Eliminates dead structure |
+| P1 | Remove stubbed `claims/` and `attestations/` directories | ✅ Done — populated by `forensic_populate.clj`, verified by `verify.py` | Eliminates dead structure |
 | P2 | Add unit tests for verify.py (known-good bundle fixture) | Medium | Prevents regression |
 | P2 | Add RFC 3161 timestamp anchoring | Medium | Replaces mock anchor |

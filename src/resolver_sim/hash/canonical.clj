@@ -76,9 +76,9 @@
    :attestation-record "ATTESTATION_RECORD_V1"
    :execution-definition "EXECUTION_DEFINITION_V1"
    :action             "ACTION_V1"
-    :action-at          "ACTION_AT_V1"
-    :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"
-    :stability-snapshot "STABILITY_SNAPSHOT_V1"})
+   :action-at          "ACTION_AT_V1"
+   :pro-rata-allocation-result "PRO_RATA_ALLOCATION_RESULT_V1"
+   :stability-snapshot "STABILITY_SNAPSHOT_V1"})
 
 ;; ──────────────────────────────────────────────────────────────────────────────
 ;; varuint Encoding (LEB128, little-endian base-128)
@@ -1109,13 +1109,13 @@
     :intent/version     2}
 
    :action-at
-    {:intent/name        :action-at
-     :intent/domain-tag  "ACTION_AT_V1"
-     :intent/description "Canonical identity of an action occurrence at a specific execution point."
-     :intent/includes    #{:action-hash :step :block-time}
-     :intent/excludes    #{:action :metadata :world-before :world-after :runtime-values}
-     :intent/projection-fn project-action-at
-     :intent/version     1}
+   {:intent/name        :action-at
+    :intent/domain-tag  "ACTION_AT_V1"
+    :intent/description "Canonical identity of an action occurrence at a specific execution point."
+    :intent/includes    #{:action-hash :step :block-time}
+    :intent/excludes    #{:action :metadata :world-before :world-after :runtime-values}
+    :intent/projection-fn project-action-at
+    :intent/version     1}
 
    :stability/snapshot
    {:intent/name        :stability/snapshot

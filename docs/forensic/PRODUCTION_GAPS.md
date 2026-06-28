@@ -86,19 +86,20 @@ runner that could produce externally-reliable output.
 | Clojure bundle root capture | ✅ | `clojure-bundle-root.json` in bundle |
 | Reproduce-from-bundle | ❌ | No `bb forensic:reproduce` |
 | Diff between two runs | ❌ | No comparison tool |
-| Multi-runner quorum comparison | ❌ | — |
+| Multi-runner quorum comparison | ✅ | Phase 1: `consensus.py` — N-run coordinator, field-level agreement, certificate/disagreement artifacts |
 
 ## Evidence Pipeline
 
 | Requirement | Status | Notes |
 |---|---|---|
 | `evidence-dag/` populated | ✅ | 145+ nodes copied from Clojure pipeline |
-| `claims/` directory created | ✅ | Empty (populated by Clojure) |
-| `attestations/` directory created | ✅ | Empty (populated by Clojure) |
-| Evidence DAG inventory manifest | ✅ | `evidence-dag-inventory.json` — Phase A (inventory only) |
-| EDN semantic parsing | ❌ | Deferred to Phase B (Clojure-side) |
-| Evidence DAG manifest hash in bundle root | ❌ | Not yet linked |
-| Execution root hash | ❌ | No semantic root identification yet |
+| `claims/` directory created | ✅ | Populated with 3 claim results by `forensic_populate.clj` |
+| `attestations/` directory created | ✅ | Populated with 3 attestations by `forensic_populate.clj` |
+| Evidence DAG inventory manifest | ✅ | `evidence-dag-inventory.json` — Phase B (semantic EDN parsing with node-hash, execution-id, parent-hashes, edges) |
+| EDN semantic parsing | ✅ | Phase B: Clojure-side EDN reader extracts node-hash, execution-id, result-status, parent-hashes; DAG edges computed from parent references |
+| Evidence DAG manifest hash in bundle root | ✅ | `evidence-dag/hash` field in `run-bundle-root.json` — SHA-256 of `evidence-dag-inventory.json` |
+| Execution root hash | ✅ | `execution/node-hash` in `run-bundle-root.json` — bridged from Clojure bundle root's execution node hash |
+| RFC 3161 timestamp anchoring | ✅ | `--tsa-url` CLI + `PRF_TSA_URL` env var; `ts/*tsa-url*` bound in `scenario_runner.clj`; TSA sidecars copied to `anchors/`; `verify.py` validates |
 
 ## Run Request & Reproducibility
 

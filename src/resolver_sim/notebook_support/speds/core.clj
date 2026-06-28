@@ -40,7 +40,7 @@
                     :fontWeight "800"
                     :color color
                     :boxShadow (str "0 0 15px " color "44")}}
-      (str/upper-case (name id))])))
+      (str/upper-case (str id))])))
 
 ;; ---
 ;; P2: Escrow Flow Line (V-FLO)
@@ -81,7 +81,7 @@
                    :fontSize "11px"
                    :fontWeight "800"
                    :color color}}
-     (if pass? "✔" "✘") " " (str/upper-case (name id)) ": " (if pass? "OK" "FAIL")]))
+      (if pass? "✔" "✘") " " (str/upper-case (str id)) ": " (if pass? "OK" "FAIL")]))
 
 ;; ---
 ;; P7: Protocol Response Marker (V-RES)

@@ -52,7 +52,7 @@
 
 (defn- render-story-frame [frame-idx total-frames header footer-left footer-right & content]
   (apply speds/v-frame
-         {:header (str "[" (:protocol-label config/profile) "] FRAME: " frame-idx "/" total-frames " | " header)
+         {:header (str "[" (:protocol-label @config/profile) "] FRAME: " frame-idx "/" total-frames " | " header)
           :footer-left footer-left
           :footer-right footer-right}
          content))
@@ -75,7 +75,7 @@
   (let [id-lc (str/lower-case (or scenario-id ""))
         purpose (ose/normalize-purpose (:purpose scenario))
         tag-text (->> (or (:threat-tags scenario) []) (map name) (str/join " ") str/lower-case)
-        {:keys [families default]} (:story-family-rules config/profile)
+        {:keys [families default]} (:story-family-rules @config/profile)
         matches? (fn [{:keys [purposes id-substrings tag-substrings]}]
                    (or (and (seq purposes) (contains? purposes purpose))
                        (some #(str/includes? id-lc %) (or id-substrings []))
@@ -92,7 +92,7 @@
     :claims [{:claim-id :threat-detected :value "THREAT_DETECTED" :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
     [(frame-badge "THREAT_DETECTED" (get tokens/palette :sys/alert))
-     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
+     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}}       (str/upper-case (str title))]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial sweep identified a critical state-space vulnerability."]]}
    {:header "STATUS: INJECTING"
@@ -130,7 +130,7 @@
     :claims [{:claim-id :deadline-scenario :value title :source-artifact "coverage" :source-path [:coverage :scenarios]}]
     :content
     [(frame-badge "BOUNDARY_TEST" (get tokens/palette :sys/alert))
-     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
+     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}}       (str/upper-case (str title))]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Temporal boundary checks verify post-deadline actions are deterministically rejected."]]}
    {:header "STATUS: WINDOW_OPEN"
@@ -190,7 +190,7 @@
     :footer-right (str "GIT:" git-sha)
     :content
     [(frame-badge "COALITION_FORMATION" (get tokens/palette :sys/alert))
-     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
+     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}}       (str/upper-case (str title))]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Adversarial actors form a coalition to siphon funds via fraudulent verdicts."]]}
    {:header "STATUS: FRAUD_EMITTED"
@@ -220,7 +220,7 @@
     :footer-right (str "GIT:" git-sha)
     :content
     [(frame-badge "ECONOMIC_ROBUSTNESS" (get tokens/palette :sys/primary))
-     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}} (str/upper-case title)]
+     [:h1 {:style {:fontSize "42px" :fontWeight 900 :lineHeight 0.9 :color "#fff" :textShadow speds/hero-shadow}}       (str/upper-case (str title))]
      [:p {:style {:fontSize "16px" :marginTop "24px" :color "#7ADDDC" :fontWeight 700}}
       "Yield conservation and solvency invariants are stress-tested under volatility."]]}
    {:header "STATUS: STRESS_TEST"
@@ -252,10 +252,11 @@
    defaulting to the first theory-falsification scenario in coverage."
   ([artifacts]
    (let [scn (some #(when (= :theory-falsification (ose/normalize-purpose (:purpose %))) %) (or (get-in artifacts [:coverage :scenarios]) []))
-         scenario-id (or (:id scn) (:default-theory-falsification-scenario-id config/profile))]
+         scenario-id (or (:id scn) (:default-theory-falsification-scenario-id @config/profile))]
      (generate-story-by-family scenario-id artifacts)))
   ([scenario-id artifacts]
-   (generate-story-by-family scenario-id artifacts)))
+   (let [sid (or scenario-id (:default-theory-falsification-scenario-id @config/profile))]
+     (generate-story-by-family sid artifacts))))
 
 (defn generate-run-overview
   "Overview panel designed for reviewer/public status context."
@@ -312,12 +313,13 @@
            (when (seq baseline-note)
              [:p {:style {:fontSize "11px" :color "#94a3b8" :marginBottom "10px"}}
               baseline-note])
-           (generate-story-by-family (:scenario_id f) artifacts)]))])))
+           (generate-story-by-family (or (:scenario_id f) (:default-theory-falsification-scenario-id @config/profile)) artifacts)]))])))
 
 (defn generate-scenario-deep-dive
   "Deep-dive mode, typically selected from issue list."
   [scenario-id artifacts]
-  (generate-story-by-family scenario-id artifacts))
+  (let [sid (or scenario-id (:default-theory-falsification-scenario-id @config/profile))]
+    (generate-story-by-family sid artifacts)))
 
 (defn generate-story
   "Unified renderer entrypoint.
@@ -325,7 +327,7 @@
   [artifacts {:keys [mode input] :or {mode :issue-gallery input {}}}]
   (case mode
     :run-overview (generate-run-overview artifacts)
-    :scenario-deep-dive (generate-scenario-deep-dive (:scenario-id input) artifacts)
+    :scenario-deep-dive (generate-scenario-deep-dive (or (:scenario-id input) (:default-theory-falsification-scenario-id @config/profile)) artifacts)
     :issue-gallery (generate-issue-gallery artifacts input)
     (generate-issue-gallery artifacts input)))
 

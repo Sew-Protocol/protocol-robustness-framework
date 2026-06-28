@@ -8,7 +8,9 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
+            [resolver-sim.evidence.forensic-populate :as fp]
             [resolver-sim.evidence.node :as ev-node]
+            [resolver-sim.evidence.timestamping :as ts]
             [resolver-sim.forensic.provenance :as prov]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.io.serialization :as serialization]
@@ -552,10 +554,15 @@
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
                   :message "Run is non-canonical; bundle will be marked accordingly"}))
-    (let [result (ev-node/with-execution-node+
+    ;; Bind TSA URL from environment if set (for RFC 3161 timestamp anchoring)
+    (let [tsa-url (System/getenv "PRF_TSA_URL")]
+      (when tsa-url
+        (.println *err* (str "  TSA URL configured: " tsa-url))))
+    (binding [ts/*tsa-url* (or (System/getenv "PRF_TSA_URL") ts/*tsa-url*)]
+      (let [result (ev-node/with-execution-node+
                    {:execution-id :execution/replay
                     :runner :scenario-runner
-                     :inputs (merge {:dispatch dispatch
+                    :inputs (merge {:dispatch dispatch
                                     :runner-selection runner-selection
                                     :canonical? canonical?
                                     :non-canonical-reason non-canonical-reason
@@ -614,11 +621,25 @@
                                                 :passed (if (zero? exit-code) 0 0)
                                                 :failed (if (zero? exit-code) 0 1)}
                                        :results []}
-                            bundle-root (br/build-bundle-root run-request run-result)]
-                        {:exit-code exit-code
-                         :dispatch-key dispatch-key
-                         :canonical? canonical?
-                         :bundle-root bundle-root})))]
+                           bundle-root (br/build-bundle-root run-request run-result)]
+                       {:exit-code exit-code
+                        :dispatch-key dispatch-key
+                        :canonical? canonical?
+                        :bundle-root bundle-root})))]
+
+      ;; Populate claims/ and attestations/ with forensic claim evaluation results
+      (.println *err* "\n--- Forensic Claims & Attestations ---")
+      (let [bundle-root (:bundle-root (:result result))
+            run-id (or (some-> (prov/provenance-map) :bundle/id) "unknown")
+            bundle-hash (or (:bundle/hash bundle-root) "unknown")]
+        (try
+          (let [pop-result (fp/populate-claims-and-attestations! run-id bundle-hash)]
+            (.println *err* (format "  claims: %d, attestations: %d, all-pass?: %s"
+                                    (:claim-count pop-result)
+                                    (:attestation-count pop-result)
+                                    (:all-pass? pop-result))))
+          (catch Exception e
+            (.println *err* (str "  warning: forensic populate failed: " (.getMessage e))))))
 
       ;; Enrich bundle root with source provenance + execution node hash,
       ;; then write to --output-file and return
@@ -635,4 +656,4 @@
           (write-result-json output-path enriched-root))
         {:exit-code (:exit-code thunk-result)
          :bundle-root enriched-root
-         :execution-node execution-node}))))
+         :execution-node execution-node})))))

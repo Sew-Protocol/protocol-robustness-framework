@@ -4,19 +4,21 @@ reference-validation-v1:
 
 .PHONY: speds-check
 speds-check:
-	clojure scripts/speds_consistency_check.clj
+	clojure scripts/scenarios/speds_consistency_check.clj
 
 .PHONY: speds-issues
 speds-issues:
-	clojure scripts/speds_generate_issues.clj
+	clojure scripts/scenarios/speds_generate_issues.clj
 
 .PHONY: speds-comparator-shadow
 speds-comparator-shadow:
 	clojure -M:speds-comparator-shadow
 
+# Generates both findings and issues (the script calls save-findings! + save-issues!).
+# Renamed to speds-findings for backward compat with speds-artifacts.
 .PHONY: speds-findings
 speds-findings:
-	clojure scripts/speds_generate_issues.clj
+	clojure scripts/scenarios/speds_generate_issues.clj
 
 .PHONY: speds-artifacts
 speds-artifacts:
@@ -35,7 +37,7 @@ semantic-registry-check:
 .PHONY: semantic-phase3-check
 semantic-phase3-check:
 	$(MAKE) semantic-registry-check
-	clojure -M:test -e "(require 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test) (clojure.test/run-tests 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test)" 2>&1
+	clojure -M:test -e "(require 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.notebooks.speds.core-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test) (clojure.test/run-tests 'resolver-sim.notebooks.speds.findings-comparator-test 'resolver-sim.notebooks.speds.issues-shadow-report-test 'resolver-sim.notebooks.speds.core-test 'resolver-sim.evidence.semantic-facts-test 'resolver-sim.definitions.registry-test)" 2>&1
 
 .PHONY: state-machine-docs-generate
 state-machine-docs-generate:

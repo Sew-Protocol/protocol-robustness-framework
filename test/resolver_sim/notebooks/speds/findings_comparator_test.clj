@@ -1,5 +1,6 @@
-(ns resolver_sim.notebooks.speds.findings-comparator-test
-  (:require [clojure.test :refer [deftest is testing]]
+(ns resolver-sim.notebooks.speds.findings-comparator-test
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [resolver-sim.notebook-support.speds.findings :as findings]))
 
 (def ^:private sample-artifacts
@@ -67,7 +68,7 @@
   (let [bundle (findings/generate-findings-bundle sample-artifacts)
         f26   (finding-by-id bundle "S26_forking-strategist-l1-reversal")]
     (is (string? (:one_line_description f26)))
-    (is (not (clojure.string/blank? (:one_line_description f26))))
+    (is (not (str/blank? (:one_line_description f26))))
     (is (= (:one_line_description f26) (:summary f26)))))
 
 (deftest baseline-comparison-includes-replay-deltas

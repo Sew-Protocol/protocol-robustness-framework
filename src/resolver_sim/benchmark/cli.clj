@@ -63,7 +63,6 @@
                                          (str "benchmarks/" (:pack/registry pack))))
                  (:packs registry))}))))
 
-
 (def cli-options
   [["-o" "--output PATH" "Output path for evidence bundle"
     :default "evidence/latest.edn"]
@@ -71,7 +70,7 @@
    ["-p" "--password PASS" "Password for private key"]
    ["-v" "--verify" "Verify evidence bundle integrity and signature"]
    ["-H" "--hash-only" "Compute and print hash of an evidence bundle"]
-    ["-l" "--list" "List available benchmarks from benchmarks/registry.edn"]
+   ["-l" "--list" "List available benchmarks from benchmarks/registry.edn"]
    [nil "--reproduce PATH" "Reproduce a benchmark run from evidence bundle"]
    [nil "--share-summary PATH" "Generate share summary for an evidence bundle"]
    [nil "--export PATH" "Export portable bundle (tar.gz) from evidence bundle"]

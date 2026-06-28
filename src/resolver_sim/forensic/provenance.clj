@@ -18,14 +18,13 @@
    :source/commit              "PRF_SOURCE_COMMIT"
    :source/dirty?              "PRF_SOURCE_DIRTY"
    :runner/orchestration-id    "PRF_ORCHESTRATION_RUNNER_ID"
-   :bundle/id                  "PRF_BUNDLE_ID"})
-
+   :bundle/id                  "PRF_BUNDLE_ID"
+   :tsa/url                    "PRF_TSA_URL"})
 
 (defn provenance-map
   "Read all PRF_* env vars and return a map keyword → value-or-nil."
   []
   (into {} (map (fn [[k v]] [k (System/getenv v)]) env-keys)))
-
 
 (defn source-provenance
   "Return only source-related provenance attributes.

@@ -316,7 +316,19 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                             :task (shell "./scripts/test.sh sew-yield-scenarios")}
 
   test:yield-scenarios {:doc "Compatibility alias for both yield path suites"
-                        :task (shell "./scripts/test.sh yield-scenarios")}
+                         :task (shell "./scripts/test.sh yield-scenarios")}
+
+  test:speds {:doc "Run SPEDS visual narrative tests"
+              :task (clojure {:dir "." :extra-deps {}}
+                            "-M:test:with-sew"
+                            "-e"
+                            "(require (quote resolver-sim.notebooks.speds.findings-comparator-test)
+                                      (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
+                                      (quote resolver-sim.notebooks.speds.core-test))
+                             (clojure.test/run-tests
+                               (quote resolver-sim.notebooks.speds.findings-comparator-test)
+                               (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
+                               (quote resolver-sim.notebooks.speds.core-test))")}
 
   scenario-registry:validate
    {:doc "Validate the invariant scenario registry and file-backed scenario suite registry"
@@ -645,6 +657,9 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                     (clojure "-M" "-e" "(require 'resolver-sim.db.store 'resolver-sim.db.xtdb) (resolver-sim.db.store/truncate! (resolver-sim.db.xtdb/->datasource))")
                     (clojure "-M:telemetry-seed" "20"))}
 
+  test:forensic-python {:doc "Run forensic Python unit tests (verify.py, preflight.py, etc.)"
+                        :task (shell "python3" "-m" "pytest" "tests/forensic/" "-v")}
+
   test:integration {:doc "Run DB integration tests"
                     :task (clojure "-M:test" "-e" "(require 'clojure.test 'resolver-sim.db.telemetry-integration-test) (clojure.test/run-tests 'resolver-sim.db.telemetry-integration-test)")}
 
@@ -864,4 +879,9 @@ Env:   PRF_SOURCE_ROOTS, PRF_RUNS_ROOT, PRF_ARTIFACT_DIR, PRF_CODE_HASH_ALGORITH
   forensic:quorum
   {:doc "Local repeated-execution quorum: run N times, compare, report agreement.
 Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2]"
-   :task (apply shell "python3" "scripts/forensic/quorum.py" *command-line-args*)}}}
+   :task (apply shell "python3" "scripts/forensic/quorum.py" *command-line-args*)}
+
+  forensic:consensus
+  {:doc "Phase 1 local consensus coordinator: run N times, collect submissions, compare stable fields, produce consensus certificate and disagreement artifacts per RUNNER_CONSENSUS_SPEC_V1.
+Usage: bb forensic:consensus [--runs 3] [--threshold 2] [--from-dirs dir1 dir2 ...]"
+   :task (apply shell "python3" "scripts/forensic/consensus.py" *command-line-args*)}}}
