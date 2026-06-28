@@ -2,8 +2,7 @@
   "Payoff and economic functions.
    
    All functions are pure: no side effects, deterministic given inputs."
-  (:require [resolver-sim.stochastic.rng :as rng])
-  (:import [java.math BigDecimal]))
+  (:require [resolver-sim.stochastic.rng :as rng]))
 
 (defn calculate-fee
   "Calculate resolver fee based on escrow and fee rate (bps).

@@ -3,8 +3,7 @@
 
   Status (:pass :fail :inconclusive :not-applicable) drives suite roll-up.
   :reason disambiguates why a non-pass status was assigned."
-  (:require [clojure.string :as str]
-            [resolver-sim.definitions.registry :as defs]))
+  (:require [resolver-sim.definitions.registry :as defs]))
 
 (def domain-result-schema-version "1.0")
 

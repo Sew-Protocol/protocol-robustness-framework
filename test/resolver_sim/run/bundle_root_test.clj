@@ -57,7 +57,7 @@
 
 (deftest build-bundle-root-registry-snapshot-contains-expected-keys
   (let [snap (:registry/snapshot (br/build-bundle-root sample-request sample-result))]
-    (is (string? (:registry-hash snap)))
+    (is (string? (:attestor-registry-hash snap)))
     (is (string? (:scenario-suite-hash snap)))
     (is (string? (:dispatcher-registry-hash snap)))
     (is (string? (:evidence-policy-hash snap)))
@@ -78,7 +78,8 @@
     (is (not= (:bundle/hash b1) (:bundle/hash b2)))))
 
 (deftest bundle-root-is-runnable
-  (let [bundle (br/build-bundle-root sample-request sample-result)
+  (let [bundle (assoc (br/build-bundle-root sample-request sample-result)
+                      :dag/root-node-hash "test-dag-root-hash")
         check (br/runnable? bundle)]
     (is (:runnable? check))))
 

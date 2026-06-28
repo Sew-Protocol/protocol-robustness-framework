@@ -1,8 +1,7 @@
 (ns resolver-sim.evidence.aggregate
   "Generic evidence aggregate builder.
    Provides a consistent envelope for structured protocol evidence."
-  (:require [resolver-sim.evidence.capture :as cap]
-            [resolver-sim.hash.canonical :as hc]
+  (:require [resolver-sim.hash.canonical :as hc]
             [resolver-sim.time.context :as time-ctx]))
 
 (defn evidence-content-hash

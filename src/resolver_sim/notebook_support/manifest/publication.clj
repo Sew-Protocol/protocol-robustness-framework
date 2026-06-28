@@ -7,8 +7,7 @@
   (:require [resolver-sim.benchmark.signing :as signing]
             [resolver-sim.notebook-support.manifest.hash :as mhash]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.java.io :as io]))
 
 ;; ── canonical hash ────────────────────────────────────────────────────────────
 

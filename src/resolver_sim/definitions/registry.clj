@@ -44,13 +44,32 @@
    :medium {:score 0.6}
    :low {:score 0.3}})
 
+(defn- load-speds-definitions
+  "Load SPEDS definitions from the first available source:
+   1. PRF_DEFINITIONS_PATH environment variable (explicit override)
+   2. Classpath resource at data/speds/definitions.edn (embedded in jar)
+   3. Filesystem path data/speds/definitions.edn (development checkout)
+
+   Returns the parsed EDN map, or nil if no source found."
+  []
+  (or (some->
+       (System/getenv "PRF_DEFINITIONS_PATH")
+       (io/file)
+       (try (slurp) (catch Exception _ nil))
+       (edn/read-string))
+      (some->
+       (io/resource "data/speds/definitions.edn")
+       (try (slurp) (catch Exception _ nil))
+       (edn/read-string))
+      (some->
+       "data/speds/definitions.edn"
+       (io/file)
+       (try (slurp) (catch Exception _ nil))
+       (edn/read-string))))
+
 (def ^:private speds-definitions
-  "SPEDS semantic definitions loaded from data/speds/definitions.edn."
-  (delay
-    (-> "data/speds/definitions.edn"
-        io/file
-        slurp
-        edn/read-string)))
+  "SPEDS semantic definitions loaded via resource chain (env → classpath → filesystem)."
+  (delay (load-speds-definitions)))
 
 (def speds-purpose-kind
   (get @speds-definitions :speds-purpose-kind))

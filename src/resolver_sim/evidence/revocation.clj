@@ -33,15 +33,12 @@
 
 (defmacro with-fresh-registry
   "Run body with a fresh empty revocation registry.
-   Restores the previous state after body completes."
+   Restores the previous state after body completes.
+   Uses dynamic binding for thread-safe test isolation."
   [& body]
-  `(let [old-atom# revocation-registry
-         fresh-atom# (atom {})]
-     (try
-       (alter-var-root #'revocation-registry (constantly fresh-atom#))
-       ~@body
-       (finally
-         (alter-var-root #'revocation-registry (constantly old-atom#))))))
+  `(let [fresh-atom# (atom {})]
+     (binding [revocation-registry fresh-atom#]
+       ~@body)))
 
 ;; ── Revocation Builder ──────────────────────────────────────────────────────
 

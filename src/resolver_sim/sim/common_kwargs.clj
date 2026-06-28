@@ -1,8 +1,8 @@
 (ns resolver-sim.sim.common-kwargs
   "Single source of truth for dispute/resolve-dispute keyword-arg extraction.
    Both batch/run-batch and shared-batch/run-shared-batch consume these to
-   ensure new params are never silently dropped in one path."
-  (:require [resolver-sim.stochastic.dispute :as dispute]))
+ensure new params are never silently dropped in one path."
+)
 
 (defn common-kwargs
   "Extract the shared keyword-args vector for dispute/resolve-dispute from params.

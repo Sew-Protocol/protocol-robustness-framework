@@ -14,6 +14,8 @@
 (defn- make-sample-evidence [n]
   (ev/make-evidence-record
    {:artifact-kind :transition
+    :step 1
+    :block-time 1000
     :before {:counter (dec n)}
     :after {:counter n}
     :action {:type :increment :n n}

@@ -9,8 +9,7 @@
      :module/id arbitrary (e.g. :aave-v3)
      :module/type :yield.profile/aave-v3-like (or :yield.provider/liquid-lending)
      :accounting/type :shares"
-  (:require [resolver-sim.yield.model :as model]
-            [resolver-sim.yield.position :as pos]
+  (:require [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
             [resolver-sim.yield.accrual :as accrual]
             [resolver-sim.yield.partial-fill :as partial-fill]

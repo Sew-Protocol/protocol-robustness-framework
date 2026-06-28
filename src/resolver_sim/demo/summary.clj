@@ -2,7 +2,6 @@
   "Print a researcher-facing summary of a scenario JSON fixture.
    Produces compact event/expectation tables suitable for asciicast recordings."
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
             [clojure.data.json :as json]))
 
 (defn- load-json [path]

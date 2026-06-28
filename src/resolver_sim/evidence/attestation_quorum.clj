@@ -16,9 +16,7 @@
      (aq/group-attestations-by-quorum-scope attestations)
      (aq/explain-quorum-report report)"
   (:require [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.evidence.attestation-integrity :as integrity]
-            [resolver-sim.evidence.attestation-registry :as ar])
-  (:import [java.time Instant]))
+            [resolver-sim.evidence.attestation-integrity :as integrity]))
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 

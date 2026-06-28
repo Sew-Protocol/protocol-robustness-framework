@@ -29,7 +29,7 @@ For canonical (bundle-marked) runs, `:runner-selection` MUST specify
 ### 2.3 Registry-Backed
 
 Runner identities and protocol ids SHALL be registered in passive
-registries (`orchestration-runner-definitions`, `protocol-symbol-registry`).
+registries (`execution-runner-definitions`, `orchestrator-definitions`, `protocol-symbol-registry`).
 The Run Request references known registry entries by key.
 
 ## 3. Fields
@@ -59,7 +59,7 @@ The Run Request references known registry entries by key.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `:mode` | keyword | yes | `:pinned`, `:capability-match`, or `:quorum` |
-| `:runner-id` | keyword | yes (pinned) | Known runner id from `orchestration-runner-definitions` |
+| `:runner-id` | keyword | yes (pinned) | Known execution runner id from `execution-runner-definitions` |
 | `:capabilities` | set | yes (capability-match) | Required capabilities for runner selection |
 
 ### 4.2 Modes
@@ -67,7 +67,7 @@ The Run Request references known registry entries by key.
 #### `:pinned` (canonical)
 
 A specific runner is named. The runner id MUST be in
-`known-orchestration-runners`. Used for canonical bundle-root runs.
+`known-execution-runner-ids`. Used for canonical bundle-root runs.
 
 #### `:capability-match`
 
@@ -84,8 +84,17 @@ Not yet implemented.
 
 | ID | Description | Capabilities |
 |---|---|---|
-| `:runner/local-bb` | Local Babashka runner | clojure, bb, filesystem, evidence-dag |
-| `:runner/local-clojure` | Local Clojure JVM runner | clojure, jvm, filesystem, evidence-dag, full-classpath |
+| `:runner/local-bb` | Local Babashka execution runner | clojure, bb, filesystem, evidence-dag |
+| `:runner/local-clojure` | Local Clojure JVM execution runner | clojure, jvm, filesystem, evidence-dag, full-classpath |
+
+### 4.4 Orchestrator
+
+Each execution runner references an orchestrator via `:orchestrator-id`.
+The orchestrator dispatches the suite-level run-and-report function:
+
+| ID | Description |
+|---|---|
+| `:orchestrator/run-and-report-v1` | Primary orchestrator dispatching suite-level execution |
 
 ## 5. Validation
 
@@ -94,7 +103,7 @@ A Run Request is valid iff:
 1. All required fields are present
 2. `:runner-selection` contains required sub-fields per mode
 3. `:runner-selection` mode is one of `#{:pinned :capability-match :quorum}`
-4. In `:pinned` mode, `:runner-id` is a known orchestration runner
+4. In `:pinned` mode, `:runner-id` is a known execution runner
 
 ```clojure
 (validate-run-request request)

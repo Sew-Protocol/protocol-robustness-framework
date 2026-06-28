@@ -22,10 +22,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? false
               :scenario-path nil
-              :replay-result {:outcome :pass :world-hash "abc"}
-              :execution/raw {:outcome :pass :world-hash "abc"}
-              :runner {:backend :local-current :protocol-id "sew-v1"}
-              :scenario {:scenario-id "S01"}}
+               :scenario-hash "abc123def456hash"
+               :replay-result {:outcome :pass :world-hash "abc"}
+               :execution/raw {:outcome :pass :world-hash "abc"}
+               :runner {:backend :local-current :protocol-id "sew-v1"}
+               :scenario {:scenario-id "S01"}}
              {:scenario-id "S02"
               :name "S02 [inline]"
               :pass? true
@@ -36,10 +37,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? false
               :scenario-path nil
-              :replay-result {:outcome :pass}
-              :execution/raw {:outcome :pass}
-              :runner {:backend :local-current :protocol-id "sew-v1"}
-              :scenario {:scenario-id "S02"}}
+               :scenario-hash "456ghi789jklhash"
+               :replay-result {:outcome :pass}
+               :execution/raw {:outcome :pass}
+               :runner {:backend :local-current :protocol-id "sew-v1"}
+               :scenario {:scenario-id "S02"}}
              {:scenario-id "S03"
               :name "S03 [inline]"
               :pass? false
@@ -50,10 +52,11 @@
               :dispatcher-id :protocol/sew-v1
               :expected-fail? true
               :scenario-path nil
-              :replay-result {:outcome :fail :halt-reason "theory violation"}
-              :execution/raw {:outcome :fail :halt-reason "theory violation"}
-              :runner {:backend :local-current :protocol-id "sew-v1"}
-              :scenario {:scenario-id "S03"}}]
+               :scenario-hash "mno012pqr345hash"
+               :replay-result {:outcome :fail :halt-reason "theory violation"}
+               :execution/raw {:outcome :fail :halt-reason "theory violation"}
+               :runner {:backend :local-current :protocol-id "sew-v1"}
+               :scenario {:scenario-id "S03"}}]
    :summary {:passed 3 :total 3 :elapsed-ms 150 :ok? true}
    :diagnostics {:elapsed-ms 150 :suite-id :sew-invariants}})
 
@@ -68,10 +71,14 @@
     (is (nil? (:execution/raw first-result)))
     (is (nil? (:runner first-result)))
     (is (nil? (:scenario first-result)))
+    (is (nil? (:scenario-path first-result)))
     ;; Stable fields preserved
     (is (= "S01" (:scenario-id first-result)))
+    (is (= "abc123def456hash" (:scenario-hash first-result)))
     (is (true? (:pass? first-result)))
-    (is (= :protocol/sew-v1 (:dispatcher-id first-result)))))
+    (is (= :protocol/sew-v1 (:dispatcher-id first-result)))
+    ;; Suite does not contain runner-selection (runner-agnostic)
+    (is (nil? (:runner-selection (:suite overview))))))
 
 (deftest build-overview-computes-correct-totals
   (let [overview (overview/build-overview sample-run-result)]
@@ -123,6 +130,16 @@
     (is (= (overview/overview-hash o1)
            (overview/overview-hash o2)))))
 
+(deftest overview-hash-is-runner-agnostic
+  (let [o1 (overview/build-overview sample-run-result)
+        ;; Different runner-selection should not affect hash
+        variant (assoc sample-run-result
+                       :runner-selection {:mode :pinned
+                                          :runner-id :runner/local-clojure})
+        o2 (overview/build-overview variant)]
+    (is (= (overview/overview-hash o1)
+           (overview/overview-hash o2)))))
+
 (deftest overview-hash-detects-suite-key-change
   (let [o1 (overview/build-overview sample-run-result)
         variant (assoc sample-run-result :suite/key :yield-provider-scenarios)
@@ -130,7 +147,4 @@
     (is (not= (overview/overview-hash o1)
               (overview/overview-hash o2)))))
 
-(deftest overview-suite-includes-runner-selection
-  (let [overview (overview/build-overview sample-run-result)]
-    (is (= {:mode :pinned :runner-id :runner/local-bb}
-           (:runner-selection (:suite overview))))))
+

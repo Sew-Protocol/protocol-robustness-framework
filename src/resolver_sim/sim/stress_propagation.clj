@@ -1,6 +1,5 @@
 (ns resolver-sim.sim.stress-propagation
-  "Causal propagation engine for protocol failures."
-  (:require [clojure.set :as set]))
+"Causal propagation engine for protocol failures.")
 
 (defrecord StressNode [id cause action])
 

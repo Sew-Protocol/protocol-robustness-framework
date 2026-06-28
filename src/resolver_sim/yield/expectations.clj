@@ -1,7 +1,6 @@
 (ns resolver-sim.yield.expectations
   "World-level expectation checkers for yield scenarios."
-  (:require [resolver-sim.yield.accounting :as acct]
-            [resolver-sim.yield.evidence :as yield-evi]))
+  (:require [resolver-sim.yield.evidence :as yield-evi]))
 
 (defn- check-yield-expectation [world exp terminal?]
   (let [total-yield (reduce + (vals (:total-yield-generated world {})))

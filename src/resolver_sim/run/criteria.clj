@@ -26,10 +26,17 @@
   "Allowed runner selection modes.  :pinned is required for canonical runs."
   #{:pinned :capability-match :quorum})
 
-(def valid-runner-ids
-  "Known orchestration runner ids.  Extended at runtime from
-   passive-registries/known-orchestration-runners when available."
-  #{:runner/local-bb :runner/local-clojure})
+(defn valid-runner-ids
+  "Known execution runner ids.  Loaded from
+   passive-registries/known-execution-runner-ids at runtime with a
+   compile-time fallback."
+  []
+  (or (try
+        (when-let [v (requiring-resolve
+                      'resolver-sim.definitions.passive-registries/known-execution-runner-ids)]
+          @v)
+        (catch Exception _ nil))
+      #{:runner/local-bb :runner/local-clojure}))
 
 (def canonical-selection-mode
   "Runner selection mode required for canonical (bundle-marked) runs."
@@ -70,10 +77,10 @@
              :known (vec (sort valid-selection-modes))})
 
       (and (= :pinned (:mode sel))
-           (not (contains? valid-runner-ids (:runner-id sel))))
+            (not (contains? (valid-runner-ids) (:runner-id sel))))
       (conj {:code :unknown-runner-id
              :runner-id (:runner-id sel)
-             :known (vec (sort valid-runner-ids))}))))
+             :known (vec (sort (valid-runner-ids)))}))))
 
 (defn validate-run-request
   "Validate a run request map against the required criteria.
@@ -145,8 +152,8 @@
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
-                                      :registry-hash)))
-                 (conj {:code :missing-registry-hash})
+                                      :attestor-registry-hash)))
+                 (conj {:code :missing-attestor-registry-hash})
 
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
@@ -161,7 +168,21 @@
                  (and has-registries?
                       (not (contains? (:registry/snapshot bundle-root)
                                       :evidence-policy-hash)))
-                 (conj {:code :missing-evidence-policy-hash}))]
+                 (conj {:code :missing-evidence-policy-hash})
+
+                 (not (contains? bundle-root :dag/root-node-hash))
+                 (conj {:code :missing-dag-root-node-hash})
+
+                 (not= (:bundle/id bundle-root) (:bundle/hash bundle-root))
+                 (conj {:code :bundle-id-hash-mismatch
+                        :bundle/id (:bundle/id bundle-root)
+                        :bundle/hash (:bundle/hash bundle-root)})
+
+                 (not (contains? bundle-root :overview/hash))
+                 (conj {:code :missing-overview-hash})
+
+                 (not (contains? bundle-root :bundle/hash))
+                 (conj {:code :missing-bundle-hash}))]
     (if (seq errors)
       {:runnable? false :errors errors}
       {:runnable? true})))
@@ -174,7 +195,7 @@
   (let [mode (:mode selection)
         runner-id (:runner-id selection)]
     (case mode
-      :pinned (contains? valid-runner-ids runner-id)
+      :pinned (contains? (valid-runner-ids) runner-id)
       :capability-match (boolean (seq (:capabilities selection)))
       :quorum false
       false)))

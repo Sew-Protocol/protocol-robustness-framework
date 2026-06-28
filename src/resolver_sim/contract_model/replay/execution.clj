@@ -7,7 +7,6 @@
             [resolver-sim.contract-model.replay.checkpoints :as replay-checkpoints]
             [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.capture :as cap]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.util.evidence :as ev]
             [resolver-sim.util.attribution :as attr]

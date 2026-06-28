@@ -8,10 +8,9 @@
 
    See `make-evidence-record` for the canonical evidence record shape, and
    `emit-evidence!` for the primary emission API."
-  (:require [clojure.walk :as walk]
-            [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.util.attribution :as attr]))
+  (:require [resolver-sim.evidence.config :as evcfg])
+  (:require [resolver-sim.hash.canonical :as hc])
+  (:require [resolver-sim.util.attribution :as attr]))
 
 ;; ── Attribution Context ──────────────────────────────────────────────────────
 

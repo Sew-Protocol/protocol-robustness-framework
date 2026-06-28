@@ -1,7 +1,7 @@
 (ns resolver-sim.run.bundle-root
   "Bundle root construction and validation for reproducible suite runs.
    A bundle root captures the run request, registry snapshot, execution
-   summary, and normalized overview hash — enough information to re-run
+   summary, and normalized overview hash M-bM-^@M-^T enough information to re-run
    the same suite and verify the same execution graph.
 
    Usage:
@@ -20,9 +20,44 @@
   (:require [clojure.walk :as walk]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.run.overview :as overview]
-            [resolver-sim.run.criteria :as criteria]))
+            [resolver-sim.run.criteria :as criteria])
+  (:import [java.security MessageDigest]
+           [java.util Arrays]))
 
 (def ^:const schema-version "bundle-root.v1")
+
+(defn- json-encode
+  "Canonical JSON encoding: sorted keys, no whitespace.
+   Handles maps, vectors, strings, numbers, booleans, nil, keywords (as strings)."
+  [v]
+  (cond
+    (nil? v) "null"
+    (instance? Boolean v) (if v "true" "false")
+    (number? v) (pr-str v)
+    (instance? String v) (str "\"" (-> v (.replace "\\" "\\\\") (.replace "\"" "\\\"")) "\"")
+    (keyword? v) (json-encode (name v))
+    (instance? java.util.Map v)
+    (let [kvs (sort (map (fn [[k v]] (str (json-encode k) ":" (json-encode v))) v))]
+      (str "{" (clojure.string/join "," kvs) "}"))
+    (coll? v)
+    (let [items (map json-encode v)]
+      (str "[" (clojure.string/join "," items) "]"))
+    :else (json-encode (str v))))
+
+(defn- json-encode-safe
+  "Like json-encode but handles keywords and non-String keys by converting them."
+  [v]
+  (letfn [(kfn [k] (if (keyword? k) (name k) (str k)))]
+    (cond
+      (instance? java.util.Map v)
+      (let [kvs (sort (map (fn [[k v]] (str (json-encode (kfn k)) ":" (json-encode v))) v))]
+        (str "{" (clojure.string/join "," kvs) "}"))
+      :else (json-encode v))))
+
+(defn- json-canonical-bytes
+  "Serialize a value to canonical UTF-8 JSON bytes (safe encoding)."
+  [v]
+  (.getBytes (json-encode-safe v) "UTF-8"))
 
 ;; ── Registry snapshot helpers ─────────────────────────────────────────────────
 
@@ -53,10 +88,18 @@
       @v)
     (catch Exception _ nil)))
 
+(defn- lookup-orchestrator-id
+  "Resolve the orchestrator-id for a given runner-id from
+   execution-runner-definitions at runtime."
+  [runner-id]
+  (when runner-id
+    (when-let [defs (lazy-resolve
+                     'resolver-sim.definitions.passive-registries/execution-runner-definitions)]
+      (some #(when (= (:id %) runner-id) (:orchestrator-id %)) defs))))
+
 (defn registry-snapshot
   "Compute a snapshot of all active registries at call time.
    Uses lazy resolution to avoid hard dependencies on every registry namespace.
-
    Returns a map suitable for :registry/snapshot in the bundle root."
   []
   (let [exec-reg (lazy-resolve 'resolver-sim.definitions.passive-registries/execution-registry)
@@ -68,7 +111,7 @@
                     (let [v (requiring-resolve 'resolver-sim.protocols.registry/known-protocol-ids)]
                       (vec (v)))
                     (catch Exception _ nil))]
-    {:registry-hash (when att-reg (registry-hash att-reg))
+    {:attestor-registry-hash (when att-reg (registry-hash att-reg))
      :scenario-suite-hash (when suites (registry-hash suites))
      :dispatcher-registry-hash (when protocols (registry-hash protocols))
      :execution-registry-hash (when exec-reg (registry-hash exec-reg))
@@ -106,17 +149,16 @@
 
 (defn build-bundle-root
   "Build a bundle root from a run request and run result.
-
-   request — the :scenario-run/request map
-   result  — the :scenario-run/result map
-
+   request M-bM-^@M-^T the :scenario-run/request map
+   result  M-bM-^@M-^T the :scenario-run/result map
    Returns a bundle-root.v1 map with:
    - run request (for reproducibility)
    - registry snapshot hashes
    - execution environment
    - execution summary
    - normalized overview hash
-   - self-referential bundle hash"
+   - self-referential bundle hash (native Clojure canonical encoding)
+   - self-referential JSON hash (standalone-verifiable canonical JSON)"
   [request result]
   (let [overview (overview/build-overview result)
         overview-h (overview/overview-hash overview)
@@ -124,10 +166,12 @@
                          [:runner/backend :runner-selection
                           :suite/key :protocol/default-id
                           :evidence/profile :output/profile])
+        runner-id (get-in request [:runner-selection :runner-id])
         base {:bundle/schema-version schema-version
               :run/request (assoc req
                                   :registry-key (or (:registry-key request) :default)
                                   :workspace (or (:workspace request) :current))
+              :orchestrator/id (lookup-orchestrator-id runner-id)
               :registry/snapshot (registry-snapshot)
               :run/environment (environment)
               :execution/summary (select-keys result [:totals :status])
@@ -140,10 +184,28 @@
 
 ;; ── Bundle root validation ────────────────────────────────────────────────────
 
+(defn compute-json-hash
+  "Compute the JSON-canonical hash of a bundle root.
+   Strips :bundle/id and :bundle/hash, serializes the rest as canonical
+   JSON (sorted keys, no whitespace), then computes
+   SHA-256(\"BUNDLE_ROOT_V1\" || canonical-json-bytes).
+
+   Returns a 64-char hex string.  Verifiable in any language with a JSON
+   library and SHA-256 M-bM-^@M-^T no Clojure runtime needed."
+  [bundle-root]
+  (let [preimage (dissoc bundle-root :bundle/id :bundle/hash)
+        json-str (json-encode-safe preimage)
+        tag-bytes (.getBytes "BUNDLE_ROOT_V1" "UTF-8")
+        canon-bytes (.getBytes json-str "UTF-8")
+        combined (Arrays/copyOf tag-bytes (+ (alength tag-bytes) (alength canon-bytes)))
+        _ (System/arraycopy canon-bytes 0 combined (alength tag-bytes) (alength canon-bytes))
+        digest (MessageDigest/getInstance "SHA-256")
+        hash-bytes (.digest digest combined)]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) hash-bytes))))
+
 (defn runnable?
   "Check whether a bundle root is reproducible.
    Delegates to criteria/runnable-bundle-root?.
-
    Returns {:runnable? true} or {:runnable? false :errors [...]}."
   [bundle-root]
   (criteria/runnable-bundle-root? bundle-root))

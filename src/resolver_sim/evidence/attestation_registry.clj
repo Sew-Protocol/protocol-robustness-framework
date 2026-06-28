@@ -10,8 +10,7 @@
      register-attestation! stores the attestation in-memory and optionally
      registers it as a chain artifact via chain/register-additional-artifact!
      when called with :register-in-chain? true."
-  (:require [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.config :as evcfg]))
+  (:require [resolver-sim.evidence.chain :as chain]))
 
 ;; ── Registry Atom ────────────────────────────────────────────────────────────
 
@@ -24,15 +23,12 @@
 (defmacro with-fresh-registry
   "Execute body with a fresh attestation registry.
    The outer registry is restored when body exits.
-   Use for test isolation to prevent cross-test contamination."
+   Use for test isolation to prevent cross-test contamination.
+   Uses dynamic binding for thread-safe test isolation."
   [& body]
-  `(let [old-atom# *attestation-registry*
-         fresh-atom# (atom {})]
-     (try
-       (alter-var-root #'*attestation-registry* (constantly fresh-atom#))
-       ~@body
-       (finally
-         (alter-var-root #'*attestation-registry* (constantly old-atom#))))))
+  `(let [fresh-atom# (atom {})]
+     (binding [*attestation-registry* fresh-atom#]
+       ~@body)))
 
 (defn clear-attestations!
   "Reset the registry to empty.

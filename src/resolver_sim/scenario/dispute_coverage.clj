@@ -5,8 +5,7 @@
    Designed to be readable by a first-time researcher."
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
-            [resolver-sim.io.scenarios :as sc]
-            [resolver-sim.definitions.registry :as defs]))
+            [resolver-sim.io.scenarios :as sc]))
 
 (def coverage-categories
   "Coverage category definitions with full scenario file paths."

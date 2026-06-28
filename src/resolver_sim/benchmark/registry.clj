@@ -1,7 +1,6 @@
 (ns resolver-sim.benchmark.registry
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.java.io :as io]))
 
 (def registry-root (str (System/getProperty "user.home") "/.protocol-robustness/evidence"))
 

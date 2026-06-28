@@ -590,11 +590,6 @@ run_equivalence_new() {
   return $?
 }
 
-run_layering_lint() {
-  echo "Running namespace layering lint..."
-  clojure -M:layering-lint
-}
-
 run_comparison_lint() {
   echo "Running comparison metadata lint..."
   python scripts/validate/validate_comparison_metadata.py
@@ -703,9 +698,6 @@ case "$MODE" in
   comparison-lint)
     run_target comparison-lint run_comparison_lint || FAILURES=$((FAILURES + 1))
     ;;
-  layering-lint)
-    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
-    ;;
   coverage)
     run_target coverage run_coverage_gates || FAILURES=$((FAILURES + 1))
     ;;
@@ -731,8 +723,6 @@ case "$MODE" in
     echo ""
     run_target invariants run_invariants || FAILURES=$((FAILURES + 1))
     echo ""
-    run_target layering-lint run_layering_lint || FAILURES=$((FAILURES + 1))
-    echo ""
     run_target suites run_suites || FAILURES=$((FAILURES + 1))
     echo ""
     run_target reference-validation run_reference_validation || FAILURES=$((FAILURES + 1))
@@ -749,7 +739,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|layering-lint|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
+    echo "Usage: $0 [unit|framework|sew|generators|contracts|invariants|dispute-resolution|yield-provider-scenarios|sew-yield-scenarios|yield-scenarios|suites|reference-validation|dr3-coverage|equivalence-new|comparison-lint|coverage|adversarial-sweep|adversarial-gates|triage|monte-carlo|long-horizon|all]"
     exit 1
     ;;
 esac

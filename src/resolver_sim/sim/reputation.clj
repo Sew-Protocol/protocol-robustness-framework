@@ -1,7 +1,6 @@
 (ns resolver-sim.sim.reputation
   "Per-resolver reputation tracking for multi-epoch simulations."
-  (:require [clojure.string :as str]
-            [resolver-sim.stochastic.rng :as rng]))
+  (:require [resolver-sim.stochastic.rng :as rng]))
 
 (defn initialize-resolvers
   "Create initial cohort of resolvers from strategy mix.

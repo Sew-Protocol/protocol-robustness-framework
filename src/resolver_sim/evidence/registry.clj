@@ -10,7 +10,6 @@
      ;; registers both in the chain registry for test-artifacts.json"
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.event-evidence :as io-evidence]

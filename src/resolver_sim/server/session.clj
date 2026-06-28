@@ -28,9 +28,19 @@
 ;; Session store
 ;; ---------------------------------------------------------------------------
 
-(defonce ^{:private true :doc "Atom: {session-id → {:world :context :lock :step-count}}"}
+(defonce ^{:dynamic true :private true
+            :doc "Atom: {session-id → {:world :context :lock :step-count}}"}
   sessions
   (atom {}))
+
+(defmacro with-fresh-sessions
+  "Execute body with a fresh empty session store.
+   The outer store is restored when body exits.
+   Uses dynamic binding for thread-safe test isolation."
+  [& body]
+  `(let [fresh-atom# (atom {})]
+     (binding [sessions fresh-atom#]
+       ~@body)))
 
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers

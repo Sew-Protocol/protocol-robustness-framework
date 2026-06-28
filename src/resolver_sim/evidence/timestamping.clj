@@ -20,10 +20,9 @@
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log])
   (:import (java.net URI)
-           (java.net.http HttpClient HttpRequest HttpResponse
+           (java.net.http HttpClient HttpRequest
                           HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
            (java.time Instant)
-           (java.util Base64)
            (org.bouncycastle.tsp TimeStampRequestGenerator TimeStampResponse)
            (java.security MessageDigest)))
 

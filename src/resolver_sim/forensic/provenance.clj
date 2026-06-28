@@ -7,9 +7,7 @@
    attribution context.
 
    All values are strings or nil.  Consumers decide default/fallback
-   semantics."
-
-  (:require [clojure.string :as str]))
+   semantics.")
 
 (def env-keys
   "Keyword → env-var mapping for forensic provenance attributes."

@@ -2,7 +2,6 @@
   "Export Clojure invariant scenario maps to trace.json / scenarios/*.json (pure)."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [clojure.walk :as walk]))
 
 (defn- agent->trace-agent

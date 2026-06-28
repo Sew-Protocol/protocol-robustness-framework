@@ -40,8 +40,7 @@
    ## Layering
 
    sim/* may import sim/* per project rules. This namespace imports nothing
-   outside sim/. All inputs are plain Clojure maps (no DB, no I/O)."
-  (:require [clojure.string :as str]))
+    outside sim/. All inputs are plain Clojure maps (no DB, no I/O).")
 
 ;; ---------------------------------------------------------------------------
 ;; Shared result helpers

@@ -25,7 +25,7 @@
             [resolver-sim.server.session :as session])
   (:import [io.grpc ServerBuilder MethodDescriptor MethodDescriptor$MethodType
             MethodDescriptor$Marshaller
-            ServerServiceDefinition ServiceDescriptor Status StatusException]
+            ServerServiceDefinition ServiceDescriptor Status]
            [io.grpc.stub ServerCalls]
            [java.io ByteArrayInputStream InputStreamReader]
            [java.nio.charset StandardCharsets]))

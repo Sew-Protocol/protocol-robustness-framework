@@ -32,8 +32,19 @@ from all fields except `:bundle/id` and `:bundle/hash` itself. The
 
 A canonical bundle root was produced by a pinned runner executing the
 full registered suite with no scenario filtering. Non-canonical bundles
-carry a `:non-canonical-reason` and are not suitable for comparison or
-attestation.
+carry a structured `:non-canonical-reason` and are not suitable for
+comparison or attestation.
+
+### Non-Canonical Reason Codes
+
+| Code | Description |
+|---|---|
+| `:single-scenario-selected` | Single scenario selected; not a full suite run |
+| `:fixture-suite-selected` | Fixture suite selected; not a registered suite run |
+| `:dev-mode` | Development mode; bundle not suitable for comparison |
+| `:capability-match-runner` | Capability-matched runner; non-deterministic selection |
+| `:quorum-not-yet-canonical` | Quorum mode selected; not yet canonical |
+| `:scenario-filtering` | Scenario filtering applied (reserved for future use) |
 
 ## 3. Fields
 
@@ -48,6 +59,7 @@ attestation.
 | `:registry/snapshot` | map | yes | Registry state hashes at execution time (see §5) |
 | `:run/environment` | map | yes | Execution environment metadata (see §6) |
 | `:execution/summary` | map | yes | Aggregate results (see §7) |
+| `:dag/root-node-hash` | string | yes | Hash of the DAG root evidence node |
 | `:overview/hash` | string | yes | Hash of the normalized overview |
 | `:overview` | map | yes | Full RUN_OVERVIEW_SPEC_V1 map |
 
@@ -56,7 +68,7 @@ attestation.
 | Field | Type | Description |
 |---|---|---|
 | `:bundle/canonical?` | boolean | True if full registered suite, production mode, pinned runner |
-| `:bundle/non-canonical-reason` | keyword | Reason if non-canonical (e.g. `:single-scenario-selected`) |
+| `:bundle/non-canonical-reason` | map or nil | Structured reason if non-canonical: `{:code <keyword> :details <string>}` |
 
 ## 4. Run Request
 
@@ -79,7 +91,7 @@ execution time. Each hash is computed via `hash-with-intent {:hash/intent :regis
 
 | Field | Source | Description |
 |---|---|---|
-| `:registry-hash` | `attestor-registry` | Attestor registry snapshot |
+| `:attestor-registry-hash` | `attestor-registry` | Attestor registry snapshot |
 | `:scenario-suite-hash` | `suites` | Scenario suite definitions |
 | `:dispatcher-registry-hash` | `known-protocol-ids` | Active protocol dispatchers |
 | `:execution-registry-hash` | `execution-registry` | Registered execution modes |
@@ -116,10 +128,14 @@ A bundle root is runnable iff ALL of the following hold:
 | `:run/request` present | Request map exists |
 | `:run/request` valid | All required fields present, runner selection valid |
 | `:registry/snapshot` present | Snapshot map exists |
-| `:registry-hash` present | Attestor registry hash captured |
+| `:attestor-registry-hash` present | Attestor registry hash captured |
 | `:scenario-suite-hash` present | Scenario suite hash captured |
 | `:dispatcher-registry-hash` present | Dispatcher hash captured |
 | `:evidence-policy-hash` present | Evidence policy hash captured |
+| `:dag/root-node-hash` present | DAG root evidence node hash captured |
+| `:bundle/id == :bundle/hash` | Self-referential hash consistency |
+| `:overview/hash` present | Normalized overview hash captured |
+| `:bundle/hash` present | Self-referential bundle hash captured |
 
 ```clojure
 (runnable-bundle-root? bundle-root registries)
@@ -147,16 +163,17 @@ own content, and the hash is what you use to verify integrity.
  :bundle/id             "abc123def456..."
  :bundle/hash           "abc123def456..."
  :run/request           {...}
- :registry/snapshot     {:registry-hash "r1"
-                         :scenario-suite-hash "s1"
-                         :dispatcher-registry-hash "d1"
-                         :evidence-policy-hash "e1"
-                         :execution-registry-hash "x1"
-                         :claim-definition-registry-hash "c1"}
- :run/environment       {:git/commit "abc" :git/dirty? false ...}
- :execution/summary     {:totals {:passed 3 :failed 0 :total 3}
-                         :status :pass}
- :overview/hash         "ov-hash"
- :overview              {...}
- :bundle/canonical?     true}
+ :registry/snapshot     {:attestor-registry-hash "r1"
+                          :scenario-suite-hash "s1"
+                          :dispatcher-registry-hash "d1"
+                          :evidence-policy-hash "e1"
+                          :execution-registry-hash "x1"
+                          :claim-definition-registry-hash "c1"}
+  :run/environment       {:git/commit "abc" :git/dirty? false ...}
+  :execution/summary     {:totals {:passed 3 :failed 0 :total 3}
+                          :status :pass}
+  :dag/root-node-hash    "dag-root-hash"
+  :overview/hash         "ov-hash"
+  :overview              {...}
+  :bundle/canonical?     true}
 ```

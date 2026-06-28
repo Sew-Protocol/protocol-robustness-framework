@@ -11,7 +11,6 @@
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
             [clojure.set :as set]
-            [clojure.walk :as walk]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.hash.canonical :as hc]

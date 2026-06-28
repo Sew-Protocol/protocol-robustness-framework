@@ -73,11 +73,11 @@
     (is (= [(:node-hash n1)] (:parent-hashes n2)))))
 
 (deftest dag-node-validates-through-node-registry
-  (node/reset-node-registry!)
-  (let [a (build-a)
-        node (adag/build-attestation-dag-node a)
-        validation (node/validate-node node)]
-    (is (:valid? validation))))
+  (node/with-fresh-registry
+    (let [a (build-a)
+          node (adag/build-attestation-dag-node a)
+          validation (node/validate-node node)]
+      (is (:valid? validation)))))
 
 ;; ── emit-attestation-dag-node! ───────────────────────────────────────────────
 

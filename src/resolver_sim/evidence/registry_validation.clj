@@ -15,9 +15,7 @@
             [clojure.set :as set]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.evidence.registry :as reg]
-            [resolver-sim.io.event-evidence :as io-evidence]
-            [resolver-sim.logging :as log]))
+            [resolver-sim.evidence.registry :as reg]))
 
 ;; ── Check Runner ─────────────────────────────────────────────────────────────
 

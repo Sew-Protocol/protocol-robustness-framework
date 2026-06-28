@@ -24,19 +24,26 @@
   "Top-level keys extracted from each scenario result entry for the normalized
    overview.  Volatile fields (execution raw data, runner metadata, timing,
    absolute paths) are intentionally excluded."
-  #{:scenario-id :pass? :outcome :halt-reason :checks :violations
-    :dispatcher-id :expected-fail? :scenario-path})
+  #{:scenario-id :scenario-hash :pass? :outcome :halt-reason :checks :violations
+    :dispatcher-id :expected-fail?})
 
 (def volatile-run-result-keys
   "Keys stripped from the scenario-run/result when building the overview.
    These differ across runners even for identical execution (timing, paths,
    raw execution data, diagnostic metadata)."
-  #{:diagnostics :execution/raw :replay-result :scenario :runner})
+  #{:diagnostics :execution/raw :replay-result :scenario :runner :scenario-path})
 
 (defn- stable-scenario-entry
-  "Extract stable fields from one scenario result entry."
+  "Extract stable fields from one scenario result entry.
+   Computes a fallback scenario-hash from :scenario-id and :dispatcher-id
+   when the entry lacks a pre-computed :scenario-hash."
   [entry]
-  (select-keys entry scenario-stable-keys))
+  (let [base (select-keys entry scenario-stable-keys)]
+    (if (:scenario-hash base)
+      base
+      (assoc base :scenario-hash
+             (hc/hash-with-intent {:hash/intent :scenario}
+                                  (select-keys entry [:scenario-id :dispatcher-id]))))))
 
 (defn build-overview
   "Build a normalized overview from a :scenario-run/result map.
@@ -47,7 +54,7 @@
 
    Returns a map conforming to run-overview.v1 schema with a self-referential
    :overview/hash computed from all other fields."
-  [{:keys [results runner-selection] :as run-result}]
+  [{:keys [results] :as run-result}]
   (let [suite-key (:suite/key run-result)
         stable-results (mapv stable-scenario-entry results)
         passed (count (filter :pass? stable-results))
@@ -58,8 +65,7 @@
                                          stable-results))
         base {:overview/schema-version schema-version
               :suite {:suite/key suite-key
-                      :scenario-count (count results)
-                      :runner-selection (select-keys runner-selection [:mode :runner-id])}
+                      :scenario-count (count results)}
               :results stable-results
               :totals {:passed passed
                        :failed failed

@@ -2,8 +2,6 @@
   "Data-driven withdrawal fulfillment and shortfall handling.
    Implements policies like partial-fill, defer, and haircut based on market state."
   (:require [resolver-sim.yield.market-state :as market-state]
-            [resolver-sim.yield.loss :as loss]
-            [resolver-sim.yield.accounting :as acct]
             [resolver-sim.time.context :as time-ctx]))
 
 (defn- calculate-fulfillment

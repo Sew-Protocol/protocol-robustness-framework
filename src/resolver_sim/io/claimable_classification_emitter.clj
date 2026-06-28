@@ -2,7 +2,6 @@
   "Write claimable-classification.v2 evidence artifact (I/O shell)."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.io.scenario-runner :as scenario-runner]
             [resolver-sim.protocols.sew.claimable-classification :as cc]

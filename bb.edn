@@ -190,7 +190,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   {:doc "Refresh results/test-artifacts and golden reports by running all canonical fixture suites in :save mode.
          Outputs new .report.edn files to data/fixtures/golden/ and emits test artifacts.
          Also touches notebooks/report.clj to trigger Clerk re-evaluation if the server is running."
-   :task (shell "./scripts/test.sh suites")}
+   :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
 
   regenerate-goldens
   {:doc "Regenerate golden report files (data/fixtures/golden/*.report.edn) by running all fixture suites in :save mode.
@@ -198,7 +198,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
          Run this after fixing a failing scenario to update its golden artifact.
          Touches notebooks/report.clj afterward so a running Clerk server re-evaluates the report notebook.
          See also: scripts/scenarios/regenerate_goldens.clj, deps.edn :regenerate-goldens alias."
-   :task (shell "clojure" "-M:regenerate-goldens")}
+   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:regenerate-goldens")}
 
   evidence:build
   {:doc "Run a single scenario with invariants and emit evidence artifacts.
@@ -295,40 +295,78 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                   :task (clojure {:dir "."} "-M:generate-scenario-docs")}
 
   test {:doc "Run canonical validation gate (all targets via scripts/test.sh)"
-        :task (shell "./scripts/test.sh all")}
+        :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "all")}
 
   test:unit {:doc "Run canonical unit target (all — framework + Sew)"
-             :task (shell "./scripts/test.sh unit")}
+             :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "unit")}
 
   test:framework {:doc "Run framework unit tests only (no Sew protocol)"
-                  :task (shell "./scripts/test.sh framework")}
+                  :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "framework")}
+
+  test:framework:parallel
+  {:doc "Run framework unit tests in parallel (uses future dispatch for ~2x speedup)"
+   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test" "-m" "scripts.parallel-test-runner"
+                "resolver-sim.core-tests"
+                "resolver-sim.protocol-alignment-test"
+                "resolver-sim.time.context-test"
+                "resolver-sim.time.model-test"
+                "resolver-sim.sim.defection-test"
+                "resolver-sim.sim.strategy-adaptation-test"
+                "resolver-sim.sim.waterfall-test")}
+
+  test:unit:parallel
+  {:doc "Run all unit tests (framework + Sew) in parallel"
+   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-m" "scripts.parallel-test-runner"
+                "resolver-sim.core-tests"
+                "resolver-sim.protocol-alignment-test"
+                "resolver-sim.protocols.sew.replay-test"
+                "resolver-sim.protocols.sew.forking-strategist-expectations-test"
+                "resolver-sim.protocols.sew.slashing-test"
+                "resolver-sim.protocols.sew.phase-k-test"
+                "resolver-sim.protocols.sew.phase-m-test"
+                "resolver-sim.scenario.expectations-test"
+                "resolver-sim.scenario.equilibrium-test"
+                "resolver-sim.sim.multi-epoch-test"
+                "resolver-sim.sim.defection-test"
+                "resolver-sim.sim.strategy-adaptation-test"
+                "resolver-sim.sim.waterfall-test"
+                "resolver-sim.io.scenario-fixture-parity-test"
+                "resolver-sim.contract-model.replay-batch-test"
+                "resolver-sim.contract-model.replay-batch-sew-test"
+                "resolver-sim.contract-model.replay-batch-appeal-test"
+                "resolver-sim.contract-model.replay-batch-slash-domain-test"
+                "resolver-sim.protocols.sew.dispute-resolution-coverage-test"
+                "resolver-sim.financial.pro-rata-characterization-test"
+                "resolver-sim.scenario.suites-test"
+                "resolver-sim.validation.scenario-registry-test"
+                "resolver-sim.run.overview-test"
+                "resolver-sim.evidence.node-test"
+                "resolver-sim.evidence.attestation-dag-test")}
 
   test:sew {:doc "Run Sew protocol unit tests only"
-            :task (shell "./scripts/test.sh sew")}
+            :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "sew")}
 
   test:yield {:doc "Run yield protocol unit tests only"
-              :task (shell "./scripts/test.sh yield")}
+              :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "yield")}
 
   test:yield-provider-scenarios {:doc "Run standalone yield-v1 JSON scenarios"
-                                 :task (shell "./scripts/test.sh yield-provider-scenarios")}
+                                 :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "yield-provider-scenarios")}
 
   test:sew-yield-scenarios {:doc "Run Sew escrow + yield integration JSON scenarios"
-                            :task (shell "./scripts/test.sh sew-yield-scenarios")}
+                            :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "sew-yield-scenarios")}
 
   test:yield-scenarios {:doc "Compatibility alias for both yield path suites"
-                         :task (shell "./scripts/test.sh yield-scenarios")}
+                         :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "yield-scenarios")}
 
   test:speds {:doc "Run SPEDS visual narrative tests"
-              :task (clojure {:dir "." :extra-deps {}}
-                            "-M:test:with-sew"
-                            "-e"
-                            "(require (quote resolver-sim.notebooks.speds.findings-comparator-test)
-                                      (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
-                                      (quote resolver-sim.notebooks.speds.core-test))
-                             (clojure.test/run-tests
-                               (quote resolver-sim.notebooks.speds.findings-comparator-test)
-                               (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
-                               (quote resolver-sim.notebooks.speds.core-test))")}
+              :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:test:with-sew" "-e"
+                           "(require (quote resolver-sim.notebooks.speds.findings-comparator-test)
+                                     (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
+                                     (quote resolver-sim.notebooks.speds.core-test))
+                            (clojure.test/run-tests
+                              (quote resolver-sim.notebooks.speds.findings-comparator-test)
+                              (quote resolver-sim.notebooks.speds.issues-shadow-report-test)
+                              (quote resolver-sim.notebooks.speds.core-test))")}
 
   scenario-registry:validate
    {:doc "Validate the invariant scenario registry and file-backed scenario suite registry"
@@ -391,16 +429,16 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                    :task (shell "./scripts/test.sh invariants")}
 
   test:dispute-resolution {:doc "Run dispute resolution coverage scenarios (S-DR-*)"
-                           :task (shell "./scripts/test.sh dispute-resolution")}
+                            :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "dispute-resolution")}
 
   test:suites {:doc "Run canonical fixture suites target"
-               :task (shell "./scripts/test.sh suites")}
+               :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "suites")}
 
    test:triage {:doc "Run failure triage grouped by purpose/threat-tag"
-                :task (shell "./scripts/test.sh triage")}
+                :task (shell "scripts/with-test-artifact-lock.sh" "./scripts/test.sh" "triage")}
 
    test:notebooks {:doc "Load every notebook namespace to verify it compiles"
-                   :task (shell "clojure" "-M:with-sew" "-m" "scripts.test-notebooks")}
+                    :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-m" "scripts.test-notebooks")}
 
    adv:sweep {:doc "Run adversarial profitability sweeps and generate safe/unsafe regions"
              :task (shell "python3 python/adversarial_profitability_sweep.py")}
@@ -444,7 +482,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                                 (println (if ok "PASS" "FAIL"))
                                 ok))
                           lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint/core")))
-                         nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))
+                          nb-ok   (ok? "Notebook namespace check" (fn [] (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))
                          all-nb-ok (ok? "All notebooks load" (fn [] (shell "bb" "test:notebooks")))
                          speds-ok (ok? "SPEDS tests" (fn [] (shell "bb" "test:speds")))]
                      (if (and lint-ok nb-ok all-nb-ok speds-ok)
@@ -666,7 +704,11 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                     (clojure "-M:telemetry-seed" "20"))}
 
   test:forensic-python {:doc "Run forensic Python unit tests (verify.py, preflight.py, etc.)"
-                        :task (shell "python3" "-m" "pytest" "tests/forensic/" "-v")}
+                        :task (shell "python3" "-m" "pytest" "tests/forensic_python/" "-v")}
+
+  test:forensic-python:parallel
+  {:doc "Run forensic Python unit tests in parallel via pytest-xdist (-n auto)"
+   :task (shell "python3" "-m" "pytest" "-n" "auto" "tests/forensic_python/" "-v")}
 
   test:integration {:doc "Run DB integration tests"
                     :task (clojure "-M:test" "-e" "(require 'clojure.test 'resolver-sim.db.telemetry-integration-test) (clojure.test/run-tests 'resolver-sim.db.telemetry-integration-test)")}
@@ -731,8 +773,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
 
   notebook:check
   {:doc "Load notebook namespaces and validate data shapes."
-   :task (clojure {:dir "."}
-                  "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report])) (println (str \"Notebook namespaces loaded. Shape checks passed.\"))")}
+   :task (shell "scripts/with-test-artifact-lock.sh" "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report])) (println (str \"Notebook namespaces loaded. Shape checks passed.\"))")}
 
   notebook:lint
   {:doc "Lint notebook and notebook support code with clj-kondo"
@@ -885,8 +926,8 @@ Env:   PRF_SOURCE_ROOTS, PRF_RUNS_ROOT, PRF_ARTIFACT_DIR, PRF_CODE_HASH_ALGORITH
    :task (apply shell "python3" "scripts/forensic/self_test.py" *command-line-args*)}
 
   forensic:quorum
-  {:doc "Local repeated-execution quorum: run N times, compare, report agreement.
-Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2]"
+  {:doc "Local repeated-execution quorum: run N times in parallel, compare, report agreement.
+Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2] [--workers 4]"
    :task (apply shell "python3" "scripts/forensic/quorum.py" *command-line-args*)}
 
   forensic:consensus
@@ -917,4 +958,20 @@ Usage: bb forensic:mailbox:validate <dir> [--run-request-hash <hash>] [--identit
   forensic:mailbox:keygen
   {:doc "Generate an Ed25519 runner keypair.
 Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
-   :task (apply shell "python3" "scripts/forensic/mailbox.py" "keygen" *command-line-args*)}}}
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "keygen" *command-line-args*)}
+
+  ;; ── Build ──────────────────────────────────────────────────────────────
+
+  build:core
+  {:doc "Build prf-runner-core uberjar (6 MB, no Sew, no DB).
+         java -jar target/prf-runner-core-0.1.0-uber.jar -m resolver-sim.replay-core --help"
+   :task (clojure "-T:build" "uberjar" ":variant" "core")}
+
+  build:sew
+  {:doc "Build prf-runner-sew uberjar (18 MB, full Sew replay).
+         java -jar target/prf-runner-sew-0.1.0-uber.jar -m resolver-sim.minimal-runner --scenario <trace.json>"
+   :task (clojure "-T:build" "uberjar" ":variant" "sew")}
+
+  build
+  {:doc "Build both uberjars (core + sew)."
+   :depends [build:core build:sew]}}}

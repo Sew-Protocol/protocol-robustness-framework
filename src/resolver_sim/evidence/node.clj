@@ -33,6 +33,15 @@
   (reset! *node-registry* {})
   nil)
 
+(defmacro with-fresh-registry
+  "Execute body with a fresh empty node registry.
+   The outer registry is restored when body exits.
+   Uses dynamic binding for thread-safe test isolation."
+  [& body]
+  `(let [fresh-atom# (atom {})]
+     (binding [*node-registry* fresh-atom#]
+       ~@body)))
+
 (defn all-nodes
   []
   (->> @*node-registry* vals (sort-by :timestamp) vec))

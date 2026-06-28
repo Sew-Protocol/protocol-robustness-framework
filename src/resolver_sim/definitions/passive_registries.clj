@@ -634,33 +634,44 @@
    :registry-validator {:description "Registry validation entry point"}
    :attestation-emitter {:description "Attestation evidence node emitter for DAG integration"}})
 
-(def orchestration-runner-definitions
-  "ORCHESTRATION_RUNNER_SPEC_V1 entries: registered suite-level orchestration runners.
-   These are the runners that execute run-and-report, not the per-node execution runners."
+(def execution-runner-definitions
+  "EXECUTION_RUNNER_SPEC_V1 entries: registered execution runners.
+   These are the per-node runners that execute individual suites, distinct from
+   the orchestrator that dispatches suite-level run-and-report."
   [{:id :runner/local-bb
     :version 1
     :kind :local-bb
     :capabilities #{:clojure :bb :filesystem :evidence-dag}
     :deterministic? true
     :trust-level :local
-    :description "Local Babashka runner for canonical suite execution."
-    :entry 'resolver-sim.io.scenario-runner/run-and-report}
+    :description "Local Babashka execution runner for canonical suite execution."
+    :orchestrator-id :orchestrator/run-and-report-v1}
    {:id :runner/local-clojure
     :version 1
     :kind :local-clojure
     :capabilities #{:clojure :jvm :filesystem :evidence-dag :full-classpath}
     :deterministic? true
     :trust-level :local
-    :description "Local Clojure JVM runner for canonical suite execution."
-    :entry 'resolver-sim.io.scenario-runner/run-and-report}])
+    :description "Local Clojure JVM execution runner for canonical suite execution."
+    :orchestrator-id :orchestrator/run-and-report-v1}])
 
-(def orchestration-runner-registry
+(def execution-runner-registry
   {:registry-version 1
-   :runners orchestration-runner-definitions})
+   :runners execution-runner-definitions})
 
-(def known-orchestration-runners
-  "Validation whitelist: valid orchestration runner ids."
-  (set (map :id orchestration-runner-definitions)))
+(def known-execution-runner-ids
+  "Validation whitelist: valid execution runner ids."
+  (set (map :id execution-runner-definitions)))
+
+(def orchestrator-definitions
+  "ORCHESTRATOR_SPEC_V1 entries: registered suite-level orchestrators.
+   Orchestrators dispatch run-and-report across execution runners.
+   The :entry field points to the suite-level dispatch function."
+  [{:id :orchestrator/run-and-report-v1
+    :version 1
+    :description "Primary orchestrator that dispatches suite-level execution.
+                  Used by both :runner/local-bb and :runner/local-clojure."
+    :entry 'resolver-sim.io.scenario-runner/run-and-report}])
 
 (defn- namespace-resource-path
   [ns-sym]

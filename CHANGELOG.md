@@ -2,6 +2,64 @@
 
 ## [Unreleased]
 
+### Build (2026-06-28)
+
+- **Minimal uberjar runner spike:** Created `prf-runner-core-0.1.0-uber.jar` (5.6 MB, `resolver-sim.replay-core`) and `prf-runner-sew-0.1.0-uber.jar` (18 MB, `resolver-sim.minimal-runner`). Source-only build (no AOT), uses `clojure.main` as `Main-Class`. Works from `/tmp` with no source tree, no Clojure CLI. Added `build.clj` with `tools.build` tasks and `bb build:core`/`bb build:sew` commands. (`build.clj`, `bb.edn`, `deps.edn`)
+- **Portability fixes:** `data/speds/definitions.edn` and `config/evidence.json` are now embedded as classpath resources with `PRF_DEFINITIONS_PATH`/`PRF_EVIDENCE_CONFIG_PATH` env var overrides. `artifact-dir` falls back to `"results/test-artifacts"` when no config found. (`src/resolver_sim/definitions/registry.clj`, `src/resolver_sim/evidence/config.clj`)
+
+### Fixed (2026-06-28)
+
+- **Notebook crash bugs:** Fixed `subs` on nil in `workbench_production.clj:70` (nil git SHA) and division by zero in `yield_demo.clj:144,150` (no shortfall expected). Fixed fragile `subs` without length guard in `yield_scenarios.clj:148` and `speds/data.clj:189` (StringIndexOutOfBounds on short hash). (`notebooks/workbench_production.clj`, `notebooks/yield_demo.clj`, `notebooks/util/yield_scenarios.clj`, `src/resolver_sim/notebook_support/speds/data.clj`)
+
+- **Compile errors in source code:** Replaced nonexistent `io/to-byte-array` with `java.nio.file.Files/readAllBytes` in chain.clj. Removed unmatched `)` delimiter in sew.clj. Restored corrupted multi-line docstring in db/store.clj. (`src/resolver_sim/evidence/chain.clj:273`, `protocols_src/resolver_sim/protocols/sew.clj:519`, `src/resolver_sim/db/store.clj`)
+
+- **Pre-existing canonical_test.clj failures (3 fail, 2 error):** `test-world-hash-roundtrip` threw `Cannot encode unsupported type` for Clojure sets — added `IPersistentSet` encoding to `canonical-bytes` (sorted elements, encoded as tag-array for JSON roundtrip compatibility). `test-projection-converts-float-to-tagged` failed on JDK-version-dependent trailing-zero precision — updated expected value. `test-golden-hash-vectors` had stale golden hashes for `:world-structure` and `:evm-projection` — regenerated. (`src/resolver_sim/hash/canonical.clj`, `test/resolver_sim/hash/canonical_test.clj`)
+
+- **Pre-existing chain_test.clj failures (18 errors):** `action-at` projection required non-nil `:step`/`:block-time` but `make-sample-evidence` didn't supply them — added to test fixture. Root cause: `evidence/config.clj` loaded config JSON with `:key-fn keyword` but all accessor functions used string keys — changed 14 string-key lookups to keyword keys throughout. (`test/resolver_sim/evidence/chain_test.clj`, `src/resolver_sim/evidence/config.clj`)
+
+- **Stale `test:forensic-python` task path:** Referenced `tests/forensic/` which didn't exist; corrected to `tests/forensic_python/`. (`bb.edn:707`)
+
+### Added (2026-06-28)
+
+- **Notebook load validation:** Created `scripts/test_notebooks.clj` — loads all 31 notebook namespaces via `require`, reports pass/fail exits non-zero on failure. Added `bb test:notebooks` task and all-notebooks-load check to `bb validate` pipeline. 31/31 notebooks pass. (`scripts/test_notebooks.clj`, `bb.edn`)
+
+- **Test artifact file lock:** Created `scripts/with-test-artifact-lock.sh` — acquires exclusive `flock` on `results/.test-artifact.lock`, blocking until available, auto-releases on process death, preserves exit code. Wraps all `bb test:*` tasks that write to `results/test-artifacts/`. Prevents cross-process clobbering. (`scripts/with-test-artifact-lock.sh`, `bb.edn`)
+
+- **Parallel test runner:** Created `scripts/parallel_test_runner.clj` — dispatches `clojure.test/run-tests` per namespace via `future`, merges results, exits non-zero on failure. Added `bb test:framework:parallel` and `bb test:unit:parallel` tasks. Framework tests: 53 tests in 0.57s. (`scripts/parallel_test_runner.clj`, `bb.edn`)
+
+- **Forensic pipeline parallelization:** Added `ThreadPoolExecutor` to `quorum.py` — replaces serial `for` loop with concurrent subprocess dispatch. Added `--workers` CLI arg (defaults to `cpu_count + 1`). Installed `pytest-xdist` for parallel Python forensic tests. Added `bb test:forensic-python:parallel` task. (`scripts/forensic/quorum.py`, `bb.edn`)
+
+- **Missing `notebook-count` and view helpers:** Added `notebook-count` to `nav.clj` for dynamic notebook index. Added `trace-table`, `notice-box`, `badge` to `views.clj` (referenced but undefined). (`src/resolver_sim/notebook_support/nav.clj`, `src/resolver_sim/notebook_support/views.clj`)
+
+### Changed (2026-06-28)
+
+- **7 `alter-var-root` macros refactored to `dynamic-binding` for thread-safe test isolation:** `with-fresh-ledger` (ledger.clj), `with-fresh-registry` (revocation.clj, attestation_policy.clj, attestation_registry.clj, attestation_lifecycle.clj, node.clj), and `with-fresh-sessions` (session.clj) now use `(binding [var fresh-atom] ~@body)` instead of `(alter-var-root #'var (constantly fresh-atom))`. All 7 vars were already `^:dynamic`. Audit confirmed zero child-thread patterns inside the 138+ macro body call sites. All 245 affected tests, 568 assertions pass. (`src/resolver_sim/stake/ledger.clj`, `src/resolver_sim/evidence/revocation.clj`, `src/resolver_sim/evidence/attestation_policy.clj`, `src/resolver_sim/evidence/attestation_registry.clj`, `src/resolver_sim/evidence/attestation_lifecycle.clj`, `src/resolver_sim/evidence/node.clj`, `src/resolver_sim/server/session.clj`)
+
+- **deeps.edn bracket structure fixed:** Three aliases (`:speds-comparator-shadow`, `:notebooks`, `:search-docs`) were outside the `:aliases` map due to premature `}}` — broke Clojure CLI classpath building. Moved inside `:aliases`. (`deps.edn`)
+
+- **Unused import cleanup:** Removed 53 unused namespace requires and import declarations across 39 `src/` files. Zero unused-import warnings remaining. (`39 files under src/resolver_sim/`)
+
+- **`bb validate` lint scope narrowed:** Added `:lint/core` alias in deps.edn (src:test only). Updated `bb lint` task to use it, excluding `notebooks/archive/` namespace-errors. Added `bb lint:full` for comprehensive linting. (`deps.edn`, `bb.edn`)
+
+- **5 weakest notebooks archived:** Moved `shortfall_fairness.clj`, `evidence_drawer.clj`, `evidence_explorer.clj`, `challenge_drilldown.clj`, `yield_shortfall_analysis.clj` to `notebooks/archive/`. Removed from registry and `serve.clj`. Restored `yield_demo.clj` from archive — 2 active notebooks depend on it. (`notebooks/archive/`, `data/notebooks.edn`, `src/notebooks/serve.clj`)
+
+- **Parallel test mailboxes use temp output dirs:** All 7 `consensus.run_consensus` calls in `test_mailbox.py` now pass `output_dir=tmp_path` — prevents parallel worker race on `consensus-results/`. (`tests/forensic_python/test_mailbox.py`)
+
+### Notes
+- **Parallel test limitations:** The `flock` wrapper prevents cross-process artifact clobbering but does not serialize intra-JVM concurrent writes. Scenario replay tests running via `future` in the same JVM produce evidence reconciliation warnings (harmless — tests pass). Full artifact isolation requires per-namespace temp artifact directories.
+- **Remaining concurrency work:** Replace 5 `alter-var-root` macros with `binding` in source code (DONE). Add parallel runner integration for `test.sh suites` (fixture suites) to parallelize 94 scenarios across 16 suites. The evidence chain is already parallel-safe (each scenario uses `binding`-isolated chain cursor + atomic `swap!` accumulation).
+
+### Planned
+
+- **Register `:scenario` intent in projection-definition-registry:** Currently in `canonical.clj` intents map + domain-tags, but no entry in `passive_registries.clj:projection-definitions`. Works for hashing, but projection-registry validation skips it.
+- **Wire `orchestrator/id` into run request:** Currently only in bundle root top-level. Could be embedded in run request for forward-provenance.
+- **`:scenario-filtering` never triggers:** The condition `(:scenario-filter dispatch)` exists in `scenario_runner.clj` but no dispatch path sets this key. Needs a CLI option or API.
+- **Pre-existing `canonical_test.clj` failures (3 fail, 2 error):** `:world-structure` golden hash mismatch, float projection precision, world-hash roundtrip encoding.
+- **Pre-existing `chain_test.clj` failures (18 errors):** `:action-at` projection requires non-nil `:step`/`:block-time` — test data feeds nil.
+- **`bb validate` timeout on `test:notebooks`:** Notebook scenarios run >3 minutes. Split notebook tests from validate or add timeout guard.
+- **`scenario-hash` fallback edge case:** Fallback in `stable-scenario-entry` uses `:scenario-id` + `:dispatcher-id`. If both are nil the hash is deterministic but meaningless.
+
+
 ### Added (2026-06-27)
 
 - **Per-run protected workspace for forensic pipeline:** Each `bb forensic:run` now creates an isolated `workspace/` directory inside the run bundle. The Clojure pipeline writes all artifacts (evidence nodes, registry, event evidence) to this private workspace rather than the shared `results/test-artifacts/`. The config bridge (`resolver-sim.evidence.config/artifact-dir`) checks the `PRF_ARTIFACT_DIR` env var, set by the Python runner, ensuring every run's Clojure pipeline output is isolated from every other run — closing the concurrency gap even if the file lock were released. Evidence node copying, DAG inventory, and registry consistency checks all read from the workspace. (`src/resolver_sim/evidence/config.clj:57`, `scripts/forensic/run.py`)

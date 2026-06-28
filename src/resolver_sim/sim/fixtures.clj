@@ -6,8 +6,6 @@
    trace minimisation integration."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
-            [clojure.walk :as walk]
             [clojure.data.json :as json]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.validation.suite-result :as suite]

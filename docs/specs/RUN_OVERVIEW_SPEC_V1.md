@@ -52,9 +52,12 @@ section, not the overview.
 
 ```clojure
 {:suite/key       :sew-invariants
- :scenario-count  120
- :runner-selection {:mode :pinned :runner-id :runner/local-bb}}
+ :scenario-count  120}
 ```
+
+Runner identity is intentionally excluded from the overview for runner-agnostic
+comparison. It belongs in the bundle root run request, diagnostics, or runner
+attestation instead.
 
 ### 3.3 Per-Scenario Result
 
@@ -63,6 +66,7 @@ Each entry in `:results` contains only stable fields:
 | Field | Type | Description |
 |---|---|---|
 | `:scenario-id` | string | Scenario identifier |
+| `:scenario-hash` | string | Stable content hash of the scenario definition |
 | `:pass?` | boolean | Whether the scenario passed |
 | `:outcome` | keyword | Raw outcome (`:pass`, `:fail`, `:error`) |
 | `:halt-reason` | string or nil | Reason for halt if failed |
@@ -70,7 +74,6 @@ Each entry in `:results` contains only stable fields:
 | `:violations` | map | Invariant violation details |
 | `:dispatcher-id` | keyword | Dispatcher used for this scenario |
 | `:expected-fail?` | boolean | Whether failure was expected |
-| `:scenario-path` | string or nil | Relative scenario path (identifier only) |
 
 Volatile fields excluded from each entry:
 
@@ -80,6 +83,7 @@ Volatile fields excluded from each entry:
 | `:execution/raw` | Raw execution data |
 | `:runner` | Runner metadata (timing, host info) |
 | `:scenario` | Full scenario map (may contain volatile metadata) |
+| `:scenario-path` | Non-authoritative file path, differs across runners |
 
 ### 3.4 Totals
 
@@ -116,6 +120,7 @@ The following fields are stripped when building the overview:
 - `:diagnostics` — timing, performance metrics
 - `:summary` — aggregate summary with timing
 - `:elapsed-ms` — wall clock time
+- `:runner-selection` — runner identity (moved to bundle root / diagnostics)
 
 ## 5. Hash Projection
 
@@ -148,27 +153,26 @@ and produce the same stable result for every scenario.
 
 ```clojure
 {:overview/schema-version "run-overview.v1"
- :suite {:suite/key :sew-invariants
-         :scenario-count 120
-         :runner-selection {:mode :pinned :runner-id :runner/local-bb}}
- :results [{:scenario-id "S01"
-            :pass? true
-            :outcome :pass
-            :halt-reason nil
-            :checks [{:check/id :some-check :check/status :pass}]
-            :violations {}
-            :dispatcher-id :protocol/sew-v1
-            :expected-fail? false
-            :scenario-path nil}
-           {:scenario-id "S02"
-            :pass? false
-            :outcome :fail
-            :halt-reason "theory violation"
-            :checks [{:check/id :theory-check :check/status :fail}]
-            :violations {:theory-mismatch {:expected :pass :actual :fail}}
-            :dispatcher-id :protocol/sew-v1
-            :expected-fail? true
-            :scenario-path nil}]
+ :suite {:suite/key       :sew-invariants
+         :scenario-count  120}
+ :results [{:scenario-id    "S01"
+            :scenario-hash  "abc123def..."
+            :pass?          true
+            :outcome        :pass
+            :halt-reason    nil
+            :checks         [{:check/id :some-check :check/status :pass}]
+            :violations     {}
+            :dispatcher-id  :protocol/sew-v1
+            :expected-fail? false}
+           {:scenario-id    "S02"
+            :scenario-hash  "456ghi..."
+            :pass?          false
+            :outcome        :fail
+            :halt-reason    "theory violation"
+            :checks         [{:check/id :theory-check :check/status :fail}]
+            :violations     {:theory-mismatch {:expected :pass :actual :fail}}
+            :dispatcher-id  :protocol/sew-v1
+            :expected-fail? true}]
  :totals {:passed 1 :failed 1 :total 2
           :expected-failed 1 :unexpected-failed 0}
  :consensus {:eligible? true :basis :normalized-result-hash}}

@@ -1143,6 +1143,14 @@
     (.getPath f)))
 
 ;; ── Wire up capture implementation for protocol layers ──────────────────────
+;; Load-time wiring: injects this namespace's capture-event-evidence!
+;; into the dynamic var in resolver-sim.evidence.capture.
+;; This is startup registration, NOT test isolation — safe to keep
+;; alter-var-root because it runs once at load, not during parallel tests.
+;;
+;; If this causes issues with parallel test isolation, the dynamic var
+;; *capture-event-evidence!* in capture.clj should use the same binding[]
+;; pattern as the with-fresh-registry macros.
 
 (let [v (find-var 'resolver-sim.evidence.capture/*capture-event-evidence!*)]
   (when v

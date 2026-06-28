@@ -47,15 +47,12 @@
 
 (defmacro with-fresh-registry
   "Execute body with a fresh lifecycle registry.
-   The outer registry is restored when body exits."
+   The outer registry is restored when body exits.
+   Uses dynamic binding for thread-safe test isolation."
   [& body]
-  `(let [old-atom# *lifecycle-registry*
-         fresh-atom# (atom {})]
-     (try
-       (alter-var-root #'*lifecycle-registry* (constantly fresh-atom#))
-       ~@body
-       (finally
-         (alter-var-root #'*lifecycle-registry* (constantly old-atom#))))))
+  `(let [fresh-atom# (atom {})]
+     (binding [*lifecycle-registry* fresh-atom#]
+       ~@body)))
 
 (defn clear-lifecycle!
   "Reset the lifecycle registry to empty."

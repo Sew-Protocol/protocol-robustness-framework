@@ -2,8 +2,7 @@
   "Temporal instrumentation and time management for replay engine.
 
    Decomposed from contract-model/replay to improve kernel modularity."
-  (:require [resolver-sim.time.model :as time-model]
-            [resolver-sim.time.context :as time-ctx]))
+  (:require [resolver-sim.time.context :as time-ctx]))
 
 (defn advance-world-time
   "Advance :block-ts and scenario-step counter atomically.

@@ -42,156 +42,173 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest test-create-session-ok
-  (let [sid (fresh-sid)
-        r   (create! sid)]
-    (is (:ok r))
-    (is (= sid (:session-id r)))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)
+          r   (create! sid)]
+      (is (:ok r))
+      (is (= sid (:session-id r)))
+      (session/destroy-session! sid))))
 
 (deftest test-create-session-duplicate-rejected
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (let [r2 (create! sid)]
-      (is (not (:ok r2)))
-      (is (= :session-already-exists (:error r2))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (let [r2 (create! sid)]
+        (is (not (:ok r2)))
+        (is (= :session-already-exists (:error r2))))
+      (session/destroy-session! sid))))
 
 (deftest test-create-session-duplicate-agent-ids-rejected
-  (let [sid  (fresh-sid)
-        bad  [{:id "buyer" :address "0xbuyer" :type "honest"}
-              {:id "buyer" :address "0xother" :type "honest"}]
-        r    (session/create-session! sid bad {} 1000)]
-    (is (not (:ok r)))
-    (is (= :duplicate-agent-ids (:error r)))))
+  (session/with-fresh-sessions
+    (let [sid  (fresh-sid)
+          bad  [{:id "buyer" :address "0xbuyer" :type "honest"}
+                {:id "buyer" :address "0xother" :type "honest"}]
+          r    (session/create-session! sid bad {} 1000)]
+      (is (not (:ok r)))
+      (is (= :duplicate-agent-ids (:error r))))))
 
 (deftest test-create-session-duplicate-agent-addresses-rejected
-  (let [sid (fresh-sid)
-        bad [{:id "buyer"  :address "0xsame" :type "honest"}
-             {:id "seller" :address "0xsame" :type "honest"}]
-        r   (session/create-session! sid bad {} 1000)]
-    (is (not (:ok r)))
-    (is (= :duplicate-agent-addresses (:error r)))))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)
+          bad [{:id "buyer"  :address "0xsame" :type "honest"}
+               {:id "seller" :address "0xsame" :type "honest"}]
+          r   (session/create-session! sid bad {} 1000)]
+      (is (not (:ok r)))
+      (is (= :duplicate-agent-addresses (:error r))))))
 
 (deftest test-create-session-no-agents-rejected
-  (let [sid (fresh-sid)
-        r   (session/create-session! sid [] {} 1000)]
-    (is (not (:ok r)))
-    (is (= :no-agents (:error r)))))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)
+          r   (session/create-session! sid [] {} 1000)]
+      (is (not (:ok r)))
+      (is (= :no-agents (:error r))))))
 
 (deftest test-create-session-string-keys-accepted
   "Agents with string map keys (from JSON parse) must be normalised."
-  (let [sid    (fresh-sid)
-        agents [{"id" "buyer" "address" "0xbuyer" "type" "honest"}]
-        r      (session/create-session! sid agents {} 1000)]
-    (is (:ok r))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid    (fresh-sid)
+          agents [{"id" "buyer" "address" "0xbuyer" "type" "honest"}]
+          r      (session/create-session! sid agents {} 1000)]
+      (is (:ok r))
+      (session/destroy-session! sid))))
 
 ;; ---------------------------------------------------------------------------
 ;; step-session!
 ;; ---------------------------------------------------------------------------
 
 (deftest test-step-unknown-session
-  (let [r (session/step-session! "does-not-exist" create-event)]
-    (is (not (:ok r)))
-    (is (= :session-not-found (:error r)))))
+  (session/with-fresh-sessions
+    (let [r (session/step-session! "does-not-exist" create-event)]
+      (is (not (:ok r)))
+      (is (= :session-not-found (:error r))))))
 
 (deftest test-step-create-escrow-ok
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (let [r (session/step-session! sid create-event)]
-      (is (:ok r))
-      (is (= :ok (get-in r [:step :trace-entry :result])))
-      (is (= 0   (get-in r [:step :trace-entry :extra :workflow-id]))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (let [r (session/step-session! sid create-event)]
+        (is (:ok r))
+        (is (= :ok (get-in r [:step :trace-entry :result])))
+        (is (= 0   (get-in r [:step :trace-entry :extra :workflow-id]))))
+      (session/destroy-session! sid))))
 
 (deftest test-step-advances-world-state
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (session/step-session! sid create-event)
-    (let [info (session/session-info sid)]
-      (is (= 1 (:escrow-count info))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (session/step-session! sid create-event)
+      (let [info (session/session-info sid)]
+        (is (= 1 (:escrow-count info))))
+      (session/destroy-session! sid))))
 
 (deftest test-step-increments-step-count
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (session/step-session! sid create-event)
-    (session/step-session! sid release-event)
-    (is (= 2 (:step-count (session/session-info sid))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (session/step-session! sid create-event)
+      (session/step-session! sid release-event)
+      (is (= 2 (:step-count (session/session-info sid))))
+      (session/destroy-session! sid))))
 
 (deftest test-step-rejected-action-does-not-halt
   "Unknown-agent revert is non-fatal — session remains alive."
-  (let [sid   (fresh-sid)]
-    (create! sid)
-    (let [bad-event {:seq 0 :time 1000 :agent "ghost" :action "create_escrow"
-                     :params {:token "USDC" :to "0xseller" :amount 100}}
-          r         (session/step-session! sid bad-event)]
-      (is (:ok r))                            ; step call succeeded
-      (is (= :rejected (get-in r [:step :trace-entry :result])))
-      (is (not (get-in r [:step :halted?])))   ; not halted
-      (is (session/session-exists? sid)))      ; session still live
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid   (fresh-sid)]
+      (create! sid)
+      (let [bad-event {:seq 0 :time 1000 :agent "ghost" :action "create_escrow"
+                       :params {:token "USDC" :to "0xseller" :amount 100}}
+            r         (session/step-session! sid bad-event)]
+        (is (:ok r))                            ; step call succeeded
+        (is (= :rejected (get-in r [:step :trace-entry :result])))
+        (is (not (get-in r [:step :halted?])))   ; not halted
+        (is (session/session-exists? sid)))      ; session still live
+      (session/destroy-session! sid))))
 
 (deftest test-step-full-happy-path-release
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (session/step-session! sid create-event)
-    (let [r (session/step-session! sid release-event)]
-      (is (:ok r))
-      (is (= :ok (get-in r [:step :trace-entry :result]))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (session/step-session! sid create-event)
+      (let [r (session/step-session! sid release-event)]
+        (is (:ok r))
+        (is (= :ok (get-in r [:step :trace-entry :result]))))
+      (session/destroy-session! sid))))
 
 ;; ---------------------------------------------------------------------------
 ;; destroy-session!
 ;; ---------------------------------------------------------------------------
 
 (deftest test-destroy-session-ok
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (let [r (session/destroy-session! sid)]
-      (is (:ok r)))
-    (is (not (session/session-exists? sid)))))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (let [r (session/destroy-session! sid)]
+        (is (:ok r)))
+      (is (not (session/session-exists? sid))))))
 
 (deftest test-destroy-unknown-session
-  (let [r (session/destroy-session! "no-such-session")]
-    (is (not (:ok r)))
-    (is (= :session-not-found (:error r)))))
+  (session/with-fresh-sessions
+    (let [r (session/destroy-session! "no-such-session")]
+      (is (not (:ok r)))
+      (is (= :session-not-found (:error r))))))
 
 ;; ---------------------------------------------------------------------------
 ;; session-info
 ;; ---------------------------------------------------------------------------
 
 (deftest test-session-info-unknown-returns-nil
-  (is (nil? (session/session-info "nonexistent"))))
+  (session/with-fresh-sessions
+    (is (nil? (session/session-info "nonexistent")))))
 
 (deftest test-session-info-reflects-world
-  (let [sid (fresh-sid)]
-    (create! sid)
-    (let [info (session/session-info sid)]
-      (is (= 1000 (:block-time info)))
-      (is (= 0    (:escrow-count info)))
-      (is (= 0    (:step-count info))))
-    (session/step-session! sid create-event)
-    (let [info2 (session/session-info sid)]
-      (is (= 1    (:escrow-count info2)))
-      (is (= 1    (:step-count info2))))
-    (session/destroy-session! sid)))
+  (session/with-fresh-sessions
+    (let [sid (fresh-sid)]
+      (create! sid)
+      (let [info (session/session-info sid)]
+        (is (= 1000 (:block-time info)))
+        (is (= 0    (:escrow-count info)))
+        (is (= 0    (:step-count info))))
+      (session/step-session! sid create-event)
+      (let [info2 (session/session-info sid)]
+        (is (= 1    (:escrow-count info2)))
+        (is (= 1    (:step-count info2))))
+      (session/destroy-session! sid))))
 
 ;; ---------------------------------------------------------------------------
 ;; active-sessions
 ;; ---------------------------------------------------------------------------
 
 (deftest test-active-sessions-lists-live-sessions
-  (let [sid1 (fresh-sid)
-        sid2 (fresh-sid)]
-    (create! sid1)
-    (create! sid2)
-    (let [active (set (session/active-sessions))]
-      (is (contains? active sid1))
-      (is (contains? active sid2)))
-    (session/destroy-session! sid1)
-    (session/destroy-session! sid2)))
+  (session/with-fresh-sessions
+    (let [sid1 (fresh-sid)
+          sid2 (fresh-sid)]
+      (create! sid1)
+      (create! sid2)
+      (let [active (set (session/active-sessions))]
+        (is (contains? active sid1))
+        (is (contains? active sid2)))
+      (session/destroy-session! sid1)
+      (session/destroy-session! sid2))))
 
 ;; ---------------------------------------------------------------------------
 ;; Thread-safety: concurrent steps on the same session

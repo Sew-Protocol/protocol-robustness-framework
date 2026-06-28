@@ -23,15 +23,12 @@
 
 (defmacro with-fresh-ledger
   "Execute body with a fresh empty stake ledger.
-   The outer ledger is restored when body exits."
+   The outer ledger is restored when body exits.
+   Uses dynamic binding for thread-safe test isolation."
   [& body]
-  `(let [old-atom# *ledger*
-         fresh-atom# (atom {})]
-     (try
-       (alter-var-root #'*ledger* (constantly fresh-atom#))
-       ~@body
-       (finally
-         (alter-var-root #'*ledger* (constantly old-atom#))))))
+  `(let [fresh-atom# (atom {})]
+     (binding [*ledger* fresh-atom#]
+       ~@body)))
 
 (defn init-ledger!
   "Initialize the ledger with a seed map of entity-id -> initial amount.

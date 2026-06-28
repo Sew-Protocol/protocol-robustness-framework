@@ -28,12 +28,9 @@
   (:require [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.walk :as walk]
-            [resolver-sim.evidence.attestation :as att]
             [resolver-sim.evidence.attestation-integrity :as integrity]
             [resolver-sim.definitions.passive-registries :as registries]
-            [resolver-sim.hash.canonical :as hc])
-  (:import [java.io File]
-           [java.time Instant]))
+            [resolver-sim.hash.canonical :as hc]))
 
 ;; ── Constants ────────────────────────────────────────────────────────────────
 

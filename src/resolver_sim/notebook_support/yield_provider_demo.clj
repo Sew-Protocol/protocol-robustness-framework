@@ -1,8 +1,6 @@
 ^{:nextjournal.clerk/visibility {:code :show :result :show}}
 (ns resolver-sim.notebook-support.yield-provider-demo
   (:require [nextjournal.clerk :as clerk]
-            [clojure.string :as str]
-            [resolver-sim.yield.model :as model]
             [resolver-sim.yield.modules.liquid-lending :as liquid]
             [resolver-sim.yield.registry :as yreg]
             [resolver-sim.yield.presets :as presets]

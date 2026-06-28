@@ -12,7 +12,6 @@
      3. Add a cli-option entry in core.cli."
   (:require [clojure.string :as str]
             [resolver-sim.evidence.node :as ev-node]
-            [resolver-sim.io.params   :as params]
             [resolver-sim.io.results  :as results]
             [resolver-sim.sim.batch   :as batch]
             [resolver-sim.sim.sweep   :as sweep]

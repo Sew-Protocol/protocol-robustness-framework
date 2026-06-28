@@ -1,7 +1,6 @@
 (ns resolver-sim.notebook-support.yield-scenarios
   "Load, replay, and project yield-provider scenarios for Clerk workbenches."
-  (:require [clojure.string :as str]
-            [resolver-sim.io.scenarios :as io-sc]
+  (:require [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.scenario.normalize :as normalize]
             [resolver-sim.scenario.runner :as runner]
             [resolver-sim.scenario.suites :as suites]

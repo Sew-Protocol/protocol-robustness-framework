@@ -417,7 +417,8 @@ class TestConsensusFromMailbox:
         for i in range(3):
             mailbox.write_result_submission(mb, rrh, f"runner-{i}", summary)
         manifest = consensus.run_consensus(
-            mailbox_dir=mb, run_request_hash=rrh)
+            mailbox_dir=mb, run_request_hash=rrh,
+            output_dir=tmp_path / "output")
         assert manifest["consensus/status"] == "confirmed"
         assert manifest["consensus/submission-count"] == 3
 
@@ -436,7 +437,8 @@ class TestConsensusFromMailbox:
                     "source/tree-hash": "x", "source/tree-hash-algorithm": "sha256"}
         for i in range(2):
             mailbox.write_result_submission(mb, rrh, f"r-{i}", summary)
-        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh)
+        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh,
+                                output_dir=tmp_path / "output")
         cert_path = mb / "runs" / rrh / "consensus" / "consensus-certificate.json"
         assert cert_path.exists()
         cert = json.loads(cert_path.read_text())
@@ -459,7 +461,8 @@ class TestConsensusFromMailbox:
         s2["bundle/hash"] = "xxx"
         mailbox.write_result_submission(mb, rrh, "r-a", s1)
         mailbox.write_result_submission(mb, rrh, "r-b", s2)
-        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh, threshold=2)
+        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh, threshold=2,
+                                output_dir=tmp_path / "output")
         dis_path = mb / "runs" / rrh / "consensus" / "disagreement-report.json"
         assert dis_path.exists()
         dis = json.loads(dis_path.read_text())
@@ -481,7 +484,8 @@ class TestConsensusFromMailbox:
                     "source/tree-hash": "x", "source/tree-hash-algorithm": "sha256"}
         mailbox.write_result_submission(mb, rrh, "r-a", summary)
         mailbox.write_result_submission(mb, rrh, "r-b", summary)
-        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh)
+        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh,
+                                output_dir=tmp_path / "output")
         ev_path = mb / "runs" / rrh / "consensus" / "evidence-node.json"
         assert ev_path.exists()
         node = json.loads(ev_path.read_text())
@@ -521,7 +525,8 @@ class TestConsensusFromMailbox:
                     "source/tree-hash": "x", "source/tree-hash-algorithm": "sha256"}
         mailbox.write_result_submission(mb, rrh, "r-a", summary)
         mailbox.write_result_submission(mb, rrh, "r-b", summary)
-        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh)
+        consensus.run_consensus(mailbox_dir=mb, run_request_hash=rrh,
+                                output_dir=tmp_path / "output")
         subs = mailbox.list_result_submissions(mb, rrh)
         assert len(subs) == 2
 

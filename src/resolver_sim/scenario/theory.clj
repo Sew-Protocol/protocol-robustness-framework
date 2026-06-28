@@ -27,9 +27,8 @@
 
    ## Full Schema Documentation
 
-   See: docs/CDRS-v1.1-THEORY-SCHEMA.md"
-  (:require [clojure.string :as str]
-            [resolver-sim.protocols.protocol :as proto]
+    See: docs/CDRS-v1.1-THEORY-SCHEMA.md"
+  (:require [resolver-sim.protocols.protocol :as proto]
             [resolver-sim.scenario.equilibrium :as equilibrium]
             [resolver-sim.scenario.theory-eval :as theory-eval]
             [resolver-sim.scenario.theory-result :as theory-result]

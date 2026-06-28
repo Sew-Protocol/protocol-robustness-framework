@@ -4,8 +4,7 @@
    Checkpoints are captured for every event during replay but may be trimmed
    before results are returned. SPE fork replay only needs pre-decision worlds
    at strategic action seqs."
-  (:require [resolver-sim.evidence.capture :as cap]
-            [resolver-sim.evidence.chain :as chain]
+  (:require [resolver-sim.evidence.chain :as chain]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]))
 

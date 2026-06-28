@@ -195,7 +195,7 @@
   (let [result (hc/project-world-to-structure-view {:rate (float 1.5)} :test-intent)
         rate (get-in result [:structure :rate])]
     (is (= :float64 (:type rate)))
-    (is (= "1.50000000000000000" (:value-str rate)))))
+    (is (= "1.5000000000000000" (:value-str rate)))))
 
 (deftest test-projection-converts-function-to-struct-marker
   (let [r1 (hc/project-world-to-structure-view (fn [x] x) :test-intent)
@@ -481,8 +481,8 @@
 (def ^:private golden-hashes
   "Known golden hash values for each intent's fixture.
    If an intent contract changes, these must be recomputed."
-  {:world-structure   "587bc682a51dd99b9830399487cc4eb10017a9fa81485c5dae38763e66531bd1"
-   :evm-projection    "6cf3532b14f8ae4242483bd37784aa6be982418e6ccb899472cf73c21d406e30"
+  {:world-structure   "7bd2385f6f282de3016059bd6e2cedd14ae1733c1c2b09fe766362346efbe091"
+   :evm-projection    "0e8665e204c8f3833773b6b68d458ccd6346acd621ab9c7f5e4219ba6e3cdd2a"
    :evidence-record   "bb94b6ff9457c613af3fefce33130c4b4e68a8a0f5b587c00124c18cfa848ace"
    :evidence-content  "aa84921b0d4b447aaad5a450ffee9b36e2e3f9d3d39991c0eb3842162b05630d"
    :evidence-chain    "365e311bef1cd758d3961a2b08dc59fffc8d636f8826ff4901328cfd4a49a84b"

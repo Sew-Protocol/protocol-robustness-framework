@@ -16,12 +16,11 @@
    baseline and writes all output files.
 
    Layering: sim/* only. File I/O via resolver-sim.io.audit-outputs."
-  (:require [resolver-sim.sim.trajectory :as trajectory]
-            [resolver-sim.vcs            :as vcs]
-            [clojure.string               :as str]
-            [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.logging :as log]))
+  (:require [resolver-sim.vcs            :as vcs])
+  (:require [clojure.string               :as str])
+  (:require [resolver-sim.evidence.config :as evcfg])
+  (:require [resolver-sim.hash.canonical :as hc])
+  (:require [resolver-sim.logging :as log]))
 ;; ---------------------------------------------------------------------------
 ;; Utility
 ;; ---------------------------------------------------------------------------

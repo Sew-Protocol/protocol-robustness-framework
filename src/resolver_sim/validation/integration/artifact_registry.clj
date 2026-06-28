@@ -102,10 +102,7 @@
 
   (:require
    [clojure.data.json :as json]
-   [clojure.set :as set]
-   [clojure.string :as str]
-   [resolver-sim.validation.adapters.artifact-registry :as adapter]
-   [resolver-sim.validation.state :as vs]))
+   [resolver-sim.validation.adapters.artifact-registry :as adapter]))
 
 ;; ── registry checks ──────────────────────────────────────────────────────────
 

@@ -17,7 +17,6 @@
    same conservation-exact primitive used everywhere else in the framework.
    Reference: resolver-sim.yield.exact-math/largest-remainder-alloc"
   (:require [resolver-sim.stochastic.difficulty :as diff]
-            [resolver-sim.stochastic.rng :as rng]
             [resolver-sim.yield.exact-math :as exact-math]))
 
 ;; === Effort Budget Constraints ===

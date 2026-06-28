@@ -11,9 +11,9 @@
             [resolver-sim.evidence.forensic-populate :as fp]
             [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.evidence.timestamping :as ts]
+            [resolver-sim.hash.canonical :as hc]
             [resolver-sim.forensic.provenance :as prov]
             [resolver-sim.io.scenarios :as io-sc]
-            [resolver-sim.io.serialization :as serialization]
             [resolver-sim.logging :as log]
             [resolver-sim.protocols.registry :as preg]
             [resolver-sim.protocols.sew :as sew]
@@ -261,6 +261,7 @@
               (mapv (fn [result]
                       (if-let [entry (get entry-by-id (:scenario-id result))]
                         (assoc result
+                               :scenario-hash (hc/hash-with-intent {:hash/intent :scenario} (:scenario entry))
                                :scenario-path (:scenario-path entry)
                                :dispatcher-id (:dispatcher-id entry)
                                :scenario-metadata (:scenario-metadata entry)
@@ -543,13 +544,25 @@
                             (suites/suite-protocol-id (:suite dispatch)))
         protocol-id (or inferred-protocol-id suite-protocol-id default-protocol-id)
         runner-selection (or (:runner-selection dispatch) default-runner-selection)
+        selection-mode (:mode runner-selection)
         canonical? (and (nil? (:scenario dispatch))
                         (nil? (:fixture-suite dispatch))
-                        (not= :dev (:mode dispatch)))
+                        (not= :dev (:mode dispatch))
+                        (= :pinned selection-mode))
         non-canonical-reason (cond
-                               (:scenario dispatch) :single-scenario-selected
-                               (:fixture-suite dispatch) :fixture-suite-selected
-                               :else nil)]
+                               (:scenario dispatch) {:code :single-scenario-selected
+                                                      :details "Single scenario selected; not a full suite run"}
+                               (:fixture-suite dispatch) {:code :fixture-suite-selected
+                                                           :details "Fixture suite selected; not a registered suite run"}
+                               (= :dev (:mode dispatch)) {:code :dev-mode
+                                                           :details "Development mode; bundle not suitable for comparison"}
+                               (= :capability-match selection-mode) {:code :capability-match-runner
+                                                                      :details "Capability-matched runner; non-deterministic selection"}
+                                (:scenario-filter dispatch) {:code :scenario-filtering
+                                                              :details (str "Scenario filtering applied: " (:scenario-filter dispatch))}
+                                (= :quorum selection-mode) {:code :quorum-not-yet-canonical
+                                                             :details "Quorum mode selected; not yet canonical"}
+                                :else nil)]
     (when (and (not canonical?) non-canonical-reason)
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
@@ -650,7 +663,8 @@
                                  (when execution-node
                                    {:execution/node-hash (:node-hash execution-node)
                                     :execution/content-hash (:content-hash execution-node)
-                                    :execution/record-hash (:record-hash execution-node)}))]
+                                    :execution/record-hash (:record-hash execution-node)
+                                    :dag/root-node-hash (:node-hash execution-node)}))]
         (when-let [output-path (:output-file dispatch)]
           (write-result-json output-path enriched-root))
         {:exit-code (:exit-code thunk-result)

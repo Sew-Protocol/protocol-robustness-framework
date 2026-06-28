@@ -2,13 +2,12 @@
   (:require [buddy.core.dsa :as dsa]
             [buddy.core.keys :as keys]
             [buddy.core.codecs :as codecs]
-            [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.logging :as log])
   (:import (org.bouncycastle.crypto.util OpenSSHPrivateKeyUtil OpenSSHPublicKeyUtil PrivateKeyInfoFactory SubjectPublicKeyInfoFactory)
            (org.bouncycastle.crypto.params Ed25519PrivateKeyParameters Ed25519PublicKeyParameters)
            (org.bouncycastle.util.io.pem PemReader)
-           (java.io FileReader StringReader)
+           (java.io FileReader)
            (java.security KeyFactory)
            (java.security.spec PKCS8EncodedKeySpec X509EncodedKeySpec)))
 

@@ -6,7 +6,6 @@
             [resolver-sim.yield.market-state :as market-state]
             [resolver-sim.time.context :as time-ctx]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.yield.evidence :as ye]
             [resolver-sim.evidence.capture :as evidence]))
 
 (defn- normalize-token [token]

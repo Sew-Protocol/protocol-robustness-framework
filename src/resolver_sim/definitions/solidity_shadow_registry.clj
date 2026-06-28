@@ -12,8 +12,7 @@
    - all-differences       — return all recorded differences
    - check-shadow-coverage — detect simulation namespaces without entries"
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
-            [resolver-sim.logging :as log]))
+            [clojure.string :as str]))
 
 ;; ──────────────────────────────────────────────────────────────────────────
 ;; Schema

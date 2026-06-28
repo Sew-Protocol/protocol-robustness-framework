@@ -1,5 +1,5 @@
 (ns resolver-sim.validation.scenario-id
-  (:require [clojure.string :as str]))
+  "Scenario ID validation utilities.")
 
 (def ^:private scenario-id-regex #"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 

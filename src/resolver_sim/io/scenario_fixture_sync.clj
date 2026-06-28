@@ -2,7 +2,6 @@
   "Sync invariant scenario maps to trace.json and public scenarios/*.json fixtures."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [resolver-sim.io.scenario-export :as export]
             [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]))
 

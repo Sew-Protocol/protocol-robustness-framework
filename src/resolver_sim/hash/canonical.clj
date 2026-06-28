@@ -70,9 +70,10 @@
    :evidence-node    "EVIDENCE_NODE_V1"
    :decision-evidence "DECISION_EVIDENCE_V1"
    :invariant-failure "INVARIANT_FAILURE_V1"
-   :startup-validation "STARTUP_VALIDATION_V1"
-   :claim-result       "CLAIM_RESULT_V1"
-   :attestation        "ATTESTATION_V1"
+    :startup-validation "STARTUP_VALIDATION_V1"
+    :claim-result       "CLAIM_RESULT_V1"
+    :attestation        "ATTESTATION_V1"
+    :scenario           "SCENARIO_V1"
    :attestation-record "ATTESTATION_RECORD_V1"
    :execution-definition "EXECUTION_DEFINITION_V1"
    :action             "ACTION_V1"
@@ -287,6 +288,12 @@
           count-enc (encode-varuint (count v))
           elements (mapcat (fn [p] [(:key-bytes p) (:val-bytes p)]) sorted)]
       (apply ba-concat (ba-of tag-map) count-enc elements))
+
+    (instance? clojure.lang.IPersistentSet v)
+    (let [sorted (vec (sort (fn [a b] (compare (canonical-bytes a) (canonical-bytes b))) v))
+          count-enc (encode-varuint (count v))
+          elements (map canonical-bytes sorted)]
+      (apply ba-concat (ba-of tag-array) count-enc elements))
 
     :else
     (throw (ex-info "Cannot encode unsupported type"
@@ -900,6 +907,15 @@
     :intent/description "Attestable checkpoint with world hash and chain position"
     :intent/includes    #{:checkpoint-id :event-seq :world-hash :chain-head}
     :intent/excludes    #{:full-world-state :trace-detail}
+    :intent/projection-fn project-identity
+    :intent/version     1}
+
+   :scenario
+   {:intent/name        :scenario
+    :intent/domain-tag  "SCENARIO_V1"
+    :intent/description "Stable content hash of a scenario definition for cross-runner scenario identification"
+    :intent/includes    #{:scenario-id :scenario-path :protocol :dispatcher-id :normalized-scenario}
+    :intent/excludes    #{:runtime-metadata :host-info :timestamps}
     :intent/projection-fn project-identity
     :intent/version     1}
 

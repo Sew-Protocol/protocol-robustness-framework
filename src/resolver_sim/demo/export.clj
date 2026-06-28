@@ -5,8 +5,7 @@
             [clojure.string :as str]
             [clojure.data.json :as json]
             [clojure.java.shell :as shell]
-            [resolver-sim.demo.spec :as demo-spec])
-  (:import [java.io File]))
+            [resolver-sim.demo.spec :as demo-spec]))
 
 ;; ── Helpers ─────────────────────────────────────────────────────────────────
 

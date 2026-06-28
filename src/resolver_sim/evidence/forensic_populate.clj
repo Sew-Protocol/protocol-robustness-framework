@@ -7,8 +7,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.evidence.chain :as chain]
-            [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.hash.canonical :as hc])
+            [resolver-sim.evidence.config :as evcfg])
   (:import [java.security MessageDigest]))
 
 (defn- sort-keys

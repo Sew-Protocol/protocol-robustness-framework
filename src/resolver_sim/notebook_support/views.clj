@@ -1,8 +1,6 @@
 (ns resolver-sim.notebook-support.views
   "Clerk display helpers for research notebooks."
-  (:require [nextjournal.clerk :as clerk]
-            [clojure.string :as str]
-            [resolver-sim.notebook-support.checks :as checks]
+  (:require [clojure.string :as str]
             [resolver-sim.notebook-support.theme :refer [notebook-theme]]))
 
 (defn rag-status
@@ -208,4 +206,3 @@
                   :border (str "1px solid " color)
                   :fontSize "0.75em" :fontWeight "700" :fontFamily "monospace"}}
    label])
-

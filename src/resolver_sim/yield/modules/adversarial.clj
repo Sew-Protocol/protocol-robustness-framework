@@ -3,7 +3,6 @@
   (:require [resolver-sim.yield.model :as model]
             [resolver-sim.yield.accounting :as acct]
             [resolver-sim.util.attribution :as attr]
-            [resolver-sim.yield.evidence :as ye]
             [resolver-sim.evidence.capture :as evidence]))
 
 (defn- normalize-token [token]

@@ -22,6 +22,19 @@ from typing import Any
 PRF_EVIDENCE_USER = os.environ.get("PRF_EVIDENCE_USER", "")
 PRF_EVIDENCE_WORKSPACE = os.environ.get("PRF_EVIDENCE_WORKSPACE", "")
 
+try:
+    import yaml
+
+    with open(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "config", "forensic_hardening.yaml"
+        ),
+        "r",
+    ) as f:
+        HARDENING_CONFIG = yaml.safe_load(f)
+except Exception:
+    HARDENING_CONFIG = {"hardening": {"minimum_ptrace_scope": 3}}
+
 
 def check_uid(expected_user: str = "") -> dict[str, Any]:
     """Verify the process is running under the expected dedicated UID.
@@ -29,9 +42,13 @@ def check_uid(expected_user: str = "") -> dict[str, Any]:
     if not expected_user:
         expected_user = PRF_EVIDENCE_USER
     if not expected_user:
-        return {"check": "uid", "status": "skip",
-                "detail": "No expected user configured (set PRF_EVIDENCE_USER)",
-                "expected": None, "actual": None}
+        return {
+            "check": "uid",
+            "status": "skip",
+            "detail": "No expected user configured (set PRF_EVIDENCE_USER)",
+            "expected": None,
+            "actual": None,
+        }
     try:
         uid = os.geteuid()
         pw = pwd.getpwuid(uid)
@@ -137,9 +154,13 @@ def check_fs_access(write_target: str = "") -> dict[str, Any]:
     if not write_target:
         write_target = PRF_EVIDENCE_WORKSPACE
     if not write_target:
-        return {"check": "fs-access", "status": "skip",
-                "detail": "No workspace path configured (set PRF_EVIDENCE_WORKSPACE)",
-                "expected": None, "actual": None}
+        return {
+            "check": "fs-access",
+            "status": "skip",
+            "detail": "No workspace path configured (set PRF_EVIDENCE_WORKSPACE)",
+            "expected": None,
+            "actual": None,
+        }
     path = Path(write_target)
     try:
         if not path.exists():
@@ -206,8 +227,7 @@ def check_privileges() -> dict[str, Any]:
         }
 
 
-def compute_isolation_grade(isolation_mode: str,
-                            checks: list[dict[str, Any]]) -> str:
+def compute_isolation_grade(isolation_mode: str, checks: list[dict[str, Any]]) -> str:
     """Compute an overall isolation grade from mode and check results.
 
     Grades:
@@ -217,10 +237,8 @@ def compute_isolation_grade(isolation_mode: str,
       basic    — shared-filesystem mode + some checks fail
       unknown  — not enough information
     """
-    all_pass = all(
-        c.get("status") == "pass" for c in checks)
-    any_fail = any(
-        c.get("status") == "fail" for c in checks)
+    all_pass = all(c.get("status") == "pass" for c in checks)
+    any_fail = any(c.get("status") == "fail" for c in checks)
 
     if isolation_mode == "private-tmpfs":
         if all_pass:

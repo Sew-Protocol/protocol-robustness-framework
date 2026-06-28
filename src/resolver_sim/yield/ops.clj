@@ -1,6 +1,5 @@
 (ns resolver-sim.yield.ops
-  "Operation dispatch and main entry points for yield transitions."
-  (:require [resolver-sim.yield.model :as model]))
+  "Operation dispatch and main entry points for yield transitions.")
 
 (defn- get-module [world module-id]
   (get-in world [:yield/modules module-id]))

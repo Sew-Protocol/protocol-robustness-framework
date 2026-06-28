@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import subprocess
@@ -158,7 +159,8 @@ def compute_field_agreement(
 def quorum(suite_key: str | None = None,
            run_count: int = 3,
            threshold: int | None = None,
-           output_base: str | Path | None = None) -> int:
+           output_base: str | Path | None = None,
+           workers: int | None = None) -> int:
     if threshold is None:
         threshold = max(2, run_count - 1)  # default: all but one
     if output_base is None:
@@ -172,19 +174,24 @@ def quorum(suite_key: str | None = None,
     print(f"  suite: {suite_key or 'registry-default'}", file=sys.stderr)
     print(f"  output: {output_base}", file=sys.stderr)
 
-    # Execute all runs
+    # Execute all runs in parallel
     bundles: list[dict | None] = []
     exit_codes: list[int] = []
     elapsed_list: list[int] = []
-    run_labels: list[str] = []
+    run_labels: list[str] = [f"{ts}-quorum-{chr(ord('a') + i)}" for i in range(run_count)]
 
-    for i in range(run_count):
-        label = f"{ts}-quorum-{chr(ord('a') + i)}"
-        run_labels.append(label)
-        code, bundle, elapsed = run_execution(suite_key, output_base, label)
-        bundles.append(bundle)
-        exit_codes.append(code)
-        elapsed_list.append(int(elapsed))
+    workers = min(run_count, workers or (os.cpu_count() or 4) + 1)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        fut_map = {pool.submit(run_execution, suite_key, output_base, label): i
+                   for i, label in enumerate(run_labels)}
+        results = [None] * run_count
+        for fut in concurrent.futures.as_completed(fut_map):
+            idx = fut_map[fut]
+            results[idx] = fut.result()
+        for code, bundle, elapsed in results:
+            bundles.append(bundle)
+            exit_codes.append(code)
+            elapsed_list.append(int(elapsed))
 
     # Collect all field names from any bundle that produced output
     all_snapshot_fields: set[str] = set()
@@ -307,8 +314,10 @@ def main():
                         help="Agreement threshold (default: runs - 1)")
     parser.add_argument("--output-base", default=str(PRF_RUNS_ROOT),
                         help=f"Output base directory (default: {PRF_RUNS_ROOT})")
+    parser.add_argument("--workers", type=int, default=None,
+                        help="Parallel workers (default: cpu_count + 1, capped at run count)")
     args = parser.parse_args()
-    sys.exit(quorum(args.suite, args.runs, args.threshold, args.output_base))
+    sys.exit(quorum(args.suite, args.runs, args.threshold, args.output_base, args.workers))
 
 
 if __name__ == "__main__":

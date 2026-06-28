@@ -30,15 +30,12 @@
 
 (defmacro with-fresh-registry
   "Execute body with a fresh policy registry.
-   The outer registry is restored when body exits."
+   The outer registry is restored when body exits.
+   Uses dynamic binding for thread-safe test isolation."
   [& body]
-  `(let [old-atom# *policy-registry*
-         fresh-atom# (atom {})]
-     (try
-       (alter-var-root #'*policy-registry* (constantly fresh-atom#))
-       ~@body
-       (finally
-         (alter-var-root #'*policy-registry* (constantly old-atom#))))))
+  `(let [fresh-atom# (atom {})]
+     (binding [*policy-registry* fresh-atom#]
+       ~@body)))
 
 (defn clear-policies!
   "Reset the policy registry to empty."

@@ -11,7 +11,6 @@
    - Keep out of core public capability claims until replay-integrated
      execution and assertions are fully implemented."
   (:require [resolver-sim.protocols.sew.types :as t]
-            [resolver-sim.protocols.sew.runner :as runner]
             [resolver-sim.protocols.sew.lifecycle :as lc]
             [resolver-sim.protocols.sew.snapshot-presets :as snap-fix]
             [resolver-sim.stochastic.rng :as rng]

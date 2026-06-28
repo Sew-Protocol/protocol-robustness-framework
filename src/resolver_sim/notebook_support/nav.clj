@@ -8,9 +8,7 @@
     top-nav-bar     — compact category strip for top of each notebook
     notebook-hub    — full hub card grid for index.clj
     status-badge    — live status derived from findings/issues artifacts"
-  (:require [clojure.java.io :as io]
-            [clojure.edn :as edn]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.notebook-support.common :as common]))
 

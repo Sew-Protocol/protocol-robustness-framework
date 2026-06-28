@@ -106,49 +106,49 @@
            (:node-hash changed)))))
 
 (deftest evidence-node-persists-to-disk-and-registers-artifact
-  (node/reset-node-registry!)
-  (chain/reset-registry!)
-  (let [artifact-dir (temp-artifact-dir)
-        built (node/build-execution-node (base-node-spec {:execution-id :execution/replay}))]
-    (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
-      (let [{:keys [path artifact-entry]} (node/persist-execution-node! built)
-            readback (node/read-persisted-node path)
-            registry (chain/build-registry)
-            registry-entry (some #(when (= (:artifact/path %) path) %) (:artifacts registry))
-            verification (node/verify-persisted-node-artifact! path artifact-entry)]
-        (is (.exists (io/file path)))
-        (is (= (:node-hash built) (:node-hash readback)))
-        (is (= artifact-entry registry-entry))
-        (is (= (:node-hash built) (:artifact/hash artifact-entry)))
-        (is (:valid? verification))
-        (is (= (:node-hash built) (get-in verification [:node :node-hash])))))))
+  (node/with-fresh-registry
+    (chain/reset-registry!)
+    (let [artifact-dir (temp-artifact-dir)
+          built (node/build-execution-node (base-node-spec {:execution-id :execution/replay}))]
+      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+        (let [{:keys [path artifact-entry]} (node/persist-execution-node! built)
+              readback (node/read-persisted-node path)
+              registry (chain/build-registry)
+              registry-entry (some #(when (= (:artifact/path %) path) %) (:artifacts registry))
+              verification (node/verify-persisted-node-artifact! path artifact-entry)]
+          (is (.exists (io/file path)))
+          (is (= (:node-hash built) (:node-hash readback)))
+          (is (= artifact-entry registry-entry))
+          (is (= (:node-hash built) (:artifact/hash artifact-entry)))
+          (is (:valid? verification))
+          (is (= (:node-hash built) (get-in verification [:node :node-hash]))))))))
 
 (deftest persisted-node-dag-validation-spans-parent-and-child
-  (node/reset-node-registry!)
-  (chain/reset-registry!)
-  (let [artifact-dir (temp-artifact-dir)
-        parent (node/build-execution-node (base-node-spec {:execution-id :execution/simulation}))
-        child (node/build-execution-node
-               (base-node-spec {:execution-id :execution/replay
-                                :parent-hashes [(:node-hash parent)]
-                                :status :fail
-                                :outputs {:exit-code 1}
-                                :failure-details [{:failure-type :unexpected
-                                                   :class :unexpected
-                                                   :message "child failure"
-                                                   :expected? false}]}))]
-    (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
-      (let [parent-result (node/persist-execution-node! parent)
-            _ (node/register-node! parent)
-            child-result (node/persist-execution-node! child)
-            verification (node/verify-persisted-node-artifacts!
-                          artifact-dir
-                          [(:artifact-entry parent-result)
-                           (:artifact-entry child-result)])]
-        (is (:valid? verification))
-        (is (:valid? (:dag verification)))
-        (is (= 2 (count (:paths verification))))
-        (is (true? (get-in verification [:checks :artifacts-matched?])))))))
+  (node/with-fresh-registry
+    (chain/reset-registry!)
+    (let [artifact-dir (temp-artifact-dir)
+          parent (node/build-execution-node (base-node-spec {:execution-id :execution/simulation}))
+          child (node/build-execution-node
+                 (base-node-spec {:execution-id :execution/replay
+                                  :parent-hashes [(:node-hash parent)]
+                                  :status :fail
+                                  :outputs {:exit-code 1}
+                                  :failure-details [{:failure-type :unexpected
+                                                     :class :unexpected
+                                                     :message "child failure"
+                                                     :expected? false}]}))]
+      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+        (let [parent-result (node/persist-execution-node! parent)
+              _ (node/register-node! parent)
+              child-result (node/persist-execution-node! child)
+              verification (node/verify-persisted-node-artifacts!
+                            artifact-dir
+                            [(:artifact-entry parent-result)
+                             (:artifact-entry child-result)])]
+          (is (:valid? verification))
+          (is (:valid? (:dag verification)))
+          (is (= 2 (count (:paths verification))))
+          (is (true? (get-in verification [:checks :artifacts-matched?]))))))))
 
 (deftest evidence-policy-filters-expected-failures-and-excluded-classes
   (let [node (node/build-execution-node
@@ -228,44 +228,44 @@
     (is (some #(= :node/hash-mismatch (:error %)) (:errors result)))))
 
 (deftest with-execution-node-emits-pass-fail-and-error-nodes
-  (node/reset-node-registry!)
-  (chain/reset-registry!)
-  (let [artifact-dir (temp-artifact-dir)]
-    (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
-      (testing "pass node"
-        (is (= 0
+  (node/with-fresh-registry
+    (chain/reset-registry!)
+    (let [artifact-dir (temp-artifact-dir)]
+      (with-redefs [evcfg/artifact-dir (constantly artifact-dir)]
+        (testing "pass node"
+          (is (= 0
+                 (node/with-execution-node
+                   {:execution-id :execution/diff
+                    :inputs {:baseline "a" :candidate "b"}
+                    :status-fn #(if (zero? %) :pass :fail)}
+                   (fn [] 0))))
+          (is (= :pass (get-in (last (node/all-nodes)) [:result :status]))))
+        (testing "fail node"
+          (is (= 1
+                 (node/with-execution-node
+                   {:execution-id :execution/diff
+                    :inputs {:baseline "a" :candidate "b"}
+                    :status-fn #(if (zero? %) :pass :fail)
+                    :failure-details-fn (fn [_]
+                                          [{:failure-type :trace-divergence
+                                            :class :unexpected
+                                            :message "diverged"
+                                            :expected? false}])}
+                   (fn [] 1))))
+          (is (= :fail (get-in (last (node/all-nodes)) [:result :status]))))
+        (testing "error node"
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #"boom"
                (node/with-execution-node
                  {:execution-id :execution/diff
-                  :inputs {:baseline "a" :candidate "b"}
-                  :status-fn #(if (zero? %) :pass :fail)}
-                 (fn [] 0))))
-        (is (= :pass (get-in (last (node/all-nodes)) [:result :status]))))
-      (testing "fail node"
-        (is (= 1
-               (node/with-execution-node
-                 {:execution-id :execution/diff
-                  :inputs {:baseline "a" :candidate "b"}
-                  :status-fn #(if (zero? %) :pass :fail)
-                  :failure-details-fn (fn [_]
-                                        [{:failure-type :trace-divergence
-                                          :class :unexpected
-                                          :message "diverged"
-                                          :expected? false}])}
-                 (fn [] 1))))
-        (is (= :fail (get-in (last (node/all-nodes)) [:result :status]))))
-      (testing "error node"
-        (is (thrown-with-msg?
-             clojure.lang.ExceptionInfo
-             #"boom"
-             (node/with-execution-node
-               {:execution-id :execution/diff
-                :inputs {:baseline "a" :candidate "b"}}
-               (fn [] (throw (ex-info "boom" {}))))))
-        (is (= :error (get-in (last (node/all-nodes)) [:result :status]))))
-      (is (= 3 (count (node/all-nodes))))
-      (is (:valid? (node/verify-persisted-node-artifacts!
-                    artifact-dir
-                    (:artifacts (chain/build-registry))))))))
+                  :inputs {:baseline "a" :candidate "b"}}
+                 (fn [] (throw (ex-info "boom" {}))))))
+          (is (= :error (get-in (last (node/all-nodes)) [:result :status]))))
+        (is (= 3 (count (node/all-nodes))))
+        (is (:valid? (node/verify-persisted-node-artifacts!
+                      artifact-dir
+                      (:artifacts (chain/build-registry)))))))))
 
 (deftest evidence-node-intent-registry-validates
   (is (nil? (hc/validate-registry!))))

@@ -3,7 +3,7 @@
 
    Claims are now produced through resolver-sim.claims.engine/evaluate-claims
    with explicit evidence-node references, not through raw allocation-input
-   tunneling."
+tunneling."
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
             [resolver-sim.claims.engine :as claims-engine]
