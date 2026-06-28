@@ -2,6 +2,7 @@
   "Findings-envelope generation for SPEDS.
    Canonical evidence artifact from trial outputs."
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
             [malli.core :as m]
@@ -11,10 +12,12 @@
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.semantics :as sem]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.scenario.outcome-semantics :as ose]
             [resolver-sim.notebook-support.speds.config :as config]))
 
-(def findings-path "results/test-artifacts/findings.json")
+(def findings-path
+  (or (:findings config/artifact-paths) "results/test-artifacts/findings.json"))
 
 (def required-finding-keys
   #{:finding_id :scenario_id :kind :severity :status_kind :title
@@ -196,8 +199,7 @@
      :provenance {:run_id (:run-id canon)
                   :git_sha (:git-sha canon)
                   :trace_digest_status "missing"
-                  :definitions/hash (defs/definitions-hash)
-                  :definitions_hash (defs/definitions-hash)}
+                  :definitions/hash (defs/definitions-hash)}
      :claims [{:claim_id "scenario-kind"
                :value st-kind
                :severity sev
@@ -334,8 +336,7 @@
                   :git_sha (:git-sha canon)
                   :trace_digest nil
                   :trace_digest_status "missing"
-                  :definitions/hash (defs/definitions-hash)
-                  :definitions_hash (defs/definitions-hash)}}))
+                  :definitions/hash (defs/definitions-hash)}}))
 
 (defn- counts [findings]
   (let [by-sev (frequencies (map :severity findings))
@@ -365,7 +366,7 @@
             :generated_at (str (java.time.Instant/now))
             :git_sha (:git-sha canon)
             :suite_id (:suite-id @config/profile)
-            :artifact_root "results/test-artifacts"}
+            :artifact_root (evcfg/artifact-dir)}
       :overall_status {:status (if (= "pass" (:overall-status canon)) "passed" "warning")
                        :status_kind (if (empty? findings) "no_findings_detected" "validated_with_gaps")
                        :confidence "medium"
@@ -384,8 +385,7 @@
       :provenance {:source_artifacts [{:kind "summary" :path (:test-summary config/artifact-paths) :digest nil}
                                       {:kind "coverage" :path (:coverage config/artifact-paths) :digest nil}]
                    :definitions/hash (defs/definitions-hash)
-                   :definitions_hash (defs/definitions-hash)
-                   :claim_map_path "results/test-artifacts/claim-map.json"}})))
+                   :claim_map_path (str (evcfg/artifact-dir) "/claim-map.json")}})))
 
 ;; ──────────────────────────────────────────────────────────────────────────
 ;; Schema validation
@@ -426,8 +426,8 @@
   ([] (save-findings! (data/load-run-artifacts)))
   ([artifacts]
    (let [bundle (-> artifacts generate-findings-bundle validate-findings-bundle!)]
-     (.mkdirs (java.io.File. "results/test-artifacts"))
-     (with-open [w (clojure.java.io/writer findings-path)]
+     (.mkdirs (java.io.File. (evcfg/artifact-dir)))
+     (with-open [w (io/writer findings-path)]
        (json/write bundle w :indent true))
      bundle)))
 

@@ -63,6 +63,10 @@
 
 ;; ── quick stats from artifacts ────────────────────────────────────────────────
 
+(defn notebook-count []
+  (let [registry (load-registry)]
+    (count (:notebooks registry))))
+
 (defn- artifact-stats []
   (let [findings     (common/read-json (evcfg/artifact-path :findings))
         issues       (common/read-json (evcfg/artifact-path :issues))

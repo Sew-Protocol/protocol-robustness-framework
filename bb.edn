@@ -396,10 +396,13 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   test:suites {:doc "Run canonical fixture suites target"
                :task (shell "./scripts/test.sh suites")}
 
-  test:triage {:doc "Run failure triage grouped by purpose/threat-tag"
-               :task (shell "./scripts/test.sh triage")}
+   test:triage {:doc "Run failure triage grouped by purpose/threat-tag"
+                :task (shell "./scripts/test.sh triage")}
 
-  adv:sweep {:doc "Run adversarial profitability sweeps and generate safe/unsafe regions"
+   test:notebooks {:doc "Load every notebook namespace to verify it compiles"
+                   :task (shell "clojure" "-M:with-sew" "-m" "scripts.test-notebooks")}
+
+   adv:sweep {:doc "Run adversarial profitability sweeps and generate safe/unsafe regions"
              :task (shell "python3 python/adversarial_profitability_sweep.py")}
 
   adv:sweep:promote {:doc "Run sweep and emit top risky promotion backlog"
@@ -424,8 +427,11 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   report:attack-map {:doc "Generate visual attack-to-outcome artifacts (state diagram, surface snapshot, timeline — all Mermaid)"
                      :task (apply shell "python3" "python/attack_outcome_map.py" *command-line-args*)}
 
-  lint {:doc "Lint code with clj-kondo"
-        :task (shell "clj -M:lint" "--lint" "src:test")}
+  lint {:doc "Lint source and test code with clj-kondo (excludes notebooks/archive/)"
+        :task (shell "clj -M:lint/core")}
+
+  lint:full {:doc "Lint all code including notebooks/ and dev/"
+            :task (shell "clj -M:lint" "--lint" "src:notebooks:test:dev")}
 
   fmt {:doc "Format code with cljfmt"
        :task (shell "clojure -M:fmt")}
@@ -437,9 +443,11 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                               (let [ok (try (ok?-f) true (catch Exception _ false))]
                                 (println (if ok "PASS" "FAIL"))
                                 ok))
-                        lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint" "--lint" "src:test")))
-                        nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))]
-                    (if (and lint-ok nb-ok)
+                          lint-ok (ok? "Lint (src:test)" (fn [] (shell "clj" "-M:lint/core")))
+                         nb-ok   (ok? "Notebook namespace check" (fn [] (shell "clojure" "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report]))")))
+                         all-nb-ok (ok? "All notebooks load" (fn [] (shell "bb" "test:notebooks")))
+                         speds-ok (ok? "SPEDS tests" (fn [] (shell "bb" "test:speds")))]
+                     (if (and lint-ok nb-ok all-nb-ok speds-ok)
                       (println "VALIDATION PASSED")
                       (do (println "VALIDATION FAILED")
                           (System/exit 1))))}
@@ -724,7 +732,7 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   notebook:check
   {:doc "Load notebook namespaces and validate data shapes."
    :task (clojure {:dir "."}
-                  "-M" "-e" "(require (quote [resolver-sim.notebook.checks])) (require (quote [notebooks.report])) (println (str \"Notebook namespaces loaded. Shape checks passed.\"))")}
+                  "-M:with-sew" "-e" "(require (quote [resolver-sim.notebook-support.checks])) (require (quote [notebooks.report])) (println (str \"Notebook namespaces loaded. Shape checks passed.\"))")}
 
   notebook:lint
   {:doc "Lint notebook and notebook support code with clj-kondo"
@@ -883,5 +891,30 @@ Usage: bb forensic:quorum [--suite <key>] [--runs 3] [--threshold 2]"
 
   forensic:consensus
   {:doc "Phase 1 local consensus coordinator: run N times, collect submissions, compare stable fields, produce consensus certificate and disagreement artifacts per RUNNER_CONSENSUS_SPEC_V1.
-Usage: bb forensic:consensus [--runs 3] [--threshold 2] [--from-dirs dir1 dir2 ...]"
-   :task (apply shell "python3" "scripts/forensic/consensus.py" *command-line-args*)}}}
+Usage: bb forensic:consensus [--runs 3] [--threshold 2] [--from-dirs dir1 dir2 ...] [--from-mailbox <dir> --run-request-hash <hash>]"
+   :task (apply shell "python3" "scripts/forensic/consensus.py" *command-line-args*)}
+
+  forensic:mailbox:init
+  {:doc "Initialize a new forensic mailbox directory.
+Usage: bb forensic:mailbox:init <dir>"
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "init" *command-line-args*)}
+
+  forensic:mailbox:publish-run
+  {:doc "Publish a run request into a mailbox.
+Usage: bb forensic:mailbox:publish-run <dir> <request> [--run-id <id>]"
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "publish-run" *command-line-args*)}
+
+  forensic:mailbox:publish-submission
+  {:doc "Publish a runner result submission into a mailbox.
+Usage: bb forensic:mailbox:publish-submission <dir> <bundle-dir> --runner-id <id> --run-request-hash <hash> [--runner-key <key-file>]"
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "publish-submission" *command-line-args*)}
+
+  forensic:mailbox:validate
+  {:doc "Validate mailbox lifecycle invariants.
+Usage: bb forensic:mailbox:validate <dir> [--run-request-hash <hash>] [--identity-registry <path>] [--strict] [--require-signatures] [--output report.json]"
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "validate" *command-line-args*)}
+
+  forensic:mailbox:keygen
+  {:doc "Generate an Ed25519 runner keypair.
+Usage: bb forensic:mailbox:keygen --runner-id <id> --out <dir>"
+   :task (apply shell "python3" "scripts/forensic/mailbox.py" "keygen" *command-line-args*)}}}

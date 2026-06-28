@@ -111,7 +111,9 @@
 
 (defn- registry-var-value
   [sym]
-  @(requiring-resolve sym))
+  (if-let [v (requiring-resolve sym)]
+    @v
+    (throw (ex-info "Required registry var not found" {:var sym}))))
 
 (defn execution-registry
   []
@@ -389,7 +391,8 @@
                               (let [artifact-entry (some #(when (= (:artifact/path %) path) %) artifact-entries)
                                     known-parent-hashes (->> paths
                                                              (map (fn [candidate]
-                                                                    (-> candidate read-persisted-node :node-hash)))
+                                                                    (some-> candidate read-persisted-node :node-hash)))
+                                                             (remove nil?)
                                                              set)]
                                 (verify-persisted-node-artifact! path
                                                                  artifact-entry

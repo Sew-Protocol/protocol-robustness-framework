@@ -169,3 +169,43 @@
       :else
       "—")))
 
+(defn trace-table
+  "Render a dark-themed trace events table."
+  [trace]
+  [:table {:style {:width "100%" :borderCollapse "collapse" :fontSize "0.82em"
+                   :backgroundColor "#1e293b" :color "#f8fafc" :borderRadius "6px" :overflow "hidden"}}
+   [:thead [:tr {:style {:backgroundColor "#0f172a"}}
+           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "#"]
+           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Action"]
+           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Agent"]
+           [:th {:style {:padding "8px 12px" :textAlign "left" :color "#94a3b8"}} "Result"]]]
+   (into [:tbody]
+         (map-indexed
+          (fn [i entry]
+            [:tr {:style {:borderBottom "1px solid #334155"}}
+             [:td {:style {:padding "6px 12px" :color "#64748b"}} (inc i)]
+             [:td {:style {:padding "6px 12px" :fontFamily "monospace" :color "#7ADDDC"}} (str (:action entry))]
+             [:td {:style {:padding "6px 12px" :color "#e2e8f0"}} (str (:agent entry))]
+             [:td {:style {:padding "6px 12px"}} (if (= :ok (:result entry))
+                                                  [:span {:style {:color "#22c55e"}} "OK"]
+                                                  [:span {:style {:color "#ef4444"}} (str (:result entry))])]])
+          trace))])
+
+(defn notice-box
+  "Render an information notice box with title and body lines."
+  [title & body]
+  [:div {:style {:background "#1e1b4b" :border "1px solid #4338ca" :borderRadius "6px"
+                 :padding "12px 16px" :marginTop "12px" :color "#e0e7ff"}}
+   [:div {:style {:fontWeight "700" :marginBottom "6px" :color "#ffffff"}} title]
+   (for [line body]
+     [:div {:style {:fontSize "0.86em" :marginTop "4px" :color "#c7d2fe"}} line])])
+
+(defn badge
+  "Render a colored pill badge."
+  [label color]
+  [:span {:style {:display "inline-block" :padding "2px 8px" :borderRadius "999px"
+                  :backgroundColor (str color "20") :color color
+                  :border (str "1px solid " color)
+                  :fontSize "0.75em" :fontWeight "700" :fontFamily "monospace"}}
+   label])
+

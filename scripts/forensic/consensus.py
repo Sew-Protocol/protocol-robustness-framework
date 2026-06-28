@@ -248,7 +248,9 @@ def agreed_hash(agreement: list[dict]) -> str | None:
 
 def build_certificate(round_id: str, verdict: str, agreement: list[dict],
                       submissions: list[dict], threshold: int) -> dict:
-    """Build the consensus certificate artifact."""
+    """Build the consensus certificate artifact.
+    Participants are sorted deterministically by runner-id then bundle/hash
+    so that identical rounds produce identical certificate hashes."""
     ah = agreed_hash(agreement)
     participants = []
     for s in submissions:
@@ -260,6 +262,8 @@ def build_certificate(round_id: str, verdict: str, agreement: list[dict],
             "status": s.get("runner-message/status", "?"),
             "agree": (summary.get("overview/hash") == ah) if ah else False,
         })
+    # Sort deterministically so certificate hash is stable across runs
+    participants.sort(key=lambda p: (p.get("runner-id", ""), p.get("bundle/hash", "") or ""))
     cert = {
         "consensus-certificate/schema-version": CERT_SCHEMA_VERSION,
         "consensus-certificate/round-id": round_id,
@@ -367,10 +371,13 @@ def run_consensus(suite_key: str | None = None,
                   output_dir: str | Path | None = None,
                   output_base: str | Path | None = None,
                   label: str | None = None,
-                  no_harden: bool = True) -> dict:
+                  no_harden: bool = True,
+                  mailbox_dir: str | Path | None = None,
+                  run_request_hash: str | None = None) -> dict:
     """Run the full consensus lifecycle.
     
-    Either specify run_dirs (pre-existing bundles) or run_count (will execute).
+    Either specify run_dirs (pre-existing bundles), run_count (will execute),
+    or mailbox_dir + run_request_hash (mailbox submissions).
     Returns the consensus round manifest.
     """
     round_id = f"round-{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H-%M-%SZ')}"
@@ -384,8 +391,18 @@ def run_consensus(suite_key: str | None = None,
     
     started_at = datetime.now(timezone.utc).isoformat()
     
-    # Phase: Collect — run or load submissions
-    if run_dirs:
+    # Phase: Collect — from mailbox, dirs, or fresh runs
+    if mailbox_dir and run_request_hash:
+        from scripts.forensic.mailbox import load_result_submissions as mb_load
+        mb_path = Path(mailbox_dir).expanduser().resolve()
+        submissions, mb_warnings = mb_load(mb_path, run_request_hash)
+        for w in mb_warnings:
+            code = w.get("warning/code", "?")
+            msg = w.get("warning/message", "")
+            print(f"  mailbox warning [{code}]: {msg}", file=sys.stderr)
+        print(f"  collected {len(submissions)} valid submission(s) from mailbox",
+              file=sys.stderr)
+    elif run_dirs:
         submissions = collect_submissions(run_dirs)
     else:
         from scripts.forensic.run import run_forensic
@@ -459,6 +476,15 @@ def run_consensus(suite_key: str | None = None,
         print(f"  wrote consensus evidence node: {node['node-hash'][:16]}...",
               file=sys.stderr)
     
+    # Mailbox writeback if mailbox mode
+    if mailbox_dir and run_request_hash:
+        from scripts.forensic.mailbox import write_consensus_outputs as mb_write
+        mb_path = Path(mailbox_dir).expanduser().resolve()
+        dis = build_disagreement(round_id, verdict, agreement, submissions) if verdict == "diverged" else None
+        mb_write(mb_path, run_request_hash,
+                 certificate=cert, disagreement=dis, evidence_node=node)
+        print(f"  wrote consensus outputs to mailbox", file=sys.stderr)
+    
     # Round manifest
     manifest = {
         "consensus/schema-version": SCHEMA_VERSION,
@@ -510,6 +536,10 @@ def main():
     parser.add_argument("--label", default=None, help="Label for the consensus round")
     parser.add_argument("--no-harden", action="store_true",
                         help="Skip output hardening")
+    parser.add_argument("--from-mailbox", default=None,
+                        help="Use mailbox directory instead of executing or dirs")
+    parser.add_argument("--run-request-hash", default=None,
+                        help="Run request hash (required with --from-mailbox)")
     args = parser.parse_args()
     
     run_dirs = [Path(d) for d in args.from_dirs] if args.from_dirs else None
@@ -523,6 +553,8 @@ def main():
         output_base=args.output_base,
         label=args.label,
         no_harden=args.no_harden,
+        mailbox_dir=args.from_mailbox,
+        run_request_hash=args.run_request_hash,
     )
     status = manifest.get("consensus/status", "failed")
     sys.exit(0 if status in ("confirmed", "confirmed-with-failures") else 1)

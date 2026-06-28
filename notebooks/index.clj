@@ -24,7 +24,7 @@
    [:p {:style {:margin "0" :color "#94a3b8" :fontSize "0.83em" :lineHeight "1.6"}}
     "Structured research workspace for protocol security, adversarial simulation, "
     "economic analysis, and evidence provenance. "
-    [:strong {:style {:color "#e2e8f0"}} "28 notebooks"] " across 12 research domains. "
+    [:strong {:style {:color "#e2e8f0"}} (str (nav/notebook-count) " notebooks")] " across 12 research domains. "
     "Navigate by category, threat, or audience role."]
    [:div {:style {:display "flex" :gap "16px" :marginTop "14px" :flexWrap "wrap"}}
     (for [[label href icon]

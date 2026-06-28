@@ -1,9 +1,7 @@
 (ns notebooks.workbench-production
   (:require [nextjournal.clerk :as clerk]
-            [resolver-sim.notebook-support.speds.core :as speds]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.story :as story]
-            [resolver-sim.notebook-support.speds.tokens :as tokens]
             [resolver-sim.notebook-support.speds.config :as config]
             [clojure.string :as str]))
 
@@ -69,7 +67,8 @@
       [:div.metric-caption "Deterministic replay alignment across runs."]]
      [:div.metric-panel
       [:div.metric-label "Git Lineage"]
-      [:div.metric-value (subs (or (:git_sha summary) (:git-sha config/protocol-defaults)) 0 7)]
+      [:div.metric-value (let [sha (or (:git_sha summary) (:git-sha config/protocol-defaults))]
+                     (if sha (subs sha 0 (min 7 (count sha))) "—"))]
       [:div.metric-caption "Commit fingerprint for this evidence bundle."]]]
     
     ;; 2. Footer

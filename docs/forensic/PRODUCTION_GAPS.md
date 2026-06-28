@@ -86,6 +86,7 @@ runner that could produce externally-reliable output.
 | Clojure bundle root capture | ✅ | `clojure-bundle-root.json` in bundle |
 | Reproduce-from-bundle | ❌ | No `bb forensic:reproduce` |
 | Diff between two runs | ❌ | No comparison tool |
+| Shared mailbox for runner messages | ✅ | Phase 2: `mailbox.py` — filesystem-backed, content-addressed; runner announcements, run requests, commitments, submissions, error reports, consensus writeback, object store, CLI |
 | Multi-runner quorum comparison | ✅ | Phase 1: `consensus.py` — N-run coordinator, field-level agreement, certificate/disagreement artifacts |
 
 ## Evidence Pipeline

@@ -145,7 +145,7 @@
   [entries]
   (sort-by (fn [e]
              (let [code (get-in e [:demo :code] "Z99")]
-               (subs code 1))) ; Y01 -> 01
+               (subs code 1 (count code)))) ; Y01 -> 01
            entries))
 
 (defn scenario-card-hiccup

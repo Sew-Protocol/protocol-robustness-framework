@@ -178,7 +178,7 @@
    plus all component hashes for traceability."
   [evidence]
   (let [eh (:evidence-hash evidence)]
-    {:id (str "evidence-" (subs eh 0 12))
+    {:id (str "evidence-" (subs eh 0 (min 12 (count eh))))
      :kind :transition-evidence
      :schema-version (evcfg/schema :evidence-record)
      :evidence-hash eh
@@ -270,8 +270,8 @@
   "Compute the SHA-256 hex digest of a file's contents."
   [path]
   (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
-    (.update digest (.getBytes (slurp path) "UTF-8"))
-    (apply str (map (partial format "%02x") (.digest digest)))))
+    (.update digest (java.nio.file.Files/readAllBytes (.toPath (io/file path))))
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest digest)))))
 
 (defn registry-artifact-entry
   "Produce a test-artifacts.json compatible artifact entry for the written
@@ -462,7 +462,7 @@
   (let [ev-dir (io/file artifact-dir "event-evidence")
         disk-files (when (.isDirectory ev-dir)
                      (sort (filter #(.endsWith (.getName %) ".json")
-                                   (.listFiles ev-dir))))
+                                   (or (.listFiles ev-dir) []))))
         disk-count (count disk-files)
         registry-file (io/file artifact-dir "evidence-registry.json")
         registry (when (.exists registry-file)
@@ -472,12 +472,15 @@
         cursor (when (.exists cursor-file)
                  (json/read-str (slurp cursor-file) :key-fn keyword))
         cursor-seq (get cursor :cursor/final-seq 0)
-        max-disk-seq (when (seq disk-files)
-                       (apply max (map (fn [f]
-                                         (try (let [data (json/read-str (slurp f) :key-fn keyword)]
-                                                (get data :evidence/chain-seq 0))
-                                              (catch Exception _ 0)))
-                                       disk-files)))
+        disk-seqs (when (seq disk-files)
+                    (keep (fn [f]
+                            (try (let [data (json/read-str (slurp f) :key-fn keyword)]
+                                   (get data :evidence/chain-seq 0))
+                                 (catch Exception e
+                                   (log/warn! "Reconciliation: unreadable evidence file, skipping" {:file (.getName f) :error (.getMessage e)})
+                                   nil)))
+                          disk-files))
+        max-disk-seq (when (seq disk-seqs) (apply max disk-seqs))
         errors (cond-> []
                  (pos? (- disk-count registry-count))
                  (conj (str "Unregistered evidence: " disk-count " files on disk, "
@@ -669,10 +672,13 @@
    :strict true — this function checks criteria 1-4."
   [& {:keys [registry dir registry-hash]
       :or {dir (str (evcfg/artifact-dir))}}]
-  (let [registry (or registry
-                     (try (json/read-str (slurp (str dir "/evidence-registry.json"))
+  (let [registry-path (str dir "/evidence-registry.json")
+        registry (or registry
+                     (try (json/read-str (slurp registry-path)
                                          :key-fn keyword)
-                          (catch Exception _ nil)))
+                          (catch Exception e
+                            (log/warn! "forensic-status: failed to read evidence registry" {:path registry-path :error (.getMessage e)})
+                            nil)))
         sig-path (str dir "/signature.json")
         tsr-path (str dir "/registry.tsr")
         cur-path (str dir "/chain-cursor-final.json")
@@ -725,6 +731,16 @@
      :criteria-met (count (filter :pass criteria))
      :criteria-total (count criteria)
      :criteria criteria}))
+
+(defn evidence-root-hash
+  "Read the final chain cursor and return the evidence root hash.
+   Returns nil if the cursor file doesn't exist or can't be read."
+  [& {:keys [dir] :or {dir (str (evcfg/artifact-dir))}}]
+  (try
+    (let [cursor (json/read-str (slurp (str dir "/chain-cursor-final.json"))
+                                :key-fn keyword)]
+      (:cursor/final-self-hash cursor))
+    (catch Exception _ nil)))
 
 (defn finalize-and-attest!
   "Full forensic-grade evidence chain finalization in one step.

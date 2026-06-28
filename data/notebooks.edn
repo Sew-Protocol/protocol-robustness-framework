@@ -176,40 +176,6 @@
    :protocol-areas [:escrow :dispute-resolution]
    :tags           ["golden" "baseline" "SPEDS" "regression" "determinism"]}
 
-  {:id             :evidence-explorer
-   :path           "notebooks/evidence_explorer.clj"
-   :title          "Evidence Explorer"
-   :summary        "Deep-dive trace inspection for verified scenarios. Audit-surface for SPEDS scenario evidence."
-   :categories     [:evidence-artifacts :replay-determinism]
-   :audience       [:auditor :researcher]
-   :status         :verified
-   :risk           :medium
-   :protocol-areas [:all]
-   :tags           ["evidence" "traces" "SPEDS" "audit"]}
-
-  {:id             :evidence-drawer
-   :path           "notebooks/evidence_drawer.clj"
-   :title          "Evidence Drawer"
-   :summary        "Technical exploration surface for raw evidence artifacts. Low-level trace and artifact browser."
-   :categories     [:evidence-artifacts]
-   :audience       [:researcher]
-   :status         :partial
-   :risk           :low
-   :protocol-areas [:all]
-   :tags           ["evidence" "artifacts" "raw" "exploration"]}
-
-  {:id             :challenge-drilldown
-   :path           "notebooks/challenge_drilldown.clj"
-   :title          "Challenge Window Mechanics"
-   :summary        "Evidence drilldown for challenge window timing, bond locking, and dispute initiation edge cases."
-   :categories     [:security-validation :replay-determinism]
-   :audience       [:auditor :researcher]
-   :status         :verified
-   :risk           :high
-   :protocol-areas [:dispute-resolution :state-machine]
-   :threats        [:escalation-abuse :same-block-ordering]
-   :tags           ["challenge" "window" "timing" "bond" "dispute"]}
-
   {:id             :withdrawal-observatory
    :path           "notebooks/withdrawal_observatory.clj"
    :title          "Withdrawal & Claimable Balance Observatory"

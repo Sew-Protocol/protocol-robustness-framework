@@ -39,7 +39,7 @@
   [^bytes ba]
   (let [digest (MessageDigest/getInstance "SHA-256")
         raw (.digest digest ba)]
-    (apply str (map (partial format "%02x") (map unchecked-byte raw)))))
+    (apply str (map #(format "%02x" (bit-and % 0xff)) raw))))
 
 (defn write-claim-result!
   "Write a single claim evaluation result to artifact-dir/claims/.
@@ -122,15 +122,18 @@
 (defn populate-claims-and-attestations!
   "Evaluate all registered forensic claims, write claim results to claims/
    and self-attestations to attestations/.  Called after scenario execution
-   completes.
+   completes.  Attestor identity is derived from the evidence chain root
+   hash, NOT from the bundle root — so this function is callable without
+   a bundle having been built.
 
    Arguments:
-     run-id       — identifier for the current run
-     bundle-hash  — bundle root hash (used as self-attestor identity)
+     run-id  — identifier for the current run
 
    Returns {:claim-count <int> :attestation-count <int> :all-pass? <bool>}."
-  [run-id bundle-hash]
-  (let [dir (str (evcfg/artifact-dir))]
+  [run-id]
+  (let [dir (str (evcfg/artifact-dir))
+        root-hash (chain/evidence-root-hash :dir dir)
+        attestor-id (if root-hash (str "self:" root-hash) (str "self:" run-id))]
     ;; Evaluate forensic-grade acceptance criteria from chain
     (.println *err* "  evaluating forensic claims...")
     (.println *err* (str "  evaluating forensic claims from " dir))
@@ -186,7 +189,7 @@
             :claim-id (get-in cr [:result :result/claim-id])
             :claim-result (if (= "pass" (get-in cr [:result :result/status]))
                             "verified" "rejected")
-            :attestor-id (str "self:" bundle-hash)
+            :attestor-id attestor-id
             :provenance {:prov/schema-version "forensic-provenance.v1"
                          :prov/trigger "run-complete"
                          :prov/generated-at (str (java.time.Instant/now))

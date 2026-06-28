@@ -3,6 +3,8 @@ v1.0 — Visual Artifacts for Technical Findings
 
 RCS is a modular design framework for creating compact, shareable "Research Cards" that summarize protocol validation results. Each card is an independent unit of evidence, cryptographically linked to a deterministic simulation trace.
 
+> **Implementation status:** RCS is an aspirational design concept. The SPEDS V-FRAME component (`speds.core/v-frame`) implements the evidence container concept described here, but the card anatomy, layout variants, and research-card-specific features have not been implemented. See `PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md` for current implementation status.
+
 ---
 
 ## 1. Card Anatomy (Information Hierarchy)

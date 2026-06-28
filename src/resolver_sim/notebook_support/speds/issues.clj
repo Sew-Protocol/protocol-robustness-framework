@@ -2,6 +2,7 @@
   "Issue-contract generation for SPEDS.
    Converts trial artifacts into deterministic issue bundles used by story rendering."
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [malli.core :as m]
             [malli.error :as me]
@@ -133,9 +134,9 @@
                      (map #(finding->issue % run-id))
                      (sort-by (juxt (comp - :priority) :scenario/id))
                      vec)]
-     {:schema/version "speds-issues-v1"
-      :run/id run-id
-      :definitions/hash (defs/definitions-hash)
+     {:schema_version "speds-issues-v1"
+      :run_id run-id
+      :definitions_hash (defs/definitions-hash)
       :comparator_config comparator-config
       :generated-at (str (java.time.Instant/now))
       :issue-count (count issues)
@@ -150,9 +151,9 @@
   "Malli schema for speds-issues-v1 bundle."
   (m/schema
    [:map {:closed true}
-    [:schema/version [:enum "speds-issues-v1"]]
-    [:run/id [:maybe :string]]
-    [:definitions/hash :string]
+    [:schema_version [:enum "speds-issues-v1"]]
+    [:run_id [:maybe :string]]
+    [:definitions_hash :string]
     [:comparator_config :map]
     [:generated-at :string]
     [:issue-count :int]
@@ -173,7 +174,7 @@
   ([] (save-issues! (data/load-run-artifacts)))
   ([artifacts]
    (let [bundle (-> artifacts generate-issues-bundle validate-issues-bundle!)]
-     (.mkdirs (java.io.File. "results/test-artifacts"))
+     (.mkdirs (java.io.File. (evcfg/artifact-dir)))
      (with-open [w (clojure.java.io/writer issues-path)]
        (json/write bundle w :indent true))
      bundle)))
@@ -207,11 +208,11 @@
                     :enabled? enabled?
                     :finding-count (count (or (:findings findings-bundle) []))
                     :issue-count (:issue-count bundle)
-                    :run-id (:run/id bundle)
+                    :run-id (:run_id bundle)
                     :comparator-config (:comparator_config bundle)}))
                strategies)]
-     {:schema/version "speds-comparator-shadow-v1"
-      :definitions/hash (defs/definitions-hash)
+     {:schema_version "speds-comparator-shadow-v1"
+      :definitions_hash (defs/definitions-hash)
       :generated-at (str (java.time.Instant/now))
       :strategies strategies
       :runs runs})))
@@ -221,7 +222,7 @@
   ([artifacts] (save-comparator-shadow-report! artifacts {}))
   ([artifacts opts]
    (let [report (generate-comparator-shadow-report artifacts opts)]
-     (.mkdirs (java.io.File. "results/test-artifacts"))
+     (.mkdirs (java.io.File. (evcfg/artifact-dir)))
      (with-open [w (clojure.java.io/writer comparator-shadow-path)]
        (json/write report w :indent true))
      report)))

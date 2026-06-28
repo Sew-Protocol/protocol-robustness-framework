@@ -141,13 +141,13 @@
       [:div {:style {:display "flex" :alignItems "center" :marginBottom "5px"}}
        [:div {:style {:width "120px" :fontSize "12px"}} "Paid now"]
        [:div {:style {:background "#e2e8f0" :height "20px" :width "300px" :borderRadius "2px"}}
-        [:div {:style {:background "#10b981" :height "100%" :width (str (int (* 100 (/ actual expected))) "%") :borderRadius "2px"}}]]
+         [:div {:style {:background "#10b981" :height "100%" :width (str (int (* 100 (if (pos? expected) (/ actual expected) 0))) "%") :borderRadius "2px"}}]]
        [:div {:style {:marginLeft "10px" :fontSize "12px" :fontWeight "bold"}} (format-usd actual)]]
       (when (pos? deferred)
         [:div {:style {:display "flex" :alignItems "center"}}
          [:div {:style {:width "120px" :fontSize "12px"}} "Deferred"]
          [:div {:style {:background "#e2e8f0" :height "20px" :width "300px" :borderRadius "2px"}}
-          [:div {:style {:background "#f59e0b" :height "100%" :width (str (int (* 100 (/ deferred expected))) "%") :borderRadius "2px"}}]]
+           [:div {:style {:background "#f59e0b" :height "100%" :width (str (int (* 100 (if (pos? expected) (/ deferred expected) 0))) "%") :borderRadius "2px"}}]]
          [:div {:style {:marginLeft "10px" :fontSize "12px" :fontWeight "bold"}} (format-usd deferred)]])])))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}

@@ -186,7 +186,7 @@
     {:trace-id    (or (:ipfs-cid manifest) "LOCALLY_SIGNED")
      :git-sha     git7
      :run-id      (or (:run_id summary) (:run-id config/protocol-defaults))
-     :hash        (str "sha256:" (subs (str (hash scenario-id)) 0 8))
+     :hash        (let [h (str (hash scenario-id))] (str "sha256:" (subs h 0 (min 8 (count h)))))
      :title       (or (:title scenario)
                       (-> scenario-id
                           (str/replace #"^scenarios/" "")

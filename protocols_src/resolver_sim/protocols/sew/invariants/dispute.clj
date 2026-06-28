@@ -196,16 +196,35 @@
 ;; ---------------------------------------------------------------------------
 
 (defn evidence-deadline-enforced?
-  "TODO STUB: When evidence-window-duration is implemented, enforce that
-   submit-evidence after the deadline is rejected.
-   Currently returns true unconditionally."
+  "True when no evidence has been submitted after the evidence window deadline.
+   When :evidence-window-duration is configured in protocol-params, every
+   submit-evidence event's timestamp is checked against the dispute creation
+   timestamp + evidence-window-duration."
   [world]
-  (let [has-deadline-param (get-in world [:params :evidence-window-duration] nil)]
-    (if (nil? has-deadline-param)
+  (let [deadline-duration (get-in world [:params :evidence-window-duration] nil)]
+    (if (nil? deadline-duration)
       {:holds? true :violations [] :note "No evidence deadline configured"}
-      {:holds? true
-       :violations []
-       :note "TODO: evidence deadline guard not yet implemented"})))
+      (let [violations
+            (for [[wf et] (:escrow-transfers world)
+                  :when (= :disputed (:escrow-state et))
+                  :let [dispute-ts (get-in world [:dispute-timestamps wf] 0)
+                        deadline (when (pos? dispute-ts)
+                                   (+ dispute-ts deadline-duration))
+                        ;; Gather evidence submissions for this workflow
+                        evidence-events (filter #(and (= wf (:workflow-id %))
+                                                       (= "submit-evidence" (:action %)))
+                                                 (:events world []))]
+                  :when (seq evidence-events)
+                  :let [late-submissions (filter #(> (:time %) deadline) evidence-events)]
+                  :when (seq late-submissions)]
+              {:workflow-id wf
+               :dispute-timestamp dispute-ts
+               :deadline deadline
+               :evidence-deadline-duration deadline-duration
+               :late-submissions (mapv #(select-keys % [:seq :time :agent]) late-submissions)
+               :violation :late-evidence-submission})]
+        {:holds? (empty? violations)
+         :violations (vec violations)}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Invariant: Finality blocks during appeal window

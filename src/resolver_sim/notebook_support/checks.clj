@@ -64,14 +64,16 @@
   (assert-shape! "Golden report" GoldenReport report))
 
 (defn assert-golden-reports!
-  "Validate all golden reports in a map keyed by trace-id."
+  "Validate all golden reports in a map keyed by trace-id.
+   Returns reports (or nil) unchanged for chaining."
   [reports]
-  (doseq [[k v] reports]
-    (try
-      (assert-golden-report! v)
-      (catch Exception e
-        (throw (ex-info (str "Golden report " (pr-str k) " failed validation")
-                        {:trace-id k :error (.getMessage e)})))))
+  (when reports
+    (doseq [[k v] reports]
+      (try
+        (assert-golden-report! v)
+        (catch Exception e
+          (throw (ex-info (str "Golden report " (pr-str k) " failed validation")
+                          {:trace-id k :error (.getMessage e)}))))))
   reports)
 
 (defn assert-trace-metadata!

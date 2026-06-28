@@ -3,6 +3,8 @@ v1.0 — Scientific Communication Workflow
 
 The ESC is a specialized workflow for protocol researchers to transform signed simulation evidence into narrative-driven public artifacts. It prioritizes researcher control and evidence integrity, ensuring the bridge from lab to public is technically verifiable.
 
+> **Implementation status:** ESC is an aspirational design concept. The SPEDS story engine (`resolver-sim.notebook-support.speds.story`) and findings/issues tooling (`speds.findings`, `speds.issues`) support basic narrative generation from artifacts, but the auto-layout, provenance binding, and publication workflow described here have not been implemented. See `PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md` for current implementation status.
+
 ---
 
 ## 1. The UX Flow: "Lab to Public"

@@ -3,7 +3,8 @@
 
   Returns pure data ({:nodes [...] :edges [...]}) — SVG rendering is
   the notebook's responsibility via hiccup."
-  (:require [resolver-sim.notebook-support.manifest.hash :as mhash]))
+  (:require [clojure.string :as str]
+            [resolver-sim.notebook-support.manifest.hash :as mhash]))
 
 ;; ── node definitions ──────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@
         run-id  (get manifest :run_id "—")
         suite   (get-in manifest [:suite :id] "—")
         sc      (get-in manifest [:suite :scenario] (get-in manifest [:suite :selector] "—"))
-        sc-s    (when sc (last (clojure.string/split sc #"/")))
+        sc-s    (when sc (last (str/split sc #"/")))
         ch      (when manifest (subs (mhash/canonical-hash manifest) 0 12))
         art-ct  (count (get registry :artifacts []))]
     {:benchmark          {:note (str "commit: " (or git-s "unknown"))}

@@ -16,7 +16,8 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.evidence.config :as evcfg]
-            [resolver-sim.evidence.chain :as chain]))
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.logging :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Reading evidence files
@@ -26,7 +27,9 @@
   [f]
   (try (with-open [r (io/reader f)]
          (json/read r))
-       (catch Exception _ nil)))
+       (catch Exception e
+         (log/warn! "Failed to read evidence file" {:path (str f) :error (.getMessage e)})
+         nil)))
 
 (defn- evidence-files
   [dir]

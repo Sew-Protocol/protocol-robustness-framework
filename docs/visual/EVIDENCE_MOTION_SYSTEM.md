@@ -3,6 +3,8 @@ v1.0 — Kinetic Proof of Robustness
 
 PEMS is a motion design framework for generating short-form animated loops from protocol simulation traces. It is designed to maximize information density while maintaining the technical credibility of deterministic evidence.
 
+> **Implementation status:** PEMS is an aspirational design concept. The static SPEDS primitives it builds upon (V-RES, V-ACT, V-FLO) are implemented in `resolver-sim.notebook-support.speds.core`, but the motion/animation layer described here has not been implemented. See `PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md` for current implementation status.
+
 ---
 
 ## 1. Core Motion Principles

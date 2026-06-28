@@ -27,9 +27,6 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.dispute-resolution
   (:require [nextjournal.clerk :as clerk]
-            [clojure.java.io :as io]
-            [clojure.edn :as edn]
-            [clojure.data.json :as json]
             [clojure.string :as str]
             [resolver-sim.notebook-support.ui :as ui]
             [resolver-sim.notebook-support.common :as common]
@@ -70,33 +67,24 @@
 ;; ---------------------------------------------------------------------------
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(do
-  (require '[resolver-sim.notebook-support.speds.data :as speds-data])
-  (def test-summary (speds-data/load-summary)))
+(def test-summary (speds-data/load-summary))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(do
-  (require '[resolver-sim.notebook-support.speds.data :as speds-data])
-  (def coverage-data (speds-data/load-coverage)))
+(def coverage-data (speds-data/load-coverage))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
-(def golden-reports
-  (do
-    (require '[resolver-sim.notebook-support.speds.data :as speds-data])
-    (speds-data/load-all-golden-reports)))
+(def golden-reports (speds-data/load-all-golden-reports))
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (def all-traces
-  (do
-    (require '[resolver-sim.notebook-support.speds.data :as speds-data])
-    (map (fn [d]
-           {:id          (or (:scenario-id d)
-                             (str/replace (:_filename d) ".trace.json" ""))
-            :title       (or (:title d) "")
-            :description (or (:description d) "")
-            :purpose     (or (:purpose d) "")
-            :threat-tags (or (:threat-tags d) [])})
-         (speds-data/load-all-traces))))
+  (map (fn [d]
+         {:id          (or (:scenario-id d)
+                           (str/replace (:_filename d) ".trace.json" ""))
+          :title       (or (:title d) "")
+          :description (or (:description d) "")
+          :purpose     (or (:purpose d) "")
+          :threat-tags (or (:threat-tags d) [])})
+       (speds-data/load-all-traces)))
 
 ;; Live invariant suite run — executes all S01–S67 scenarios in-process.
 ;; Cached by Clerk across re-evaluations unless `:nextjournal.clerk/no-cache true` is set.

@@ -29,6 +29,26 @@ SPEDS is the foundational visual language for the Sew Protocol. It is designed t
   - `[BYR]` (Buyer), `[SLR]` (Seller), `[RES]` (Resolver), `[GOV]` (Governance).
 - **Anti-Pattern:** Using avatars. Names/Faces distract from mechanism logic.
 
+### Implementation Status
+
+| Primitive | Design Spec | Code | Notes |
+|-----------|------------|------|-------|
+| P1 V-ACT | Actor Node | `speds.core/v-act` | ✅ Implemented |
+| P2 V-FLO | Flow Line | `speds.core/v-flo` | ✅ Implemented |
+| P3 V-TIM | Escalation Timeline | — | ❌ Not implemented (see #19) |
+| P4 V-ATK | Attack Overlay | — | ❌ Not implemented (see #19) |
+| P5 V-INV | Invariant Badge | `speds.core/v-inv` | ✅ Implemented |
+| P6 V-CON | Confidence Indicator | — | ❌ Not implemented (see #19) |
+| P7 V-RES | Response Marker | `speds.core/v-res` | ✅ Implemented |
+| P8 V-RPY | Replay Badge | `speds.core/v-rpy` | ✅ Implemented |
+| Frame | Evidence Container | `speds.core/v-frame` | ✅ Implemented |
+| Carousel | Layout Engine | `speds.core/render-carousel` | ✅ Implemented |
+
+> Missing primitives (V-TIM, V-ATK, V-CON) are tracked as deferred feature work.
+> Current notebooks use only the implemented primitives.
+
+---
+
 ### P2: Escrow Flow Line (V-FLO)
 **Purpose:** Defines the causal path of value and state.
 - **Treatment:** Solid vectors with directional arrowheads.
@@ -121,15 +141,15 @@ SPEDS is the foundational visual language for the Sew Protocol. It is designed t
 
 To keep visuals auditable and maintainable, SPEDS implementation follows strict layering:
 
-1. **Data Layer** (`resolver-sim.notebooks.speds.data`)
+1. **Data Layer** (`resolver-sim.notebook-support.speds.data`)
    - Loads artifacts and computes derived metrics.
    - Must not include rendering primitives or style decisions.
 
-2. **Narrative Layer** (`resolver-sim.notebooks.speds.story`)
+2. **Narrative Layer** (`resolver-sim.notebook-support.speds.story`)
    - Selects story family adapters and builds frame specs.
    - Must not hardcode outcome claims that can be computed from artifacts.
 
-3. **Primitive/View Layer** (`resolver-sim.notebooks.speds.core` + tokens)
+3. **Primitive/View Layer** (`resolver-sim.notebook-support.speds.core` + tokens)
    - Renders visual primitives and applies semantic tokens.
    - Must not read artifact files directly.
 
@@ -146,7 +166,7 @@ Each narrative frame spec must include:
 - `:footer-right`
 - `:content`
 
-This contract is validated by `resolver-sim.notebooks.speds.validation/validate-frame-schema`.
+This contract is validated by `resolver-sim.notebook-support.speds.validation/validate-frame-schema`.
 
 ### 6.2 Claim Provenance Contract
 
@@ -157,7 +177,7 @@ Each frame can include `:claims`, where every claim must include:
 - `:source-artifact`
 - `:source-path`
 
-This is validated by `resolver-sim.notebooks.speds.validation/validate-frame-claims`.
+This is validated by `resolver-sim.notebook-support.speds.validation/validate-frame-claims`.
 
 ### 6.3 Consistency Gate
 

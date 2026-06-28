@@ -46,20 +46,18 @@ Identifies gaps, stubbed features, and priorities for closing.
 | OS-level isolation checks (5) | ✅ | UID, ptrace, /proc, fs-access, privileges |
 | Composite isolation grade | ✅ | `full` → `good` → `partial` → `basic` |
 | Configurable env vars | ✅ | 12 `PRF_*` variables |
-| **Concurrent run safety** | ❌ | See below |
+| **Concurrent run safety** | ✅ | See below |
 
-### Concurrent Run Safety — Critical Gap
+### Concurrent Run Safety
 
-**Current state:** No concurrency protection exists.
+**Current state:** Three-layer protection implemented.
 
-| Issue | Detail | Risk |
+| Protection | Detail | Risk Resolved |
 |---|---|---|
-| No PID files or locks | Multiple runs can start simultaneously | Medium |
-| **Shared `results/test-artifacts/`** | All runs write to the same Clojure pipeline output directory. Evidence nodes, chain cursors, and artifact registries from concurrent runs **overwrite each other** | **Critical** |
-| No lock on `~/prf-runs/` output base | Output dirs are timestamped, so don't collide, but nothing prevents races | Low |
-| Quorum runs are sequential | `quorum.py` runs N executions sequentially (no parallelism) | Acceptable |
-
-**Resolution:** Each run needs an isolated Clojure working directory. Either: (a) pass a unique `PRF_ARTIFACT_DIR` per run, or (b) run the Clojure pipeline with a per-run temp workspace.
+| **File lock** (`fcntl.flock`) | Exclusive lock on `results/.forensic-run.lock` — auto-releases on process death | Prevents concurrent orchestrator runs |
+| **Per-run workspace** (`PRF_ARTIFACT_DIR`) | Each run gets an isolated `workspace/` dir inside its bundle. The Clojure pipeline writes all artifacts there instead of the shared `results/test-artifacts/`. Config bridge in `resolver-sim.evidence.config/artifact-dir` checks env var first. | Closes the critical gap even if the file lock were released |
+| **Private tmpfs** (`--private-tmpfs`) | `unshare --user --map-root-user -m` mounts an isolated tmpfs | OS-level filesystem isolation |
+| Quorum runs are sequential | `quorum.py` runs N executions sequentially (no parallelism) | Acceptable by design |
 
 ## Error Recovery
 

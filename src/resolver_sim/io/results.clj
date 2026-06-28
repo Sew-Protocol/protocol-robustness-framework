@@ -2,7 +2,8 @@
   "Serialization of simulation results and traces.
    Handles export to CSV/EDN and standardized trace persistence."
   (:require [clojure.data.json :as json]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.string :as str]))
 
 (defn- kw->json-key [kw]
   (name kw))
@@ -36,9 +37,9 @@
   (when (seq rows)
     (io/make-parents (io/file path))
     (let [ks (keys (first rows))
-          header (clojure.string/join "," (map name ks))
-          lines  (map (fn [r] (clojure.string/join "," (map #(get r %) ks))) rows)]
-      (spit path (clojure.string/join "\n" (cons header lines))))))
+          header (str/join "," (map name ks))
+          lines  (map (fn [r] (str/join "," (map #(get r %) ks))) rows)]
+      (spit path (str/join "\n" (cons header lines))))))
 
 (defn write-run-metadata
   "Write run metadata map to an EDN file."

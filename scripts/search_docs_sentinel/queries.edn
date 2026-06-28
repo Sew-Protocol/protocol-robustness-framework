@@ -20,8 +20,7 @@
                    "scenarios/S79_yield-negative-yield-dispute-refund-path.json"
                    "scenarios/S103_negative-yield-shortfall-cascade.json"
                    "scenarios/S82_shortfall-recovery-cycle.json"
-                   "notebooks/yield_shortfall_analysis.clj"
-                   "docs/evidence/S80_MOSTLY_LIQUID_END_TO_END_DEMO.md"]
+                    "docs/evidence/S80_MOSTLY_LIQUID_END_TO_END_DEMO.md"]
   :tags [:yield :evidence :scenario]
   :note "Yield shortfall is a core claim; researchers must find authoritative scenario docs + evidence."}
 

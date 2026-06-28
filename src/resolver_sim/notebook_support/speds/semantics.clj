@@ -1,6 +1,7 @@
 (ns resolver-sim.notebook-support.speds.semantics
   "SPEDS-local semantic mappings built on top of shared outcome semantics."
-  (:require [resolver-sim.definitions.registry :as defs]
+  (:require [clojure.string :as str]
+            [resolver-sim.definitions.registry :as defs]
             [resolver-sim.scenario.outcome-semantics :as ose]))
 
 (defn purpose->kind [purpose]
@@ -9,7 +10,7 @@
 (defn purpose->story-family-str [purpose]
   (-> (defs/purpose->default-story-family (ose/normalize-purpose purpose))
       name
-      (clojure.string/replace "-" "_")))
+      (str/replace "-" "_")))
 
 (defn purpose->story-family-kw [purpose]
   (defs/purpose->default-story-family (ose/normalize-purpose purpose)))

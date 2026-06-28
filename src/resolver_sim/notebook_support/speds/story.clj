@@ -329,7 +329,8 @@
     :run-overview (generate-run-overview artifacts)
     :scenario-deep-dive (generate-scenario-deep-dive (or (:scenario-id input) (:default-theory-falsification-scenario-id @config/profile)) artifacts)
     :issue-gallery (generate-issue-gallery artifacts input)
-    (generate-issue-gallery artifacts input)))
+    (throw (ex-info (str "Unknown story mode: " (pr-str mode) ". Supported modes: :run-overview, :issue-gallery, :scenario-deep-dive")
+                    {:mode mode :supported-modes [:run-overview :issue-gallery :scenario-deep-dive]}))))
 
 ;; ---
 ;; 2. The "Atlas" View Engine

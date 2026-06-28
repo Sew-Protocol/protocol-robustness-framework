@@ -10,11 +10,13 @@
      ;; returns {:diff-count N :paths [...]}"
   (:require [clojure.java.io :as io]
             [clojure.data.json :as json]
+            [clojure.set :as set]
             [clojure.walk :as walk]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.hash.canonical :as hc]
-            [resolver-sim.io.event-evidence :as io-evidence]))
+            [resolver-sim.io.event-evidence :as io-evidence]
+            [resolver-sim.logging :as log]))
 
 (declare build-enhanced-diff-artifact build-fully-classified-diff-artifact build-domain-summary classify-diff-changes classify-diff-changes-semantic build-enhanced-domain-summary)
 
@@ -23,7 +25,10 @@
 (defn- safe-bytes
   "Total bytes of a top-level value for size comparison."
   [v]
-  (try (count (pr-str v)) (catch Exception _ 0)))
+  (try (count (pr-str v))
+       (catch Exception e
+         (log/warn! "safe-bytes: failed to count bytes" {:value (pr-str v) :error (.getMessage e)})
+         0)))
 
 (defn structural-diff
   "Compute a structural diff between two maps (before, after).
@@ -35,9 +40,9 @@
   [before after]
   (let [keys-before (set (keys before))
         keys-after (set (keys after))
-        added (clojure.set/difference keys-after keys-before)
-        removed (clojure.set/difference keys-before keys-after)
-        common (clojure.set/intersection keys-before keys-after)]
+        added (set/difference keys-after keys-before)
+        removed (set/difference keys-before keys-after)
+        common (set/intersection keys-before keys-after)]
     (concat
      (for [k (sort added)]
        {:path [k] :op :added :after (get after k)})
@@ -390,7 +395,10 @@
 (defn- safe-bytes
   "Total bytes of a top-level value for size comparison."
   [v]
-  (try (count (pr-str v)) (catch Exception _ 0)))
+  (try (count (pr-str v))
+       (catch Exception e
+         (log/warn! "safe-bytes: failed to count bytes" {:value (pr-str v) :error (.getMessage e)})
+         0)))
 
 ;; ── Path Classification ───────────────────────────────────────────────────────
 

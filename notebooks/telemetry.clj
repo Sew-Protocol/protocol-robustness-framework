@@ -2,6 +2,7 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :show}}
 (ns notebooks.telemetry
   (:require [nextjournal.clerk :as clerk]
+            [clojure.set :as set]
             [clojure.string :as str]
             [resolver-sim.notebook-support.ui :as ui]))
 
@@ -75,7 +76,7 @@
 
 (defn missing-required-columns [rows required-cols]
   (let [present (into #{} (map (comp str :column_name) rows))]
-    (sort (clojure.set/difference required-cols present))))
+    (sort (set/difference required-cols present))))
 
 (defn trial-row->view [r]
   {:trial-id (str (:_id r))

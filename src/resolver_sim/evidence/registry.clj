@@ -59,7 +59,7 @@
   (let [etype (:evidence/type artifact)
         gid (:evidence/group-id artifact)]
     {:mechanism (io-evidence/mechanism-for-type etype)
-     :targeted-count (when (and gid group-idx) (count (get group-idx gid [])) 0)}))
+     :targeted-count (if (and gid group-idx) (count (get group-idx gid [])) 0)}))
 
 ;; ── Registry Builder ─────────────────────────────────────────────────────────
 
@@ -97,10 +97,12 @@
             all-files (filter (fn [f] (not= "diff-index.json" (.getName f)))
                               (concat ev-files diff-files))
             artifacts (vec (sort-by :evidence/chain-seq
-                                    (keep (fn [f]
-                                            (try (io-evidence/read-evidence-json f)
-                                                 (catch Exception _ nil)))
-                                          all-files)))
+                                     (keep (fn [f]
+                                             (try (io-evidence/read-evidence-json f)
+                                                  (catch Exception e
+                                                    (log/warn! "Failed to read evidence file for registry" {:path (str f) :error (.getMessage e)})
+                                                    nil)))
+                                           all-files)))
             ;; Extract run/scenario from first available
             first-artifact (first artifacts)
             run-id (or (:run/id first-artifact)

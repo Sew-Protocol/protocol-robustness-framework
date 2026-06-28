@@ -617,9 +617,9 @@
                                         :output/profile (:output-profile opts)}
                            run-result {:status (if (zero? exit-code) :pass :fail)
                                        :suite/key (:suite dispatch)
-                                       :totals {:total 0
-                                                :passed (if (zero? exit-code) 0 0)
-                                                :failed (if (zero? exit-code) 0 1)}
+:totals {:total 1
+         :passed (if (zero? exit-code) 1 0)
+         :failed (if (zero? exit-code) 0 1)}
                                        :results []}
                            bundle-root (br/build-bundle-root run-request run-result)]
                        {:exit-code exit-code
@@ -627,13 +627,12 @@
                         :canonical? canonical?
                         :bundle-root bundle-root})))]
 
-      ;; Populate claims/ and attestations/ with forensic claim evaluation results
+      ;; Phase 3 (opt-in): Populate claims/ and attestations/ from evidence chain.
+      ;; Independent of bundle — reads evidence root hash directly from the chain.
       (.println *err* "\n--- Forensic Claims & Attestations ---")
-      (let [bundle-root (:bundle-root (:result result))
-            run-id (or (some-> (prov/provenance-map) :bundle/id) "unknown")
-            bundle-hash (or (:bundle/hash bundle-root) "unknown")]
+      (let [run-id (or (some-> (prov/provenance-map) :bundle/id) "unknown")]
         (try
-          (let [pop-result (fp/populate-claims-and-attestations! run-id bundle-hash)]
+          (let [pop-result (fp/populate-claims-and-attestations! run-id)]
             (.println *err* (format "  claims: %d, attestations: %d, all-pass?: %s"
                                     (:claim-count pop-result)
                                     (:attestation-count pop-result)

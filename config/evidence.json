@@ -32,7 +32,10 @@
     "semantic-facts": "semantic-facts.v1",
     "evidence-record": "evidence-record.v1",
     "equivalence-summary": "equivalence-summary.v1",
-    "evidence-registry": "evidence-registry.v1"
+    "evidence-registry": "evidence-registry.v1",
+    "speds-findings": "speds.findings.v1",
+    "speds-issues": "speds-issues-v1",
+    "speds-comparator-shadow": "speds-comparator-shadow-v1"
   },
   "producers": {
     "summary": "summary-emitter.v1",

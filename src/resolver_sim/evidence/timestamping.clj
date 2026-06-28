@@ -275,9 +275,11 @@
               imprint (.getMessageImprintDigest ts-info)
               expected (sha-256-digest (.getBytes registry-hash "UTF-8"))
               digest-match (java.util.Arrays/equals imprint expected)
-              envelope (when (.exists tsa-file)
-                         (try (json/read-str (slurp tsa-file) :key-fn keyword)
-                              (catch Exception _ nil)))]
+               envelope (when (.exists tsa-file)
+                          (try (json/read-str (slurp tsa-file) :key-fn keyword)
+                               (catch Exception e
+                                 (log/warn! "Failed to read TSA envelope" {:path (str tsa-file) :error (.getMessage e)})
+                                 nil)))]
           {:timestamp/verified? digest-match
            :timestamp/gen-time (str (.getGenTime ts-info))
            :timestamp/serial (str (.getSerialNumber ts-info))
@@ -288,35 +290,6 @@
         (catch Exception e
           {:error (str "Failed to verify TSA token: " (.getMessage e))
            :timestamp/verified? false})))))
-
-(defn verify-tsa-token
-  "Verify an RFC 3161 timestamp response against the original hash.
-
-   response-hex is the hex-encoded full TimeStampResp DER (from :response-hex
-   in tsa-request result). hash is the original SHA-256 hex string.
-   Returns {:valid true/false :time <gen-time> :serial <serial>}.
-   Does NOT verify the TSA's certificate chain — that requires the TSA's
-   root CA certificate obtained separately."
-  [response-hex hash]
-  (try
-    (let [resp-bytes (hex->bytes response-hex)
-          resp (TimeStampResponse. resp-bytes)
-          token (.getTimeStampToken resp)
-          ts-info (.getTimeStampInfo token)
-          imprint (.getMessageImprintDigest ts-info)
-          expected (sha-256-digest (.getBytes hash "UTF-8"))
-          digest-match (java.util.Arrays/equals imprint expected)]
-      (if digest-match
-        {:valid true
-         :time (str (.getGenTime ts-info))
-         :serial (str (.getSerialNumber ts-info))
-         :hash hash
-         :algorithm (str (.getAlgorithm (.getHashAlgorithm ts-info)))}
-        {:valid false
-         :error "Message imprint digest does not match the original hash"
-         :hash hash}))
-    (catch Exception e
-      {:error (str "Failed to verify TSA token: " (.getMessage e))})))
 
 (defn verify-tsa-token
   "Verify an RFC 3161 timestamp response against the original hash.

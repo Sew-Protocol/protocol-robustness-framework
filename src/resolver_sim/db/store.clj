@@ -22,7 +22,8 @@
      Use resolver-sim.db.xtdb/->datasource to obtain a connection to the
      XTDB pgwire endpoint.  Pass nil as the datasource to skip all writes
      (useful in tests and offline simulation runs)."
-  (:require [next.jdbc              :as jdbc]
+  (:require [clojure.string :as str]
+            [next.jdbc              :as jdbc]
             [resolver-sim.db.xtdb   :as xtdb]
             [resolver-sim.logging   :as log]))
 
@@ -160,7 +161,7 @@
              (jdbc/execute!
               ds
               [(cond-> (str "SELECT * FROM sim_trial_results WHERE "
-                            (clojure.string/join " AND " clauses))
+                            (str/join " AND " clauses))
                  limit (str " LIMIT " limit))]
               xtdb/opts))))))
 

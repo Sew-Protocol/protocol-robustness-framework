@@ -153,15 +153,15 @@ changing defaults.
 
 ### Programmatic entrypoints
 
-- `resolver-sim.notebooks.speds.issues/generate-comparator-shadow-report`
-- `resolver-sim.notebooks.speds.issues/save-comparator-shadow-report!`
-- `resolver-sim.notebooks.speds.issues/load-comparator-shadow-report`
+- `resolver-sim.notebook-support.speds.issues/generate-comparator-shadow-report`
+- `resolver-sim.notebook-support.speds.issues/save-comparator-shadow-report!`
+- `resolver-sim.notebook-support.speds.issues/load-comparator-shadow-report`
 
 ### Example
 
 ```clj
-(require '[resolver-sim.notebooks.speds.data :as data]
-         '[resolver-sim.notebooks.speds.issues :as issues])
+(require '[resolver-sim.notebook-support.speds.data :as data]
+         '[resolver-sim.notebook-support.speds.issues :as issues])
 
 (def artifacts (data/load-run-artifacts))
 

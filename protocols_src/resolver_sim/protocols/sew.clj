@@ -505,11 +505,11 @@
           (t/ok (update world :params assoc :resolver-fee-bps fee-bps)))))))
 
 (defmethod apply-action "set-token-liquidity-crunch"
-  ;; TODO: should use with-governance-actor — see governance-dispatch-audit test
-  [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
+  [{:keys [agent-index] :as context} world event]
+  (actx/with-governance-actor
     agent-index event
-    (fn [_addr]
+    (governance-pred context)
+    (fn [_addr _agent]
       (let [p       (:params event)
             token   (keyword (:token p))
             active? (get p :active? true)]
@@ -644,12 +644,15 @@
                                     :track :immediate))))
 
 (defmethod apply-action "set-yield-risk"
-  ;; TODO: should use with-governance-actor — see governance-dispatch-audit test
-  [_ctx world event]
-  (let [{:keys [module-id token]} (:params event)
-        mid (yield-module/resolve-module-id world module-id)
-        tok (keyword token)]
-    (t/ok (yield-risk/apply-market-shock world mid tok (:params event)))))
+  [{:keys [agent-index] :as context} world event]
+  (actx/with-governance-actor
+    agent-index event
+    (governance-pred context)
+    (fn [_addr _agent]
+      (let [{:keys [module-id token]} (:params event)
+            mid (yield-module/resolve-module-id world module-id)
+            tok (keyword token)]
+        (t/ok (yield-risk/apply-market-shock world mid tok (:params event)))))))
 
 (defmethod apply-action :default
   [_ctx world event]

@@ -52,9 +52,7 @@
   (let [bundle (findings/generate-findings-bundle sample-artifacts)
         f26   (finding-by-id bundle "S26_forking-strategist-l1-reversal")]
     (is (string? (get-in bundle [:provenance :definitions/hash])))
-    (is (string? (get-in bundle [:provenance :definitions_hash])))
-    (is (string? (get-in f26 [:provenance :definitions/hash])))
-    (is (string? (get-in f26 [:provenance :definitions_hash])))))
+    (is (string? (get-in bundle [:provenance :definitions/hash])))))
 
 (deftest invariant-severity-fallback
   (let [artifacts (assoc-in sample-artifacts

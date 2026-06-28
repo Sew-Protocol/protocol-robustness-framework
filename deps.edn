@@ -119,6 +119,11 @@
    :main-opts ["-m" "clj-kondo.main"
                "--lint" "src:notebooks:test:dev"]}
 
+  :lint/core
+  {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2025.04.07"}}
+   :main-opts ["-m" "clj-kondo.main"
+               "--lint" "src:test"]}
+
   :layering-lint
   {:extra-paths ["scripts"]
    :main-opts ["-m" "layering-lint"]}

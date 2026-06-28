@@ -3,6 +3,8 @@ v1.0 — The Canonical Evidence Landing Page
 
 The PVE is the public-facing "Truth Surface" for a specific validation run. It is designed to convert technical simulation results into a high-trust, shareable experience that proves protocol robustness to researchers and the public alike.
 
+> **Implementation status:** PVE is an aspirational design concept. The SPEDS story engine (`resolver-sim.notebook-support.speds.story`) and Clerk notebooks under `notebooks/` provide the underlying evidence rendering, but the full public landing page with run-specific layout, section design, and guided experience described here has not been implemented. See `PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md` for current implementation status.
+
 ---
 
 ## 1. Information Architecture (Progressive Disclosure)

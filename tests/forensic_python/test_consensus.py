@@ -352,6 +352,72 @@ class TestConsensusIntegration:
         subs = consensus.collect_submissions([])
         assert subs == []
 
+    def test_full_run_consensus_from_dirs(self, tmp_path: Path):
+        """run_consensus with --from-dirs produces correct artifacts."""
+        d1 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        d2 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        d3 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        manifest = consensus.run_consensus(
+            run_dirs=[d1, d2, d3], threshold=2,
+            output_dir=tmp_path / "consensus-out")
+        assert manifest["consensus/status"] == "confirmed"
+        assert manifest["consensus/submission-count"] == 3
+        # Check evidence node was written
+        ev_path = tmp_path / "consensus-out" / "consensus" / "node-*.json"
+        assert len(list(tmp_path.rglob("node-*.json"))) >= 1
+
+    def test_full_run_consensus_diverged(self, tmp_path: Path):
+        """run_consensus with diverged bundles produces disagreement report."""
+        d1 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        d2 = _make_bundle_with_hash(tmp_path, "xxx", "yyy")
+        manifest = consensus.run_consensus(
+            run_dirs=[d1, d2], threshold=2,
+            output_dir=tmp_path / "consensus-div")
+        assert manifest["consensus/status"] == "diverged"
+        # Disagreement report should exist
+        dis_paths = list((tmp_path / "consensus-div").rglob("disagreement-report.json"))
+        assert len(dis_paths) >= 1
+
+    def test_evidence_node_content(self, tmp_path: Path):
+        """Evidence node has correct execution-id and result status."""
+        d1 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        manifest = consensus.run_consensus(
+            run_dirs=[d1, d1, d1], threshold=2,
+            output_dir=tmp_path / "consensus-ev")
+        # Find the evidence node
+        for p in (tmp_path / "consensus-ev").rglob("node-*.json"):
+            node = json.loads(p.read_text())
+            assert node.get("execution", {}).get("execution-id") == "execution/consensus"
+            assert node.get("result", {}).get("status") == "pass"
+            break
+
+    def test_certificate_no_absolute_paths(self, tmp_path: Path):
+        """Stable consensus certificate fields contain no absolute paths."""
+        d1 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        manifest = consensus.run_consensus(
+            run_dirs=[d1, d1], threshold=2,
+            output_dir=tmp_path / "consensus-nopath")
+        # Check cert for absolute paths
+        for p in (tmp_path / "consensus-nopath").rglob("consensus-certificate.json"):
+            cert = json.loads(p.read_text())
+            cert_str = json.dumps(cert)
+            # participant-list entries should not have /tmp/ paths in stable fields
+            for participant in cert.get("consensus-certificate/participant-list", []):
+                for val in participant.values():
+                    if isinstance(val, str) and val.startswith("/tmp/"):
+                        # Only bundle-path can have abs paths, not hash fields
+                        assert False, f"Absolute path in participant field: {val}"
+            break
+
+    def test_run_consensus_from_dirs_respects_threshold(self, tmp_path: Path):
+        """run_consensus --from-dirs with threshold higher than participants → diverged."""
+        d1 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        d2 = _make_bundle_with_hash(tmp_path, "abc", "def")
+        manifest = consensus.run_consensus(
+            run_dirs=[d1, d2], threshold=3,
+            output_dir=tmp_path / "consensus-thresh")
+        assert manifest["consensus/status"] == "diverged"
+
 
 # ── Helper ─────────────────────────────────────────────────────────────────
 

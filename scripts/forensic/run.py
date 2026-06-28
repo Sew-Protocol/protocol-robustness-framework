@@ -13,6 +13,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -89,7 +90,8 @@ def _enforce_retention(output_base: Path, max_runs: int) -> None:
         return
     if not output_base.exists():
         return
-    dirs = sorted([d for d in output_base.iterdir() if d.is_dir()])
+    dirs = sorted([d for d in output_base.iterdir()
+                   if d.is_dir() and _is_forensic_run_dir(d)])
     if len(dirs) <= max_runs:
         return
     to_remove = dirs[:len(dirs) - max_runs]
@@ -99,6 +101,14 @@ def _enforce_retention(output_base: Path, max_runs: int) -> None:
             print(f"  removed old run: {d.name}", file=sys.stderr)
         except Exception as e:
             print(f"  warning: could not remove {d.name}: {e}", file=sys.stderr)
+
+
+_RUN_DIR_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z")
+
+
+def _is_forensic_run_dir(d: Path) -> bool:
+    """Check if a directory matches the forensic run naming pattern."""
+    return bool(_RUN_DIR_PATTERN.match(d.name))
 
 
 def snapshot_source(repo_root: Path, run_dir: Path) -> dict:
@@ -455,10 +465,8 @@ def _bundle_scenario_files(run_dir: Path, suite_key: str) -> None:
                   file=sys.stderr)
             return
         paths_str = r.stdout.strip()
-        import ast
-        try:
-            paths = ast.literal_eval(paths_str)
-        except Exception:
+        paths = re.findall(r'"([^"]*)"', paths_str)
+        if not paths:
             print(f"  warning: could not parse suite paths: {paths_str[:100]}",
                   file=sys.stderr)
             return
@@ -568,277 +576,277 @@ def run_forensic(run_request_path: str = "workspaces/forensic-runner/inputs/run-
     # Step 1c: Acquire exclusive lock on artifact directory
     lock_file = _acquire_lock()
     lock_held = True
+    try:
+        # Step 2: Create output directory and per-run protected workspace
+        print(f"\n--- Output Setup ---", file=sys.stderr)
+        run_dir.mkdir(parents=True, exist_ok=False)
+        (run_dir / "evidence-dag").mkdir()
+        (run_dir / "claims").mkdir()
+        (run_dir / "attestations").mkdir()
+        (run_dir / "anchors").mkdir()
+        workspace_dir = run_dir / "workspace"
+        workspace_dir.mkdir(parents=True, exist_ok=False)
 
-    # Step 2: Create output directory and per-run protected workspace
-    print(f"\n--- Output Setup ---", file=sys.stderr)
-    run_dir.mkdir(parents=True, exist_ok=False)
-    (run_dir / "evidence-dag").mkdir()
-    (run_dir / "claims").mkdir()
-    (run_dir / "attestations").mkdir()
-    (run_dir / "anchors").mkdir()
-    workspace_dir = run_dir / "workspace"
-    workspace_dir.mkdir(parents=True, exist_ok=False)
+        # Write preflight report to output
+        write_sealed_json(run_dir / "preflight-report.json", report.to_dict())
 
-    # Write preflight report to output
-    write_sealed_json(run_dir / "preflight-report.json", report.to_dict())
+        # Step 3: Snapshot source and environment
+        print(f"\n--- Snapshots ---", file=sys.stderr)
+        source_info = snapshot_source(repo_root, run_dir)
+        env_info = snapshot_environment()
+        write_sealed_json(run_dir / "source-snapshot.json", source_info)
+        write_sealed_json(run_dir / "environment.json", env_info)
 
-    # Step 3: Snapshot source and environment
-    print(f"\n--- Snapshots ---", file=sys.stderr)
-    source_info = snapshot_source(repo_root, run_dir)
-    env_info = snapshot_environment()
-    write_sealed_json(run_dir / "source-snapshot.json", source_info)
-    write_sealed_json(run_dir / "environment.json", env_info)
+        # Step 3b: OS-level isolation checks
+        print(f"\n--- Isolation Checks ---", file=sys.stderr)
+        isolation_report = run_isolation_checks(isolation_mode=isolation)
+        for c in isolation_report["isolation/checks"]:
+            status = c.get("status", "?")
+            label = c.get("check", "?")
+            detail = c.get("detail", "")
+            print(f"  [{status:>5}] {label}: {detail}", file=sys.stderr)
+        print(f"  grade: {isolation_report['isolation/grade']}", file=sys.stderr)
 
-    # Step 3b: OS-level isolation checks
-    print(f"\n--- Isolation Checks ---", file=sys.stderr)
-    isolation_report = run_isolation_checks(isolation_mode=isolation)
-    for c in isolation_report["isolation/checks"]:
-        status = c.get("status", "?")
-        label = c.get("check", "?")
-        detail = c.get("detail", "")
-        print(f"  [{status:>5}] {label}: {detail}", file=sys.stderr)
-    print(f"  grade: {isolation_report['isolation/grade']}", file=sys.stderr)
+        # Step 4: Copy inputs to output
+        print(f"\n--- Inputs ---", file=sys.stderr)
+        if run_request_path:
+            shutil.copy2(run_request_path, run_dir / "run-request.json")
+        if registry_snapshot_path:
+            rsp = Path(registry_snapshot_path).expanduser()
+            if rsp.exists():
+                shutil.copy2(rsp, run_dir / "registry-snapshot.json")
+        if evidence_policy_path:
+            epp = Path(evidence_policy_path).expanduser()
+            if epp.exists():
+                shutil.copy2(epp, run_dir / "evidence-policy.edn")
 
-    # Step 4: Copy inputs to output
-    print(f"\n--- Inputs ---", file=sys.stderr)
-    if run_request_path:
-        shutil.copy2(run_request_path, run_dir / "run-request.json")
-    if registry_snapshot_path:
-        rsp = Path(registry_snapshot_path).expanduser()
-        if rsp.exists():
-            shutil.copy2(rsp, run_dir / "registry-snapshot.json")
-    if evidence_policy_path:
-        epp = Path(evidence_policy_path).expanduser()
-        if epp.exists():
-            shutil.copy2(epp, run_dir / "evidence-policy.edn")
+        # Step 5: Write input manifest
+        input_manifest = {
+            "run-request": str(run_request_path),
+            "registry-snapshot": str(registry_snapshot_path or ""),
+            "evidence-policy": str(evidence_policy_path or ""),
+            "source-snapshot": source_info,
+            "environment": env_info,
+            "run-timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        write_sealed_json(run_dir / "input-manifest.json", input_manifest)
 
-    # Step 5: Write input manifest
-    input_manifest = {
-        "run-request": str(run_request_path),
-        "registry-snapshot": str(registry_snapshot_path or ""),
-        "evidence-policy": str(evidence_policy_path or ""),
-        "source-snapshot": source_info,
-        "environment": env_info,
-        "run-timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    write_sealed_json(run_dir / "input-manifest.json", input_manifest)
+        # Step 6: Execute scenarios
+        print(f"\n--- Execution ---", file=sys.stderr)
+        t0 = time.time()
+        # Resolve TSA URL: CLI arg > PRF_TSA_URL env var > None
+        tsa_url = tsa_url or PRF_TSA_URL
+        exit_code = run_invoke_scenario_pipeline(
+            run_request_path, run_dir,
+            source_info=source_info, run_id=run_id,
+            workspace_dir=workspace_dir,
+            tsa_url=tsa_url)
+        elapsed_ms = int((time.time() - t0) * 1000)
+        print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
 
-    # Step 6: Execute scenarios
-    print(f"\n--- Execution ---", file=sys.stderr)
-    t0 = time.time()
-    # Resolve TSA URL: CLI arg > PRF_TSA_URL env var > None
-    tsa_url = tsa_url or PRF_TSA_URL
-    exit_code = run_invoke_scenario_pipeline(
-        run_request_path, run_dir,
-        source_info=source_info, run_id=run_id,
-        workspace_dir=workspace_dir,
-        tsa_url=tsa_url)
-    elapsed_ms = int((time.time() - t0) * 1000)
-    print(f"  exit code: {exit_code}  ({elapsed_ms}ms)", file=sys.stderr)
-
-    # Step 6b: Bundle scenario files and deps.edn for portability
-    run_request_data = None
-    if run_request_path:
-        try:
-            run_request_data = parse_edn_or_json(
-                Path(run_request_path).expanduser().read_text(), run_request_path)
-        except Exception:
-            pass
-    suite_key = _get_key(run_request_data, "suite/key", ":suite/key", "key") if run_request_data else None
-    if suite_key:
-        _bundle_scenario_files(run_dir, suite_key)
-    # Snapshot deps.edn for dependency tracking
-    deps_path = Path("deps.edn")
-    if deps_path.exists():
-        try:
-            shutil.copy2(str(deps_path), str(run_dir / "deps.edn"))
-            print(f"  bundled deps.edn", file=sys.stderr)
-        except Exception as e:
-            print(f"  warning: could not bundle deps.edn: {e}", file=sys.stderr)
-
-    # Step 6c: Write results summary (minimal — detailed results in overview)
-    results_summary = {
-        "results/schema-version": "results-summary.v1",
-        "results/status": "pass" if exit_code == 0 else "fail",
-        "results/suite-key": suite_key or "registry-default",
-    }
-    write_sealed_json(run_dir / "results-summary.json", results_summary)
-
-    # Step 6d: Copy evidence nodes from per-run workspace (private, not shared dir)
-    dag_dir = run_dir / "evidence-dag"
-    workspace_evidence_dir = workspace_dir / "evidence-nodes" if workspace_dir else \
-        (repo_root / PRF_ARTIFACT_DIR / "evidence-nodes")
-    node_files = []
-    if workspace_evidence_dir.exists():
-        for f in workspace_evidence_dir.iterdir():
-            if f.is_file() and f.suffix in (".json", ".edn"):
-                shutil.copy2(str(f), str(dag_dir / f.name))
-                node_files.append(f)
-        print(f"  copied {len(node_files)} evidence node(s) to evidence-dag/", file=sys.stderr)
-
-    # Step 6e: Populate claims/ and attestations/ from per-run workspace
-    for src_subdir, dst_dir_name in [("claims", "claims"), ("attestations", "attestations")]:
-        src_dir = workspace_dir / src_subdir
-        dst_dir = run_dir / dst_dir_name
-        if src_dir.exists():
-            count = 0
-            for f in src_dir.iterdir():
-                if f.is_file() and f.suffix == ".json":
-                    shutil.copy2(str(f), str(dst_dir / f.name))
-                    count += 1
-            print(f"  copied {count} file(s) to {dst_dir_name}/", file=sys.stderr)
-
-    # Step 6f: Evidence DAG inventory manifest (Phase B — semantic EDN parsing)
-    dag_inv_hash = _write_dag_inventory(run_dir, dag_dir, node_files, repo_root, workspace_dir=workspace_dir)
-
-    # Step 6g: Read execution node hash from Clojure bundle root for bridge
-    execution_node_hash = None
-    clj_bundle_path = run_dir / "clojure-bundle-root.json"
-    if clj_bundle_path.exists():
-        try:
-            clj_data = json.loads(clj_bundle_path.read_text())
-            execution_node_hash = clj_data.get("execution/node-hash")
-        except Exception:
-            pass
-
-    # Step 6h: Populate anchors/ from TSA artifacts or produce local proof
-    tsa_anchor_type = "mock"
-    anchor_tsa_url = None
-    anchor_tsa_token = None
-    if workspace_dir:
-        for ext, name in [(".tsr", "registry.tsr"), (".tsq", "registry.tsq"),
-                          (".json", "registry.tsa.json")]:
-            src = workspace_dir / name
-            if src.exists():
-                shutil.copy2(str(src), str(run_dir / "anchors" / name))
-        if (workspace_dir / "registry.tsa.json").exists():
-            tsa_anchor_type = "rfc3161"
+        # Step 6b: Bundle scenario files and deps.edn for portability
+        run_request_data = None
+        if run_request_path:
             try:
-                tsa_meta = json.loads((workspace_dir / "registry.tsa.json").read_text())
-                anchor_tsa_url = tsa_meta.get("timestamp/provider-url")
+                run_request_data = parse_edn_or_json(
+                    Path(run_request_path).expanduser().read_text(), run_request_path)
             except Exception:
                 pass
-            anchor_tsa_token = "registry.tsr"
-        elif tsa_url:
-            tsa_anchor_type = "tsa-requested-no-response"
+        suite_key = _get_key(run_request_data, "suite/key", ":suite/key", "key") if run_request_data else None
+        if suite_key:
+            _bundle_scenario_files(run_dir, suite_key)
+        # Snapshot deps.edn for dependency tracking
+        deps_path = Path("deps.edn")
+        if deps_path.exists():
+            try:
+                shutil.copy2(str(deps_path), str(run_dir / "deps.edn"))
+                print(f"  bundled deps.edn", file=sys.stderr)
+            except Exception as e:
+                print(f"  warning: could not bundle deps.edn: {e}", file=sys.stderr)
+
+        # Step 6c: Write results summary (minimal — detailed results in overview)
+        results_summary = {
+            "results/schema-version": "results-summary.v1",
+            "results/status": "pass" if exit_code == 0 else "fail",
+            "results/suite-key": suite_key or "registry-default",
+        }
+        write_sealed_json(run_dir / "results-summary.json", results_summary)
+
+        # Step 6d: Copy evidence nodes from per-run workspace (private, not shared dir)
+        dag_dir = run_dir / "evidence-dag"
+        workspace_evidence_dir = workspace_dir / "evidence-nodes" if workspace_dir else \
+            (repo_root / PRF_ARTIFACT_DIR / "evidence-nodes")
+        node_files = []
+        if workspace_evidence_dir.exists():
+            for f in workspace_evidence_dir.iterdir():
+                if f.is_file() and f.suffix in (".json", ".edn"):
+                    shutil.copy2(str(f), str(dag_dir / f.name))
+                    node_files.append(f)
+            print(f"  copied {len(node_files)} evidence node(s) to evidence-dag/", file=sys.stderr)
+
+        # Step 6e: Populate claims/ and attestations/ from per-run workspace
+        for src_subdir, dst_dir_name in [("claims", "claims"), ("attestations", "attestations")]:
+            src_dir = workspace_dir / src_subdir
+            dst_dir = run_dir / dst_dir_name
+            if src_dir.exists():
+                count = 0
+                for f in src_dir.iterdir():
+                    if f.is_file() and f.suffix == ".json":
+                        shutil.copy2(str(f), str(dst_dir / f.name))
+                        count += 1
+                print(f"  copied {count} file(s) to {dst_dir_name}/", file=sys.stderr)
+
+        # Step 6f: Evidence DAG inventory manifest (Phase B — semantic EDN parsing)
+        dag_inv_hash = _write_dag_inventory(run_dir, dag_dir, node_files, repo_root, workspace_dir=workspace_dir)
+
+        # Step 6g: Read execution node hash from Clojure bundle root for bridge
+        execution_node_hash = None
+        clj_bundle_path = run_dir / "clojure-bundle-root.json"
+        if clj_bundle_path.exists():
+            try:
+                clj_data = json.loads(clj_bundle_path.read_text())
+                execution_node_hash = clj_data.get("execution/node-hash")
+            except Exception:
+                pass
+
+        # Step 6h: Populate anchors/ from TSA artifacts or produce local proof
+        tsa_anchor_type = "mock"
+        anchor_tsa_url = None
+        anchor_tsa_token = None
+        if workspace_dir:
+            for ext, name in [(".tsr", "registry.tsr"), (".tsq", "registry.tsq"),
+                              (".json", "registry.tsa.json")]:
+                src = workspace_dir / name
+                if src.exists():
+                    shutil.copy2(str(src), str(run_dir / "anchors" / name))
+            if (workspace_dir / "registry.tsa.json").exists():
+                tsa_anchor_type = "rfc3161"
+                try:
+                    tsa_meta = json.loads((workspace_dir / "registry.tsa.json").read_text())
+                    anchor_tsa_url = tsa_meta.get("timestamp/provider-url")
+                except Exception:
+                    pass
+                anchor_tsa_token = "registry.tsr"
+            elif tsa_url:
+                tsa_anchor_type = "tsa-requested-no-response"
+            else:
+                tsa_anchor_type = "local-proof"
+        print(f"  anchor type: {tsa_anchor_type}", file=sys.stderr)
+
+        # Step 7: Write run overview (self-referential SHA-256)
+        run_overview = {
+            "overview/schema-version": "run-overview.v1",
+            "overview/hash": None,   # filled in step below
+            "run-id": run_id,
+            "run-timestamp": datetime.now(timezone.utc).isoformat(),
+            "exit-code": exit_code,
+            "elapsed-ms": elapsed_ms,
+            "status": "pass" if exit_code == 0 else "fail",
+            "source": source_info,
+        }
+        # Build canonical dict (without hash), serialize, hash, set hash, seal
+        overview_canonical = {k: v for k, v in run_overview.items()
+                              if k not in ("overview/hash",)}
+        can_bytes = json.dumps(overview_canonical, indent=2, default=str,
+                               sort_keys=True).encode("utf-8")
+        overview_hash = compute_sha256(can_bytes)
+        run_overview["overview/hash"] = overview_hash
+        write_sealed_json(run_dir / "run-overview.json", run_overview)
+        print(f"  overview hash: {overview_hash[:16]}...", file=sys.stderr)
+
+        # Step 8: Write bundle root (self-referential SHA-256 + optional signing)
+        bundle_root = {
+            "bundle/schema-version": "bundle-root.v1",
+            "bundle/id": None,        # filled after hash
+            "bundle/hash": None,      # self-referential hash
+            "bundle/signature": None, # filled after signing
+            "bundle/signing-key-id": None,
+            "bundle/timestamp": datetime.now(timezone.utc).isoformat(),
+            "run/request-path": str(run_request_path),
+            "run/exit-code": exit_code,
+            "run/status": "pass" if exit_code == 0 else "fail",
+            "overview/hash": overview_hash,
+            "evidence-dag/hash": dag_inv_hash,
+            "execution/node-hash": execution_node_hash,
+            "preflight": {
+                "status": preflight_status,
+                "summary": report.summary,
+            },
+        }
+        bundle_root.update(isolation_report)
+        bundle_canonical = {k: v for k, v in bundle_root.items()
+                            if k not in SIGN_EXCLUDE_KEYS}
+        can_bytes = json.dumps(bundle_canonical, indent=2, default=str,
+                               sort_keys=True).encode("utf-8")
+        bundle_hash = compute_sha256(can_bytes)
+        bundle_root["bundle/id"] = bundle_hash
+        bundle_root["bundle/hash"] = bundle_hash
+
+        # Optional: sign the bundle hash with Ed25519
+        if signing_key_path:
+            sig, kid = sign_bundle_hash(bundle_hash, signing_key_path, signing_key_id)
+            bundle_root["bundle/signature"] = sig
+            bundle_root["bundle/signing-key-id"] = kid
+
+        write_sealed_json(run_dir / "run-bundle-root.json", bundle_root)
+        print(f"  bundle root hash: {bundle_hash[:16]}...", file=sys.stderr)
+
+        # Step 9: Write anchor cursor (TSA-aware)
+        anchor_cursor = {
+            "anchor/schema-version": "anchor-cursor.v1",
+            "anchor/type": tsa_anchor_type,
+            "anchor/target": f"file://{run_dir}",
+            "anchor/timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if anchor_tsa_url:
+            anchor_cursor["anchor/tsa-url"] = anchor_tsa_url
+        if anchor_tsa_token:
+            anchor_cursor["anchor/tsa-token-path"] = anchor_tsa_token
+        if tsa_anchor_type == "rfc3161":
+            anchor_cursor["anchor/note"] = "RFC 3161 timestamp from configured TSA"
+        elif tsa_anchor_type == "tsa-requested-no-response":
+            anchor_cursor["anchor/note"] = "TSA was configured but returned no response"
         else:
-            tsa_anchor_type = "local-proof"
-    print(f"  anchor type: {tsa_anchor_type}", file=sys.stderr)
+            anchor_cursor["anchor/note"] = "Local timestamp — no external TSA configured"
+        write_sealed_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
 
-    # Step 7: Write run overview (self-referential SHA-256)
-    run_overview = {
-        "overview/schema-version": "run-overview.v1",
-        "overview/hash": None,   # filled in step below
-        "run-id": run_id,
-        "run-timestamp": datetime.now(timezone.utc).isoformat(),
-        "exit-code": exit_code,
-        "elapsed-ms": elapsed_ms,
-        "status": "pass" if exit_code == 0 else "fail",
-        "source": source_info,
-    }
-    # Build canonical dict (without hash), serialize, hash, set hash, seal
-    overview_canonical = {k: v for k, v in run_overview.items()
-                          if k not in ("overview/hash",)}
-    can_bytes = json.dumps(overview_canonical, indent=2, default=str,
-                           sort_keys=True).encode("utf-8")
-    overview_hash = compute_sha256(can_bytes)
-    run_overview["overview/hash"] = overview_hash
-    write_sealed_json(run_dir / "run-overview.json", run_overview)
-    print(f"  overview hash: {overview_hash[:16]}...", file=sys.stderr)
+        # Step 10: Post-run full verification
+        print(f"\n--- Post-run Verification ---", file=sys.stderr)
+        try:
+            v_report = verify_run(str(run_dir))
+            v_summary = v_report.summary
+            if v_report.status == "fail":
+                print(f"  Verification FAILED: {v_summary['fail']} check(s) failed",
+                      file=sys.stderr)
+            else:
+                print(f"  Verification {v_report.status} "
+                      f"({v_summary['pass']} pass, {v_summary['fail']} fail, "
+                      f"{v_summary['warning']} warn)",
+                      file=sys.stderr)
+        except Exception as e:
+            print(f"  Verification error: {e}", file=sys.stderr)
 
-    # Step 8: Write bundle root (self-referential SHA-256 + optional signing)
-    bundle_root = {
-        "bundle/schema-version": "bundle-root.v1",
-        "bundle/id": None,        # filled after hash
-        "bundle/hash": None,      # self-referential hash
-        "bundle/signature": None, # filled after signing
-        "bundle/signing-key-id": None,
-        "bundle/timestamp": datetime.now(timezone.utc).isoformat(),
-        "run/request-path": str(run_request_path),
-        "run/exit-code": exit_code,
-        "run/status": "pass" if exit_code == 0 else "fail",
-        "overview/hash": overview_hash,
-        "evidence-dag/hash": dag_inv_hash,
-        "execution/node-hash": execution_node_hash,
-        "preflight": {
-            "status": preflight_status,
-            "summary": report.summary,
-        },
-    }
-    bundle_root.update(isolation_report)
-    bundle_canonical = {k: v for k, v in bundle_root.items()
-                        if k not in SIGN_EXCLUDE_KEYS}
-    can_bytes = json.dumps(bundle_canonical, indent=2, default=str,
-                           sort_keys=True).encode("utf-8")
-    bundle_hash = compute_sha256(can_bytes)
-    bundle_root["bundle/id"] = bundle_hash
-    bundle_root["bundle/hash"] = bundle_hash
-
-    # Optional: sign the bundle hash with Ed25519
-    if signing_key_path:
-        sig, kid = sign_bundle_hash(bundle_hash, signing_key_path, signing_key_id)
-        bundle_root["bundle/signature"] = sig
-        bundle_root["bundle/signing-key-id"] = kid
-
-    write_sealed_json(run_dir / "run-bundle-root.json", bundle_root)
-    print(f"  bundle root hash: {bundle_hash[:16]}...", file=sys.stderr)
-
-    # Step 9: Write anchor cursor (TSA-aware)
-    anchor_cursor = {
-        "anchor/schema-version": "anchor-cursor.v1",
-        "anchor/type": tsa_anchor_type,
-        "anchor/target": f"file://{run_dir}",
-        "anchor/timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    if anchor_tsa_url:
-        anchor_cursor["anchor/tsa-url"] = anchor_tsa_url
-    if anchor_tsa_token:
-        anchor_cursor["anchor/tsa-token-path"] = anchor_tsa_token
-    if tsa_anchor_type == "rfc3161":
-        anchor_cursor["anchor/note"] = "RFC 3161 timestamp from configured TSA"
-    elif tsa_anchor_type == "tsa-requested-no-response":
-        anchor_cursor["anchor/note"] = "TSA was configured but returned no response"
-    else:
-        anchor_cursor["anchor/note"] = "Local timestamp — no external TSA configured"
-    write_sealed_json(run_dir / "anchors/anchor-cursor.json", anchor_cursor)
-
-    # Step 10: Post-run full verification
-    print(f"\n--- Post-run Verification ---", file=sys.stderr)
-    try:
-        v_report = verify_run(str(run_dir))
-        v_summary = v_report.summary
-        if v_report.status == "fail":
-            print(f"  Verification FAILED: {v_summary['fail']} check(s) failed",
+        # Step 11: Make output tree immutable (skip on failure — enables cleanup)
+        if no_harden:
+            print(f"  output hardening skipped (--no-harden)", file=sys.stderr)
+        elif exit_code != 0:
+            print(f"  output hardening skipped (exit code {exit_code} — partial bundle may need cleanup)",
                   file=sys.stderr)
         else:
-            print(f"  Verification {v_report.status} "
-                  f"({v_summary['pass']} pass, {v_summary['fail']} fail, "
-                  f"{v_summary['warning']} warn)",
-                  file=sys.stderr)
-    except Exception as e:
-        print(f"  Verification error: {e}", file=sys.stderr)
+            print(f"\n--- Output Hardening ---", file=sys.stderr)
+            # Hardens entire run tree including per-run workspace (chmod -R a-w)
+            make_output_immutable(run_dir)
 
-    # Step 11: Make output tree immutable (skip on failure — enables cleanup)
-    if no_harden:
-        print(f"  output hardening skipped (--no-harden)", file=sys.stderr)
-    elif exit_code != 0:
-        print(f"  output hardening skipped (exit code {exit_code} — partial bundle may need cleanup)",
-              file=sys.stderr)
-    else:
-        print(f"\n--- Output Hardening ---", file=sys.stderr)
-        # Hardens entire run tree including per-run workspace (chmod -R a-w)
-        make_output_immutable(run_dir)
+        print(f"\n=== Run Complete ===", file=sys.stderr)
+        print(f"  Output: {run_dir}", file=sys.stderr)
+        print(f"  Status: {'PASS' if exit_code == 0 else 'FAIL'}", file=sys.stderr)
+    finally:
+        # Always release the lock, even on failure
+        if lock_held:
+            _release_lock(lock_file)
 
-    # Step 12: Release lock
-    if lock_held:
-        _release_lock(lock_file)
-
-    # Step 13: Enforce retention policy
+    # Step 13: Enforce retention policy (outside lock — doesn't need it)
     _enforce_retention(output_base, PRF_MAX_RUNS)
-
-    print(f"\n=== Run Complete ===", file=sys.stderr)
-    print(f"  Output: {run_dir}", file=sys.stderr)
-    print(f"  Status: {'PASS' if exit_code == 0 else 'FAIL'}", file=sys.stderr)
     return exit_code
 
 

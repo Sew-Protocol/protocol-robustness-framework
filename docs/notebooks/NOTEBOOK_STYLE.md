@@ -113,7 +113,7 @@ Notebooks may require:
 - `[resolver-sim.notebook.views :as views]` — cards, RAG, emoji, render helpers
 - `[resolver-sim.notebook.checks :as checks]` — shape validation
 - `[resolver-sim.notebooks.common :as common]` — safe-slurp, read-json, safe-render
-- `[resolver_sim.notebooks.speds.data :as speds-data]` — SPEDS data loading
+- `[resolver-sim.notebook-support.speds.data :as speds-data]` — SPEDS data loading
 
 ## Agent Rules
 

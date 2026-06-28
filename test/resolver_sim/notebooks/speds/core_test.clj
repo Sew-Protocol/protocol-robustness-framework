@@ -1,9 +1,13 @@
 (ns resolver-sim.notebooks.speds.core-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
+            [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.speds.config :as config]
             [resolver-sim.notebook-support.speds.core :as core]
             [resolver-sim.notebook-support.speds.data :as data]
             [resolver-sim.notebook-support.speds.semantics :as sem]
+            [resolver-sim.notebook-support.speds.story :as story]
             [resolver-sim.notebook-support.speds.validation :as validation]
             [resolver-sim.notebook-support.speds.findings :as findings]
             [resolver-sim.notebook-support.speds.issues :as issues]
@@ -230,7 +234,7 @@
   (testing "generate-issues-bundle returns valid shape with nil artifacts"
     (let [bundle (issues/generate-issues-bundle nil)]
       (is (map? bundle))
-      (is (= "speds-issues-v1" (:schema/version bundle)))
+      (is (= "speds-issues-v1" (:schema_version bundle)))
       (is (vector? (:issues bundle))))))
 
 ;; ──────────────────────────────────────────────────────────────────────────
@@ -248,3 +252,148 @@
     (let [c (:adversarial-robustness defs/speds-purpose-classification)]
       (is (= "liveness_risk" (:label c)))
       (is (= "attack_detected" (:status c)))))))
+
+;; ──────────────────────────────────────────────────────────────────────────
+;; P2#16 — Round-trip tests (generate → write → read → verify)
+;; ──────────────────────────────────────────────────────────────────────────
+
+(deftest round-trip-findings-bundle
+  (testing "findings bundle can be written to temp dir and read back"
+    (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/speds-test-findings-" (java.util.UUID/randomUUID))
+          tmp-path (str tmp-dir "/findings.json")
+          artifacts {:summary {:run_id "R1" :overall_status "pass"}
+                     :coverage {:scenarios [{:id "S01" :purpose :theory-falsification}]}}]
+      (.mkdirs (io/file tmp-dir))
+      (let [bundle (findings/generate-findings-bundle artifacts)]
+        (with-open [w (io/writer tmp-path)]
+          (json/write bundle w :indent true))
+        (let [loaded (common/read-json tmp-path)]
+          (is (= "speds.findings.v1" (:schema_version loaded)))
+          (is (vector? (:findings loaded)))
+          (is (string? (get-in loaded [:run :run_id])))))
+      (doseq [f (file-seq (io/file tmp-dir))]
+        (when (.isFile f) (.delete f)))
+      (.delete (io/file tmp-dir)))))
+
+(deftest round-trip-issues-bundle
+  (testing "issues bundle can be written to temp dir and read back"
+    (let [tmp-dir (str (System/getProperty "java.io.tmpdir") "/speds-test-issues-" (java.util.UUID/randomUUID))
+          tmp-path (str tmp-dir "/issues.json")
+          artifacts {:summary {:run_id "R1" :overall_status "pass"}
+                     :coverage {:scenarios [{:id "S01" :purpose :theory-falsification}]}}]
+      (.mkdirs (io/file tmp-dir))
+      (let [bundle (issues/generate-issues-bundle artifacts)]
+        (with-open [w (io/writer tmp-path)]
+          (json/write bundle w :indent true))
+        (let [loaded (common/read-json tmp-path)]
+          (is (= "speds-issues-v1" (:schema_version loaded)))
+          (is (vector? (:issues loaded)))
+          (is (number? (:issue-count loaded)))))
+      (doseq [f (file-seq (io/file tmp-dir))]
+        (when (.isFile f) (.delete f)))
+      (.delete (io/file tmp-dir)))))
+
+;; ──────────────────────────────────────────────────────────────────────────
+;; P2#12 — Error-path tests (missing/corrupt/empty/nil)
+;; ──────────────────────────────────────────────────────────────────────────
+
+(deftest error-path-load-summary-missing-file
+  (testing "load-summary returns nil for missing file"
+    (with-redefs [config/artifact-paths (assoc config/artifact-paths :test-summary "/nonexistent/path.json")]
+      (let [result (data/load-summary)]
+        (is (nil? result))))))
+
+(deftest error-path-load-coverage-missing-file
+  (testing "load-coverage returns nil for missing file"
+    (with-redefs [config/artifact-paths (assoc config/artifact-paths :coverage "/nonexistent/path.json")]
+      (let [result (data/load-coverage)]
+        (is (nil? result))))))
+
+(deftest error-path-load-all-traces-missing-dir
+  (testing "load-all-traces returns [] for missing dir"
+    (with-redefs [config/artifact-paths (assoc config/artifact-paths :traces-dir "/nonexistent/dir")]
+      (let [result (data/load-all-traces)]
+        (is (vector? result))
+        (is (empty? result))))))
+
+(deftest error-path-load-all-golden-reports-missing-dir
+  (testing "load-all-golden-reports returns {} for missing dir"
+    (with-redefs [config/artifact-paths (assoc config/artifact-paths :golden-dir "/nonexistent/dir")]
+      (let [result (data/load-all-golden-reports)]
+        (is (map? result))
+        (is (empty? result))))))
+
+(deftest error-path-load-run-artifacts-returns-map
+  (testing "load-run-artifacts always returns a map"
+    (let [result (data/load-run-artifacts)]
+      (is (map? result))
+      (is (contains? result :summary))
+      (is (contains? result :coverage)))))
+
+(deftest error-path-narrative-metrics-empty-coverage
+  (testing "narrative-metrics handles empty coverage scenarios"
+    (let [m (data/narrative-metrics {:summary {:run_id "R1" :overall_status "pass"} :coverage {:scenarios []}})]
+      (is (= 0 (:scenario-count m)))
+      (is (string? (:replay-match-label m))))))
+
+(deftest error-path-narrative-metrics-partial-summary
+  (testing "narrative-metrics handles summary with missing fields"
+    (let [m (data/narrative-metrics {:summary nil :coverage nil})]
+      (is (integer? (:scenario-count m)))
+      (is (string? (:replay-match-label m))))))
+
+(deftest error-path-findings-nil-artifacts
+  (testing "generate-findings-bundle handles nil artifacts"
+    (let [bundle (findings/generate-findings-bundle nil)]
+      (is (= "speds.findings.v1" (:schema_version bundle)))
+      (is (empty? (:findings bundle))))))
+
+(deftest error-path-issues-nil-artifacts
+  (testing "generate-issues-bundle handles nil artifacts"
+    (let [bundle (issues/generate-issues-bundle nil)]
+      (is (= "speds-issues-v1" (:schema_version bundle)))
+      (is (empty? (:issues bundle))))))
+
+;; ──────────────────────────────────────────────────────────────────────────
+;; P2#18 — Story engine edge-case tests
+;; ──────────────────────────────────────────────────────────────────────────
+
+(deftest story-scenario-deep-dive-nil-args
+  (testing "generate-scenario-deep-dive with nil args returns hiccup"
+    (let [result (story/generate-scenario-deep-dive nil nil)]
+      (is (vector? result)))))
+
+(deftest story-scenario-deep-dive-missing-artifacts
+  (testing "generate-scenario-deep-dive with missing artifacts returns hiccup"
+    (let [result (story/generate-scenario-deep-dive "S01" nil)]
+      (is (vector? result)))))
+
+(deftest story-run-overview-nil-artifacts
+  (testing "generate-run-overview with nil artifacts returns hiccup"
+    (let [result (story/generate-run-overview nil)]
+      (is (vector? result)))))
+
+(deftest story-run-overview-empty-artifacts
+  (testing "generate-run-overview with empty coverage returns hiccup"
+    (let [result (story/generate-run-overview {:summary nil :coverage {:scenarios []}})]
+      (is (vector? result)))))
+
+(deftest story-issue-gallery-nil-artifacts
+  (testing "generate-issue-gallery with nil artifacts returns hiccup"
+    (let [result (story/generate-issue-gallery nil)]
+      (is (vector? result)))))
+
+(deftest story-atlas-view-nil-artifacts
+  (testing "generate-atlas-view with nil artifacts returns hiccup"
+    (let [result (story/generate-atlas-view nil)]
+      (is (vector? result)))))
+
+(deftest story-generate-story-unknown-mode
+  (testing "generate-story with unknown mode throws"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown story mode"
+          (story/generate-story nil {:mode :nonexistent :input {}})))))
+
+(deftest story-generate-story-nil-artifacts
+  (testing "generate-story with nil artifacts returns hiccup"
+    (let [result (story/generate-story nil {:mode :run-overview :input {}})]
+      (is (vector? result)))))

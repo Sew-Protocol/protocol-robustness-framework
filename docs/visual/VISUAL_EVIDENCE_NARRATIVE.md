@@ -3,6 +3,8 @@ v1.0 — "Mission Control" Specification
 
 This document defines the visual and narrative framework for presenting protocol robustness, adversarial simulations, and deterministic evidence. It is designed to bridge the gap between deep protocol engineering and high-signal public communication.
 
+> **Implementation status:** The SPEDS primitives referenced in this document (V-ACT, V-FLO, V-INV, V-RES, V-RPY, V-FRAME) are implemented in `resolver-sim.notebook-support.speds.core`. The VENS-specific concepts (Event Pulse, Incentive Funnel, Boundary Stress) are aspirational design concepts not yet reflected in code. See `PROTOCOL_EVIDENCE_DESIGN_SYSTEM.md` for current implementation status.
+
 ---
 
 ## 1. Visual Design Principles

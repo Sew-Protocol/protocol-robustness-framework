@@ -23,8 +23,8 @@
                   sample-artifacts
                   {:strategies strategies
                    :enabled? true})]
-      (is (= "speds-comparator-shadow-v1" (:schema/version report)))
-      (is (string? (:definitions/hash report)))
+      (is (= "speds-comparator-shadow-v1" (:schema_version report)))
+      (is (string? (:definitions_hash report)))
       (is (= strategies (:strategies report)))
       (is (= 2 (count (:runs report))))
       (doseq [r (:runs report)]
