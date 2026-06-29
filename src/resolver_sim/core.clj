@@ -53,7 +53,8 @@
                            :suite          suite-kw
                            :fixture-suite  fixture-kw
                            :scenario       scenario
-                           :output-file    output}
+                           :output-file    output
+                           :scenario-filter (:scenario-filter options)}
                           {})]
               (System/exit (:exit-code result))))
 

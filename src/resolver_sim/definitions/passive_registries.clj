@@ -198,7 +198,19 @@
           :output {:type :canonical-hash
                    :hash/intent :attestor}
           :description "Canonical identity for one attestor registry entry."}
-          ;; ──────────────────────────────────────────────────────────────────
+         {:id :identity/scenario
+          :version 1
+          :intent/type :identity/hash-projection
+          :intent/purpose :scenario-identity
+          :scope {:protocols #{:framework}
+                  :domains #{:scenario}
+                  :modules #{:scenario}}
+          :inputs #{:scenario}
+          :constraints #{:canonical-safe :domain-separated :self-hash-excluded}
+          :output {:type :canonical-hash
+                   :hash/intent :scenario}
+          :description "Canonical identity for one scenario definition."}
+           ;; ──────────────────────────────────────────────────────────────────
           ;; Protocol-specific intent definitions
           ;; Each entry is scoped to a specific protocol.
           ;; ──────────────────────────────────────────────────────────────────
@@ -288,6 +300,21 @@
           :transforms [:canonical-artifact-value]
           :output {:type :scenario-content-hash
                    :domain-tag "SCENARIO_V1"}
+          :claims [{:claim-id :projection-deterministic
+                    :required? true}
+                   {:claim-id :projection-canonical-safe
+                    :required? true}]}
+           ;; ──────────────────────────────────────────────────────────────────
+         {:id :projection/scenario
+          :version 1
+          :projection-type :scenario-view
+          :intent-types #{:identity/hash-projection}
+          :intent-purposes #{:scenario-identity}
+          :source {:type :scenario}
+          :include-paths [[:scenario-id] [:scenario-path] [:protocol] [:dispatcher-id] [:normalized-scenario]]
+          :exclude-paths []
+          :transforms [:canonical-artifact-value]
+          :output {:type :scenario-view}
           :claims [{:claim-id :projection-deterministic
                     :required? true}
                    {:claim-id :projection-canonical-safe

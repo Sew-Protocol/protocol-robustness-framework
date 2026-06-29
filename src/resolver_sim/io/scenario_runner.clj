@@ -349,12 +349,21 @@
   "Protocol ID → (fn [opts] → summary-map).
    sew-v1:   in-process invariant registry (protocols_src/.../invariant_scenarios.clj)
    yield-v1: file-backed suite (scenarios/edn/Y*.edn via :yield-provider-scenarios)"
-  {"sew-v1"   (fn [{:keys [suite-id] :as opts}]
-                (runner/run-collection
-                 {:entries     inv-sc/all-scenarios
-                  :replay-fn   (sew-replay-fn)
-                  :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
-                 (merge {:suite-id (or suite-id :sew-invariants)} opts)))
+  {"sew-v1" (fn [{:keys [suite-id scenario-filter] :as opts}]
+              (let [entries (if (string? scenario-filter)
+                              (try
+                                (let [pred (read-string scenario-filter)]
+                                  (filterv (fn [entry]
+                                             (let [s (if (vector? entry) (second entry) entry)]
+                                               (if (map? s) (pred s) true)))
+                                           inv-sc/all-scenarios))
+                                (catch Exception _ inv-sc/all-scenarios))
+inv-sc/all-scenarios)]
+                 (runner/run-collection
+                  {:entries entries
+                   :replay-fn (sew-replay-fn)
+                   :type-meta-fn (fn [sid] (get inv-sc/scenario-type-registry sid {}))}
+                  (merge {:suite-id (or suite-id :sew-invariants)} opts))))
    "yield-v1" (fn [opts]
                 (run-paths (suites/suite-paths :yield-provider-scenarios)
                            (assoc opts :protocol "yield-v1")))})
@@ -479,11 +488,26 @@
   "Run a registered suite keyword (e.g. :yield-provider-scenarios). Returns exit code."
   [suite-key opts]
   (if-let [paths (suites/suite-paths suite-key)]
-    (run-paths-and-report paths
-                          (assoc opts
-                                 :suite-id suite-key
-                                 :protocol (or (:protocol opts)
-                                               (suites/suite-protocol-id suite-key))))
+    (run-paths-and-report
+     (if-let [scenario-filter (:scenario-filter opts)]
+       (try
+         (let [pred (read-string scenario-filter)
+               enriched (mapv (fn [path]
+                                (let [entry (scenario-entry-for-path path (or (:protocol opts) (suites/suite-protocol-id suite-key)))]
+                                  (assoc entry :raw-path path)))
+                              paths)
+               filtered (filterv (fn [{:keys [scenario]}]
+                                   (if (map? scenario)
+                                     (pred scenario)
+                                     true))
+                                 enriched)]
+         (mapv :raw-path filtered))
+         (catch Exception _ paths))
+       paths)
+     (assoc opts
+            :suite-id suite-key
+            :protocol (or (:protocol opts)
+                          (suites/suite-protocol-id suite-key))))
     (do
       (println (str "Unknown suite: " suite-key
                     ". Known: " (str/join ", " (map name (suites/known-suite-keys)))))
