@@ -144,14 +144,20 @@
   (clear-claimable-v2-kind world workflow-id domain))
 
 (defn- clear-claimable-v2-for-addr
-  "Zero claimable-v2 balances for addr on workflow-id (all domains)."
+  "Remove claimable-v2 entries for addr on workflow-id (all domains).
+   Dissocs addr from each domain; cleans up empty domain and workflow maps."
   [world wf-id addr]
   (if-let [domains (get-in world [:claimable-v2 wf-id])]
-    (update-in world [:claimable-v2 wf-id]
-               (fn [domain-map]
-                 (into {}
-                       (for [[domain addr-map] domain-map]
-                         [domain (assoc addr-map addr 0)]))))
+    (let [cleaned (reduce-kv (fn [m domain addr-map]
+                              (let [without-addr (dissoc addr-map addr)]
+                                (if (seq without-addr)
+                                  (assoc m domain without-addr)
+                                  m)))
+                            {}
+                            domains)]
+      (if (seq cleaned)
+        (assoc-in world [:claimable-v2 wf-id] cleaned)
+        (update world :claimable-v2 dissoc wf-id)))
     world))
 
 (defn withdraw-escrow
@@ -173,7 +179,10 @@
         (t/fail :transfer-not-finalized)
 
         :else
-        (let [amount (get-in world [:claimable wf-id addr] 0)
+         (let [legacy-amount (get-in world [:claimable wf-id addr] 0)
+               bond-refund   (get-in world [:claimable-v2 wf-id :bond/refund addr] 0)
+               bounty        (get-in world [:claimable-v2 wf-id :liability/challenge-bounty addr] 0)
+               amount        (+ legacy-amount bond-refund bounty)
               et     (t/get-transfer world wf-id)
               token  (:token et)]
           (cond
@@ -390,3 +399,23 @@
            {:world-before world
             :world-after world'}))
         (assoc (t/ok world') :returned amount)))))
+
+(defn return-all-bonds-for-workflow
+  "Return all posted appeal/challenge bonds for a workflow-id on finalization.
+   Prevents bonds from leaking/accumulating indefinitely.
+   Bonds are returned as claimable to the appellant."
+  [world workflow-id]
+  (let [wf-bonds (get-in world [:bond-balances workflow-id])]
+    (if (seq wf-bonds)
+      (let [et    (t/get-transfer world workflow-id)
+            token (:token et)]
+        (reduce-kv (fn [w appellant amount]
+                     (if (pos? amount)
+                       (-> w
+                           (sub-held token amount)
+                           (assoc-in [:bond-balances workflow-id appellant] 0)
+                           (record-claimable workflow-id appellant amount))
+                       w))
+                   world
+                   wf-bonds))
+      world)))

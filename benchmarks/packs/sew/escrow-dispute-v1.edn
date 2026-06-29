@@ -8,22 +8,40 @@
    exhaustion, and governance interactions."
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
-  :benchmark/purpose
+   :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+  :benchmark/property-types  #{:safety :liveness}
+   :benchmark/purpose
   "Evaluate Sew escrow dispute resolution across unauthorized release
    prevention, fund conservation, dispute liveness, slashing integrity,
    and governance non-interference."
   :benchmark/concepts        [:ecommerce/purchase
-                             :event/deposit
-                             :consensus/authority
-                             :consensus/evidence
-                             :consensus/finality
-                             :consensus/escalation
-                             :consensus/liveness
-                             :consensus/legitimacy]
- :benchmark/claims          [:claim/no-unauthorized-release
-                            :claim/funds-conserved
-                            :claim/dispute-liveness
-                            :claim/slashing-conservation
-                            :claim/governance-non-interference]}
+                              :event/deposit
+                              :decision-quality/solvency-status
+                              :attestation/verification
+                              :consensus/authority
+                              :consensus/evidence
+                              :consensus/finality
+                              :consensus/escalation
+                              :consensus/liveness
+                              :consensus/legitimacy]
+  :benchmark/claims          [{:claim/id :claim/no-unauthorized-release
+                              :claim/role :primary
+                              :claim/rationale "Escrow funds must only move through authorized settlement paths."
+                              :claim/failure-meaning "Funds were released without proper authorization."}
+                             {:claim/id :claim/funds-conserved
+                              :claim/role :primary
+                              :claim/rationale "Total escrow value must be conserved across state transitions."
+                              :claim/failure-meaning "Escrow value changed outside authorized settlement."}
+                             {:claim/id :claim/dispute-liveness
+                              :claim/role :supporting
+                              :claim/rationale "Disputes must resolve in bounded time under adversarial load."
+                              :claim/failure-meaning "Dispute resolution stalled or exceeded time bounds."}
+                             {:claim/id :claim/slashing-conservation
+                              :claim/role :supporting
+                              :claim/rationale "Slashing must distribute amounts consistently and conserve value."
+                              :claim/failure-meaning "Slashed amounts violated conservation or distribution rules."}
+                             {:claim/id :claim/governance-non-interference
+                              :claim/role :supporting
+                              :claim/rationale "Governance actions must not interfere with active escrow state."
+                              :claim/failure-meaning "Governance interfered with an active escrow."}]}
 

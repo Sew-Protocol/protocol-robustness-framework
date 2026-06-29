@@ -108,10 +108,21 @@
    :protocol-mechanisms [:governance-checks :resolver-scope :appeal]
    :stakeholder-impact "Account holder cannot access funds."}]
 
+:concept/metrics
+  {:hold-count
+   {:description "Number of holds placed during the interaction."
+    :source :derived-from-trace}
+   :withdrawal-count
+   {:description "Number of successful withdrawals."
+    :source :derived-from-trace}
+   :freeze-events
+   {:description "Number of governance freeze actions."
+    :source :derived-from-trace}}
+
  :concept/assumptions
- ["The balance is modelled as a derived view over escrow and dispute states."
-  "Holds map to unresolved disputes or pending releases."
-  "Concept labels do not change protocol validity."]
+  ["The balance is modelled as a derived view over escrow and dispute states."
+   "Holds map to unresolved disputes or pending releases."
+   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
  ["Real-world banking or payment rails."

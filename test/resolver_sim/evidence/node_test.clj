@@ -19,6 +19,12 @@
         "node-artifacts"
         (make-array java.nio.file.attribute.FileAttribute 0))))
 
+(defn- temp-run-dir
+  []
+  (str (java.nio.file.Files/createTempDirectory
+        "node-run"
+        (make-array java.nio.file.attribute.FileAttribute 0))))
+
 (defn- base-node-spec
   ([] (base-node-spec {}))
   ([overrides]
@@ -150,6 +156,35 @@
           (is (= 2 (count (:paths verification))))
           (is (true? (get-in verification [:checks :artifacts-matched?]))))))))
 
+(deftest verify-persisted-node-artifacts-fails-when-node-directory-is-missing
+  (let [run-dir (temp-run-dir)
+        verification (node/verify-persisted-node-artifacts! run-dir nil)]
+    (is (not (:valid? verification)))
+    (is (some #(= :node-directory-missing (:error %)) (:errors verification)))
+    (is (false? (get-in verification [:checks :node-directory-exists?])))))
+
+(deftest verify-persisted-node-artifacts-fails-when-node-directory-is-empty
+  (let [run-dir (temp-run-dir)
+        _ (.mkdirs (io/file run-dir "evidence-nodes"))
+        verification (node/verify-persisted-node-artifacts! run-dir nil)]
+    (is (not (:valid? verification)))
+    (is (some #(= :node-directory-empty (:error %)) (:errors verification)))
+    (is (true? (get-in verification [:checks :node-directory-exists?])))
+    (is (true? (get-in verification [:checks :node-directory-empty?])))))
+
+(deftest verify-persisted-node-artifacts-allows-empty-when-explicitly-enabled
+  (let [missing-run-dir (temp-run-dir)
+        empty-run-dir (temp-run-dir)
+        _ (.mkdirs (io/file empty-run-dir "evidence-nodes"))
+        missing-verification (node/verify-persisted-node-artifacts!
+                              missing-run-dir nil {:allow-empty? true})
+        empty-verification (node/verify-persisted-node-artifacts!
+                            empty-run-dir nil {:allow-empty? true})]
+    (is (:valid? missing-verification))
+    (is (:valid? empty-verification))
+    (is (true? (get-in missing-verification [:checks :allow-empty?])))
+    (is (true? (get-in empty-verification [:checks :allow-empty?])))))
+
 (deftest evidence-policy-filters-expected-failures-and-excluded-classes
   (let [node (node/build-execution-node
               (base-node-spec {:status :fail
@@ -226,6 +261,14 @@
     (is (not (:valid? result)))
     (is (some #(= :node/cycle (:error %)) (:errors result)))
     (is (some #(= :node/hash-mismatch (:error %)) (:errors result)))))
+
+(deftest validate-node-dag-rejects-duplicate-hashes
+  (let [node (node/build-execution-node (base-node-spec))
+        dup (assoc node :parent-hashes [(:node-hash node)])
+        result (node/validate-node-dag [node dup])]
+    (is (not (:valid? result)))
+    (is (some #(= :node/duplicate-hashes (:error %)) (:errors result)))
+    (is (true? (get-in result [:checks :duplicate-hashes])))))
 
 (deftest with-execution-node-emits-pass-fail-and-error-nodes
   (node/with-fresh-registry
@@ -370,3 +413,70 @@
         result (node/validate-dag-detailed [a b])]
     (is (not (:valid? result)))
     (is (some #(= :node/cycle (:error %)) (:errors result)))))
+
+;; ── build-dag-index ──────────────────────────────────────────────────────────
+
+(deftest build-dag-index-single-node
+  (let [node (node/build-execution-node (base-node-spec))
+        index (node/build-dag-index [node])]
+    (is (= "evidence-dag-index.v0" (:dag-index/schema-version index)))
+    (is (= 1 (get-in index [:dag-index/summary :node-count])))
+    (is (= 1 (:dag-index/root-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:dag-index/leaf-count (get-in index [:dag-index/summary]))))
+    (is (contains? (:dag-index/nodes-by-hash index) (:node-hash node)))
+    (is (some? (get-in index [:dag-index/short-hashes (subs (:node-hash node) 0 12)])))
+    (is (= 0 (get-in index [:dag-index/summary :failure-count])))))
+
+(deftest build-dag-index-parent-child-chain
+  (let [parent (node/build-execution-node (base-node-spec))
+        child (node/build-execution-node
+               (base-node-spec {:parent-hashes [(:node-hash parent)]
+                                :execution-id :execution/replay}))
+        index (node/build-dag-index [parent child])]
+    (is (= 2 (get-in index [:dag-index/summary :node-count])))
+    (is (= 1 (:dag-index/root-count (get-in index [:dag-index/summary]))))
+    (is (= 1 (:dag-index/leaf-count (get-in index [:dag-index/summary]))))
+    (is (= [(:node-hash child)]
+           (get-in index [:dag-index/children-by-parent (:node-hash parent)])))
+    (is (= [(:node-hash parent)]
+           (get-in index [:dag-index/parents-by-child (:node-hash child)])))
+    (is (= [(:node-hash parent)] (:dag-index/roots index)))
+    (is (= [(:node-hash child)] (:dag-index/leaves index)))))
+
+(deftest build-dag-index-failure-tracking
+  (let [node (node/build-execution-node
+              (base-node-spec {:status :fail
+                               :outputs {:exit-code 1}
+                               :failure-details [{:failure-type :unexpected
+                                                  :class :unexpected
+                                                  :message "failed"
+                                                  :expected? false}]}))
+        ok (node/build-execution-node (base-node-spec))
+        index (node/build-dag-index [node ok])]
+    (is (= 1 (get-in index [:dag-index/summary :failure-count])))
+    (is (= 0 (get-in index [:dag-index/summary :error-count])))
+    (is (contains? (get-in index [:dag-index/by-status :fail]) (:node-hash node)))
+    (is (contains? (get-in index [:dag-index/by-status :pass]) (:node-hash ok)))))
+
+(deftest build-dag-index-multi-root
+  (let [a (node/build-execution-node (base-node-spec))
+        b (node/build-execution-node (base-node-spec {:execution-id :execution/replay}))
+        index (node/build-dag-index [a b])]
+    (is (= 2 (:dag-index/root-count (get-in index [:dag-index/summary]))))
+    (is (= 2 (count (:dag-index/roots index))))))
+
+(deftest dag-summary-includes-failure-paths
+  (let [parent (node/build-execution-node (base-node-spec))
+        child (node/build-execution-node
+               (base-node-spec {:parent-hashes [(:node-hash parent)]
+                                :status :fail
+                                :execution-id :execution/replay
+                                :outputs {:exit-code 1}
+                                :failure-details [{:failure-type :unexpected
+                                                   :class :unexpected
+                                                   :message "child failed"
+                                                   :expected? false}]}))
+        summary (node/dag-summary [parent child])]
+    (is (= 1 (count (:dag-index/root-nodes summary))))
+    (is (= 1 (count (:dag-index/failure-nodes summary))))
+    (is (= (:node-hash child) (get-in (:dag-index/failure-nodes summary) [0 :node-hash])))))

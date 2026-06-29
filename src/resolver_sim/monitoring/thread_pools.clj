@@ -6,7 +6,10 @@
             [resolver-sim.config :as config]
             [clojure.core.async :as async])
   (:import (java.util.concurrent ThreadPoolExecutor ExecutorService TimeUnit)
-           (java.util.concurrent.atomic AtomicLong AtomicInteger)))
+           (java.util.concurrent.atomic AtomicLong AtomicInteger)
+           (javax.management DynamicMBean MBeanInfo MBeanOperationInfo
+                             MBeanParameterInfo AttributeNotFoundException
+                             ReflectionException)))
 
 (def ^:private monitored-pools (atom {}))
 (def ^:private pool-stats (atom {}))
@@ -61,7 +64,7 @@
       (try
         (update-pool-stats pool-name executor)
         (catch Exception e
-          (log/error "Error monitoring thread pool" pool-name ":" (.getMessage e))))
+          (log/error! (str "Error monitoring thread pool " pool-name ": " (.getMessage e)))))
 
       (async/<! (async/timeout (or (get-in (config/load-config :monitoring false) [:sampling-interval-ms]) 1000)))
       (recur (System/currentTimeMillis)))))
@@ -72,7 +75,7 @@
     (when (instance? ThreadPoolExecutor executor)
       (swap! monitored-pools assoc pool-name executor)
       (start-monitoring-loop pool-name executor)
-      (log/info "Started monitoring thread pool:" pool-name)
+      (log/info! (str "Started monitoring thread pool: " pool-name))
       true)
     false))
 
@@ -80,7 +83,7 @@
   "Stop monitoring a thread pool."
   (swap! monitored-pools dissoc pool-name)
   (swap! pool-stats dissoc pool-name)
-  (log/info "Stopped monitoring thread pool:" pool-name))
+  (log/info! (str "Stopped monitoring thread pool: " pool-name)))
 
 (defn get-monitored-pool-names []
   "Get names of all monitored thread pools."
@@ -135,46 +138,96 @@
   (filter #(= :critical (:severity %)) (detect-bottlenecks)))
 
 ;; Define the MBean interface
-(jmx/defmbean ThreadPoolMonitorMXBean
-  [(getMonitoredPoolNames ["[Ljava.lang.String;"])
-   (getThreadPoolStats ["[Ljava.lang.String;" "[Ljava.lang.String;"])
-   (getAllThreadPoolStats ["[Ljava.lang.String;"])
-   (getAverageUtilization ["double"])
-   (detectBottlenecks ["[Ljava.lang.String;"])
-   (getBottleneckCount ["int"])
-   (getCriticalBottleneckCount ["int"])])
+(def ^:private string-array-type (Class/forName "[Ljava.lang.String;"))
+
+(defn- make-mbean-info
+  "Build MBeanInfo metadata for the thread pool monitor MBean."
+  []
+  (MBeanInfo.
+   "ThreadPoolMonitor"
+   "Thread pool monitoring MBean"
+   nil  ;; no attributes
+   nil  ;; no constructors
+   (into-array MBeanOperationInfo
+               [(MBeanOperationInfo.
+                 "getMonitoredPoolNames" "Get monitored pool names"
+                 nil  ;; no params
+                 string-array-type
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "getThreadPoolStats" "Get stats for a pool"
+                 (into-array MBeanParameterInfo
+                             [(MBeanParameterInfo.
+                               "poolName" "java.lang.String" "Pool name")])
+                 string-array-type
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "getAllThreadPoolStats" "Get all pool stats"
+                 nil
+                 string-array-type
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "getAverageUtilization" "Get average pool utilization"
+                 nil
+                 Double/TYPE
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "detectBottlenecks" "Detect bottlenecks"
+                 nil
+                 string-array-type
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "getBottleneckCount" "Get bottleneck count"
+                 nil
+                 Integer/TYPE
+                 MBeanOperationInfo/INFO)
+                (MBeanOperationInfo.
+                 "getCriticalBottleneckCount" "Get critical bottleneck count"
+                 nil
+                 Integer/TYPE
+                 MBeanOperationInfo/INFO)])
+   nil))  ;; no notifications
 
 (defn create-thread-pool-monitor-mbean []
   "Create and register the thread pool monitor MBean."
-  (reify ThreadPoolMonitorMXBean
-    (getMonitoredPoolNames [this]
-      (into-array String (get-monitored-pool-names)))
+  (reify DynamicMBean
+    (getAttribute [this attribute]
+      (throw (AttributeNotFoundException. attribute)))
 
-    (getThreadPoolStats [this poolName]
-      (when-let [stats (get-thread-pool-stats poolName)]
-        (into-array String
-                    (map (fn [[k v]] (str (name k) "=" v)) stats))))
+    (setAttribute [this attribute]
+      (throw (AttributeNotFoundException. (.getName attribute))))
 
-    (getAllThreadPoolStats [this]
-      (into-array String
-                  (mapcat (fn [[pool-name stats]]
-                            (map (fn [[k v]] (str pool-name "." (name k) "=" v)) stats))
-                          @pool-stats)))
+    (getAttributes [this attributes]
+      (javax.management.AttributeList.))
 
-    (getAverageUtilization [this] (get-average-utilization))
+    (setAttributes [this attributes]
+      attributes)
 
-    (detectBottlenecks [this]
-      (into-array String
-                  (map (fn [bottleneck]
-                         (str (:pool-name bottleneck) "=" (:severity bottleneck)
-                              " util=" (format "%.2f" (* 100.0 (:utilization bottleneck)))
-                              " queue=" (:queue-size bottleneck)))
-                       (detect-bottlenecks))))
+    (invoke [this action-name params signature]
+      (case action-name
+        "getMonitoredPoolNames" (into-array String (get-monitored-pool-names))
+        "getThreadPoolStats" (if-let [stats (get-thread-pool-stats (first params))]
+                               (into-array String
+                                           (map (fn [[k v]] (str (name k) "=" v)) stats))
+                               (into-array String []))
+        "getAllThreadPoolStats" (into-array String
+                                            (mapcat (fn [[pool-name stats]]
+                                                      (map (fn [[k v]] (str pool-name "." (name k) "=" v)) stats))
+                                                    @pool-stats))
+        "getAverageUtilization" (get-average-utilization)
+        "detectBottlenecks" (into-array String
+                                        (map (fn [bottleneck]
+                                               (str (:pool-name bottleneck) "=" (:severity bottleneck)
+                                                    " util=" (format "%.2f" (* 100.0 (:utilization bottleneck)))
+                                                    " queue=" (:queue-size bottleneck)))
+                                             (detect-bottlenecks)))
+        "getBottleneckCount" (get-bottleneck-count)
+        "getCriticalBottleneckCount" (count (get-critical-bottlenecks))
+        (throw (ReflectionException.
+                (NoSuchMethodException. action-name)))))
 
-    (getBottleneckCount [this] (get-bottleneck-count))
-
-    (getCriticalBottleneckCount [this]
-      (count (get-critical-bottlenecks)))))
+    (getMBeanInfo [this]
+      (make-mbean-info))))
 
 (defn startup []
   "Initialize thread pool monitoring."
@@ -183,7 +236,7 @@
     (let [mbean (create-thread-pool-monitor-mbean)
           object-name (jmx/create-domain-object-name "ThreadPoolMonitor")]
       (jmx/register-mbean mbean object-name)
-      (log/info "Thread pool JMX monitoring started"))))
+      (log/info! "Thread pool JMX monitoring started"))))
 
 (defn shutdown []
   "Shutdown thread pool monitoring."
@@ -193,4 +246,4 @@
     (let [object-name (jmx/create-domain-object-name "ThreadPoolMonitor")]
       (jmx/unregister-mbean object-name))
     (reset! monitoring-enabled false)
-    (log/info "Thread pool JMX monitoring stopped")))
+    (log/info! "Thread pool JMX monitoring stopped")))

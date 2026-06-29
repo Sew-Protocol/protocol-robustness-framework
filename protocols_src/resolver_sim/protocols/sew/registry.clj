@@ -44,12 +44,17 @@
 (defn register-stake
   "Deposit stake for a resolver address.
    Returns updated world.
+   Updates total-resolvers count for circuit breaker tracking.
 
    If yield-profile-id is provided, the stake will be managed by that yield module."
   ([world resolver-addr amount] (register-stake world resolver-addr amount nil))
   ([world resolver-addr amount yield-profile-id]
-   (let [world' (-> world
+   (let [prev-stake (get-stake world resolver-addr)
+         was-zero?  (zero? prev-stake)
+         world' (-> world
                     (update-in [:resolver-stakes resolver-addr] (fnil + 0) amount)
+                    (cond-> (and was-zero? (pos? amount))
+                      (update-in [:unavailability-stats :total-resolvers] (fnil inc 0)))
                     (cond-> yield-profile-id
                       (assoc-in [:resolver-yield-profiles resolver-addr] yield-profile-id)))]
      (attr/with-attribution {:subject/type :resolver
@@ -98,7 +103,11 @@
           (t/fail :insufficient-stake))
 
       :else
-      (let [world' (update-in world [:resolver-stakes resolver-addr] (fnil - 0) amount)]
+       (let [new-stake (- current amount)
+             world' (-> world
+                        (update-in [:resolver-stakes resolver-addr] (fnil - 0) amount)
+                        (cond-> (and (pos? current) (zero? new-stake))
+                          (update-in [:unavailability-stats :total-resolvers] (fnil dec 0))))]
         (attr/with-attribution {:subject/type :resolver
                                 :subject/id resolver-addr
                                 :action/type :stake/withdraw

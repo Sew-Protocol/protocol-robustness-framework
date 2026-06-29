@@ -91,7 +91,7 @@
                transition-to-resolved enforce that accounting is settled before
                it may be entered."
   {:none      #{:pending}
-   :pending   #{:disputed :released :refunded :resolved}
+   :pending   #{:disputed :released :refunded}
    :disputed  #{:released :refunded :resolved}
    :resolved  #{}
    :released  #{}

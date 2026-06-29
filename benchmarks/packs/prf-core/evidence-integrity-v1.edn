@@ -8,13 +8,24 @@
    evidence hash consistency."
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
- :benchmark/scoring-rule    :scoring/binary-claims-v1
- :benchmark/purpose
+  :benchmark/scoring-rule    :scoring/binary-claims-v1
+  :benchmark/property-types  #{:integrity}
+  :benchmark/purpose
  "Verify evidence integrity across protocol replay: deterministic
   hash consistency, replay-identical results, and absence of
   nondeterminism. Each scenario is replayed and the evidence
   bundle hash is verified to be reproducible."
- :benchmark/concepts        [:robustness/evidence-integrity]
- :benchmark/claims          [:claim/replay-identical-results
-                             :claim/hash-consistency-across-runs
-                             :claim/no-nondeterminism]}
+  :benchmark/concepts        [:robustness/evidence-integrity
+                              :forensic/evidence-chain]
+  :benchmark/claims          [{:claim/id :claim/replay-identical-results
+                              :claim/role :primary
+                              :claim/rationale "Replay must produce identical results for evidence integrity."
+                              :claim/failure-meaning "Results differ between replay runs."}
+                             {:claim/id :claim/hash-consistency-across-runs
+                              :claim/role :primary
+                              :claim/rationale "Evidence hashes must be reproducible for auditability."
+                              :claim/failure-meaning "Evidence hash changed across runs."}
+                             {:claim/id :claim/no-nondeterminism
+                              :claim/role :supporting
+                              :claim/rationale "No nondeterminism ensures evidence is reproducible."
+                              :claim/failure-meaning "Nondeterministic behavior detected."}]}

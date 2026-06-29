@@ -135,10 +135,10 @@ but have no real implementation.
 | Area | Status | Detail |
 |---|---|---|
 | Clojure pipeline tests | ✅ | 335+ unit tests, invariants, generators |
-| **Forensic Python script tests** | ❌ | Zero tests for `run.py`, `verify.py`, `preflight.py`, `reproduce.py`, `quorum.py`, `export.py`, `import_archive.py`, `isolation_checks.py` |
+| **Forensic Python script tests** | ❌ | Coverage exists for `verify.py` and mechanism persistence; broader scripts still lack direct unit tests |
 | Self-test is not a test | 🟡 | `bb forensic:self-test` validates Clojure determinism, not the Python orchestration layer |
 
-**Resolution:** The Python scripts need unit tests. At minimum: mock-based tests for `verify.py` (parse a known-good bundle), `preflight.py` (validate known-good and known-bad run requests), `export.py`/`import_archive.py` (round-trip).
+**Resolution:** The Python scripts need unit tests. At minimum: expand coverage beyond `verify.py` and `tests/forensic_python/test_mechanism_persistence.py` to `preflight.py` (validate known-good and known-bad run requests), `export.py`/`import_archive.py` (round-trip).
 
 ## Summary by Severity
 

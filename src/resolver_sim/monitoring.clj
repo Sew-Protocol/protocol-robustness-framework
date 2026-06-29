@@ -35,17 +35,20 @@
       ;; Start scenario monitoring
       (safe-startup "Scenario monitoring" scenario-monitoring/startup)
 
-      ;; Invariant monitoring, thread pools, dashboard loaded at runtime
-      ;; to avoid hard dependencies on broken sub-namespaces.
+      ;; Lazy-loaded with :reload to pick up hot-fixes without nREPL restart.
+      ;; Dashboard still depends on Ring (not on classpath) and will warn.
       (safe-startup "Invariant monitoring"
-                    #((requiring-resolve 'resolver-sim.monitoring.invariant-checker/startup)))
+                    #(do (require 'resolver-sim.monitoring.invariant-checker :reload)
+                         ((resolve 'resolver-sim.monitoring.invariant-checker/startup))))
 
       (safe-startup "Thread pool monitoring"
-                    #((requiring-resolve 'resolver-sim.monitoring.thread-pools/startup)))
+                    #(do (require 'resolver-sim.monitoring.thread-pools :reload)
+                         ((resolve 'resolver-sim.monitoring.thread-pools/startup))))
 
       (safe-startup "Dashboard"
-                    #((requiring-resolve 'resolver-sim.monitoring.dashboard/startup)
-                      (config/monitoring-dashboard-port)))
+                    #(do (require 'resolver-sim.monitoring.dashboard :reload)
+                         ((resolve 'resolver-sim.monitoring.dashboard/startup)
+                          (config/monitoring-dashboard-port))))
 
       (reset! monitoring-enabled true)
       (log/info! "PRF monitoring system started successfully")

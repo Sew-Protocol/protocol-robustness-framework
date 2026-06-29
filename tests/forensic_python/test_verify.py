@@ -212,3 +212,130 @@ class TestVerifyRun:
         make_attestation_file(run_dir, "h1", "verified")
         report = verify.verify_run(str(run_dir))
         assert report.status == "pass"
+
+    def test_mechanism_persistence_artifacts_are_informational(self, tmp_path: Path):
+        """Derived mechanism artifacts should be reported but not required."""
+        run_dir = make_minimal_bundle(tmp_path)
+        make_claim_file(run_dir, "c1", "pass")
+        make_attestation_file(run_dir, "h1", "verified")
+        (run_dir / "mechanism-persistence-index.json").write_text(json.dumps({
+            "schema-version": "mechanism-persistence-index.v1",
+            "episodes": [],
+        }, indent=2))
+        (run_dir / "mechanism-persistence-summary.json").write_text(json.dumps({
+            "schema-version": "mechanism-persistence-summary.v1",
+            "episode-count": 0,
+        }, indent=2))
+        (run_dir / "mechanism-scenario-matrix.json").write_text(json.dumps({
+            "schema-version": "mechanism-scenario-matrix.v1",
+            "cells": {},
+        }, indent=2))
+
+        report = verify.verify_run(str(run_dir))
+
+        mech_checks = [c for c in report.checks if c["check/key"] == "mechanism-persistence-artifacts"]
+        assert mech_checks and mech_checks[0]["check/status"] == "info"
+        assert "mechanism-persistence-index.v1" in mech_checks[0]["check/message"]
+        assert report.status == "pass"
+
+    def test_inventory_backed_evidence_dag_passes(self, tmp_path: Path):
+        """A run with a semantically populated evidence-dag inventory must pass."""
+        run_dir = make_minimal_bundle(tmp_path)
+        make_claim_file(run_dir, "c1", "pass")
+        make_attestation_file(run_dir, "h1", "verified")
+        dag_dir = run_dir / "evidence-dag"
+        dag_dir.mkdir(exist_ok=True)
+        (dag_dir / "node-abc.edn").write_text("{:node-hash \"abc\" :parent-hashes []}")
+        inventory = {
+            "dag/schema-version": "evidence-dag-inventory.v0",
+            "dag/phase": "B",
+            "dag/semantic-status": "parsed",
+            "dag/files": {"total": 1, "json": 0, "edn": 1, "unparsed": 0},
+            "dag/hashes": {"algorithm": "sha256-file-bytes"},
+            "dag/total-bytes": 34,
+            "dag/file-hashes": [{"name": "node-abc.edn", "sha256": "deadbeef", "bytes": 34}],
+            "dag/nodes": [{"file": "node-abc.edn",
+                           "node-hash": "abc",
+                           "execution-id": "execution/replay",
+                           "execution-kind": "scenario-run",
+                           "runner": "scenario-runner",
+                           "result-status": "pass",
+                           "parent-hashes": []}],
+            "dag/parse-errors": [],
+            "dag/edges": [],
+            "dag/index": {
+                "dag-index/schema-version": "evidence-dag-index.v0",
+                "dag-index/nodes-by-hash": {
+                    "abc": {"node-hash": "abc", "short-hash": "abc", "execution-id": "execution/replay", "result-status": "pass"},
+                },
+                "dag-index/children-by-parent": {},
+                "dag-index/parents-by-child": {"abc": []},
+                "dag-index/roots": ["abc"],
+                "dag-index/leaves": ["abc"],
+                "dag-index/by-execution-id": {"execution/replay": ["abc"]},
+                "dag-index/by-status": {"pass": ["abc"]},
+                "dag-index/short-hashes": {"abc": "abc"},
+                "dag-index/summary": {
+                    "node-count": 1, "root-count": 1, "leaf-count": 1,
+                    "failure-count": 0, "error-count": 0, "orphan-count": 0,
+                    "execution-id-counts": {"execution/replay": 1},
+                    "status-counts": {"pass": 1},
+                },
+            },
+        }
+        (run_dir / "evidence-dag-inventory.json").write_text(json.dumps(inventory, indent=2))
+        bundle_root = json.loads((run_dir / "run-bundle-root.json").read_text())
+        bundle_root["execution/node-hash"] = "abc"
+        bundle_root["execution/content-hash"] = "abc"
+        (run_dir / "run-bundle-root.json").write_text(json.dumps(bundle_root, indent=2))
+        report = verify.verify_run(str(run_dir))
+        assert report.status == "pass"
+
+    def test_inventory_backed_evidence_dag_rejects_unresolved_bundle_root(self, tmp_path: Path):
+        """An evidence-dag inventory must fail when the bundle root points nowhere."""
+        run_dir = make_minimal_bundle(tmp_path)
+        make_claim_file(run_dir, "c1", "pass")
+        make_attestation_file(run_dir, "h1", "verified")
+        dag_dir = run_dir / "evidence-dag"
+        dag_dir.mkdir(exist_ok=True)
+        (dag_dir / "node-abc.edn").write_text("{:node-hash \"abc\" :parent-hashes []}")
+        inventory = {
+            "dag/schema-version": "evidence-dag-inventory.v0",
+            "dag/phase": "B",
+            "dag/semantic-status": "parsed",
+            "dag/files": {"total": 1, "json": 0, "edn": 1, "unparsed": 0},
+            "dag/hashes": {"algorithm": "sha256-file-bytes"},
+            "dag/total-bytes": 34,
+            "dag/file-hashes": [{"name": "node-abc.edn", "sha256": "deadbeef", "bytes": 34}],
+            "dag/nodes": [{"file": "node-abc.edn",
+                           "node-hash": "abc",
+                           "execution-id": "execution/replay",
+                           "execution-kind": "scenario-run",
+                           "runner": "scenario-runner",
+                           "result-status": "pass",
+                           "parent-hashes": []}],
+            "dag/parse-errors": [],
+            "dag/edges": [],
+            "dag/index": {
+                "dag-index/schema-version": "evidence-dag-index.v0",
+                "dag-index/nodes-by-hash": {
+                    "abc": {"node-hash": "abc", "short-hash": "abc", "execution-id": "execution/replay", "result-status": "pass"},
+                },
+                "dag-index/children-by-parent": {},
+                "dag-index/parents-by-child": {"abc": []},
+                "dag-index/roots": ["abc"],
+                "dag-index/leaves": ["abc"],
+                "dag-index/by-execution-id": {"execution/replay": ["abc"]},
+                "dag-index/by-status": {"pass": ["abc"]},
+                "dag-index/short-hashes": {"abc": "abc"},
+                "dag-index/summary": {
+                    "node-count": 1, "root-count": 1, "leaf-count": 1,
+                    "failure-count": 0, "error-count": 0, "orphan-count": 0,
+                    "execution-id-counts": {"execution/replay": 1},
+                    "status-counts": {"pass": 1},
+                },
+            },
+        }
+        (run_dir / "evidence-dag-inventory.json").write_text(json.dumps(inventory, indent=2))
+        report = verify.verify_run(str(run_dir))
+        assert report.status == "fail"

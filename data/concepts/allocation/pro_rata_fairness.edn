@@ -1,0 +1,124 @@
+{:concept/id :allocation/pro-rata-fairness
+ :concept/name "Pro-rata fairness in allocation"
+ :concept/type :allocation
+ :concept/layer :stakeholder
+
+ :concept/summary
+ "When available value is less than total valid claims, equal-priority
+  claimants receive the same fraction of their claim. The allocation is
+  independent of claim order, timing, or privileged access."
+
+ :concept/stakeholder-question
+ "Do all claimants at the same priority level receive the same proportional
+  recovery, regardless of when they submitted their claim?"
+
+ :concept/protocols #{:protocol/sew-v1 :protocol/prf}
+
+ :concept/related
+ [:allocation/partial-fill
+  :allocation/shortfall
+  :consensus/finality
+  :verifiable-assurance/forensic-confidence]
+
+ :concept/roles
+ {:claimant
+  {:description "Party with a valid claim at a given priority level."
+   :maps-to [:protocol.actor/sender :protocol.actor/recipient]}
+  :allocation-engine
+  {:description "Protocol logic that computes pro-rata shares."
+   :maps-to [:protocol.actor/resolution-module]}
+  :priority-classifier
+  {:description "Entity or rule that assigns claims to priority levels."
+   :maps-to [:protocol.actor/resolution-module]}
+  :verifier
+  {:description "Party checking that allocation was proportional."
+   :maps-to [:protocol.actor/verifier]}}
+
+ :concept/entities
+ {:claim-group
+  {:description "Set of claims at the same priority level."
+   :maps-to [:protocol.entity/claim-pool]}
+  :pro-rata-share
+  {:description "Fraction of available value allocated to a single claimant."
+   :maps-to [:protocol.entity/allocation]}
+  :allocation-table
+  {:description "Complete mapping from claimants to allocated amounts."
+   :maps-to [:protocol.entity/settlement]}
+  :proportionality-proof
+  {:description "Evidence that allocation was proportional and ordering-independent."
+   :maps-to [:protocol.entity/evidence]}}
+
+ :concept/actions
+ {:compute-pro-rata
+  {:description "Divide available value proportionally among equal-priority claimants."
+   :maps-to [:protocol.action/calculate-pro-rata-allocation]}
+  :verify-proportionality
+  {:description "Check that fill ratios are equal across same-priority claimants."
+   :maps-to [:protocol.action/verify-allocation :protocol.action/check-invariant]}
+  :detect-imbalance
+  {:description "Identify when claimants at the same priority receive different fill ratios."
+   :maps-to [:protocol.action/verify-allocation]}
+  :reject-unequal-allocation
+  {:description "Prevent settlement when pro-rata fairness is violated."
+   :maps-to [:protocol.action/reject-allocation]}}
+
+ :concept/outcomes
+ {:allocation-proportional
+  {:description "All equal-priority claimants receive the same fill ratio."
+   :maps-to [:protocol.outcome/released]}
+  :allocation-unequal
+  {:description "Equal-priority claimants receive different fill ratios."
+   :maps-to [:protocol.outcome/adversarial-resolution]}
+  :allocation-order-dependent
+  {:description "Allocation changes when claim order is permuted."
+   :maps-to [:protocol.outcome/adversarial-resolution]}
+  :allocation-rejected
+  {:description "Unequal allocation was detected and settlement blocked."
+   :maps-to [:protocol.outcome/rejected]}}
+
+ :concept/failure-modes
+ [{:failure/id :unequal-pro-rata
+   :failure/name "Unequal pro-rata treatment"
+   :failure/summary
+   "Claimants at the same priority level receive different proportional recovery."
+   :protocol-mechanisms [:pro-rata-allocation :settlement]
+   :stakeholder-impact "Some claimants are unfairly favoured despite equivalent rights."}
+
+  {:failure/id :ordering-dependent
+   :failure/name "Ordering-dependent allocation"
+   :failure/summary
+   "Allocation changes based on the order in which claims are processed."
+   :protocol-mechanisms [:claim-ordering :settlement]
+   :stakeholder-impact "Early claimants may receive more than late claimants at the same priority."}
+
+  {:failure/id :priority-violation
+   :failure/name "Priority-level violation"
+   :failure/summary
+   "Lower-priority claimants receive recovery before higher-priority claims are satisfied."
+   :protocol-mechanisms [:priority-waterfall :settlement]
+   :stakeholder-impact "Claim priority model is violated, harming senior claimants."}]
+
+ :concept/metrics
+ {:fill-ratio-variance
+  {:description "Variance in fill ratios across equal-priority claimants."
+   :source :derived-from-invariant-results}
+  :ordering-sensitivity
+  {:description "Whether allocation changes when claim order is permuted."
+   :source :derived-from-invariant-results}
+  :priority-adherence
+  {:description "Whether higher-priority claims are fully satisfied before lower-priority claims."
+   :source :derived-from-invariant-results}
+  :claim-count
+  {:description "Number of valid claims at each priority level."
+   :source :derived-from-trace}}
+
+ :concept/assumptions
+ ["Claims can be grouped into priority classes."
+  "Available value is known before allocation."
+  "Fill ratio should be identical for all same-priority claimants."
+  "Concept labels do not change protocol validity."]
+
+ :concept/out-of-scope
+ ["Real-world bankruptcy law or legal creditor priority."
+  "Subjective fairness beyond the protocol's declared allocation rule."
+  "Off-chain negotiation or side agreements between claimants."]}

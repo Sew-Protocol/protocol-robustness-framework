@@ -17,7 +17,8 @@
   {:use-case "use-case"
    :decision-quality "decision-quality"
    :assurance "assurance"
-   :allocation "allocation"})
+   :allocation "allocation"
+   :yield "yield"})
 
 (defn edn-files [dir]
   (filter #(and (.endsWith (.getName %) ".edn") (not (.isDirectory %)))

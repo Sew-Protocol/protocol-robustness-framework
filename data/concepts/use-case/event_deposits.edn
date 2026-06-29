@@ -97,10 +97,21 @@
    :protocol-mechanisms [:timeout-check :deadline-config]
    :stakeholder-impact "Beneficiary loses the opportunity to fulfill the condition."}]
 
+:concept/metrics
+  {:time-to-condition
+   {:description "Time from deposit creation to condition evaluation."
+    :source :derived-from-trace}
+   :condition-verified
+   {:description "Whether the condition was verified by the authority."
+    :source :derived-from-trace}
+   :outcome-type
+   {:description "Terminal outcome (released, returned, stuck, misattested)."
+    :source :derived-from-trace}}
+
  :concept/assumptions
- ["A condition is defined at deposit creation and is evaluable."
-  "The condition authority is either a resolver module or an oracle."
-  "Concept labels do not change protocol validity."]
+  ["A condition is defined at deposit creation and is evaluable."
+   "The condition authority is either a resolver module or an oracle."
+   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
  ["Real-world legal or contractual conditions."

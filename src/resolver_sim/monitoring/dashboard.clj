@@ -49,7 +49,8 @@
           (response/content-type "application/json")))
     (catch Exception e
       (log/error! (str "Dashboard error:" (.getMessage e)))
-      (response/internal-server-error (.getMessage e)))))
+      (-> (response/response (.getMessage e))
+          (response/status 500)))))
 
 (defn- html-handler [request]
   "Handle HTML dashboard requests."
@@ -129,7 +130,8 @@
 </html>")))
     (catch Exception e
       (log/error! (str "HTML dashboard error:" (.getMessage e)))
-      (response/internal-server-error (.getMessage e)))))
+      (-> (response/response (.getMessage e))
+          (response/status 500)))))
 
 (defn- create-http-server [port]
   "Create and start HTTP server."
@@ -140,25 +142,25 @@
 
       (.setExecutor server nil) ; Use default executor
 
-      (.handle context
-               (reify HttpHandler
-                 (handle [this exchange]
-                   (let [response (json-handler {:uri (.getRequestURI exchange)})]
-                     (.sendResponseHeaders exchange
-                                           (response :status 200)
-                                           (count (.getBytes (response :body) "UTF-8")))
-                     (with-open [os (.getResponseBody exchange)]
-                       (.write os (.getBytes (response :body) "UTF-8")))))))
+      (.setHandler context
+                   (reify HttpHandler
+                     (handle [this exchange]
+                       (let [response (json-handler {:uri (.getRequestURI exchange)})]
+                         (.sendResponseHeaders exchange
+                                               (response :status 200)
+                                               (count (.getBytes (response :body) "UTF-8")))
+                         (with-open [os (.getResponseBody exchange)]
+                           (.write os (.getBytes (response :body) "UTF-8")))))))
 
-      (.handle html-context
-               (reify HttpHandler
-                 (handle [this exchange]
-                   (let [response (html-handler {:uri (.getRequestURI exchange)})]
-                     (.sendResponseHeaders exchange
-                                           (response :status 200)
-                                           (count (.getBytes (response :body) "UTF-8")))
-                     (with-open [os (.getResponseBody exchange)]
-                       (.write os (.getBytes (response :body) "UTF-8")))))))
+      (.setHandler html-context
+                   (reify HttpHandler
+                     (handle [this exchange]
+                       (let [response (html-handler {:uri (.getRequestURI exchange)})]
+                         (.sendResponseHeaders exchange
+                                               (response :status 200)
+                                               (count (.getBytes (response :body) "UTF-8")))
+                         (with-open [os (.getResponseBody exchange)]
+                           (.write os (.getBytes (response :body) "UTF-8")))))))
 
       (.start server)
       (log/info! (str "Monitoring dashboard started on port" port))
@@ -171,9 +173,9 @@
   "Start the monitoring dashboard server."
   (when (config/monitoring-enabled?)
     (when-not @running
-      (let [server (create-http-server port)]
-        (when server
-          (reset! server server)
+      (let [srv (create-http-server port)]
+        (when srv
+          (reset! server srv)
           (reset! running true)
           :started)))))
 

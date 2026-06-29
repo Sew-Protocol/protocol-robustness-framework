@@ -223,6 +223,98 @@ The repository has extensive pro-rata allocation functionality:
 (pro-rata/demo-claims)
 ```
 
+## Monitoring Dashboard
+
+The repository includes a comprehensive monitoring system for observing system behavior during scenario execution.
+
+### Starting the Monitoring System
+
+```clojure
+;; 1. Initialize monitoring
+(require '[resolver-sim.monitoring :as monitoring])
+(monitoring/init-monitoring!)
+
+;; 2. Check if monitoring is enabled
+(monitoring/monitoring-enabled?)  ; Should return true
+
+;; 3. Shutdown monitoring when done
+(monitoring/shutdown-monitoring!)
+```
+
+### Accessing Monitoring Data
+
+The monitoring system provides multiple access methods:
+
+#### ✅ Working Components (Core Monitoring)
+- **JMX Console**: Connect to port `1099` (always available)
+- **Programmatic Access**: `(monitoring/get-monitoring-data)` (always available)
+- **Metrics System**: Tracking and timing metrics (always available)
+- **Scenario Monitoring**: Scenario execution tracking (always available)
+
+#### ⚠️ Web Dashboard (May Require Ring Dependency)
+- **Web Dashboard**: `http://localhost:8090/monitoring` (requires Ring)
+- **JSON API**: `http://localhost:8090/api/monitoring` (requires Ring)
+
+**Note**: The web dashboard requires the Ring HTTP library. If you see compilation errors, the core monitoring (JMX, metrics, programmatic access) still works perfectly.
+
+### Dashboard Features
+
+The dashboard shows:
+- **Scenario Monitoring**: Active scenarios, completion rates, error rates
+- **Thread Pool Monitoring**: Utilization, bottlenecks, critical issues
+- **Metrics**: Processing rates, timing data, custom metrics
+- **Alerts**: High utilization, error rate thresholds
+
+### Configuration
+
+Monitoring is configured in `config/monitoring.edn`:
+```clojure
+{:enabled true
+ :dashboard-port 8090
+ :jmx-port 1099
+ :metrics-enabled true
+ :thread-pool-monitoring true
+ :alert-thresholds {...}}
+```
+
+### Using the Dashboard with Scenarios
+
+```clojure
+;; 1. Start monitoring
+(monitoring/init-monitoring!)
+
+;; 2. Run scenarios while monitoring
+(scenarios/run-scenario "S103 l2-reversal-slash-ids")
+
+;; 3. Observe real-time metrics in the dashboard
+;;    - Open http://localhost:8090/monitoring in your browser
+;;    - Watch scenario processing, thread pool utilization
+;;    - Monitor for bottlenecks and errors
+
+;; 4. Clean up when done
+(monitoring/shutdown-monitoring!)
+```
+
+### Monitoring Functions
+
+```clojure
+;; Add custom metrics
+(monitoring/increment-metric [:my-module :operations])
+(monitoring/timing-metric 150 [:operation :duration])
+
+;; Monitor thread pools
+(monitoring/monitor-thread-pool "my-pool" executor)
+
+;; Get current metrics programmatically
+(def counters (metrics/get-all-metric-names))
+(def timing-stats (metrics/get-histogram-stats [:operation :duration]))
+(tap> {:counters counters :timing timing-stats})
+
+;; Get specific metrics
+(def scenario-count (metrics/get-counter [:scenario :completed]))
+(def avg-duration (metrics/get-gauge [:operation :avg-duration]))
+```
+
 ## Validation and Testing
 
 ### Code Validation
@@ -391,6 +483,56 @@ The repository has extensive pro-rata allocation functionality:
 (p/clear)
 ```
 
+## Quick Reference: Connecting to Monitoring Dashboard
+
+### 1. Start the monitoring system
+```clojure
+(require '[resolver-sim.monitoring :as monitoring])
+(monitoring/init-monitoring!)
+```
+
+### 2. Access monitoring data
+
+**✅ Always Available (Core Monitoring):**
+- **JMX Console**: Connect to port `1099`
+- **Programmatic Access**:
+  ```clojure
+  (def data (monitoring/get-monitoring-data))
+  (tap> data)  ; View in portal
+  ```
+
+**⚠️ Web Dashboard (Requires Ring Dependency):**
+- **Web URL**: [http://localhost:8090/monitoring](http://localhost:8090/monitoring)
+- **JSON API**: [http://localhost:8090/api/monitoring](http://localhost:8090/api/monitoring)
+
+### 3. Run scenarios with monitoring
+```clojure
+;; Require the metrics namespace for detailed access
+(require '[resolver-sim.monitoring.metrics :as metrics])
+
+;; Run a scenario while monitoring
+(scenarios/run-scenario "S103 l2-reversal-slash-ids")
+
+;; Access monitoring data:
+;; - Use JMX console (port 1099) - always available
+;; - Use programmatic access with correct functions:
+(def all-metrics (metrics/get-all-metric-names))
+(def timing-stats (metrics/get-histogram-stats [:scenario :duration]))
+(tap> {:metrics all-metrics :timing timing-stats})
+
+;; Get specific metrics:
+(def completed (metrics/get-counter [:scenario :completed]))
+(def failed (metrics/get-counter [:scenario :failed]))
+(println "Completed:" completed "Failed:" failed)
+
+;; If Ring is available: Use web dashboard at http://localhost:8090/monitoring
+```
+
+### 4. Shutdown when done
+```clojure
+(monitoring/shutdown-monitoring!)
+```
+
 ## Tips and Best Practices
 
 1. **Use Portal for Complex Data**: Always tap complex results to portal for better visualization
@@ -414,12 +556,49 @@ If you get `No such var: scenarios/list-scenarios`, make sure to:
 If `(scenarios/run-scenario :S103)` fails:
 1. List available scenarios: `(scenarios/list-scenarios "103")`
 2. Use the exact name with space: `(scenarios/run-scenario "S103 l2-reversal-slash-ids")`
-3. Check the registry directly: 
+3. Check the registry directly:
    ```clojure
    (require '[resolver-sim.protocols.sew.invariant-scenarios :as inv-sc])
    (filter #(re-find #"103" %) (keys @inv-sc/all-scenarios))
    ```
 4. Remember scenario names have the format: `"S01 baseline-happy-path"` (with space and description)
+
+### Monitoring dashboard errors
+If you see `Syntax error compiling at (resolver_sim/monitoring/dashboard.clj:1:1)`:
+1. **Missing Ring dependency**: The dashboard requires Ring HTTP library which may not be loaded
+2. **Core monitoring still works**: Metrics, scenario tracking, and JMX monitoring continue to function
+3. **Alternative access**: Use JMX console or programmatic access instead of web dashboard
+
+#### Solutions:
+1. **Add Ring dependency** (if needed):
+   ```clojure
+   ;; Add to deps.edn if missing:
+   {:deps {ring/ring-core {:mvn/version "1.12.0"}}}
+   ```
+
+2. **Use JMX monitoring instead**:
+   ```clojure
+   ;; Connect JMX console to port 1099
+   ;; Provides access to all monitoring metrics
+   ```
+
+3. **Programmatic access**:
+   ```clojure
+   ;; Get monitoring data directly
+   (def data (monitoring/get-monitoring-data))
+   (tap> data)  ; Send to portal for inspection
+   ```
+
+4. **Restart monitoring**:
+   ```clojure
+   (monitoring/shutdown-monitoring!)
+   (monitoring/init-monitoring!)
+   ```
+
+### Portal not showing data
+1. Initialize portal: `(user/portal)`
+2. Check tap> is added: `(add-tap #'portal.api/submit)`
+3. Clear and retry: `(portal.api/clear)`
 
 ### Portal not showing data
 1. Initialize portal: `(user/portal)`

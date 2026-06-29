@@ -1,11 +1,12 @@
 (ns resolver-sim.benchmark.report
   "Build a report-ready data structure from a benchmark evidence bundle,
    benchmark concepts, and scoring definition.
-   
+
    Produces a plain map suitable for Clerk rendering — no view logic."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]))
 
 ;; ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -28,6 +29,15 @@
   [path]
   (load-edn path))
 
+(defn- reference-validation-path-by-id
+  [scenario-id]
+  (when (.exists (io/file "suites/reference-validation-v1/manifest.edn"))
+    (let [manifest (load-edn "suites/reference-validation-v1/manifest.edn")]
+      (some (fn [scenario]
+              (when (= scenario-id (:id scenario))
+                (:simulator/scenario-path scenario)))
+            (:scenarios manifest)))))
+
 ;; ── Concept lookup ───────────────────────────────────────────────────────────
 
 (defn concept-index
@@ -44,27 +54,64 @@
 
 (defn scenario->outcome
   "Look up a scenario's outcome in the evidence results list.
-   Prefer explicit :scenario/id, then fall back to file-path matching."
+   Prefer explicit :scenario/id, then a resolved reference-validation path,
+   then fall back to file-path matching."
   [scenario-id results]
-  (let [match (or (first (filter #(= scenario-id (:scenario/id %)) results))
-                  (first (filter #(str/includes? (:file %) scenario-id) results)))]
+  (let [scenario-path (reference-validation-path-by-id scenario-id)
+        match (or (first (filter #(= scenario-id (:scenario/id %)) results))
+                  (when scenario-path
+                    (first (filter #(= scenario-path (:simulator/scenario-path %)) results)))
+                  (when scenario-path
+                    (first (filter #(= scenario-path (:file %)) results)))
+                  (first (filter #(str/includes? (or (:file %) "") scenario-id) results)))]
     (when match
-      {:outcome (:outcome match)
-       :halt-reason (:halt-reason match)
-       :file (:file match)
-       :scenario/evidence-root (:scenario/evidence-root match)})))
+      (cond-> {:outcome (:outcome match)
+               :halt-reason (:halt-reason match)
+               :file (:file match)
+               :scenario/evidence-root (:scenario/evidence-root match)}
+        (:simulator/scenario-path match)
+        (assoc :simulator/scenario-path (:simulator/scenario-path match))
+        (:invariant-results match)
+        (assoc :invariant-results (:invariant-results match))))))
+
+(defn- scenario-claim-results
+  [scenario-id outcome-data claim-results]
+  (let [scenario-file (:file outcome-data)
+        scenario-path (:simulator/scenario-path outcome-data)]
+    (filterv (fn [claim-result]
+               (and (= :scenario (:claim/scope claim-result))
+                    (or (= scenario-id (:scenario/id claim-result))
+                        (and scenario-file (= scenario-file (:scenario/file claim-result)))
+                        (and scenario-path (= scenario-path (:simulator/scenario-path claim-result))))))
+             claim-results)))
+
+(defn- pass-state
+  [xs pred]
+  (when (seq xs)
+    (boolean (every? pred xs))))
+
+(defn- invariant-pass-state
+  [invariant-results]
+  (pass-state invariant-results #(= :pass (:result %))))
+
+(defn- dimension-pass?
+  [scenario-pass? claims-pass? invariants-pass?]
+  (and scenario-pass?
+       (not= false claims-pass?)
+       (not= false invariants-pass?)))
 
 (defn build-dimension-results
   "For each dimension/scenario entry in the benchmark manifest, find the
    actual scenario outcome from the evidence results and merge concept data.
-   
+
    evidence-results — vector of scenario result maps from the evidence bundle
+   claim-results    — vector of evaluated claim result maps from the evidence bundle
    manifest         — the benchmark manifest map
    concepts         — vector of benchmark concept definitions
    scoring          — the scoring definition map
-   
+
    Returns a vector of dimension result maps."
-  [evidence-results manifest concepts scoring]
+  [evidence-results claim-results manifest concepts scoring]
   (let [scenario-entries (:benchmark/scenarios manifest)
         concept-idx (concept-index concepts)
         dimension-rules (->> scoring :scoring/rules :dimensions
@@ -73,15 +120,28 @@
     (mapv (fn [entry]
             (let [dim-id (:dimension entry)
                   scenario-id (:scenario/id entry)
+                  declared-claim (:claim entry)
                   outcome-data (scenario->outcome scenario-id evidence-results)
+                  scenario-pass? (= :pass (:outcome outcome-data))
+                  dimension-claim-results (scenario-claim-results scenario-id outcome-data claim-results)
+                  claims-pass? (pass-state dimension-claim-results #(= :pass (:claim/outcome %)))
+                  invariants-pass? (invariant-pass-state (:invariant-results outcome-data))
+                  dimension-ok? (dimension-pass? scenario-pass? claims-pass? invariants-pass?)
                   concept (dimension->concept concept-idx dim-id)
                   scoring-rule (get dimension-rules dim-id)]
               {:dimension dim-id
                :scenario/id scenario-id
+               :declared-claim declared-claim
                :outcome (:outcome outcome-data)
                :halt-reason (:halt-reason outcome-data)
+               :scenario/pass? scenario-pass?
+               :claims/pass? claims-pass?
+               :invariants/pass? invariants-pass?
+               :dimension/pass? dimension-ok?
                :pass-condition (:pass-condition scoring-rule)
-               :pass-condition-met? (= :pass (:outcome outcome-data))
+               :pass-condition-met? dimension-ok?
+               :claim-results dimension-claim-results
+               :invariant-results (:invariant-results outcome-data)
                :concept/title (:concept/title concept)
                :concept/summary (:concept/summary concept)
                :concept/stakeholder-language (:concept/stakeholder-language concept)
@@ -132,7 +192,7 @@
           critical-fail? (some (fn [cr]
                                  (and (= :fail (:claim/outcome cr))
                                       (contains? critical-severity
-                                        (get-in cr [:claim/severity] :low))))
+                                                 (get-in cr [:claim/severity] :low))))
                                claim-results)]
       {:classification-label (cond
                                all-pass?    pass
@@ -151,7 +211,7 @@
   [total passed scoring-rules claim-results]
   (if-not (map? scoring-rules)
     {:classification-label "Unclassified" :reason "No scoring rules defined"}
-    (let [{:keys [classifier score-fn] :as rule} scoring-rules]
+    (let [{:keys [classifier] :as rule} scoring-rules]
       (case classifier
         :pass-fail-per-scenario
         (classify-per-scenario total passed rule)
@@ -159,8 +219,8 @@
         :pass-fail-per-claim
         (or (classify-per-claim claim-results rule)
             (classify-per-scenario total passed
-              (assoc rule :pass "All scenarios pass" :fail "At least one scenario fails"
-                           :mixed "Some scenarios pass, some fail")))
+                                   (assoc rule :pass "All scenarios pass" :fail "At least one scenario fails"
+                                          :mixed "Some scenarios pass, some fail")))
 
         :pass-fail-critical
         (or (classify-critical claim-results rule)
@@ -188,7 +248,7 @@
         metrics (:metrics evidence)
         results (:results evidence)
         inv-summary (:invariant-summary evidence)
-        dimensions (build-dimension-results results manifest concepts scoring)]
+        dimensions (build-dimension-results results (:claim-results evidence) manifest concepts scoring)]
     {:benchmark/id (:benchmark/id manifest)
      :purpose (:benchmark/purpose manifest)
      :scenario/suite (:benchmark/scenario-suite manifest)
@@ -205,15 +265,16 @@
               (float (/ (:passed metrics) (:total metrics)))
               0.0)
      :scoring/classification (classify-result (:total metrics) (:passed metrics)
-                                               (:scoring/rules scoring)
-                                               (:claim-results evidence))
-     :claim/status (let [cr (:claim-results evidence)]
+                                              (:scoring/rules scoring)
+                                              (:claim-results evidence))
+     :claim/status (let [cr (:claim-results evidence)
+                         claim-refs (normalize-claim-refs (:benchmark/claims manifest))]
                      (cond
                        (seq cr)
                        (if (every? #(= :pass (:claim/outcome %)) cr)
                          :verified
                          :partial)
-                       (seq (:benchmark/claims manifest))
+                       (seq claim-refs)
                        :declared-not-verified
                        :else :none))
      :claim-results (:claim-results evidence)

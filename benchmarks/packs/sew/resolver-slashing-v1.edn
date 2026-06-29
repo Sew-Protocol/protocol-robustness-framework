@@ -8,21 +8,35 @@
    coverage, over-slashing prevention, and appeal bond adequacy."
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
-  :benchmark/purpose
+   :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+  :benchmark/property-types  #{:safety}
+   :benchmark/purpose
   "Evaluate Sew resolver slashing mechanics: slashing conservation,
    waterfall coverage, over-slashing prevention, and appeal bond
    adequacy under adversarial dispute scenarios."
   :benchmark/concepts        [:ecommerce/purchase
-                             :event/deposit
-                             :consensus/authority
-                             :consensus/evidence
-                             :consensus/finality
-                             :consensus/escalation
-                             :consensus/liveness
-                             :consensus/legitimacy]
- :benchmark/claims          [:claim/slashing-conservation
-                            :claim/waterfall-coverage-correct
-                            :claim/no-over-slashing
-                            :claim/appeal-bond-adequacy]}
+                              :event/deposit
+                              :allocation/slash-obligation
+                              :consensus/authority
+                              :consensus/evidence
+                              :consensus/finality
+                              :consensus/escalation
+                              :consensus/liveness
+                              :consensus/legitimacy]
+  :benchmark/claims          [{:claim/id :claim/slashing-conservation
+                              :claim/role :primary
+                              :claim/rationale "Slashing must distribute amounts consistently and conserve total value."
+                              :claim/failure-meaning "Slash distribution violated conservation."}
+                             {:claim/id :claim/waterfall-coverage-correct
+                              :claim/role :primary
+                              :claim/rationale "Senior positions must be covered before junior in the waterfall."
+                              :claim/failure-meaning "Waterfall coverage order was violated."}
+                             {:claim/id :claim/no-over-slashing
+                              :claim/role :primary
+                              :claim/rationale "No resolver should be slashed beyond their bonded stake."
+                              :claim/failure-meaning "Resolver was over-slashed beyond bond."}
+                             {:claim/id :claim/appeal-bond-adequacy
+                              :claim/role :supporting
+                              :claim/rationale "Appeal bonds must cover challenge costs adequately."
+                              :claim/failure-meaning "Appeal bond was insufficient."}]}
 

@@ -106,10 +106,21 @@
    :protocol-mechanisms [:bonding :slashing :evidence-requirements]
    :stakeholder-impact "Protocol reserves or resolver bonds are drained."}]
 
+:concept/metrics
+  {:dispute-count
+   {:description "Number of disputes raised during the interaction."
+    :source :derived-from-trace}
+   :time-to-finality
+   {:description "Total time from payment commitment to terminal outcome."
+    :source :derived-from-trace}
+   :resolution-path
+   {:description "Path taken to reach terminal outcome (release, refund, dispute)."
+    :source :derived-from-trace}}
+
  :concept/assumptions
- ["A buyer and merchant are identifiable protocol actors."
-  "The escrow balance represents the payment amount."
-  "Concept labels do not change protocol validity."]
+  ["A buyer and merchant are identifiable protocol actors."
+   "The escrow balance represents the payment amount."
+   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
  ["Real-world shipping, delivery logistics, or product quality."

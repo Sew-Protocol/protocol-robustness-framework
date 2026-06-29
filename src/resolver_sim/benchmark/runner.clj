@@ -58,6 +58,65 @@
   (when (= suite-kw :suite/reference-validation-v1)
     (reference-validation-id-by-path scenario-path)))
 
+(defn- benchmark-local-concept-namespace?
+  [concept-id]
+  (contains? #{"robustness" "allocation"} (namespace concept-id)))
+
+(defn- benchmark-concept-files
+  []
+  (let [root (io/file "benchmarks/concepts")]
+    (when (.exists root)
+      (->> (file-seq root)
+           (filter #(.isFile %))
+           (filter #(str/ends-with? (.getName %) ".edn"))))))
+
+(defn- load-benchmark-local-concepts
+  []
+  (try
+    (->> (benchmark-concept-files)
+         (mapcat (fn [f]
+                   (try
+                     (:concepts (edn/read-string (slurp f)))
+                     (catch Exception e
+                       (log/warn! "benchmark/local-concepts-load-failed"
+                                  {:path (.getPath f)
+                                   :error (.getMessage e)})
+                       []))))
+         vec)
+    (catch Exception e
+      (log/warn! "benchmark/local-concepts-load-failed"
+                 {:error (.getMessage e)})
+      [])))
+
+(defn- benchmark-local-concept-summary
+  [concept]
+  {:concept/id (:concept/id concept)
+   :concept/name (or (:concept/name concept) (:concept/title concept))
+   :concept/title (:concept/title concept)
+   :concept/summary (:concept/summary concept)
+   :concept/stakeholder-question (or (:concept/stakeholder-question concept)
+                                     (:concept/stakeholder-language concept))
+   :concept/stakeholder-language (:concept/stakeholder-language concept)
+   :concept/assumptions (or (:concept/assumptions concept) [])
+   :concept/out-of-scope (or (:concept/out-of-scope concept) [])
+   :concept/why-it-matters (:concept/why-it-matters concept)
+   :concept/maps-to (:concept/maps-to concept)
+   :concept/failure-modes (:concept/failure-modes concept)})
+
+(defn- benchmark-local-concept-section
+  [concepts]
+  (when (seq concepts)
+    {:concept/summaries (mapv benchmark-local-concept-summary concepts)}))
+
+(defn- merge-concept-sections
+  [& sections]
+  (let [sections (remove nil? sections)
+        summaries (vec (mapcat :concept/summaries sections))
+        risk-annotations (vec (mapcat :risk-annotations sections))]
+    (when (or (seq summaries) (seq risk-annotations))
+      (cond-> {:concept/summaries summaries}
+        (seq risk-annotations) (assoc :risk-annotations risk-annotations)))))
+
 (defrecord SewAdapter []
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
@@ -140,50 +199,57 @@
                            seen-ids)
          total-inv-checks (count all-inv-results)
          passed-inv-checks (count (filter #(= :pass (:result %)) all-inv-results))
-          all-invariants-pass? (= total-inv-checks passed-inv-checks)
+         all-invariants-pass? (= total-inv-checks passed-inv-checks)
 
             ;; ── Claim evaluation ────────────────────────────────────────────
-          claim-results (try
-                          (benchmark-claims/evaluate-manifest-claims manifest results)
-                          (catch Exception e
-                            (log/warn! "benchmark/claim-evaluation-failed"
-                                       {:error (.getMessage e)})
-                            []))
+         claim-results (try
+                         (benchmark-claims/evaluate-manifest-claims manifest results)
+                         (catch Exception e
+                           (log/warn! "benchmark/claim-evaluation-failed"
+                                      {:error (.getMessage e)})
+                           []))
 
             ;; ── Concept enrichment ──────────────────────────────────────────
          concept-ids (:benchmark/concepts manifest)
          concept-section (when (seq concept-ids)
                            (try
                              (let [{:keys [concepts]} (concepts-registry/load-registry)
-                                   relevant (filter #(contains? (set concept-ids) (:concept/id %))
-                                                    concepts)
-                                   benchmark-local (remove (set (map :concept/id relevant)) concept-ids)]
+                                   local-concepts (load-benchmark-local-concepts)
+                                   global-by-id (into {} (map (fn [c] [(:concept/id c) c]) concepts))
+                                   local-by-id (into {} (map (fn [c] [(:concept/id c) c]) local-concepts))
+                                   local-ids (set (keys local-by-id))
+                                   global-relevant (keep global-by-id (remove local-ids concept-ids))
+                                   local-relevant (keep local-by-id concept-ids)
+                                   benchmark-local (remove (set (concat (keys global-by-id) (keys local-by-id)))
+                                                           concept-ids)
+                                   global-section (when (seq global-relevant)
+                                                    (:concept/section
+                                                     (concepts-reporting/enrich-report nil global-relevant)))
+                                   local-section (benchmark-local-concept-section local-relevant)]
                                (when (and (seq benchmark-local)
-                                          (not-every? #(str/starts-with? (name %) "robustness/")
+                                          (not-every? benchmark-local-concept-namespace?
                                                       benchmark-local))
                                  (log/warn! "benchmark/unknown-concepts" {:stale benchmark-local}))
-                               (when (seq relevant)
-                                 (:concept/section
-                                  (concepts-reporting/enrich-report nil relevant))))
+                               (merge-concept-sections global-section local-section))
                              (catch Exception e
                                (log/warn! "benchmark/concept-enrichment-failed"
                                           {:error (.getMessage e)})
                                nil)))
 
-          evidence {:benchmark      manifest
-                    :repo           repo-meta
-                    :environment    {:os-name (System/getProperty "os.name")
-                                     :os-version (System/getProperty "os.version")
-                                     :java-version (System/getProperty "java.version")}
-                    :results        results
-                    :metrics        metrics
-                    :claim-results  claim-results
-                    :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))}
-                    :invariant-summary {:per-invariant  inv-summary
-                                        :total-checks   total-inv-checks
-                                        :passed-checks  passed-inv-checks
-                                        :all-pass?      all-invariants-pass?}
-                    :concept/section concept-section}
+         evidence {:benchmark      manifest
+                   :repo           repo-meta
+                   :environment    {:os-name (System/getProperty "os.name")
+                                    :os-version (System/getProperty "os.version")
+                                    :java-version (System/getProperty "java.version")}
+                   :results        results
+                   :metrics        metrics
+                   :claim-results  claim-results
+                   :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))}
+                   :invariant-summary {:per-invariant  inv-summary
+                                       :total-checks   total-inv-checks
+                                       :passed-checks  passed-inv-checks
+                                       :all-pass?      all-invariants-pass?}
+                   :concept/section concept-section}
 
          hashable-evidence (dissoc evidence :timestamp)
          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)

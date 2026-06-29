@@ -9,17 +9,19 @@
    liveness under adversarial load, and pull-first fund safety."
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
- :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
-  :benchmark/purpose
+  :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
+  :benchmark/property-types  #{:integrity :safety :liveness}
+   :benchmark/purpose
   "Evaluate protocol robustness across three scenario-tested dimensions
    (resolver accountability, liveness under adversarial load, fund safety
    through pull-first settlement) plus a cross-cutting evidence-integrity
    concept. Each dimension maps to a representative scenario from the Sew
    reference-validation suite."
- :benchmark/concepts       [:robustness/resolver-accountability
-                            :robustness/liveness-under-load
-                            :robustness/escrow-fund-safety
-                            :robustness/evidence-integrity]
+  :benchmark/concepts       [:robustness/resolver-accountability
+                             :robustness/liveness-under-load
+                             :robustness/escrow-fund-safety
+                             :robustness/evidence-integrity
+                             :forensic/evidence-chain]
  :benchmark/scenarios
  [{:scenario/id "malicious-resolver-verdict-v1"
    :dimension   :robustness/resolver-accountability
@@ -30,9 +32,24 @@
   {:scenario/id "autopush-settlement-v1"
    :dimension   :robustness/escrow-fund-safety
    :claim       :pull-first-settlement-safety}]
- :benchmark/claims
- [:evidence-root-present
-  :replay-result-present
-  :scenario-hash-present
-  :no-invariant-errors
-  :all-scenarios-pass]}
+  :benchmark/claims
+  [{:claim/id :evidence-root-present
+    :claim/role :primary
+    :claim/rationale "Every scenario must produce an evidence root hash to be verifiable."
+    :claim/failure-meaning "Scenario evidence root is missing or nil."}
+   {:claim/id :replay-result-present
+    :claim/role :primary
+    :claim/rationale "Replay must produce a result outcome for each scenario."
+    :claim/failure-meaning "Scenario outcome is nil or missing from replay result."}
+   {:claim/id :scenario-hash-present
+    :claim/role :primary
+    :claim/rationale "Evidence root must be a valid SHA-256 hex string for reproducible verification."
+    :claim/failure-meaning "Evidence root is not a valid 64-char hex string."}
+   {:claim/id :no-invariant-errors
+    :claim/role :supporting
+    :claim/rationale "No post-hoc invariants should fail during protocol execution."
+    :claim/failure-meaning "One or more post-hoc invariants reported a failure."}
+   {:claim/id :all-scenarios-pass
+    :claim/role :primary
+    :claim/rationale "All scenarios in the suite must complete with a passing outcome."
+    :claim/failure-meaning "One or more scenarios had a non-passing outcome."}]}

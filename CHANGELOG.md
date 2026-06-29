@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+### Added (2026-06-30)
+
+- **Mechanism persistence derived artifacts:** Added a PRF-owned V1 semantic layer for researcher-facing per-mechanism persistence analysis without changing canonical evidence DAG semantics. Includes a versioned shortfall mechanism map, derived index/summary/matrix builder, and Python regression tests for status/applicability separation and required-source coverage. (`scripts/forensic/mechanism_persistence.py`, `benchmarks/mechanisms/shortfall-v1.edn`, `tests/forensic_python/test_mechanism_persistence.py`, `docs/forensic/MECHANISM_PERSISTENCE_MINI_HANDOFF.md`)
+- **Adversarial robustness DR-L family (4 scenarios):** Track 2 reversal slash lifecycle covering execute, wrong-id fallback, appeal rejected + execution, appeal upheld + refund. All pass. (`scenarios/edn/DR-L-001-004*.edn`)
+- **Adversarial robustness DR-K scenario:** Manual fraud slash blocks second concurrent slash. (`scenarios/edn/DR-K-001*.edn`)
+- **Adversarial robustness DR-M family (3 scenarios):** Freeze/unfreeze lifecycle, finality guards against double-settlement, and freeze-vs-active-dispute invariant detection. (`scenarios/edn/DR-M-0*.edn`)
+- **Adversarial robustness DR-N family (1 scenario):** Resolver rotation capacity leak demonstrated. (`scenarios/edn/DR-N-001*.edn`)
+
+### Fixed (2026-06-30, resolution foundation bugs)
+
+- **CRITICAL BUG FIX: Rotate-dispute-resolver capacity leak.** `rotate-dispute-resolver` now calls `decrement-resolver-capacity` for the old resolver and `increment-resolver-capacity` for the new resolver. Previously, the original resolver's capacity permanently leaked (+1 phantom dispute) and the new resolver got a phantom decrement at finalize. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:95-96`)
+- **HIGH BUG FIX: Escalation/challenge capacity leak.** Both `escalate-dispute` and `challenge-resolution` now adjust resolver capacity counters when changing the dispute-resolver — same fix pattern as `rotate-dispute-resolver`. Previously, escalation/challenge permanently inflated the old resolver's capacity and under-counted the new resolver's capacity. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:940-941, 733-734`)
+- **HIGH BUG FIX: Escalation/challenge bond leak.** Added `return-all-bonds-for-workflow` that clears all bonds for a workflow on finalization. Previously, `return-bond` and `slash-bond` were defined but never called — bonds posted during `escalate-dispute` and `challenge-resolution` accumulated in `:bond-balances` indefinitely with no cleanup path. (`protocols_src/resolver_sim/protocols/sew/accounting.clj:394-413`, `protocols_src/resolver_sim/protocols/sew/lifecycle.clj:198`)
+- **MEDIUM FIX: `cleanup-orphaned-slashes` now checks appeal window expiry.** Previously removed ALL pending reversal slashes on finalization regardless of whether their appeal window was still open. Now only removes slashes whose appeal deadline has passed. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:1283-1288`)
+- **Removed stale duplicate `rotate-dispute-resolver` definition** that was overriding the primary implementation and causing evidence loss.
+- **Fixed `allowed-transitions` inconsistency:** Removed `:resolved` from `:pending`'s outgoing edges since the transition registry only supports `:disputed -> :resolved`. The two sources of truth were inconsistent. (`protocols_src/resolver_sim/protocols/sew/types.clj:94`)
+- **Added `unfreeze-resolver` and `compute-prorata-slash-allocation` to batch conflict domains.** Previously both fell through to `[:global :unknown]`, causing unnecessary serialization. (`protocols_src/resolver_sim/protocols/sew.clj:190-191`)
+- **Fixed duplicate priority label comment** in `automate-timed-actions` dispatch order. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:773-779`)
+
+### Fixed (2026-06-30, pause/governance/accounting)
+
+- **CRITICAL FIX: `release-address` never checked in release authorization.** `sender-only-release` now also checks the escrow's `:release-address` setting. Previously the setting was stored but never consulted — only the sender (`:from`) could release, making `:release-address` a dead feature with documented expectations of functionality. (`protocols_src/resolver_sim/protocols/sew.clj:49-52`)
+- **HIGH FIX: `delegate-to-senior` authorization bypass.** Changed to governance-only. Previously any agent could reserve senior coverage. (`protocols_src/resolver_sim/protocols/sew.clj:560-564`)
+- **HIGH FIX: Circuit breaker `total-resolvers` never updated.** `register-stake` now increments `total-resolvers` on first registration; `withdraw-stake` decrements on full withdrawal. Previously the counter was always 0, making the circuit breaker permanently unable to activate. (`protocols_src/resolver_sim/protocols/sew/registry.clj:44-69, 100-106`)
+- **MEDIUM FIX: `cancel-disputed-escrow-now` missing `cleanup-orphaned-slashes`.** Added orphaned slash cleanup after auto-cancel paths in `automate-timed-actions`. Previously, stale Track 2 reversal slash entries accumulated when auto-cancel fired. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:810-813, 822-825`)
+- **MEDIUM FIX: Zero-bond escalation/challenge.** Both functions now skip `post-appeal-bond` when bond-amt is zero. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:938, 729`)
+- **LOW FIX: `calculate-bps-amount` nil guard.** Added `(or amount 0)` and `(or bps 0)` to prevent NPE. (`src/resolver_sim/economics/payoffs.clj:18`)
+
+- **CRITICAL FIX: Bond refunds and challenge bounties unclaimable.** `withdraw-escrow` now reads from both legacy `:claimable` and `:claimable-v2` (bond/refund and liability/challenge-bounty domains). Previously, bond refunds from upheld appeals and challenge bounties were written only to `:claimable-v2` but `withdraw-escrow` read only from the legacy map — making those funds permanently unclaimable. (`protocols_src/resolver_sim/protocols/sew/accounting.clj:176-179`)
+- **MEDIUM FIX: `auto-release`/`auto-cancel` capacity corruption.** Both now use `lc/finalize-escrow-accounting` directly instead of `resolution.clj`'s `finalize` which adds an incorrect capacity decrement. Auto-release and auto-cancel fire for `:pending` escrows that were never disputed (capacity never incremented), so the decrement corrupted tracking. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:827,832`)
+- **MEDIUM FIX: `automate-timed-actions` blind to superseded-pending.** `pending-settlement-executable?` now checks both active and superseded pending settlements. Previously, after escalation cleared the active pending, `automate-timed-actions` would fall through to `dispute-timeout` (slashing the resolver) instead of executing the superseded settlement. (`protocols_src/resolver_sim/protocols/sew/state_machine.clj:469-477`)
+- **LOW FIX: `clear-claimable-v2-for-addr` stale zero entries.** Now properly dissocs addr from domain maps and cleans up empty containers instead of setting entries to 0. (`protocols_src/resolver_sim/protocols/sew/accounting.clj:146-155`)
+
+### Fixed (2026-06-30, finality and freeze governance)
+
+- **Freeze-with-active-disputed-escrow finding:** When a resolver is slashed while holding an active disputed escrow, the `resolver-not-frozen-on-assign` invariant fires. The keeper can still execute the pending settlement after the appeal window, but the disputed escrow is briefly assigned to a frozen resolver. Mitigation: governance should rotate the resolver (`rotate-dispute-resolver`) before slashing, or settle all disputed escrows first. Documented by DR-M-003.
+- **Finality guard verification:** Confirmed all three guards reject post-finality actions: `execute_pending_settlement` → `:no-pending-settlement`, `raise_dispute` → `:transfer-not-pending`, `execute_resolution` → `:transfer-not-in-dispute`. Verified by DR-M-002.
+
+### Fixed (2026-06-30)
+
+- **Benchmark report evidence-aware outcomes:** Claim evaluation now carries scoring-rule severity into result records, including scenario identity for scenario-scoped claims. Benchmark reports now derive dimension pass/fail from scenario outcome plus matching claim and invariant evidence, preserving `:pass-condition-met?` as a compatibility alias. (`src/resolver_sim/benchmark/claims.clj`, `src/resolver_sim/benchmark/report.clj`, `test/resolver_sim/benchmark/report_test.clj`)
+- **`automate-timed-actions` dispute-timeout gap:** Added `dispute-timeout-exceeded?` as Priority 3 in keeper dispatch, calling `auto-cancel-disputed-escrow`. Verified by DR-J-003. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:777`)
+- **`validate-dag-detailed` compilation bug:** Missing from `declare` form in `node.clj:80`. Fixed by adding to declare list.
+
+### Fixed (2026-06-30, remaining findings resolution)
+
+- **`unfreeze-resolver` dispatch gap:** Added `defmethod apply-action "unfreeze-resolver"` with governance-actor predicate. Previously unreachable from scenarios. (`protocols_src/resolver_sim/protocols/sew.clj:338`)
+- **`:upheld?` vs `:appeal-upheld?` param key mismatch:** Changed `:appeal-upheld?` to `:upheld?` in DR-C-002 to match the dispatch code's `(:upheld? p)` lookup. (`scenarios/edn/DR-C-002-slash-appeal-bond-lifecycle.edn:40`)
+- **Slash-id format inconsistency:** Added `resolve-reversal-slash-id` helper that auto-detects string-format reversal slash-keys (`<wf-id>-reversal-<level>`) when callers pass integer workflow-id. Applied to `execute-fraud-slash`, `resolve-appeal`, and `appeal-slash`. (`protocols_src/resolver_sim/protocols/sew/resolution.clj:1278`)
+
 ### Added (2026-06-29)
 
 - **Protocol robustness v0 benchmark pack:** Created `prf-core/protocol-robustness-v0.edn` — evaluates 4 robustness dimensions (resolver accountability, liveness under load, fund safety, evidence integrity) across 3 Sew reference-validation scenarios. Includes per-dimension scoring with pass conditions and benchmark-specific concept mappings. (`benchmarks/packs/prf-core/protocol-robustness-v0.edn`, `benchmarks/concepts/protocol-robustness-v0.edn`, `benchmarks/scoring/robustness-dimensions-v0.edn`)

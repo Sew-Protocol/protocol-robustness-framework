@@ -82,8 +82,15 @@ OPTIONAL_FILES = [
     "run-output.log",
     "run-output.json",
     "results-summary.json",
+    "evidence-dag-inventory.json",
     "deps.edn",
     "clojure-bundle-root.json",
+]
+
+MECHANISM_DERIVED_FILES = [
+    "mechanism-persistence-index.json",
+    "mechanism-persistence-summary.json",
+    "mechanism-scenario-matrix.json",
 ]
 
 OPTIONAL_DIRS = [
@@ -129,6 +136,136 @@ def _load_json(path: Path) -> dict | None:
         return json.loads(path.read_text())
     except Exception:
         return None
+
+
+def _bundle_root_reference(bundle_root: dict) -> str | None:
+    return (bundle_root.get("dag/root-node-hash")
+            or bundle_root.get("execution/node-hash")
+            or bundle_root.get("execution/content-hash"))
+
+
+def _detect_dag_cycles(edges: list[dict],
+                       node_hashes: set[str]) -> list[list[str]]:
+    """Detect cycles in a DAG using DFS.
+    Returns a list of cycles, each as a list of hashes forming the cycle."""
+    adj: dict[str, list[str]] = {h: [] for h in node_hashes}
+    for e in edges:
+        p, c = e.get("parent"), e.get("child")
+        if p in adj and c in adj:
+            adj[p].append(c)
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {h: WHITE for h in node_hashes}
+    cycles: list[list[str]] = []
+    parent: dict[str, str | None] = {h: None for h in node_hashes}
+
+    def dfs(u: str) -> None:
+        color[u] = GRAY
+        for v in adj.get(u, []):
+            if v not in color:
+                continue
+            if color[v] == GRAY:
+                # Found a cycle, reconstruct it
+                cycle = [v, u]
+                cur = u
+                while cur != v and parent.get(cur) is not None:
+                    cur = parent[cur]  # type: ignore
+                    if cur is not None:
+                        cycle.append(cur)
+                if cycle and cycle[0] == cycle[-1]:
+                    cycles.append(list(reversed(cycle[:-1])))
+                else:
+                    cycles.append(list(reversed(cycle)))
+            elif color[v] == WHITE:
+                parent[v] = u
+                dfs(v)
+        color[u] = BLACK
+
+    for h in node_hashes:
+        if color.get(h, WHITE) == WHITE:
+            dfs(h)
+
+    return cycles
+
+
+def _validate_evidence_dag_inventory(inventory: dict,
+                                     bundle_roots: list[dict],
+                                     dag_file_count: int) -> tuple[bool, list[str]]:
+    errors: list[str] = []
+    nodes = inventory.get("dag/nodes", [])
+    edges = inventory.get("dag/edges", [])
+    file_hashes = inventory.get("dag/file-hashes", [])
+    dag_index = inventory.get("dag/index")
+    parseable_nodes = [n for n in nodes if not n.get("parse-error")]
+    node_hashes = {n.get("node-hash") for n in parseable_nodes if n.get("node-hash")}
+
+    if inventory.get("dag/semantic-status") == "inventory-only" and dag_file_count > 0:
+        errors.append("evidence-dag inventory did not semantically parse any EDN nodes")
+
+    if len(file_hashes) != dag_file_count:
+        errors.append(f"inventory file count mismatch: inventory={len(file_hashes)} disk={dag_file_count}")
+
+    duplicate_hashes = sorted({h for h in node_hashes if list(map(lambda n: n.get("node-hash"), parseable_nodes)).count(h) > 1})
+    if duplicate_hashes:
+        errors.append(f"duplicate node hashes found: {duplicate_hashes}")
+
+    parsed_names = {n.get("file") for n in nodes if n.get("file")}
+    if len(parsed_names) != len(nodes):
+        errors.append("one or more evidence-dag nodes are missing file names")
+
+    parse_errors = [n for n in nodes if n.get("parse-error")]
+    if parse_errors:
+        errors.append(f"{len(parse_errors)} evidence-dag file(s) failed to parse")
+
+    # Cycle detection via DFS
+    if node_hashes:
+        cycles = _detect_dag_cycles(edges, node_hashes)
+        if cycles:
+            cycle_descs = [" -> ".join(c[:5]) + ("..." if len(c) > 5 else "")
+                           for c in cycles[:5]]
+            errors.append(f"evidence DAG contains {len(cycles)} cycle(s): {cycle_descs}")
+
+    unresolved_parents: set[str] = set()
+    edge_pairs = {(e.get("parent"), e.get("child")) for e in edges if e.get("parent") and e.get("child")}
+    edge_count = 0
+    for node in parseable_nodes:
+        child = node.get("node-hash")
+        parents = [p for p in node.get("parent-hashes", []) if p]
+        edge_count += len(parents)
+        for parent in parents:
+            if parent not in node_hashes:
+                unresolved_parents.add(parent)
+            if (parent, child) not in edge_pairs:
+                errors.append(f"missing DAG edge {parent} -> {child}")
+
+    if unresolved_parents:
+        errors.append(f"unresolved parent hashes: {sorted(unresolved_parents)}")
+
+    if len(edge_pairs) != edge_count:
+        errors.append(f"edge count mismatch: inventory={len(edge_pairs)} expected={edge_count}")
+
+    root_refs = [ref for ref in (_bundle_root_reference(root) for root in bundle_roots) if ref]
+    if root_refs:
+        if not any(ref in node_hashes for ref in root_refs):
+            errors.append("bundle root references do not resolve to an evidence-dag node: "
+                          + ", ".join(root_refs))
+    elif parseable_nodes:
+            errors.append("bundle root does not include a DAG root reference")
+
+    # Validate dag/index if present
+    if dag_index is not None:
+        idx_summary = dag_index.get("dag-index/summary", {})
+        idx_node_count = idx_summary.get("node-count", 0)
+        if idx_node_count != len(parseable_nodes):
+            errors.append(f"dag/index node count mismatch: index={idx_node_count} parsed={len(parseable_nodes)}")
+        idx_roots = dag_index.get("dag-index/roots", [])
+        if parseable_nodes and not idx_roots:
+            errors.append("dag/index reports no roots but parsed nodes exist")
+        idx_orphans = idx_summary.get("orphan-count", 0)
+        if idx_orphans > 0:
+            errors.append(f"dag/index reports {idx_orphans} orphan node(s) with unresolved parents")
+
+    return (not errors, errors)
 
 
 def _canonical_json_bytes(data: dict, exclude_keys: list[str]) -> bytes:
@@ -232,6 +369,31 @@ def check_results_summary(run_dir: Path) -> VerifyCheck:
     return VerifyCheck(key="results-summary", status="pass",
                        message=f"Status: {status}, suite: {suite_key}",
                        severity="info")
+
+
+def check_mechanism_persistence_artifacts(run_dir: Path) -> VerifyCheck:
+    """Report presence and schema versions for derived mechanism artifacts."""
+    present = []
+    for fname in MECHANISM_DERIVED_FILES:
+        path = run_dir / fname
+        if not path.exists():
+            continue
+        data = _load_json(path)
+        sv = data.get("schema-version") if isinstance(data, dict) else None
+        present.append(f"{fname} ({sv or 'unparseable'})")
+    if not present:
+        return VerifyCheck(
+            key="mechanism-persistence-artifacts",
+            status="info",
+            message="No mechanism persistence artifacts present (optional derived output)",
+            severity="info",
+        )
+    return VerifyCheck(
+        key="mechanism-persistence-artifacts",
+        status="info",
+        message="Mechanism persistence artifacts present: " + ", ".join(present),
+        severity="info",
+    )
 
 
 def check_overview_hash(run_dir: Path) -> VerifyCheck:
@@ -480,8 +642,44 @@ def check_evidence_dag(run_dir: Path) -> VerifyCheck:
         return VerifyCheck(key="evidence-dag-present", status="fail",
                            message="evidence-dag/ directory not found",
                            severity="required")
-    files = list(dag_dir.iterdir())
-    # Evidence DAG may be empty for minimal runs — that's informational
+    files = [f for f in dag_dir.iterdir() if f.is_file()]
+    edn_files = [f for f in files if f.suffix == ".edn"]
+    inventory_path = run_dir / "evidence-dag-inventory.json"
+    inventory = _load_json(inventory_path) if inventory_path.exists() else None
+    bundle_root = _load_json(run_dir / "run-bundle-root.json")
+    clojure_bundle_root = _load_json(run_dir / "clojure-bundle-root.json")
+    bundle_root_ref = _bundle_root_reference(clojure_bundle_root or bundle_root or {})
+    bundle_roots = [root for root in [clojure_bundle_root, bundle_root] if root]
+
+    if inventory:
+        ok, errors = _validate_evidence_dag_inventory(inventory,
+                                                      bundle_roots,
+                                                      len(edn_files))
+        if ok:
+            ref_msg = f", root={bundle_root_ref[:16]}..." if bundle_root_ref else ""
+            return VerifyCheck(
+                key="evidence-dag-present",
+                status="pass",
+                message=(f"evidence-dag/ contains {len(files)} file(s); "
+                         f"parsed {len(inventory.get('dag/nodes', []))} node(s){ref_msg}"),
+                severity="required")
+        return VerifyCheck(
+            key="evidence-dag-present",
+            status="fail",
+            message="; ".join(errors),
+            severity="required")
+
+    # Older runs may not have the inventory file yet; keep this as an
+    # informational structural check, but require some node content.
+    if not edn_files:
+        return VerifyCheck(key="evidence-dag-present", status="info",
+                           message=f"evidence-dag/ contains {len(files)} file(s)",
+                           severity="info")
+    if bundle_root_ref:
+        return VerifyCheck(key="evidence-dag-present", status="pass",
+                           message=(f"evidence-dag/ contains {len(files)} file(s); "
+                                    f"bundle root references {bundle_root_ref[:16]}..."),
+                           severity="required")
     return VerifyCheck(key="evidence-dag-present", status="info",
                        message=f"evidence-dag/ contains {len(files)} file(s)",
                        severity="info")
@@ -536,7 +734,7 @@ def check_anchor_content(run_dir: Path) -> VerifyCheck:
 
 def check_no_extra_dirs(run_dir: Path) -> VerifyCheck:
     """Warn about unexpected top-level entries in the run directory."""
-    known = set(REQUIRED_FILES + OPTIONAL_FILES
+    known = set(REQUIRED_FILES + OPTIONAL_FILES + MECHANISM_DERIVED_FILES
                 + [d + "/" for d in REQUIRED_DIRS]
                 + [d + "/" for d in OPTIONAL_DIRS])
     extra = []
@@ -599,6 +797,7 @@ def verify_run(run_dir: str | Path,
     results.append(check_overview_hash(run_dir))
     results.append(check_bundle_signature(run_dir, public_key_path))
     results.append(check_results_summary(run_dir))
+    results.append(check_mechanism_persistence_artifacts(run_dir))
 
     # Phase C: claims and attestations content validation
     results.extend(check_claims_content(run_dir))

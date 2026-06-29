@@ -7,13 +7,24 @@
    as a placeholder). Verifies deterministic replay and hash consistency."
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/binary-claims-v1
-  :benchmark/purpose
+   :benchmark/scoring-rule    :scoring/binary-claims-v1
+  :benchmark/property-types  #{:integrity}
+   :benchmark/purpose
   "Verify that protocol replay is deterministic: the same scenario
    input produces identical results, hashes, and evidence across
    independent runs."
-  :benchmark/concepts        [:verifiable-assurance/forensic-confidence]
- :benchmark/claims          [:claim/replay-identical-results
-                            :claim/hash-consistency-across-runs
-                            :claim/no-nondeterminism]}
+  :benchmark/concepts        [:verifiable-assurance/forensic-confidence
+                              :attestation/verification]
+  :benchmark/claims          [{:claim/id :claim/replay-identical-results
+                              :claim/role :primary
+                              :claim/rationale "Replaying the same scenario must produce identical outcomes."
+                              :claim/failure-meaning "A scenario produced different outcomes across replay runs."}
+                             {:claim/id :claim/hash-consistency-across-runs
+                              :claim/role :primary
+                              :claim/rationale "Evidence hashes must be consistent across independent runs."
+                              :claim/failure-meaning "Evidence hash changed between runs."}
+                             {:claim/id :claim/no-nondeterminism
+                              :claim/role :supporting
+                              :claim/rationale "Protocol execution must be fully deterministic with no hidden RNG."
+                              :claim/failure-meaning "Nondeterminism detected in protocol execution."}]}
 

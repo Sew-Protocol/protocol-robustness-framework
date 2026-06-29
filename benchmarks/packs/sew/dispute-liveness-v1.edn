@@ -8,8 +8,9 @@
    bounded resolution time, and slashing conservation."
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
-  :benchmark/scoring-rule    :scoring/binary-claims-v1
-  :benchmark/purpose
+   :benchmark/scoring-rule    :scoring/binary-claims-v1
+  :benchmark/property-types  #{:liveness :safety}
+   :benchmark/purpose
   "Evaluate Sew dispute liveness: timely resolution under adversarial
    load, bounded resolution time, and slashing conservation across
    concurrent disputes."
@@ -21,7 +22,16 @@
                              :consensus/escalation
                              :consensus/liveness
                              :consensus/legitimacy]
- :benchmark/claims          [:claim/dispute-liveness
-                            :claim/bounded-resolution-time
-                            :claim/slashing-conservation]}
+  :benchmark/claims          [{:claim/id :claim/dispute-liveness
+                              :claim/role :primary
+                              :claim/rationale "Dispute resolution must make progress under adversarial load."
+                              :claim/failure-meaning "Dispute resolution stalled."}
+                             {:claim/id :claim/bounded-resolution-time
+                              :claim/role :primary
+                              :claim/rationale "Disputes must complete within bounded temporal limits."
+                              :claim/failure-meaning "Resolution exceeded time bounds."}
+                             {:claim/id :claim/slashing-conservation
+                              :claim/role :supporting
+                              :claim/rationale "Slashing during dispute resolution must conserve value."
+                              :claim/failure-meaning "Slashing violated conservation rules."}]}
 

@@ -159,11 +159,22 @@
    "Verifier cannot confirm that the bundle is self-contained and
     complete."}]
 
+:concept/metrics
+  {:evidence-node-count
+   {:description "Number of evidence nodes collected during a run."
+    :source :derived-from-trace}
+   :hash-chain-depth
+   {:description "Depth of the evidence hash chain."
+    :source :derived-from-trace}
+   :invariant-pass-rate
+   {:description "Fraction of invariants that passed post-hoc."
+    :source :derived-from-invariant-results}}
+
  :concept/assumptions
- ["Evidence is collected and hashed using canonical EDN serialization (deterministic ordering)."
-  "Attestations use Ed25519 or similar public-key signatures."
-  "The verifier has access to the same scenario definitions and protocol adapter as the original run."
-  "Concept labels do not change protocol validity."]
+  ["Evidence is collected and hashed using canonical EDN serialization (deterministic ordering)."
+   "Attestations use Ed25519 or similar public-key signatures."
+   "The verifier has access to the same scenario definitions and protocol adapter as the original run."
+   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
  ["Real-world identity verification or KYC."

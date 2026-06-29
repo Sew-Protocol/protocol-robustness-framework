@@ -79,7 +79,8 @@
 
 (declare canonical-hashable-value
          validate-node
-         validate-node-dag)
+         validate-node-dag
+         validate-dag-detailed)
 
 (def ^:dynamic *node-registry*
   "In-memory registry of execution evidence nodes keyed by :node-hash."
@@ -452,7 +453,18 @@
   ([dir]
    (verify-persisted-node-artifacts! dir nil))
   ([dir artifact-entries]
-   (let [paths (persisted-node-artifact-paths dir)
+   (verify-persisted-node-artifacts! dir artifact-entries {}))
+  ([dir artifact-entries {:keys [allow-empty? detailed?]
+                          :or {allow-empty? false detailed? true}}]
+   (let [root (io/file dir)
+         node-dir (if (= "evidence-nodes" (.getName root))
+                    root
+                    (io/file root "evidence-nodes"))
+         node-dir-exists? (.exists node-dir)
+         paths (when node-dir-exists?
+                 (persisted-node-artifact-paths dir))
+         missing-directory? (not node-dir-exists?)
+         empty-directory? (and node-dir-exists? (empty? paths))
          node-results (mapv (fn [path]
                               (let [artifact-entry (some #(when (= (:artifact/path %) path) %) artifact-entries)
                                     known-parent-hashes (->> paths
@@ -463,9 +475,11 @@
                                 (verify-persisted-node-artifact! path
                                                                  artifact-entry
                                                                  {:known-parent-hashes known-parent-hashes})))
-                            paths)
+                            (or paths []))
          nodes (mapv :node node-results)
-         dag (validate-node-dag nodes)
+         dag (if detailed?
+               (validate-dag-detailed nodes)
+               (validate-node-dag nodes))
          artifact-matches? (if (seq artifact-entries)
                              (every? (fn [{:keys [path node artifact-entry]}]
                                        (and artifact-entry
@@ -476,16 +490,30 @@
                                                (chain/compute-file-sha256 path))))
                                      node-results)
                              true)
-         errors (vec (concat (mapcat :errors node-results)
-                             (:errors dag)))]
-     {:valid? (and (empty? errors) (:valid? dag) artifact-matches?)
-      :paths paths
+         boundary-errors (cond-> []
+                           (and missing-directory? (not allow-empty?))
+                           (conj {:error :node-directory-missing
+                                  :path (.getPath node-dir)})
+
+                           (and empty-directory? (not allow-empty?))
+                           (conj {:error :node-directory-empty
+                                  :path (.getPath node-dir)}))
+         errors (vec (concat boundary-errors
+                             (mapcat :errors node-results)
+                             (:errors dag)))
+         valid? (and (empty? errors) (:valid? dag) artifact-matches?)]
+     {:valid? valid?
+      :paths (or paths [])
       :node-results node-results
       :dag dag
       :errors errors
       :checks {:dag-valid? (:valid? dag)
-               :paths-found (count paths)
-               :artifacts-matched? artifact-matches?}})))
+               :paths-found (count (or paths []))
+               :artifacts-matched? artifact-matches?
+               :allow-empty? allow-empty?
+               :detailed? detailed?
+               :node-directory-exists? node-dir-exists?
+               :node-directory-empty? empty-directory?}})))
 
 (defn emit-execution-node!
   "Build, persist, and register an execution node.
@@ -558,10 +586,13 @@
    Checks:
    - every node hash matches its canonical projection
    - every parent hash exists in the collection or in explicit bootstrap roots
-   - cycles are rejected when :strict-dag? is true"
+   - cycles are rejected when :strict-dag? is true
+   - duplicate node hashes are rejected"
   [nodes & {:keys [strict-dag?]
             :or {strict-dag? true}}]
-  (let [node-map (into {} (map (juxt :node-hash identity) nodes))
+  (let [hashes (map :node-hash nodes)
+        duplicates (vec (keys (filter (fn [[_ v]] (> v 1)) (frequencies hashes))))
+        node-map (into {} (map (juxt :node-hash identity) nodes))
         known-hashes (set (keys node-map))
         per-node (mapv #(validate-node % :known-parent-hashes known-hashes) nodes)
         graph (into {}
@@ -570,7 +601,10 @@
                          nodes))
         cycle (when strict-dag?
                 (some #(cycle-path graph %) (keys graph)))
-        errors (vec (concat (mapcat :errors per-node)
+        errors (vec (concat (when (seq duplicates)
+                              [{:error :node/duplicate-hashes
+                                :duplicates duplicates}])
+                            (mapcat :errors per-node)
                             (when cycle
                               [{:error :node/cycle
                                 :cycle cycle}])))]
@@ -579,7 +613,8 @@
      :node-count (count nodes)
      :checks {:hashes-valid? (every? #(get-in % [:checks :hash-valid?]) per-node)
               :parents-valid? (every? empty? (map #(get-in % [:checks :missing-parents]) per-node))
-              :cycle-free? (nil? cycle)}}))
+              :cycle-free? (nil? cycle)
+              :duplicate-hashes (seq duplicates)}}))
 
 ;; ── Detailed validation ──────────────────────────────────────────────────────
 
@@ -676,18 +711,21 @@
 
 (defn- check-dag-single-root
   "Acyclicity check: the DAG must have exactly one root node
-   (a node with no :parent-hashes that are not bootstrap-roots)."
+   (a node with no :parent-hashes that are not bootstrap-roots).
+   An empty node collection is trivially valid (no roots needed)."
   [nodes]
-  (let [all-parents (set (mapcat :parent-hashes nodes))
-        all-bootstrap (set (mapcat :bootstrap-roots nodes))
-        effective-parents (apply disj all-parents all-bootstrap)
-        roots (remove #(contains? effective-parents (:node-hash %)) nodes)
-        root-count (count roots)]
-    (if (= 1 root-count)
-      {:check/id :dag-single-root :check/status :pass}
-      {:check/id :dag-single-root :check/status :fail
-       :reason (str "Expected 1 root node, found " root-count)
-       :root-count root-count})))
+  (if (empty? nodes)
+    {:check/id :dag-single-root :check/status :pass :node-count 0}
+    (let [all-parents (set (mapcat :parent-hashes nodes))
+          all-bootstrap (set (mapcat :bootstrap-roots nodes))
+          effective-parents (apply disj all-parents all-bootstrap)
+          roots (remove #(contains? effective-parents (:node-hash %)) nodes)
+          root-count (count roots)]
+      (if (= 1 root-count)
+        {:check/id :dag-single-root :check/status :pass}
+        {:check/id :dag-single-root :check/status :fail
+         :reason (str "Expected 1 root node, found " root-count)
+         :root-count root-count}))))
 
 (defn- check-dag-no-duplicate-hashes
   "Completeness check: no two nodes may share the same :node-hash."
@@ -739,6 +777,259 @@
                :detailed-checks-total (count detailed-checks)
                :detailed-checks-passed (- (count detailed-checks) (count failures))
                :detailed-checks-failed (count failures)}}))
+
+;; ── DAG Navigation / Index ────────────────────────────────────────────────────
+
+(defn- node->short-hash
+  [node-hash]
+  (subs node-hash 0 (min 12 (count node-hash))))
+
+(defn- node-summary-entry
+  "Build a compact summary for a single node, suitable for an index or display."
+  [node]
+  (let [node-hash (:node-hash node)]
+    {:node-hash node-hash
+     :short-hash (node->short-hash node-hash)
+     :execution-id (get-in node [:execution :execution-id])
+     :execution-kind (get-in node [:execution :execution-kind])
+     :runner (get-in node [:execution :runner])
+     :status (get-in node [:result :status])
+     :parent-hashes (vec (:parent-hashes node))
+     :bootstrap-roots (vec (:bootstrap-roots node))
+     :record-hash (:record-hash node)
+     :schema-version (:schema-version node)}))
+
+(defn build-dag-index
+  "Build a navigation index from a collection of evidence DAG nodes.
+
+   Returns a map with:
+   - :dag-index/schema-version \"evidence-dag-index.v0\"
+   - :dag-index/nodes-by-hash     — full hash -> summary entry
+   - :dag-index/children-by-parent — parent hash -> [child hash ...]
+   - :dag-index/parents-by-child   — child hash -> [parent hash ...]
+   - :dag-index/roots              — [root hash ...]  (no un-bootstrapped parents)
+   - :dag-index/leaves             — [leaf hash ...]  (no children)
+   - :dag-index/by-execution-id    — execution-id -> [hash ...]
+   - :dag-index/by-status          — status -> [hash ...]
+   - :dag-index/short-hashes       — 12-char prefix -> full hash
+   - :dag-index/summary            — aggregate counts"
+  [nodes]
+  (let [entries (mapv node-summary-entry nodes)
+        node-hashes (set (map :node-hash nodes))
+        bootstrap-set (set (mapcat :bootstrap-roots nodes))
+        by-hash (into {} (map (juxt :node-hash identity) entries))
+        children (fn [parent-hash]
+                   (vec (keep (fn [e]
+                                (when (some #(= % parent-hash) (:parent-hashes e))
+                                  (:node-hash e)))
+                              entries)))
+        children-by-parent (into {} (map (fn [h] [h (children h)]) node-hashes))
+        parents-by-child (into {}
+                               (map (fn [e]
+                                      [(:node-hash e)
+                                       (vec (remove (fn [p] (contains? bootstrap-set p))
+                                                    (:parent-hashes e)))]))
+                               entries)
+        roots (vec (sort (map :node-hash
+                              (filter (fn [e]
+                                        (every? (fn [p] (or (contains? bootstrap-set p)
+                                                            (not (contains? node-hashes p))))
+                                                (:parent-hashes e)))
+                                      entries))))
+        leaves (vec (sort (filter (fn [h] (empty? (children h))) node-hashes)))
+        by-execution-id (reduce (fn [m e]
+                                  (let [eid (get e :execution-id)]
+                                    (if eid
+                                      (update m eid (fnil conj []) (:node-hash e))
+                                      m)))
+                                {} entries)
+        by-status (reduce (fn [m e]
+                            (let [s (get e :status)]
+                              (if s
+                                (update m s (fnil conj []) (:node-hash e))
+                                m)))
+                          {} entries)
+        short-hashes (into {} (map (fn [h] [(node->short-hash h) h]) node-hashes))
+        failure-count (count (get by-status :fail []))
+        error-count (count (get by-status :error []))
+        orphan-count (count (filter (fn [e]
+                                      (some (fn [p]
+                                              (and (not (contains? bootstrap-set p))
+                                                   (not (contains? node-hashes p))))
+                                            (:parent-hashes e)))
+                                    entries))]
+    {:dag-index/schema-version "evidence-dag-index.v0"
+     :dag-index/nodes-by-hash by-hash
+     :dag-index/children-by-parent children-by-parent
+     :dag-index/parents-by-child parents-by-child
+     :dag-index/roots roots
+     :dag-index/leaves leaves
+     :dag-index/by-execution-id by-execution-id
+     :dag-index/by-status by-status
+     :dag-index/short-hashes short-hashes
+     :dag-index/summary {:node-count (count nodes)
+                         :root-count (count roots)
+                         :leaf-count (count leaves)
+                         :failure-count failure-count
+                         :error-count error-count
+                         :orphan-count orphan-count
+                         :execution-id-counts (into {} (map (fn [[k v]] [k (count v)]) by-execution-id))
+                         :status-counts (into {} (map (fn [[k v]] [k (count v)]) by-status))}}))
+
+(defn show-node
+  "Print a human-readable summary of a node by :node-hash or short hash prefix.
+   If multiple nodes match a short prefix, all are printed.
+   Returns the matched node entry or nil."
+  [node-hash-or-prefix nodes]
+  (let [index (build-dag-index nodes)
+        by-hash (:dag-index/nodes-by-hash index)
+        short (:dag-index/short-hashes index)
+        matches (cond
+                  (contains? by-hash node-hash-or-prefix)
+                  [(get by-hash node-hash-or-prefix)]
+
+                  (contains? short node-hash-or-prefix)
+                  (let [full (get short node-hash-or-prefix)]
+                    (when full
+                      [(get by-hash full)]))
+
+                  :else
+                  (let [prefix (str node-hash-or-prefix)]
+                    (->> (keys by-hash)
+                         (filter #(.startsWith ^String % prefix))
+                         (mapv by-hash))))]
+    (doseq [entry matches]
+      (println "── Node ─────────────────────────────────────")
+      (println (str "  hash:        " (:node-hash entry)))
+      (println (str "  short:       " (:short-hash entry)))
+      (println (str "  execution:   " (:execution-id entry)))
+      (println (str "  kind:        " (:execution-kind entry)))
+      (println (str "  runner:      " (:runner entry)))
+      (println (str "  status:      " (:status entry)))
+      (println (str "  parents:     " (pr-str (:parent-hashes entry))))
+      (println (str "  bootstrap:   " (pr-str (:bootstrap-roots entry))))
+      (println (str "  record-hash: " (:record-hash entry)))
+      (println))
+    (when (and (empty? matches) (seq nodes))
+      (println (str "No node found matching: " node-hash-or-prefix)))
+    (first matches)))
+
+(defn trace-node
+  "Trace from a node up to its root(s), printing each ancestor.
+   Returns the path from node to root as a vector of entries.
+   Accepts a node hash (full or short prefix) or a node entry map."
+  [node-identifier nodes]
+  (let [index (build-dag-index nodes)
+        by-hash (:dag-index/nodes-by-hash index)
+        parents-by-child (:dag-index/parents-by-child index)
+        start (cond
+                (map? node-identifier) node-identifier
+                (contains? by-hash node-identifier) (get by-hash node-identifier)
+                :else (some (fn [e] (when (.startsWith (:node-hash e) (str node-identifier)) e))
+                            (vals by-hash)))]
+    (if-not start
+      (do (println (str "Node not found: " node-identifier))
+          [])
+      (let [path (loop [current start
+                        seen #{}
+                        acc []]
+                   (if (or (nil? current) (contains? seen (:node-hash current)))
+                     acc
+                     (let [parents (get parents-by-child (:node-hash current) [])]
+                       (if (empty? parents)
+                         (conj acc current)
+                         (let [parent (some (fn [p] (get by-hash p)) parents)]
+                           (recur parent
+                                  (conj seen (:node-hash current))
+                                  (conj acc current)))))))]
+        (doseq [entry path]
+          (println (str (:short-hash entry) "  " (:execution-id entry) "  " (:status entry))))
+        path))))
+
+(defn list-roots
+  "Print all root nodes (nodes with no unresolved parents)."
+  [nodes]
+  (let [index (build-dag-index nodes)]
+    (doseq [root (:dag-index/roots index)]
+      (let [entry (get-in index [:dag-index/nodes-by-hash root])]
+        (println (str (:short-hash entry) "  " (:execution-id entry) "  " (:status entry)))))
+    (:dag-index/roots index)))
+
+(defn list-failures
+  "Print all failing (:fail) and error (:error) nodes.
+   Returns the list of matching entries."
+  [nodes]
+  (let [index (build-dag-index nodes)
+        by-status (:dag-index/by-status index)
+        failures (concat (get by-status :fail []) (get by-status :error []))
+        entries (keep (fn [h] (get-in index [:dag-index/nodes-by-hash h])) failures)]
+    (doseq [entry entries]
+      (println (str (:short-hash entry) "  " (:execution-id entry) "  " (:status entry)
+                    "  parents: " (count (:parent-hashes entry)))))
+    entries))
+
+(defn dag-summary
+  "Return a researcher-facing summary of a node collection as a map.
+   Includes root node, failing nodes, count by execution ID and status,
+   orphan/missing-parent count, and the shortest path from root to each failure.
+
+   Accepts optional opts:
+   - :max-failure-paths  — max failure path descriptions to include (default 10)"
+  [nodes & {:keys [max-failure-paths]
+            :or {max-failure-paths 10}}]
+  (let [index (build-dag-index nodes)
+        smry (:dag-index/summary index)
+        by-hash (:dag-index/nodes-by-hash index)
+        children-by-parent (:dag-index/children-by-parent index)
+        failure-hashes (concat (get (:dag-index/by-status index) :fail [])
+                               (get (:dag-index/by-status index) :error []))
+        roots (:dag-index/roots index)
+        root-entries (keep by-hash roots)
+        failure-entries (keep by-hash failure-hashes)
+
+        bfs-paths (fn [root-hash target-hashes]
+                    (loop [queue (mapv vector (repeat root-hash))
+                           visited #{root-hash}
+                           found {}]
+                      (if (or (empty? queue) (>= (count found) max-failure-paths))
+                        found
+                        (let [path (first queue)
+                              current (last path)
+                              children (get children-by-parent current [])
+                              new-paths (for [c children
+                                              :when (not (contains? visited c))]
+                                          (conj path c))]
+                          (recur (vec (concat (rest queue) new-paths))
+                                 (into visited children)
+                                 (into found
+                                       (for [c children
+                                             :when (contains? (set target-hashes) c)
+                                             :when (not (contains? found c))]
+                                         [c (conj path c)])))))))
+
+        path-descs (if (< 1 (count roots))
+                     {}
+                     (let [root-hash (first roots)]
+                       (when root-hash
+                         (bfs-paths root-hash (set failure-hashes)))))
+
+        failure-paths (into {}
+                            (comp (take max-failure-paths)
+                                  (map (fn [[h path]]
+                                         [h (mapv (fn [n] (select-keys (get by-hash n)
+                                                                       [:node-hash :short-hash
+                                                                        :execution-id :status]))
+                                                  path)])))
+                            path-descs)]
+    {:dag-index/summary smry
+     :dag-index/root-nodes (vec (map (fn [e] (select-keys e [:node-hash :short-hash :execution-id :status]))
+                                     root-entries))
+     :dag-index/failure-nodes (vec (map (fn [e] (select-keys e [:node-hash :short-hash :execution-id :status]))
+                                        failure-entries))
+     :dag-index/failure-paths failure-paths
+     :dag-index/failure-path-count (count path-descs)
+     :dag-index/roots (:dag-index/roots index)
+     :dag-index/leaves (:dag-index/leaves index)}))
 
 (defn with-execution-node
   "Run thunk, emit an execution node for pass/fail/error, return thunk's value.

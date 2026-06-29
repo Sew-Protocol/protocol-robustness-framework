@@ -1,0 +1,35 @@
+{:concepts/version 1
+ :concepts/description
+ "Benchmark concept for the evidence-integrity-v1 pack.
+
+  This concept describes the evidence integrity dimension evaluated by
+  the deterministic-replay benchmark. It is self-contained to avoid
+  a cross-benchmark dependency on protocol-robustness-v0's concept file."
+
+ :concepts
+ [{:concept/id :robustness/evidence-integrity
+   :concept/title "Evidence integrity"
+   :concept/summary
+   "Whether the evidence produced by a benchmark run is
+    cryptographically verifiable, non-repudiable, and
+    reproducible by independent verifiers."
+   :concept/stakeholder-language
+   "After a benchmark run, anyone should be able to inspect the
+    evidence bundle, verify the hash chain, re-run the scenarios,
+    and confirm the results match — without trusting the original
+    runner."
+   :concept/maps-to
+   {:scenarios ["suite/prf-replay-v1 (44 dispute-resolution scenarios)"]
+    :claims    [:claim/replay-identical-results
+                :claim/hash-consistency-across-runs
+                :claim/no-nondeterminism]
+    :evidence  [:evidence/evidence-bundle :evidence/hash-chain
+                :evidence/attestation :evidence/trace]}
+   :concept/why-it-matters
+   "Evidence integrity is what separates a reproducible benchmark
+    from a slide deck. Without it, stakeholders cannot independently
+    verify claims about deterministic replay."
+   :concept/note
+   "The claims listed here are Level 3 semantic claims — no evaluator
+    is registered yet. The benchmark report status will remain
+    :declared-not-verified until evaluators are implemented."}]}

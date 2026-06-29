@@ -33,7 +33,7 @@
 
 (defn list-scenarios
   "List all available scenarios in the registry.
-   Returns a seq of scenario names like [" S01 baseline-happy-path " " S02 dispute-timeout " ...]
+   Returns a seq of scenario names like [S01 baseline-happy-path S02 dispute-timeout ...]
    Optional pattern parameter filters results."
   ([]
    (list-scenarios nil))

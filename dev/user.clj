@@ -69,4 +69,10 @@
                                         :items [{:id :a :weight 1}
                                                 {:id :b :weight 1}]})
   (scenarios/run-scenario "S103 l2-reversal-slash-ids")
-  (tests/run-tests-matching "partial-fill"))
+  (tests/run-tests-matching "partial-fill")
+
+  ;; Monitoring:
+  (require '[resolver-sim.monitoring :as monitoring])
+  (monitoring/init-monitoring!)  ; Start dashboard on http://localhost:8090/monitoring
+  (monitoring/monitoring-enabled?)
+  (monitoring/shutdown-monitoring!))

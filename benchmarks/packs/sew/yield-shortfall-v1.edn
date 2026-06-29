@@ -9,8 +9,10 @@
   :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
   :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+  :benchmark/property-types  #{:safety :fairness}
   :benchmark/concepts        [:ecommerce/purchase
                               :event/deposit
+                              :yield/yield-bearing
                               :consensus/authority
                               :consensus/evidence
                               :consensus/legitimacy]
@@ -18,7 +20,16 @@
   "Evaluate Sew yield shortfall behavior: yield preservation during
    shortfall, partial fill fairness under liquidity constraints, and
    prevention of value leakage beyond declared shortfall bounds."
-  :benchmark/claims          [:claim/yield-preserved-during-shortfall
-                            :claim/partial-fill-fairness
-                            :claim/no-leakage-beyond-shortfall]}
+  :benchmark/claims          [{:claim/id :claim/yield-preserved-during-shortfall
+                              :claim/role :primary
+                              :claim/rationale "Yield position value must not leak during shortfall events."
+                              :claim/failure-meaning "Yield position lost value during shortfall."}
+                             {:claim/id :claim/partial-fill-fairness
+                              :claim/role :primary
+                              :claim/rationale "Shortfall allocation must be fair among claimants."
+                              :claim/failure-meaning "Partial fill was not allocated fairly."}
+                             {:claim/id :claim/no-leakage-beyond-shortfall
+                              :claim/role :supporting
+                              :claim/rationale "No value should leak beyond the declared shortfall bounds."
+                              :claim/failure-meaning "Value leaked beyond the shortfall boundary."}]}
 

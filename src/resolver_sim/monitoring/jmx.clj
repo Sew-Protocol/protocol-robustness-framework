@@ -60,18 +60,18 @@
 
 (defn create-domain-object-name [type & components]
   "Create a standard ObjectName for PRF domains."
-  (str "org.prf.monitoring:type=" type "," (str/join "," components)))
+  (if (seq components)
+    (str "org.prf.monitoring:type=" type "," (str/join "," components))
+    (str "org.prf.monitoring:type=" type)))
 
 (defmacro defmbean [name & body]
   "Define an MBean interface. gen-interface returns the generated class."
   `(def ~name
      (gen-interface
-      :name ~(symbol (str (namespace-munge *ns*) "." name))
+      :name ~(str (namespace-munge *ns*) "." name)
       :methods ~(vec (for [method body]
-                       (if (vector? method)
-                         (let [[name arg-types return-type] method]
-                           [name arg-types return-type])
-                         method))))))
+                       (let [[mname arg-types return-type] method]
+                         [mname arg-types return-type]))))))
 
 (defn startup []
   "Initialize JMX monitoring system."

@@ -693,7 +693,7 @@
 
 (defn- build-execution-node-spec
   "Build the spec map for with-execution-node+ from resolved parameters."
-  [dispatch opts runner-selection canonical? non-canonical-reason protocol-id]
+  [dispatch opts runner-selection canonical? non-canonical-reason protocol-id source-provenance]
   {:execution-id :execution/replay
    :runner :scenario-runner
    :inputs (merge {:dispatch dispatch
@@ -703,7 +703,7 @@
                    :opts {:protocol protocol-id
                           :report-format (:report-format opts)
                           :suite-id (:suite-id opts)}}
-                  (prov/source-provenance))
+                  source-provenance)
    :status-fn (fn [{:keys [exit-code]}]
                 (cond (zero? exit-code) :pass
                       (integer? exit-code) :fail
@@ -743,9 +743,9 @@
 
 (defn- build-enriched-bundle-root
   "Merge source provenance and execution node hashes into the bundle root."
-  [bundle-root execution-node]
+  [bundle-root execution-node source-provenance]
   (merge bundle-root
-         (prov/source-provenance)
+         source-provenance
          (when execution-node
            {:execution/node-hash (:node-hash execution-node)
             :execution/content-hash (:content-hash execution-node)
@@ -770,7 +770,8 @@
         runner-selection (or (:runner-selection dispatch) default-runner-selection)
         {:keys [canonical? non-canonical-reason]}
         (determine-canonicality dispatch runner-selection)
-        tsa-url (System/getenv "PRF_TSA_URL")]
+        tsa-url (System/getenv "PRF_TSA_URL")
+        source-provenance (prov/source-provenance)]
     (when (and (not canonical?) non-canonical-reason)
       (log/warn! :non-canonical-run
                  {:reason non-canonical-reason
@@ -804,7 +805,8 @@
                       evcfg/*artifact-dir* (str "results/runs/" run-id)]
               (let [exec-spec (build-execution-node-spec
                                dispatch opts runner-selection
-                               canonical? non-canonical-reason protocol-id)
+                               canonical? non-canonical-reason protocol-id
+                               source-provenance)
                     result (ev-node/with-execution-node+
                              exec-spec
                              (fn []
@@ -812,12 +814,27 @@
                                                   runner-selection)))
                     thunk-result (:result result)
                     execution-node (:execution-node result)
-                    _ (dispatch-report-exit-code (:dispatch-key thunk-result)
-                                                 (:summary thunk-result)
-                                                 opts
-                                                 protocol-id)
+                    thunk-error (:error result)
+                    _ (if thunk-error
+                        (throw thunk-error)
+                        (let [report-exit-code
+                              (dispatch-report-exit-code (:dispatch-key thunk-result)
+                                                         (:summary thunk-result)
+                                                         opts
+                                                         protocol-id)
+                              dispatch-exit-code (:exit-code thunk-result)]
+                          (when (and report-exit-code dispatch-exit-code
+                                     (not= report-exit-code dispatch-exit-code))
+                            (log/warn! :exit-code-mismatch
+                                       {:report-exit-code report-exit-code
+                                        :dispatch-exit-code dispatch-exit-code
+                                        :dispatch dispatch}))))
+                    bundle-root (:bundle-root thunk-result)
+                    _ (when (nil? bundle-root)
+                        (throw (ex-info "run-and-report: nil bundle-root from execute-dispatch!"
+                                        {:dispatch dispatch})))
                     enriched-root (build-enriched-bundle-root
-                                   (:bundle-root thunk-result) execution-node)]
+                                   bundle-root execution-node source-provenance)]
                 (populate-forensic-claims!)
 
         ;; Execution DAG (best-effort, lazy-loaded)

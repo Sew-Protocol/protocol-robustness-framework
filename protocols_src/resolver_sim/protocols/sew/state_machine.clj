@@ -467,11 +467,13 @@
          (dl/deadline-expired? (time-ctx/block-ts world) (dl/deadline ts max-dur)))))
 
 (defn pending-settlement-executable?
-  "True when pending-settlement exists, state is :disputed, and
-   appeal-deadline has passed."
+  "True when pending-settlement exists (or eligible superseded pending exists),
+   state is :disputed, and appeal-deadline has passed."
   [world workflow-id]
   (let [pending (t/get-pending world workflow-id)
-        state   (t/escrow-state world workflow-id)]
-    (and (:exists pending)
-         (= :disputed state)
-         (dl/deadline-expired? (time-ctx/block-ts world) (:appeal-deadline pending)))))
+        state   (t/escrow-state world workflow-id)
+        now-ts  (time-ctx/block-ts world)]
+    (and (= :disputed state)
+         (or (:exists pending)
+             (some #(dl/deadline-expired? now-ts (:appeal-deadline (:pending %)))
+                   (get-in world [:superseded-pending-settlements workflow-id] []))))))

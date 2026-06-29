@@ -1,10 +1,12 @@
 (ns resolver-sim.minimal-runner
   "Standalone CLI entry point.  Loads the scenario runner lazily so
-   --help and --compute-hash work without triggering Sew protocol or DB init.
+   --help and --self-test work without triggering Sew protocol or DB init.
    Usage:
      java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner --help
      java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner \\
-       --fixtures ./fixtures --scenario scenario.trace.json"
+       --fixtures ./fixtures --scenario scenario.trace.json
+     java -jar prf-runner-sew.jar -m resolver-sim.minimal-runner \\
+       --suite :sew-invariants --self-test"
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :as cli])
@@ -20,6 +22,7 @@
    ["-o" "--output FILE" "Output file for JSON results"]
    ["-p" "--protocol PROTOCOL" "Protocol ID (default sew-v1)"
     :default "sew-v1"]
+   ["-t" "--self-test" "Run scenario/suite twice and compare bundle roots for determinism"]
    ["-h" "--help"]])
 
 (defn- print-help [summary]
@@ -39,6 +42,9 @@
   (println)
   (println "  Suite replay:")
   (println "    --suite :sew-invariants")
+  (println)
+  (println "  Self-test (determinism check):")
+  (println "    --suite :sew-invariants --self-test")
   0)
 
 (defn- resolve-scenario-path
@@ -74,9 +80,77 @@
                          {:report-format :summary})]
       (System/exit (:exit-code result)))))
 
+(defn- runner-opts
+  "Build the runner options map from CLI options."
+  [options]
+  (let [fixtures (:fixtures options)
+        scenario (resolve-scenario-path fixtures (:scenario options))
+        scenario-path (or scenario (:scenario options))]
+    {:protocol (:protocol options)
+     :suite (:suite options)
+     :fixture-suite (:fixture-suite options)
+     :scenario scenario-path
+     :output-file (:output options)}))
+
+(defn- stable-bundle-fields
+  "Extract the deterministic fields from a bundle root for comparison.
+   Excludes volatile fields (node-hash, record-hash) that include
+   wall-clock timestamps and vary between independent runs."
+  [bundle-root]
+  (dissoc bundle-root
+          :execution/node-hash
+          :execution/record-hash))
+
+(defn- self-test!
+  "Run the same scenario/suite twice, compare bundle roots, and report determinism.
+   Exits 0 if deterministic, 1 if non-deterministic."
+  [options]
+  (when (and (:scenario options) (not (.exists (java.io.File. (:scenario options))))
+             (:fixtures options))
+    (let [resolved (resolve-scenario-path (:fixtures options) (:scenario options))]
+      (when (and resolved (not (.exists (java.io.File. resolved))))
+        (.println System/err (str "ERROR: Scenario file not found: " resolved))
+        (System/exit 1))))
+  (let [runner (requiring-resolve 'resolver-sim.io.scenario-runner/run-and-report)
+        opts (runner-opts options)
+        run-fn (fn [] (try
+                        (runner opts {:report-format :summary})
+                        (catch Exception e
+                          (let [msg (.getMessage e)]
+                            (.println System/err (str "ERROR: " msg))
+                            (when (and (= "No matching clause: " msg)
+                                       (not (:scenario options)))
+                              (.println System/err "  This may be caused by an invalid or unregistered suite key.")
+                              (.println System/err "  Use --fixture-suite for fixture-based suites (e.g. :all-invariants).")
+                              (.println System/err "  Use --suite only for registered path-list suites."))
+                            (System/exit 1)))))
+        _ (println "Running pass 1...")
+        result-1 (run-fn)
+        _ (println "Running pass 2...")
+        result-2 (run-fn)
+        bundle-1 (:bundle-root result-1)
+        bundle-2 (:bundle-root result-2)]
+    (if (and bundle-1 bundle-2)
+      (let [stable-1 (stable-bundle-fields bundle-1)
+            stable-2 (stable-bundle-fields bundle-2)
+            eq? (= stable-1 stable-2)]
+        (if eq?
+          (do (println "PASS: Deterministic replay confirmed — stable bundle fields are identical across two runs")
+              (System/exit 0))
+          (do (println "FAIL: Non-deterministic replay detected — stable bundle fields differ")
+              (doseq [k (sort (keys (merge stable-1 stable-2)))]
+                (when (not= (get stable-1 k) (get stable-2 k))
+                  (println (str "  " k " differs:"))
+                  (println (str "    run 1: " (pr-str (get stable-1 k))))
+                  (println (str "    run 2: " (pr-str (get stable-2 k))))))
+              (System/exit 1))))
+      (do (.println System/err "ERROR: run-and-report did not return bundle roots")
+          (System/exit 1)))))
+
 (defn -main [& args]
   (let [{:keys [options errors summary]} (cli/parse-opts args cli-options)]
     (cond
       errors (do (run! println errors) (System/exit 1))
       (:help options) (System/exit (print-help summary))
+      (:self-test options) (self-test! options)
       :else (run-scenario! options))))

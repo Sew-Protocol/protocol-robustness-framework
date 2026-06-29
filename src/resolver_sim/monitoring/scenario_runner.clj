@@ -10,57 +10,80 @@
 (def ^:private scenarios-completed (AtomicLong. 0))
 (def ^:private scenarios-failed (AtomicLong. 0))
 
+(defn- compute-processing-rate
+  "Rate of scenario completions per second over the last N events."
+  []
+  (let [completed (.get scenarios-completed)
+        failed (.get scenarios-failed)
+        total (+ completed failed)]
+    (if (pos? total)
+      (/ total 1.0)  ;; placeholder — integrate with real timing data
+      0.0)))
+
 (defn scenario-started [scenario-id params]
   "Record that a scenario has started execution."
   (when (config/monitoring-enabled?)
     (swap! active-scenarios assoc scenario-id {:start-time (System/currentTimeMillis)
                                                :params params})
     (metrics/increment! [:scenario :active-count])
-    (log/debug! (str "Scenario started:" scenario-id)))
+    (log/debug! (str "Scenario started:" scenario-id))))
 
-  (defn scenario-completed [scenario-id result]
-    "Record that a scenario has completed successfully."
-    (when (config/monitoring-enabled?)
-      (when-let [start-entry (@active-scenarios scenario-id)]
-        (let [duration (- (System/currentTimeMillis) (:start-time start-entry))]
-          (swap! active-scenarios dissoc scenario-id)
-          (.incrementAndGet scenarios-completed)
-          (metrics/decrement! [:scenario :active-count])
-          (metrics/increment! [:scenario :completed-count])
-          (metrics/timing! [:scenario :processing-time] duration)
-          (log/debug! (str "Scenario completed:" scenario-id " in " duration "ms"))))))
+(defn scenario-completed [scenario-id result]
+  "Record that a scenario has completed successfully."
+  (when (config/monitoring-enabled?)
+    (when-let [start-entry (@active-scenarios scenario-id)]
+      (let [duration (- (System/currentTimeMillis) (:start-time start-entry))]
+        (swap! active-scenarios dissoc scenario-id)
+        (.incrementAndGet scenarios-completed)
+        (metrics/decrement! [:scenario :active-count])
+        (metrics/increment! [:scenario :completed-count])
+        (metrics/timing! [:scenario :processing-time] duration)
+        (log/debug! (str "Scenario completed:" scenario-id " in " duration "ms"))))))
 
-  (defn scenario-failed [scenario-id error]
-    "Record that a scenario has failed."
-    (when (config/monitoring-enabled?)
-      (when-let [start-entry (@active-scenarios scenario-id)]
-        (let [duration (- (System/currentTimeMillis) (:start-time start-entry))]
-          (swap! active-scenarios dissoc scenario-id)
-          (.incrementAndGet scenarios-failed)
-          (metrics/decrement! [:scenario :active-count])
-          (metrics/increment! [:scenario :failed-count])
-          (metrics/timing! [:scenario :processing-time] duration)
-          (log/warn! (str "Scenario failed:" scenario-id " in " duration "ms:" (.getMessage error)))))))
+(defn scenario-failed [scenario-id error]
+  "Record that a scenario has failed."
+  (when (config/monitoring-enabled?)
+    (when-let [start-entry (@active-scenarios scenario-id)]
+      (let [duration (- (System/currentTimeMillis) (:start-time start-entry))]
+        (swap! active-scenarios dissoc scenario-id)
+        (.incrementAndGet scenarios-failed)
+        (metrics/decrement! [:scenario :active-count])
+        (metrics/increment! [:scenario :failed-count])
+        (metrics/timing! [:scenario :processing-time] duration)
+        (log/warn! (str "Scenario failed:" scenario-id " in " duration "ms:" (.getMessage error)))))))
 
-  (defn get-active-scenarios []
-    "Get currently active scenarios."
-    @active-scenarios)
+(defn get-active-scenarios []
+  "Get currently active scenarios."
+  @active-scenarios)
 
-  (defn get-scenarios-completed []
-    "Get total scenarios completed."
-    (.get scenarios-completed))
+(defn get-scenarios-completed []
+  "Get total scenarios completed."
+  (.get scenarios-completed))
 
-  (defn get-scenarios-failed []
-    "Get total scenarios failed."
-    (.get scenarios-failed))
+(defn get-scenarios-failed []
+  "Get total scenarios failed."
+  (.get scenarios-failed))
 
-  (defn reset-statistics! []
-    "Reset all scenario statistics."
-    (reset! active-scenarios {})
-    (.set scenarios-completed 0)
-    (.set scenarios-failed 0)
-    (metrics/reset-metrics!)
-    (log/info! "Scenario statistics reset")))
+(defn get-processing-rate []
+  "Get the scenario processing rate (completions + failures per second)."
+  (compute-processing-rate))
+
+(defn get-error-rate []
+  "Get the scenario error rate (failed / total)."
+  (let [completed (.get scenarios-completed)
+        failed (.get scenarios-failed)
+        total (+ completed failed)]
+    (if (pos? total)
+      (/ (double failed) (double total))
+      0.0)))
+
+(defn reset-statistics! []
+  "Reset all scenario statistics."
+  (reset! active-scenarios {})
+  (.set scenarios-completed 0)
+  (.set scenarios-failed 0)
+  (metrics/reset-metrics!)
+  (log/info! "Scenario statistics reset"))
 
 (defn startup []
   "Start scenario runner monitoring."

@@ -1,0 +1,50 @@
+{:scenario-id "dr-l-002-track2-pending-slash-wrong-id"
+ :schema-version "1.0"
+ :allow-open-disputes? true
+ :purpose "adversarial-robustness"
+ :title "Track 2 reversal slash: execute-fraud-slash without explicit slash-id fails (defaults to workflow-id integer)"
+ :description "Same setup as DR-L-001 but execute-fraud-slash is called WITHOUT the explicit slash-id param. The dispatch defaults to workflow-id (integer 0), which does not match the reversal slash entry key (string '0-reversal-0'). The call fails with :no-pending-slash. Demonstrates the caller-responsibility bug: reversal slash IDs use level-scoped string format but the default behavior uses integer workflow-ids."
+ :provenance {:author "@dispute-researcher" :created-at "2026-06-30" :license "CC-BY-4.0"}
+ :claim {:id "track2-pending-slash-wrong-id-fails"
+         :statement "Calling execute-fraud-slash on a Track 2 reversal slash without passing the explicit level-scoped slash-id fails with :no-pending-slash, because the slash-id defaults to the integer workflow-id rather than the string '0-reversal-0' format used by reversal slashes."
+         :falsifies-if ["execute-fraud-slash WITHOUT slash-id succeeds on a reversal slash"
+                        "The slash executes despite slash-id mismatch"
+                        "The scenario passes without the expected failure"]}
+ :expectations {:terminal-state "refunded"
+                :must-hold ["slashable_liability_preserved" "resolver_decision_attributable"]
+                :metrics {:slash_count {:eq 0}  ;; slash should NOT execute
+                          :execute_fraud_slash_failed? {:eq true}}}
+ :threat {:family "resolution-slashing" :attack "track2-pending-slash-wrong-id" :severity "high"
+          :actors ["keeper"] :victims ["protocol"]
+          :assumptions ["execute-fraud-slash without slash-id defaults to workflow-id integer"
+                       "Reversal slash keys are strings like '0-reversal-0' mismatching the default"]}
+ :accounting {:unit "USDC" :decimals 6 :tracked-balances ["buyer" "seller" "resolver" "protocol" "slashPool"]}
+ :initial-block-time 1000
+ :protocol-params {:resolver-fee-bps 150 :appeal-window-duration 60 :max-dispute-duration 2592000
+                   :reversal-slash-bps 2500 :dispute-resolver "0xresolver-l0"
+                   :escalation-resolvers {:1 "0xresolver-l1"}}
+ :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
+          {:id "seller" :address "0xseller" :strategy "honest"}
+          {:id "resolver-l0" :address "0xresolver-l0" :role "resolver" :stake 20000}
+          {:id "resolver-l1" :address "0xresolver-l1" :role "resolver" :stake 20000}
+          {:id "keeper" :address "0xkeeper" :role "keeper"}]
+ :events [{:seq 0 :time 1000 :agent "resolver-l0" :action "register_stake"
+           :params {:amount 20000}}
+          {:seq 1 :time 1000 :agent "resolver-l1" :action "register_stake"
+           :params {:amount 20000}}
+          {:seq 2 :time 1000 :agent "buyer" :action "create_escrow"
+           :params {:token "USDC" :to "0xseller" :amount 5000}}
+          {:seq 3 :time 1060 :agent "seller" :action "raise_dispute" :params {:workflow-id 0}}
+          {:seq 4 :time 1120 :agent "resolver-l0" :action "execute_resolution"
+           :params {:workflow-id 0 :is-release true :resolution-hash "0xrelease"}}
+          {:seq 5 :time 1150 :agent "seller" :action "submit_evidence"
+           :params {:workflow-id 0 :evidence-hash "0xnew-evidence"}}
+          {:seq 6 :time 1160 :agent "seller" :action "escalate_dispute"
+           :params {:workflow-id 0}}
+          {:seq 7 :time 1200 :agent "resolver-l1" :action "execute_resolution"
+           :params {:workflow-id 0 :is-release false :resolution-hash "0xreversal"}}
+          ;; Call execute_fraud_slash WITHOUT slash-id — defaults to workflow-id integer 0
+          ;; Reversal slash stored under "0-reversal-0" (string), not 0 (integer)
+          ;; Expected: :no-pending-slash failure, slash_count remains 0
+          {:seq 8 :time 1400 :agent "keeper" :action "execute_fraud_slash"
+           :params {:workflow-id 0}}]}

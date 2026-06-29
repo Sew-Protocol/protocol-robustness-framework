@@ -114,6 +114,13 @@
       "q" (System/exit 0)
       (println "Invalid choice"))))
 
+(defn- record-history-best-effort!
+  [entry]
+  (try
+    (registry/record-entry entry)
+    (catch Exception e
+      (println "Warning: benchmark history write failed:" (.getMessage e)))))
+
 (defn -main [& args]
   (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
     (cond
@@ -222,10 +229,7 @@
               passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
           ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
            final-evidence output-path)
-          (try
-            (registry/record-entry final-evidence)
-            (catch Exception e
-              (println "Warning: benchmark history write failed:" (.getMessage e))))
+          (record-history-best-effort! final-evidence)
           (when passed?
             (interactive-ux final-evidence output-path options))
           (System/exit (if passed? 0 1)))))))

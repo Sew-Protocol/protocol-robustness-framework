@@ -1,6 +1,8 @@
 (require '[clojure.edn :as edn]
          '[clojure.java.io :as io]
          '[clojure.set :as set]
+         '[clojure.string :as str]
+         '[resolver-sim.concepts.registry :as concepts-registry]
          '[resolver-sim.scenario.suites :as suites])
 
 (defn parse-edn [f]
@@ -13,6 +15,17 @@
 (defn read-edn-file [path]
   (when (file-exists? path)
     (edn/read-string (slurp path))))
+
+(defn benchmark-concept-files []
+  (let [root (io/file "benchmarks/concepts")]
+    (when (.exists root)
+      (->> (file-seq root)
+           (filter #(.isFile %))
+           (filter #(str/ends-with? (.getName %) ".edn"))))))
+
+(defn concept-index
+  [concepts]
+  (into {} (map (fn [concept] [(:concept/id concept) concept]) concepts)))
 
 (defn scoring-path-for [scoring-id]
   (let [filename (case scoring-id
@@ -52,7 +65,53 @@
             (swap! errors conj (str "reference-validation manifest missing simulator path " path))
             (println "    FAIL simulator path missing:" path)))))))
 
-(defn validate-benchmark-file! [errors benchmark-path benchmark]
+(defn suite-scenario-ids
+  "Return the set of expected scenario IDs for a given suite key.
+   For manifest-backed suites (those with a suites/<suite-name>/manifest.edn),
+   returns the manifest's public scenario IDs. For path-list suites, derives
+   IDs by stripping directory and .json extension from each path."
+  [suite-key]
+  (let [suite-name (name suite-key)
+        manifest-path (str "suites/" suite-name "/manifest.edn")]
+    (if (file-exists? manifest-path)
+      ;; Manifest-backed suite: use public scenario IDs
+      (let [manifest (read-edn-file manifest-path)]
+        (set (map :id (:scenarios manifest))))
+      ;; Path-list suite: derive from file name stems
+      (let [paths (suites/suite-paths suite-key)]
+        (set (map (fn [p]
+                    (let [f (io/file p)
+                          name (.getName f)
+                          stem (if (.endsWith name ".json")
+                                 (subs name 0 (- (count name) 5))
+                                 name)]
+                      stem))
+                  paths))))))
+
+(defn validate-scenario-ids!
+  "Check that every :scenario/id in the benchmark's scenario list
+   is a known scenario ID in the referenced suite."
+  [errors suite-key benchmark-path scenarios]
+  (let [known-ids (suite-scenario-ids suite-key)]
+    (doseq [scenario scenarios]
+      (let [id (:scenario/id scenario)]
+        (when-not (contains? known-ids id)
+          (swap! errors conj (str "scenario id \"" id "\" not found in suite "
+                                  suite-key " in " benchmark-path))
+          (println "    FAIL unknown scenario id \"" id "\" in suite" suite-key))))))
+
+(defn- normalize-claim-ref
+  "Normalize a single claim ref: keyword → {:claim/id <keyword>}, map kept as-is."
+  [c]
+  (cond
+    (keyword? c) {:claim/id c}
+    (map? c) c
+    :else (throw (ex-info "Invalid claim ref" {:claim-ref c}))))
+
+(defn- claim-ref-id [c]
+  (or (:claim/id c) (when (keyword? c) c)))
+
+(defn validate-benchmark-file! [errors concept-idx claim-registry benchmark-path benchmark]
   (println "    Checking benchmark..." benchmark-path)
   (validate-file-exists! errors benchmark-path "benchmark")
 
@@ -62,30 +121,66 @@
       (swap! errors conj (str "unknown suite " suite-key " in " benchmark-path))
       (println "    FAIL unknown suite" suite-key))
 
-    (when-let [scoring-path (scoring-path-for scoring-id)]
-      (validate-file-exists! errors scoring-path "scoring"))
+    (when scoring-id
+      (if-let [scoring-path (scoring-path-for scoring-id)]
+        (validate-file-exists! errors scoring-path "scoring")
+        (do (swap! errors conj (str "unknown scoring rule " scoring-id " in " benchmark-path))
+            (println "    FAIL unknown scoring rule" scoring-id))))
 
     (when-not scoring-id
       (swap! errors conj (str "missing scoring rule in " benchmark-path))
       (println "    FAIL missing scoring rule"))
 
-    (when (= :benchmark/prf-protocol-robustness-v0 (:benchmark/id benchmark))
-      (let [manifest (read-edn-file "suites/reference-validation-v1/manifest.edn")
-            scenario-ids (set (map :id (:scenarios manifest)))]
-        (doseq [scenario (:benchmark/scenarios benchmark)]
-          (let [id (:scenario/id scenario)
-                scenario-path (some->> (:scenarios manifest)
-                                       (filter #(= id (:id %)))
-                                       first
-                                       :simulator/scenario-path)]
-            (when-not (scenario-ids id)
-              (swap! errors conj (str "public scenario id missing from reference-validation manifest: " id))
-              (println "    FAIL public scenario id missing:" id))
-            (when-not scenario-path
-              (swap! errors conj (str "reference-validation manifest missing simulator path for public id " id))
-              (println "    FAIL simulator path missing for public id:" id))))))))
+    (doseq [concept-id (:benchmark/concepts benchmark)]
+      (when-not (get concept-idx concept-id)
+        (swap! errors conj (str "missing concept definition " concept-id " in " benchmark-path))
+        (println "    FAIL missing concept definition" concept-id)))
 
-(defn validate-pack-registry! [errors registry-path]
+    (doseq [scenario (:benchmark/scenarios benchmark)]
+      (let [dimension (:dimension scenario)]
+        (when-not (get concept-idx dimension)
+          (swap! errors conj (str "missing concept definition for scenario dimension "
+                                  dimension " in " benchmark-path))
+          (println "    FAIL missing scenario dimension concept" dimension))
+        (when-not (contains? (set (:benchmark/concepts benchmark)) dimension)
+          (swap! errors conj (str "scenario dimension " dimension
+                                  " is not declared in :benchmark/concepts in " benchmark-path))
+          (println "    FAIL scenario dimension not declared in :benchmark/concepts" dimension))))
+
+    (let [scenarios (:benchmark/scenarios benchmark)]
+      (when (seq scenarios)
+        (validate-scenario-ids! errors suite-key benchmark-path scenarios)))
+
+    ;; ── Claim ref validation ──────────────────────────────────
+    (let [claim-refs (:benchmark/claims benchmark)]
+      (when (seq claim-refs)
+        (doseq [ref claim-refs]
+          (try
+            (let [normalized (normalize-claim-ref ref)
+                  id (claim-ref-id ref)]
+              ;; Check claim exists in registry
+              (when (and claim-registry (not (get claim-registry id)))
+                (swap! errors conj (str "unknown claim " id " in " benchmark-path))
+                (println "    FAIL unknown claim" id))
+              ;; Warn if map ref is missing rationale
+              (when (map? ref)
+                (when-not (:claim/rationale ref)
+                  (println "    WARN claim" id "in" benchmark-path "missing :claim/rationale"))
+                (when-not (:claim/failure-meaning ref)
+                  (println "    WARN claim" id "in" benchmark-path "missing :claim/failure-meaning"))))
+            (catch Exception e
+              (swap! errors conj (str "invalid claim ref " (pr-str ref) " in " benchmark-path ": " (.getMessage e)))
+              (println "    FAIL invalid claim ref" (pr-str ref)))))))
+
+    ;; ── Property types ─────────────────────────────────────────
+    (let [prop-types (:benchmark/property-types benchmark)]
+      (when prop-types
+        (doseq [pt prop-types]
+          (when-not (#{:safety :liveness :integrity :fairness} pt)
+            (swap! errors conj (str "unknown property type " pt " in " benchmark-path))
+            (println "    FAIL unknown property type" pt)))))))
+
+(defn validate-pack-registry! [errors concept-idx claim-registry registry-path]
   (let [[data parse-err] (parse-edn (io/file registry-path))]
     (if parse-err
       (do (swap! errors conj (str registry-path ": " parse-err))
@@ -99,7 +194,7 @@
           (let [benchmark-path (str pack-dir "/" (:benchmark/file benchmark-ref))]
             (validate-file-exists! errors benchmark-path "benchmark file")
             (when-let [benchmark (read-edn-file benchmark-path)]
-              (validate-benchmark-file! errors benchmark-path benchmark))))))))
+              (validate-benchmark-file! errors concept-idx claim-registry benchmark-path benchmark))))))))
 
 (defn run-validation []
   (println "▶ benchmarks:validate\n")
@@ -112,21 +207,77 @@
         (doseq [pack (:packs registry)]
           (validate-file-exists! errors (str "benchmarks/" (:pack/registry pack)) "pack registry"))))
 
-    (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
-                           "benchmarks/packs/sew/registry.edn"]]
-      (validate-pack-registry! errors registry-path))
-
     (println "  Checking benchmark concepts...")
-    (validate-file-exists! errors "benchmarks/concepts/protocol-robustness-v0.edn" "concepts")
+    (let [concept-files (vec (benchmark-concept-files))
+          global-concepts (try
+                            (:concepts (concepts-registry/load-registry))
+                            (catch Exception _ nil))
+          local-concepts (reduce
+                          (fn [acc path]
+                            (let [[data parse-err] (parse-edn path)]
+                              (if parse-err
+                                (do (swap! errors conj (str (.getPath path) ": " parse-err))
+                                    (println "    FAIL" (.getPath path) "-" parse-err)
+                                    acc)
+                                (into acc (:concepts data)))))
+                          []
+                          concept-files)
+          concept-idx (merge (concept-index global-concepts)
+                             (concept-index local-concepts))]
+      (doseq [path concept-files]
+        (validate-file-exists! errors (.getPath path) "concept file")
+        (let [[data parse-err] (parse-edn path)]
+          (if parse-err
+            (do (swap! errors conj (str (.getPath path) ": " parse-err))
+                (println "    FAIL" (.getPath path) "-" parse-err))
+            (let [concepts (:concepts data)]
+              (when-not (:concepts/version data)
+                (swap! errors conj (str (.getPath path) " missing :concepts/version"))
+                (println "    FAIL" (.getPath path) "missing :concepts/version"))
+              (doseq [c concepts]
+                (let [id (:concept/id c)]
+                  (doseq [k [:concept/title :concept/summary :concept/stakeholder-language
+                             :concept/why-it-matters]]
+                    (when-not (get c k)
+                      (swap! errors conj (str (.getPath path) " concept " id " missing " k))
+                      (println "    FAIL" (.getPath path) "concept" id "missing" k)))
+                  (let [maps-to (:concept/maps-to c)]
+                    (when-not (map? maps-to)
+                      (swap! errors conj (str (.getPath path) " concept " id " :concept/maps-to must be a map"))
+                      (println "    FAIL" (.getPath path) "concept" id ":concept/maps-to must be a map"))
+                    (when (map? maps-to)
+                      (let [scenarios (:scenarios maps-to)]
+                        (when-not (vector? scenarios)
+                          (swap! errors conj (str (.getPath path) " concept " id " :maps-to :scenarios must be a vector"))
+                          (println "    FAIL" (.getPath path) "concept" id ":maps-to :scenarios must be a vector"))
+                        (doseq [[k expected-type] [[:claims vector?] [:invariants vector?] [:evidence vector?]]]
+                          (let [v (get maps-to k)]
+                            (when (and v (not (expected-type v)))
+                              (swap! errors conj (str (.getPath path) " concept " id " :maps-to " k " must be a vector"))
+                              (println "    FAIL" (.getPath path) "concept" id ":maps-to" k "must be a vector"))))))))))))
+      )
 
-    (println "  Checking scoring definitions...")
-    (doseq [path ["benchmarks/scoring/robustness-dimensions-v0.edn"
-                  "benchmarks/scoring/binary-claims-v1.edn"
-                  "benchmarks/scoring/severity-weighted-v1.edn"
-                  "benchmarks/scoring/shortfall-allocation-v0.edn"]]
-      (validate-file-exists! errors path "scoring"))
+       (println "  Checking scoring definitions...")
+      (doseq [path ["benchmarks/scoring/robustness-dimensions-v0.edn"
+                    "benchmarks/scoring/binary-claims-v1.edn"
+                    "benchmarks/scoring/severity-weighted-v1.edn"
+                    "benchmarks/scoring/shortfall-allocation-v0.edn"]]
+        (validate-file-exists! errors path "scoring"))
 
-    (validate-reference-validation-manifest! errors)
+      (validate-reference-validation-manifest! errors)
+
+      (println "  Checking claim registry...")
+      (let [[claim-registry-data parse-err] (parse-edn (io/file "benchmarks/claim-registry.edn"))]
+        (if parse-err
+          (do (swap! errors conj (str "benchmarks/claim-registry.edn: " parse-err))
+              (println "    FAIL claim-registry.edn -" parse-err))
+          (println "    OK" (count (:claims claim-registry-data)) "claims registered"))
+        (let [claim-registry (when-not parse-err
+                               (into {} (map (fn [c] [(:claim/id c) c]) (:claims claim-registry-data))))]
+          (doseq [registry-path ["benchmarks/packs/prf-core/registry.edn"
+                                 "benchmarks/packs/sew/registry.edn"]]
+            (validate-pack-registry! errors concept-idx claim-registry registry-path))))
+      )
 
     (println)
     (if (empty? @errors)

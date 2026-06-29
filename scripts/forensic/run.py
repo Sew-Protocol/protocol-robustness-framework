@@ -282,16 +282,17 @@ def run_invoke_scenario_pipeline(run_request_path: str,
     return r.returncode
 
 
-def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict]]:
+def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict], list[dict]]:
     """Parse EDN evidence node files semantically using Clojure reader.
-    Returns (parsed_nodes, edge_list).
+    Returns (parsed_nodes, parse_errors, edge_list).
     parsed_nodes is a list of dicts with node-hash, execution-id, etc.
+    parse_errors is a list of dicts with :file and :parse-error for unparseable EDN.
     edge_list is a list of {parent, child} dicts for DAG structure.
-    Returns ([], []) on failure or if no EDN files present."""
+    Returns ([], [], []) on failure or if no EDN files present."""
     edn_files = sorted([f for f in dag_dir.iterdir()
                         if f.is_file() and f.suffix == ".edn"])
     if not edn_files:
-        return [], []
+        return [], [], []
     try:
         import tempfile
         # Write Clojure code to a temp file to avoid shell escaping issues
@@ -315,6 +316,11 @@ def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict]]:
       {:file (.getName (java.io.File. path))
        :parse-error (.getMessage e)})))
 
+(defn separate-errors [nodes]
+  (let [good (filter :node-hash nodes)
+        bad (filter :parse-error nodes)]
+    {:parsed (vec good) :parse-errors (vec bad)}))
+
 (defn build-edges [nodes]
   (mapcat
     (fn [node]
@@ -324,9 +330,10 @@ def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict]]:
     nodes))
 
 (let [paths %s
-      nodes (doall (map parse-node paths))
-      edges (build-edges nodes)]
-  (println (json/write-str {:nodes nodes :edges edges})))
+      raw-nodes (doall (map parse-node paths))
+      {:keys [parsed parse-errors]} (separate-errors raw-nodes)
+      edges (build-edges parsed)]
+  (println (json/write-str {:parsed parsed :parse-errors parse-errors :edges edges})))
 """ % path_vec
         with tempfile.NamedTemporaryFile(mode="w", suffix=".clj",
                                          delete=False) as tmp:
@@ -339,22 +346,103 @@ def _parse_edn_nodes_semantic(dag_dir: Path) -> tuple[list[dict], list[dict]]:
         if r.returncode != 0:
             print(f"  warning: EDN semantic parse failed: {r.stderr.strip()[:300]}",
                   file=sys.stderr)
-            return [], []
+            return [], [], []
         import json as _json
         out = r.stdout.strip()
         if not out:
             print("  warning: EDN semantic parse returned empty output",
                   file=sys.stderr)
-            return [], []
+            return [], [], []
         result = _json.loads(out)
-        nodes = result.get("nodes", [])
+        nodes = result.get("parsed", [])
+        parse_errors = result.get("parse-errors", [])
         edges = result.get("edges", [])
+        if parse_errors:
+            print(f"  warning: {len(parse_errors)} EDN file(s) failed to parse",
+                  file=sys.stderr)
+            for pe in parse_errors:
+                print(f"    {pe.get('file')}: {pe.get('parse-error', '?')[:120]}",
+                      file=sys.stderr)
         print(f"  parsed {len(nodes)} EDN node(s) semantically ({len(edges)} DAG edge(s))",
               file=sys.stderr)
-        return nodes, edges
+        return nodes, parse_errors, edges
     except Exception as e:
         print(f"  warning: EDN semantic parse error: {e}", file=sys.stderr)
-        return [], []
+        return [], [], []
+
+
+def _build_dag_index(nodes: list[dict],
+                     edges: list[dict]) -> dict:
+    """Build a navigation index from parsed evidence DAG nodes and edges.
+    Returns a map suitable for dag/index in the inventory."""
+    by_hash: dict[str, dict] = {}
+    children_by_parent: dict[str, list[str]] = {}
+    parents_by_child: dict[str, list[str]] = {}
+    by_execution_id: dict[str, list[str]] = {}
+    by_status: dict[str, list[str]] = {}
+    short_hashes: dict[str, str] = {}
+    all_hashes: set[str] = set()
+
+    for n in nodes:
+        h = n.get("node-hash")
+        if not h:
+            continue
+        all_hashes.add(h)
+        by_hash[h] = n
+        short_hashes[h[:12]] = h
+        eid = n.get("execution-id")
+        if eid:
+            by_execution_id.setdefault(eid, []).append(h)
+        st = n.get("result-status")
+        if st:
+            by_status.setdefault(st, []).append(h)
+
+    for n in nodes:
+        h = n.get("node-hash")
+        if not h:
+            continue
+        parents = [p for p in n.get("parent-hashes", []) if p]
+        parents_by_child[h] = parents
+        for p in parents:
+            children_by_parent.setdefault(p, []).append(h)
+
+    roots = sorted(h for h in all_hashes
+                   if all((p not in all_hashes) for p in parents_by_child.get(h, [])))
+    leaves = sorted([h for h in all_hashes
+                     if h not in children_by_parent
+                     or not children_by_parent[h]])
+
+    failure_count = len(by_status.get("fail", []))
+    error_count = len(by_status.get("error", []))
+    orphan_count = len([h for h in all_hashes
+                        if any(p not in all_hashes for p in parents_by_child.get(h, []))])
+
+    return {
+        "dag-index/schema-version": "evidence-dag-index.v0",
+        "dag-index/nodes-by-hash": {h: {
+            "node-hash": h,
+            "short-hash": h[:12],
+            "execution-id": n.get("execution-id"),
+            "result-status": n.get("result-status"),
+        } for h, n in by_hash.items()},
+        "dag-index/children-by-parent": children_by_parent,
+        "dag-index/parents-by-child": parents_by_child,
+        "dag-index/roots": roots,
+        "dag-index/leaves": leaves,
+        "dag-index/by-execution-id": by_execution_id,
+        "dag-index/by-status": by_status,
+        "dag-index/short-hashes": short_hashes,
+        "dag-index/summary": {
+            "node-count": len(nodes),
+            "root-count": len(roots),
+            "leaf-count": len(leaves),
+            "failure-count": failure_count,
+            "error-count": error_count,
+            "orphan-count": orphan_count,
+            "execution-id-counts": {k: len(v) for k, v in by_execution_id.items()},
+            "status-counts": {k: len(v) for k, v in by_status.items()},
+        },
+    }
 
 
 def _write_dag_inventory(run_dir: Path, dag_dir: Path,
@@ -372,6 +460,7 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
     total_bytes = 0
     file_hashes: list[dict] = []
     edn_nodes: list[dict] = []
+    parse_errors: list[dict] = []
     dag_edges: list[dict] = []
     for f in dag_dir.iterdir():
         if not f.is_file():
@@ -393,7 +482,8 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
     total = json_count + edn_count
     # Phase B: semantic EDN parsing
     if edn_count > 0:
-        edn_nodes, dag_edges = _parse_edn_nodes_semantic(dag_dir)
+        edn_nodes, parse_errors, dag_edges = _parse_edn_nodes_semantic(dag_dir)
+    dag_index = _build_dag_index(edn_nodes, dag_edges) if edn_nodes else None
     inventory = {
         "dag/schema-version": "evidence-dag-inventory.v0",
         "dag/phase": "B" if edn_nodes else "A",
@@ -404,7 +494,9 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
         "dag/total-bytes": total_bytes,
         "dag/file-hashes": file_hashes,
         "dag/nodes": edn_nodes,
+        "dag/parse-errors": parse_errors,
         "dag/edges": dag_edges,
+        "dag/index": dag_index,
     }
     # Registry consistency check: read from per-run workspace (not shared dir)
     artifact_root = workspace_dir if workspace_dir else (repo_root / PRF_ARTIFACT_DIR)
@@ -440,6 +532,12 @@ def _write_dag_inventory(run_dir: Path, dag_dir: Path,
             "message": (f"{unparsed} EDN evidence nodes could not be "
                         f"semantically parsed."),
         })
+    if parse_errors:
+        for pe in parse_errors:
+            warnings.append({
+                "code": "edn-parse-error",
+                "message": f"Parse error in {pe.get('file')}: {pe.get('parse-error', '?')[:200]}",
+            })
     inventory["dag/warnings"] = warnings
     write_sealed_json(run_dir / "evidence-dag-inventory.json", inventory)
     dag_inv_hash = compute_sha256(

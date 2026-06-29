@@ -279,7 +279,7 @@
                                                  authority (assoc :authority-params authority)
                                                  actors (assoc :agents (vec (concat (:agents trace []) actors)))
                                                  token (assoc :token-params token))
-                                res (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true})
+                               res (replay/replay-with-protocol effective-protocol effective-trace {:allow-dirty? true})
                                trace-id (:scenario-id trace)
                                runner-opts (scenario-runner/runner-opts-for-scenario effective-trace opts)
                                threshold-validation (validate-thresholds res thresholds

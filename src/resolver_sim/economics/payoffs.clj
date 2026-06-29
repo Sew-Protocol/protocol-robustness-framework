@@ -13,9 +13,10 @@
 (def basis-point-denominator 10000)
 
 (defn calculate-bps-amount
-  "Return `amount * bps / 10000` using integer division."
+  "Return `amount * bps / 10000` using integer division.
+   Nil-safe: nil amount or bps is treated as 0."
   [amount bps]
-  (quot (* amount bps) basis-point-denominator))
+  (quot (* (or amount 0) (or bps 0)) basis-point-denominator))
 
 (defn calculate-net-after-bps-fee
   "Return {:fee ... :net ...} for a basis-point fee deducted from `amount`."

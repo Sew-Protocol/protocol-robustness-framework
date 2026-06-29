@@ -15,16 +15,14 @@
   :dimensions
   [{:dimension/id    :allocation/partial-fill
     :scenario       "S-DR-043-payout-shortfall-deferred"
-    :pass-condition "Scenario outcome is :pass and all invariants hold.
-                     Shortfall detection, pro-rata allocation, and deferred
-                     claim recording are verified through invariant checks."}
+    :pass-condition "Scenario outcome is :pass and invariants hold:
+                     allocation-complete, shortfall-recorded,
+                     proportionality-preserved."}
    {:dimension/id    :allocation/shortfall
-    :scenario       "s103-negative-yield-shortfall-cascade"
-    :pass-condition "Scenario outcome is :pass and all invariants hold.
-                     Negative yield shortfall is detected, partial fill is
-                     applied pro-rata, and deferred remainder is recorded."}
+    :scenario       "S103_negative-yield-shortfall-cascade"
+    :pass-condition "Scenario outcome is :pass and invariants hold:
+                     shortfall-recorded, conservation-preserved."}
    {:dimension/id    :allocation/pro-rata-fairness
-    :scenario       "s104-resolver-stake-shortfall"
-    :pass-condition "Scenario outcome is :pass and all invariants hold.
-                     Resolver stake shortfall is detected and the resolver
-                     is correctly blocked from actions requiring full stake."}]}}
+    :scenario       "S104_resolver-stake-shortfall"
+    :pass-condition "Scenario outcome is :pass and invariants hold:
+                     proportionality-preserved, priority-order-preserved."}]}}

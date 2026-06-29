@@ -47,8 +47,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- sender-only-release [world workflow-id caller]
-  (let [et (t/get-transfer world workflow-id)]
-    {:allowed? (= caller (:from et)) :reason-code 0}))
+  (let [et       (t/get-transfer world workflow-id)
+        settings (t/get-settings world workflow-id)]
+    {:allowed? (or (= caller (:from et))
+                   (= caller (:release-address settings)))
+     :reason-code 0}))
 
 (defn- has-active-dispute-for-resolver?
   [world resolver-addr]
@@ -185,9 +188,10 @@
         token (conj [:token token]))
 
       (contains? #{"set-resolver-capacity" "register-stake" "withdraw-stake"
-                   "register-resolver-bond" "register-senior-bond"
-                   "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"
-                   "force-reversal-slash" "delegate-to-senior"}
+                    "register-resolver-bond" "register-senior-bond"
+                    "propose-fraud-slash" "appeal-slash" "resolve-appeal" "execute-fraud-slash"
+                    "force-reversal-slash" "delegate-to-senior" "unfreeze-resolver"
+                    "compute-prorata-slash-allocation"}
                  action)
       ;; Group 2: resolver-scoped actions.  Derive the resolver address from
       ;; the performing actor when the event params don't specify it directly
@@ -334,6 +338,15 @@
           (assoc result :extra {:old-resolver (:old-resolver result)
                                 :new-resolver (:new-resolver result)})
           result)))))
+
+(defmethod apply-action "unfreeze-resolver"
+  [{:keys [agent-index] :as context} world event]
+  (actx/with-governance-actor
+    agent-index event
+    (governance-pred context)
+    (fn [addr _agent]
+      (let [resolver (get-in event [:params :resolver])]
+        (res/unfreeze-resolver world resolver)))))
 
 (defmethod apply-action "set-resolver-capacity"
   [{:keys [agent-index]} world event]
@@ -548,10 +561,11 @@
                         {:coverage-max coverage-max :reserved-coverage 0}))))))
 
 (defmethod apply-action "delegate-to-senior"
-  [{:keys [agent-index]} world event]
-  (actx/with-resolved-actor
+  [{:keys [agent-index] :as context} world event]
+  (actx/with-governance-actor
     agent-index event
-    (fn [_addr]
+    (governance-pred context)
+    (fn [_addr _agent]
       (let [p           (:params event)
             senior-addr (:senior-addr p)
             coverage    (:coverage p 0)

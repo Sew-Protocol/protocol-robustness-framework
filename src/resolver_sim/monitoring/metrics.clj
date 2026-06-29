@@ -87,6 +87,15 @@
   (when-let [meter (.get meters (key->string key))]
     (.get ^AtomicReference meter)))
 
+(defn get-all-metric-names []
+  "Get all registered metric names as strings."
+  (let [ks (java.util.TreeSet.)]
+    (.addAll ks (.keySet counters))
+    (.addAll ks (.keySet gauges))
+    (.addAll ks (.keySet histograms))
+    (.addAll ks (.keySet meters))
+    (vec ks)))
+
 (defn reset-metrics! []
   "Reset all metrics."
   (.clear counters)

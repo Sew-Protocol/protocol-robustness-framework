@@ -1,0 +1,45 @@
+{:scenario-id "dr-i-001-superseded-pending-fallback"
+ :schema-version "1.0"
+ :allow-open-disputes? true
+ :purpose "adversarial-robustness"
+ :title "Superseded pending settlement fallback: escalation archives pending, escalated resolver fails, fallback executes archived settlement"
+ :description "L0 resolver rules release, creating pending settlement. Participant escalates (clears pending, archives as superseded). The escalated resolver fails to produce a resolution before max-dispute-duration. The pending settlement expiry mechanism should NOT auto-execute the original superseded settlement — the escrow remains :disputed until manual cleanup or further escalation."
+ :provenance {:author "@dispute-researcher" :created-at "2026-06-30" :license "CC-BY-4.0"}
+ :claim {:id "superseded-pending-does-not-auto-execute"
+         :statement "When a pending settlement is superseded by escalation and the escalated resolver fails to resolve, the original pending settlement is archived but NOT automatically executable. The escrow remains :disputed. No fallback executor can claim the old pending. This prevents stale settlement execution after escalation."
+         :falsifies-if ["The old superseded pending settlement auto-executes after some time"
+                        "The escrow terminal state diverges from the latest resolution"
+                        "A keeper can execute the superseded pending settlement directly"]}
+ :expectations {:terminal-state "disputed"
+                :must-hold ["finality_blocked_during_appeal" "dispute_level_bounded"]
+                :metrics {:dispute_level {:gte 1}
+                          :superseded_pending_count {:gte 1}}}
+ :threat {:family "settlement-finality" :attack "superseded-pending-settlement-revival" :severity "high"
+          :actors ["escalator"]
+          :assumptions ["Escalation archives -> superseded pending"
+                        "Escalated resolver does not produce resolution"]}
+ :accounting {:unit "USDC" :decimals 6 :tracked-balances ["buyer" "seller" "l0resolver" "l1resolver" "protocol"]}
+ :initial-block-time 1000
+ :protocol-params {:resolver-fee-bps 150 :appeal-window-duration 120 :max-dispute-duration 600
+                   :dispute-resolver "0xl0"
+                   :escalation-resolvers {:0 "0xl0" :1 "0xl1"}}
+ :agents [{:id "buyer" :address "0xbuyer" :strategy "honest"}
+          {:id "seller" :address "0xseller" :strategy "honest"}
+          {:id "l0resolver" :address "0xl0" :role "resolver"}
+          {:id "l1resolver" :address "0xl1" :role "resolver"}
+          {:id "keeper" :address "0xkeeper" :role "keeper"}]
+ :events [{:seq 0 :time 1000 :agent "buyer" :action "create_escrow"
+           :params {:token "USDC" :to "0xseller" :amount 5000}}
+          {:seq 1 :time 1060 :agent "buyer" :action "raise_dispute" :params {:workflow-id 0}}
+          ;; L0 resolves release — creates pending settlement
+          {:seq 2 :time 1100 :agent "l0resolver" :action "execute_resolution"
+           :params {:workflow-id 0 :is-release true :resolution-hash "0xl0release"}}
+          ;; Escalate to L1 — archives pending settlement as superseded
+          {:seq 3 :time 1120 :agent "seller" :action "escalate_dispute" :params {:workflow-id 0}}
+          ;; L1 resolver does NOT produce a resolution
+          ;; The escrow remains :disputed at level 1
+          ;; Max-dispute-duration = 600, so at time 1660 the escrow auto-expires
+          ;; But no keeper action can execute the old superseded pending settlement
+          ;; Attempt to execute old settlement should fail
+          ;; (This is the key claim: superseded settlements are not executable)
+          ]}

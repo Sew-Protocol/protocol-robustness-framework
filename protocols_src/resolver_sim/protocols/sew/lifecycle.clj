@@ -613,7 +613,9 @@
                           world-finalized)
         world-result    (-> world-slashed
                             (t/decrement-resolver-capacity resolver)
-                            (update :dispute-timestamps dissoc workflow-id))]
+                            (update :dispute-timestamps dissoc workflow-id)
+                    ;; Return all posted bonds for this workflow (prevents bond leak)
+                    (acct/return-all-bonds-for-workflow workflow-id))]
     (t/ok world-result)))
 
 (defn auto-cancel-disputed-escrow

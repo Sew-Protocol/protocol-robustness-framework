@@ -118,11 +118,22 @@
    :protocol-mechanisms [:resolver-availability :timeout :governance-override]
    :stakeholder-impact "Neither party can access the funds."}]
 
+:concept/metrics
+  {:dispute-rate
+   {:description "Ratio of disputes to total purchases."
+    :source :derived-from-trace}
+   :time-to-settlement
+   {:description "Time from purchase commitment to settlement."
+    :source :derived-from-trace}
+   :price-consistency
+   {:description "Whether the settled price matches the listing price."
+    :source :derived-from-trace}}
+
  :concept/assumptions
- ["The listing specifies a fixed price in a single currency or token."
-  "Price is immutable after the buyer commits funds."
-  "Delivery and condition evidence can be submitted on-chain or via attestation."
-  "Concept labels do not change protocol validity."]
+  ["The listing specifies a fixed price in a single currency or token."
+   "Price is immutable after the buyer commits funds."
+   "Delivery and condition evidence can be submitted on-chain or via attestation."
+   "Concept labels do not change protocol validity."]
 
  :concept/out-of-scope
  ["Auction, bidding, or negotiation mechanics."
