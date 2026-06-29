@@ -2,6 +2,11 @@
   "Execution evidence nodes: immutable, content-addressed records describing
    registered execution workloads.
 
+   This namespace is the canonical persisted evidence DAG abstraction for
+   the PRF evidence system. All execution evidence nodes should be built
+   through build-execution-node, persisted via persist-execution-node!,
+   and registered via emit-execution-node!.
+
    The node hash is computed from a canonical projection that excludes:
    - :node-id
    - :node-hash
@@ -9,7 +14,59 @@
    - policy-filtered presentation output
 
    This keeps node identity stable under metadata-only changes while allowing
-   policy-driven visible output to vary without affecting integrity checks."
+   policy-driven visible output to vary without affecting integrity checks.
+
+   ── Evidence Object Taxonomy ──────────────────────────────────────────
+
+   Evidence DAG nodes (resolver-sim.evidence.node):
+     scenario-replay      — Deterministic replay of one scenario trace.
+                            ID: :execution/replay
+                            Runner: :scenario-runner
+                            References: projection artifacts, allocation result artifacts,
+                            evidence records, chain cursor.
+     pro-rata-allocation  — Pro-rata computation chain (projection, re-projection,
+                            allocation, claims, artifact).
+                            ID: :execution/pro-rata-allocation
+                            Runner: :protocol-layer
+                            References: claim-evaluation node (parent), projection artifact
+                            hash, allocation result artifact hash, evidence record hash.
+     claim-evaluation     — Claim evaluation evidence node carrying allocation facts
+                            for claim evaluators. Persisted inline during pro-rata
+                            evidence construction.
+                            ID: :execution/pro-rata-allocation
+                            Runner: :protocol-layer
+                            References: allocation input context, direct/projection results.
+     attestation          — Attestation creation evidence node.
+                            ID: :execution/attestation
+                            Runner: :attestation-emitter
+
+   Referenced artifacts (registered evidence objects, NOT DAG nodes):
+     projection-artifact           — Ex-ante allocation frame (projection-definition,
+                                     intent, items, weights, caps, claims).
+                                     Built by: resolver-sim.economics.payoffs
+     allocation-result-artifact    — Ex-post allocation outcome (projection link,
+                                     allocation result, claims, provenance).
+                                     Built by: resolver-sim.economics.payoffs
+
+   Separate structures (not part of the Evidence DAG):
+     evidence-chain                — Linear hash chain of evidence records with
+                                     seq/prev-hash/self-hash (chain.clj).
+     attestation-dag               — DAG of attestation nodes (attestation_dag.clj),
+                                     built on top of this namespace.
+     claim-definition-graph        — Flat registry of claim definitions with
+                                     canonical hashes and concept hashes
+                                     (passive_registries.clj).
+     concept-registry              — Enriched claim definitions with resolved
+                                     depends-on concept hashes (passive_registries.clj).
+     artifact-registry-validation  — On-disk artifact verification and chain
+                                     integrity checks (registry_validation.clj).
+     benchmark-report-bundle       — Portable evidence pack for publication
+                                     (evidence_pack.clj).
+
+   NOTE: The forensic/execution-dag.json (resolver-sim.forensic.execution-dag)
+   is a separate legacy DAG for scenario-run planning metadata only. It is NOT
+   the researcher-facing evidence DAG. The canonical researcher-facing DAG
+   abstraction is this namespace: resolver-sim.evidence.node."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [resolver-sim.evidence.chain :as chain]

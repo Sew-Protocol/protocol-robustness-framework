@@ -4,6 +4,7 @@
    evidence-node references, not through raw allocation-input tunneling."
   (:require [clojure.test :refer [deftest is testing]]
             [resolver-sim.claims.engine :as claims-engine]
+            [resolver-sim.evidence.node :as node]
             [resolver-sim.protocols.sew.evidence.slashing :as slashing]
             [resolver-sim.protocols.sew.economics :as sew-economics]
             [resolver-sim.protocols.sew.types :as sew-types]
@@ -180,3 +181,130 @@
     (let [h1 (:evidence/hash (build-evidence))
           h2 (:evidence/hash (build-evidence))]
       (is (= h1 h2) "same inputs produce identical evidence hash"))))
+
+;; ── Concept hash and execution DAG tests ───────────────────────────────
+
+(deftest claims-include-concept-hash
+  (testing "each claim result entry includes :claim-definition-concept-hash alongside :claim-definition-hash"
+    (let [evidence (build-evidence)
+          claims (get-in evidence [:evidence/result :pro-rata :claims])]
+      (is (= 7 (count claims)))
+      (is (every? :claim-definition-concept-hash claims) "each claim has :claim-definition-concept-hash")
+      (is (every? string? (map :claim-definition-concept-hash claims)) "every concept-hash is a string")
+      (is (every? #(= 64 (count (:claim-definition-concept-hash %))) claims) "each concept-hash is 64 hex chars")
+      (is (every? :claim-definition-hash claims) "still has :claim-definition-hash")
+      (is (every? #(not= (:claim-definition-concept-hash %) (:claim-definition-hash %)) claims)
+          "concept-hash differs from canonical claim-definition-hash"))))
+
+(deftest claim-result-hash-commits-to-concept-hash
+  (testing "claim-result-hash includes concept-hash in its computation"
+    (let [hashes (-> (build-evidence) (get-in [:evidence/result :pro-rata :claims])
+                     (->> (map :claim-result-hash)))
+          all-distinct? (apply distinct? hashes)]
+      (is (every? string? hashes))
+      (is (= 7 (count (set hashes))) "each claim has a unique claim-result-hash"))))
+
+(deftest evidence-dependencies-include-claim-eval-node
+  (testing "evidence :dependencies includes the persisted claim-evaluation node hash"
+    (let [evidence (build-evidence)
+          deps (:evidence/dependencies evidence)]
+      (is (some (fn [d] (= :claim-evaluation (:type d))) deps)
+          "dependencies include a claim-evaluation entry")
+      (is (some (fn [d] (string? (:node-hash d))) deps)
+          "claim-evaluation entry has a :node-hash string"))))
+
+(deftest pro-rata-execution-node-persisted-in-registry
+  (testing "emit-pro-rata-execution-node! produces a registered execution node"
+    (let [allocation-result (sew-economics/calculate-sew-slash-allocation sample-allocation-input)
+          projection (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
+          projection-again (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
+          eval-content {:claims/input-context {:liable-parties [] :total-basis 0 :slash-obligation 0}
+                        :claims/direct-result allocation-result
+                        :claims/projection-artifact projection
+                        :claims/projection-artifact-again projection-again}
+          claim-eval-node (slashing/emit-claim-eval-execution-node! eval-content)
+          claim-eval-hash (:node-hash claim-eval-node)
+          evidence (build-evidence)
+          exec-node (slashing/emit-pro-rata-execution-node!
+                     {:projection-artifact projection
+                      :projection-artifact-again projection-again
+                      :claim-eval-node-hash claim-eval-hash
+                      :evidence evidence
+                      :artifact {:allocation-result-hash "test-artifact-hash"}
+                      :allocation-result allocation-result
+                      :slash-id "test-slash"
+                      :workflow-id 0})]
+      (is (some? (:node-hash exec-node)) "execution node has :node-hash")
+      (is (some? (node/lookup-node (:node-hash exec-node)))
+          "execution node is registered in node registry")
+      (is (= :execution/pro-rata-allocation (get-in exec-node [:execution :execution-id]))
+          "execution node has correct :execution-id")
+      (is (some #(= claim-eval-hash %) (:parent-hashes exec-node))
+          "execution node references claim-eval-node as parent")
+      (is (= "test-artifact-hash" (get-in exec-node [:extensions :pro-rata/allocation-result-hash]))
+          "execution node extensions include allocation-result-hash"))))
+
+;; ── Validation tests ───────────────────────────────────────────────────
+
+(deftest pro-rata-node-has-no-dangling-claim-eval-ref
+  (testing "pro-rata execution node parent claim-eval ref is resolvable in node registry"
+    (let [allocation-result (sew-economics/calculate-sew-slash-allocation sample-allocation-input)
+          projection (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
+          eval-content {:claims/input-context {:liable-parties [] :total-basis 0 :slash-obligation 0}
+                        :claims/direct-result allocation-result
+                        :claims/projection-artifact projection}
+          claim-eval-node (slashing/emit-claim-eval-execution-node! eval-content)
+          exec-node (slashing/emit-pro-rata-execution-node!
+                     {:projection-artifact projection
+                      :projection-artifact-again projection
+                      :claim-eval-node-hash (:node-hash claim-eval-node)
+                      :evidence (build-evidence)
+                      :artifact {:allocation-result-hash "test"}
+                      :allocation-result allocation-result
+                      :slash-id "test" :workflow-id 0})]
+      (is (some? (node/lookup-node (:node-hash claim-eval-node)))
+          "claim-eval node is in registry")
+      (is (some? (node/lookup-node (:node-hash exec-node)))
+          "pro-rata node is in registry")
+      (is (= (:node-hash claim-eval-node) (get-in exec-node [:parent-hashes 0]))
+          "first parent is existing claim-eval node"))))
+
+(deftest pro-rata-node-references-existing-artifacts
+  (testing "pro-rata execution node references existing projection and allocation artifacts"
+    (let [allocation-result (sew-economics/calculate-sew-slash-allocation sample-allocation-input)
+          projection (sew-economics/build-sew-slash-projection-artifact sample-allocation-input)
+          claim-eval-node (slashing/emit-claim-eval-execution-node!
+                           {:claims/input-context {} :claims/direct-result allocation-result
+                            :claims/projection-artifact projection})
+          exec-node (slashing/emit-pro-rata-execution-node!
+                     {:projection-artifact projection
+                      :projection-artifact-again projection
+                      :claim-eval-node-hash (:node-hash claim-eval-node)
+                      :evidence (build-evidence)
+                      :artifact {:allocation-result-hash "test-artifact"}
+                      :allocation-result allocation-result
+                      :slash-id "test" :workflow-id 0})]
+      (is (string? (get-in exec-node [:extensions :pro-rata/projection-hash]))
+          "execution node extensions include projection-hash")
+      (is (string? (get-in exec-node [:extensions :pro-rata/re-projection-hash]))
+          "execution node extensions include re-projection-hash")
+      (is (string? (get-in exec-node [:extensions :pro-rata/allocation-result-hash]))
+          "execution node extensions include allocation-result-hash")
+      (is (string? (get-in exec-node [:extensions :pro-rata/artifact-hash]))
+          "execution node extensions include artifact-hash")
+      (is (= (get-in exec-node [:extensions :pro-rata/projection-hash])
+             (:projection-hash projection))
+          "projection-hash in node matches projection artifact"))))
+
+(deftest evidence-record-references-pro-rata-node
+  (testing "final evidence record dependencies include the pro-rata execution node hash"
+    (let [evidence (build-evidence)
+          deps (:evidence/dependencies evidence)]
+      (is (some (fn [d] (= :pro-rata-allocation (:type d))) deps)
+          "dependencies include a pro-rata-allocation entry")
+      (is (some (fn [d] (and (= :pro-rata-allocation (:type d))
+                             (string? (:node-hash d)))) deps)
+          "pro-rata-allocation entry has a :node-hash string")
+      (let [pro-rata-hash (->> (filter #(= :pro-rata-allocation (:type %)) deps)
+                               first :node-hash)]
+        (is (string? pro-rata-hash) "pro-rata node hash is a string")))))

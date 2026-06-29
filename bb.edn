@@ -646,37 +646,37 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                                     "))")))}
 
   benchmark:run {:doc "Run a benchmark manifest and generate evidence bundle. Usage: bb benchmark:run [manifest-path|id] [-o output-path]"
-                 :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" *command-line-args*)}
+                 :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" *command-line-args*)}
 
   benchmark:reproduce {:doc "Reproduce a benchmark run from evidence bundle. Usage: bb benchmark:reproduce <evidence-path>"
-                       :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--reproduce" *command-line-args*)}
+                       :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--reproduce" *command-line-args*)}
 
   benchmark:share-summary {:doc "Generate share summary for an evidence bundle. Usage: bb benchmark:share-summary <evidence-path>"
-                           :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--share-summary" *command-line-args*)}
+                           :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--share-summary" *command-line-args*)}
 
   benchmark:export {:doc "Export portable bundle (tar.gz) from evidence bundle. Usage: bb benchmark:export <evidence-path>"
-                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--export" *command-line-args*)}
+                    :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--export" *command-line-args*)}
 
   benchmark:publish-ipfs {:doc "Publish exported bundle to IPFS. Usage: bb benchmark:publish-ipfs <evidence-path>"
-                          :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--publish-ipfs" *command-line-args*)}
+                          :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--publish-ipfs" *command-line-args*)}
 
   benchmark:attest {:doc "Generate an independent attestation for an evidence bundle. Usage: bb benchmark:attest <evidence-path> -k <private-key>"
-                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--attest" *command-line-args*)}
+                    :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--attest" *command-line-args*)}
 
   benchmark:verify-attestation {:doc "Verify an independent attestation. Usage: bb benchmark:verify-attestation <attestation-path>"
-                                :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify-attestation" *command-line-args*)}
+                                :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--verify-attestation" *command-line-args*)}
 
   benchmark:history {:doc "Display local evidence run history"
-                     :task (clojure "-M" "-m" "resolver-sim.benchmark.cli" "--history")}
+                     :task (clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--history")}
 
   benchmark:list {:doc "List available benchmarks from benchmarks/registry.edn"
                   :task (clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--list")}
 
   benchmark:verify {:doc "Verify evidence bundle integrity and signature. Usage: bb benchmark:verify [bundle-path]"
-                    :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
+                    :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--verify" *command-line-args*)}
 
   benchmark:hash {:doc "Compute and print hash of an evidence bundle. Usage: bb benchmark:hash [bundle-path]"
-                   :task (apply clojure "-M" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
+                   :task (apply clojure "-M:with-sew" "-m" "resolver-sim.benchmark.cli" "--hash-only" *command-line-args*)}
 
   stability:check
   {:doc "Check stability manifest: recompute hashes and report changes to stability surfaces.

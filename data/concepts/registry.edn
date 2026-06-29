@@ -90,4 +90,12 @@
     :concept/file  "data/concepts/decision-quality/legitimacy.edn"
    :concept/name  "Consensus legitimacy"
    :concept/status :draft
-   :concept/protocols #{:protocol/sew-v1 :protocol/prf}}]}
+    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}
+
+   {:concept/id    :allocation/partial-fill
+    :concept/type  :allocation
+    :concept/layer :stakeholder
+    :concept/file  "data/concepts/allocation/partial_fill.edn"
+    :concept/name  "Partial fill allocation"
+    :concept/status :draft
+    :concept/protocols #{:protocol/sew-v1 :protocol/prf}}]}

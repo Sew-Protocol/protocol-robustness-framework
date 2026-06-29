@@ -1,5 +1,6 @@
 (ns resolver-sim.scenario.runner-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [resolver-sim.evidence.node :as ev-node]
@@ -334,6 +335,27 @@
                    (get-in payload [:execution/summary :totals]))))
           (is (= {:total 2 :passed 1 :failed 1}
                  (get-in (:bundle-root result) [:execution/summary :totals])))))
+      (finally
+        (io/delete-file output-file true)))))
+
+(deftest run-and-report-writes-bundle-root-for-real-scenario-output
+  (let [output-file (.getAbsolutePath (java.io.File/createTempFile "scenario-run-bundle-" ".json"))]
+    (try
+      (let [result (with-out-str
+                     (scenario-runner/run-and-report
+                      {:scenario "scenarios/Y02_vault-shortfall-partial-withdraw.json"
+                       :output-file output-file}
+                      {}))
+            written (json/read-str (slurp output-file) :key-fn keyword)]
+        (is (str/includes? result "Y02_vault-shortfall-partial-withdraw"))
+        (is (= "bundle-root.v1" (:bundle/schema-version written)))
+        (is (string? (:bundle/hash written)))
+        (is (map? (:run/request written)))
+        (is (map? (:execution/summary written)))
+        (is (= "yield-v1" (get-in written [:run/request :protocol/default-id])))
+        (is (= 1 (get-in written [:execution/summary :totals :total])))
+        (is (nil? (:final-world written)))
+        (is (nil? (:scenario-id written))))
       (finally
         (io/delete-file output-file true)))))
 

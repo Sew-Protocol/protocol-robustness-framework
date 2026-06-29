@@ -1,11 +1,19 @@
 {:benchmark/id              :benchmark/sew-escrow-dispute-v1
  :benchmark/domain          :domain/escrow-dispute-resolution
  :benchmark/protocol        :protocol/sew
- :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
- :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+  :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
+  :benchmark/scenario-suite-description
+  "44 Sew dispute-resolution scenarios covering basic release/refund,
+   evidence lifecycle, resolver incentives, escalation paths, capacity
+   exhaustion, and governance interactions."
+  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
- :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
- :benchmark/concepts        [:ecommerce/purchase
+  :benchmark/scoring-rule    :scoring/severity-weighted-robustness-v1
+  :benchmark/purpose
+  "Evaluate Sew escrow dispute resolution across unauthorized release
+   prevention, fund conservation, dispute liveness, slashing integrity,
+   and governance non-interference."
+  :benchmark/concepts        [:ecommerce/purchase
                              :event/deposit
                              :consensus/authority
                              :consensus/evidence

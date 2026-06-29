@@ -16,11 +16,11 @@
    "If the resolver acts dishonestly, the protocol should limit
     their gains and compensate affected parties. Users should not
     bear the full cost of resolver misconduct."
-   :concept/maps-to
-   {:scenarios ["malicious-resolver-verdict-v1"]
-    :claims    [:malicious-verdict-economically-bounded]
-    :invariants ["slashable-liability-preserved"]
-    :evidence  [:evidence/dispute-decision :evidence/economic-transfer]}
+    :concept/maps-to
+    {:scenarios ["malicious-resolver-verdict-v1"]
+     :claims    [:evidence-root-present :replay-result-present]
+     :invariants ["slashable-liability-preserved"]
+     :evidence  [:evidence/dispute-decision :evidence/economic-transfer]}
    :concept/why-it-matters
    "Resolver accountability is the primary safeguard against
     capture. Without economic bounds, a resolver can extract value
@@ -35,11 +35,11 @@
    "A malicious party should not be able to freeze the protocol by
     filing excessive disputes. Honest users should still get timely
     resolutions."
-   :concept/maps-to
-   {:scenarios ["dispute-flooding-v1"]
-    :claims    [:liveness-under-adversarial-load]
-    :invariants ["bounded-progress-under-load"]
-    :evidence  [:evidence/dispute-count :evidence/timing]}
+    :concept/maps-to
+    {:scenarios ["dispute-flooding-v1"]
+     :claims    [:evidence-root-present :replay-result-present]
+     :invariants ["bounded-progress-under-load"]
+     :evidence  [:evidence/dispute-count :evidence/timing]}
    :concept/why-it-matters
    "Liveness failures are invisible to casual observers but can
     lock user funds indefinitely. This is the most practical
@@ -55,11 +55,11 @@
    "Funds should only leave escrow when the intended recipient
     pulls them. No external actor should be able to push funds out
     without proper authorization."
-   :concept/maps-to
-   {:scenarios ["autopush-settlement-v1"]
-    :claims    [:pull-first-settlement-safety]
-    :invariants ["pull-first-value-flow"]
-    :evidence  [:evidence/settlement-path :evidence/value-transfer]}
+    :concept/maps-to
+    {:scenarios ["autopush-settlement-v1"]
+     :claims    [:evidence-root-present :replay-result-present]
+     :invariants ["pull-first-value-flow"]
+     :evidence  [:evidence/settlement-path :evidence/value-transfer]}
    :concept/why-it-matters
    "Pull-first settlement is a fundamental safety pattern. Without
     it, a compromised resolver or governance action could drain
@@ -76,14 +76,20 @@
     evidence bundle, verify the hash chain, re-run the scenarios,
     and confirm the results match — without trusting the original
     runner."
-   :concept/maps-to
-   {:scenarios ["malicious-resolver-verdict-v1"
-                "dispute-flooding-v1"
-                "autopush-settlement-v1"]
-    :claims    [:replay-identical-results :hash-consistency-across-runs]
-    :evidence  [:evidence/evidence-bundle :evidence/hash-chain
-                :evidence/attestation :evidence/trace]}
+    :concept/maps-to
+    {:scenarios ["malicious-resolver-verdict-v1"
+                 "dispute-flooding-v1"
+                 "autopush-settlement-v1"]
+     :claims    [:all-scenarios-pass :scenario-hash-present :no-invariant-errors]
+     :evidence  [:evidence/evidence-bundle :evidence/hash-chain
+                 :evidence/attestation :evidence/trace]}
    :concept/why-it-matters
    "Evidence integrity is what separates a reproducible benchmark
     from a slide deck. Without it, stakeholders cannot independently
-    verify claims about protocol robustness."}]}
+    verify claims about protocol robustness."
+   :concept/note
+   "The claims :replay-identical-results and
+    :hash-consistency-across-runs referenced in :maps-to are defined
+    in the deterministic-replay-v1 benchmark pack, not evaluated by
+    this benchmark. They are listed here because the evidence-integrity
+    concept spans both packs."}]}

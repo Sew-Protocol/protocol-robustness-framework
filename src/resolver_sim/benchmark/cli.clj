@@ -222,7 +222,10 @@
               passed? (= (get-in evidence [:metrics :passed]) (get-in evidence [:metrics :total]))]
           ((requiring-resolve 'resolver-sim.benchmark.runner/write-evidence)
            final-evidence output-path)
-          (registry/record-entry final-evidence)
+          (try
+            (registry/record-entry final-evidence)
+            (catch Exception e
+              (println "Warning: benchmark history write failed:" (.getMessage e))))
           (when passed?
             (interactive-ux final-evidence output-path options))
           (System/exit (if passed? 0 1)))))))

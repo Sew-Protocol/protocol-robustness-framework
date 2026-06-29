@@ -6,8 +6,10 @@
    :domain/description "Escrow release/cancel, dispute lifecycle, resolver behaviour"}
   {:domain/id :domain/evidence-integrity
    :domain/description "Evidence chain integrity, attestation, proof verification"}
-  {:domain/id :domain/yield-shortfall
-   :domain/description "Yield provider shortfall, partial fill, liquidity disruption"}]
+   {:domain/id :domain/yield-shortfall
+    :domain/description "Yield provider shortfall, partial fill, liquidity disruption"}
+   {:domain/id :domain/allocation-shortfall
+    :domain/description "Allocation shortfall detection, pro-rata handling, deferred claim recording"}]
 
  :packs
  [{:pack/id :pack/prf-core
@@ -18,7 +20,4 @@
    :pack/description "Sew protocol benchmark pack"
    :pack/registry "packs/sew/registry.edn"}
 
-  ;; {:pack/id :pack/stablecoin-safety
-  ;;  :pack/description "Stablecoin safety benchmark pack (not yet materialized)"
-  ;;  :pack/registry "packs/stablecoin-safety/registry.edn"}
   ]}

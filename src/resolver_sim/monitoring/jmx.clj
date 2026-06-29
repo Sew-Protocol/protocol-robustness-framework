@@ -1,6 +1,7 @@
 (ns resolver-sim.monitoring.jmx
   "JMX monitoring infrastructure for PRF parallel processing."
-  (:require [resolver-sim.logging :as log]
+  (:require [clojure.string :as str]
+            [resolver-sim.logging :as log]
             [resolver-sim.config :as config])
   (:import (javax.management ObjectName MalformedObjectNameException)
            (java.lang.management ManagementFactory)))
@@ -40,7 +41,7 @@
           (swap! registered-mbeans conj object-name)
           (log/debug! "Registered MBean:" object-name)))
       (catch MalformedObjectNameException e
-        (log/error! "Invalid ObjectName:" object-name ":" (.getMessage e)))
+        (log/error! (str "Invalid ObjectName: " object-name ": " (.getMessage e))))
       (catch Exception e
         (log/error! "Failed to register MBean:" (.getMessage e))))))
 
@@ -59,7 +60,7 @@
 
 (defn create-domain-object-name [type & components]
   "Create a standard ObjectName for PRF domains."
-  (str "org.prf.monitoring:type=" type "," (clojure.string/join "," components)))
+  (str "org.prf.monitoring:type=" type "," (str/join "," components)))
 
 (defmacro defmbean [name & body]
   "Define an MBean interface. gen-interface returns the generated class."

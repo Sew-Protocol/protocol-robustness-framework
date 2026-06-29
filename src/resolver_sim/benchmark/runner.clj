@@ -1,12 +1,14 @@
 (ns resolver-sim.benchmark.runner
   (:require [resolver-sim.benchmark.repo :as repo]
             [resolver-sim.benchmark.adapter :as adapter]
+            [resolver-sim.benchmark.claims :as benchmark-claims]
             [resolver-sim.concepts.registry :as concepts-registry]
             [resolver-sim.concepts.reporting :as concepts-reporting]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.logging :as log]
             [resolver-sim.io.scenarios :as io-sc]
             [resolver-sim.protocols.sew :as sew]
+            [resolver-sim.protocols.sew.invariants :as sew-inv]
             [resolver-sim.scenario.suites :as suites]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -40,6 +42,22 @@
 (defn- load-scenario [path]
   (io-sc/load-scenario-file path))
 
+(defn- reference-validation-id-by-path
+  [scenario-path]
+  (try
+    (let [manifest (edn/read-string (slurp "suites/reference-validation-v1/manifest.edn"))
+          scenarios (:scenarios manifest)]
+      (some (fn [scenario]
+              (when (= scenario-path (:simulator/scenario-path scenario))
+                (:id scenario)))
+            scenarios))
+    (catch Exception _ nil)))
+
+(defn- benchmark-public-scenario-id
+  [suite-kw scenario-path]
+  (when (= suite-kw :suite/reference-validation-v1)
+    (reference-validation-id-by-path scenario-path)))
+
 (defrecord SewAdapter []
   adapter/RepositoryAdapter
   (load-scenarios [_ benchmark]
@@ -48,16 +66,41 @@
       (find-scenarios-in-suites (:scenario-suites benchmark))))
 
   (execute-benchmark [_ _benchmark scenarios]
-    (mapv (fn [scenario-file]
-            (let [path (.getPath scenario-file)
-                  scenario (load-scenario path)
-                  result   (sew/replay-with-sew-protocol scenario)]
-              {:file path
-               :outcome (:outcome result)
-               :halt-reason (:halt-reason result)
-               :metrics (:metrics result)
-               :invariant-results (get-in result [:metrics :invariant-results] {})}))
-          scenarios))
+    (let [suite-kw (:benchmark/scenario-suite _benchmark)]
+      (mapv (fn [scenario-file]
+              (let [path (.getPath scenario-file)
+                    scenario (load-scenario path)
+                    result   (sew/replay-with-sew-protocol scenario
+                                                           {:allow-dirty? true})
+                    public-id (benchmark-public-scenario-id suite-kw path)
+                    scenario-evidence (hc/hash-with-intent
+                                       {:hash/intent :evidence-content}
+                                       (select-keys result
+                                                    [:events-processed :outcome :halt-reason]))
+                  ;; Post-hoc invariant check: run check-all on final world, then
+                  ;; merge with any per-step failures from the replay metrics.
+                    final-world (:world result)
+                    step-failures (get-in result [:metrics :invariant-results] {})
+                    all-inv-ids (sort sew-inv/canonical-ids)
+                    post-check (when final-world
+                                 (:results (sew-inv/check-all final-world)))
+                    inv-results (mapv (fn [id]
+                                        {:id id
+                                         :result (cond
+                                                   (contains? step-failures id) :fail
+                                                   (get post-check id) :pass
+                                                   (false? (get-in post-check [id :holds?])) :fail
+                                                   :else :pass)})
+                                      all-inv-ids)]
+                {:file path
+                 :scenario/id public-id
+                 :simulator/scenario-path path
+                 :outcome (:outcome result)
+                 :halt-reason (:halt-reason result)
+                 :metrics (:metrics result)
+                 :invariant-results inv-results
+                 :scenario/evidence-root scenario-evidence}))
+            scenarios)))
 
   (collect-metrics [_ results]
     {:total (count results)
@@ -97,18 +140,28 @@
                            seen-ids)
          total-inv-checks (count all-inv-results)
          passed-inv-checks (count (filter #(= :pass (:result %)) all-inv-results))
-         all-invariants-pass? (= total-inv-checks passed-inv-checks)
+          all-invariants-pass? (= total-inv-checks passed-inv-checks)
 
-           ;; ── Concept enrichment ──────────────────────────────────────────
+            ;; ── Claim evaluation ────────────────────────────────────────────
+          claim-results (try
+                          (benchmark-claims/evaluate-manifest-claims manifest results)
+                          (catch Exception e
+                            (log/warn! "benchmark/claim-evaluation-failed"
+                                       {:error (.getMessage e)})
+                            []))
+
+            ;; ── Concept enrichment ──────────────────────────────────────────
          concept-ids (:benchmark/concepts manifest)
          concept-section (when (seq concept-ids)
                            (try
                              (let [{:keys [concepts]} (concepts-registry/load-registry)
                                    relevant (filter #(contains? (set concept-ids) (:concept/id %))
                                                     concepts)
-                                   stale (remove (set (map :concept/id relevant)) concept-ids)]
-                               (when (seq stale)
-                                 (log/warn! "benchmark/unknown-concepts" {:stale stale}))
+                                   benchmark-local (remove (set (map :concept/id relevant)) concept-ids)]
+                               (when (and (seq benchmark-local)
+                                          (not-every? #(str/starts-with? (name %) "robustness/")
+                                                      benchmark-local))
+                                 (log/warn! "benchmark/unknown-concepts" {:stale benchmark-local}))
                                (when (seq relevant)
                                  (:concept/section
                                   (concepts-reporting/enrich-report nil relevant))))
@@ -117,19 +170,20 @@
                                           {:error (.getMessage e)})
                                nil)))
 
-         evidence {:benchmark      manifest
-                   :repo           repo-meta
-                   :environment    {:os-name (System/getProperty "os.name")
-                                    :os-version (System/getProperty "os.version")
-                                    :java-version (System/getProperty "java.version")}
-                   :results        results
-                   :metrics        metrics
-                   :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))}
-                   :invariant-summary {:per-invariant  inv-summary
-                                       :total-checks   total-inv-checks
-                                       :passed-checks  passed-inv-checks
-                                       :all-pass?      all-invariants-pass?}
-                   :concept/section concept-section}
+          evidence {:benchmark      manifest
+                    :repo           repo-meta
+                    :environment    {:os-name (System/getProperty "os.name")
+                                     :os-version (System/getProperty "os.version")
+                                     :java-version (System/getProperty "java.version")}
+                    :results        results
+                    :metrics        metrics
+                    :claim-results  claim-results
+                    :reproduce      {:command (str "bb benchmark:reproduce " (or manifest-path "benchmarks/packs/sew/escrow-dispute-v1.edn"))}
+                    :invariant-summary {:per-invariant  inv-summary
+                                        :total-checks   total-inv-checks
+                                        :passed-checks  passed-inv-checks
+                                        :all-pass?      all-invariants-pass?}
+                    :concept/section concept-section}
 
          hashable-evidence (dissoc evidence :timestamp)
          bundle-root-hash (hc/hash-with-intent {:hash/intent :bundle-root} hashable-evidence)

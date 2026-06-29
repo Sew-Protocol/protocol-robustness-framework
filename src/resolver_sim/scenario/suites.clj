@@ -211,14 +211,26 @@
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
 
-   :suite/reference-validation-v1 {:paths        reference-validation-scenario-paths
-                                   :protocol-id  "sew-v1"
-                                   :title        "Reference validation v1 — protocol robustness scenarios"
-                                   :description  "Simulator-backed scenarios for resolver accountability,
+    :suite/reference-validation-v1 {:paths        reference-validation-scenario-paths
+                                    :protocol-id  "sew-v1"
+                                    :title        "Reference validation v1 — protocol robustness scenarios"
+                                    :description  "Simulator-backed scenarios for resolver accountability,
                                      liveness under adversarial load, and autopush settlement safety.
                                      Used by the protocol-robustness-v0 benchmark pack."
-                                   :kind         :file-path-suite
-                                   :ci-tier      :coverage}})
+                                    :kind         :file-path-suite
+                                    :ci-tier      :coverage}
+
+    :suite/sew-shortfall-allocation-v0
+    {:paths        ["scenarios/S-DR-043-payout-shortfall-deferred.json"
+                    "scenarios/S103_negative-yield-shortfall-cascade.json"
+                    "scenarios/S104_resolver-stake-shortfall.json"]
+     :protocol-id  "sew-v1"
+     :title        "Shortfall allocation v0 — partial fill and pro-rata scenarios"
+     :description  "Sew scenarios exercising yield shortfall with partial fill,
+      negative yield cascade with deferred recovery, and resolver stake
+      shortfall. Used by the shortfall-allocation-v0 benchmark pack."
+     :kind         :file-path-suite
+     :ci-tier      :coverage}})
 
 (defn- resolve-suite-registry
   "Return the registry map for a suite keyword — checks `suites` first,

@@ -16,7 +16,8 @@
 (def type-dir-map
   {:use-case "use-case"
    :decision-quality "decision-quality"
-   :assurance "assurance"})
+   :assurance "assurance"
+   :allocation "allocation"})
 
 (defn edn-files [dir]
   (filter #(and (.endsWith (.getName %) ".edn") (not (.isDirectory %)))

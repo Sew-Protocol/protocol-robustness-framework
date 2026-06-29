@@ -68,5 +68,5 @@
   (pro-rata/explain-generic-allocation {:amount 10
                                         :items [{:id :a :weight 1}
                                                 {:id :b :weight 1}]})
-  (scenarios/run-scenario :S103)
+  (scenarios/run-scenario "S103 l2-reversal-slash-ids")
   (tests/run-tests-matching "partial-fill"))

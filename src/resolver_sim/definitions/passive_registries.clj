@@ -56,7 +56,7 @@
                                  (reduce #(update %1 %2 (fnil inc 0)) (assoc acc node 0) deps))
                                {} g))
         deps (in-degree graph)
-        queue (into (clojure.lang.PersistentQueue/EMPTY)
+        queue (into clojure.lang.PersistentQueue/EMPTY
                     (filter #(zero? (get deps %)) (keys graph)))]
     (loop [q queue, deps deps, sorted []]
       (if (empty? q)
@@ -531,7 +531,16 @@
     :execution/type :attestation
     :execution/mode :inline
     :description "Attestation creation evidence node — records an attestation event as a DAG-verifiable evidence node."
-    :claims #{}}])
+    :claims #{}}
+   {:id :execution/pro-rata-allocation
+    :version 1
+    :kind :allocation
+    :runner :protocol-layer
+    :entry 'resolver-sim.evidence.node/build-execution-node
+    :execution/type :pro-rata
+    :execution/mode :inline
+    :description "Pro-rata allocation execution evidence node — records the full pro-rata computation chain (projection, allocation, claims, artifact) as a DAG-verifiable evidence node."
+    :claims #{:allocation-complete :non-negative :conservation :rounding-bounded :ordering-independent}}])
 
 (def execution-registry
   {:registry-version 1
@@ -717,7 +726,8 @@
    :grpc-server {:description "Interactive gRPC server entry point"}
    :differential-runner {:description "Trace diff execution runner"}
    :registry-validator {:description "Registry validation entry point"}
-   :attestation-emitter {:description "Attestation evidence node emitter for DAG integration"}})
+   :attestation-emitter {:description "Attestation evidence node emitter for DAG integration"}
+   :protocol-layer {:description "Protocol-layer inline execution for evidence node emission"}})
 
 (def execution-runner-definitions
   "EXECUTION_RUNNER_SPEC_V1 entries: registered execution runners.

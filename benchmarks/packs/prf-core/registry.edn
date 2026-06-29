@@ -18,4 +18,9 @@
    {:benchmark/id :benchmark/prf-protocol-robustness-v0
     :benchmark/domain :domain/escrow-dispute-resolution
     :benchmark/file "protocol-robustness-v0.edn"
+    :benchmark/status :active}
+
+   {:benchmark/id :benchmark/prf-shortfall-allocation-v0
+    :benchmark/domain :domain/allocation-shortfall
+    :benchmark/file "shortfall-allocation-v0.edn"
     :benchmark/status :active}]}

@@ -1,11 +1,19 @@
 {:benchmark/id              :benchmark/sew-dispute-liveness-v1
  :benchmark/domain          :domain/escrow-dispute-resolution
  :benchmark/protocol        :protocol/sew
- :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
- :benchmark/runner-policy   :runner-policy/deterministic-local-v1
+  :benchmark/scenario-suite  :suite/sew-dispute-safety-v1
+  :benchmark/scenario-suite-description
+  "44 Sew dispute-resolution scenarios (shared with escrow-dispute-v1).
+   Focus on dispute liveness: timely resolution under adversarial load,
+   bounded resolution time, and slashing conservation."
+  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
- :benchmark/scoring-rule    :scoring/binary-claims-v1
- :benchmark/concepts        [:ecommerce/purchase
+  :benchmark/scoring-rule    :scoring/binary-claims-v1
+  :benchmark/purpose
+  "Evaluate Sew dispute liveness: timely resolution under adversarial
+   load, bounded resolution time, and slashing conservation across
+   concurrent disputes."
+  :benchmark/concepts        [:ecommerce/purchase
                              :event/deposit
                              :consensus/authority
                              :consensus/evidence

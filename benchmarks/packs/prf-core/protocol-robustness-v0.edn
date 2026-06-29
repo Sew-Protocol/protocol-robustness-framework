@@ -2,6 +2,11 @@
  :benchmark/domain          :domain/escrow-dispute-resolution
  :benchmark/protocol        :protocol/prf
   :benchmark/scenario-suite  :suite/reference-validation-v1
+  :benchmark/scenario-suite-description
+  "Three Sew reference-validation scenarios: malicious-resolver-verdict-v1,
+   dispute-flooding-v1, and autopush-settlement-v1. These are
+   simulator-backed scenarios that exercise resolver accountability,
+   liveness under adversarial load, and pull-first fund safety."
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
  :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
@@ -26,6 +31,8 @@
    :dimension   :robustness/escrow-fund-safety
    :claim       :pull-first-settlement-safety}]
  :benchmark/claims
- [:malicious-verdict-economically-bounded
-  :liveness-under-adversarial-load
-  :pull-first-settlement-safety]}
+ [:evidence-root-present
+  :replay-result-present
+  :scenario-hash-present
+  :no-invariant-errors
+  :all-scenarios-pass]}

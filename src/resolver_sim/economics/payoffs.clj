@@ -136,12 +136,14 @@
          claims (mapv (fn [claim-id]
                         (let [claim (require-registered :claim-id claim-id (registered-claim claim-id))]
                           {:claim-id claim-id
-                           :claim-definition-hash (:canonical-hash claim)}))
+                           :claim-definition-hash (:canonical-hash claim)
+                           :claim-definition-concept-hash (:concept-hash claim)}))
                       claim-ids)
          projection-frame (prepared-allocation-frame allocation-input)
          projection (:summary projection-frame)
          projection-body (dissoc projection-frame :summary)
          projection-definition-hash (:canonical-hash projection-definition)
+         projection-concept-hash (:concept-hash projection-definition)
          intent-hash (:canonical-hash intent)
          source-hash (hc/hash-with-intent {:hash/intent :projection-artifact}
                                           {:intent-id intent-id
@@ -157,6 +159,7 @@
                                  :intent-hash intent-hash}
                         :projection-definition-id (:id projection-definition)
                         :projection-definition-hash projection-definition-hash
+                        :projection-concept-hash projection-concept-hash
                         :source (merge {:source-hash source-hash}
                                        source)
                         :projection projection-body
@@ -322,7 +325,7 @@
        :evidence-record-hash       — evidence envelope hash (stored in :external-refs, excluded from canonical hash)
        :evidence-group-id          — group-id for cross-layer linking to surrounding evidence
         :attribution                — researcher attribution context (scenario-id, run-id, event-index, event-type)
-        :allocation-input           — raw input map (slash-obligation, liable-parties, basis, cap-field, etc.)
+         :allocation-input           — raw input map (obligation, parties, basis, cap-field, etc.)
         :metadata                   — additional metadata"
   [{:keys [projection-artifact
            allocation-result
@@ -341,6 +344,7 @@
   (let [projection-artifact-hash (:projection-hash projection-artifact)
         projection-definition-id (:projection-definition-id projection-artifact)
         projection-definition-hash (:projection-definition-hash projection-artifact)
+        projection-concept-hash (:projection-concept-hash projection-artifact)
         provenance (merge
                     {:world-before-hash world-before-hash
                      :world-after-hash world-after-hash
@@ -356,7 +360,8 @@
                                          {:projection-artifact-hash projection-artifact-hash
                                           :allocation-result (dissoc allocation-result :policy)
                                           :provenance provenance
-                                          :shortfall-outcome shortfall-outcome})
+                                          :shortfall-outcome shortfall-outcome
+                                          :allocation-input allocation-input})
         external-refs (merge (when evidence-record-hash
                                {:evidence-record-hash evidence-record-hash})
                              (when evidence-group-id
@@ -370,6 +375,7 @@
                        :projection-artifact-hash projection-artifact-hash
                        :projection-definition-id projection-definition-id
                        :projection-definition-hash projection-definition-hash
+                       :projection-concept-hash projection-concept-hash
                        :source source
                        :provenance provenance
                        :allocation-input allocation-input

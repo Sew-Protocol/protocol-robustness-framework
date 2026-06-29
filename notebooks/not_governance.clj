@@ -134,7 +134,7 @@
 ^{::clerk/visibility {:code :hide :result :hide}}
 (defonce lifecycle-result
   (delay
-    (let [result (sew/replay-with-sew-protocol lifecycle-scenario)]
+    (let [result (sew/replay-with-sew-protocol lifecycle-scenario {:allow-dirty? true})]
       (checks/assert-shape!
        "lifecycle result"
        [:map [:outcome keyword?] [:trace sequential?] [:metrics [:maybe map?]]]

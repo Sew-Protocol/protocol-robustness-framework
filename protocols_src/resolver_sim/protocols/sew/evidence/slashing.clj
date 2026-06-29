@@ -11,6 +11,7 @@ tunneling."
             [resolver-sim.evidence.aggregate :as agg]
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.evidence.node :as node]
             [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.hash.canonical :as hc]
             [resolver-sim.protocols.sew.economics :as sew-economics]
@@ -87,6 +88,7 @@ tunneling."
   (let [definition (claim-definition-by-id claim-id)
         base {:claim-id claim-id
               :claim-definition-hash (:canonical-hash definition)
+              :claim-definition-concept-hash (:concept-hash definition)
               :holds? (boolean (:holds? claim-result))
               :violations (vec (:violations claim-result))
               :status (if (:holds? claim-result) :pass :fail)}]
@@ -112,6 +114,60 @@ tunneling."
     (assoc (select-keys allocation-result
                         [:total-requested :total-allocated :total-unmet :remainder :policy])
            :capped-party-count capped-count)))
+
+;; ── Execution node emission ───────────────────────────────────────────
+
+(defn emit-claim-eval-execution-node!
+  "Persist a claim-evaluation content map as an execution evidence node.
+   Returns the node map (including :node-hash)."
+  [claim-eval-content]
+  (node/emit-execution-node!
+   {:execution-id :execution/pro-rata-allocation
+    :status :pass
+    :inputs claim-eval-content
+    :outputs {:type :claim-evaluation
+              :claim-count (count (get-in claim-eval-content [:claims/input-context :liable-parties]))}
+    :extensions {:pro-rata/type :claim-evaluation}
+    :execution-kind :claim-evaluation
+    :runner :protocol-layer}))
+
+(defn emit-pro-rata-execution-node!
+  "Emit a persisted execution evidence node for the full pro-rata computation.
+   Links projection artifact, re-projection, allocation result, claim-evaluation
+   node, and final evidence/artifact hashes.
+
+   :scenario-replay-node-hash is optional — set when the replay scenario node
+   hash is known (e.g., from a containing scenario-replay execution node).
+
+   Reference hashes (projection, allocation-result, evidence) are stored in
+   :extensions for researcher visibility. The :inputs and :outputs fields
+   are content-addressed hashes of the raw computation data.
+
+   Returns the execution node map (including :node-hash)."
+  [{:keys [projection-artifact projection-artifact-again
+           claim-eval-node-hash evidence artifact
+           allocation-result scenario-replay-node-hash
+           slash-id workflow-id]}]
+  (node/emit-execution-node!
+   {:execution-id :execution/pro-rata-allocation
+    :status :pass
+    :parent-hashes (cond-> [claim-eval-node-hash]
+                     scenario-replay-node-hash (conj scenario-replay-node-hash))
+    :inputs {:projection-artifact (select-keys projection-artifact [:projection-hash :projection-definition-hash])
+             :allocation-input (select-keys (get-in evidence [:evidence/inputs :allocation] {})
+                                            [:slash-obligation :liable-parties :basis :cap-field])}
+    :outputs {:evidence-hash (:evidence/hash evidence)}
+    :extensions {:pro-rata/type :pro-rata-allocation
+                 :pro-rata/projection-hash (:projection-hash projection-artifact)
+                 :pro-rata/re-projection-hash (:projection-hash projection-artifact-again)
+                 :pro-rata/allocation-result-hash (or (:allocation-result-hash allocation-result)
+                                                      (:allocation-result-hash artifact))
+                 :pro-rata/artifact-hash (:allocation-result-hash artifact)
+                 :pro-rata/claim-eval-node-hash claim-eval-node-hash
+                 :pro-rata/slash-id slash-id
+                 :pro-rata/workflow-id workflow-id}
+    :execution-kind :pro-rata-allocation
+    :runner :protocol-layer}))
 
 ;; ── Main evidence constructor ──────────────────────────────────────────
 
@@ -154,7 +210,8 @@ tunneling."
            attribution
            world-before-hash
            action-hash
-           action-hash-at]}]
+           action-hash-at
+           scenario-replay-node-hash]}]
   (let [projection-artifact (or projection-artifact
                                 (sew-economics/build-sew-slash-projection-artifact
                                  (cond-> allocation-input
@@ -169,6 +226,9 @@ tunneling."
                          allocation-input projection-artifact allocation-result
                          projection-artifact-again projection-result)
         claim-eval-hash (:node-hash claim-eval-node)
+        ;; Persist claim-evaluation node as an execution evidence node
+        claim-eval-persisted (emit-claim-eval-execution-node! (:result claim-eval-node))
+        claim-eval-node-hash (:node-hash claim-eval-persisted)
         claim-requests (build-claim-requests claim-eval-hash)
         {:keys [claim-results]}
         (claims-engine/evaluate-claims
@@ -228,7 +288,28 @@ tunneling."
         result-artifact (payoffs/build-pro-rata-allocation-result-artifact
                          (assoc artifact-base-opts
                                 :evidence-record-hash evidence-hash
-                                :evidence-group-id (:ctx/evidence-group-id attribution)))]
+                                :evidence-group-id (:ctx/evidence-group-id attribution)))
+        ;; Emit top-level pro-rata execution node referencing all computation hashes
+        pro-rata-exec-node (emit-pro-rata-execution-node!
+                            {:projection-artifact projection-artifact
+                             :projection-artifact-again projection-artifact-again
+                             :claim-eval-node-hash claim-eval-node-hash
+                             :evidence evidence
+                             :artifact result-artifact
+                             :allocation-result allocation-result
+                             :scenario-replay-node-hash scenario-replay-node-hash
+                             :slash-id slash-id
+                             :workflow-id workflow-id})
+        pro-rata-exec-node-hash (:node-hash pro-rata-exec-node)
+        ;; Include claim-eval-node-hash and pro-rata-exec-node-hash in evidence dependencies
+        evidence (update evidence :evidence/dependencies
+                         (fnil conj [])
+                         {:node-hash claim-eval-node-hash
+                          :type :claim-evaluation})
+        evidence (update evidence :evidence/dependencies
+                         (fnil conj [])
+                         {:node-hash pro-rata-exec-node-hash
+                          :type :pro-rata-allocation})]
     {:evidence evidence
      :artifact result-artifact}))
 

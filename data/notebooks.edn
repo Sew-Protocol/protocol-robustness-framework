@@ -82,6 +82,17 @@
    :protocol-areas [:all]
    :tags           ["robustness" "atlas" "comprehensive" "phases"]}
 
+  {:id             :benchmark-protocol-robustness
+   :path           "notebooks/benchmark_protocol_robustness.clj"
+   :title          "Protocol Robustness — Benchmark Report"
+   :summary        "PRF benchmark report across resolver accountability, liveness, fund safety, and evidence integrity. Per-dimension scoring, evidence traceability, and reproducibility."
+   :categories     [:evidence-artifacts :security-validation]
+   :audience       [:grant-reviewer :auditor :researcher :protocol-designer]
+   :status         :experimental
+   :risk           :low
+   :protocol-areas [:benchmark]
+   :tags           ["benchmark" "protocol-robustness" "prf" "evidence" "reproducibility"]}
+
   {:id             :dispute-artifact
    :path           "notebooks/dispute_artifact.clj"
    :title          "Dispute Resolution — Technical Validation"

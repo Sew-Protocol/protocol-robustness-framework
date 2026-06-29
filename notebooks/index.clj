@@ -28,12 +28,13 @@
     "Navigate by category, threat, or audience role."]
    [:div {:style {:display "flex" :gap "16px" :marginTop "14px" :flexWrap "wrap"}}
     (for [[label href icon]
-          [["Evidence Workbook"    "/notebooks/report"               "🛡️"]
-           ["Protocol Provenance"  "/notebooks/protocol_provenance"  "📋"]
-           ["Invariant Failures"   "/notebooks/invariant_failures"   "🔍"]
-           ["Workbench v2"         "/notebooks/workbench_v2"         "🔧"]
-           ["Yield scenarios"      "/notebooks/yield_scenarios_workbench" "📈"]
-           ["Atlas of Robustness"  "/notebooks/atlas_artifact"       "📊"]]]
+           [["Evidence Workbook"       "/notebooks/report"                          "🛡️"]
+            ["Protocol Provenance"     "/notebooks/protocol_provenance"             "📋"]
+            ["Invariant Failures"      "/notebooks/invariant_failures"              "🔍"]
+            ["Workbench v2"            "/notebooks/workbench_v2"                    "🔧"]
+            ["Yield scenarios"         "/notebooks/yield_scenarios_workbench"       "📈"]
+            ["Benchmark Report"        "/notebooks/benchmark_protocol_robustness"   "📊"]
+            ["Atlas of Robustness"     "/notebooks/atlas_artifact"                  "📊"]]]
       [:a {:key   label :href href
            :style {:background "#1e293b" :border "1px solid #334155"
                    :borderRadius "5px" :padding "5px 12px"

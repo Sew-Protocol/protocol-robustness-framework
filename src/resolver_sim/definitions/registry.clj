@@ -52,20 +52,15 @@
 
    Returns the parsed EDN map, or nil if no source found."
   []
-  (or (some->
-       (System/getenv "PRF_DEFINITIONS_PATH")
-       (io/file)
-       (try (slurp) (catch Exception _ nil))
-       (edn/read-string))
-      (some->
-       (io/resource "data/speds/definitions.edn")
-       (try (slurp) (catch Exception _ nil))
-       (edn/read-string))
-      (some->
-       "data/speds/definitions.edn"
-       (io/file)
-       (try (slurp) (catch Exception _ nil))
-       (edn/read-string))))
+  (or (try (some-> (System/getenv "PRF_DEFINITIONS_PATH")
+                   io/file slurp edn/read-string)
+           (catch Exception _ nil))
+      (try (some-> (io/resource "data/speds/definitions.edn")
+                   slurp edn/read-string)
+           (catch Exception _ nil))
+      (try (some-> "data/speds/definitions.edn"
+                   io/file slurp edn/read-string)
+           (catch Exception _ nil))))
 
 (def ^:private speds-definitions
   "SPEDS semantic definitions loaded via resource chain (env → classpath → filesystem)."

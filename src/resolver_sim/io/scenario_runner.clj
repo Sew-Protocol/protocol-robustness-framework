@@ -9,6 +9,8 @@
             [clojure.string :as str]
             [resolver-sim.contract-model.replay :as replay]
             [resolver-sim.evidence.forensic-populate :as fp]
+            [resolver-sim.evidence.chain :as chain]
+            [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.evidence.node :as ev-node]
             [resolver-sim.evidence.timestamping :as ts]
             [resolver-sim.hash.canonical :as hc]
@@ -171,8 +173,8 @@
       #(replay/replay-yield-scenario protocol %)
       (fn [scenario]
         (if (= "sew-v1" protocol-id)
-          (sew/replay-with-sew-protocol scenario)
-          (replay/replay-with-protocol protocol scenario))))))
+          (sew/replay-with-sew-protocol scenario {:allow-dirty? true})
+          (replay/replay-with-protocol protocol scenario {:allow-dirty? true}))))))
 
 (defn- scenario-file-details
   [scenario-path default-protocol-id]
@@ -795,44 +797,49 @@
               (catch Exception e
                 (.println *err* (str "  WARN: pre-run commitment failed: " (.getMessage e)))))]
 
-      (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)]
-        (let [exec-spec (build-execution-node-spec
-                         dispatch opts runner-selection
-                         canonical? non-canonical-reason protocol-id)
-              result (ev-node/with-execution-node+
-                       exec-spec
-                       (fn []
-                         (execute-dispatch! dispatch opts protocol-id
-                                            runner-selection)))
-              thunk-result (:result result)
-              execution-node (:execution-node result)
-              _ (dispatch-report-exit-code (:dispatch-key thunk-result)
-                                           (:summary thunk-result)
-                                           opts
-                                           protocol-id)
-              enriched-root (build-enriched-bundle-root
-                             (:bundle-root thunk-result) execution-node)]
-          (populate-forensic-claims!)
+      (ev-node/with-fresh-registry
+        (chain/with-fresh-registry
+          (chain/with-fresh-chain-cursor
+            (binding [ts/*tsa-url* (or tsa-url ts/*tsa-url*)
+                      evcfg/*artifact-dir* (str "results/runs/" run-id)]
+              (let [exec-spec (build-execution-node-spec
+                               dispatch opts runner-selection
+                               canonical? non-canonical-reason protocol-id)
+                    result (ev-node/with-execution-node+
+                             exec-spec
+                             (fn []
+                               (execute-dispatch! dispatch opts protocol-id
+                                                  runner-selection)))
+                    thunk-result (:result result)
+                    execution-node (:execution-node result)
+                    _ (dispatch-report-exit-code (:dispatch-key thunk-result)
+                                                 (:summary thunk-result)
+                                                 opts
+                                                 protocol-id)
+                    enriched-root (build-enriched-bundle-root
+                                   (:bundle-root thunk-result) execution-node)]
+                (populate-forensic-claims!)
 
         ;; Execution DAG (best-effort, lazy-loaded)
-          (try
-            (let [dag-build (requiring-resolve 'resolver-sim.forensic.execution-dag/build-dag)
-                  dag-write (requiring-resolve 'resolver-sim.forensic.execution-dag/write-dag!)
-                  dag-make-node (requiring-resolve 'resolver-sim.forensic.execution-dag/make-plan-node)
-                  paths (when suite-key (suites/suite-paths suite-key))
-                  nodes (mapv (fn [p] (dag-make-node
-                                       {:id (str "node:" (.getName (java.io.File. p)))
-                                        :type :scenario-run
-                                        :input-hashes {:scenario/path p}}))
-                              (or paths []))
-                  dag (dag-build nodes [])]
-              (dag-write dag run-id)
-              (.println *err* (str "  Execution DAG: " (:dag/node-count dag) " nodes")))
-            (catch Exception e
-              (.println *err* (str "  WARN: execution DAG write failed: " (.getMessage e)))))
+                (try
+                  (let [dag-build (requiring-resolve 'resolver-sim.forensic.execution-dag/build-dag)
+                        dag-write (requiring-resolve 'resolver-sim.forensic.execution-dag/write-dag!)
+                        dag-make-node (requiring-resolve 'resolver-sim.forensic.execution-dag/make-plan-node)
+                        paths (when suite-key (suites/suite-paths suite-key))
+                        nodes (mapv (fn [p] (dag-make-node
+                                             {:id (str "node:" (.getName (java.io.File. p)))
+                                              :type :scenario-run
+                                              :input-hashes {:scenario/path p}}))
+                                    (or paths []))
+                        dag (dag-build nodes [])]
+                    (dag-write dag run-id)
+                    (.println *err* (str "  Execution DAG: " (:dag/node-count dag) " nodes")))
+                  (catch Exception e
+                    (.println *err* (str "  WARN: execution DAG write failed: " (.getMessage e)))))
 
-          (when-let [output-path (:output-file dispatch)]
-            (write-result-json output-path enriched-root))
-          {:exit-code (:exit-code thunk-result)
-           :bundle-root enriched-root
-           :execution-node execution-node})))))
+                (when-let [output-path (:output-file dispatch)]
+                  (write-result-json output-path enriched-root))
+                {:exit-code (:exit-code thunk-result)
+                 :bundle-root enriched-root
+                 :execution-node execution-node}))))))))
+

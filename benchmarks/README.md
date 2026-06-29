@@ -16,20 +16,14 @@ benchmarks/
   packs/                        Protocol/domain benchmark packs
     prf-core/                   Core PRF infrastructure benchmarks
     sew/                        Sew protocol benchmarks
-    stablecoin-safety/          Stablecoin safety benchmarks
+
+  concepts/                     Benchmark-specific concept definitions
+    protocol-robustness-v0.edn  Concepts for the protocol-robustness-v0 pack
 
   scoring/                      Scoring rule definitions
-    severity_weighted_v1.edn
-    binary_claims_v1.edn
-
-  runners/                      Runner policy configurations
-    local.edn
-    with-sew.edn
-    quorum-local-v0.edn
-
-  scenarios/                    Scenario suite references
-
-  outputs/                      Generated benchmark output (gitignored)
+    severity-weighted-v1.edn
+    binary-claims-v1.edn
+    robustness-dimensions-v0.edn
 
   archived/                     Legacy/experimental material
 ```

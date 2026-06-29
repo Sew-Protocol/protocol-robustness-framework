@@ -235,3 +235,37 @@
   (testing "capacity limit is generic scalar multiplication"
     (is (= 1000.0 (payoffs/calculate-capacity-limit 1000)))
     (is (= 1500.0 (payoffs/calculate-capacity-limit 1000 1.5)))))
+
+;; ── Artifact identity and concept hash tests ───────────────────────────
+
+(deftest projection-artifact-claims-include-concept-hash
+  (testing "projection artifact claims entries have :claim-definition-concept-hash alongside :claim-definition-hash"
+    (let [artifact (payoffs/build-projection-artifact
+                    {:amount 100
+                     :items [{:id :a :weight 100} {:id :b :weight 100}]
+                     :id-fn :id
+                     :weight-fn :weight})
+          claims (:claims artifact)]
+      (is (seq claims) "projection artifact has claims")
+      (is (every? :claim-definition-concept-hash claims) "each claim has :claim-definition-concept-hash")
+      (is (every? string? (map :claim-definition-concept-hash claims)) "concept-hash values are strings")
+      (is (every? :claim-definition-hash claims) "still has :claim-definition-hash")
+      (is (every? #(not= (:claim-definition-concept-hash %) (:claim-definition-hash %)) claims)
+          "concept-hash differs from canonical claim-definition-hash in each claim"))))
+
+(deftest allocation-result-hash-changes-with-allocation-input
+  (testing "changing allocation-input changes the allocation result hash"
+    (let [base-opts {:projection-artifact (payoffs/build-projection-artifact
+                                           {:amount 50
+                                            :items [{:id :a :weight 100} {:id :b :weight 100}]
+                                            :id-fn :id
+                                            :weight-fn :weight})
+                     :allocation-result (payoffs/allocate-pro-rata
+                                         {:amount 50
+                                          :items [{:id :a :weight 100} {:id :b :weight 100}]})}]
+      (let [r1 (payoffs/build-pro-rata-allocation-result-artifact
+                (assoc base-opts :allocation-input {:source :input-a}))
+            r2 (payoffs/build-pro-rata-allocation-result-artifact
+                (assoc base-opts :allocation-input {:source :input-b}))]
+        (is (not= (:allocation-result-hash r1) (:allocation-result-hash r2))
+            "different allocation-input produces different result hash")))))

@@ -6,24 +6,27 @@
   their claims and invariants. Concept coverage is reported but
   does not affect the pass/fail decision."
 
- :scoring/rules
- {:classifier        :pass-fail-per-dimension
-  :pass              "All scenarios pass — all robustness dimensions hold"
-  :fail              "At least one scenario fails — a robustness dimension is violated"
-  :mixed             "Some scenarios pass, some fail — partial robustness"
-  :score-fn          "Ratio of passing scenarios to total scenarios"
-  :dimensions
-  [{:dimension/id    :robustness/resolver-accountability
-    :scenario       "malicious-resolver-verdict-v1"
-    :pass-condition "malicious-verdict-economically-bounded claim passes
-                     and slashable-liability-preserved invariant holds"}
-   {:dimension/id    :robustness/liveness-under-load
-    :scenario       "dispute-flooding-v1"
-    :pass-condition "liveness-under-adversarial-load claim passes
-                     and bounded-progress-under-load invariant holds"}
-   {:dimension/id    :robustness/escrow-fund-safety
-    :scenario       "autopush-settlement-v1"
-    :pass-condition "pull-first-settlement-safety claim passes
-                     and pull-first-value-flow invariant holds"}]}}
+  :scoring/rules
+  {:classifier        :pass-fail-per-scenario
+   :pass              "All scenarios pass — all robustness dimensions hold"
+   :fail              "At least one scenario fails — a robustness dimension is violated"
+   :mixed             "Some scenarios pass, some fail — partial robustness"
+   :score-fn          "Ratio of passing scenarios to total scenarios"
+   :dimensions
+   [{:dimension/id    :robustness/resolver-accountability
+     :scenario       "malicious-resolver-verdict-v1"
+     :pass-condition "Scenario outcome is :pass and all invariants hold.
+                      Semantic/economic claim verification for this dimension
+                      is deferred (see DESIGN_CLAIM_VERIFICATION.md Level 3)."}
+    {:dimension/id    :robustness/liveness-under-load
+     :scenario       "dispute-flooding-v1"
+     :pass-condition "Scenario outcome is :pass and all invariants hold.
+                      Semantic/economic claim verification for this dimension
+                      is deferred (see DESIGN_CLAIM_VERIFICATION.md Level 3)."}
+    {:dimension/id    :robustness/escrow-fund-safety
+     :scenario       "autopush-settlement-v1"
+     :pass-condition "Scenario outcome is :pass and all invariants hold.
+                      Semantic/economic claim verification for this dimension
+                      is deferred (see DESIGN_CLAIM_VERIFICATION.md Level 3)."}]}}
 
 

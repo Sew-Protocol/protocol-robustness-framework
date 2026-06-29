@@ -102,10 +102,11 @@
                    "Benchmark dimensions passed"
                    "Some benchmark dimensions did not pass")
                 "Not run")
-       :note (if report
-               (str (:passed-scenarios report) "/" (:total-scenarios report)
-                    " scenarios passed")
-               "Run `bb benchmark:run` to generate evidence")})
+        :note (if report
+                (let [cls (get-in report [:scoring/classification :classification-label])]
+                  (str (:passed-scenarios report) "/" (:total-scenarios report)
+                       " scenarios passed" (when cls (str " — " cls))))
+                "Run `bb benchmark:run` to generate evidence")})
      (when report
        (views/render-card
         {:label "Evidence hash"
@@ -141,9 +142,9 @@
     [:table {:style (merge table-style {:marginBottom "24px"})}
      [:thead {:style table-header-row-style}
       [:tr
-       [:th {:style table-header-cell-style} "Dimension"]
-       [:th {:style table-header-cell-style} "Scenario"]
-       [:th {:style table-header-cell-style} "Outcome"]
+        [:th {:style table-header-cell-style} "Dimension"]
+        [:th {:style table-header-cell-style} "Scenario"]
+        [:th {:style table-header-cell-style} "Outcome"]
         [:th {:style table-header-cell-style} "Pass condition met?"]
         [:th {:style table-header-cell-style} "Summary"]
         [:th {:style table-header-cell-style} "Evidence ref"]]]
@@ -152,18 +153,18 @@
         (let [ok? (:pass-condition-met? d)]
           [:tr {:key (str (:dimension d))}
            [:td {:style cell-bold-style} (:concept/title d)]
-           [:td {:style cell-mono-style} (:scenario/id d)]
-           [:td {:style table-cell-style}
-            (views/badge (name (:outcome d))
-                         (if (= :pass (:outcome d)) pass-badge fail-badge))]
-           [:td {:style table-cell-style}
-            (views/badge (if ok? "Pass" "Fail")
-                         (if ok? pass-badge fail-badge))]
+            [:td {:style cell-mono-style} (:scenario/id d)]
+            [:td {:style table-cell-style}
+             (views/badge (name (:outcome d))
+                          (if (= :pass (:outcome d)) pass-badge fail-badge))]
+            [:td {:style table-cell-style}
+             (views/badge (if ok? "Pass" "Fail")
+                          (if ok? pass-badge fail-badge))]
             [:td {:style table-cell-style}
              (or (:concept/summary d) "")]
             [:td {:style cell-mono-style}
-             (let [ref (:evidence/ref d)]
-               (if ref (str/upper-case (subs ref 0 (min 8 (count ref))))
+             (let [root (:scenario/evidence-root d)]
+               (if root (str/upper-case (subs root 0 (min 8 (count root))))
                    "—"))]]))]]]))
 
 ;; ── Scoring detail ────────────────────────────────────────────────────────────
@@ -226,9 +227,9 @@
                  (views/badge (format "%.0f%%" (* 100 rate)) color)]]))]]]
         (views/notice-box
          "Invariant checks"
-         "The current scenario replay path records scenario outcomes but"
-         "does not run per-invariant checks. Future benchmark versions may"
-         "add invariant verification for individual robustness dimensions."))])))
+         "No per-step invariant failures were recorded during replay."
+         "All invariants passed post-hoc verification on the terminal"
+         "world state."))])))
 
 ;; ── Evidence trail ────────────────────────────────────────────────────────────
 
@@ -246,17 +247,37 @@
       [:tr [:td {:style cell-bold-style} "Reproduce command"]
        [:td {:style cell-mono-style}
         (or (get-in report [:reproduce :command]) "—")]]
-      [:tr [:td {:style cell-bold-style} "Environment"]
-       [:td {:style table-cell-style}
-        (str (:os-name (:environment report)) " "
-             (:os-version (:environment report)))]]]]
-    (views/notice-box
-     "Verification"
-     (clerk/row
-      "Run "
-      [:code {:style {:color (:code/block-text notebook-theme)}}
-       "bb benchmark:reproduce " (or (:evidence/path report) "<evidence-bundle>")]
-      " with the same bundle to independently verify these results."))]))
+       [:tr [:td {:style cell-bold-style} "Environment"]
+        [:td {:style table-cell-style}
+         (str (:os-name (:environment report)) " "
+              (:os-version (:environment report)))]]
+       [:tr [:td {:style cell-bold-style} "Scenario suite"]
+        [:td {:style table-cell-style}
+         (or (:scenario/suite-description report)
+             (str (:scenario/suite report)))]]
+        [:tr [:td {:style cell-bold-style} "Claim status"]
+         [:td {:style table-cell-style}
+          (let [s (:claim/status report)]
+            (views/badge (name (or s :none))
+                         (case s
+                           :verified pass-badge
+                           :partial warn-badge
+                           (:declared-not-verified nil) warn-badge
+                           pass-badge)))]]]]
+     (views/notice-box
+      "Verification"
+      (clerk/row
+       "Run "
+       [:code {:style {:color (:code/block-text notebook-theme)}}
+        "bb benchmark:reproduce " (or (:evidence/path report) "<evidence-bundle>")]
+       " with the same bundle to independently verify these results."))
+     (views/notice-box
+      "Claim verification scope"
+      (clerk/row
+       "Claim status applies only to the claims declared in the benchmark"
+       " manifest. protocol-robustness-v0 currently verifies Level 1 mechanical"
+       " claims (field existence, hash format, outcome present). Semantic or"
+       " economic claim verification (Level 3) requires separate review."))]))
 
 ;; ── Concepts reference ────────────────────────────────────────────────────────
 
@@ -276,9 +297,12 @@
            [:th {:style (merge table-header-cell-style
                                {:color "#f8fafc" :background "#0f172a"})}
             "Summary"]
-           [:th {:style (merge table-header-cell-style
-                               {:color "#f8fafc" :background "#0f172a"})}
-            "Why it matters"]]]]
+            [:th {:style (merge table-header-cell-style
+                                {:color "#f8fafc" :background "#0f172a"})}
+             "Why it matters"]
+            [:th {:style (merge table-header-cell-style
+                                {:color "#f8fafc" :background "#0f172a"})}
+             "Note"]]]]
         [:tbody
          (for [c concepts]
            [:tr {:key (str (:concept/id c))
@@ -287,8 +311,10 @@
              (:concept/title c)]
             [:td {:style (merge table-cell-style {:color "#cbd5e1"})}
              (:concept/summary c)]
-            [:td {:style (merge table-cell-style {:color "#cbd5e1"})}
-             (:concept/why-it-matters c)]])]]
+             [:td {:style (merge table-cell-style {:color "#cbd5e1"})}
+              (:concept/why-it-matters c)]
+             [:td {:style (merge table-cell-style {:color "#cbd5e1" :font-size "0.85em" :font-style "italic"})}
+              (or (:concept/note c) "")]])]]
       (views/notice-box
        "Concepts file not found"
        "Benchmark concepts file not found at " (:concepts-path config) ".")))])

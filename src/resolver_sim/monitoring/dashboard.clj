@@ -16,37 +16,29 @@
 
 (defn- collect-monitoring-data []
   "Collect all monitoring data into a single map."
-  {
-   :timestamp (System/currentTimeMillis)
-   :scenario {
-     :active-count (count (scenario-monitoring/get-active-scenarios))
-     :completed (scenario-monitoring/get-scenarios-completed)
-     :failed (scenario-monitoring/get-scenarios-failed)
-     :processing-rate (scenario-monitoring/get-processing-rate)
-     :error-rate (scenario-monitoring/get-error-rate)
-   }
-   :thread-pools {
-     :monitored-pools (vec (thread-pool-monitoring/get-monitored-pool-names))
-     :average-utilization (thread-pool-monitoring/get-average-utilization)
-     :bottlenecks (thread-pool-monitoring/detect-bottlenecks)
-     :bottleneck-count (thread-pool-monitoring/get-bottleneck-count)
-     :critical-bottlenecks (thread-pool-monitoring/get-critical-bottlenecks)
-   }
-   :metrics {
-     :counters (into {}
-                     (for [key (metrics/get-all-metric-names)
-                           :when (.startsWith key "counter.")]
-                       [(keyword (subs key 8)) (metrics/get-counter [(keyword (subs key 8))])]))
-     :gauges (into {}
-                   (for [key (metrics/get-all-metric-names)
-                         :when (.startsWith key "gauge.")]
-                     [(keyword (subs key 6)) (metrics/get-gauge [(keyword (subs key 6))])]))
-     :histograms (into {}
-                      (for [key (metrics/get-all-metric-names)
-                            :when (.startsWith key "histogram.")]
-                        [(keyword (subs key 10)) (metrics/get-histogram-stats [(keyword (subs key 10))])]))
-   }
-  })
+  {:timestamp (System/currentTimeMillis)
+   :scenario {:active-count (count (scenario-monitoring/get-active-scenarios))
+              :completed (scenario-monitoring/get-scenarios-completed)
+              :failed (scenario-monitoring/get-scenarios-failed)
+              :processing-rate (scenario-monitoring/get-processing-rate)
+              :error-rate (scenario-monitoring/get-error-rate)}
+   :thread-pools {:monitored-pools (vec (thread-pool-monitoring/get-monitored-pool-names))
+                  :average-utilization (thread-pool-monitoring/get-average-utilization)
+                  :bottlenecks (thread-pool-monitoring/detect-bottlenecks)
+                  :bottleneck-count (thread-pool-monitoring/get-bottleneck-count)
+                  :critical-bottlenecks (thread-pool-monitoring/get-critical-bottlenecks)}
+   :metrics {:counters (into {}
+                             (for [key (metrics/get-all-metric-names)
+                                   :when (.startsWith key "counter.")]
+                               [(keyword (subs key 8)) (metrics/get-counter [(keyword (subs key 8))])]))
+             :gauges (into {}
+                           (for [key (metrics/get-all-metric-names)
+                                 :when (.startsWith key "gauge.")]
+                             [(keyword (subs key 6)) (metrics/get-gauge [(keyword (subs key 6))])]))
+             :histograms (into {}
+                               (for [key (metrics/get-all-metric-names)
+                                     :when (.startsWith key "histogram.")]
+                                 [(keyword (subs key 10)) (metrics/get-histogram-stats [(keyword (subs key 10))])]))}})
 
 (defn- json-handler [request]
   "Handle JSON API requests."
@@ -67,7 +59,7 @@
           timestamp (:timestamp data)]
 
       (response/response
-        (str "<html>
+       (str "<html>
 <head>
   <title>PRF Monitoring Dashboard</title>
   <style>
@@ -112,10 +104,10 @@
       " (when (seq bottlenecks)
           (str "<div class='card-header' style='margin-top: 15px;'>Detected Bottlenecks</div>"
                (str/join ""
-                 (for [bottleneck bottlenecks]
-                   (str "<div class='bottleneck'>
+                         (for [bottleneck bottlenecks]
+                           (str "<div class='bottleneck'>
                      <strong>" (:pool-name bottleneck) "</strong> - "
-                        (name (:severity bottleneck)) "<br>
+                                (name (:severity bottleneck)) "<br>
                      Utilization: " (format "%.1f%%" (* 100.0 (:utilization bottleneck))) "<br>
                      Queue: " (:queue-size bottleneck) " items
                    </div>"))))) "
@@ -134,7 +126,7 @@
     Dashboard updated: " (java.util.Date.) " | Data timestamp: " (java.util.Date. timestamp) "
   </div>
 </body>
-</html>"))
+</html>")))
     (catch Exception e
       (log/error! (str "HTML dashboard error:" (.getMessage e)))
       (response/internal-server-error (.getMessage e)))))
@@ -149,24 +141,24 @@
       (.setExecutor server nil) ; Use default executor
 
       (.handle context
-        (reify HttpHandler
-          (handle [this exchange]
-            (let [response (json-handler {:uri (.getRequestURI exchange)})]
-              (.sendResponseHeaders exchange
-                   (response :status 200)
-                   (count (.getBytes (response :body) "UTF-8")))
-              (with-open [os (.getResponseBody exchange)]
-                (.write os (.getBytes (response :body) "UTF-8")))))))
+               (reify HttpHandler
+                 (handle [this exchange]
+                   (let [response (json-handler {:uri (.getRequestURI exchange)})]
+                     (.sendResponseHeaders exchange
+                                           (response :status 200)
+                                           (count (.getBytes (response :body) "UTF-8")))
+                     (with-open [os (.getResponseBody exchange)]
+                       (.write os (.getBytes (response :body) "UTF-8")))))))
 
       (.handle html-context
-        (reify HttpHandler
-          (handle [this exchange]
-            (let [response (html-handler {:uri (.getRequestURI exchange)})]
-              (.sendResponseHeaders exchange
-                   (response :status 200)
-                   (count (.getBytes (response :body) "UTF-8")))
-              (with-open [os (.getResponseBody exchange)]
-                (.write os (.getBytes (response :body) "UTF-8")))))))
+               (reify HttpHandler
+                 (handle [this exchange]
+                   (let [response (html-handler {:uri (.getRequestURI exchange)})]
+                     (.sendResponseHeaders exchange
+                                           (response :status 200)
+                                           (count (.getBytes (response :body) "UTF-8")))
+                     (with-open [os (.getResponseBody exchange)]
+                       (.write os (.getBytes (response :body) "UTF-8")))))))
 
       (.start server)
       (log/info! (str "Monitoring dashboard started on port" port))
@@ -192,7 +184,7 @@
       (.stop s 0)
       (reset! server nil)
       (reset! running false)
-      (log/info! "Monitoring dashboard stopped"))
+      (log/info! "Monitoring dashboard stopped"))))
 
 (defn running? []
   "Check if dashboard is running."
