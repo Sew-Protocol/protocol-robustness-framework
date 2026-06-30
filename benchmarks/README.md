@@ -68,6 +68,22 @@ Each concept entry includes:
 - `:concept/maps-to` — references to scenarios, claims, invariants, evidence
 - `:concept/why-it-matters` — why this property matters to users
 
+### Concept Shadowing Policy
+
+Benchmark-local concept files under `benchmarks/concepts/` may define
+concept IDs that already exist in the global registry (`data/concepts/`).
+This is called *shadowing* and is only allowed when the local concept
+explicitly declares `:concept/shadows-global? true`.
+
+When a local concept shadows a global ID:
+1. The local definition takes precedence for the benchmark's report rendering.
+2. The validator prints an informational message, not an error.
+3. Without `:concept/shadows-global? true`, the validator fails with an
+   actionable error showing both files.
+
+This policy prevents accidental naming collisions while allowing packs
+to intentionally override concept text for benchmark-specific contexts.
+
 ## Key Boundaries
 
 **PRF** owns the benchmark infrastructure: registry, scenario selection,

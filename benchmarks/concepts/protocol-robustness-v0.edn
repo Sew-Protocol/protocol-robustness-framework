@@ -65,31 +65,4 @@
     it, a compromised resolver or governance action could drain
     escrows in a single transaction."}
 
-  {:concept/id :robustness/evidence-integrity
-   :concept/title "Evidence integrity"
-   :concept/summary
-   "Whether the evidence produced by a benchmark run is
-    cryptographically verifiable, non-repudiable, and
-    reproducible by independent verifiers."
-   :concept/stakeholder-language
-   "After a benchmark run, anyone should be able to inspect the
-    evidence bundle, verify the hash chain, re-run the scenarios,
-    and confirm the results match — without trusting the original
-    runner."
-    :concept/maps-to
-    {:scenarios ["malicious-resolver-verdict-v1"
-                 "dispute-flooding-v1"
-                 "autopush-settlement-v1"]
-     :claims    [:all-scenarios-pass :scenario-hash-present :no-invariant-errors]
-     :evidence  [:evidence/evidence-bundle :evidence/hash-chain
-                 :evidence/attestation :evidence/trace]}
-   :concept/why-it-matters
-   "Evidence integrity is what separates a reproducible benchmark
-    from a slide deck. Without it, stakeholders cannot independently
-    verify claims about protocol robustness."
-   :concept/note
-   "The claims :replay-identical-results and
-    :hash-consistency-across-runs referenced in :maps-to are defined
-    in the deterministic-replay-v1 benchmark pack, not evaluated by
-    this benchmark. They are listed here because the evidence-integrity
-    concept spans both packs."}]}
+   ]}

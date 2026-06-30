@@ -6,7 +6,7 @@
 
    Protocol scenario coverage:
      sew-v1   — in-process invariant registry (protocols_src/.../invariant_scenarios.clj)
-     yield-v1 — file-backed suite (scenarios/Y*.json via :yield-provider-scenarios)")
+     yield-v1 — file-backed suite (scenarios/edn/Y*.edn via :yield-provider-scenarios)")
 
 (def ^:private protocol-symbol-registry
   {"sew-v1"   'resolver-sim.protocols.sew/protocol

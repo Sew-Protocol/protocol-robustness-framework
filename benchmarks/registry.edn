@@ -9,7 +9,9 @@
    {:domain/id :domain/yield-shortfall
     :domain/description "Yield provider shortfall, partial fill, liquidity disruption"}
    {:domain/id :domain/allocation-shortfall
-    :domain/description "Allocation shortfall detection, pro-rata handling, deferred claim recording"}]
+     :domain/description "Allocation shortfall detection, pro-rata handling, deferred claim recording"}
+   {:domain/id :domain/prf-core
+    :domain/description "Core PRF benchmark infrastructure: registries, evidence policies, runner policies, scoring rules, and concept mappings"}]
 
  :packs
  [{:pack/id :pack/prf-core

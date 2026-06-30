@@ -9,7 +9,7 @@
 (defn run-sweep []
   (println "Running resilience sweep...")
   (doseq [fee fees severity severities]
-    (let [scenario-path "scenarios/dynamic-sweep.json"
+    (let [scenario-path "scenarios/edn/dynamic-sweep.edn"
           ;; Simple template modification
           scenario-content (format "{\"scenario-id\": \"sweep-%d-%s\", \"title\": \"Sweep\", \"protocol-params\": {\"resolver-fee-bps\": %d}, \"yield-config\": {\"modules\": {\"aave-v3\": {\"policy\": \"de-risking\"}}}, \"events\": [{\"seq\": 0, \"time\": 1000, \"action\": \"set-yield-risk\", \"params\": {\"module-id\": \"aave-v3\", \"shortfall\": {\"available-ratio\": %.1f}}}]}" 
                                    fee severity fee (- 1.0 severity))

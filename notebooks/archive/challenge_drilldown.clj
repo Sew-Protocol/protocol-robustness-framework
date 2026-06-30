@@ -14,7 +14,7 @@
 ;; Data Loading
 
 (def scenario (speds-data/load-coverage)) ;; Simplification for drilldown focus
-(def events (get-in (common/read-json "scenarios/S74_appeal-deadline-boundary.json") [:events]))
+(def events (get-in (common/read-json "scenarios/edn/S74_appeal-deadline-boundary.edn") [:events]))
 
 ;; ---
 ;; Drilldown Interface

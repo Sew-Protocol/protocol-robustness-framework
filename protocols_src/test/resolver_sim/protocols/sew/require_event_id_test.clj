@@ -7,7 +7,7 @@
             [resolver-sim.io.scenarios :as scen-io]))
 
 (deftest require-event-id-rejects-sensitive-action-without-id
-  (let [scenario (scen-io/load-scenario-file "scenarios/S02_dr3-dispute-release.json")
+  (let [scenario (scen-io/load-scenario-file "scenarios/edn/S02_dr3-dispute-release.edn")
         result   (replay/replay-with-protocol sew/protocol scenario
                                               {:flags {:require-event-id? true}})
         entry    (nth (:trace result) 2)]
@@ -16,7 +16,7 @@
     (is (= :missing-event-id (:error entry)))))
 
 (deftest require-event-id-allows-s64-with-ids
-  (let [scenario (scen-io/load-scenario-file "scenarios/S64_replay-event-id-dedupe.json")
+  (let [scenario (scen-io/load-scenario-file "scenarios/edn/S64_replay-event-id-dedupe.edn")
         result   (replay/replay-with-protocol sew/protocol scenario
                                               {:flags replay-flags/external-log-replay-flags})]
     (is (= :pass (:outcome result)))

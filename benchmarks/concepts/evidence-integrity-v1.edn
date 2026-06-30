@@ -7,8 +7,8 @@
   a cross-benchmark dependency on protocol-robustness-v0's concept file."
 
  :concepts
- [{:concept/id :robustness/evidence-integrity
-   :concept/title "Evidence integrity"
+  [{:concept/id :robustness/evidence-integrity
+    :concept/title "Evidence integrity"
    :concept/summary
    "Whether the evidence produced by a benchmark run is
     cryptographically verifiable, non-repudiable, and

@@ -313,7 +313,7 @@
 (def ^:private registry-suite-runners
   "Protocol ID → (fn [opts] → summary-map).
    sew-v1:   in-process invariant registry (protocols_src/.../invariant_scenarios.clj)
-   yield-v1: file-backed suite (scenarios/Y*.json via :yield-provider-scenarios)"
+   yield-v1: file-backed suite (scenarios/edn/Y*.edn via :yield-provider-scenarios)"
   {"sew-v1"   (fn [{:keys [suite-id] :as opts}]
                 (runner/run-collection
                  {:entries     inv-sc/all-scenarios

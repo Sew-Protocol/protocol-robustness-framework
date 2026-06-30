@@ -16,6 +16,7 @@
             [clojure.string    :as str]
             [resolver-sim.definitions.registry :as defs]
             [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.io.scenarios :as sc]
             [resolver-sim.scenario.schema-profile :as schema-profile]
             [resolver-sim.logging :as log]))
 
@@ -60,9 +61,9 @@
   (-> (str (or v ""))
       str/lower-case
       (str/replace #"^:" "")
-      (str/replace #"^scenarios/" "")
       (str/replace #"\.json$" "")
-      (str/replace #"\.trace\.json$" "")))
+      (str/replace #"\.trace\.json$" "")
+      (str/replace #"\.edn$" "")))
 
 (defn- scenario-map->meta [m source-file]
   (let [sid (or (:id m) (:scenario-id m))
@@ -81,15 +82,16 @@
      :source-file source-file}))
 
 (defn- load-scenario-metadata-index
-  "Index canonical scenario metadata by normalized scenario id.
-   Supports both single-scenario maps and array-of-scenarios files."
+  "Index canonical scenario metadata by normalized scenario id."
   []
-  (let [scenario-files (->> (file-seq (io/file "scenarios"))
+  (let [scenario-dir (sc/*scenario-dir*)
+        scenario-ext (sc/*scenario-ext*)
+        scenario-files (->> (file-seq (io/file scenario-dir))
                             (filter #(.isFile %))
-                            (filter #(str/ends-with? (.getName %) ".json")))]
+                            (filter #(str/ends-with? (.getName %) scenario-ext)))]
     (reduce (fn [idx f]
               (try
-                (let [raw (with-open [r (io/reader f)] (json/read r :key-fn keyword))
+                (let [raw (sc/load-scenario-file (.getPath f))
                       entries (cond
                                 (map? raw) [raw]
                                 (vector? raw) (filter map? raw)

@@ -70,9 +70,16 @@
 ^{::clerk/visibility {:code :hide :result :hide}}
 (def report
   (try
-    (rpt/build-report (:evidence-path config)
-                       (:concepts-path config)
-                       (:scoring-path config))
+    ;; Prefer auto-resolution from evidence bundle alone,
+    ;; fall back to explicit paths for backward compatibility.
+    (if (.exists (java.io.File. (:evidence-path config)))
+      (try
+        (rpt/resolve-report (:evidence-path config))
+        (catch Exception _
+          (rpt/build-report (:evidence-path config)
+                             (:concepts-path config)
+                             (:scoring-path config))))
+      (println "No evidence bundle found at" (:evidence-path config)))
     (catch Exception e
       (println "Warning: could not load benchmark evidence:" (.getMessage e))
       nil)))
@@ -94,19 +101,22 @@
        " · " (or (:purpose report) "")])
     [:div {:style {:display "flex" :gap "16px" :marginTop "16px"
                    :flexWrap "wrap"}}
-     (views/render-card
-      {:label "Status"
-       :rag rag
-        :value (if report
-                 (if (:all-pass? report)
-                   "Benchmark dimensions passed"
-                   "Some benchmark dimensions did not pass")
-                "Not run")
-        :note (if report
-                (let [cls (get-in report [:scoring/classification :classification-label])]
-                  (str (:passed-scenarios report) "/" (:total-scenarios report)
-                       " scenarios passed" (when cls (str " — " cls))))
-                "Run `bb benchmark:run` to generate evidence")})
+      (views/render-card
+       {:label "Status"
+        :rag rag
+         :value (if report
+                  (let [cls (get-in report [:scoring/classification :classification-label])
+                        maturity (get-in report [:scoring/classification :claim-maturity :label])]
+                    (or cls (if (:all-pass? report) "Scenario replay passed" "Scenario replay failed")))
+                 "Not run")
+         :note (if report
+                 (let [cls (get-in report [:scoring/classification :classification-label])
+                       maturity (get-in report [:scoring/classification :claim-maturity :label])]
+                   (str (:passed-scenarios report) "/" (:total-scenarios report)
+                        " scenarios passed"
+                        (when cls (str " — " cls))
+                        (when maturity (str " (" maturity ")"))))
+                 "Run `bb benchmark:run` to generate evidence")})
      (when report
        (views/render-card
         {:label "Evidence hash"
@@ -271,13 +281,15 @@
        [:code {:style {:color (:code/block-text notebook-theme)}}
         "bb benchmark:reproduce " (or (:evidence/path report) "<evidence-bundle>")]
        " with the same bundle to independently verify these results."))
-     (views/notice-box
-      "Claim verification scope"
-      (clerk/row
-       "Claim status applies only to the claims declared in the benchmark"
-       " manifest. protocol-robustness-v0 currently verifies Level 1 mechanical"
-       " claims (field existence, hash format, outcome present). Semantic or"
-       " economic claim verification (Level 3) requires separate review."))]))
+      (views/notice-box
+       "Claim verification scope"
+       (clerk/row
+        "Claim status applies only to the claims declared in the benchmark"
+        " manifest. Current verification is at"
+        " Level 1 (mechanical: field existence, hash format, outcome present)."
+        " Level 2 (invariant-backed) evaluators exist for Sew protocol claims."
+        " Level 3 (semantic/economic) verification is deferred — declared"
+        " scenario claims are not evaluated."))]))
 
 ;; ── Concepts reference ────────────────────────────────────────────────────────
 

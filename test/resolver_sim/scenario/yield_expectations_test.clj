@@ -5,11 +5,11 @@
             [resolver-sim.scenario.yield-scenario-lint :as lint]))
 
 (def ^:private negative-yield-scenarios
-  ["scenarios/S108_negative-yield-mild.json"
-   "scenarios/S103_negative-yield-shortfall-cascade.json"
-   "scenarios/S78_yield-negative-yield-release-path.json"
-   "scenarios/S79_yield-negative-yield-dispute-refund-path.json"
-   "scenarios/S109_negative-yield-severe-repair.json"])
+  ["scenarios/edn/S108_negative-yield-mild.edn"
+   "scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+   "scenarios/edn/S78_yield-negative-yield-release-path.edn"
+   "scenarios/edn/S79_yield-negative-yield-dispute-refund-path.edn"
+   "scenarios/edn/S109_negative-yield-severe-repair.edn"])
 
 (defn- load-normalized [path]
   (-> path sc/load-scenario-file fix/normalize-scenario))

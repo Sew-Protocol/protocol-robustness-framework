@@ -300,6 +300,58 @@
               :ordering-policy ordering-policy
               :total-weight total-weight}}))
 
+(defn allocate-pro-rata-with-redistribution
+  "Like allocate-pro-rata, but when an item hits its cap the excess
+   is redistributed to remaining uncapped items via a second pass.
+
+   Items shape: {:id <kw> :weight <int> :cap <int-or-nil>}
+   Nil cap means unlimited (no cap applied).
+
+   When no item has a cap, or no item hits its cap, the result is
+   identical to allocate-pro-rata with the same parameters.
+
+   Same return shape as allocate-pro-rata."
+  [{:keys [amount items id-fn weight-fn cap-fn rounding]
+    :or {id-fn :id
+         weight-fn :weight
+         cap-fn :cap
+         rounding :floor-with-largest-remainder}}]
+  (let [initial (allocate-pro-rata {:amount amount
+                                    :items items
+                                    :id-fn id-fn
+                                    :weight-fn weight-fn
+                                    :cap-fn cap-fn
+                                    :rounding rounding
+                                    :remainder-policy :unallocated})
+        capped-ids (set (keep (fn [a]
+                                (when (and (:cap a) (>= (:allocated a) (:cap a)))
+                                  (:id a)))
+                              (:allocations initial)))
+        excess (+ (:total-unmet initial) (:remainder initial))]
+    (if (or (zero? excess) (empty? capped-ids) (= (count capped-ids) (count items)))
+      initial
+      (let [uncapped (remove (fn [item] (contains? capped-ids (id-fn item))) items)
+            redistributed (allocate-pro-rata {:amount excess
+                                              :items uncapped
+                                              :id-fn id-fn
+                                              :weight-fn weight-fn
+                                              :cap-fn cap-fn
+                                              :rounding rounding
+                                              :remainder-policy :unallocated})
+            capped-alloc (filter (fn [a] (contains? capped-ids (:id a)))
+                                 (:allocations initial))
+            uncapped-alloc (:allocations redistributed)]
+        {:allocations (vec (concat capped-alloc uncapped-alloc))
+         :total-requested amount
+         :total-allocated (+ (:total-allocated initial) (:total-allocated redistributed))
+         :total-unmet (:total-unmet redistributed)
+         :remainder (:remainder redistributed)
+         :policy (:policy initial)
+         :redistribution {:pass-1-capped-ids (vec capped-ids)
+                          :pass-1-excess excess
+                          :pass-2-allocated (:total-allocated redistributed)
+                          :pass-2-items (count uncapped)}}))))
+
 (def default-pro-rata-allocation-result-kind :pro-rata-allocation)
 (def default-pro-rata-allocation-result-version 1)
 (def default-pro-rata-allocation-result-artifact-kind :pro-rata/allocation-result)

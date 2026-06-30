@@ -11,6 +11,26 @@
             [clojure.string   :as str]
             [resolver-sim.logging :as log]))
 
+(def ^:dynamic *scenario-dir*
+  "Directory for executable scenario files, relative to project root."
+  "scenarios/edn")
+
+(def ^:dynamic *scenario-ext*
+  "File extension for executable scenario files, including leading dot."
+  ".edn")
+
+(defn scenario-path
+  "Convert a scenario ID (e.g. \"S01_baseline-happy-path\") to a canonical file path.
+   Uses *scenario-dir* and *scenario-ext* so callers never hardcode dir or extension."
+  [scenario-id]
+  (str *scenario-dir* "/" scenario-id *scenario-ext*))
+
+(defn scenario-file->id
+  "Extract the scenario ID from a scenario file path.
+   Inverse of scenario-path."
+  [path]
+  (-> (io/file path) .getName (str/replace #"\.(edn|json)$" "")))
+
 (defn- json-key->kw [s]
   (keyword (str/replace s "_" "-")))
 
@@ -22,10 +42,19 @@
       :else :json)))
 
 (defn load-scenario-file
-  "Load and parse a scenario file. EDN is preferred; JSON is deprecated."
+  "Load and parse a scenario file. EDN is preferred; JSON is deprecated.
+   Handles both proper EDN format and JSON-style EDN files during migration."
   [path]
   (case (scenario-format path)
-    :edn (edn/read-string (slurp path))
+    :edn (try
+          (edn/read-string (slurp path))
+          (catch Exception _
+            ;; Fallback: try to parse as JSON-style EDN content
+            (log/warn! :scenario-edn-json-style
+                       {:path path
+                        :message "EDN file contains JSON-style content; prefer proper EDN format with keywords"})
+            (with-open [r (io/reader path)]
+              (json/read r :key-fn json-key->kw))))
     :json (do
             (log/warn! :scenario-json-deprecated
                        {:path path

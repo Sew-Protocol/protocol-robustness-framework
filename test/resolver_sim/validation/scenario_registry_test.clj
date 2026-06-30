@@ -20,10 +20,10 @@
     (is (pos? (get-in summary [:registry/file-backed :scenario-count])))))
 
 (deftest file-backed-registry-rejects-duplicate-scenario-ids
-  (let [suite-registry {:suite/a {:paths ["scenarios/Y01_vault-shared-liquidity.json"]
+  (let [suite-registry {:suite/a {:paths ["scenarios/edn/Y01_vault-shared-liquidity.edn"]
                                   :protocol-id "yield-v1"
                                   :kind :file-path-suite}
-                        :suite/b {:paths ["scenarios/Y01_vault-shared-liquidity.json"]
+                        :suite/b {:paths ["scenarios/edn/Y01_vault-shared-liquidity.edn"]
                                   :protocol-id "yield-v1"
                                   :kind :file-path-suite}}]
     (try
@@ -45,7 +45,7 @@
         (is (= "scenarios/DOES_NOT_EXIST.edn" (:scenario/path (ex-data e))))))))
 
 (deftest file-backed-registry-rejects-protocol-dispatch-mismatch
-  (let [suite-registry {:suite/wrong-protocol {:paths ["scenarios/Y01_vault-shared-liquidity.json"]
+  (let [suite-registry {:suite/wrong-protocol {:paths ["scenarios/edn/Y01_vault-shared-liquidity.edn"]
                                                :protocol-id "sew-v1"
                                                :kind :file-path-suite}}]
     (try
@@ -57,7 +57,7 @@
         (is (= "yield-v1" (:actual (ex-data e))))))))
 
 (deftest file-backed-registry-rejects-malformed-suite-definition
-  (let [suite-registry {:suite/bad {:paths '("scenarios/Y01_vault-shared-liquidity.json")
+  (let [suite-registry {:suite/bad {:paths '("scenarios/edn/Y01_vault-shared-liquidity.edn")
                                     :protocol-id "yield-v1"
                                     :kind :file-path-suite}}]
     (try

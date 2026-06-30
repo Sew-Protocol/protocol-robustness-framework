@@ -1,6 +1,6 @@
 (ns resolver-sim.protocols.sew.dispute-resolution-coverage-test
   "Deterministic test suite for dispute resolution coverage scenarios (S-DR-*).
-   Each scenario is loaded from scenarios/S-DR-*.json, normalized, replayed
+   Each scenario is loaded from scenarios/edn/S-DR-*.edn, normalized, replayed
    with the Sew protocol, and verified for:
      - Deterministic pass/fail outcome
      - Zero invariant violations (unless expected-fail?)
@@ -521,7 +521,7 @@
 
 (deftest test-new-dispute-invariants-on-sample
   (testing "New dispute invariants execute without error on a basic dispute world"
-    (let [scenario (load-scenario "scenarios/S-DR-001-basic-release-ruling.json")
+    (let [scenario (load-scenario "scenarios/edn/S-DR-001-basic-release-ruling.edn")
           replay (replay-scenario scenario)
           world (:world replay)]
       (testing "evidence-on-state-change"
@@ -540,7 +540,7 @@
           (is (contains? result :holds?))
           (is (contains? result :reversals)))))
     (testing "S-DR-030 biased-resolver world triggers reversal detection"
-      (let [scenario (load-scenario "scenarios/S-DR-030-biased-resolver-appealed.json")
+      (let [scenario (load-scenario "scenarios/edn/S-DR-030-biased-resolver-appealed.edn")
             replay (replay-scenario scenario)
             world (:world replay)
             result ((resolve 'resolver-sim.protocols.sew.invariants.dispute/appeal-reversal-detectable?) world)]

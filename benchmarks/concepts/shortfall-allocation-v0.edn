@@ -7,8 +7,9 @@
  is covered by the Sew yield-shortfall-v1 benchmark (scenario S82)."
 
  :concepts
- [{:concept/id :allocation/partial-fill
-   :concept/title "Partial fill allocation"
+  [{:concept/id :allocation/partial-fill
+    :concept/shadows-global? true
+    :concept/title "Partial fill allocation"
    :concept/summary
    "When available value is insufficient, the protocol pays the recoverable
     portion of valid claims instead of pretending all claims can be satisfied."
@@ -25,7 +26,8 @@
     recovery should remain fair and reproducible."}
 
   {:concept/id :allocation/shortfall
-   :concept/title "Shortfall detection"
+    :concept/shadows-global? true
+    :concept/title "Shortfall detection"
    :concept/summary
    "The protocol detects when the requested value exceeds what can be paid and
     records that shortfall explicitly."
@@ -42,7 +44,8 @@
     auditable allocation."}
 
   {:concept/id :allocation/pro-rata-fairness
-   :concept/title "Pro-rata fairness"
+    :concept/shadows-global? true
+    :concept/title "Pro-rata fairness"
    :concept/summary
    "Equal-priority claimants receive proportionate recovery from the available
     value."

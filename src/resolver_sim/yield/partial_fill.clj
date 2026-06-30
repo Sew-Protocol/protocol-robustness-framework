@@ -14,6 +14,7 @@
       :post-partial-fill-accrual :accrue-residual-as-unrealized
       :rounding-policy :floor-and-carry}"
   (:require [resolver-sim.evidence.config :as evcfg]
+            [resolver-sim.economics.payoffs :as payoffs]
             [resolver-sim.yield.exact-math :as m]
             [resolver-sim.yield.position :as pos]
             [resolver-sim.yield.token :as tok]
@@ -72,55 +73,113 @@
   (reduce + 0 (map long (vals requested))))
 
 (defn- make-evidence
-  [policy available-liquidity total-requested shortage fill-mode]
-  {:schema-version schema-version
-   :available-liquidity available-liquidity
-   :total-requested total-requested
-   :shortage shortage
-   :fill-mode fill-mode
-   :rounding-policy (:rounding-policy policy)
-   :fill-order (:fill-order policy)})
+  [policy available-liquidity total-requested shortage fill-mode & [extra]]
+  (merge {:schema-version schema-version
+          :available-liquidity available-liquidity
+          :total-requested total-requested
+          :shortage shortage
+          :fill-mode fill-mode
+          :rounding-policy (:rounding-policy policy)
+          :fill-order (:fill-order policy)}
+         (when extra (assoc extra :allocation-rows (:rows extra)))))
 
 (defn calculate-fulfillment-pro-rata
   "Pro-rata fill: each claim bucket receives a proportional share of the available
-   liquidity. Exact ratios computed, then quantized via configured rounding policy."
-  [available-liquidity requested policy]
+   liquidity. Exact ratios computed, then quantized via configured rounding policy.
+
+   Optional opts:
+     :rows — vector of {:key k :owed v :weight w :cap c} for decoupled
+             weight/cap allocation. When absent, weight and cap are both
+             derived from the requested amount (existing behavior)."
+  [available-liquidity requested policy & [opts]]
   (let [total (sum-requested requested)
-        shortage (max 0 (- total available-liquidity))]
+        shortage (max 0 (- total available-liquidity))
+        rows (:rows opts)]
     (if (zero? shortage)
-      {:settlement-mode :full-fill
-       :requested requested
-       :filled requested
-       :deferred {}
-       :haircut {}
-       :unrealized {}
-       :policy policy
-       :evidence (make-evidence policy available-liquidity total 0 :pro-rata)}
-      (let [claims (mapv (fn [[k v]] {:key k :amount (long v)})
-                         (seq requested))
-            rounding-policy (:rounding-policy policy :floor-and-carry)
-            alloc (case rounding-policy
-                    :largest-remainder (m/largest-remainder-alloc available-liquidity claims)
-                    :principal-protective-floor (m/principal-protective-floor-alloc
-                                                 available-liquidity claims
-                                                 (fn [c] (= :principal (:key c))))
-                    :adversarial-rounding (m/adversarial-rounding available-liquidity claims)
-                    (m/floor-and-carry-alloc available-liquidity claims))
-            filled (into {} (map (fn [a] [(:key a) (:filled a)]) (:allocations alloc)))
-            deferred (into {} (map (fn [[k v]] [k (max 0 (- (long v) (long (get filled k 0))))])
-                                   requested))]
-        {:settlement-mode :partial-fill
-         :requested requested
+      (let [filled (if rows
+                     (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows))
+                     requested)]
+        {:settlement-mode :full-fill
+         :requested (if rows (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows)) requested)
          :filled filled
-         :deferred deferred
+         :deferred {}
          :haircut {}
          :unrealized {}
          :policy policy
-         :evidence (assoc (make-evidence policy available-liquidity total shortage :pro-rata)
-                          :allocation-detail (select-keys alloc [:total-available-units
-                                                                 :total-allocated-units
-                                                                 :shortage-units
-                                                                 :carry]))}))))
+         :evidence (make-evidence policy available-liquidity total 0 :pro-rata)})
+      (if rows
+        ;; Decoupled weight/cap path via payoffs allocator with redistribution.
+        ;; Effective cap = min(owed, cap) so the allocator enforces both limits.
+        (let [items (mapv (fn [r]
+                            {:id (:key r)
+                             :weight (or (:weight r) (long (:owed r)))
+                             :cap (let [c (:cap r)]
+                                    (if (some? c) (min (long (:owed r)) c) (long (:owed r))))})
+                          rows)
+              rounding-policy (:rounding-policy policy :floor-and-carry)
+              alloc (payoffs/allocate-pro-rata-with-redistribution
+                     {:amount available-liquidity
+                      :items items
+                      :id-fn :id
+                      :weight-fn :weight
+                      :cap-fn :cap
+                      :rounding (if (#{:floor :floor-with-largest-remainder} rounding-policy)
+                                  rounding-policy
+                                  :floor-with-largest-remainder)})
+              filled (into {} (map (fn [a] [(:id a) (:allocated a)]) (:allocations alloc)))
+              row-evidence (mapv (fn [r]
+                                   (let [f (long (get filled (:key r) 0))
+                                         d (max 0 (- (long (:owed r)) f))
+                                         cap (:cap r)
+                                         effective-cap (if (some? cap)
+                                                         (min (long (:owed r)) cap)
+                                                         (long (:owed r)))]
+                                     {:key (:key r)
+                                      :owed (long (:owed r))
+                                      :weight (or (:weight r) (long (:owed r)))
+                                      :cap (when cap (long cap))
+                                      :filled f
+                                      :deferred d
+                                      :cap-hit? (if (some? cap) (>= f effective-cap) false)}))
+                                 rows)
+              deferred (into {} (map (fn [r] [(:key r) (:deferred r)]) row-evidence))]
+          {:settlement-mode :partial-fill
+           :requested (into {} (map (fn [r] [(:key r) (long (:owed r))]) rows))
+           :filled filled
+           :deferred deferred
+           :haircut {}
+           :unrealized {}
+           :policy policy
+           :evidence (assoc (make-evidence policy available-liquidity total shortage :pro-rata)
+                            :allocation-detail (select-keys alloc [:total-allocated :total-unmet :remainder])
+                            :allocation-rows row-evidence
+                            :redistribution (:redistribution alloc))})
+        ;; Backward compatible path: derive weight/cap from requested
+        (let [claims (mapv (fn [[k v]] {:key k :amount (long v)})
+                           (seq requested))
+              rounding-policy (:rounding-policy policy :floor-and-carry)
+              alloc (case rounding-policy
+                      :largest-remainder (m/largest-remainder-alloc available-liquidity claims)
+                      :principal-protective-floor (m/principal-protective-floor-alloc
+                                                   available-liquidity claims
+                                                   (fn [c] (= :principal (:key c))))
+                      :adversarial-rounding (m/adversarial-rounding available-liquidity claims)
+                      (m/floor-and-carry-alloc available-liquidity claims))
+              filled (into {} (map (fn [a] [(:key a) (:filled a)]) (:allocations alloc)))
+              deferred (into {} (map (fn [[k v]] [k (max 0 (- (long v) (long (get filled k 0))))])
+                                     requested))]
+          {:settlement-mode :partial-fill
+           :requested requested
+           :filled filled
+           :deferred deferred
+           :haircut {}
+           :unrealized {}
+           :policy policy
+           :evidence (assoc (make-evidence policy available-liquidity total shortage :pro-rata)
+                            :allocation-detail (select-keys alloc [:total-available-units
+                                                                   :total-allocated-units
+                                                                   :shortage-units
+                                                                   :carry]))})))))
 
 (defn calculate-fulfillment-principal-first
   "Principal-first fill: principal claims are satisfied in full before any
@@ -268,7 +327,8 @@
                    :shortage 0
                    :fill-mode mode}}
        (case mode
-         :pro-rata        (calculate-fulfillment-pro-rata available requested policy)
+         :pro-rata        (calculate-fulfillment-pro-rata available requested policy
+                                                          (select-keys opts [:rows]))
          :principal-first (calculate-fulfillment-principal-first available requested policy)
          :waterfall       (calculate-fulfillment-waterfall available requested policy))))))
 

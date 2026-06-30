@@ -45,7 +45,7 @@
       label]
      [:div {:style {:marginTop "6px" :fontFamily "JetBrains Mono" :fontSize "12px" :color "#e2e8f0"}} sid]
      [:div {:style {:marginTop "6px" :fontSize "12px" :color "#cbd5e1"}}
-      (or title "Scenario not found in loaded coverage artifact or scenarios/*.json")]
+      (or title "Scenario not found in loaded coverage artifact or scenarios/edn/*.edn")]
      [:div {:style {:marginTop "4px" :fontSize "11px" :color "#94a3b8"}}
       (str "Metadata source: " source)]
      [:div {:style {:marginTop "8px" :fontSize "12px" :color "#fbbf24"}}

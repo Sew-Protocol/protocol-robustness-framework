@@ -730,7 +730,7 @@
 ;; ── Diff Evidence: "What changed because of this event?" ────────────────
 
 (deftest diff-evidence-builds-from-trace
-  (let [s (io-sc/load-scenario-file "scenarios/S01_baseline-happy-path.json")
+  (let [s (io-sc/load-scenario-file "scenarios/edn/S01_baseline-happy-path.edn")
         r (sew/replay-with-sew-protocol (fix/normalize-scenario s))
         diffs (diff/build-diff-evidence (:trace r) :scenario-id "S01" :run-id "test")]
     (is (seq diffs) "At least one diff artifact produced")
@@ -769,7 +769,7 @@
 
 (deftest diff-evidence-write-and-index
   (let [dir (str (System/getProperty "java.io.tmpdir") "/qol-diff-" (java.util.UUID/randomUUID))
-        s (io-sc/load-scenario-file "scenarios/S01_baseline-happy-path.json")
+        s (io-sc/load-scenario-file "scenarios/edn/S01_baseline-happy-path.edn")
         r (sew/replay-with-sew-protocol (fix/normalize-scenario s))
         result (diff/write-diff-evidence! (:trace r) dir :scenario-id "S01" :run-id "test")]
     (is (pos? (:diff-count result)) "Diffs were written")

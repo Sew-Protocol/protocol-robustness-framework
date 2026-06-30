@@ -1,8 +1,9 @@
 (ns resolver-sim.io.scenario-fixture-sync
-  "Sync invariant scenario maps to trace.json and public scenarios/*.json fixtures."
+  "Sync invariant scenario maps to trace.json and public scenarios/edn/*.edn fixtures."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [resolver-sim.io.scenario-export :as export]
+            [resolver-sim.io.scenarios :as sc]
             [resolver-sim.protocols.sew.invariant-scenarios :as scenarios]))
 
 (defn- flatten-scenarios
@@ -48,9 +49,9 @@
 (defn trace-path [scenario-id]
   (str "data/fixtures/traces/" scenario-id ".trace.json"))
 
-(defn public-json-path [scenario-id]
+(defn public-scenario-path [scenario-id]
   (some-> scenario-id export/scenario-id->public-json-filename
-          (str "scenarios/")))
+          (str sc/*scenario-dir* "/")))
 
 (defn export-scenario-fixtures!
   [scenario & {:keys [write-public-json?]}]

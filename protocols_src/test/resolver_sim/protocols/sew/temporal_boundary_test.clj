@@ -9,7 +9,7 @@
 
 (deftest test-s74-appeal-deadline-boundary
   (testing "execute_pending_settlement is rejected at t-1 and accepted at t"
-    (let [scenario (load-scenario "scenarios/S74_appeal-deadline-boundary.json")
+    (let [scenario (load-scenario "scenarios/edn/S74_appeal-deadline-boundary.edn")
           r1       (replay/replay-with-protocol sew/protocol scenario)
           r2       (replay/replay-with-protocol sew/protocol scenario)
           trace    (:trace r1)
@@ -26,7 +26,7 @@
 
 (deftest test-s75-auto-release-vs-dispute-race
   (testing "Dispute before auto-release boundary prevents timed auto-release path"
-    (let [scenario (load-scenario "scenarios/S75_auto-release-vs-dispute-race.json")
+    (let [scenario (load-scenario "scenarios/edn/S75_auto-release-vs-dispute-race.edn")
           r1       (replay/replay-with-protocol sew/protocol scenario)
           r2       (replay/replay-with-protocol sew/protocol scenario)
           trace    (:trace r1)
@@ -45,7 +45,7 @@
 
 (deftest test-s77-challenge-clears-pending-before-deadline-without-next-resolver
   (testing "BUG repro: challenge at t-1 can clear pending even if no usable next resolver executes"
-    (let [scenario (load-scenario "scenarios/S77_appeal-window-challenge-clears-pending-without-next-resolver.json")
+    (let [scenario (load-scenario "scenarios/edn/S77_appeal-window-challenge-clears-pending-without-next-resolver.edn")
           r1       (replay/replay-with-protocol sew/protocol scenario)
           trace    (:trace r1)
           p1       (-> r1 :trace last :projection)]

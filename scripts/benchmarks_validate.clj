@@ -65,11 +65,21 @@
             (swap! errors conj (str "reference-validation manifest missing simulator path " path))
             (println "    FAIL simulator path missing:" path)))))))
 
+(defn- file-stem
+  "Strip known extensions from a file name."
+  [name]
+  (let [extensions [".json" ".edn"]]
+    (reduce (fn [n ext]
+              (if (.endsWith n ext)
+                (subs n 0 (- (count n) (count ext)))
+                n))
+            name extensions)))
+
 (defn suite-scenario-ids
   "Return the set of expected scenario IDs for a given suite key.
    For manifest-backed suites (those with a suites/<suite-name>/manifest.edn),
    returns the manifest's public scenario IDs. For path-list suites, derives
-   IDs by stripping directory and .json extension from each path."
+   IDs by stripping directory and known extensions from each path."
   [suite-key]
   (let [suite-name (name suite-key)
         manifest-path (str "suites/" suite-name "/manifest.edn")]
@@ -81,11 +91,8 @@
       (let [paths (suites/suite-paths suite-key)]
         (set (map (fn [p]
                     (let [f (io/file p)
-                          name (.getName f)
-                          stem (if (.endsWith name ".json")
-                                 (subs name 0 (- (count name) 5))
-                                 name)]
-                      stem))
+                          name (.getName f)]
+                      (file-stem name)))
                   paths))))))
 
 (defn validate-scenario-ids!
@@ -150,6 +157,27 @@
     (let [scenarios (:benchmark/scenarios benchmark)]
       (when (seq scenarios)
         (validate-scenario-ids! errors suite-key benchmark-path scenarios)))
+
+    ;; ── Scenario claim reference validation ──────────────────────
+    ;; :benchmark/scenarios[*].:claim must resolve to the claim registry
+    ;; or be explicitly listed as a deferred semantic claim.
+    (let [deferred-claims (or (:benchmark/deferred-scenario-claims benchmark)
+                              #{})
+          all-registered-ids (set (map :claim/id (:claims claim-registry)))
+          all-scenario-claims (set (keep :claim (:benchmark/scenarios benchmark)))]
+      (doseq [scenario (:benchmark/scenarios benchmark)
+              :let [scenario-claim (:claim scenario)]
+              :when scenario-claim]
+        (cond
+          (contains? all-registered-ids scenario-claim)
+          (println "    OK scenario claim" scenario-claim "resolves to claim registry")
+
+          (contains? deferred-claims scenario-claim)
+          (println "    OK scenario claim" scenario-claim "is explicitly deferred (semantic claim, not evaluated)")
+
+          :else
+          (do (swap! errors conj (str "scenario claim " scenario-claim " does not resolve to claim registry or deferred-claims in " benchmark-path))
+              (println "    FAIL scenario claim" scenario-claim "does not resolve — add to claim-registry.edn or :benchmark/deferred-scenario-claims")))))
 
     ;; ── Claim ref validation ──────────────────────────────────
     (let [claim-refs (:benchmark/claims benchmark)]
@@ -224,6 +252,27 @@
                           concept-files)
           concept-idx (merge (concept-index global-concepts)
                              (concept-index local-concepts))]
+
+      ;; ── Concept ID collision detection ─────────────────────────────
+      (let [global-ids (set (map :concept/id global-concepts))
+            local-ids (set (map :concept/id local-concepts))
+            collisions (set/intersection global-ids local-ids)]
+        (doseq [cid (sort collisions)]
+          (let [local-file (first (for [path concept-files
+                                        :let [[data _] (parse-edn path)]
+                                        :when data
+                                        :let [concept (first (filter #(= (:concept/id %) cid) (:concepts data)))]
+                                        :when concept]
+                                    (.getPath path)))
+                shadows-global? (some (fn [c]
+                                        (and (= (:concept/id c) cid)
+                                             (:concept/shadows-global? c)))
+                                      local-concepts)]
+            (if shadows-global?
+              (println "    OK concept" cid "explicitly shadows global concept (in" local-file ")")
+              (do (swap! errors conj (str "concept " cid " in " local-file " shadows global concept without :concept/shadows-global? true"))
+                  (println "    FAIL concept" cid "shadows global concept — add :concept/shadows-global? true to" local-file))))))
+
       (doseq [path concept-files]
         (validate-file-exists! errors (.getPath path) "concept file")
         (let [[data parse-err] (parse-edn path)]

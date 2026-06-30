@@ -13,13 +13,13 @@
   :label "Yield shortfall + partial liquidity"
   :terms ["yield shortfall" "partial liquidity" "available-ratio" "shortfall"]
   :expected-paths ["docs/yield/YIELD_INVARIANTS.md"
-                   "scenarios/S78_yield-aave-partial-liquidity-release.json"
-                   "scenarios/S79_yield-aave-partial-liquidity-dispute-resolution.json"
-                   "scenarios/S80_yield-mostly-liquid-partial-liquidity.json"
-                   "scenarios/S78_yield-negative-yield-release-path.json"
-                   "scenarios/S79_yield-negative-yield-dispute-refund-path.json"
-                   "scenarios/S103_negative-yield-shortfall-cascade.json"
-                   "scenarios/S82_shortfall-recovery-cycle.json"
+                   "scenarios/edn/S78_yield-aave-partial-liquidity-release.edn"
+                   "scenarios/edn/S79_yield-aave-partial-liquidity-dispute-resolution.edn"
+                   "scenarios/edn/S80_yield-mostly-liquid-partial-liquidity.edn"
+                   "scenarios/edn/S78_yield-negative-yield-release-path.edn"
+                   "scenarios/edn/S79_yield-negative-yield-dispute-refund-path.edn"
+                   "scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+                   "scenarios/edn/S82_shortfall-recovery-cycle.edn"
                     "docs/evidence/S80_MOSTLY_LIQUID_END_TO_END_DEMO.md"]
   :tags [:yield :evidence :scenario]
   :note "Yield shortfall is a core claim; researchers must find authoritative scenario docs + evidence."}
@@ -40,7 +40,7 @@
  {:id :fork-isolation
   :label "Fork isolation (scenario S33)"
   :terms ["fork isolation" "S33" "two-escrow-fork-isolation"]
-  :expected-paths ["scenarios/S33_forking-strategist-two-escrow-fork-isolation.json"
+  :expected-paths ["scenarios/edn/S33_forking-strategist-two-escrow-fork-isolation.edn"
                    "docs/scenarios.md"
                    "src/resolver_sim/protocols/sew/invariant_scenarios/forking_strategist.clj"
                    "data/fixtures/suites/forking-strategist.edn"]
@@ -51,10 +51,10 @@
   :label "Partial liquidity yield scenarios"
   :terms ["partial liquidity" "mostly-liquid" "available-ratio"
           "partial-liquidity-release" "partial-liquidity-dispute"]
-  :expected-paths ["scenarios/S78_yield-aave-partial-liquidity-release.json"
-                   "scenarios/S79_yield-aave-partial-liquidity-dispute-resolution.json"
-                   "scenarios/S80_yield-mostly-liquid-partial-liquidity.json"
-                   "scenarios/S112_aave-partial-liquidity-recovery.json"
+  :expected-paths ["scenarios/edn/S78_yield-aave-partial-liquidity-release.edn"
+                   "scenarios/edn/S79_yield-aave-partial-liquidity-dispute-resolution.edn"
+                   "scenarios/edn/S80_yield-mostly-liquid-partial-liquidity.edn"
+                   "scenarios/edn/S112_aave-partial-liquidity-recovery.edn"
                    "docs/evidence/S80_MOSTLY_LIQUID_END_TO_END_DEMO.md"]
   :tags [:yield :scenario :evidence]
   :note "Partial liquidity is a DeFi-specific risk; docs must be accessible."}
@@ -142,11 +142,11 @@
   :label "Yield scenario suite (S68-S115)"
   :terms ["yield scenario" "yield-accrual" "yield-aave" "yield-fixed"
           "S68" "S69" "S73" "S80" "S83" "S84" "S85"]
-  :expected-paths ["scenarios/S68_yield-aave-long-horizon-10y-monthly-accrual.json"
-                   "scenarios/S69_yield-fixed-long-horizon-10y-quarterly-accrual.json"
-                   "scenarios/S80_yield-mostly-liquid-partial-liquidity.json"
-                   "scenarios/S103_negative-yield-shortfall-cascade.json"
-                   "scenarios/S104_resolver-stake-shortfall.json"
+  :expected-paths ["scenarios/edn/S68_yield-aave-long-horizon-10y-monthly-accrual.edn"
+                   "scenarios/edn/S69_yield-fixed-long-horizon-10y-quarterly-accrual.edn"
+                   "scenarios/edn/S80_yield-mostly-liquid-partial-liquidity.edn"
+                   "scenarios/edn/S103_negative-yield-shortfall-cascade.edn"
+                   "scenarios/edn/S104_resolver-stake-shortfall.edn"
                    "notebooks/yield_scenarios_workbench.clj"
                    "docs/researcher/yield_scenario_guide.md"]
   :tags [:yield :scenario :notebook]
@@ -155,9 +155,9 @@
  {:id :adversarial-scenarios
   :label "Adversarial + forking strategist suite"
   :terms ["adversarial" "forking strategist" "S26" "S42" "bribery loop" "malicious resolver"]
-  :expected-paths ["scenarios/S26_forking-strategist-l1-reversal.json"
-                   "scenarios/S42_resolver-buyer-bribery-loop.json"
-                   "scenarios/S08_state-machine-attack-gauntlet.json"
+  :expected-paths ["scenarios/edn/S26_forking-strategist-l1-reversal.edn"
+                   "scenarios/edn/S42_resolver-buyer-bribery-loop.edn"
+                   "scenarios/edn/S08_state-machine-attack-gauntlet.edn"
                    "data/fixtures/suites/forking-strategist.edn"
                    "src/resolver_sim/protocols/sew/invariant_scenarios/adversarial.clj"]
   :tags [:adversarial :scenario :invariant]
@@ -170,8 +170,8 @@
                    "src/resolver_sim/time/model.clj"
                    "src/resolver_sim/time/invariants.clj"
                    "docs/protocol/temporal-rules.md"
-                   "scenarios/S04_dispute-timeout-autocancel.json"
-                   "scenarios/S57_pending-settlement-expiry-boundary-1s.json"]
+                   "scenarios/edn/S04_dispute-timeout-autocancel.edn"
+                   "scenarios/edn/S57_pending-settlement-expiry-boundary-1s.edn"]
   :tags [:temporal :invariant :scenario]
   :note "Temporal rules govern all dispute windows; docs/code alignment is essential."}
 

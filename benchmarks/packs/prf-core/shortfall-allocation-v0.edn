@@ -9,8 +9,11 @@
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
   :benchmark/scoring-rule    :scoring/shortfall-allocation-v0
-  :benchmark/property-types  #{:fairness :safety}
-  :benchmark/purpose
+   :benchmark/property-types  #{:fairness :safety}
+   :benchmark/deferred-scenario-claims #{:allocation-complete
+                                         :conservation
+                                         :ordering-independent}
+   :benchmark/purpose
  "Evaluate shortfall handling across three conditions: yield liquidity
   shortfall with partial fill, negative yield cascade with deferred
   recovery, and resolver stake shortfall. Each scenario exercises

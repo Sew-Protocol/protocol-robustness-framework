@@ -8,8 +8,8 @@
             [resolver-sim.notebook-support.common :as common]
             [resolver-sim.notebook-support.speds.data :as data]))
 
-(def base-scenario "scenarios/S83_yield-accrual-reorg-race.json")
-(def cf-scenario "scenarios/S74_appeal-deadline-boundary.json")
+(def base-scenario "scenarios/edn/S83_yield-accrual-reorg-race.edn")
+(def cf-scenario "scenarios/edn/S74_appeal-deadline-boundary.edn")
 
 (defn load-events [scenario-path]
   (or (:events (common/read-json scenario-path)) []))

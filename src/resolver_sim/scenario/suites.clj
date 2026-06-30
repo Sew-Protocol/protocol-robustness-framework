@@ -1,12 +1,13 @@
 (ns resolver-sim.scenario.suites
-  "Named deterministic scenario collections (path lists) for run-collection.
+  "Named deterministic scenario collections for run-collection.
+   Scenario IDs are resolved to file paths via resolver-sim.io.scenarios/scenario-path.
 
    THREE GROUPING CONCEPTS exist in this codebase.
    They differ in registration, execution model, and purpose:
 
    ─────────────────────────────────────────────────────────────────
    SUITE  (run:scenario:suite)
-     Registered, curated path list in `suites` (this file).
+     Registered, curated scenario ID list in `suites` (this file).
      Executes in a single Clojure process via run-collection.
      Used by: CI gates, golden report refresh, coverage tiers.
      Examples: :dispute-resolution-scenarios, :sew-yield-scenarios
@@ -33,73 +34,78 @@
    OVERLAP WARNING:
    The 44 dispute-resolution files (S-DR-001..S-DR-085) appear in
    THREE groupings — one suite + two pack suites.  This is by design
-   (pack suites reuse the same path lists), but means the same
+   (pack suites reuse the same ID lists), but means the same
    scenarios execute under different names depending on the entry
    point.  See `pack-suites` docstring for details.
 
    Suite naming:
      :yield-provider-scenarios — standalone `yield-v1` provider scenarios (scenarios/Y01..Y05)
      :sew-yield-scenarios       — Sew escrow + yield integration (scenarios/S*)
-     :yield-scenarios           — removed June 2026; use :sew-yield-scenarios")
+     :yield-scenarios           — removed June 2026; use :sew-yield-scenarios"
+  (:require [resolver-sim.io.scenarios :as sc]))
 
-(def ^:private yield-provider-scenario-paths
-  ["scenarios/Y01_vault-shared-liquidity.json"
-   "scenarios/Y02_vault-shortfall-partial-withdraw.json"
-   "scenarios/Y03_vault-risk-override-schedule-shadowing.json"
-   "scenarios/Y04_vault-recovery-claim-deferred.json"
-   "scenarios/Y05_auto-generated-shortfall.json"])
+;; ── Suite path resolution ─────────────────────────────────────────────────────
+;; Scenario IDs are resolved to file paths via sc/scenario-path.
+;; Only trace-reference suites (sew-reference-v1) store explicit paths.
 
-(def ^:private dispute-resolution-scenario-paths
-  ["scenarios/S-DR-001-basic-release-ruling.json"
-   "scenarios/S-DR-002-basic-refund-ruling.json"
-   "scenarios/S-DR-003-duplicate-dispute-rejected.json"
-   "scenarios/S-DR-004-timeout-default-resolution.json"
-   "scenarios/S-DR-010-missing-evidence.json"
-   "scenarios/S-DR-011-contradictory-evidence.json"
-   "scenarios/S-DR-012-late-evidence-rejected.json"
-   "scenarios/S-DR-013-evidence-at-deadline.json"
-   "scenarios/S-DR-020-false-claimant-slashed.json"
-   "scenarios/S-DR-021-griefing-claim-cost.json"
-   "scenarios/S-DR-022-lazy-counterparty-timeout.json"
-   "scenarios/S-DR-030-biased-resolver-appealed.json"
-   "scenarios/S-DR-031-colluding-resolver-detected.json"
-   "scenarios/S-DR-032-resolver-insufficient-stake.json"
-   "scenarios/S-DR-040-finality-blocked-during-appeal.json"
-   "scenarios/S-DR-041-finality-after-appeal-window.json"
-   "scenarios/S-DR-042-duplicate-claim-after-finality-rejected.json"
-   "scenarios/S-DR-043-payout-shortfall-deferred.json"
-   "scenarios/S-DR-044-slash-obligation-unmet-recorded.json"
-   "scenarios/S-DR-050-resolution-module-plus-kleros.json"
-   "scenarios/S-DR-051-challenge-without-escalation.json"
-   "scenarios/S-DR-052-custom-resolver-bypasses-module.json"
-   "scenarios/S-DR-053-module-false-fallthrough.json"
-   "scenarios/S-DR-054-missing-escalation-level.json"
-   "scenarios/S-DR-055-sender-cancel-refund.json"
-   "scenarios/S-DR-056-evidence-non-disputed-rejected.json"
-   "scenarios/S-DR-060-rotate-resolver-mid-dispute.json"
-   "scenarios/S-DR-061-slash-propose-execute.json"
-   "scenarios/S-DR-062-rotate-resolver-rejected.json"
-   "scenarios/S-DR-063-slash-appeal-upheld.json"
-   "scenarios/S-DR-064-slash-appeal-rejected-executed.json"
-   "scenarios/S-DR-070-empty-string-resolver-rejected.json"
-   "scenarios/S-DR-071-governance-rotate-biased-ruling.json"
-   "scenarios/S-DR-072-resolver-unavailable-timeout.json"
-   "scenarios/S-DR-073-capacity-exhaustion-permanent-lock.json"
-   "scenarios/S-DR-074-governance-capacity-bypass.json"
-   "scenarios/S-DR-075-insufficient-bond-deterrence.json"
-   "scenarios/S-DR-076-non-governance-rotate-rejected.json"
-   "scenarios/S-DR-080-stake-capacity-enforced.json"
-   "scenarios/S-DR-081-stake-capacity-bypass.json"
-   "scenarios/S-DR-082-stake-capacity-sufficient.json"
-   "scenarios/S-DR-083-evidence-after-resolution.json"
-   "scenarios/S-DR-084-evidence-after-settlement-rejected.json"
-   "scenarios/S-DR-085-repeated-frivolous-disputes.json"])
+(def ^:private yield-provider-scenario-ids
+  ["Y01_vault-shared-liquidity"
+   "Y02_vault-shortfall-partial-withdraw"
+   "Y03_vault-risk-override-schedule-shadowing"
+   "Y04_vault-recovery-claim-deferred"
+   "Y05_auto-generated-shortfall"])
+
+(def ^:private dispute-resolution-scenario-ids
+  ["S-DR-001-basic-release-ruling"
+   "S-DR-002-basic-refund-ruling"
+   "S-DR-003-duplicate-dispute-rejected"
+   "S-DR-004-timeout-default-resolution"
+   "S-DR-010-missing-evidence"
+   "S-DR-011-contradictory-evidence"
+   "S-DR-012-late-evidence-rejected"
+   "S-DR-013-evidence-at-deadline"
+   "S-DR-020-false-claimant-slashed"
+   "S-DR-021-griefing-claim-cost"
+   "S-DR-022-lazy-counterparty-timeout"
+   "S-DR-030-biased-resolver-appealed"
+   "S-DR-031-colluding-resolver-detected"
+   "S-DR-032-resolver-insufficient-stake"
+   "S-DR-040-finality-blocked-during-appeal"
+   "S-DR-041-finality-after-appeal-window"
+   "S-DR-042-duplicate-claim-after-finality-rejected"
+   "S-DR-043-payout-shortfall-deferred"
+   "S-DR-044-slash-obligation-unmet-recorded"
+   "S-DR-050-resolution-module-plus-kleros"
+   "S-DR-051-challenge-without-escalation"
+   "S-DR-052-custom-resolver-bypasses-module"
+   "S-DR-053-module-false-fallthrough"
+   "S-DR-054-missing-escalation-level"
+   "S-DR-055-sender-cancel-refund"
+   "S-DR-056-evidence-non-disputed-rejected"
+   "S-DR-060-rotate-resolver-mid-dispute"
+   "S-DR-061-slash-propose-execute"
+   "S-DR-062-rotate-resolver-rejected"
+   "S-DR-063-slash-appeal-upheld"
+   "S-DR-064-slash-appeal-rejected-executed"
+   "S-DR-070-empty-string-resolver-rejected"
+   "S-DR-071-governance-rotate-biased-ruling"
+   "S-DR-072-resolver-unavailable-timeout"
+   "S-DR-073-capacity-exhaustion-permanent-lock"
+   "S-DR-074-governance-capacity-bypass"
+   "S-DR-075-insufficient-bond-deterrence"
+   "S-DR-076-non-governance-rotate-rejected"
+   "S-DR-080-stake-capacity-enforced"
+   "S-DR-081-stake-capacity-bypass"
+   "S-DR-082-stake-capacity-sufficient"
+   "S-DR-083-evidence-after-resolution"
+   "S-DR-084-evidence-after-settlement-rejected"
+   "S-DR-085-repeated-frivolous-disputes"])
 
 (def ^:private sew-reference-scenario-paths
   "Curated reference scenarios for external verifier reproducibility.
    All scenarios are cancellation/terminal-state traces that exercise
    the core griefing-protection, same-timestamp, and auto-cancel paths.
-   Each file is a standalone .trace.json — no Clojure source needed."
+   Each file is a standalone .trace.json — not an executable scenario."
   ["data/fixtures/traces/s-auto-cancel-time-via-keeper.trace.json"
    "data/fixtures/traces/s-auto-cancel-time-boundary.trace.json"
    "data/fixtures/traces/s-auto-cancel-time-orphaned-by-dispute.trace.json"
@@ -108,57 +114,55 @@
    "data/fixtures/traces/s-extortion-unilateral-cancel.trace.json"
    "data/fixtures/traces/s-extortion-unilateral-cancel-dual.trace.json"])
 
-(def ^:private reference-validation-scenario-paths
-  "Reference validation v1 scenarios — simulator-backed scenarios
-   covering resolver accountability, dispute-flooding liveness, and
-   autopush settlement safety.  Used by the protocol-robustness-v0
-   benchmark pack."
-  ["scenarios/S25_profit-maximizer-slash-lifecycle.json"
-   "scenarios/S62_resolver-throughput-exhaustion.json"
-   "scenarios/S05_pending-settlement-execute.json"])
+(def ^:private reference-validation-scenario-ids
+  ["S25_profit-maximizer-slash-lifecycle"
+   "S62_resolver-throughput-exhaustion"
+   "S05_pending-settlement-execute"])
 
-(def ^:private yield-scenario-paths
-  ["scenarios/S78_yield-aave-partial-liquidity-release.json"
-   "scenarios/S78_yield-negative-yield-release-path.json"
-   "scenarios/S79_yield-aave-partial-liquidity-dispute-resolution.json"
-   "scenarios/S79_yield-negative-yield-dispute-refund-path.json"
-   "scenarios/S80_yield-mostly-liquid-partial-liquidity.json"
-   "scenarios/S80_yield-aave-partial-liquidity-governance-disable-post-create.json"
-   "scenarios/S81_escrow-yield-may-be-partially-deferred.json"
-   "scenarios/S82_shortfall-recovery-cycle.json"
-   "scenarios/S83_yield-accrual-reorg-race.json"
-   "scenarios/S87_resolver-frozen-while-yield-due.json"
-   "scenarios/S88_yield-accrual-efficiency.json"
-   "scenarios/S103_negative-yield-shortfall-cascade.json"
-   "scenarios/S108_negative-yield-mild.json"
-   "scenarios/S109_negative-yield-severe-repair.json"
-   "scenarios/S110_resolver-yield-accrual.json"])
+(def ^:private yield-scenario-ids
+  ["S78_yield-aave-partial-liquidity-release"
+   "S78_yield-negative-yield-release-path"
+   "S79_yield-aave-partial-liquidity-dispute-resolution"
+   "S79_yield-negative-yield-dispute-refund-path"
+   "S80_yield-mostly-liquid-partial-liquidity"
+   "S80_yield-aave-partial-liquidity-governance-disable-post-create"
+   "S81_escrow-yield-may-be-partially-deferred"
+   "S82_shortfall-recovery-cycle"
+   "S83_yield-accrual-reorg-race"
+   "S87_resolver-frozen-while-yield-due"
+   "S88_yield-accrual-efficiency"
+   "S103_negative-yield-shortfall-cascade"
+   "S108_negative-yield-mild"
+   "S109_negative-yield-severe-repair"
+   "S110_resolver-yield-accrual"])
+
+(def ^:private shortfall-scenario-ids
+  ["S-DR-043-payout-shortfall-deferred"
+   "S103_negative-yield-shortfall-cascade"
+   "S104_resolver-stake-shortfall"])
+
+;; ── Suite definitions ─────────────────────────────────────────────────────────
+;; Use :scenario-ids for executable scenarios (resolved via sc/scenario-path)
+;; or :paths for trace/reference files (used as-is).
 
 (def suites
-  "Suite keyword → {:paths [relative-path-str ...] :protocol-id ...}.
-
-   The registry is the source of truth for named file-backed scenario suites. Keep the
-   metadata here aligned with task/docs entrypoints and protocol inference.
-
-   Protocol pack suites (prefixed with :suite/) are used by benchmark pack manifests
-   under benchmarks/packs/. They reference the same scenario file lists as the
-   functional suite keywords for execution purposes."
-  {:dispute-resolution-scenarios {:paths        dispute-resolution-scenario-paths
+  "Suite keyword → {:scenario-ids [str ...] or :paths [str ...] :protocol-id ...}."
+  {:dispute-resolution-scenarios {:scenario-ids dispute-resolution-scenario-ids
                                   :protocol-id  "sew-v1"
                                   :title        "Dispute-resolution scenarios"
                                   :description  "Sew dispute-resolution coverage scenarios."
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
-   :sew-yield-scenarios          {:paths        yield-scenario-paths
+   :sew-yield-scenarios          {:scenario-ids yield-scenario-ids
                                   :protocol-id  "sew-v1"
                                   :title        "Sew yield integration scenarios"
                                   :description  "Sew escrow scenarios that exercise yield integration behavior."
                                   :kind         :file-path-suite
                                   :ci-tier      :integration}
-   :yield-provider-scenarios     {:paths        yield-provider-scenario-paths
+   :yield-provider-scenarios     {:scenario-ids yield-provider-scenario-ids
                                   :protocol-id  "yield-v1"
                                   :title        "Yield provider scenarios"
-                                  :description  "Standalone yield-v1 scenarios backed by canonical top-level scenarios/Y01..Y05 files."
+                                  :description  "Standalone yield-v1 provider scenarios."
                                   :kind         :file-path-suite
                                   :ci-tier      :provider}
    :sew-reference-v1             {:paths        sew-reference-scenario-paths
@@ -174,7 +178,7 @@
   "Benchmark pack suite keywords — used by benchmarks/packs/*/ manifests.
 
    NOTE — OVERLAP WITH FUNCTIONAL SUITES:
-   Pack suites currently reference the EXACT SAME path lists as functional
+   Pack suites currently reference the EXACT SAME ID lists as functional
    suites.  They are semantic aliases, not distinct scenario sets.
 
      :suite/sew-dispute-safety-v1  ≡ :dispute-resolution-scenarios  (44 S-DR files)
@@ -188,20 +192,20 @@
    Kept separate from `suites` to avoid duplicate scenario-id
    errors in file-backed suite registry validation.  When new
    protocol-specific scenarios are added for a benchmark pack,
-   its pack suite should define its own path list here."
-  {:suite/sew-dispute-safety-v1  {:paths        dispute-resolution-scenario-paths
+   its pack suite should define its own ID list here."
+  {:suite/sew-dispute-safety-v1  {:scenario-ids dispute-resolution-scenario-ids
                                   :protocol-id  "sew-v1"
                                   :title        "Sew dispute-safety benchmark suite"
                                   :description  "Sew escrow dispute, slashing, and liveness scenarios for benchmark execution."
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
-   :suite/sew-yield-safety-v1    {:paths        yield-scenario-paths
+   :suite/sew-yield-safety-v1    {:scenario-ids yield-scenario-ids
                                   :protocol-id  "sew-v1"
                                   :title        "Sew yield-safety benchmark suite"
                                   :description  "Sew escrow + yield integration scenarios for benchmark execution."
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
-   :suite/prf-replay-v1          {:paths        dispute-resolution-scenario-paths
+   :suite/prf-replay-v1          {:scenario-ids dispute-resolution-scenario-ids
                                   :protocol-id  "sew-v1"
                                   :title        "PRF deterministic replay benchmark suite"
                                   :description  "Core deterministic replay scenarios for benchmark execution.
@@ -210,8 +214,7 @@
                                     suite would contain protocol-agnostic replay/evidence scenarios."
                                   :kind         :file-path-suite
                                   :ci-tier      :coverage}
-
-   :suite/reference-validation-v1 {:paths        reference-validation-scenario-paths
+   :suite/reference-validation-v1 {:scenario-ids reference-validation-scenario-ids
                                    :protocol-id  "sew-v1"
                                    :title        "Reference validation v1 — protocol robustness scenarios"
                                    :description  "Simulator-backed scenarios for resolver accountability,
@@ -219,11 +222,8 @@
                                      Used by the protocol-robustness-v0 benchmark pack."
                                    :kind         :file-path-suite
                                    :ci-tier      :coverage}
-
    :suite/sew-shortfall-allocation-v0
-   {:paths        ["scenarios/S-DR-043-payout-shortfall-deferred.json"
-                   "scenarios/S103_negative-yield-shortfall-cascade.json"
-                   "scenarios/S104_resolver-stake-shortfall.json"]
+   {:scenario-ids shortfall-scenario-ids
     :protocol-id  "sew-v1"
     :title        "Shortfall allocation v0 — partial fill and pro-rata scenarios"
     :description  "Sew scenarios exercising yield shortfall with partial fill,
@@ -231,6 +231,10 @@
       shortfall. Used by the shortfall-allocation-v0 benchmark pack."
     :kind         :file-path-suite
     :ci-tier      :coverage}})
+
+;; ── Suite path resolution ─────────────────────────────────────────────────────
+;; Scenario IDs are resolved to file paths via sc/scenario-path.
+;; Suite entries with :paths (trace references) are returned as-is.
 
 (defn- resolve-suite-registry
   "Return the registry map for a suite keyword — checks `suites` first,
@@ -244,9 +248,14 @@
   (or (:protocol-id (resolve-suite-registry suite-key)) "sew-v1"))
 
 (defn suite-paths
-  "Return scenario file paths for a registered suite keyword, or nil if unknown."
+  "Return resolved file paths for a registered suite keyword, or nil if unknown.
+   Suite entries with :scenario-ids are resolved via sc/scenario-path.
+   Entries with :paths (trace/reference files) are returned as-is."
   [suite-key]
-  (:paths (resolve-suite-registry suite-key)))
+  (when-let [defn (resolve-suite-registry suite-key)]
+    (if-let [ids (:scenario-ids defn)]
+      (mapv sc/scenario-path ids)
+      (:paths defn))))
 
 (defn suite-definition
   "Return the registry entry for a named suite keyword, or nil if unknown."
@@ -254,17 +263,19 @@
   (resolve-suite-registry suite-key))
 
 (defn suite-metadata
-  "Return suite metadata without the path list."
+  "Return suite metadata without the scenario list."
   [suite-key]
   (some-> (suite-definition suite-key)
-          (dissoc :paths)))
+          (dissoc :scenario-ids :paths)))
 
 (defn suite-path-count
   "Return the number of scenario files registered for suite-key."
   [suite-key]
   (count (or (suite-paths suite-key) [])))
 
-(defn known-suite-keys []
+(defn known-suite-keys
+  "Return sorted vector of all registered suite keywords."
+  []
   (vec (sort (keys suites))))
 
 (defn known-suite-definitions

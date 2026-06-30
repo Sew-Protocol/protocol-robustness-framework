@@ -1,4 +1,5 @@
 {:concept/id :attestation/verification
+ :concept/name "Attestation verification"
  :concept/type :assurance
  :concept/layer :stakeholder
 

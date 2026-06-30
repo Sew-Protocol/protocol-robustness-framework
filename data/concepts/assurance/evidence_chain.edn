@@ -1,4 +1,5 @@
 {:concept/id :forensic/evidence-chain
+ :concept/name "Forensic evidence chain"
  :concept/type :assurance
  :concept/layer :stakeholder
 

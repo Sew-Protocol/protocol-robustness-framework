@@ -46,6 +46,19 @@ A benchmark is a bundle of references — an evaluation contract:
 All references resolve through the registry or named definitions under
 `scenarios/`, `runners/`, `scoring/`, etc.
 
+Optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `:concept/shadows-global?` | `Boolean` | When true, this benchmark-local concept intentionally shadows a global concept with the same ID in `data/concepts/`. Required when a local concept ID duplicates a global one. Without it, `bb benchmarks:validate` reports a collision error. |
+| `:benchmark/deferred-scenario-claims` | `#{<qualified-kw> …}` | Scenario-level claims (`:benchmark/scenarios[*].:claim`) that are not in the claim registry because they represent Level 3 semantic claims not yet evaluated. Without this field, unresolved scenario claims cause validation failure. |
+
+Optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `:benchmark/deferred-scenario-claims` | `#{<qualified-kw> …}` | Scenario-level claims (`:benchmark/scenarios[*].:claim`) that are not in the claim registry because they represent Level 3 semantic claims not yet evaluated. Without this field, unresolved scenario claims cause validation failure. |
+
 ## Claims
 
 Claims are the atomic units of benchmark evaluation. Each claim

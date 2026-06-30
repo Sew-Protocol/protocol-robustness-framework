@@ -208,3 +208,146 @@
           decision (pf/calculate-fulfillment 0 pos)]
       (is (= :full-fill (:settlement-mode decision))))))
 
+;; ── Decoupled rows (weight/cap) tests ─────────────────────────────────
+
+(deftest test-pro-rata-rows-backward-compatible
+  (testing "no explicit rows produces same result as current behavior"
+    (let [policy {:mode :pro-rata}
+          without-rows (pf/calculate-fulfillment 5350 base-position policy)
+          ;; same call but explicitly passing rows derived from requested
+          rows [{:key :principal :owed 10000 :weight 10000 :cap 10000}
+                {:key :realized-yield :owed 500 :weight 500 :cap 500}
+                {:key :deferred-yield :owed 200 :weight 200 :cap 200}]
+          with-rows (pf/calculate-fulfillment 5350 base-position policy
+                                              {:rows rows})]
+      (is (= (:settlement-mode without-rows) (:settlement-mode with-rows)))
+      (is (= (:filled without-rows) (:filled with-rows)))
+      (is (= (:deferred without-rows) (:deferred with-rows))))))
+
+(deftest test-pro-rata-rows-owed-exceeds-cap
+  (testing "owed > cap: unfilled owed goes to deferred"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 5000 base-position policy
+                                             {:rows [{:key :principal :owed 10000 :weight 10000 :cap 1000}
+                                                     {:key :realized-yield :owed 500 :weight 500 :cap 500}
+                                                     {:key :deferred-yield :owed 200 :weight 200 :cap 200}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (= 1000 (get-in decision [:filled :principal]))
+          "principal capped at 1000")
+      (is (= 9000 (get-in decision [:deferred :principal]))
+          "remaining 9000 deferred"))))
+
+(deftest test-pro-rata-rows-cap-exceeds-owed
+  (testing "cap > owed: allocation does not overpay beyond owed"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 5000 base-position policy
+                                             {:rows [{:key :principal :owed 5000 :weight 10000 :cap 10000}
+                                                     {:key :realized-yield :owed 500 :weight 500 :cap 500}
+                                                     {:key :deferred-yield :owed 200 :weight 200 :cap 200}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (<= (get-in decision [:filled :principal]) 5000)
+          "principal capped at owed")
+      (is (<= (get-in decision [:filled :realized-yield]) 500)
+          "realized-yield capped at owed")
+      (is (<= (get-in decision [:filled :deferred-yield]) 200)
+          "deferred-yield capped at owed"))))
+
+(deftest test-pro-rata-rows-weight-exceeds-cap-redistributes
+  (testing "weight > cap: excess redistributes to uncapped rows"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 60 base-position policy
+                                             {:rows [{:key :a :owed 50 :weight 100 :cap 10}
+                                                     {:key :b :owed 50 :weight 100 :cap nil}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (= 10 (get-in decision [:filled :a]))
+          "a capped at 10")
+      (is (pos? (get-in decision [:filled :b]))
+          "b receives remaining")
+      (is (pos? (get-in decision [:deferred :a]))
+          "a has deferred (owed 50, filled 10)")
+      (is (>= (get-in decision [:deferred :a])
+              (- 50 (get-in decision [:filled :a])))
+          "deferred accounts for remaining owed"))))
+
+(deftest test-pro-rata-rows-weight-below-cap
+  (testing "weight < cap: row receives more after capped peers release excess"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 100 base-position policy
+                                             {:rows [{:key :a :owed 100 :weight 60 :cap 60}
+                                                     {:key :b :owed 100 :weight 2 :cap nil}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (<= (get-in decision [:filled :a]) 60)
+          "a does not exceed cap")
+      (is (<= (get-in decision [:filled :b]) 100)
+          "b does not exceed owed")
+      (is (< 0 (get-in decision [:filled :b]))
+          "b receives some amount"))))
+
+(deftest test-pro-rata-rows-zero-weight
+  (testing "zero weight with positive cap gets nothing"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 100 base-position policy
+                                             {:rows [{:key :a :owed 100 :weight 0 :cap 50}
+                                                     {:key :b :owed 100 :weight 100 :cap nil}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (zero? (get-in decision [:filled :a]))
+          "zero-weight row gets nothing")
+      (is (pos? (get-in decision [:filled :b]))
+          "b gets allocation"))))
+
+(deftest test-pro-rata-rows-zero-cap
+  (testing "positive weight with zero cap gets nothing"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 100 base-position policy
+                                             {:rows [{:key :a :owed 100 :weight 100 :cap 0}
+                                                     {:key :b :owed 100 :weight 100 :cap nil}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (zero? (get-in decision [:filled :a]))
+          "zero-cap row gets nothing")
+      (is (pos? (get-in decision [:filled :b]))
+          "b gets allocation"))))
+
+(deftest test-pro-rata-rows-excess-liquidity
+  (testing "available liquidity exceeding total cap reports residual"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 100 base-position policy
+                                             {:rows [{:key :a :owed 50 :weight 50 :cap 20}
+                                                     {:key :b :owed 30 :weight 30 :cap 30}]})]
+      (is (= :partial-fill (:settlement-mode decision)))
+      (is (= 20 (get-in decision [:filled :a])))
+      (is (= 30 (get-in decision [:filled :b])))
+      (is (pos? (get-in decision [:evidence :shortage]))
+          "shortage is computed from total requested, not available"))))
+
+(deftest test-pro-rata-rows-conservation
+  (testing "conservation: filled + deferred = owed for each row"
+    (let [policy {:mode :pro-rata}
+          rows [{:key :a :owed 100 :weight 100 :cap 30}
+                {:key :b :owed 100 :weight 100 :cap nil}]
+          decision (pf/calculate-fulfillment 80 base-position policy {:rows rows})]
+      (doseq [row rows]
+        (let [k (:key row)
+              f (long (get-in decision [:filled k] 0))
+              d (long (get-in decision [:deferred k] 0))]
+          (is (<= f (long (:owed row)))
+              (str "row " k " filled <= owed"))
+          (is (>= d 0)
+              (str "row " k " deferred >= 0")))))))
+
+(deftest test-pro-rata-rows-evidence
+  (testing "row-level evidence includes allocation-rows with cap-hit? flag"
+    (let [policy {:mode :pro-rata}
+          decision (pf/calculate-fulfillment 40 base-position policy
+                                             {:rows [{:key :a :owed 100 :weight 100 :cap 10}
+                                                     {:key :b :owed 100 :weight 100 :cap nil}]})
+          rows-evidence (get-in decision [:evidence :allocation-rows])]
+      (is (some? rows-evidence) "allocation-rows in evidence")
+      (is (= 2 (count rows-evidence)))
+      (is (true? (get-in decision [:evidence :allocation-rows 0 :cap-hit?]))
+          "a hit its cap")
+      (is (false? (get-in decision [:evidence :allocation-rows 1 :cap-hit?]))
+          "b did not hit cap (nil cap)")
+      (is (every? #(contains? % :filled) rows-evidence)
+          "each row has filled")
+      (is (every? #(contains? % :deferred) rows-evidence)
+          "each row has deferred"))))

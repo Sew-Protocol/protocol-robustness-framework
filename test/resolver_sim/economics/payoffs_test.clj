@@ -269,3 +269,53 @@
                 (assoc base-opts :allocation-input {:source :input-b}))]
         (is (not= (:allocation-result-hash r1) (:allocation-result-hash r2))
             "different allocation-input produces different result hash")))))
+
+;; ── Allocate pro-rata with redistribution ──────────────────────────────
+
+(deftest allocate-pro-rata-with-redistribution-redistributes
+  (testing "capped items release excess to uncapped items"
+    (let [result (payoffs/allocate-pro-rata-with-redistribution
+                  {:amount 100
+                   :items [{:id :a :weight 100 :cap 30}
+                           {:id :b :weight 100 :cap nil}
+                           {:id :c :weight 100 :cap nil}]
+                   :id-fn :id :weight-fn :weight :cap-fn :cap
+                   :rounding :floor-with-largest-remainder})]
+      (is (= 100 (:total-allocated result))
+          "all available liquidity allocated")
+      (is (= 0 (:total-unmet result))
+          "no unmet after redistribution")
+      (is (= 30 (:allocated (first (filter #(= :a (:id %)) (:allocations result)))))
+          "capped item a receives exactly cap")
+      (is (some? (:redistribution result))
+          "redistribution metadata present"))))
+
+(deftest allocate-pro-rata-with-redistribution-no-caps-identical
+  (testing "without caps, result matches allocate-pro-rata"
+    (let [items [{:id :a :weight 100} {:id :b :weight 100} {:id :c :weight 100}]
+          with-redist (payoffs/allocate-pro-rata-with-redistribution
+                       {:amount 100 :items items
+                        :id-fn :id :weight-fn :weight :cap-fn (constantly nil)
+                        :rounding :floor-with-largest-remainder})
+          vanilla (payoffs/allocate-pro-rata
+                   {:amount 100 :items items
+                    :id-fn :id :weight-fn :weight :cap-fn (constantly nil)
+                    :rounding :floor-with-largest-remainder})]
+      (is (= (:total-allocated vanilla) (:total-allocated with-redist)))
+      (is (= (mapv :allocated (:allocations vanilla))
+             (mapv :allocated (:allocations with-redist)))))))
+
+(deftest allocate-pro-rata-with-redistribution-all-capped
+  (testing "all items capped => no redistribution, remainder reported"
+    (let [result (payoffs/allocate-pro-rata-with-redistribution
+                  {:amount 100
+                   :items [{:id :a :weight 100 :cap 10}
+                           {:id :b :weight 100 :cap 10}]
+                   :id-fn :id :weight-fn :weight :cap-fn :cap
+                   :rounding :floor-with-largest-remainder})]
+      (is (= 20 (:total-allocated result))
+          "each capped at 10")
+      (is (= 80 (:total-unmet result))
+          "unmet = remainder from caps")
+      (is (nil? (:redistribution result))
+          "no redistribution when all capped"))))

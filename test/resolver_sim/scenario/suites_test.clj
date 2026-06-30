@@ -42,11 +42,11 @@
 
 (deftest yield-provider-suite-is-canonical-top-level
   (let [paths (suites/suite-paths :yield-provider-scenarios)]
-    (is (= ["scenarios/Y01_vault-shared-liquidity.json"
-            "scenarios/Y02_vault-shortfall-partial-withdraw.json"
-            "scenarios/Y03_vault-risk-override-schedule-shadowing.json"
-            "scenarios/Y04_vault-recovery-claim-deferred.json"
-            "scenarios/Y05_auto-generated-shortfall.json"]
+    (is (= ["scenarios/edn/Y01_vault-shared-liquidity.edn"
+            "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"
+            "scenarios/edn/Y03_vault-risk-override-schedule-shadowing.edn"
+            "scenarios/edn/Y04_vault-recovery-claim-deferred.edn"
+            "scenarios/edn/Y05_auto-generated-shortfall.edn"]
            paths))
     (is (every? #(str/starts-with? % "scenarios/Y") paths))
     (is (not-any? #(str/includes? % "scenarios/yield/") paths))

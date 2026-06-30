@@ -9,7 +9,7 @@
 (deftest serialize-replay-result-with-yield-modules
   (testing "S19 replay result serializes (yield module ops are fns)"
     (let [raw      (io-sc/load-scenario-file
-                    "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json")
+                    "scenarios/edn/S19_dr3-kleros-escalation-rejected-l0-resolves.edn")
           scenario (normalize/normalize-scenario raw)
           result   (sew/replay-with-sew-protocol scenario)
           json-str (ser/serialize-artifact result {:pretty? true})

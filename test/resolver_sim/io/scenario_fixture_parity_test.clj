@@ -54,7 +54,7 @@
           (sync/all-invariant-scenario-maps)))
 
 (deftest public-json-strict-expected-errors-match-source
-  (testing "exported scenarios/*.json carries strict expected-errors contract"
+  (testing "exported scenarios/edn/*.edn carries strict expected-errors contract"
     (doseq [s (scenarios-with-strict-expected-errors)
             :let [sid   (:scenario-id s)
                   fname (export/scenario-id->public-json-filename sid)

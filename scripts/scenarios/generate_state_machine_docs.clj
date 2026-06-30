@@ -83,7 +83,7 @@
 
 (defn- transition-coverage-markdown [coverage]
   (str "# Transition Coverage (Generated)\n\n"
-       "Derived from scenario events in `scenarios/*.json` and canonical transition IDs in registry.\n\n"
+       "Derived from scenario events in `scenarios/edn/*.edn` and canonical transition IDs in registry.\n\n"
        "| Transition ID | Label | Covered by scenarios | Count |\n"
        "|---|---|---|---:|\n"
        (apply str

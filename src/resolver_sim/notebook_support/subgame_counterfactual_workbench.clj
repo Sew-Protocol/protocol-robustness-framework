@@ -191,7 +191,7 @@
 
 ^{:nextjournal.clerk/visibility {:code :show :result :show}}
 ;; 1. Load a scenario:
-;;    (init! "scenarios/S65_spe-fork-event-id-inheritance.json")
+;;    (init! "scenarios/edn/S65_spe-fork-event-id-inheritance.edn")
 ;;
 ;; 2. Get decision nodes (includes :fork-world from checkpoints):
 ;;    (def nodes (decision-nodes))

@@ -74,39 +74,85 @@ This is a fingerprint of the scenario result, not a link to on-disk evidence cha
 ```
 :scoring/classification
   {:classification-label <string>
-   :scoring/summary      <string>}
+   :scoring/summary      <string>
+   :claim-maturity       <map>}  ;; present when claim results exist
 ```
 
-The label is derived from the scoring rule's `:pass`/`:fail`/`:mixed` classifier:
+The label is derived from the report builder's classifier and uses
+clear action-oriented language:
 
-- All scenarios pass → `"All scenarios pass — …"` (the scoring rule's `:pass` text)
-- All scenarios fail → `"At least one scenario fails — …"` (the `:fail` text)
-- Mixed → `"Some scenarios pass, some fail — …"` (the `:mixed` text)
-- No scenarios executed → `"No scenarios executed"`
+| Scenario count | Label |
+|----------------|-------|
+| All scenarios pass | `"Scenario replay passed"` |
+| All scenarios fail | `"Scenario replay failed"` |
+| Mixed | `"Partial scenario replay"` |
+| No scenarios executed | `"No scenarios executed"` |
 
-Returns `nil` when the scoring rule is missing or lacks the required keys (`:pass :fail :mixed`).
+When per-claim results are available, the label reflects claim status:
+
+| Claim result | Label |
+|--------------|-------|
+| All claims pass | `"Mechanical claims passed"` |
+| Any claim fails | `"Mechanical claims failed"` |
+| Any claim inconclusive (no evaluator) | `"Semantic claims deferred"` |
+
+When `:classifier` is `:pass-fail-critical` (severity-weighted):
+
+| Condition | Label |
+|-----------|-------|
+| All claims pass | `"All claims pass — mechanical and invariant verification passed"` |
+| Critical claim fails | `"Critical claim failed — semantic claim violation detected"` |
+| Inconclusive claims exist | `"Semantic claims deferred — not evaluated"` |
+| Non-critical failures only | `"Non-critical failures only"` |
 
 `:scoring/summary` is the scoring rule's `:score-fn` description (a human-readable string like `"Ratio of passing scenarios to total scenarios"`). It is **not** an executable function.
+
+### Claim Maturity Level
+
+When claim results are present, the classification includes a
+`:claim-maturity` map:
+
+```clojure
+:claim-maturity
+{:label       "Level 1 — mechanical"
+ :description "Required artifacts, hashes, evidence roots, and result fields
+               exist and are internally consistent."
+ :maturity/key :level-1}
+```
+
+Maturity levels:
+
+| Level | Label | Meaning |
+|-------|-------|---------|
+| 1 | Mechanical | Structural checks on evidence bundle fields and hashes |
+| 2 | Invariant-backed | Named post-hoc invariants proxying semantic properties |
+| 3 | Semantic | Domain-specific reasoning — currently deferred, not evaluated |
 
 ---
 
 ## Claim status
 
 ```
-:claim/status  <keyword>
+:claim/status   <keyword>
+:claim/maturity <keyword-or-nil>  ;; :level-1 | :level-2 | :level-3 | nil
 ```
+
+`:claim/status` values:
 
 | Value | Meaning |
 |-------|---------|
-| `:verified` | All declared claims in the manifest were evaluated and passed. Currently only Level 1 mechanical claims (field existence, hash format, outcome non-nil) are verified. |
+| `:verified` | All declared claims in the manifest were evaluated and passed. |
 | `:partial` | Some declared claims failed or returned `:inconclusive` (e.g. no evaluator registered, missing data). |
 | `:declared-not-verified` | Claims are declared but no evaluator ran — no `:claim-results` in the evidence bundle. |
 | `:none` | The benchmark pack declares no claims. |
 
-`:verified` means the benchmark pack's declared claims passed the evaluators that exist for them.
-It does **not** mean all claims about protocol robustness have been verified. Claims at
-Level 2 (invariant-backed) and Level 3 (semantic/economic) require separate evaluator
-implementation and review. See `DESIGN_CLAIM_VERIFICATION.md` for maturity level definitions.
+`:claim/maturity` indicates the highest verification level present:
+
+| Level | Name | Description |
+|-------|------|-------------|
+| `:level-1` | Mechanical | Required artifacts, hashes, evidence roots, and result fields exist and are internally consistent. These are the currently verified claims. |
+| `:level-2` | Invariant-backed | Named post-hoc invariants passed for each scenario; claim is proxied by invariant results. Evaluators exist for Sew protocol claims. |
+| `:level-3` | Semantic | Domain-specific reasoning over scenario results, world state, or evidence nodes. These claims are declared but not evaluated — their verification is deferred. |
 
 When `:claim-results` are present, each entry follows the benchmark result spec:
 
@@ -143,9 +189,13 @@ The `:benchmark/claims` field and `:concept/maps-to` references document what th
  :passed-scenarios 3
  :all-pass? true
  :scoring/classification
- {:classification-label "All scenarios pass — all robustness dimensions hold"
-  :scoring/summary "Ratio of passing scenarios to total scenarios"}
+ {:classification-label "Scenario replay passed"
+  :scoring/summary "Ratio of passing scenarios to total scenarios"
+  :claim-maturity {:label "Level 1 — mechanical"
+                   :description "Required artifacts, hashes, evidence roots, and result fields…"
+                   :maturity/key :level-1}}
  :claim/status :verified
+ :claim/maturity :level-1
  :claim-results [{:claim/id :evidence-root-present :claim/outcome :pass …}
                  {:claim/id :replay-result-present  :claim/outcome :pass …} …]
  :invariant-summary {:total-checks 192 :passed-checks 192 :all-pass? true}

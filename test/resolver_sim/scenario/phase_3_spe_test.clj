@@ -38,7 +38,7 @@
 
 (deftest test-dispute-tree-expansion-uses-world-checkpoints
   (testing "SPE fork replay from disputed state uses replay-complete checkpoints"
-    (let [scenario (scen-io/load-scenario-file "scenarios/S02_dr3-dispute-release.json")
+    (let [scenario (scen-io/load-scenario-file "scenarios/edn/S02_dr3-dispute-release.edn")
           result   (replay/replay-with-protocol sew/protocol scenario)
           _        (is (= :pass (:outcome result)))
           projection (assoc (proto/trace-projection sew/protocol result)

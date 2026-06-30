@@ -78,13 +78,13 @@
 (defn- scenario-exists?
   "Check if a scenario file exists on disk."
   [scenario-id]
-  (let [path (str "scenarios/" scenario-id ".json")]
+  (let [path (sc/scenario-path scenario-id)]
     (.exists (io/file path))))
 
 (defn- scenario-tags
   "Read tags from a scenario file."
   [scenario-id]
-  (let [path (str "scenarios/" scenario-id ".json")]
+  (let [path (sc/scenario-path scenario-id)]
     (when (.exists (io/file path))
       (try (let [sc (sc/load-scenario-file path)]
              (or (get sc :tags []) []))

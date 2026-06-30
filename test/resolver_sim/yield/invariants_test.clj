@@ -71,7 +71,7 @@
 
 (deftest y03-replay-passes-invariant-expectations
   (let [raw  (io-sc/load-scenario-file
-              "scenarios/yield/Y03_partial-liquidity-shortfall-affected.json")
+              "scenarios/edn/yield/Y03_partial-liquidity-shortfall-affected.edn")
         scenario (cat/enrich-expectations (normalize/normalize-scenario raw))
         result (replay/replay-yield-scenario scenario)
         inv-check (expectations/evaluate-invariants
@@ -80,7 +80,7 @@
     (is (:ok? inv-check) (pr-str (:violations inv-check)))))
 
 (deftest y07-replay-passes-metrics-and-invariants
-  (let [raw  (io-sc/load-scenario-file "scenarios/yield/Y07_monthly-accrual-one-year.json")
+  (let [raw  (io-sc/load-scenario-file "scenarios/edn/yield/Y07_monthly-accrual-one-year.edn")
         scenario (cat/enrich-expectations (normalize/normalize-scenario raw))
         result (replay/replay-yield-scenario scenario)
         inv-check (expectations/evaluate-invariants
@@ -90,9 +90,9 @@
     (is (> (get-in result [:metrics :yield/liquidity-index] 0) 1.04))))
 
 (deftest provider-suite-scenarios-pass-final-invariants
-  (doseq [path ["scenarios/yield/Y01_deposit-accrue-positive.json"
-                "scenarios/yield/Y06_liquidity-shortage-deposit-blocked.json"
-                "scenarios/yield/Y07_monthly-accrual-one-year.json"]]
+  (doseq [path ["scenarios/edn/yield/Y01_deposit-accrue-positive.edn"
+                "scenarios/edn/yield/Y06_liquidity-shortage-deposit-blocked.edn"
+                "scenarios/edn/yield/Y07_monthly-accrual-one-year.edn"]]
     (let [scenario (-> path io-sc/load-scenario-file normalize/normalize-scenario
                        cat/enrich-expectations)
           result (replay/replay-yield-scenario scenario)

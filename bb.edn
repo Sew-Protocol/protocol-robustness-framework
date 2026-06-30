@@ -211,10 +211,10 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
                raw-scenario (when (<= 0 scenario-idx)
                               (nth args (inc scenario-idx) nil))
                scenario-map {"kleros/preemptive-escalation-rejected-l0"
-                             "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"
+                             "scenarios/edn/S19_dr3-kleros-escalation-rejected-l0-resolves.edn"
                               ;; deprecated alias (pre-2026-06 rename)
                              "kleros/escalation-race"
-                             "scenarios/S19_dr3-kleros-escalation-rejected-l0-resolves.json"}
+                             "scenarios/edn/S19_dr3-kleros-escalation-rejected-l0-resolves.edn"}
                scenario     (or (get scenario-map raw-scenario) raw-scenario)
                output-file  (let [given (when (<= 0 output-idx)
                                           (nth args (inc output-idx) nil))]
@@ -281,13 +281,13 @@ cli-args (cond-> ["-M:run:with-sew" "--invariants" "--scenario" scenario]
   sweep {:doc "Run a parameter sweep"
          :task (println "Sweep task - run with bb sweep data/params/baseline.edn")}
 
-  fixtures:sync {:doc "Sync trace.json + scenarios/*.json from Clojure invariant scenario source"
+  fixtures:sync {:doc "Sync trace.json + scenarios/edn/*.edn from Clojure invariant scenario source"
                  :task (clojure {:dir "."} "-M:sync-trace-fixtures")}
 
   fixtures:generate-traces
   {:doc "Generate .trace.json files for golden reports that lack matching trace metadata.
          Scans data/fixtures/golden/*.report.edn, finds orphans (no matching trace),
-         replays the matching scenario from scenarios/*.json, and writes the trace file.
+         replays the matching scenario from scenarios/edn/*.edn, and writes the trace file.
          After completion, touches notebooks/report.clj to notify Clerk."
    :task (clojure {:dir "."} "-M:generate-missing-traces")}
 

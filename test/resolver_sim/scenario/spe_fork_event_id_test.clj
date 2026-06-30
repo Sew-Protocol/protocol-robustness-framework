@@ -13,7 +13,7 @@
 
 (deftest fork-continuation-inherits-event-id-from-main-trace
   (testing "SPE fork replay preserves event-id on continuation events"
-    (let [scenario   (scen-io/load-scenario-file "scenarios/S65_spe-fork-event-id-inheritance.json")
+    (let [scenario   (scen-io/load-scenario-file "scenarios/edn/S65_spe-fork-event-id-inheritance.edn")
           result     (replay/replay-with-protocol sew/protocol scenario
                                                   {:flags {:world-checkpoint-policy :retain-all}})
           trace      (:trace result)
@@ -37,7 +37,7 @@
 
 (deftest fork-continuation-dedupes-duplicate-settlement-event-id
   (testing "Inherited event-id activates replay dedupe in fork continuations"
-    (let [scenario   (scen-io/load-scenario-file "scenarios/S65_spe-fork-event-id-inheritance.json")
+    (let [scenario   (scen-io/load-scenario-file "scenarios/edn/S65_spe-fork-event-id-inheritance.edn")
           result     (replay/replay-with-protocol sew/protocol scenario
                                                   {:flags {:world-checkpoint-policy :retain-all}})
           trace      (:trace result)
@@ -59,7 +59,7 @@
 
 (deftest spe-tree-expansion-passes-with-event-id-scenario
   (testing "SPE evaluation with tree expansion on S65"
-    (let [scenario    (scen-io/load-scenario-file "scenarios/S65_spe-fork-event-id-inheritance.json")
+    (let [scenario    (scen-io/load-scenario-file "scenarios/edn/S65_spe-fork-event-id-inheritance.edn")
           result      (replay/replay-with-protocol sew/protocol scenario)
           projection  (assoc (proto/trace-projection sew/protocol result)
                              :spe-config {:regret-threshold 1000

@@ -1,8 +1,9 @@
 (ns resolver-sim.io.scenario-export
-  "Export Clojure invariant scenario maps to trace.json / scenarios/*.json (pure)."
+  "Export Clojure invariant scenario maps to trace.json / scenarios/edn/*.edn (pure)."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.walk :as walk]))
+            [clojure.walk :as walk]
+            [resolver-sim.io.scenarios :as sc]))
 
 (defn- agent->trace-agent
   [{:keys [id address strategy role]}]
@@ -17,10 +18,10 @@
     role             (assoc :role role)))
 
 (defn scenario-id->public-json-filename
-  "Map s19-dr3-... → S19_dr3-....json (public scenarios/ naming)."
+  "Map s19-dr3-... → S19_dr3-....edn (public scenarios/ naming)."
   [scenario-id]
   (when-let [[_ n rest] (re-matches #"^s(\d+[a-z]?)-(.+)$" scenario-id)]
-    (str "S" n "_" rest ".json")))
+    (str "S" n "_" rest ".edn")))
 
 (defn- stringify-escalation-keys
   [params]
@@ -85,7 +86,7 @@
         (attach-public-metadata scenario))))
 
 (defn scenario->public-json-document
-  "Build scenarios/*.json document (schema 1.0) from an invariant scenario map.
+  "Build scenarios/edn/*.edn document (schema 1.0) from an invariant scenario map.
    Includes :title and :threat-tags when present on the scenario."
   [scenario]
   (let [sid (:scenario-id scenario)
@@ -212,7 +213,7 @@
         tags    (assoc :threat-tags tags)))))
 
 (defn export-scenario-files!
-  "Write trace fixture and optional public scenarios/*.json for one scenario map.
+  "Write trace fixture and optional public scenario EDN for one scenario map.
    Metadata is resolved in this order (last wins):
      1. hardcoded default-export-metadata map (by scenario-id)
      2. inline keys from the scenario map itself (:title, :purpose, :threat-tags)
@@ -226,7 +227,7 @@
         trace-p     (str "data/fixtures/traces/" sid ".trace.json")
         public-name (scenario-id->public-json-filename sid)
         scen-p      (when (and write-public-json? public-name)
-                      (str "scenarios/" public-name))]
+                      (str sc/*scenario-dir* "/" public-name))]
     (write-json-file trace-doc trace-p)
     (when scen-p
       (write-json-file (scenario->public-json-document scenario) scen-p))

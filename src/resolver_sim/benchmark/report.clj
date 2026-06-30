@@ -2,11 +2,30 @@
   "Build a report-ready data structure from a benchmark evidence bundle,
    benchmark concepts, and scoring definition.
 
-   Produces a plain map suitable for Clerk rendering — no view logic."
+   Produces a plain map suitable for Clerk rendering — no view logic.
+   Supports both explicit-path and auto-resolved (from evidence bundle)
+   report construction."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [resolver-sim.benchmark.claims :refer [normalize-claim-refs]]))
+
+;; ── Path resolution ────────────────────────────────────────────────────────────
+;; Maps from benchmark/scoring IDs to filesystem paths for auto-resolution.
+
+(def benchmark-concept-paths
+  "Benchmark ID → concept file path."
+  {:benchmark/prf-protocol-robustness-v0 "benchmarks/concepts/protocol-robustness-v0.edn"
+   :benchmark/prf-shortfall-allocation-v0 "benchmarks/concepts/shortfall-allocation-v0.edn"
+   :benchmark/prf-evidence-integrity-v1 "benchmarks/concepts/evidence-integrity-v1.edn"})
+
+(def benchmark-scoring-paths
+  "Scoring rule ID → scoring file path."
+  {:scoring/robustness-dimensions-v0 "benchmarks/scoring/robustness-dimensions-v0.edn"
+   :scoring/binary-claims-v1 "benchmarks/scoring/binary-claims-v1.edn"
+   :scoring/severity-weighted-robustness-v1 "benchmarks/scoring/severity-weighted-v1.edn"
+   :scoring/severity-weighted-v1 "benchmarks/scoring/severity-weighted-v1.edn"
+   :scoring/shortfall-allocation-v0 "benchmarks/scoring/shortfall-allocation-v0.edn"})
 
 ;; ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -152,11 +171,19 @@
 
 ;; ── Scoring classification ───────────────────────────────────────────────────
 
+(def ^:private claim-maturity-levels
+  {:level-1 {:label "Level 1 — mechanical"
+             :description "Required artifacts, hashes, evidence roots, and result fields exist and are internally consistent."}
+   :level-2 {:label "Level 2 — invariant-backed"
+             :description "Named post-hoc invariants passed for each scenario; claim is linked to invariant results."}
+   :level-3 {:label "Level 3 — semantic"
+             :description "Domain-specific reasoning over scenario results, world state, or evidence nodes. Currently deferred — not evaluated."}})
+
 (defn- classify-per-scenario
   "Classify based on scenario outcome counts.
-   Falls back to :unclassified when no scenarios were executed."
+   Uses explicit labels: 'scenario replay passed' instead of broad 'pass'."
   [total passed rule]
-  (let [{:keys [pass fail mixed score-fn]} rule]
+  (let [{:keys [score-fn]} rule]
     (cond
       (zero? total)
       {:classification-label "No scenarios executed"
@@ -166,39 +193,79 @@
       {:classification-label "Unclassified — no scenario metrics"
        :scoring/summary (or score-fn "N/A")}
 
-      (= total passed) {:classification-label pass  :scoring/summary (or score-fn "N/A")}
-      (zero? passed)   {:classification-label fail  :scoring/summary (or score-fn "N/A")}
-      :else            {:classification-label mixed :scoring/summary (or score-fn "N/A")})))
+      (= total passed)
+      {:classification-label "Scenario replay passed"
+       :scoring/summary (or score-fn "N/A")}
+
+      (zero? passed)
+      {:classification-label "Scenario replay failed"
+       :scoring/summary (or score-fn "N/A")}
+
+      :else
+      {:classification-label "Partial scenario replay"
+       :scoring/summary (or score-fn "N/A")})))
 
 (defn- classify-per-claim
   "Classify based on claim results. Returns nil when claim-results are absent
-   or empty — caller should fall back to per-scenario classification."
+   or empty — caller should fall back to per-scenario classification.
+   Uses 'mechanical claims passed' / 'semantic claims deferred' labels."
   [claim-results rule]
   (when (seq claim-results)
-    (let [{:keys [pass fail mixed score-fn]} rule
+    (let [{:keys [score-fn]} rule
           all-pass? (every? #(= :pass (:claim/outcome %)) claim-results)
-          any-fail? (some #(= :fail (:claim/outcome %)) claim-results)]
-      {:classification-label (cond all-pass? pass  any-fail? fail  :else mixed)
+          any-fail? (some #(= :fail (:claim/outcome %)) claim-results)
+          any-inconclusive? (some #(= :inconclusive (:claim/outcome %)) claim-results)]
+      {:classification-label (cond
+                               all-pass? "Mechanical claims passed"
+                               any-fail? "Mechanical claims failed"
+                               any-inconclusive? "Semantic claims deferred"
+                               :else "Partial mechanical verification")
        :scoring/summary (or score-fn "N/A")})))
 
 (defn- classify-critical
   "Classify based on severity-weighted claim results.
    Requires :critical-severity set in the scoring rule and non-nil claim-results.
-   Returns nil when either is missing."
+   Returns nil when either is missing.
+   Uses 'critical claim failed' / 'non-critical failures only' labels."
   [claim-results rule]
   (when (and (seq claim-results) (:critical-severity rule))
-    (let [{:keys [pass fail mixed score-fn critical-severity]} rule
+    (let [{:keys [score-fn critical-severity]} rule
           all-pass? (every? #(= :pass (:claim/outcome %)) claim-results)
           critical-fail? (some (fn [cr]
                                  (and (= :fail (:claim/outcome cr))
                                       (contains? critical-severity
                                                  (get-in cr [:claim/severity] :low))))
-                               claim-results)]
+                               claim-results)
+          any-inconclusive? (some #(= :inconclusive (:claim/outcome %)) claim-results)]
       {:classification-label (cond
-                               all-pass?    pass
-                               critical-fail? fail
-                               :else        mixed)
+                               all-pass?    "All claims pass — mechanical and invariant verification passed"
+                               critical-fail? "Critical claim failed — semantic claim violation detected"
+                               any-inconclusive? "Semantic claims deferred — not evaluated"
+                               :else        "Non-critical failures only")
        :scoring/summary (or score-fn "N/A")})))
+
+(defn- claim-maturity-level
+  "Determine the highest claim maturity level present in the evidence.
+   Returns a keyword :level-1, :level-2, :level-3, or nil."
+  [claim-results manifest]
+  (let [registered-claim-ids (set (keys (:claim-registry manifest)))
+        scenario-claims (set (map :claim (:benchmark/scenarios manifest)))
+        manifest-claim-ids (set (map :claim/id (:benchmark/claims manifest)))
+        evaluated-ids (set (map :claim/id claim-results))]
+    (cond
+      (and (seq evaluated-ids)
+           (some #(contains? registered-claim-ids %) evaluated-ids))
+      :level-1
+      (some #(contains? #{:claim/no-unauthorized-release :claim/funds-conserved
+                          :claim/dispute-liveness :claim/slashing-conservation
+                          :claim/governance-non-interference :claim/bounded-resolution-time
+                          :claim/yield-preserved-during-shortfall :claim/partial-fill-fairness
+                          :claim/no-leakage-beyond-shortfall :claim/waterfall-coverage-correct
+                          :claim/no-over-slashing :claim/appeal-bond-adequacy}
+                        %) (concat evaluated-ids manifest-claim-ids))
+      :level-2
+      (or (seq scenario-claims) (some #(not (contains? registered-claim-ids %)) manifest-claim-ids))
+      :level-3)))
 
 (defn classify-result
   "Apply the scoring rule's classifier to available evidence.
@@ -206,30 +273,37 @@
      :pass-fail-per-scenario  — uses scenario outcome counts
      :pass-fail-per-claim    — uses per-claim outcomes from claim-results
      :pass-fail-critical     — uses severity-weighted claim results
-   Returns {:classification-label <string> :scoring/summary <string>}
+   Returns {:classification-label <string> :scoring/summary <string>
+            :claim-maturity <map-or-nil>}
    or {:classification-label \"Unclassified\" :reason <string>}."
-  [total passed scoring-rules claim-results]
-  (if-not (map? scoring-rules)
-    {:classification-label "Unclassified" :reason "No scoring rules defined"}
-    (let [{:keys [classifier] :as rule} scoring-rules]
-      (case classifier
-        :pass-fail-per-scenario
-        (classify-per-scenario total passed rule)
+  [total passed scoring-rules claim-results manifest]
+  (let [maturity (when (and manifest (seq claim-results))
+                   (claim-maturity-level claim-results manifest))
+        maturity-info (when maturity
+                        (assoc (get claim-maturity-levels maturity)
+                               :maturity/key maturity))]
+    (if-not (map? scoring-rules)
+      {:classification-label "Unclassified" :reason "No scoring rules defined"}
+      (let [{:keys [classifier] :as rule} scoring-rules
+            base (case classifier
+                   :pass-fail-per-scenario
+                   (classify-per-scenario total passed rule)
 
-        :pass-fail-per-claim
-        (or (classify-per-claim claim-results rule)
-            (classify-per-scenario total passed
-                                   (assoc rule :pass "All scenarios pass" :fail "At least one scenario fails"
-                                          :mixed "Some scenarios pass, some fail")))
+                   :pass-fail-per-claim
+                   (or (classify-per-claim claim-results rule)
+                       (classify-per-scenario total passed rule))
 
-        :pass-fail-critical
-        (or (classify-critical claim-results rule)
-            {:classification-label "Unclassified"
-             :reason (str "Cannot classify " (pr-str classifier)
-                          " — claim-results or :critical-severity is missing")})
+                   :pass-fail-critical
+                   (or (classify-critical claim-results rule)
+                       {:classification-label "Unclassified"
+                        :reason (str "Cannot classify " (pr-str classifier)
+                                     " — claim-results or :critical-severity is missing")})
 
-        {:classification-label "Unclassified"
-         :reason (str "Unknown classifier: " (pr-str classifier))}))))
+                   {:classification-label "Unclassified"
+                    :reason (str "Unknown classifier: " (pr-str classifier))})]
+        (if maturity-info
+          (assoc base :claim-maturity maturity-info)
+          base)))))
 
 ;; ── Report assembly ──────────────────────────────────────────────────────────
 
@@ -266,7 +340,8 @@
               0.0)
      :scoring/classification (classify-result (:total metrics) (:passed metrics)
                                               (:scoring/rules scoring)
-                                              (:claim-results evidence))
+                                              (:claim-results evidence)
+                                              (:benchmark evidence))
      :claim/status (let [cr (:claim-results evidence)
                          claim-refs (normalize-claim-refs (:benchmark/claims manifest))]
                      (cond
@@ -277,7 +352,43 @@
                        (seq claim-refs)
                        :declared-not-verified
                        :else :none))
+     :claim/maturity (let [cr (:claim-results evidence)
+                           manifest (:benchmark evidence)]
+                       (when (seq cr)
+                         (claim-maturity-level cr manifest)))
      :claim-results (:claim-results evidence)
      :dimensions dimensions
      :invariant-summary inv-summary
      :concept/section (:concept/section evidence)}))
+
+;; ── Auto-resolution ───────────────────────────────────────────────────────────
+
+(defn resolve-concept-path
+  "Resolve the concept file path for a benchmark ID, or nil if unknown."
+  [benchmark-id]
+  (get benchmark-concept-paths benchmark-id))
+
+(defn resolve-scoring-path
+  "Resolve the scoring file path for a scoring rule ID, or nil if unknown."
+  [scoring-id]
+  (get benchmark-scoring-paths scoring-id))
+
+(defn resolve-report
+  "Build a complete report from an evidence bundle path alone.
+   Auto-resolves concept and scoring file paths from the bundle's
+   benchmark manifest. Throws if either path cannot be resolved."
+  [evidence-path]
+  (let [evidence (load-evidence evidence-path)
+        manifest (:benchmark evidence)
+        benchmark-id (:benchmark/id manifest)
+        scoring-id (:benchmark/scoring-rule manifest)
+        concepts-path (resolve-concept-path benchmark-id)
+        scoring-path (resolve-scoring-path scoring-id)]
+    (if (and concepts-path scoring-path)
+      (build-report evidence-path concepts-path scoring-path)
+      (throw (ex-info "Cannot resolve report paths from evidence bundle"
+                      {:evidence-path evidence-path
+                       :benchmark-id benchmark-id
+                       :scoring-id scoring-id
+                       :resolved-concept (boolean concepts-path)
+                       :resolved-scoring (boolean scoring-path)})))))

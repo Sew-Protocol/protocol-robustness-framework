@@ -22,7 +22,7 @@
 (deftest replay-idempotent-same-trace-works
   (testing "replay-idempotent-same-trace? confirms determinism for a single scenario"
     (binding [chain/*allow-dirty* true]
-      (let [scenario (-> "scenarios/S63_replay-idempotence-same-trace-double-run.json"
+      (let [scenario (-> "scenarios/edn/S63_replay-idempotence-same-trace-double-run.edn"
                          sc/load-scenario-file
                          norm/normalize-scenario)
             protocol (preg/get-protocol preg/default-protocol-id)

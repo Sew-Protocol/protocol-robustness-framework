@@ -28,9 +28,9 @@
   "Run the two new scenarios, write .trace.json and .report.edn."
   []
   (doseq [[scenario-path trace-id suite-id]
-          [["scenarios/S114_withdraw-fees-governance.json"
+          [["scenarios/edn/S114_withdraw-fees-governance.edn"
             "s114-withdraw-fees-governance" :suites/forking-strategist]
-           ["scenarios/S115_claim-deferred-yield-recovery.json"
+           ["scenarios/edn/S115_claim-deferred-yield-recovery.edn"
             "s115-claim-deferred-yield-recovery" :suites/withdrawals]]]
     (let [scenario (io-sc/load-scenario-file scenario-path)
           result   (replay/replay-with-protocol sew/protocol scenario)

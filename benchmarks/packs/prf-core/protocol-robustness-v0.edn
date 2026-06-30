@@ -10,7 +10,10 @@
  :benchmark/runner-policy   :runner-policy/deterministic-local-v1
  :benchmark/evidence-policy :evidence-policy/forensic-standard-v1
   :benchmark/scoring-rule    :scoring/robustness-dimensions-v0
-  :benchmark/property-types  #{:integrity :safety :liveness}
+   :benchmark/property-types  #{:integrity :safety :liveness}
+   :benchmark/deferred-scenario-claims #{:malicious-verdict-economically-bounded
+                                         :liveness-under-adversarial-load
+                                         :pull-first-settlement-safety}
    :benchmark/purpose
   "Evaluate protocol robustness across three scenario-tested dimensions
    (resolver accountability, liveness under adversarial load, fund safety

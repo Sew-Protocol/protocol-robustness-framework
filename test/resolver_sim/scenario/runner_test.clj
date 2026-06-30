@@ -44,7 +44,7 @@
           {})))))
 
 (deftest build-entry-reuses-replay-expectations
-  (let [path "scenarios/S108_negative-yield-mild.json"
+  (let [path "scenarios/edn/S108_negative-yield-mild.edn"
         scenario (-> path sc/load-scenario-file norm/normalize-scenario)
         replay   (sew/replay-with-sew-protocol scenario)
         entry    (runner/build-entry-result
@@ -56,7 +56,7 @@
 
 (deftest yield-suite-summary-shape
   (let [summary (scenario-runner/run-paths
-                 ["scenarios/S108_negative-yield-mild.json"]
+                 ["scenarios/edn/S108_negative-yield-mild.edn"]
                  {:suite-id :yield-scenarios})]
     (is (= 1 (:total summary)))
     (is (contains? summary :passed))
@@ -64,7 +64,7 @@
 
 (deftest yield-scenario-protocol-is-inferred-from-file
   (let [summary (scenario-runner/run-paths
-                 ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+                 ["scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"]
                  {:suite-id :yield-scenarios})]
     (is (= 1 (:total summary)))
     (is (= 1 (:passed summary)))
@@ -73,7 +73,7 @@
 (deftest yield-scenario-announces-inferred-protocol
   (let [out (with-out-str
               (scenario-runner/run-paths
-               ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+               ["scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"]
                {:suite-id :yield-scenarios}))]
     (is (str/includes? out "[run:scenario]"))
     (is (str/includes? out "protocol yield-v1"))))
@@ -81,7 +81,7 @@
 (deftest path-run-request-captures-stable-run-metadata
   (let [{request :scenario-run/request}
         (scenario-runner/resolve-path-run-request
-         ["scenarios/Y02_vault-shortfall-partial-withdraw.json"]
+         ["scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"]
          {:suite-id :yield-provider-scenarios})
         entry (first (:entries request))]
     (is (= :local-current (:runner/backend request)))
@@ -90,11 +90,11 @@
     (is (= "Y02_vault-shortfall-partial-withdraw" (:scenario-id entry)))
     (is (= "yield-v1" (:protocol entry)))
     (is (= :protocol/yield-v1 (:dispatcher-id entry)))
-    (is (= "scenarios/Y02_vault-shortfall-partial-withdraw.json" (:scenario-path entry)))))
+    (is (= "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn" (:scenario-path entry)))))
 
 (deftest suite-scenario-details-uses-run-request-path
   (let [details (scenario-runner/suite-scenario-details
-                 "scenarios/Y02_vault-shortfall-partial-withdraw.json")]
+                 "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn")]
     (is (= "Y02_vault-shortfall-partial-withdraw" (:scenario/id details)))
     (is (= :yield-v1 (:scenario/protocol details)))
     (is (= :file (:scenario/source details)))
@@ -236,7 +236,7 @@
        #"Ambiguous dispatch map"
        (scenario-runner/run-and-report
         {:suite :yield-provider-scenarios
-         :scenario "scenarios/Y02_vault-shortfall-partial-withdraw.json"}
+         :scenario "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"}
         {}))))
 
 (deftest run-and-report-prints-after-execution-and-writes-bundle-once
@@ -247,11 +247,11 @@
                  :suite/key :yield-provider-scenarios
                  :protocol/default-id "yield-v1"
                  :entries [{:scenario-id "Y01"
-                            :scenario-path "scenarios/Y01.json"
+                            :scenario-path "scenarios/edn/Y01.edn"
                             :protocol "yield-v1"
                             :dispatcher-id :protocol/yield-v1}
                            {:scenario-id "Y02"
-                            :scenario-path "scenarios/Y02.json"
+                            :scenario-path "scenarios/edn/Y02.edn"
                             :protocol "yield-v1"
                             :dispatcher-id :protocol/yield-v1}]
                  :entry-count 2}
@@ -276,7 +276,7 @@
         output-file (.getAbsolutePath (java.io.File/createTempFile "bundle-root-" ".json"))]
     (try
       (with-redefs [suites/suite-paths
-                    (fn [_] ["scenarios/Y01.json" "scenarios/Y02.json"])
+                    (fn [_] ["scenarios/edn/Y01.edn" "scenarios/edn/Y02.edn"])
                     suites/suite-protocol-id
                     (fn [_] "yield-v1")
                     scenario-runner/run-paths
@@ -343,7 +343,7 @@
     (try
       (let [result (with-out-str
                      (scenario-runner/run-and-report
-                      {:scenario "scenarios/Y02_vault-shortfall-partial-withdraw.json"
+                      {:scenario "scenarios/edn/Y02_vault-shortfall-partial-withdraw.edn"
                        :output-file output-file}
                       {}))
             written (json/read-str (slurp output-file) :key-fn keyword)]
@@ -386,7 +386,7 @@
                                    {:evaluate-theory? true}))))))
 
 (deftest build-entry-theory-eval-once
-  (let [path "scenarios/S108_negative-yield-mild.json"
+  (let [path "scenarios/edn/S108_negative-yield-mild.edn"
         scenario (-> path sc/load-scenario-file norm/normalize-scenario)
         replay   (sew/replay-with-sew-protocol scenario)
         forced-off (runner/build-entry-result

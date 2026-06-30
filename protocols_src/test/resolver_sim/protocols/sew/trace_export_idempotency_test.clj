@@ -6,7 +6,7 @@
             [resolver-sim.io.scenarios :as scen-io]))
 
 (deftest s64-export-surfaces-idempotency-on-deduped-steps
-  (let [scenario (scen-io/load-scenario-file "scenarios/S64_replay-event-id-dedupe.json")
+  (let [scenario (scen-io/load-scenario-file "scenarios/edn/S64_replay-event-id-dedupe.edn")
         result   (replay/replay-with-protocol sew/protocol scenario)
         fixture  (trace-export/export-trace-fixture result scenario)
         dup-exec (some #(when (= 3 (:seq %)) %) (:steps fixture))

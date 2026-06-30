@@ -18,6 +18,7 @@
             [resolver-sim.evidence.chain :as chain]
             [resolver-sim.evidence.config :as evcfg]
             [resolver-sim.hash.canonical :as hc]
+            [resolver-sim.io.scenarios :as sc]
             [resolver-sim.util.attribution :as attr]
             [resolver-sim.logging :as log]))
 
@@ -1018,7 +1019,9 @@
   [scenarios-dir artifact-dir]
   (let [sd (io/file scenarios-dir)]
     (when (.isDirectory sd)
-      (let [scenario-files (filter #(.endsWith (.getName %) ".json") (.listFiles sd))
+      (let [scenario-files (filter #(or (.endsWith (.getName %) ".edn")
+                                        (.endsWith (.getName %) ".json"))
+                                   (.listFiles sd))
             ev-dir (str artifact-dir "/event-evidence")
             results (keep (fn [f]
                             (try (let [scenario (json/read-str (slurp f) :key-fn keyword)

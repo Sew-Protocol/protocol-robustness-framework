@@ -625,7 +625,7 @@
         (res/resolve-appeal world
                             (event-workflow-id event)
                             addr
-                            (:upheld? p)
+                             (boolean (:upheld? p))
                             (event-slash-id event))))))
 
 (defmethod apply-action "execute-fraud-slash"
